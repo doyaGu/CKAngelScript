@@ -367,13 +367,13 @@ void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
             type = "INFO";
             break;
     }
-    m_Context->OutputToConsoleEx("%s (%d, %d) : %s : %s", msg.section, msg.row, msg.col, type, msg.message);
+    m_Context->OutputToConsoleEx("%s(%d,%d): %s: %s", msg.section, msg.row, msg.col, type, msg.message);
 }
 
 void ScriptManager::ExceptionCallback(asIScriptContext *context) {
     XString message;
     XString callStackString = GetCallStack(context);
-    message.Format("- Exception '%s' in '%s'\n%s", context->GetExceptionString(),
+    message.Format("Exception - '%s' in '%s'\n%s", context->GetExceptionString(),
                    context->GetExceptionFunction()->GetDeclaration(), callStackString.CStr());
 
     asSMessageInfo info = {};
@@ -384,7 +384,7 @@ void ScriptManager::ExceptionCallback(asIScriptContext *context) {
 }
 
 XString ScriptManager::GetCallStack(asIScriptContext *context) {
-    XString str("AngelScript callstack:\n");
+    XString str("AngelScript Callstack:\n");
 
     // Append the call stack
     for (asUINT i = 0; i < context->GetCallstackSize(); i++) {
@@ -394,7 +394,7 @@ XString ScriptManager::GetCallStack(asIScriptContext *context) {
         int line = context->GetLineNumber(i, &column, &scriptSection);
 
         XString buf;
-        buf.Format("\t%s:%s:%d,%d\n", scriptSection, func->GetDeclaration(), line, column);
+        buf.Format("\t%s at %s(%d,%d)\n",  func->GetDeclaration(), scriptSection, line, column);
         str << buf;
     }
 
