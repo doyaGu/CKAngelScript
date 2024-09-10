@@ -9,12 +9,14 @@ add_library(angelscript_addon STATIC
         angelscript/add_on/scriptstdstring/scriptstdstring.cpp
         angelscript/add_on/scriptstdstring/scriptstdstring_utils.cpp
         angelscript/add_on/scriptdictionary/scriptdictionary.cpp
-        angelscript/add_on/scripthandle/scripthandle.cpp
         angelscript/add_on/scriptmath/scriptmath.cpp
         angelscript/add_on/scriptmath/scriptmathcomplex.cpp
+        angelscript/add_on/scripthandle/scripthandle.cpp
+        angelscript/add_on/weakref/weakref.cpp
         angelscript/add_on/datetime/datetime.cpp
         angelscript/add_on/scriptfile/scriptfile.cpp
         angelscript/add_on/scriptfile/scriptfilesystem.cpp
+        angelscript/add_on/scripthelper/scripthelper.cpp
         angelscript/add_on/scriptbuilder/scriptbuilder.cpp
         )
 target_include_directories(angelscript_addon PUBLIC

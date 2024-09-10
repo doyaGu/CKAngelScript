@@ -11,12 +11,14 @@
 #include "add_on/scriptarray/scriptarray.h"
 #include "add_on/scriptstdstring/scriptstdstring.h"
 #include "add_on/scriptdictionary/scriptdictionary.h"
-#include "add_on/scripthandle/scripthandle.h"
 #include "add_on/scriptmath/scriptmath.h"
 #include "add_on/scriptmath/scriptmathcomplex.h"
+#include "add_on/scripthandle/scripthandle.h"
+#include "add_on/weakref/weakref.h"
 #include "add_on/datetime/datetime.h"
 #include "add_on/scriptfile/scriptfile.h"
 #include "add_on/scriptfile/scriptfilesystem.h"
+#include "add_on/scripthelper/scripthelper.h"
 #include "add_on/scriptbuilder/scriptbuilder.h"
 
 static void Print(const std::string &str) {
@@ -118,12 +120,14 @@ int ScriptManager::Init() {
     RegisterStdString(m_ScriptEngine);
     RegisterStdStringUtils(m_ScriptEngine);
     RegisterScriptDictionary(m_ScriptEngine);
-    RegisterScriptHandle(m_ScriptEngine);
     RegisterScriptMath(m_ScriptEngine);
     RegisterScriptMathComplex(m_ScriptEngine);
+    RegisterScriptHandle(m_ScriptEngine);
+    RegisterScriptWeakRef(m_ScriptEngine);
     RegisterScriptDateTime(m_ScriptEngine);
     RegisterScriptFile(m_ScriptEngine);
     RegisterScriptFileSystem(m_ScriptEngine);
+    RegisterExceptionRoutines(m_ScriptEngine);
 
     // Register the Virtools API
     RegisterXString(m_ScriptEngine);
