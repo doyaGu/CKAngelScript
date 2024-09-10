@@ -1045,7 +1045,7 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
 static void RegisterVxVector(asIScriptEngine *engine) {
     int r = 0;
 
-    // Properties (x, y, z)
+    // Properties
     r = engine->RegisterObjectProperty("VxVector", "float x", asOFFSET(VxVector, x)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxVector", "float y", asOFFSET(VxVector, y)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxVector", "float z", asOFFSET(VxVector, z)); assert(r >= 0);
@@ -1064,7 +1064,7 @@ static void RegisterVxVector(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxVector", "VxVector &opAssign(const VxCompressedVector &in)", asMETHODPR(VxVector, operator=, (const VxCompressedVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxVector", "bool opEquals(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) -> bool { return lhs == rhs; }, (const VxVector &, const VxVector &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "int opCmp(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const VxVector &, const VxVector &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    // r = engine->RegisterObjectMethod("VxVector", "int opCmp(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const VxVector &, const VxVector &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
     r = engine->RegisterObjectMethod("VxVector", "float &opIndex(int)", asFUNCTIONPR([](VxVector &v, int i) -> float & { return v[i]; }, (VxVector &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
     r = engine->RegisterObjectMethod("VxVector", "const float &opIndex(int) const", asFUNCTIONPR([](const VxVector &v, int i) -> const float & { return v[i]; }, (const VxVector &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
@@ -1125,7 +1125,7 @@ static void RegisterVxVector(asIScriptEngine *engine) {
 static void RegisterVxVector4(asIScriptEngine *engine) {
     int r = 0;
 
-    // Properties (x, y, z, w)
+    // Properties
     r = engine->RegisterObjectProperty("VxVector4", "float x", asOFFSET(VxVector4, x)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxVector4", "float y", asOFFSET(VxVector4, y)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxVector4", "float z", asOFFSET(VxVector4, z)); assert(r >= 0);
@@ -1211,7 +1211,7 @@ static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, const CScriptArray 
 static void RegisterVxBbox(asIScriptEngine *engine) {
     int r = 0;
 
-    // Properties (Min, Max)
+    // Properties
     r = engine->RegisterObjectProperty("VxBbox", "VxVector Min", asOFFSET(VxBbox, Min)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxBbox", "VxVector Max", asOFFSET(VxBbox, Max)); assert(r >= 0);
 
@@ -1283,7 +1283,7 @@ static void RegisterVxCompressedVector(asIScriptEngine *engine) {
 static void RegisterVxCompressedVectorOld(asIScriptEngine *engine) {
     int r = 0;
 
-    // Properties (xa, ya)
+    // Properties
     r = engine->RegisterObjectProperty("VxCompressedVectorOld", "int xa", asOFFSET(VxCompressedVectorOld, xa)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxCompressedVectorOld", "int ya", asOFFSET(VxCompressedVectorOld, ya)); assert(r >= 0);
 
