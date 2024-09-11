@@ -1,5 +1,6 @@
 #include "ScriptXString.h"
 
+#include <string>
 #include <unordered_map>
 
 #include "XString.h"
@@ -8,7 +9,7 @@ namespace std {
     // BKDR hash function for XString
     template<>
     struct hash<XString> {
-        size_t operator()(const XString &str) const {
+        size_t operator()(const XString &str) const noexcept {
             size_t hash = 0;
 
             if (!str.Empty()) {
@@ -123,64 +124,69 @@ public:
 
 static CXStringFactoryCleaner s_StringCleaner;
 
-static void ConstructString(XString *ptr) {
-    new(ptr) XString();
+static bool CheckStringSize(const std::string &str) {
+    if (str.size() >= UINT16_MAX) {
+        // Set a script exception
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Oversized string");
+        return false;
+    }
+    return true;
 }
 
-static void CopyConstructString(const XString &other, XString *ptr) {
-    new(ptr) XString(other);
+static void ConstructXString(const std::string &str, XString *self) {
+    if (!CheckStringSize(str))
+        return;
+
+    new(self) XString(str.c_str());
 }
 
-static void DestructString(XString *ptr) {
-    ptr->~XString();
+static XString &XStringAssign(const std::string &str, XString &self) {
+    if (!CheckStringSize(str))
+        return self;
+
+    self = str.c_str();
+    return self;
 }
 
-static XString &AddAssignStringToString(const XString &str, XString &dest) {
-    // We don't register the method directly because some compilers
-    // and standard libraries inline the definition, resulting in the
-    // linker being unable to find the declaration.
-    // Example: CLang/LLVM with XCode 4.3 on OSX 10.7
-    dest += str;
-    return dest;
+static bool XStringEquals(const XString &str, const XString &self) {
+    return self.Compare(str) == 0;
 }
 
-static bool StringIsEmpty(const XString &str) {
-    // We don't register the method directly because some compilers
-    // and standard libraries inline the definition, resulting in the
-    // linker being unable to find the declaration
-    // Example: CLang/LLVM with XCode 4.3 on OSX 10.7
-    return str.Empty();
+static bool XStringEquals(const std::string &str, const XString &self) {
+    if (!CheckStringSize(str))
+        return false;
+
+    return self.Compare(str.c_str()) == 0;
 }
 
-static XString StringAdd(const XString &lhs, const XString &rhs) {
-    return lhs + rhs;
+static int XStringCmp(const XString &str, const XString &self) {
+    return self.Compare(str);
 }
 
-static bool StringEquals(const XString &lhs, const XString &rhs) {
-    return lhs == rhs;
+static int XStringCmp(const std::string &str, const XString &self) {
+    if (!CheckStringSize(str))
+        return 0;
+
+    return self.Compare(str.c_str());
 }
 
-static int StringCmp(const XString &a, const XString &b) {
-    int cmp = 0;
-    if (a < b) cmp = -1;
-    else if (a > b) cmp = 1;
-    return cmp;
+static XString &XStringAddAssign(const std::string &str, XString &self) {
+    if (!CheckStringSize(str))
+        return self;
+
+    return self += str.c_str();
 }
 
-static asUINT StringLength(const XString &str) {
-    return (asUINT) str.Length();
+static XString XStringAdd(const std::string &str, const XString &self) {
+    if (!CheckStringSize(str))
+        return self;
+
+    return self + str.c_str();
 }
 
-static void StringResize(asUINT l, XString &str) {
-    str.Resize(l);
-}
-
-static bool StringEmpty(const XString &str) {
-    return str.Empty() == TRUE;
-}
-
-static char *StringCharAt(unsigned int i, XString &str) {
-    if (i >= str.Length()) {
+static char *XStringCharAt(const XWORD i, XString &self) {
+    if (i >= self.Length()) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
         ctx->SetException("Out of range");
@@ -189,7 +195,24 @@ static char *StringCharAt(unsigned int i, XString &str) {
         return nullptr;
     }
 
-    return &str[(int) i];
+    return &self[i];
+}
+
+static std::string XStringCastToString(const XString &str) {
+    return str.CStr();
+}
+
+static XString StringCastToXString(const std::string &str) {
+    if (str.size() >= UINT16_MAX) {
+        // Set a script exception
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Oversized string");
+
+        // Return a null pointer
+        return {};
+    }
+
+    return str.c_str();
 }
 
 void RegisterXString(asIScriptEngine *engine) {
@@ -201,22 +224,71 @@ void RegisterXString(asIScriptEngine *engine) {
 
     // r = engine->RegisterStringFactory("XString", GetXStringFactorySingleton()); assert(r >= 0);
 
-    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructString), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(const XString &in)", asFUNCTION(CopyConstructString), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructString), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString &opAssign(const XString &in)", asMETHODPR(XString, operator=, (const XString&), XString &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(const XString &in)", asFUNCTION(AddAssignStringToString), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "bool opEquals(const XString &in) const", asFUNCTIONPR(StringEquals, (const XString &, const XString &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "int opCmp(const XString &in) const", asFUNCTION(StringCmp), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString opAdd(const XString &in) const", asFUNCTIONPR(StringAdd, (const XString &, const XString &), XString), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    // Constructors
+    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](XString *self) { new(self) XString(); }, (XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(const XString &in)", asFUNCTIONPR([](const XBaseString &str, XString *self) { new(self) XString(str); }, (const XBaseString &, XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(const string &in)", asFUNCTIONPR(ConstructXString, (const std::string &, XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(int)", asFUNCTIONPR([](int length, XString *self) { new(self) XString(length); }, (int, XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("XString", "uint Length() const", asFUNCTION(StringLength), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "void Resize(uint)", asFUNCTION(StringResize), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    // Destructor
+    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](XString *self) { self->~XString(); }, (XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("XString", "bool Empty() const", asFUNCTION(StringEmpty), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    // Methods
+    r = engine->RegisterObjectMethod("XString", "XString &opAssign(const XString &in)", asMETHODPR(XString, operator=, (const XString &), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAssign(const string &in)", asFUNCTIONPR(XStringAssign, (const std::string &, XString &), XString &), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("XString", "bool opEquals(const XString &in) const", asFUNCTIONPR(XStringEquals, (const XString &, const XString &), bool), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool opEquals(const string &in) const", asFUNCTIONPR(XStringEquals, (const std::string &, const XString &), bool), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int opCmp(const XString &in) const", asFUNCTIONPR(XStringCmp, (const XString &, const XString &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int opCmp(const string &in) const", asFUNCTIONPR(XStringCmp, (const std::string &, const XString &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(const XString &in)", asMETHODPR(XString, operator+=, (const XString&), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(const string &in)", asFUNCTIONPR(XStringAddAssign, (const std::string &, XString &), XString &), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(uint8)", asMETHODPR(XString, operator+=, (const char), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(int)", asMETHODPR(XString, operator+=, (const int), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(float)", asMETHODPR(XString, operator+=, (const float), XString &), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(const XString &in) const", asMETHODPR(XString, operator+, (const XBaseString &) const, XString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(const string &in) const", asFUNCTIONPR(XStringAdd, (const std::string &, const XString &), XString), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(uint8) const", asMETHODPR(XString, operator+, (const char) const, XString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(int) const", asMETHODPR(XString, operator+, (const int) const, XString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(float) const", asMETHODPR(XString, operator+, (const float) const, XString), asCALL_THISCALL); assert(r >= 0);
 
     // Register the index operator, both as a mutator and as an inspector
     // Note that we don't register the operator[] directly, as it doesn't do bounds checking
-    r = engine->RegisterObjectMethod("XString", "uint8 &opIndex(uint)", asFUNCTION(StringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "const uint8 &opIndex(uint) const", asFUNCTION(StringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint8 &opIndex(uint16)", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "const uint8 &opIndex(uint16) const", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("XString", "string opImplCast()", asFUNCTION(XStringCastToString), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("string", "XString opImplCast()", asFUNCTION(StringCastToXString), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+
+    r = engine->RegisterObjectMethod("XString", "bool Empty() const", asMETHODPR(XString, Empty, () const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint16 Length() const", asMETHODPR(XString, Length, () const, XWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint16 Capacity() const", asMETHODPR(XString, Capacity, (), XWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "void Resize(uint16)", asMETHODPR(XString, Resize, (XWORD), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "void Reserve(uint16)", asMETHODPR(XString, Reserve, (XWORD), void), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("XString", "XString &ToUpper()", asMETHODPR(XString, ToUpper, (), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &ToLower()", asMETHODPR(XString, ToLower, (), XString &), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("XString", "int Compare(const XString &in) const", asMETHODPR(XString, Compare, (const XBaseString &) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int NCompare(const XString &in, int) const", asMETHODPR(XString, NCompare, (const XBaseString &, const int) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int ICompare(const XString &in) const", asMETHODPR(XString, ICompare, (const XBaseString &) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int NICompare(const XString &in, int) const", asMETHODPR(XString, NICompare, (const XBaseString &, const int) const, int), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("XString", "XString &Trim()", asMETHODPR(XString, Trim, (), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &Strip()", asMETHODPR(XString, Strip, (), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool Contains(const XString &in) const", asMETHODPR(XString, Contains, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool StartsWith(const XString &in) const", asMETHODPR(XString, StartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool IStartsWith(const XString &in) const", asMETHODPR(XString, IStartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool EndsWith(const XString &in) const", asMETHODPR(XString, EndsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool IEndsWith(const XString &in) const", asMETHODPR(XString, IEndsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint16 Find(uint8, uint16 = 0) const", asMETHODPR(XString, Find, (char, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint16 Find(const XString &in, uint16 = 0) const", asMETHODPR(XString, Find, (const XBaseString &, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint16 RFind(uint8, uint16 = 0) const", asMETHODPR(XString, RFind, (char, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString Substring(uint16, uint16 = 0) const", asMETHODPR(XString, Substring, (XWORD, XWORD) const, XString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &Crop(uint16, uint16)", asMETHODPR(XString, Crop, (XWORD, XWORD), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &Cut(uint16, uint16)", asMETHODPR(XString, Cut, (XWORD, XWORD), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int Replace(uint8, uint8)", asMETHODPR(XString, Replace, (char, char), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int Replace(const XString &in, const XString &in)", asMETHODPR(XString, Replace, (const XBaseString &, const XBaseString &), int), asCALL_THISCALL); assert(r >= 0);
 }
