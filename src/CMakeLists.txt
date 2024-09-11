@@ -3,9 +3,10 @@ set(CKAS_PUBLIC_HEADERS
 
 set(CKAS_PRIVATE_HEADERS
         ScriptManager.h
-        ScriptCK2.h
-        ScriptVxMath.h
         ScriptXString.h
+        ScriptXBitArray.h
+        ScriptVxMath.h
+        ScriptCK2.h
 #        Logger.h
 )
 
@@ -14,9 +15,10 @@ set(CKAS_SOURCES
         ScriptManager.cpp
         AngelScriptLoader.cpp
 #        AngelScriptRunner.cpp
-        ScriptCK2.cpp
-        ScriptVxMath.cpp
         ScriptXString.cpp
+        ScriptXBitArray.cpp
+        ScriptVxMath.cpp
+        ScriptCK2.cpp
 #        Logger.cpp
 )
 

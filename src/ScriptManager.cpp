@@ -6,6 +6,7 @@
 #include "CKPathManager.h"
 
 #include "ScriptXString.h"
+#include "ScriptXBitArray.h"
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
 
@@ -174,6 +175,7 @@ int ScriptManager::Init() {
 
     // Register the Virtools API
     RegisterXString(m_ScriptEngine);
+    RegisterXBitArray(m_ScriptEngine);
     RegisterVxMath(m_ScriptEngine);
     RegisterCK2(m_ScriptEngine);
 
