@@ -1052,9 +1052,10 @@ static void RegisterVxVector(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxVector *self) { new(self) VxVector(); }, (VxVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(const VxVector &in)", asFUNCTIONPR([](const VxVector &v, VxVector *self) { new(self) VxVector(v); }, (const VxVector &, VxVector *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float f, VxVector *self) { new(self) VxVector(f); }, (float, VxVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float x, float y, float z, VxVector *self) { new(self) VxVector(x, y, z); }, (float, float, float, VxVector *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(const VxVector &in)", asFUNCTIONPR([](const VxVector &v, VxVector *self) { new(self) VxVector(v); }, (const VxVector &, VxVector *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxVector *self) { new(self) VxVector(list[0], list[1], list[2]); }, (float *, VxVector *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxVector* self) { self->~VxVector(); }, (VxVector *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1065,9 +1066,6 @@ static void RegisterVxVector(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxVector", "bool opEquals(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) -> bool { return lhs == rhs; }, (const VxVector &, const VxVector &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     // r = engine->RegisterObjectMethod("VxVector", "int opCmp(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const VxVector &, const VxVector &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
-
-    r = engine->RegisterObjectMethod("VxVector", "float &opIndex(int)", asFUNCTIONPR([](VxVector &v, int i) -> float & { return v[i]; }, (VxVector &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
-    r = engine->RegisterObjectMethod("VxVector", "const float &opIndex(int) const", asFUNCTIONPR([](const VxVector &v, int i) -> const float & { return v[i]; }, (const VxVector &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
     r = engine->RegisterObjectMethod("VxVector", "VxVector &opAddAssign(const VxVector &in)", asMETHODPR(VxVector, operator+=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxVector", "VxVector &opSubAssign(const VxVector &in)", asMETHODPR(VxVector, operator-=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
@@ -1088,6 +1086,9 @@ static void RegisterVxVector(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxVector", "VxVector opMul(const VxMatrix &in) const", asFUNCTIONPR(operator*, (const VxVector&, const VxMatrix&), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxVector", "VxVector opNeg() const", asFUNCTIONPR([](const VxVector &v) -> const VxVector { return -v; }, (const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxVector", "float &opIndex(int)", asFUNCTIONPR([](VxVector &v, int i) -> float & { return v[i]; }, (VxVector &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector", "const float &opIndex(int) const", asFUNCTIONPR([](const VxVector &v, int i) -> const float & { return v[i]; }, (const VxVector &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
     r = engine->RegisterObjectMethod("VxVector", "void Set(float, float, float)", asMETHOD(VxVector, Set), asCALL_THISCALL); assert(r >= 0);
 
@@ -1133,9 +1134,10 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxVector4 *self) { new(self) VxVector4(); }, (VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(const VxVector4 &)", asFUNCTIONPR([](const VxVector4 &v, VxVector4 *self) { new(self) VxVector4(v); }, (const VxVector4 &, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float f, VxVector4 *self) { new(self) VxVector4(f); }, (float, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float x, float y, float z, float w, VxVector4 *self) { new(self) VxVector4(x, y, z, w); }, (float, float, float, float, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(const VxVector4 &)", asFUNCTIONPR([](const VxVector4 &v, VxVector4 *self) { new(self) VxVector4(v); }, (const VxVector4 &, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxVector4 *self) { new(self) VxVector4(list[0], list[1], list[2], list[3]); }, (float *, VxVector4 *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxVector4 *self) { self->~VxVector4(); }, (VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1146,9 +1148,6 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxVector4", "bool opEquals(const VxVector4 &in) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) -> bool { return lhs == rhs; }, (const VxVector4 &, const VxVector4 &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxVector4", "int opCmp(const VxVector4 &in) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const VxVector4 &, const VxVector4 &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
-
-    r = engine->RegisterObjectMethod("VxVector4", "float &opIndex(int)", asFUNCTIONPR([](VxVector4 &v, int i) -> float & { return v[i]; }, (VxVector4 &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
-    r = engine->RegisterObjectMethod("VxVector4", "const float &opIndex(int) const", asFUNCTIONPR([](const VxVector4 &v, int i) -> const float & { return v[i]; }, (const VxVector4 &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAddAssign(const VxVector4 &in)", asMETHODPR(VxVector4, operator+=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opSubAssign(const VxVector4 &in)", asMETHODPR(VxVector4, operator-=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
@@ -1176,6 +1175,9 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul(const VxMatrix &in) const", asFUNCTIONPR(operator*, (const VxVector4 &, const VxMatrix &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opNeg() const", asFUNCTIONPR([](const VxVector4 &v) -> const VxVector4 { return -v; }, (const VxVector4 &), const VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxVector4", "float &opIndex(int)", asFUNCTIONPR([](VxVector4 &v, int i) -> float & { return v[i]; }, (VxVector4 &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector4", "const float &opIndex(int) const", asFUNCTIONPR([](const VxVector4 &v, int i) -> const float & { return v[i]; }, (const VxVector4 &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
     r = engine->RegisterObjectMethod("VxVector4", "void Set(float, float, float, float)", asMETHODPR(VxVector4, Set, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxVector4", "void Set(float, float, float)", asMETHODPR(VxVector4, Set, (float, float, float), void), asCALL_THISCALL); assert(r >= 0);
@@ -1217,9 +1219,10 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxBbox *self) { new(self) VxBbox(); }, (VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(const VxBbox &in)", asFUNCTIONPR([](const VxBbox &box, VxBbox *self) { new(self) VxBbox(box); }, (const VxBbox &, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in)", asFUNCTIONPR([](const VxVector &min, const VxVector &max, VxBbox *self) { new(self) VxBbox(min, max); }, (const VxVector &, const VxVector &, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float value, VxBbox *self) { new(self) VxBbox(value); }, (float, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(const VxBbox &in)", asFUNCTIONPR([](const VxBbox &box, VxBbox *self) { new(self) VxBbox(box); }, (const VxBbox &, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {VxVector, VxVector}", asFUNCTIONPR([](VxVector *list, VxBbox *self) { new(self) VxBbox(list[0], list[1]); }, (VxVector *, VxBbox *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxBbox *self) { self->~VxBbox(); }, (VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1257,14 +1260,15 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
 static void RegisterVxCompressedVector(asIScriptEngine *engine) {
     int r = 0;
 
-    // Properties (xa, ya)
+    // Properties
     r = engine->RegisterObjectProperty("VxCompressedVector", "int16 xa", asOFFSET(VxCompressedVector, xa)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxCompressedVector", "int16 ya", asOFFSET(VxCompressedVector, ya)); assert(r >= 0);
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVector *self) { new(self) VxCompressedVector(); }, (VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVector *self) { new(self) VxCompressedVector(x, y, z); }, (float, float, float, VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f(const VxCompressedVector &in)", asFUNCTIONPR([](const VxCompressedVector &v, VxCompressedVector *self) { new(self) VxCompressedVector(v); }, (const VxCompressedVector &, VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVector *self) { new(self) VxCompressedVector(x, y, z); }, (float, float, float, VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxCompressedVector *self) { new(self) VxCompressedVector(list[0], list[1], list[2]); }, (float *, VxCompressedVector *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVector *self) { self->~VxCompressedVector(); }, (VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1289,8 +1293,9 @@ static void RegisterVxCompressedVectorOld(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(); }, (VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(x, y, z); }, (float, float, float, VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f(const VxCompressedVectorOld &in)", asFUNCTIONPR([](const VxCompressedVectorOld &v, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(v); }, (const VxCompressedVectorOld &, VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(x, y, z); }, (float, float, float, VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(list[0], list[1], list[2]); }, (float *, VxCompressedVectorOld *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVectorOld *self) { self->~VxCompressedVectorOld(); }, (VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1315,9 +1320,10 @@ static void RegisterVx2DVector(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](Vx2DVector *self) { new(self) Vx2DVector(); }, (Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(const Vx2DVector &in)", asFUNCTIONPR([](const Vx2DVector &v, Vx2DVector *self) { new(self) Vx2DVector(v); }, (const Vx2DVector &, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float f, Vx2DVector *self) { new(self) Vx2DVector(f); }, (float, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(float, float)", asFUNCTIONPR([](float x, float y, Vx2DVector *self) { new(self) Vx2DVector(x, y); }, (float, float, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(const Vx2DVector &in)", asFUNCTIONPR([](const Vx2DVector &v, Vx2DVector *self) { new(self) Vx2DVector(v); }, (const Vx2DVector &, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float}", asFUNCTIONPR([](float *list, Vx2DVector *self) { new(self) Vx2DVector(list[0], list[1]); }, (float *, Vx2DVector *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](Vx2DVector *self) { self->~Vx2DVector(); }, (Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1335,9 +1341,6 @@ static void RegisterVx2DVector(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("Vx2DVector", "bool opEquals(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs == rhs; }, (const Vx2DVector &, const Vx2DVector &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("Vx2DVector", "int opCmp(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const Vx2DVector &, const Vx2DVector &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
-    r = engine->RegisterObjectMethod("Vx2DVector", "const float &opIndex(int) const", asMETHODPR(Vx2DVector, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "float &opIndex(int)", asMETHODPR(Vx2DVector, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
-
     r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opAdd(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs + rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opSub(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs - rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opMul(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs * rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -1346,6 +1349,9 @@ static void RegisterVx2DVector(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opDiv(float) const", asFUNCTIONPR([](const Vx2DVector &lhs, float scalar) { return lhs / scalar; }, (const Vx2DVector &, float), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opNeg() const", asMETHODPR(Vx2DVector, operator-, () const, Vx2DVector), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("Vx2DVector", "const float &opIndex(int) const", asMETHODPR(Vx2DVector, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "float &opIndex(int)", asMETHODPR(Vx2DVector, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("Vx2DVector", "float Magnitude() const", asMETHOD(Vx2DVector, Magnitude), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Vx2DVector", "float SquareMagnitude() const", asMETHOD(Vx2DVector, SquareMagnitude), asCALL_THISCALL); assert(r >= 0);
@@ -1373,13 +1379,13 @@ static void RegisterVxMatrix(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxMatrix", "bool opEquals(const VxMatrix &in) const", asMETHODPR(VxMatrix, operator==, (const VxMatrix&) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxMatrix", "VxVector4& opIndex(int)", asMETHODPR(VxMatrix, operator[], (int), VxVector4&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxMatrix", "const VxVector4& opIndex(int) const", asMETHODPR(VxMatrix, operator[], (int) const, const VxVector4&), asCALL_THISCALL); assert(r >= 0);
-
     r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix &opMulAssign(const VxMatrix &in) const", asMETHODPR(VxMatrix, operator*=, (const VxMatrix&), VxMatrix&), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix opMul(const VxMatrix &in) const", asMETHODPR(VxMatrix, operator*, (const VxMatrix&) const, VxMatrix), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxMatrix", "VxVector opMul(const VxVector &in) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector&), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxMatrix", "VxVector4 opMul(const VxVector4 &in) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector4&), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxMatrix", "VxVector4& opIndex(int)", asMETHODPR(VxMatrix, operator[], (int), VxVector4&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "const VxVector4& opIndex(int) const", asMETHODPR(VxMatrix, operator[], (int) const, const VxVector4&), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxMatrix", "void SetIdentity()", asMETHODPR(VxMatrix, SetIdentity, (), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxMatrix", "void Clear()", asMETHODPR(VxMatrix, Clear, (), void), asCALL_THISCALL); assert(r >= 0);
@@ -1431,9 +1437,10 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxQuaternion *self) { new(self) VxQuaternion(); }, (VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(const VxQuaternion &in)", asFUNCTIONPR([](const VxQuaternion &quat, VxQuaternion *self) { new(self) VxQuaternion(quat); }, (const VxQuaternion &, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, float)", asFUNCTIONPR([](const VxVector &v, float angle, VxQuaternion *self) { new(self) VxQuaternion(v, angle); }, (const VxVector &, float, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float x, float y, float z, float w, VxQuaternion *self) { new(self) VxQuaternion(x, y, z, w); }, (float, float, float, float, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(const VxQuaternion &in)", asFUNCTIONPR([](const VxQuaternion &quat, VxQuaternion *self) { new(self) VxQuaternion(quat); }, (const VxQuaternion &, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxQuaternion *self) { new(self) VxQuaternion(list[0], list[1], list[2], list[3]); }, (float *, VxQuaternion *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxQuaternion *self) { self->~VxQuaternion(); }, (VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1442,9 +1449,6 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opAssign(const VxQuaternion &in)", asMETHODPR(VxQuaternion, operator=, (const VxQuaternion &), VxQuaternion &), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxQuaternion", "bool opEquals(const VxQuaternion &in) const", asFUNCTIONPR(operator==, (const VxQuaternion &, const VxQuaternion &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-
-    r = engine->RegisterObjectMethod("VxQuaternion", "float& opIndex(int)", asMETHODPR(VxQuaternion, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "const float& opIndex(int) const", asMETHODPR(VxQuaternion, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opMulAssign(float) const", asMETHODPR(VxQuaternion, operator*=, (float), VxQuaternion &), asCALL_THISCALL); assert(r >= 0);
 
@@ -1456,6 +1460,9 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opMul(float) const", asFUNCTIONPR(operator*, (const VxQuaternion &, float), VxQuaternion), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opNeg() const", asMETHODPR(VxQuaternion, operator-, () const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxQuaternion", "float& opIndex(int)", asMETHODPR(VxQuaternion, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "const float& opIndex(int) const", asMETHODPR(VxQuaternion, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxQuaternion", "void FromMatrix(const VxMatrix &in)", asMETHOD(VxQuaternion, FromMatrix), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxQuaternion", "void ToMatrix(VxMatrix &out) const", asMETHOD(VxQuaternion, ToMatrix), asCALL_THISCALL); assert(r >= 0);
@@ -1499,9 +1506,10 @@ static void RegisterVxRect(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxRect *self) { new(self) VxRect(); }, (VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(const VxRect &in)", asFUNCTIONPR([](const VxRect &rect, VxRect *self) { new(self) VxRect(rect); }, (const VxRect &, VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float l, float t, float r, float b, VxRect *self) { new(self) VxRect(l, t, r, b); }, (float, float, float, float, VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(Vx2DVector &in, Vx2DVector &in)", asFUNCTIONPR([](Vx2DVector &topleft, Vx2DVector &bottomright, VxRect *self) { new(self) VxRect(topleft, bottomright); }, (Vx2DVector &, Vx2DVector &, VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(const VxRect &in)", asFUNCTIONPR([](const VxRect &rect, VxRect *self) { new(self) VxRect(rect); }, (const VxRect &, VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxRect *self) { new(self) VxRect(list[0], list[1], list[2], list[3]); }, (float *, VxRect *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxRect *self) { self->~VxRect(); }, (VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1583,8 +1591,8 @@ static void RegisterVxOBB(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxOBB *self) { new(self) VxOBB(); }, (VxOBB *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_CONSTRUCT, "void f(const VxBbox &in, const VxMatrix &in)", asFUNCTIONPR([](const VxBbox &box, const VxMatrix &mat, VxOBB *self) { new(self) VxOBB(box, mat); }, (const VxBbox &, const VxMatrix &, VxOBB *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_CONSTRUCT, "void f(const VxOBB &in)", asFUNCTIONPR([](const VxOBB &obb, VxOBB *self) { new(self) VxOBB(obb); }, (const VxOBB &, VxOBB*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_CONSTRUCT, "void f(const VxBbox &in, const VxMatrix &in)", asFUNCTIONPR([](const VxBbox &box, const VxMatrix &mat, VxOBB *self) { new(self) VxOBB(box, mat); }, (const VxBbox &, const VxMatrix &, VxOBB *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxOBB *self) { self->~VxOBB(); }, (VxOBB*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1619,8 +1627,9 @@ static void RegisterVxRay(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxRay *self) { new(self) VxRay(); }, (VxRay *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in)", asFUNCTIONPR([](const VxVector &start, const VxVector &end, VxRay *self) { new(self) VxRay(start, end); }, (const VxVector &, const VxVector &, VxRay *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_CONSTRUCT, "void f(const VxRay &in)", asFUNCTIONPR([](const VxRay &r, VxRay *self) { new(self) VxRay(r); }, (const VxRay &, VxRay*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in)", asFUNCTIONPR([](const VxVector &start, const VxVector &end, VxRay *self) { new(self) VxRay(start, end); }, (const VxVector &, const VxVector &, VxRay *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {VxVector, VxVector}", asFUNCTIONPR([](VxVector *list, VxRay *self) { new(self) VxRay(list[0], list[1]); }, (VxVector *, VxRay *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxRay *self) { self->~VxRay(); }, (VxRay*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1649,8 +1658,8 @@ static void RegisterVxSphere(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxSphere *self) { new(self) VxSphere(); }, (VxSphere *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, float)", asFUNCTIONPR([](const VxVector &center, float radius, VxSphere *self) { new(self) VxSphere(center, radius); }, (const VxVector &, float, VxSphere *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_CONSTRUCT, "void f(const VxSphere &in)", asFUNCTIONPR([](const VxSphere &s, VxSphere *self) { new(self) VxSphere(s); }, (const VxSphere &, VxSphere*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, float)", asFUNCTIONPR([](const VxVector &center, float radius, VxSphere *self) { new(self) VxSphere(center, radius); }, (const VxVector &, float, VxSphere *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxSphere *self) { self->~VxSphere(); }, (VxSphere*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1681,11 +1690,11 @@ static void RegisterVxPlane(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxPlane *self) { new(self) VxPlane(); }, (VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxPlane &in)", asFUNCTIONPR([](const VxPlane &p, VxPlane *self) { new(self) VxPlane(p); }, (const VxPlane &, VxPlane*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, float)", asFUNCTIONPR([](const VxVector &n, float d, VxPlane *self) { new(self) VxPlane(n, d); }, (const VxVector &, float, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float a, float b, float c, float d, VxPlane *self) { new(self) VxPlane(a, b, c, d); }, (float, float, float, float, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in)", asFUNCTIONPR([](const VxVector &n, const VxVector &p, VxPlane *self) { new(self) VxPlane(n, p); }, (const VxVector &, const VxVector &, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in, const VxVector &in)", asFUNCTIONPR([](const VxVector &a, const VxVector &b, const VxVector &c, VxPlane *self) { new(self) VxPlane(a, b, c); }, (const VxVector &, const VxVector &, const VxVector &, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxPlane &in)", asFUNCTIONPR([](const VxPlane &p, VxPlane *self) { new(self) VxPlane(p); }, (const VxPlane &, VxPlane*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxPlane *self) { self->~VxPlane(); }, (VxPlane*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1818,11 +1827,11 @@ static void RegisterVxFrustum(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxFrustum *self) { new(self) VxFrustum(); }, (VxFrustum *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_CONSTRUCT, "void f(const VxFrustum &in)", asFUNCTIONPR([](const VxFrustum &f, VxFrustum *self) { new(self) VxFrustum(f); }, (const VxFrustum &, VxFrustum*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in, const VxVector &in, const VxVector &in, float, float, float, float)",
         asFUNCTIONPR([](const VxVector &origin, const VxVector &right, const VxVector &up, const VxVector &dir, float nearplane, float farplane, float fov, float aspectratio, VxFrustum *self)
         { new(self) VxFrustum(origin, right, up, dir, nearplane, farplane, fov, aspectratio); },
         (const VxVector &, const VxVector &, const VxVector &, const VxVector &, float, float, float, float, VxFrustum *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_CONSTRUCT, "void f(const VxFrustum &in)", asFUNCTIONPR([](const VxFrustum &f, VxFrustum *self) { new(self) VxFrustum(f); }, (const VxFrustum &, VxFrustum*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxFrustum *self) { self->~VxFrustum(); }, (VxFrustum*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1878,13 +1887,14 @@ static void RegisterVxColor(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxColor *self) { new(self) VxColor(); }, (VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(const VxColor &in)", asFUNCTIONPR([](const VxColor &f, VxColor *self) { new(self) VxColor(f); }, (const VxColor &, VxColor*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float r, float g, float b, float a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (float, float, float, float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float r, float g, float b, VxColor *self) { new(self) VxColor(r, g, b); }, (float, float, float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float r, VxColor *self) { new(self) VxColor(r); }, (float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(uint)", asFUNCTIONPR([](unsigned long col, VxColor *self) { new(self) VxColor(col); }, (unsigned long, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int, int, int, int)", asFUNCTIONPR([](int r, int g, int b, int a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (int, int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int, int, int)", asFUNCTIONPR([](int r, int g, int b, VxColor *self) { new(self) VxColor(r, g, b); }, (int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(const VxColor &in)", asFUNCTIONPR([](const VxColor &f, VxColor *self) { new(self) VxColor(f); }, (const VxColor &, VxColor*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxColor *self) { new(self) VxColor(list[0], list[1], list[2], list[3]); }, (float *, VxColor *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxColor *self) { self->~VxColor(); }, (VxColor*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
