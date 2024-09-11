@@ -1,8 +1,8 @@
-#ifndef BML_SCRIPTVXMATH_H
-#define BML_SCRIPTVXMATH_H
+#ifndef CK_SCRIPTVXMATH_H
+#define CK_SCRIPTVXMATH_H
 
 #include <angelscript.h>
 
 void RegisterVxMath(asIScriptEngine *engine);
 
-#endif // BML_SCRIPTVXMATH_H
+#endif // CK_SCRIPTVXMATH_H

@@ -1,5 +1,5 @@
-#ifndef AS_LOGGER_H
-#define AS_LOGGER_H
+#ifndef CK_LOGGER_H
+#define CK_LOGGER_H
 
 #include <cstdarg>
 #include <cstdio>
@@ -93,4 +93,4 @@ private:
     FILE *m_File;
 };
 
-#endif // AS_LOGGER_H
+#endif // CK_LOGGER_H
