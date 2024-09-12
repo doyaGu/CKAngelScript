@@ -1,30 +1,25 @@
-set(CKAS_PUBLIC_HEADERS
-)
-
-set(CKAS_PRIVATE_HEADERS
+set(CKAS_HEADERS
         ScriptManager.h
         ScriptFormat.h
         ScriptXString.h
         ScriptXBitArray.h
         ScriptVxMath.h
         ScriptCK2.h
-#        Logger.h
 )
 
 set(CKAS_SOURCES
         Plugin.cpp
         ScriptManager.cpp
         AngelScriptLoader.cpp
-#        AngelScriptRunner.cpp
+        # AngelScriptRunner.cpp
         ScriptFormat.cpp
         ScriptXString.cpp
         ScriptXBitArray.cpp
         ScriptVxMath.cpp
         ScriptCK2.cpp
-#        Logger.cpp
 )
 
-add_library(CKAngelScript SHARED ${CKAS_SOURCES} ${CKAS_PUBLIC_HEADERS} ${CKAS_PRIVATE_HEADERS})
+add_library(CKAngelScript SHARED ${CKAS_SOURCES} ${CKAS_HEADERS})
 set_target_properties(CKAngelScript PROPERTIES OUTPUT_NAME "AngelScript")
 
 target_include_directories(CKAngelScript
@@ -46,7 +41,9 @@ if (NOT SKIP_INSTALL_ALL)
     )
 
     if (NOT SKIP_INSTALL_HEADERS)
-        install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/AngelScriptManager.h
+        install(FILES
+                ${PROJECT_SOURCE_DIR}/include/AngelScriptManager.h
+                ${PROJECT_SOURCE_DIR}/deps/angelscript/angelscript/include/angelscript.h
                 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     endif ()
 endif ()
