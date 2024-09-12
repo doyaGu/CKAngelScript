@@ -1,10 +1,8 @@
 #include "ScriptManager.h"
 
-#include <sstream>
-
-#include "CKGlobals.h"
 #include "CKPathManager.h"
 
+#include "ScriptFormat.h"
 #include "ScriptXString.h"
 #include "ScriptXBitArray.h"
 #include "ScriptVxMath.h"
@@ -23,54 +21,6 @@
 #include "add_on/scriptfile/scriptfilesystem.h"
 #include "add_on/scripthelper/scripthelper.h"
 #include "add_on/scriptbuilder/scriptbuilder.h"
-
-static void Print(const std::string &str) {
-    CKContext *context = GetCKContext(0);
-    if (context) {
-        context->OutputToConsole((CKSTRING) str.c_str());
-    }
-}
-
-static void Print(int value) {
-    std::stringstream ss;
-    ss << value;
-    Print(ss.str());
-}
-
-static void Print(long long value) {
-    std::stringstream ss;
-    ss << value;
-    Print(ss.str());
-}
-
-static void Print(unsigned value) {
-    std::stringstream ss;
-    ss << value;
-    Print(ss.str());
-}
-
-static void Print(unsigned long long value) {
-    std::stringstream ss;
-    ss << value;
-    Print(ss.str());
-}
-
-static void Print(float value) {
-    std::stringstream ss;
-    ss << value;
-    Print(ss.str());
-}
-
-static void Print(double value) {
-    std::stringstream ss;
-    ss << value;
-    Print(ss.str());
-}
-
-static void Print(bool value) {
-    std::string str = value ? "true" : "false";
-    Print(str);
-}
 
 static int PragmaCallback(const std::string &pragmaText, CScriptBuilder &builder, void * /*userParam*/) {
     asIScriptEngine *engine = builder.GetEngine();
@@ -180,18 +130,7 @@ int ScriptManager::Init() {
     RegisterCK2(m_ScriptEngine);
 
     // Register the function that we want the scripts to call
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(const string &in)", asFUNCTIONPR(Print, (const std::string &), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(int8)", asFUNCTIONPR(Print, (int), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(int16)", asFUNCTIONPR(Print, (int), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(int)", asFUNCTIONPR(Print, (int), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(int64)", asFUNCTIONPR(Print, (long long), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(uint8)", asFUNCTIONPR(Print, (unsigned), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(uint16)", asFUNCTIONPR(Print, (unsigned), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(uint)", asFUNCTIONPR(Print, (unsigned), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(uint64)", asFUNCTIONPR(Print, (unsigned long long), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(float)", asFUNCTIONPR(Print, (float), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(double)", asFUNCTIONPR(Print, (double), void), asCALL_CDECL); assert(r >= 0);
-    r = m_ScriptEngine->RegisterGlobalFunction("void print(bool)", asFUNCTIONPR(Print, (bool), void), asCALL_CDECL); assert(r >= 0);
+    RegisterScriptFormat(m_ScriptEngine);
 
     m_ScriptContext = m_ScriptEngine->CreateContext();
     if (!m_ScriptContext) {
