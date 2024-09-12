@@ -93,6 +93,9 @@ public:
     }
 
 protected:
+    void RegisterStdAddons(asIScriptEngine *engine);
+    void RegisterVirtools(asIScriptEngine *engine);
+
     CKERROR ResolveScriptFileName(XString &filename);
 
     int m_Flags = 0;

@@ -92,7 +92,7 @@ int ScriptManager::Init() {
 
     m_ScriptEngine = asCreateScriptEngine();
     if (!m_ScriptEngine) {
-        m_Context->OutputToConsole("Failed to create script engine.");
+        m_Context->OutputToConsole(const_cast<char *>("Failed to create script engine."));
         return -1;
     }
 
@@ -109,32 +109,17 @@ int ScriptManager::Init() {
         return r;
 
     // Register the standard add-ons that we'll allow the scripts to use
-    RegisterScriptAny(m_ScriptEngine);
-    RegisterScriptArray(m_ScriptEngine, true);
-    RegisterStdString(m_ScriptEngine);
-    RegisterStdStringUtils(m_ScriptEngine);
-    RegisterScriptDictionary(m_ScriptEngine);
-    RegisterScriptMath(m_ScriptEngine);
-    RegisterScriptMathComplex(m_ScriptEngine);
-    RegisterScriptHandle(m_ScriptEngine);
-    RegisterScriptWeakRef(m_ScriptEngine);
-    RegisterScriptDateTime(m_ScriptEngine);
-    RegisterScriptFile(m_ScriptEngine);
-    RegisterScriptFileSystem(m_ScriptEngine);
-    RegisterExceptionRoutines(m_ScriptEngine);
+    RegisterStdAddons(m_ScriptEngine);
 
     // Register the Virtools API
-    RegisterXString(m_ScriptEngine);
-    RegisterXBitArray(m_ScriptEngine);
-    RegisterVxMath(m_ScriptEngine);
-    RegisterCK2(m_ScriptEngine);
+    RegisterVirtools(m_ScriptEngine);
 
     // Register the function that we want the scripts to call
     RegisterScriptFormat(m_ScriptEngine);
 
     m_ScriptContext = m_ScriptEngine->CreateContext();
     if (!m_ScriptContext) {
-        m_Context->OutputToConsole((CKSTRING) "Failed to create script context.");
+        m_Context->OutputToConsole(const_cast<char *>("Failed to create script context."));
         return -1;
     }
     m_ScriptContext->SetExceptionCallback(asMETHOD(ScriptManager, ExceptionCallback), this, asCALL_THISCALL);
@@ -365,7 +350,7 @@ void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
             type = "INFO";
             break;
     }
-    m_Context->OutputToConsoleEx("%s(%d,%d): %s: %s", msg.section, msg.row, msg.col, type, msg.message);
+    m_Context->OutputToConsoleEx(const_cast<char *>("%s(%d,%d): %s: %s"), msg.section, msg.row, msg.col, type, msg.message);
 }
 
 void ScriptManager::ExceptionCallback(asIScriptContext *context) {
@@ -397,6 +382,33 @@ XString ScriptManager::GetCallStack(asIScriptContext *context) {
     }
 
     return str;
+}
+
+void ScriptManager::RegisterStdAddons(asIScriptEngine *engine) {
+    assert(engine != nullptr);
+
+    RegisterScriptAny(engine);
+    RegisterScriptArray(engine, true);
+    RegisterStdString(engine);
+    RegisterStdStringUtils(engine);
+    RegisterScriptDictionary(engine);
+    RegisterScriptMath(engine);
+    RegisterScriptMathComplex(engine);
+    RegisterScriptHandle(engine);
+    RegisterScriptWeakRef(engine);
+    RegisterScriptDateTime(engine);
+    RegisterScriptFile(engine);
+    RegisterScriptFileSystem(engine);
+    RegisterExceptionRoutines(engine);
+}
+
+void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
+    assert(engine != nullptr);
+
+    RegisterXString(m_ScriptEngine);
+    RegisterXBitArray(m_ScriptEngine);
+    RegisterVxMath(m_ScriptEngine);
+    RegisterCK2(m_ScriptEngine);
 }
 
 CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
