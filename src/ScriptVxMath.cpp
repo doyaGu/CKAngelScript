@@ -9,11 +9,11 @@
 
 #include "add_on/scriptarray/scriptarray.h"
 
-static float s_EPSILON = EPSILON;
-static float s_PI = PI;
-static float s_HALFPI = HALFPI;
-static float s_NB_STDPIXEL_FORMATS = NB_STDPIXEL_FORMATS;
-static float s_MAX_PIXEL_FORMATS = MAX_PIXEL_FORMATS;
+static float g_EPSILON = EPSILON;
+static float g_PI = PI;
+static float g_HALFPI = HALFPI;
+static float g_NB_STDPIXEL_FORMATS = NB_STDPIXEL_FORMATS;
+static float g_MAX_PIXEL_FORMATS = MAX_PIXEL_FORMATS;
 
 static void RegisterVxMathTypedefs(asIScriptEngine *engine) {
     int r = 0;
@@ -748,11 +748,11 @@ static void RegisterVxMathObjectTypes(asIScriptEngine *engine) {
 static void RegisterVxMathGlobalVariables(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterGlobalProperty("const float EPSILON", (void*)&s_EPSILON); assert(r >= 0);
-    r = engine->RegisterGlobalProperty("const float PI", (void*)&s_PI); assert(r >= 0);
-    r = engine->RegisterGlobalProperty("const float HALFPI", (void*)&s_HALFPI); assert(r >= 0);
-    r = engine->RegisterGlobalProperty("const float NB_STDPIXEL_FORMATS", (void*)&s_NB_STDPIXEL_FORMATS); assert(r >= 0);
-    r = engine->RegisterGlobalProperty("const float MAX_PIXEL_FORMATS", (void*)&s_MAX_PIXEL_FORMATS); assert(r >= 0);
+    r = engine->RegisterGlobalProperty("const float EPSILON", (void*)&g_EPSILON); assert(r >= 0);
+    r = engine->RegisterGlobalProperty("const float PI", (void*)&g_PI); assert(r >= 0);
+    r = engine->RegisterGlobalProperty("const float HALFPI", (void*)&g_HALFPI); assert(r >= 0);
+    r = engine->RegisterGlobalProperty("const float NB_STDPIXEL_FORMATS", (void*)&g_NB_STDPIXEL_FORMATS); assert(r >= 0);
+    r = engine->RegisterGlobalProperty("const float MAX_PIXEL_FORMATS", (void*)&g_MAX_PIXEL_FORMATS); assert(r >= 0);
 }
 
 static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
