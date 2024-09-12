@@ -342,7 +342,9 @@ void RegisterScriptFormat(asIScriptEngine *engine) {
         decl += ", ?&in)";
     }
 
-    decl = "void print(?&in)";
+    r = engine->RegisterGlobalFunction("void print(?&in)", asFUNCTION(PrintGeneric), asCALL_GENERIC); assert(r >= 0);
+
+    decl = "void print(const string &in)";
     for (int i = 0; i <= 16; ++i) {
         r = engine->RegisterGlobalFunction(decl.c_str(), asFUNCTION(PrintGeneric), asCALL_GENERIC); assert(r >= 0);
         decl.pop_back();
