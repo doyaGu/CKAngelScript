@@ -22,3 +22,6 @@ add_library(angelscript_addon STATIC
 target_include_directories(angelscript_addon PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/angelscript>)
 target_link_libraries(angelscript_addon PUBLIC angelscript)
+
+# fmt
+add_subdirectory(fmt EXCLUDE_FROM_ALL)

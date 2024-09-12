@@ -37,6 +37,7 @@ target_include_directories(CKAngelScript
 target_link_libraries(CKAngelScript PRIVATE
         CK2 VxMath
         angelscript angelscript_addon
+        fmt::fmt
 )
 
 if (NOT SKIP_INSTALL_ALL)

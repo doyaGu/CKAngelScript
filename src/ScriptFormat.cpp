@@ -6,6 +6,9 @@
 #include <unordered_map>
 #include <mutex>
 
+#include <fmt/format.h>
+#include <fmt/args.h>
+
 #include "CKContext.h"
 
 #include "RefCount.h"
@@ -224,56 +227,77 @@ static void ToStringGeneric(asIScriptGeneric *gen) {
 }
 
 static std::string FormatString(asIScriptGeneric *gen) {
-    asIScriptEngine *engine = gen->GetEngine();
-    const int count = gen->GetArgCount();
-
-    std::stringstream stream;
     const std::string &fmt = **static_cast<std::string **>(gen->GetAddressOfArg(0));
+    fmt::dynamic_format_arg_store<fmt::format_context> store;
 
-    const size_t len = fmt.length();
-    for (size_t i = 0; i < len; ++i) {
-        char c = fmt[i];
-        if (c != '{') {
-            stream << c;
-            continue;
-        }
-        if (++i == len) {
-            engine->WriteMessage("Format", 0, 0, asMSGTYPE_ERROR, "Broken format string, { at end of string.");
-            return {};
-        }
-        c = fmt[i];
-        if (c == '{') {
-            stream << '{';
-            continue;
-        }
-        size_t pos = fmt.find_first_of('}', i);
-        if (pos == std::string::npos) {
-            engine->WriteMessage("Format", 0, 0, asMSGTYPE_ERROR, "Broken format string, missing closing }.");
-            return {};
-        }
-        std::string part = fmt.substr(i, pos - i);
-        int index;
-        try {
-            index = std::stoi(part);
-        } catch (const std::invalid_argument &) {
-            std::string msg("Broken format string, invalid index '");
-            msg.append(part).append("'.");
-            engine->WriteMessage("Format", 0, 0, asMSGTYPE_ERROR, msg.c_str());
-            return {};
-        }
+    const int count = gen->GetArgCount();
+    for (int i = 1; i < count; ++i) {
+        auto typeId = gen->GetArgTypeId(i);
+        void *adr = gen->GetAddressOfArg(i);
 
-        ++index;
-        if (index < 1 || index >= count) {
-            std::string msg("Broken format string, invalid index ");
-            msg.append(std::to_string(index - 1)).append(".");
-            engine->WriteMessage("Format", 0, 0, asMSGTYPE_ERROR, msg.c_str());
-            return {};
+        switch (typeId) {
+            case asTYPEID_BOOL: {
+                bool value = **static_cast<bool **>(adr);
+                store.push_back(value ? "true" : "false");
+            }
+            break;
+            case asTYPEID_INT8: {
+                int8_t value = **static_cast<int8_t **>(adr);
+                store.push_back(value);
+            }
+            break;
+            case asTYPEID_INT16: {
+                int16_t value = **static_cast<int16_t **>(adr);
+                store.push_back(value);
+            }
+            break;
+            case asTYPEID_INT32: {
+                int32_t value = **static_cast<int32_t **>(adr);
+                store.push_back(value);
+            }
+            break;
+            case asTYPEID_INT64: {
+                int64_t value = **static_cast<int64_t **>(adr);
+                store.push_back(value);
+            }
+            break;
+            case asTYPEID_UINT8: {
+                uint8_t value = **static_cast<uint8_t **>(adr);
+                store.push_back(value);
+            }
+            break;
+            case asTYPEID_UINT16: {
+                uint16_t value = **static_cast<uint16_t **>(adr);
+                store.push_back(value);
+            }
+            break;
+            case asTYPEID_UINT32: {
+                uint32_t value = **static_cast<uint32_t **>(adr);
+                store.push_back(value);
+            }
+            break;
+            case asTYPEID_UINT64: {
+                uint64_t value = **static_cast<uint64_t **>(adr);
+                store.push_back(value);
+            }
+            break;
+            case asTYPEID_FLOAT: {
+                float value = **static_cast<float **>(adr);
+                store.push_back(value);
+            }
+            break;
+            case asTYPEID_DOUBLE: {
+                double value = **static_cast<double **>(adr);
+                store.push_back(value);
+            }
+            break;
+            default:
+                store.push_back(ToString(gen, adr, typeId));
+            break;
         }
-        ArgToStringStream(gen, index, stream);
-        i = pos;
     }
 
-    return stream.str();
+    return fmt::vformat(fmt, store);
 }
 
 static void FormatStringGeneric(asIScriptGeneric *gen) {
