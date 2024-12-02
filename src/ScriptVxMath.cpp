@@ -691,15 +691,9 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
 static void RegisterVxMathObjectTypes(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectType("CKRECT", sizeof(CKRECT), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKRECT>()); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKRECT", "int left", asOFFSET(CKRECT, left)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKRECT", "int top", asOFFSET(CKRECT, top)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKRECT", "int right", asOFFSET(CKRECT, right)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKRECT", "int bottom", asOFFSET(CKRECT, bottom)); assert(r >= 0);
+    r = engine->RegisterObjectType("CKRECT", sizeof(CKRECT), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<CKRECT>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("CKPOINT", sizeof(CKPOINT), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKPOINT>()); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKPOINT", "int x", asOFFSET(CKPOINT, x)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKPOINT", "int y", asOFFSET(CKPOINT, y)); assert(r >= 0);
+    r = engine->RegisterObjectType("CKPOINT", sizeof(CKPOINT), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<CKPOINT>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("VxMutex", sizeof(VxMutex), asOBJ_VALUE | asGetTypeTraits<VxMutex>()); assert(r >= 0);
 
@@ -819,6 +813,40 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
 
     // Best-fit bounding box computation
     // r = engine->RegisterGlobalFunction("bool VxComputeBestFitBBox(const uint8 *in, uint Stride, int Count, VxMatrix &out, float AdditionalBorder)", asFUNCTION(VxComputeBestFitBBox), asCALL_CDECL); assert(r >= 0);
+}
+
+// CKRECT
+
+static void RegisterCKRECT(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKRECT", "int left", asOFFSET(CKRECT, left)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKRECT", "int top", asOFFSET(CKRECT, top)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKRECT", "int right", asOFFSET(CKRECT, right)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKRECT", "int bottom", asOFFSET(CKRECT, bottom)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKRECT", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKRECT *self) { new(self) CKRECT(); }, (CKRECT*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKRECT", asBEHAVE_CONSTRUCT, "void f(const CKRECT &in)", asFUNCTIONPR([](const CKRECT &rect, CKRECT *self) { new(self) CKRECT(rect); }, (const CKRECT &, CKRECT *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKRECT", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKRECT* self) { self->~CKRECT(); }, (CKRECT *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKRECT", "CKRECT &opAssign(const CKRECT &in)", asMETHODPR(CKRECT, operator=, (const CKRECT &), CKRECT &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKPOINT
+
+static void RegisterCKPOINT(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKPOINT", "int x", asOFFSET(CKPOINT, x)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPOINT", "int y", asOFFSET(CKPOINT, y)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKPOINT", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKPOINT *self) { new(self) CKPOINT(); }, (CKPOINT*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKPOINT", asBEHAVE_CONSTRUCT, "void f(const CKPOINT &in)", asFUNCTIONPR([](const CKPOINT &point, CKPOINT *self) { new(self) CKPOINT(point); }, (const CKPOINT &, CKPOINT *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKPOINT", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPOINT* self) { self->~CKPOINT(); }, (CKPOINT *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKPOINT", "CKPOINT &opAssign(const CKPOINT &in)", asMETHODPR(CKPOINT, operator=, (const CKPOINT &), CKPOINT &), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxMutex
@@ -1993,6 +2021,9 @@ void RegisterVxMath(asIScriptEngine *engine) {
 
     RegisterXString(engine);
     RegisterXBitArray(engine);
+
+    RegisterCKRECT(engine);
+    RegisterCKPOINT(engine);
 
     RegisterVxMutex(engine);
     RegisterVxTimeProfiler(engine);
