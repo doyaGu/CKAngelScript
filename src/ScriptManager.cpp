@@ -3,6 +3,8 @@
 #include "CKPathManager.h"
 
 #include "ScriptFormat.h"
+#include "ScriptNativePointer.h"
+#include "ScriptNativeBuffer.h"
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
 
@@ -109,13 +111,18 @@ int ScriptManager::Init() {
     // Register the standard types
     RegisterStdTypes(m_ScriptEngine);
 
+    // Register the standard add-ons
     RegisterStdAddons(m_ScriptEngine);
 
-    // Register the Virtools API
-    RegisterVirtools(m_ScriptEngine);
+    // Register the native types
+    RegisterNativePointer(m_ScriptEngine);
+    RegisterNativeBuffer(m_ScriptEngine);
 
     // Register the function that we want the scripts to call
     RegisterScriptFormat(m_ScriptEngine);
+
+    // Register the Virtools API
+    RegisterVirtools(m_ScriptEngine);
 
     m_ScriptContext = m_ScriptEngine->CreateContext();
     if (!m_ScriptContext) {

@@ -1,6 +1,8 @@
 set(CKAS_HEADERS
         ScriptManager.h
         ScriptFormat.h
+        ScriptNativePointer.h
+        ScriptNativeBuffer.h
         ScriptXString.h
         ScriptXBitArray.h
         ScriptVxMath.h
@@ -13,6 +15,8 @@ set(CKAS_SOURCES
         AngelScriptLoader.cpp
         # AngelScriptRunner.cpp
         ScriptFormat.cpp
+        ScriptNativePointer.cpp
+        ScriptNativeBuffer.cpp
         ScriptXString.cpp
         ScriptXBitArray.cpp
         ScriptVxMath.cpp
