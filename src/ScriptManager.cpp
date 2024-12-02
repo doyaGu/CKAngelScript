@@ -106,7 +106,9 @@ int ScriptManager::Init() {
     if (r < 0)
         return r;
 
-    // Register the standard add-ons that we'll allow the scripts to use
+    // Register the standard types
+    RegisterStdTypes(m_ScriptEngine);
+
     RegisterStdAddons(m_ScriptEngine);
 
     // Register the Virtools API
@@ -380,6 +382,24 @@ XString ScriptManager::GetCallStack(asIScriptContext *context) {
     }
 
     return str;
+}
+
+void ScriptManager::RegisterStdTypes(asIScriptEngine *engine) {
+    assert(engine != nullptr);
+
+    int r = 0;
+
+    if (sizeof(void *) == 4) {
+        r = engine->RegisterTypedef("size_t", "int"); assert(r >= 0);
+        r = engine->RegisterTypedef("ptrdiff_t", "int"); assert(r >= 0);
+        r = engine->RegisterTypedef("intptr_t", "int"); assert(r >= 0);
+        r = engine->RegisterTypedef("uintptr_t", "uint"); assert(r >= 0);
+    } else {
+        r = engine->RegisterTypedef("size_t", "int64"); assert(r >= 0);
+        r = engine->RegisterTypedef("ptrdiff_t", "int64"); assert(r >= 0);
+        r = engine->RegisterTypedef("intptr_t", "int64"); assert(r >= 0);
+        r = engine->RegisterTypedef("uintptr_t", "uint64"); assert(r >= 0);
+    }
 }
 
 void ScriptManager::RegisterStdAddons(asIScriptEngine *engine) {

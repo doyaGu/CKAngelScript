@@ -93,6 +93,7 @@ public:
     }
 
 protected:
+    void RegisterStdTypes(asIScriptEngine *engine);
     void RegisterStdAddons(asIScriptEngine *engine);
     void RegisterVirtools(asIScriptEngine *engine);
 
