@@ -686,6 +686,30 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CKRST_2DCAPS", "CKRST_2DCAPS_WINDOWED", CKRST_2DCAPS_WINDOWED); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_2DCAPS", "CKRST_2DCAPS_3D", CKRST_2DCAPS_3D); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_2DCAPS", "CKRST_2DCAPS_GDI", CKRST_2DCAPS_GDI); assert(r >= 0);
+
+    // VXCURSOR_POINTER
+    r = engine->RegisterEnum("VXCURSOR_POINTER"); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXCURSOR_POINTER", "VXCURSOR_NORMALSELECT", VXCURSOR_NORMALSELECT); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXCURSOR_POINTER", "VXCURSOR_BUSY", VXCURSOR_BUSY); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXCURSOR_POINTER", "VXCURSOR_MOVE", VXCURSOR_MOVE); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXCURSOR_POINTER", "VXCURSOR_LINKSELECT", VXCURSOR_LINKSELECT); assert(r >= 0);
+
+    // VXTEXT_ALIGNMENT
+    r = engine->RegisterEnum("VXTEXT_ALIGNMENT"); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_CENTER", VXTEXT_CENTER); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_LEFT", VXTEXT_LEFT); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_RIGHT", VXTEXT_RIGHT); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_TOP", VXTEXT_TOP); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_BOTTOM", VXTEXT_BOTTOM); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_VCENTER", VXTEXT_VCENTER); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_HCENTER", VXTEXT_HCENTER); assert(r >= 0);
+
+    // VxMMF_Error
+    r = engine->RegisterEnum("VxMMF_Error"); assert(r >= 0);
+    r = engine->RegisterEnumValue("VxMMF_Error", "VxMMF_NoError", VxMMF_NoError); assert(r >= 0);
+    r = engine->RegisterEnumValue("VxMMF_Error", "VxMMF_FileOpen", VxMMF_FileOpen); assert(r >= 0);
+    r = engine->RegisterEnumValue("VxMMF_Error", "VxMMF_FileMapping", VxMMF_FileMapping); assert(r >= 0);
+    r = engine->RegisterEnumValue("VxMMF_Error", "VxMMF_MapView", VxMMF_MapView); assert(r >= 0);
 }
 
 static void RegisterVxMathObjectTypes(asIScriptEngine *engine) {
@@ -775,64 +799,98 @@ static void RegisterVxMathGlobalVariables(asIScriptEngine *engine) {
 static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterGlobalFunction("int radToAngle(float)", asFUNCTION(radToAngle), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float Tsin(int)", asFUNCTION(Tsin), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float Tcos(int)", asFUNCTION(Tcos), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int radToAngle(float val)", asFUNCTION(radToAngle), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float Tsin(int angle)", asFUNCTION(Tsin), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float Tcos(int angle)", asFUNCTION(Tcos), asCALL_CDECL); assert(r >= 0);
 
     // Interpolation functions
-    r = engine->RegisterGlobalFunction("void InterpolateFloatArray(NativePointer Res, NativePointer array1, NativePointer array2, float factor, int count)", asFUNCTION(InterpolateFloatArray), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void InterpolateVectorArray(NativePointer Res, NativePointer array1, NativePointer array2, float factor, int count, uint StrideRes, uint StrideIn)", asFUNCTION(InterpolateVectorArray), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void InterpolateFloatArray(NativePointer res, NativePointer array1, NativePointer array2, float factor, int count)", asFUNCTION(InterpolateFloatArray), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void InterpolateVectorArray(NativePointer res, NativePointer array1, NativePointer array2, float factor, int count, uint strideRes, uint strideIn)", asFUNCTION(InterpolateVectorArray), asCALL_CDECL); assert(r >= 0);
 
     // Box and transformation functions
     r = engine->RegisterGlobalFunction("bool VxTransformBox2D(const VxMatrix &in, const VxBbox &in, VxRect &out, VxRect &out, VXCLIP_FLAGS &inout, VXCLIP_FLAGS &inout)", asFUNCTION(VxTransformBox2D), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxProjectBoxZExtents(const VxMatrix &in, const VxBbox &in, float &out, float &out)", asFUNCTION(VxProjectBoxZExtents), asCALL_CDECL); assert(r >= 0);
 
     // Structure copying functions
-    r = engine->RegisterGlobalFunction("bool VxFillStructure(int Count, NativePointer Dst, uint Stride, uint SizeSrc, NativePointer Src)", asFUNCTION(VxFillStructure), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxCopyStructure(int Count, NativePointer Dst, uint OutStride, uint SizeSrc, NativePointer Src, uint InStride)", asFUNCTION(VxCopyStructure), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxFillStructure(int count, NativePointer dst, uint stride, uint sizeSrc, NativePointer src)", asFUNCTION(VxFillStructure), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxCopyStructure(int count, NativePointer dst, uint outStride, uint sizeSrc, NativePointer src, uint inStride)", asFUNCTION(VxCopyStructure), asCALL_CDECL); assert(r >= 0);
     // r = engine->RegisterGlobalFunction("bool VxIndexedCopy(const VxStridedData &Dst, const VxStridedData &Src, uint SizeSrc, int *Indices, int IndexCount)", asFUNCTION(VxIndexedCopy), asCALL_CDECL); assert(r >= 0);
 
     // Graphic utilities (Blitting)
-    r = engine->RegisterGlobalFunction("void VxDoBlit(const VxImageDescEx &in, const VxImageDescEx &in)", asFUNCTION(VxDoBlit), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void VxDoBlitUpsideDown(const VxImageDescEx &in, const VxImageDescEx &in)", asFUNCTION(VxDoBlitUpsideDown), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void VxDoAlphaBlit(const VxImageDescEx &in, uint8 AlphaValue)", asFUNCTIONPR(VxDoAlphaBlit, (const VxImageDescEx &, XBYTE), void), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void VxDoAlphaBlit(const VxImageDescEx &in, NativePointer)", asFUNCTIONPR(VxDoAlphaBlit, (const VxImageDescEx &, XBYTE *), void), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxDoBlit(const VxImageDescEx &in src, const VxImageDescEx &in dst)", asFUNCTION(VxDoBlit), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxDoBlitUpsideDown(const VxImageDescEx &in src, const VxImageDescEx &in dst)", asFUNCTION(VxDoBlitUpsideDown), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxDoAlphaBlit(const VxImageDescEx &in dst, uint8 alphaValue)", asFUNCTIONPR(VxDoAlphaBlit, (const VxImageDescEx &, XBYTE), void), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxDoAlphaBlit(const VxImageDescEx &in dst, NativePointer alphaValue)", asFUNCTIONPR(VxDoAlphaBlit, (const VxImageDescEx &, XBYTE *), void), asCALL_CDECL); assert(r >= 0);
 
     // Inline functions
-    r = engine->RegisterGlobalFunction("uint GetBitCount(uint)", asFUNCTION(GetBitCount), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint GetBitShift(uint)", asFUNCTION(GetBitShift), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void VxGetBitCounts(const VxImageDescEx &in, uint &out, uint &out, uint &out, uint &out)", asFUNCTION(VxGetBitCounts), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void VxGetBitShifts(const VxImageDescEx &in, uint &out, uint &out, uint &out, uint &out)", asFUNCTION(VxGetBitShifts), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint GetBitCount(uint mask)", asFUNCTION(GetBitCount), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint GetBitShift(uint mask)", asFUNCTION(GetBitShift), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxGetBitCounts(const VxImageDescEx &in desc, uint &out r, uint &out g, uint &out b, uint &out a)", asFUNCTION(VxGetBitCounts), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxGetBitShifts(const VxImageDescEx &in desc, uint &out r, uint &out g, uint &out b, uint &out a)", asFUNCTION(VxGetBitShifts), asCALL_CDECL); assert(r >= 0);
 
     // Graphic utilities (MipMaps and Resizing)
-    r = engine->RegisterGlobalFunction("void VxGenerateMipMap(const VxImageDescEx &in, NativePointer &out)", asFUNCTION(VxGenerateMipMap), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void VxResizeImage32(const VxImageDescEx &in, const VxImageDescEx &in)", asFUNCTION(VxResizeImage32), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxGenerateMipMap(const VxImageDescEx &in src, NativePointer &out dst)", asFUNCTION(VxGenerateMipMap), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxResizeImage32(const VxImageDescEx &in src, const VxImageDescEx &in dst)", asFUNCTION(VxResizeImage32), asCALL_CDECL); assert(r >= 0);
 
     // Conversion to normal/bump map
-    r = engine->RegisterGlobalFunction("bool VxConvertToNormalMap(const VxImageDescEx &in, uint ColorMask)", asFUNCTION(VxConvertToNormalMap), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxConvertToBumpMap(const VxImageDescEx &in)", asFUNCTION(VxConvertToBumpMap), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxConvertToNormalMap(const VxImageDescEx &in image, uint colorMask)", asFUNCTION(VxConvertToNormalMap), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxConvertToBumpMap(const VxImageDescEx &in image)", asFUNCTION(VxConvertToBumpMap), asCALL_CDECL); assert(r >= 0);
 
     // Pixel format conversion functions
-    r = engine->RegisterGlobalFunction("VX_PIXELFORMAT VxImageDesc2PixelFormat(const VxImageDescEx &in)", asFUNCTION(VxImageDesc2PixelFormat), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void VxPixelFormat2ImageDesc(VX_PIXELFORMAT, VxImageDescEx &out)", asFUNCTION(VxPixelFormat2ImageDesc), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("string VxPixelFormat2String(VX_PIXELFORMAT)", asFUNCTION(VxPixelFormat2String), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VX_PIXELFORMAT VxImageDesc2PixelFormat(const VxImageDescEx &in desc)", asFUNCTION(VxImageDesc2PixelFormat), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxPixelFormat2ImageDesc(VX_PIXELFORMAT pf, VxImageDescEx &out desc)", asFUNCTION(VxPixelFormat2ImageDesc), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string VxPixelFormat2String(VX_PIXELFORMAT pf)", asFUNCTION(VxPixelFormat2String), asCALL_CDECL); assert(r >= 0);
 
     // Miscellaneous
     r = engine->RegisterGlobalFunction("int GetQuantizationSamplingFactor()", asFUNCTION(GetQuantizationSamplingFactor), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void SetQuantizationSamplingFactor(int)", asFUNCTION(SetQuantizationSamplingFactor), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void SetQuantizationSamplingFactor(int sf)", asFUNCTION(SetQuantizationSamplingFactor), asCALL_CDECL); assert(r >= 0);
 
     // Processor features
     r = engine->RegisterGlobalFunction("string GetProcessorDescription()", asFUNCTION(GetProcessorDescription), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("int GetProcessorFrequency()", asFUNCTION(GetProcessorFrequency), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("uint GetProcessorFeatures()", asFUNCTION(GetProcessorFeatures), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void ModifyProcessorFeatures(uint Add, uint Remove)", asFUNCTION(ModifyProcessorFeatures), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void ModifyProcessorFeatures(uint add, uint remove)", asFUNCTION(ModifyProcessorFeatures), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("ProcessorsType GetProcessorType()", asFUNCTION(GetProcessorType), asCALL_CDECL); assert(r >= 0);
 
     // Utility function for point-in-rect check
-    r = engine->RegisterGlobalFunction("bool VxPtInRect(const CKRECT &in, const CKPOINT &in)", asFUNCTION(VxPtInRect), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxPtInRect(const CKRECT &in rect, const CKPOINT &in pt)", asFUNCTION(VxPtInRect), asCALL_CDECL); assert(r >= 0);
 
     // Best-fit bounding box computation
-    r = engine->RegisterGlobalFunction("bool VxComputeBestFitBBox(NativePointer, uint, int, VxMatrix &out, float)", asFUNCTION(VxComputeBestFitBBox), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxComputeBestFitBBox(NativePointer points, uint stride, int count, VxMatrix &out bBoxMatrix, float additionalBorder)", asFUNCTION(VxComputeBestFitBBox), asCALL_CDECL); assert(r >= 0);
+}
+
+// CKRECT
+
+static void RegisterCKRECT(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKRECT", "int left", asOFFSET(CKRECT, left)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKRECT", "int top", asOFFSET(CKRECT, top)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKRECT", "int right", asOFFSET(CKRECT, right)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKRECT", "int bottom", asOFFSET(CKRECT, bottom)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKRECT", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKRECT *self) { new(self) CKRECT(); }, (CKRECT*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKRECT", asBEHAVE_CONSTRUCT, "void f(const CKRECT &in other)", asFUNCTIONPR([](const CKRECT &rect, CKRECT *self) { new(self) CKRECT(rect); }, (const CKRECT &, CKRECT *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKRECT", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKRECT* self) { self->~CKRECT(); }, (CKRECT *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKRECT", "CKRECT &opAssign(const CKRECT &in other)", asMETHODPR(CKRECT, operator=, (const CKRECT &), CKRECT &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKPOINT
+
+static void RegisterCKPOINT(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKPOINT", "int x", asOFFSET(CKPOINT, x)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPOINT", "int y", asOFFSET(CKPOINT, y)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKPOINT", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKPOINT *self) { new(self) CKPOINT(); }, (CKPOINT*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKPOINT", asBEHAVE_CONSTRUCT, "void f(const CKPOINT &in other)", asFUNCTIONPR([](const CKPOINT &point, CKPOINT *self) { new(self) CKPOINT(point); }, (const CKPOINT &, CKPOINT *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKPOINT", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPOINT* self) { self->~CKPOINT(); }, (CKPOINT *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKPOINT", "CKPOINT &opAssign(const CKPOINT &in other)", asMETHODPR(CKPOINT, operator=, (const CKPOINT &), CKPOINT &), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxUV
@@ -845,21 +903,23 @@ static void RegisterVxUV(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxUV *self) { new(self) VxUV(); }, (VxUV *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f(float u = 0, float v = 0)", asFUNCTIONPR([](float u, float v, VxUV *self) { new(self) VxUV(u, v); }, (float, float, VxUV *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f(const VxUV &in)", asFUNCTIONPR([](const VxUV &uv, VxUV *self) { new(self) VxUV(uv); }, (const VxUV &, VxUV *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f(const VxUV &in uv)", asFUNCTIONPR([](const VxUV &uv, VxUV *self) { new(self) VxUV(uv); }, (const VxUV &, VxUV *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxUV *self) { self->~VxUV(); }, (VxUV *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxUV", "VxUV &opAddAssign(const VxUV &in)", asMETHODPR(VxUV, operator+=, (const VxUV &), VxUV &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxUV", "VxUV &opSubAssign(const VxUV &in)", asMETHODPR(VxUV, operator-=, (const VxUV &), VxUV &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxUV", "VxUV &opMulAssign(float)", asMETHODPR(VxUV, operator*=, (float), VxUV &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxUV", "VxUV &opDivAssign(float)", asMETHODPR(VxUV, operator/=, (float), VxUV &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV &opAssign(const VxUV &in uv)", asMETHODPR(VxUV, operator=, (const VxUV &), VxUV &), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxUV", "VxUV &opAddAssign(const VxUV &in uv)", asMETHODPR(VxUV, operator+=, (const VxUV &), VxUV &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV &opSubAssign(const VxUV &in uv)", asMETHODPR(VxUV, operator-=, (const VxUV &), VxUV &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV &opMulAssign(float s)", asMETHODPR(VxUV, operator*=, (float), VxUV &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV &opDivAssign(float s)", asMETHODPR(VxUV, operator/=, (float), VxUV &), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxUV", "VxUV opNeg() const", asFUNCTIONPR([](const VxUV &uv) { return -uv; }, (const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxUV", "VxUV opAdd(const VxUV &in) const", asFUNCTIONPR([](const VxUV &v1, const VxUV &v2) { return v1 + v2; }, (const VxUV &, const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxUV", "VxUV opSub(const VxUV &in) const", asFUNCTIONPR([](const VxUV &v1, const VxUV &v2) { return v1 - v2; }, (const VxUV &, const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxUV", "VxUV opMul(float) const", asFUNCTIONPR([](const VxUV &uv, float s) { return uv * s; }, (const VxUV &, float), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxUV", "VxUV opDiv(float) const", asFUNCTIONPR([](const VxUV& uv, float s) { return uv / s; }, (const VxUV &, float), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opAdd(const VxUV &in uv) const", asFUNCTIONPR([](const VxUV &v1, const VxUV &v2) { return v1 + v2; }, (const VxUV &, const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opSub(const VxUV &in uv) const", asFUNCTIONPR([](const VxUV &v1, const VxUV &v2) { return v1 - v2; }, (const VxUV &, const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opMul(float s) const", asFUNCTIONPR([](const VxUV &uv, float s) { return uv * s; }, (const VxUV &, float), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opDiv(float s) const", asFUNCTIONPR([](const VxUV& uv, float s) { return uv / s; }, (const VxUV &, float), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // VxDisplayMode
@@ -873,14 +933,14 @@ static void RegisterVxDisplayMode(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("VxDisplayMode", "int RefreshRate", asOFFSET(VxDisplayMode, RefreshRate)); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VxDisplayMode", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxDisplayMode *self) { new(self) VxDisplayMode(); }, (VxDisplayMode *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxDisplayMode", asBEHAVE_CONSTRUCT, "void f(const VxDisplayMode &in)", asFUNCTIONPR([](const VxDisplayMode &mode, VxDisplayMode *self) { new(self) VxDisplayMode(mode); }, (const VxDisplayMode &, VxDisplayMode *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxDisplayMode", asBEHAVE_CONSTRUCT, "void f(const VxDisplayMode &in other)", asFUNCTIONPR([](const VxDisplayMode &mode, VxDisplayMode *self) { new(self) VxDisplayMode(mode); }, (const VxDisplayMode &, VxDisplayMode *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VxDisplayMode", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxDisplayMode *self) { self->~VxDisplayMode(); }, (VxDisplayMode *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxDisplayMode", "VxDisplayMode &opAssign(const VxDisplayMode &in)", asMETHODPR(VxDisplayMode, operator=, (const VxDisplayMode &), VxDisplayMode &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxDisplayMode", "VxDisplayMode &opAssign(const VxDisplayMode &in other)", asMETHODPR(VxDisplayMode, operator=, (const VxDisplayMode &), VxDisplayMode &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxDisplayMode", "bool opEquals(const VxDisplayMode &in) const", asFUNCTIONPR([](const VxDisplayMode &lhs, const VxDisplayMode &rhs) { return lhs == rhs; }, (const VxDisplayMode &, const VxDisplayMode &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxDisplayMode", "bool opNotEquals(const VxDisplayMode &in) const", asFUNCTIONPR([](const VxDisplayMode &lhs, const VxDisplayMode &rhs) { return lhs != rhs; }, (const VxDisplayMode &, const VxDisplayMode &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxDisplayMode", "bool opEquals(const VxDisplayMode &in other) const", asFUNCTIONPR([](const VxDisplayMode &lhs, const VxDisplayMode &rhs) { return lhs == rhs; }, (const VxDisplayMode &, const VxDisplayMode &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxDisplayMode", "bool opNotEquals(const VxDisplayMode &in other) const", asFUNCTIONPR([](const VxDisplayMode &lhs, const VxDisplayMode &rhs) { return lhs != rhs; }, (const VxDisplayMode &, const VxDisplayMode &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // VxDrawPrimitiveData
@@ -889,11 +949,11 @@ static void RegisterVxDrawPrimitiveData(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectBehaviour("VxDrawPrimitiveData", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxDrawPrimitiveData *self) { new(self) VxDrawPrimitiveData(); }, (VxDrawPrimitiveData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxDrawPrimitiveData", asBEHAVE_CONSTRUCT, "void f(const VxDrawPrimitiveData &in)", asFUNCTIONPR([](const VxDrawPrimitiveData &data, VxDrawPrimitiveData *self) { new(self) VxDrawPrimitiveData(data); }, (const VxDrawPrimitiveData &, VxDrawPrimitiveData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxDrawPrimitiveData", asBEHAVE_CONSTRUCT, "void f(const VxDrawPrimitiveData &in other)", asFUNCTIONPR([](const VxDrawPrimitiveData &data, VxDrawPrimitiveData *self) { new(self) VxDrawPrimitiveData(data); }, (const VxDrawPrimitiveData &, VxDrawPrimitiveData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VxDrawPrimitiveData", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxDrawPrimitiveData *self) { self->~VxDrawPrimitiveData(); }, (VxDrawPrimitiveData *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "VxDrawPrimitiveData &opAssign(const VxDrawPrimitiveData &in)", asMETHODPR(VxDrawPrimitiveData, operator=, (const VxDrawPrimitiveData &), VxDrawPrimitiveData &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "VxDrawPrimitiveData &opAssign(const VxDrawPrimitiveData &in other)", asMETHODPR(VxDrawPrimitiveData, operator=, (const VxDrawPrimitiveData &), VxDrawPrimitiveData &), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxTransformData
@@ -912,11 +972,11 @@ static void RegisterVxTransformData(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("VxTransformData", "uint m_Offscreen", asOFFSET(VxTransformData, m_Offscreen)); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VxTransformData", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxTransformData *self) { new(self) VxTransformData(); }, (VxTransformData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxTransformData", asBEHAVE_CONSTRUCT, "void f(const VxTransformData &in)", asFUNCTIONPR([](const VxTransformData &data, VxTransformData *self) { new(self) VxTransformData(data); }, (const VxTransformData &, VxTransformData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxTransformData", asBEHAVE_CONSTRUCT, "void f(const VxTransformData &in other)", asFUNCTIONPR([](const VxTransformData &data, VxTransformData *self) { new(self) VxTransformData(data); }, (const VxTransformData &, VxTransformData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VxTransformData", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxTransformData *self) { self->~VxTransformData(); }, (VxTransformData *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxTransformData", "VxTransformData &opAssign(const VxTransformData &in)", asMETHODPR(VxTransformData, operator=, (const VxTransformData &), VxTransformData &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxTransformData", "VxTransformData &opAssign(const VxTransformData &in other)", asMETHODPR(VxTransformData, operator=, (const VxTransformData &), VxTransformData &), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxDirectXData
@@ -935,11 +995,11 @@ static void RegisterVxDirectXData(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("VxDirectXData", "uint DxVersion", asOFFSET(VxDirectXData, DxVersion)); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VxDirectXData", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxDirectXData *self) { new(self) VxDirectXData(); }, (VxDirectXData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxDirectXData", asBEHAVE_CONSTRUCT, "void f(const VxDirectXData &in)", asFUNCTIONPR([](const VxDirectXData &data, VxDirectXData *self) { new(self) VxDirectXData(data); }, (const VxDirectXData &, VxDirectXData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxDirectXData", asBEHAVE_CONSTRUCT, "void f(const VxDirectXData &in other)", asFUNCTIONPR([](const VxDirectXData &data, VxDirectXData *self) { new(self) VxDirectXData(data); }, (const VxDirectXData &, VxDirectXData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VxDirectXData", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxDirectXData *self) { self->~VxDirectXData(); }, (VxDirectXData *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxDirectXData", "VxDirectXData &opAssign(const VxDirectXData &in)", asMETHODPR(VxDirectXData, operator=, (const VxDirectXData &), VxDirectXData &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxDirectXData", "VxDirectXData &opAssign(const VxDirectXData &in other)", asMETHODPR(VxDirectXData, operator=, (const VxDirectXData &), VxDirectXData &), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxSpriteRenderOptions
@@ -948,58 +1008,58 @@ static void RegisterVxSpriteRenderOptions(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectBehaviour("VxSpriteRenderOptions", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxSpriteRenderOptions *self) { new(self) VxSpriteRenderOptions(); }, (VxSpriteRenderOptions *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxSpriteRenderOptions", asBEHAVE_CONSTRUCT, "void f(const VxSpriteRenderOptions &in)", asFUNCTIONPR([](const VxSpriteRenderOptions &options, VxSpriteRenderOptions *self) { new(self) VxSpriteRenderOptions(options); }, (const VxSpriteRenderOptions &, VxSpriteRenderOptions *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxSpriteRenderOptions", asBEHAVE_CONSTRUCT, "void f(const VxSpriteRenderOptions &in other)", asFUNCTIONPR([](const VxSpriteRenderOptions &options, VxSpriteRenderOptions *self) { new(self) VxSpriteRenderOptions(options); }, (const VxSpriteRenderOptions &, VxSpriteRenderOptions *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VxSpriteRenderOptions", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxSpriteRenderOptions *self) { self->~VxSpriteRenderOptions(); }, (VxSpriteRenderOptions *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VxSpriteRenderOptions &opAssign(const VxSpriteRenderOptions &in)", asMETHODPR(VxSpriteRenderOptions, operator=, (const VxSpriteRenderOptions &), VxSpriteRenderOptions &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VxSpriteRenderOptions &opAssign(const VxSpriteRenderOptions &in other)", asMETHODPR(VxSpriteRenderOptions, operator=, (const VxSpriteRenderOptions &), VxSpriteRenderOptions &), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_ModulateColor() const",
                                      asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XULONG { return self->ModulateColor; }, (const VxSpriteRenderOptions *), XULONG),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_ModulateColor(uint)",
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_ModulateColor(uint value)",
                                      asFUNCTIONPR([](VxSpriteRenderOptions *self, XULONG value) { self->ModulateColor = value; }, (VxSpriteRenderOptions *, XULONG), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_Options() const",
                                      asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XULONG { return self->Options; }, (const VxSpriteRenderOptions *), XULONG),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_Options(uint)",
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_Options(uint value)",
                                      asFUNCTIONPR([](VxSpriteRenderOptions *self, XULONG value) { self->Options = value; }, (VxSpriteRenderOptions *, XULONG), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXCMPFUNC get_AlphaTestFunc() const",
                                      asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> VXCMPFUNC { return self->AlphaTestFunc; }, (const VxSpriteRenderOptions *), VXCMPFUNC),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_AlphaTestFunc(VXCMPFUNC)",
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_AlphaTestFunc(VXCMPFUNC value)",
                                      asFUNCTIONPR([](VxSpriteRenderOptions *self, VXCMPFUNC value) { self->AlphaTestFunc = value; }, (VxSpriteRenderOptions *, VXCMPFUNC), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXBLEND_MODE get_SrcBlendMode() const",
                                      asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> VXBLEND_MODE { return self->SrcBlendMode; }, (const VxSpriteRenderOptions *), VXBLEND_MODE),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_SrcBlendMode(VXBLEND_MODE)",
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_SrcBlendMode(VXBLEND_MODE value)",
                                      asFUNCTIONPR([](VxSpriteRenderOptions *self, VXBLEND_MODE value) { self->SrcBlendMode = value; }, (VxSpriteRenderOptions *, VXBLEND_MODE), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_Options2() const",
                                      asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XULONG { return self->Options2; }, (const VxSpriteRenderOptions *), XULONG),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_Options2(uint)",
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_Options2(uint value)",
                                      asFUNCTIONPR([](VxSpriteRenderOptions *self, XULONG value) { self->Options2 = value; }, (VxSpriteRenderOptions *, XULONG), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXBLEND_MODE get_DstBlendMode() const",
                                      asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> VXBLEND_MODE { return self->DstBlendMode; }, (const VxSpriteRenderOptions *), VXBLEND_MODE),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_DstBlendMode(VXBLEND_MODE)",
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_DstBlendMode(VXBLEND_MODE value)",
                                      asFUNCTIONPR([](VxSpriteRenderOptions *self, VXBLEND_MODE value) { self->DstBlendMode = value; }, (VxSpriteRenderOptions *, VXBLEND_MODE), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint8 get_AlphaRefValue() const",
                                      asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XBYTE { return self->AlphaRefValue; }, (const VxSpriteRenderOptions *), XBYTE),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_AlphaRefValue(uint8)",
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_AlphaRefValue(uint8 value)",
                                      asFUNCTIONPR([](VxSpriteRenderOptions *self, XBYTE value) { self->AlphaRefValue = value; }, (VxSpriteRenderOptions *, XBYTE), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
@@ -1015,11 +1075,11 @@ static void RegisterVx2DCapsDesc(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("Vx2DCapsDesc", "uint Caps", asOFFSET(Vx2DCapsDesc, Caps)); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("Vx2DCapsDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](Vx2DCapsDesc *self) { new(self) Vx2DCapsDesc(); }, (Vx2DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("Vx2DCapsDesc", asBEHAVE_CONSTRUCT, "void f(const Vx2DCapsDesc &in)", asFUNCTIONPR([](const Vx2DCapsDesc &options, Vx2DCapsDesc *self) { new(self) Vx2DCapsDesc(options); }, (const Vx2DCapsDesc &, Vx2DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("Vx2DCapsDesc", asBEHAVE_CONSTRUCT, "void f(const Vx2DCapsDesc &in other)", asFUNCTIONPR([](const Vx2DCapsDesc &options, Vx2DCapsDesc *self) { new(self) Vx2DCapsDesc(options); }, (const Vx2DCapsDesc &, Vx2DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("Vx2DCapsDesc", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](Vx2DCapsDesc *self) { self->~Vx2DCapsDesc(); }, (Vx2DCapsDesc *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("Vx2DCapsDesc", "Vx2DCapsDesc &opAssign(const Vx2DCapsDesc &in)", asMETHODPR(Vx2DCapsDesc, operator=, (const Vx2DCapsDesc &), Vx2DCapsDesc &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DCapsDesc", "Vx2DCapsDesc &opAssign(const Vx2DCapsDesc &in other)", asMETHODPR(Vx2DCapsDesc, operator=, (const Vx2DCapsDesc &), Vx2DCapsDesc &), asCALL_THISCALL); assert(r >= 0);
 }
 
 // Vx3DCapsDesc
@@ -1053,45 +1113,11 @@ static void RegisterVx3DCapsDesc(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint DestBlendCaps", asOFFSET(Vx3DCapsDesc, DestBlendCaps)); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("Vx3DCapsDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](Vx3DCapsDesc *self) { new(self) Vx3DCapsDesc(); }, (Vx3DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("Vx3DCapsDesc", asBEHAVE_CONSTRUCT, "void f(const Vx3DCapsDesc &in)", asFUNCTIONPR([](const Vx3DCapsDesc &options, Vx3DCapsDesc *self) { new(self) Vx3DCapsDesc(options); }, (const Vx3DCapsDesc &, Vx3DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("Vx3DCapsDesc", asBEHAVE_CONSTRUCT, "void f(const Vx3DCapsDesc &in other)", asFUNCTIONPR([](const Vx3DCapsDesc &options, Vx3DCapsDesc *self) { new(self) Vx3DCapsDesc(options); }, (const Vx3DCapsDesc &, Vx3DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("Vx3DCapsDesc", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](Vx3DCapsDesc *self) { self->~Vx3DCapsDesc(); }, (Vx3DCapsDesc *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("Vx3DCapsDesc", "Vx3DCapsDesc &opAssign(const Vx3DCapsDesc &in)", asMETHODPR(Vx3DCapsDesc, operator=, (const Vx3DCapsDesc &), Vx3DCapsDesc &), asCALL_THISCALL); assert(r >= 0);
-}
-
-// CKRECT
-
-static void RegisterCKRECT(asIScriptEngine *engine) {
-    int r = 0;
-
-    r = engine->RegisterObjectProperty("CKRECT", "int left", asOFFSET(CKRECT, left)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKRECT", "int top", asOFFSET(CKRECT, top)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKRECT", "int right", asOFFSET(CKRECT, right)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKRECT", "int bottom", asOFFSET(CKRECT, bottom)); assert(r >= 0);
-
-    r = engine->RegisterObjectBehaviour("CKRECT", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKRECT *self) { new(self) CKRECT(); }, (CKRECT*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("CKRECT", asBEHAVE_CONSTRUCT, "void f(const CKRECT &in)", asFUNCTIONPR([](const CKRECT &rect, CKRECT *self) { new(self) CKRECT(rect); }, (const CKRECT &, CKRECT *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-
-    r = engine->RegisterObjectBehaviour("CKRECT", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKRECT* self) { self->~CKRECT(); }, (CKRECT *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-
-    r = engine->RegisterObjectMethod("CKRECT", "CKRECT &opAssign(const CKRECT &in)", asMETHODPR(CKRECT, operator=, (const CKRECT &), CKRECT &), asCALL_THISCALL); assert(r >= 0);
-}
-
-// CKPOINT
-
-static void RegisterCKPOINT(asIScriptEngine *engine) {
-    int r = 0;
-
-    r = engine->RegisterObjectProperty("CKPOINT", "int x", asOFFSET(CKPOINT, x)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKPOINT", "int y", asOFFSET(CKPOINT, y)); assert(r >= 0);
-
-    r = engine->RegisterObjectBehaviour("CKPOINT", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKPOINT *self) { new(self) CKPOINT(); }, (CKPOINT*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("CKPOINT", asBEHAVE_CONSTRUCT, "void f(const CKPOINT &in)", asFUNCTIONPR([](const CKPOINT &point, CKPOINT *self) { new(self) CKPOINT(point); }, (const CKPOINT &, CKPOINT *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-
-    r = engine->RegisterObjectBehaviour("CKPOINT", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPOINT* self) { self->~CKPOINT(); }, (CKPOINT *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-
-    r = engine->RegisterObjectMethod("CKPOINT", "CKPOINT &opAssign(const CKPOINT &in)", asMETHODPR(CKPOINT, operator=, (const CKPOINT &), CKPOINT &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx3DCapsDesc", "Vx3DCapsDesc &opAssign(const Vx3DCapsDesc &in other)", asMETHODPR(Vx3DCapsDesc, operator=, (const Vx3DCapsDesc &), Vx3DCapsDesc &), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxMutex
@@ -1111,7 +1137,7 @@ static void RegisterVxMutex(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxMutex", "int opPostInc()", asMETHOD(VxMutex, operator++), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxMutex", "int opPostDec()", asMETHOD(VxMutex, operator--), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectBehaviour("VxMutexLock", asBEHAVE_CONSTRUCT, "void f(VxMutex &in)", asFUNCTIONPR([](VxMutexLock *self, VxMutex &mutex) { new(self) VxMutexLock(mutex); }, (VxMutexLock *, VxMutex &), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxMutexLock", asBEHAVE_CONSTRUCT, "void f(VxMutex &in other)", asFUNCTIONPR([](VxMutexLock *self, VxMutex &mutex) { new(self) VxMutexLock(mutex); }, (VxMutexLock *, VxMutex &), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxMutexLock", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxMutexLock *self) { self->~VxMutexLock(); }, (VxMutexLock *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 }
 
@@ -1127,7 +1153,7 @@ static void RegisterVxTimeProfiler(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxTimeProfiler", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxTimeProfiler *self) { self->~VxTimeProfiler(); }, (VxTimeProfiler *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxTimeProfiler", "VxTimeProfiler &opAssign(const VxTimeProfiler &in)", asMETHOD(VxTimeProfiler, operator=), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxTimeProfiler", "VxTimeProfiler &opAssign(const VxTimeProfiler &in other)", asMETHOD(VxTimeProfiler, operator=), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxTimeProfiler", "void Reset()", asMETHOD(VxTimeProfiler, Reset), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxTimeProfiler", "float Current() const", asMETHOD(VxTimeProfiler, Current), asCALL_THISCALL); assert(r >= 0);
@@ -1153,11 +1179,11 @@ static void RegisterVxSharedLibrary(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxSharedLibrary", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxSharedLibrary *self) { self->~VxSharedLibrary(); }, (VxSharedLibrary *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxSharedLibrary", "void Attach(INSTANCE_HANDLE LibraryHandle)", asMETHODPR(VxSharedLibrary, Attach, (INSTANCE_HANDLE), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSharedLibrary", "INSTANCE_HANDLE Load(const string &in)", asMETHOD(VxSharedLibrary, Load), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSharedLibrary", "INSTANCE_HANDLE Load(const string &LibraryName)", asFUNCTIONPR(VxSharedLibraryLoad, (const std::string &, VxSharedLibrary &), INSTANCE_HANDLE), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSharedLibrary", "void Attach(INSTANCE_HANDLE libraryHandle)", asMETHODPR(VxSharedLibrary, Attach, (INSTANCE_HANDLE), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSharedLibrary", "INSTANCE_HANDLE Load(const string &in libraryName)", asMETHOD(VxSharedLibrary, Load), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSharedLibrary", "INSTANCE_HANDLE Load(const string &libraryName)", asFUNCTIONPR(VxSharedLibraryLoad, (const std::string &, VxSharedLibrary &), INSTANCE_HANDLE), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSharedLibrary", "void ReleaseLibrary()", asMETHODPR(VxSharedLibrary, ReleaseLibrary, (), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSharedLibrary", "FUNC_PTR GetFunctionPtr(const string &FunctionName)", asFUNCTIONPR(VxSharedLibraryGetFunctionPtr, (const std::string &, VxSharedLibrary &), FUNC_PTR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSharedLibrary", "FUNC_PTR GetFunctionPtr(const string &functionName)", asFUNCTIONPR(VxSharedLibraryGetFunctionPtr, (const std::string &, VxSharedLibrary &), FUNC_PTR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // VxMemoryMappedFile
@@ -1165,15 +1191,8 @@ static void RegisterVxSharedLibrary(asIScriptEngine *engine) {
 static void RegisterVxMemoryMappedFile(asIScriptEngine *engine) {
     int r = 0;
 
-    // VxMMF_Error
-    r = engine->RegisterEnum("VxMMF_Error"); assert(r >= 0);
-    r = engine->RegisterEnumValue("VxMMF_Error", "VxMMF_NoError", VxMMF_NoError); assert(r >= 0);
-    r = engine->RegisterEnumValue("VxMMF_Error", "VxMMF_FileOpen", VxMMF_FileOpen); assert(r >= 0);
-    r = engine->RegisterEnumValue("VxMMF_Error", "VxMMF_FileMapping", VxMMF_FileMapping); assert(r >= 0);
-    r = engine->RegisterEnumValue("VxMMF_Error", "VxMMF_MapView", VxMMF_MapView); assert(r >= 0);
-
     // Constructor
-    r = engine->RegisterObjectBehaviour("VxMemoryMappedFile", asBEHAVE_CONSTRUCT, "void f(const string &in)", asFUNCTIONPR([](const std::string &fileName, VxMemoryMappedFile *self) { new(self) VxMemoryMappedFile((char *)fileName.c_str()); }, (const std::string &, VxMemoryMappedFile *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxMemoryMappedFile", asBEHAVE_CONSTRUCT, "void f(const string &in fileName)", asFUNCTIONPR([](const std::string &fileName, VxMemoryMappedFile *self) { new(self) VxMemoryMappedFile((char *)fileName.c_str()); }, (const std::string &, VxMemoryMappedFile *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxMemoryMappedFile", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxMemoryMappedFile *self) { self->~VxMemoryMappedFile(); }, (VxMemoryMappedFile *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1190,7 +1209,7 @@ static void RegisterVxMemoryMappedFile(asIScriptEngine *engine) {
 static void RegisterCKPathSplitter(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectBehaviour("CKPathSplitter", asBEHAVE_CONSTRUCT, "void f(const string &in)", asFUNCTIONPR([](const std::string &fileName, CKPathSplitter *self) { new(self) CKPathSplitter((char *)fileName.c_str()); }, (const std::string &, CKPathSplitter *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKPathSplitter", asBEHAVE_CONSTRUCT, "void f(const string &in fileName)", asFUNCTIONPR([](const std::string &fileName, CKPathSplitter *self) { new(self) CKPathSplitter((char *)fileName.c_str()); }, (const std::string &, CKPathSplitter *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("CKPathSplitter", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPathSplitter *self) { self->~CKPathSplitter(); }, (CKPathSplitter *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
@@ -1205,7 +1224,7 @@ static void RegisterCKPathSplitter(asIScriptEngine *engine) {
 static void RegisterCKPathMaker(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectBehaviour("CKPathMaker", asBEHAVE_CONSTRUCT, "void f(const string &in, const string &in, const string &in, const string &in)",
+    r = engine->RegisterObjectBehaviour("CKPathMaker", asBEHAVE_CONSTRUCT, "void f(const string &in drive, const string &in directory, const string &in fileName, const string &in extension)",
         asFUNCTIONPR([](const std::string &Drive, const std::string &Directory, const std::string &Fname, const std::string &Extension, CKPathMaker *self) {
             new(self) CKPathMaker((char *)Drive.c_str(), (char *)Directory.c_str(), (char *)Fname.c_str(), (char *)Extension.c_str());
         }, (const std::string &, const std::string &, const std::string &, const std::string &, CKPathMaker *), void),
@@ -1222,7 +1241,7 @@ static void RegisterCKFileExtension(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectBehaviour("CKFileExtension", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKFileExtension *self) { new(self) CKFileExtension(); }, (CKFileExtension *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("CKFileExtension", asBEHAVE_CONSTRUCT, "void f(const string &in)", asFUNCTIONPR([](const std::string &s, CKFileExtension *self) { new(self) CKFileExtension((char *)s.c_str()); }, (const std::string &, CKFileExtension *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKFileExtension", asBEHAVE_CONSTRUCT, "void f(const string &in str)", asFUNCTIONPR([](const std::string &s, CKFileExtension *self) { new(self) CKFileExtension((char *)s.c_str()); }, (const std::string &, CKFileExtension *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("CKFileExtension", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKFileExtension *self) { self->~CKFileExtension(); }, (CKFileExtension *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
@@ -1248,37 +1267,20 @@ static void RegisterCKDirectoryParser(asIScriptEngine *engine) {
     int r = 0;
 
     // Constructor
-    r = engine->RegisterObjectBehaviour("CKDirectoryParser", asBEHAVE_CONSTRUCT, "void f(const string &in, const string &in, bool = false)", asFUNCTION(ConstructCKDirectoryParser), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKDirectoryParser", asBEHAVE_CONSTRUCT, "void f(const string &in dir, const string &in fileMask, bool recursive = false)", asFUNCTION(ConstructCKDirectoryParser), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("CKDirectoryParser", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKDirectoryParser *self) { self->~CKDirectoryParser(); }, (CKDirectoryParser *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
     r = engine->RegisterObjectMethod("CKDirectoryParser", "string GetNextFile()", asFUNCTION(CKDirectoryParserGetNextFile), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKDirectoryParser", "void Reset(const string &in = \"\", const string &in = \"\", bool = false)", asFUNCTION(CKDirectoryParserReset), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDirectoryParser", "void Reset(const string &in dir = \"\", const string &in fileMask = \"\", bool recursive = false)", asFUNCTION(CKDirectoryParserReset), asCALL_CDECL_OBJLAST); assert(r >= 0);
 }
 
 // VxWindowFunctions
 
 static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
     int r = 0;
-
-    // VXCURSOR_POINTER
-    r = engine->RegisterEnum("VXCURSOR_POINTER"); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXCURSOR_POINTER", "VXCURSOR_NORMALSELECT", VXCURSOR_NORMALSELECT); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXCURSOR_POINTER", "VXCURSOR_BUSY", VXCURSOR_BUSY); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXCURSOR_POINTER", "VXCURSOR_MOVE", VXCURSOR_MOVE); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXCURSOR_POINTER", "VXCURSOR_LINKSELECT", VXCURSOR_LINKSELECT); assert(r >= 0);
-
-    // VXTEXT_ALIGNMENT
-    r = engine->RegisterEnum("VXTEXT_ALIGNMENT"); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_CENTER", VXTEXT_CENTER); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_LEFT", VXTEXT_LEFT); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_RIGHT", VXTEXT_RIGHT); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_TOP", VXTEXT_TOP); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_BOTTOM", VXTEXT_BOTTOM); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_VCENTER", VXTEXT_VCENTER); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXTEXT_ALIGNMENT", "VXTEXT_HCENTER", VXTEXT_HCENTER); assert(r >= 0);
 
     // VXFONTINFO
     r = engine->RegisterObjectType("VXFONTINFO", sizeof(VXFONTINFO), asOBJ_VALUE | asGetTypeTraits<VXFONTINFO>()); assert(r >= 0);
@@ -1300,7 +1302,7 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
 
     // FPU control
     r = engine->RegisterGlobalFunction("uint16 VxGetFPUControlWord()", asFUNCTION(VxGetFPUControlWord), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void VxSetFPUControlWord(uint16 Fpu)", asFUNCTION(VxSetFPUControlWord), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxSetFPUControlWord(uint16 fpu)", asFUNCTION(VxSetFPUControlWord), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxSetBaseFPUControlWord()", asFUNCTION(VxSetBaseFPUControlWord), asCALL_CDECL); assert(r >= 0);
 
     // Library and environment functions
@@ -1310,13 +1312,13 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
 
     // Window functions
     r = engine->RegisterGlobalFunction("WIN_HANDLE VxWindowFromPoint(CKPOINT &in pt)", asFUNCTION(VxWindowFromPoint), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxGetClientRect(WIN_HANDLE Win, CKRECT &out rect)", asFUNCTION(VxGetClientRect), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxGetWindowRect(WIN_HANDLE Win, CKRECT &out rect)", asFUNCTION(VxGetWindowRect), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxScreenToClient(WIN_HANDLE Win, CKPOINT &inout pt)", asFUNCTION(VxScreenToClient), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxClientToScreen(WIN_HANDLE Win, CKPOINT &inout pt)", asFUNCTION(VxClientToScreen), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("WIN_HANDLE VxSetParent(WIN_HANDLE Child, WIN_HANDLE Parent)", asFUNCTION(VxSetParent), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("WIN_HANDLE VxGetParent(WIN_HANDLE Win)", asFUNCTION(VxGetParent), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxMoveWindow(WIN_HANDLE Win, int x, int y, int Width, int Height, bool Repaint)", asFUNCTION(VxMoveWindow), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxGetClientRect(WIN_HANDLE win, CKRECT &out rect)", asFUNCTION(VxGetClientRect), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxGetWindowRect(WIN_HANDLE win, CKRECT &out rect)", asFUNCTION(VxGetWindowRect), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxScreenToClient(WIN_HANDLE win, CKPOINT &inout pt)", asFUNCTION(VxScreenToClient), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxClientToScreen(WIN_HANDLE win, CKPOINT &inout pt)", asFUNCTION(VxClientToScreen), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("WIN_HANDLE VxSetParent(WIN_HANDLE child, WIN_HANDLE parent)", asFUNCTION(VxSetParent), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("WIN_HANDLE VxGetParent(WIN_HANDLE win)", asFUNCTION(VxGetParent), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxMoveWindow(WIN_HANDLE win, int x, int y, int width, int height, bool repaint)", asFUNCTION(VxMoveWindow), asCALL_CDECL); assert(r >= 0);
 
     // File and directory functions
     r = engine->RegisterGlobalFunction("bool VxMakeDirectory(string &in path)", asFUNCTION(VxMakeDirectory), asCALL_CDECL); assert(r >= 0);
@@ -1327,19 +1329,19 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool VxTestDiskSpace(string &in dir, uint size)", asFUNCTION(VxTestDiskSpace), asCALL_CDECL); assert(r >= 0);
 
     // URL functions
-    r = engine->RegisterGlobalFunction("uint VxURLDownloadToCacheFile(string &in File, string &out CachedFile, int szCachedFile)", asFUNCTION(VxURLDownloadToCacheFile), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint VxURLDownloadToCacheFile(string &in file, string &out cachedFile, int szCachedFile)", asFUNCTION(VxURLDownloadToCacheFile), asCALL_CDECL); assert(r >= 0);
 
     // Bitmap functions
     r = engine->RegisterGlobalFunction("BITMAP_HANDLE VxCreateBitmap(const VxImageDescEx &in)", asFUNCTION(VxCreateBitmap), asCALL_CDECL); assert(r >= 0);
-    // r = engine->RegisterGlobalFunction("uint8@ VxConvertBitmap(BITMAP_HANDLE, VxImageDescEx &out)", asFUNCTION(VxConvertBitmap), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("NativePointer VxConvertBitmap(BITMAP_HANDLE, VxImageDescEx &out)", asFUNCTION(VxConvertBitmap), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool VxCopyBitmap(BITMAP_HANDLE, const VxImageDescEx &in)", asFUNCTION(VxCopyBitmap), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxDeleteBitmap(BITMAP_HANDLE)", asFUNCTION(VxDeleteBitmap), asCALL_CDECL); assert(r >= 0);
 
     // Font functions
-    r = engine->RegisterGlobalFunction("FONT_HANDLE VxCreateFont(string &in FontName, int FontSize, int Weight, bool italic, bool underline)", asFUNCTION(VxCreateFont), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("FONT_HANDLE VxCreateFont(string &in fontName, int fontSize, int weight, bool italic, bool underline)", asFUNCTION(VxCreateFont), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool VxGetFontInfo(FONT_HANDLE Font, VXFONTINFO &out desc)", asFUNCTION(VxGetFontInfo), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxDrawBitmapText(BITMAP_HANDLE Bitmap, FONT_HANDLE Font, string &in string, CKRECT &in rect, uint Align, uint BkColor, uint FontColor)", asFUNCTION(VxDrawBitmapText), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void VxDeleteFont(FONT_HANDLE Font)", asFUNCTION(VxDeleteFont), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxDrawBitmapText(BITMAP_HANDLE bitmap, FONT_HANDLE font, string &in str, CKRECT &in rect, uint align, uint bkColor, uint fontColor)", asFUNCTION(VxDrawBitmapText), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxDeleteFont(FONT_HANDLE font)", asFUNCTION(VxDeleteFont), asCALL_CDECL); assert(r >= 0);
 }
 
 // VxVector
@@ -1354,45 +1356,45 @@ static void RegisterVxVector(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxVector *self) { new(self) VxVector(); }, (VxVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(const VxVector &in)", asFUNCTIONPR([](const VxVector &v, VxVector *self) { new(self) VxVector(v); }, (const VxVector &, VxVector *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float f, VxVector *self) { new(self) VxVector(f); }, (float, VxVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float x, float y, float z, VxVector *self) { new(self) VxVector(x, y, z); }, (float, float, float, VxVector *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(const VxVector &in v)", asFUNCTIONPR([](const VxVector &v, VxVector *self) { new(self) VxVector(v); }, (const VxVector &, VxVector *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(float f)", asFUNCTIONPR([](float f, VxVector *self) { new(self) VxVector(f); }, (float, VxVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z)", asFUNCTIONPR([](float x, float y, float z, VxVector *self) { new(self) VxVector(x, y, z); }, (float, float, float, VxVector *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxVector *self) { new(self) VxVector(list[0], list[1], list[2]); }, (float *, VxVector *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxVector* self) { self->~VxVector(); }, (VxVector *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxVector", "VxVector &opAssign(const VxVector &in)", asMETHODPR(VxVector, operator=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector &opAssign(const VxCompressedVector &in)", asMETHODPR(VxVector, operator=, (const VxCompressedVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector &opAssign(const VxVector &in v)", asMETHODPR(VxVector, operator=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector &opAssign(const VxCompressedVector &in v)", asMETHODPR(VxVector, operator=, (const VxCompressedVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector", "bool opEquals(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) -> bool { return lhs == rhs; }, (const VxVector &, const VxVector &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "bool opEquals(const VxVector &in v) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) -> bool { return lhs == rhs; }, (const VxVector &, const VxVector &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     // r = engine->RegisterObjectMethod("VxVector", "int opCmp(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const VxVector &, const VxVector &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
-    r = engine->RegisterObjectMethod("VxVector", "VxVector &opAddAssign(const VxVector &in)", asMETHODPR(VxVector, operator+=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector &opSubAssign(const VxVector &in)", asMETHODPR(VxVector, operator-=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector &opMulAssign(const VxVector &in)", asMETHODPR(VxVector, operator*=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector &opDivAssign(const VxVector &in)", asMETHODPR(VxVector, operator/=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector &opAddAssign(const VxVector &in v)", asMETHODPR(VxVector, operator+=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector &opSubAssign(const VxVector &in v)", asMETHODPR(VxVector, operator-=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector &opMulAssign(const VxVector &in v)", asMETHODPR(VxVector, operator*=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector &opDivAssign(const VxVector &in v)", asMETHODPR(VxVector, operator/=, (const VxVector &), VxVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector", "VxVector &opMulAssign(float)", asMETHODPR(VxVector, operator*=, (float), VxVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector &opDivAssign(float)", asMETHODPR(VxVector, operator/=, (float), VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector &opMulAssign(float s)", asMETHODPR(VxVector, operator*=, (float), VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector &opDivAssign(float s)", asMETHODPR(VxVector, operator/=, (float), VxVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector", "VxVector opAdd(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) { return lhs + rhs; }, (const VxVector &, const VxVector &), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector opSub(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) { return lhs - rhs; }, (const VxVector &, const VxVector &), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector opMul(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) { return lhs * rhs; }, (const VxVector &, const VxVector &), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector opDiv(const VxVector &in) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) { return lhs / rhs; }, (const VxVector &, const VxVector &), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector opAdd(const VxVector &in v) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) { return lhs + rhs; }, (const VxVector &, const VxVector &), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector opSub(const VxVector &in v) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) { return lhs - rhs; }, (const VxVector &, const VxVector &), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector opMul(const VxVector &in v) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) { return lhs * rhs; }, (const VxVector &, const VxVector &), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector opDiv(const VxVector &in v) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs) { return lhs / rhs; }, (const VxVector &, const VxVector &), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector", "VxVector opMul(float) const", asFUNCTIONPR([](const VxVector &lhs, float scalar) { return lhs * scalar; }, (const VxVector &, float), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector opDiv(float) const", asFUNCTIONPR([](const VxVector &lhs, float scalar) { return lhs / scalar; }, (const VxVector &, float), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector opMul(float s) const", asFUNCTIONPR([](const VxVector &lhs, float scalar) { return lhs * scalar; }, (const VxVector &, float), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector opDiv(float s) const", asFUNCTIONPR([](const VxVector &lhs, float scalar) { return lhs / scalar; }, (const VxVector &, float), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector", "VxVector opMul(const VxMatrix &in) const", asFUNCTIONPR(operator*, (const VxVector&, const VxMatrix&), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector opMul(const VxMatrix &in mat) const", asFUNCTIONPR(operator*, (const VxVector&, const VxMatrix&), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxVector", "VxVector opNeg() const", asFUNCTIONPR([](const VxVector &v) -> const VxVector { return -v; }, (const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector", "float &opIndex(int)", asFUNCTIONPR([](VxVector &v, int i) -> float & { return v[i]; }, (VxVector &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
-    r = engine->RegisterObjectMethod("VxVector", "const float &opIndex(int) const", asFUNCTIONPR([](const VxVector &v, int i) -> const float & { return v[i]; }, (const VxVector &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector", "float &opIndex(int index)", asFUNCTIONPR([](VxVector &v, int i) -> float & { return v[i]; }, (VxVector &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector", "const float &opIndex(int index) const", asFUNCTIONPR([](const VxVector &v, int i) -> const float & { return v[i]; }, (const VxVector &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
-    r = engine->RegisterObjectMethod("VxVector", "void Set(float, float, float)", asMETHOD(VxVector, Set), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "void Set(float x, float y, float z)", asMETHOD(VxVector, Set), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxVector", "void Absolute()", asMETHOD(VxVector, Absolute), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxVector", "float SquareMagnitude() const", asMETHOD(VxVector, SquareMagnitude), asCALL_THISCALL); assert(r >= 0);
@@ -1400,20 +1402,20 @@ static void RegisterVxVector(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxVector", "float InvSquareMagnitude() const", asFUNCTIONPR(InvSquareMagnitude, (const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxVector", "float InvMagnitude() const", asFUNCTIONPR(InvMagnitude, (const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector", "float Min(const VxVector &in) const", asFUNCTIONPR(Min, (const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "float Max(const VxVector &in) const", asFUNCTIONPR(Max, (const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "float Min(const VxVector &in v) const", asFUNCTIONPR(Min, (const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "float Max(const VxVector &in v) const", asFUNCTIONPR(Max, (const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector", "VxVector Minimize(const VxVector &in) const", asFUNCTIONPR(Minimize, (const VxVector &, const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector Maximize(const VxVector &in) const", asFUNCTIONPR(Maximize, (const VxVector &, const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector Interpolate(const VxVector &in, float step) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs, float step) -> const VxVector { return Interpolate(step, lhs, rhs); }, (const VxVector &, const VxVector &, float step), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector Minimize(const VxVector &in v) const", asFUNCTIONPR(Minimize, (const VxVector &, const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector Maximize(const VxVector &in v) const", asFUNCTIONPR(Maximize, (const VxVector &, const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector Interpolate(const VxVector &in v, float step) const", asFUNCTIONPR([](const VxVector &lhs, const VxVector &rhs, float step) -> const VxVector { return Interpolate(step, lhs, rhs); }, (const VxVector &, const VxVector &, float step), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxVector", "VxVector Normalize() const", asFUNCTIONPR(Normalize, (const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     // r = engine->RegisterObjectMethod("VxVector", "float Dot(const VxVector &in) const", asMETHODPR(VxVector, Dot, (const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "float Dot(const VxVector &in) const", asFUNCTIONPR(DotProduct, (const VxVector &, const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector Cross(const VxVector &in) const", asFUNCTIONPR(CrossProduct, (const VxVector &, const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector Reflect(const VxVector &in) const", asFUNCTIONPR(Reflect, (const VxVector &, const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector Rotate(const VxMatrix &in) const", asFUNCTIONPR(Rotate, (const VxMatrix &, const VxVector &), const VxVector), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector", "VxVector Rotate(const VxVector &in, float) const", asFUNCTIONPR(Rotate, (const VxVector &, const VxVector &, float), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "float Dot(const VxVector &in v) const", asFUNCTIONPR(DotProduct, (const VxVector &, const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector Cross(const VxVector &in v) const", asFUNCTIONPR(CrossProduct, (const VxVector &, const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector Reflect(const VxVector &in v) const", asFUNCTIONPR(Reflect, (const VxVector &, const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector Rotate(const VxMatrix &in v) const", asFUNCTIONPR(Rotate, (const VxMatrix &, const VxVector &), const VxVector), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector Rotate(const VxVector &in v, float angle) const", asFUNCTIONPR(Rotate, (const VxVector &, const VxVector &, float), const VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // Static properties
     r = engine->RegisterObjectMethod("VxVector", "const VxVector &get_axisX() const", asFUNCTIONPR([](const VxVector& lhs) -> const VxVector& { return VxVector::axisX(); }, (const VxVector &), const VxVector &), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -1436,54 +1438,54 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxVector4 *self) { new(self) VxVector4(); }, (VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(const VxVector4 &)", asFUNCTIONPR([](const VxVector4 &v, VxVector4 *self) { new(self) VxVector4(v); }, (const VxVector4 &, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float f, VxVector4 *self) { new(self) VxVector4(f); }, (float, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float x, float y, float z, float w, VxVector4 *self) { new(self) VxVector4(x, y, z, w); }, (float, float, float, float, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(const VxVector4 & v)", asFUNCTIONPR([](const VxVector4 &v, VxVector4 *self) { new(self) VxVector4(v); }, (const VxVector4 &, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(float f)", asFUNCTIONPR([](float f, VxVector4 *self) { new(self) VxVector4(f); }, (float, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z, float w)", asFUNCTIONPR([](float x, float y, float z, float w, VxVector4 *self) { new(self) VxVector4(x, y, z, w); }, (float, float, float, float, VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxVector4 *self) { new(self) VxVector4(list[0], list[1], list[2], list[3]); }, (float *, VxVector4 *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxVector4 *self) { self->~VxVector4(); }, (VxVector4*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAssign(const VxVector4 &in)", asMETHODPR(VxVector4, operator=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAssign(const VxVector &in)", asMETHODPR(VxVector4, operator=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAssign(const VxVector4 &in v)", asMETHODPR(VxVector4, operator=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAssign(const VxVector &in v)", asMETHODPR(VxVector4, operator=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector4", "bool opEquals(const VxVector4 &in) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) -> bool { return lhs == rhs; }, (const VxVector4 &, const VxVector4 &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "int opCmp(const VxVector4 &in) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const VxVector4 &, const VxVector4 &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector4", "bool opEquals(const VxVector4 &in v) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) -> bool { return lhs == rhs; }, (const VxVector4 &, const VxVector4 &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "int opCmp(const VxVector4 &in v) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const VxVector4 &, const VxVector4 &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAddAssign(const VxVector4 &in)", asMETHODPR(VxVector4, operator+=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opSubAssign(const VxVector4 &in)", asMETHODPR(VxVector4, operator-=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opMulAssign(const VxVector4 &in)", asMETHODPR(VxVector4, operator*=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opDivAssign(const VxVector4 &in)", asMETHODPR(VxVector4, operator/=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAddAssign(const VxVector4 &in v)", asMETHODPR(VxVector4, operator+=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opSubAssign(const VxVector4 &in v)", asMETHODPR(VxVector4, operator-=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opMulAssign(const VxVector4 &in v)", asMETHODPR(VxVector4, operator*=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opDivAssign(const VxVector4 &in v)", asMETHODPR(VxVector4, operator/=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAddAssign(const VxVector &in)", asMETHODPR(VxVector4, operator+=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opSubAssign(const VxVector &in)", asMETHODPR(VxVector4, operator-=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opMulAssign(const VxVector &in)", asMETHODPR(VxVector4, operator*=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opDivAssign(const VxVector &in)", asMETHODPR(VxVector4, operator/=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAddAssign(const VxVector &in v)", asMETHODPR(VxVector4, operator+=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opSubAssign(const VxVector &in v)", asMETHODPR(VxVector4, operator-=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opMulAssign(const VxVector &in v)", asMETHODPR(VxVector4, operator*=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opDivAssign(const VxVector &in v)", asMETHODPR(VxVector4, operator/=, (const VxVector &), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opMulAssign(float)", asMETHODPR(VxVector4, operator*=, (float), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opDivAssign(float)", asMETHODPR(VxVector4, operator/=, (float), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opMulAssign(float s)", asMETHODPR(VxVector4, operator*=, (float), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opDivAssign(float s)", asMETHODPR(VxVector4, operator/=, (float), VxVector4 &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opAdd(const VxVector &in) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) { return lhs + rhs; }, (const VxVector4 &, const VxVector4 &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opSub(const VxVector &in) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) { return lhs - rhs; }, (const VxVector4 &, const VxVector4 &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul(const VxVector &in) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) { return lhs * rhs; }, (const VxVector4 &, const VxVector4 &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opDiv(const VxVector &in) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) { return lhs / rhs; }, (const VxVector4 &, const VxVector4 &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opAdd(const VxVector &in v) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) { return lhs + rhs; }, (const VxVector4 &, const VxVector4 &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opSub(const VxVector &in v) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) { return lhs - rhs; }, (const VxVector4 &, const VxVector4 &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul(const VxVector &in v) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) { return lhs * rhs; }, (const VxVector4 &, const VxVector4 &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opDiv(const VxVector &in v) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) { return lhs / rhs; }, (const VxVector4 &, const VxVector4 &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opAdd(float) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs + scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opSub(float) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs - scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul(float) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs * scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opDiv(float) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs / scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opAdd(float s) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs + scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opSub(float s) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs - scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul(float s) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs * scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opDiv(float s) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs / scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul(const VxMatrix &in) const", asFUNCTIONPR(operator*, (const VxVector4 &, const VxMatrix &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul(const VxMatrix &in mat) const", asFUNCTIONPR(operator*, (const VxVector4 &, const VxMatrix &), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opNeg() const", asFUNCTIONPR([](const VxVector4 &v) -> const VxVector4 { return -v; }, (const VxVector4 &), const VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxVector4", "float &opIndex(int)", asFUNCTIONPR([](VxVector4 &v, int i) -> float & { return v[i]; }, (VxVector4 &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
-    r = engine->RegisterObjectMethod("VxVector4", "const float &opIndex(int) const", asFUNCTIONPR([](const VxVector4 &v, int i) -> const float & { return v[i]; }, (const VxVector4 &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector4", "float &opIndex(int index)", asFUNCTIONPR([](VxVector4 &v, int i) -> float & { return v[i]; }, (VxVector4 &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector4", "const float &opIndex(int index) const", asFUNCTIONPR([](const VxVector4 &v, int i) -> const float & { return v[i]; }, (const VxVector4 &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
-    r = engine->RegisterObjectMethod("VxVector4", "void Set(float, float, float, float)", asMETHODPR(VxVector4, Set, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "void Set(float, float, float)", asMETHODPR(VxVector4, Set, (float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxVector4", "float Dot(const VxVector4 &in) const", asMETHODPR(VxVector4, Dot, (const VxVector4 &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "void Set(float x, float y, float z, float w)", asMETHODPR(VxVector4, Set, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "void Set(float x, float y, float z)", asMETHODPR(VxVector4, Set, (float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxVector4", "float Dot(const VxVector4 &in v) const", asMETHODPR(VxVector4, Dot, (const VxVector4 &) const, float), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxVector4", "void Absolute()", asMETHOD(VxVector4, Absolute), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxVector4", "float SquareMagnitude() const", asMETHOD(VxVector4, SquareMagnitude), asCALL_THISCALL); assert(r >= 0);
@@ -1521,40 +1523,40 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxBbox *self) { new(self) VxBbox(); }, (VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(const VxBbox &in)", asFUNCTIONPR([](const VxBbox &box, VxBbox *self) { new(self) VxBbox(box); }, (const VxBbox &, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in)", asFUNCTIONPR([](const VxVector &min, const VxVector &max, VxBbox *self) { new(self) VxBbox(min, max); }, (const VxVector &, const VxVector &, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float value, VxBbox *self) { new(self) VxBbox(value); }, (float, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(const VxBbox &in box)", asFUNCTIONPR([](const VxBbox &box, VxBbox *self) { new(self) VxBbox(box); }, (const VxBbox &, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(const VxVector &in min, const VxVector &in max)", asFUNCTIONPR([](const VxVector &min, const VxVector &max, VxBbox *self) { new(self) VxBbox(min, max); }, (const VxVector &, const VxVector &, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(float value)", asFUNCTIONPR([](float value, VxBbox *self) { new(self) VxBbox(value); }, (float, VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {VxVector, VxVector}", asFUNCTIONPR([](VxVector *list, VxBbox *self) { new(self) VxBbox(list[0], list[1]); }, (VxVector *, VxBbox *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxBbox *self) { self->~VxBbox(); }, (VxBbox*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxBbox", "VxBbox &opAssign(const VxBbox &in)", asMETHODPR(VxBbox, operator=, (const VxBbox &), VxBbox &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "VxBbox &opAssign(const VxBbox &in box)", asMETHODPR(VxBbox, operator=, (const VxBbox &), VxBbox &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxBbox", "bool opEquals(const VxVector &in) const", asFUNCTIONPR([](const VxBbox &lhs, const VxBbox &rhs) -> bool { return lhs == rhs; }, (const VxBbox &, const VxBbox &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "bool opEquals(const VxVector &in v) const", asFUNCTIONPR([](const VxBbox &lhs, const VxBbox &rhs) -> bool { return lhs == rhs; }, (const VxBbox &, const VxBbox &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxBbox", "bool IsValid() const", asMETHOD(VxBbox, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "VxVector GetSize() const", asMETHOD(VxBbox, GetSize), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "VxVector GetHalfSize() const", asMETHOD(VxBbox, GetHalfSize), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "VxVector GetCenter() const", asMETHOD(VxBbox, GetCenter), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void SetCorners(const VxVector &in, const VxVector &in)", asMETHOD(VxBbox, SetCorners), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void SetDimension(const VxVector &in, const VxVector &in)", asMETHOD(VxBbox, SetDimension), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void SetCenter(const VxVector &in, const VxVector &in)", asMETHOD(VxBbox, SetCenter), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void SetCorners(const VxVector &in min, const VxVector &in max)", asMETHOD(VxBbox, SetCorners), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void SetDimension(const VxVector &in position, const VxVector &in size)", asMETHOD(VxBbox, SetDimension), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void SetCenter(const VxVector &in center, const VxVector &in halfSize)", asMETHOD(VxBbox, SetCenter), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "void Reset()", asMETHOD(VxBbox, Reset), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void Merge(const VxBbox &in)", asMETHODPR(VxBbox, Merge, (const VxBbox &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void Merge(const VxVector &in)", asMETHODPR(VxBbox, Merge, (const VxVector &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "uint Classify(const VxVector &in) const", asMETHODPR(VxBbox, Classify, (const VxVector &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "uint Classify(const VxBbox &in) const", asMETHODPR(VxBbox, Classify, (const VxBbox &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "int Classify(const VxBbox &in, const VxVector &in) const", asMETHODPR(VxBbox, Classify, (const VxBbox &, const VxVector &) const, int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVertices(const array<uint8> &in, const array<uint32> &in) const", asFUNCTIONPR(VxBboxClassifyVertices, (const VxBbox &, const CScriptArray &, const CScriptArray &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVerticesOneAxis(const array<uint8> &in, int, const array<uint32> &in) const", asFUNCTIONPR(VxBboxClassifyVerticesOneAxis, (const VxBbox &, const CScriptArray &, int, const CScriptArray &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void Intersect(const VxBbox &in)", asMETHODPR(VxBbox, Intersect, (const VxBbox &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "bool VectorIn(const VxVector &in) const", asMETHODPR(VxBbox, VectorIn, (const VxVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "bool IsBoxInside(const VxBbox &in) const", asMETHODPR(VxBbox, IsBoxInside, (const VxBbox &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void Merge(const VxBbox &in box)", asMETHODPR(VxBbox, Merge, (const VxBbox &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void Merge(const VxVector &in v)", asMETHODPR(VxBbox, Merge, (const VxVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "uint Classify(const VxVector &in point) const", asMETHODPR(VxBbox, Classify, (const VxVector &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "uint Classify(const VxBbox &in box) const", asMETHODPR(VxBbox, Classify, (const VxBbox &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "int Classify(const VxBbox &in box, const VxVector &in point) const", asMETHODPR(VxBbox, Classify, (const VxBbox &, const VxVector &) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVertices(const array<uint8> &in vertices, const array<uint32> &in flags) const", asFUNCTIONPR(VxBboxClassifyVertices, (const VxBbox &, const CScriptArray &, const CScriptArray &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVerticesOneAxis(const array<uint8> &in vertices, int axis, const array<uint32> &in flags) const", asFUNCTIONPR(VxBboxClassifyVerticesOneAxis, (const VxBbox &, const CScriptArray &, int, const CScriptArray &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void Intersect(const VxBbox &in box)", asMETHODPR(VxBbox, Intersect, (const VxBbox &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "bool VectorIn(const VxVector &in v) const", asMETHODPR(VxBbox, VectorIn, (const VxVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "bool IsBoxInside(const VxBbox &in box) const", asMETHODPR(VxBbox, IsBoxInside, (const VxBbox &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxBbox", "void TransformTo(VxVector &out, const VxMatrix &in) const", asMETHODPR(VxBbox, TransformTo, (VxVector *, const VxMatrix &) const, void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void TransformFrom(const VxBbox &in, const VxMatrix &in)", asMETHODPR(VxBbox, TransformFrom, (const VxBbox &, const VxMatrix &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void TransformTo(VxVector &out pts, const VxMatrix &in mat) const", asMETHODPR(VxBbox, TransformTo, (VxVector *, const VxMatrix &) const, void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void TransformFrom(const VxBbox &in box, const VxMatrix &in mat)", asMETHODPR(VxBbox, TransformFrom, (const VxBbox &, const VxMatrix &), void), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxCompressedVector
@@ -1568,20 +1570,20 @@ static void RegisterVxCompressedVector(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVector *self) { new(self) VxCompressedVector(); }, (VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f(const VxCompressedVector &in)", asFUNCTIONPR([](const VxCompressedVector &v, VxCompressedVector *self) { new(self) VxCompressedVector(v); }, (const VxCompressedVector &, VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVector *self) { new(self) VxCompressedVector(x, y, z); }, (float, float, float, VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f(const VxCompressedVector &in v)", asFUNCTIONPR([](const VxCompressedVector &v, VxCompressedVector *self) { new(self) VxCompressedVector(v); }, (const VxCompressedVector &, VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVector *self) { new(self) VxCompressedVector(x, y, z); }, (float, float, float, VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxCompressedVector *self) { new(self) VxCompressedVector(list[0], list[1], list[2]); }, (float *, VxCompressedVector *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVector *self) { self->~VxCompressedVector(); }, (VxCompressedVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxCompressedVector", "VxCompressedVector &opAssign(const VxCompressedVector &in)", asMETHODPR(VxCompressedVector, operator=, (const VxCompressedVector &), VxCompressedVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxCompressedVector", "VxCompressedVector &opAssign(const VxVector &in)", asMETHODPR(VxCompressedVector, operator=, (const VxVector &), VxCompressedVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxCompressedVector", "VxCompressedVector &opAssign(const VxCompressedVectorOld &in)", asMETHODPR(VxCompressedVector, operator=, (const VxCompressedVectorOld &), VxCompressedVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVector", "VxCompressedVector &opAssign(const VxCompressedVector &in v)", asMETHODPR(VxCompressedVector, operator=, (const VxCompressedVector &), VxCompressedVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVector", "VxCompressedVector &opAssign(const VxVector &in v)", asMETHODPR(VxCompressedVector, operator=, (const VxVector &), VxCompressedVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVector", "VxCompressedVector &opAssign(const VxCompressedVectorOld &in v)", asMETHODPR(VxCompressedVector, operator=, (const VxCompressedVectorOld &), VxCompressedVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxCompressedVector", "void Set(float, float, float)", asMETHOD(VxCompressedVector, Set), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxCompressedVector", "void Slerp(float, VxCompressedVector &in, VxCompressedVector &in)", asMETHOD(VxCompressedVector, Slerp), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVector", "void Set(float x, float y, float z)", asMETHOD(VxCompressedVector, Set), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVector", "void Slerp(float step, VxCompressedVector &in v1, VxCompressedVector &in v2)", asMETHOD(VxCompressedVector, Slerp), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxCompressedVectorOld
@@ -1595,20 +1597,20 @@ static void RegisterVxCompressedVectorOld(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(); }, (VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f(const VxCompressedVectorOld &in)", asFUNCTIONPR([](const VxCompressedVectorOld &v, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(v); }, (const VxCompressedVectorOld &, VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(x, y, z); }, (float, float, float, VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f(const VxCompressedVectorOld &in v)", asFUNCTIONPR([](const VxCompressedVectorOld &v, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(v); }, (const VxCompressedVectorOld &, VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(x, y, z); }, (float, float, float, VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(list[0], list[1], list[2]); }, (float *, VxCompressedVectorOld *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVectorOld *self) { self->~VxCompressedVectorOld(); }, (VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "VxCompressedVectorOld &opAssign(const VxCompressedVectorOld &in)", asMETHODPR(VxCompressedVectorOld, operator=, (const VxCompressedVectorOld &), VxCompressedVectorOld &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "VxCompressedVectorOld &opAssign(const VxVector &in)", asMETHODPR(VxCompressedVectorOld, operator=, (const VxVector &), VxCompressedVectorOld &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "VxCompressedVectorOld &opAssign(const VxCompressedVector &in)", asMETHODPR(VxCompressedVectorOld, operator=, (const VxCompressedVector &), VxCompressedVectorOld &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "VxCompressedVectorOld &opAssign(const VxCompressedVectorOld &in v)", asMETHODPR(VxCompressedVectorOld, operator=, (const VxCompressedVectorOld &), VxCompressedVectorOld &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "VxCompressedVectorOld &opAssign(const VxVector &in v)", asMETHODPR(VxCompressedVectorOld, operator=, (const VxVector &), VxCompressedVectorOld &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "VxCompressedVectorOld &opAssign(const VxCompressedVector &in v)", asMETHODPR(VxCompressedVectorOld, operator=, (const VxCompressedVector &), VxCompressedVectorOld &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "void Set(float, float, float)", asMETHOD(VxCompressedVectorOld, Set), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "void Slerp(float, VxCompressedVectorOld &in, VxCompressedVectorOld &in)", asMETHOD(VxCompressedVectorOld, Slerp), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "void Set(float x, float y, float z)", asMETHOD(VxCompressedVectorOld, Set), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxCompressedVectorOld", "void Slerp(float step, VxCompressedVectorOld &in v1, VxCompressedVectorOld &in v2)", asMETHOD(VxCompressedVectorOld, Slerp), asCALL_THISCALL); assert(r >= 0);
 }
 
 // Vx2DVector
@@ -1622,43 +1624,43 @@ static void RegisterVx2DVector(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](Vx2DVector *self) { new(self) Vx2DVector(); }, (Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(const Vx2DVector &in)", asFUNCTIONPR([](const Vx2DVector &v, Vx2DVector *self) { new(self) Vx2DVector(v); }, (const Vx2DVector &, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float f, Vx2DVector *self) { new(self) Vx2DVector(f); }, (float, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(float, float)", asFUNCTIONPR([](float x, float y, Vx2DVector *self) { new(self) Vx2DVector(x, y); }, (float, float, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(const Vx2DVector &in v)", asFUNCTIONPR([](const Vx2DVector &v, Vx2DVector *self) { new(self) Vx2DVector(v); }, (const Vx2DVector &, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(float f)", asFUNCTIONPR([](float f, Vx2DVector *self) { new(self) Vx2DVector(f); }, (float, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_CONSTRUCT, "void f(float x, float y)", asFUNCTIONPR([](float x, float y, Vx2DVector *self) { new(self) Vx2DVector(x, y); }, (float, float, Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float}", asFUNCTIONPR([](float *list, Vx2DVector *self) { new(self) Vx2DVector(list[0], list[1]); }, (float *, Vx2DVector *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("Vx2DVector", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](Vx2DVector *self) { self->~Vx2DVector(); }, (Vx2DVector*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opAssign(const Vx2DVector &in)", asMETHODPR(Vx2DVector, operator=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opAssign(const Vx2DVector &in v)", asMETHODPR(Vx2DVector, operator=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opAddAssign(const Vx2DVector &in)", asMETHODPR(Vx2DVector, operator+=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opSubAssign(const Vx2DVector &in)", asMETHODPR(Vx2DVector, operator-=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opMulAssign(const Vx2DVector &in)", asMETHODPR(Vx2DVector, operator*=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opDivAssign(const Vx2DVector &in)", asMETHODPR(Vx2DVector, operator/=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opMulAssign(float)", asMETHODPR(Vx2DVector, operator*=, (float), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opDivAssign(float)", asMETHODPR(Vx2DVector, operator/=, (float), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opAddAssign(const Vx2DVector &in v)", asMETHODPR(Vx2DVector, operator+=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opSubAssign(const Vx2DVector &in v)", asMETHODPR(Vx2DVector, operator-=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opMulAssign(const Vx2DVector &in v)", asMETHODPR(Vx2DVector, operator*=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opDivAssign(const Vx2DVector &in v)", asMETHODPR(Vx2DVector, operator/=, (const Vx2DVector &), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opMulAssign(float s)", asMETHODPR(Vx2DVector, operator*=, (float), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &opDivAssign(float s)", asMETHODPR(Vx2DVector, operator/=, (float), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("Vx2DVector", "bool opEquals(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs == rhs; }, (const Vx2DVector &, const Vx2DVector &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "int opCmp(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const Vx2DVector &, const Vx2DVector &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("Vx2DVector", "bool opEquals(const Vx2DVector &in v) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs == rhs; }, (const Vx2DVector &, const Vx2DVector &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "int opCmp(const Vx2DVector &in v) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const Vx2DVector &, const Vx2DVector &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opAdd(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs + rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opSub(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs - rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opMul(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs * rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opDiv(const Vx2DVector &in) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs / rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opMul(float) const", asFUNCTIONPR([](const Vx2DVector &lhs, float scalar) { return lhs * scalar; }, (const Vx2DVector &, float), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opDiv(float) const", asFUNCTIONPR([](const Vx2DVector &lhs, float scalar) { return lhs / scalar; }, (const Vx2DVector &, float), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opAdd(const Vx2DVector &in v) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs + rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opSub(const Vx2DVector &in v) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs - rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opMul(const Vx2DVector &in v) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs * rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opDiv(const Vx2DVector &in v) const", asFUNCTIONPR([](const Vx2DVector &lhs, const Vx2DVector &rhs) { return lhs / rhs; }, (const Vx2DVector &, const Vx2DVector &), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opMul(float s) const", asFUNCTIONPR([](const Vx2DVector &lhs, float scalar) { return lhs * scalar; }, (const Vx2DVector &, float), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opDiv(float s) const", asFUNCTIONPR([](const Vx2DVector &lhs, float scalar) { return lhs / scalar; }, (const Vx2DVector &, float), Vx2DVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector opNeg() const", asMETHODPR(Vx2DVector, operator-, () const, Vx2DVector), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("Vx2DVector", "const float &opIndex(int) const", asMETHODPR(Vx2DVector, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "float &opIndex(int)", asMETHODPR(Vx2DVector, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "const float &opIndex(int index) const", asMETHODPR(Vx2DVector, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "float &opIndex(int index)", asMETHODPR(Vx2DVector, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("Vx2DVector", "float Magnitude() const", asMETHOD(Vx2DVector, Magnitude), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Vx2DVector", "float SquareMagnitude() const", asMETHOD(Vx2DVector, SquareMagnitude), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector &Normalize()", asMETHOD(Vx2DVector, Normalize), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("Vx2DVector", "float Dot(const Vx2DVector &in) const", asMETHOD(Vx2DVector, Dot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Vx2DVector", "float Dot(const Vx2DVector &in v) const", asMETHOD(Vx2DVector, Dot), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Vx2DVector", "Vx2DVector Cross() const", asMETHOD(Vx2DVector, Cross), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Vx2DVector", "float Min() const", asMETHOD(Vx2DVector, Min), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Vx2DVector", "float Max() const", asMETHOD(Vx2DVector, Max), asCALL_THISCALL); assert(r >= 0);
@@ -1671,52 +1673,52 @@ static void RegisterVxMatrix(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxMatrix", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxMatrix* self) { new(self) VxMatrix(); }, (VxMatrix*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxMatrix", asBEHAVE_CONSTRUCT, "void f(const VxMatrix &in)", asFUNCTIONPR([](const VxMatrix &mat, VxMatrix *self) { new(self) VxMatrix(mat); }, (const VxMatrix &, VxMatrix*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxMatrix", asBEHAVE_CONSTRUCT, "void f(const VxMatrix &in mat)", asFUNCTIONPR([](const VxMatrix &mat, VxMatrix *self) { new(self) VxMatrix(mat); }, (const VxMatrix &, VxMatrix*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxMatrix", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxMatrix *self) { self->~VxMatrix(); }, (VxMatrix*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix &opAssign(const VxMatrix &in)", asMETHODPR(VxMatrix, operator=, (const VxMatrix &), VxMatrix &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix &opAssign(const VxMatrix &in mat)", asMETHODPR(VxMatrix, operator=, (const VxMatrix &), VxMatrix &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxMatrix", "bool opEquals(const VxMatrix &in) const", asMETHODPR(VxMatrix, operator==, (const VxMatrix&) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "bool opEquals(const VxMatrix &in mat) const", asMETHODPR(VxMatrix, operator==, (const VxMatrix&) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix &opMulAssign(const VxMatrix &in) const", asMETHODPR(VxMatrix, operator*=, (const VxMatrix&), VxMatrix&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix opMul(const VxMatrix &in) const", asMETHODPR(VxMatrix, operator*, (const VxMatrix&) const, VxMatrix), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxMatrix", "VxVector opMul(const VxVector &in) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector&), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxMatrix", "VxVector4 opMul(const VxVector4 &in) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector4&), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix &opMulAssign(const VxMatrix &in mat) const", asMETHODPR(VxMatrix, operator*=, (const VxMatrix&), VxMatrix&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix opMul(const VxMatrix &in mat) const", asMETHODPR(VxMatrix, operator*, (const VxMatrix&) const, VxMatrix), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "VxVector opMul(const VxVector &in mat) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector&), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "VxVector4 opMul(const VxVector4 &in mat) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector4&), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxMatrix", "VxVector4& opIndex(int)", asMETHODPR(VxMatrix, operator[], (int), VxVector4&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxMatrix", "const VxVector4& opIndex(int) const", asMETHODPR(VxMatrix, operator[], (int) const, const VxVector4&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "VxVector4& opIndex(int index)", asMETHODPR(VxMatrix, operator[], (int), VxVector4&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "const VxVector4& opIndex(int index) const", asMETHODPR(VxMatrix, operator[], (int) const, const VxVector4&), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxMatrix", "void SetIdentity()", asMETHODPR(VxMatrix, SetIdentity, (), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxMatrix", "void Clear()", asMETHODPR(VxMatrix, Clear, (), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxMatrix", "void Perspective(float, float, float, float)", asMETHODPR(VxMatrix, Perspective, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxMatrix", "void Orthographic(float, float, float, float)", asMETHODPR(VxMatrix, Orthographic, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxMatrix", "void PerspectiveRect(float, float, float, float, float, float)", asMETHODPR(VxMatrix, PerspectiveRect, (float, float, float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxMatrix", "void OrthographicRect(float, float, float, float, float, float)", asMETHODPR(VxMatrix, OrthographicRect, (float, float, float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "void Perspective(float fov, float aspect, float nearPlane, float farPlane)", asMETHODPR(VxMatrix, Perspective, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "void Orthographic(float zoom, float aspect, float nearPlane, float farPlane)", asMETHODPR(VxMatrix, Orthographic, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "void PerspectiveRect(float left, float right, float top, float bottom, float nearPlane, float farPlane)", asMETHODPR(VxMatrix, PerspectiveRect, (float, float, float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "void OrthographicRect(float left, float right, float top, float bottom, float nearPlane, float farPlane)", asMETHODPR(VxMatrix, OrthographicRect, (float, float, float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
 
     // Functions
-    r = engine->RegisterGlobalFunction("void Vx3DMatrixIdentity(VxMatrix &out)", asFUNCTION(Vx3DMatrixIdentity), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrixVector(VxVector &out, const VxMatrix &in, const VxVector &in)", asFUNCTION(Vx3DMultiplyMatrixVector), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMatrixIdentity(VxMatrix &out mat)", asFUNCTION(Vx3DMatrixIdentity), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrixVector(VxVector &out resultVector, const VxMatrix &in mat, const VxVector &in vector)", asFUNCTION(Vx3DMultiplyMatrixVector), asCALL_CDECL); assert(r >= 0);
     // r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrixVectorMany(VxVector &out, const VxMatrix &in, const VxVector &in)", asFUNCTION(Vx3DMultiplyMatrixVector), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrixVector4(VxVector4 &out, const VxMatrix &in, const VxVector4 &in)", asFUNCTIONPR(Vx3DMultiplyMatrixVector4, (VxVector4 *, const VxMatrix &, const VxVector4 *), void), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrixVector4(VxVector4 &out, const VxMatrix &in, const VxVector &in)", asFUNCTIONPR(Vx3DMultiplyMatrixVector4, (VxVector4 *, const VxMatrix &, const VxVector *), void), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DRotateVector(VxVector &out, const VxMatrix &in, const VxVector &in)", asFUNCTION(Vx3DRotateVector), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrixVector4(VxVector4 &out resultVector, const VxMatrix &in mat, const VxVector4 &in vector)", asFUNCTIONPR(Vx3DMultiplyMatrixVector4, (VxVector4 *, const VxMatrix &, const VxVector4 *), void), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrixVector4(VxVector4 &out resultVector, const VxMatrix &in mat, const VxVector &in vector)", asFUNCTIONPR(Vx3DMultiplyMatrixVector4, (VxVector4 *, const VxMatrix &, const VxVector *), void), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DRotateVector(VxVector &out resultVector, const VxMatrix &in mat, const VxVector &in vector)", asFUNCTION(Vx3DRotateVector), asCALL_CDECL); assert(r >= 0);
     // r = engine->RegisterGlobalFunction("void Vx3DRotateVectorMany(VxVector &out, const VxMatrix &in, const VxVector &in, int count, int stride)", asFUNCTION(Vx3DRotateVectorMany), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrix(VxMatrix &out, const VxMatrix &in, const VxMatrix &in)", asFUNCTION(Vx3DMultiplyMatrix), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrix4(VxMatrix &out, const VxMatrix &in, const VxMatrix &in)", asFUNCTION(Vx3DMultiplyMatrix4), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DInverseMatrix(VxMatrix &out, const VxMatrix &in)", asFUNCTION(Vx3DInverseMatrix), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float Vx3DMatrixDeterminant(const VxMatrix &in)", asFUNCTION(Vx3DMatrixDeterminant), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DMatrixFromRotation(VxMatrix &out, const VxVector &in, float)", asFUNCTION(Vx3DMatrixFromRotation), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DMatrixFromRotationAndOrigin(VxMatrix &out, const VxVector &in, const VxVector &, float )", asFUNCTION(Vx3DMatrixFromRotationAndOrigin), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DMatrixFromEulerAngles(VxMatrix &out, float, float, float)", asFUNCTION(Vx3DMatrixFromEulerAngles), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DMatrixToEulerAngles(const VxMatrix &in, float &out, float &out, float &out)", asFUNCTION(Vx3DMatrixToEulerAngles), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DInterpolateMatrix(float step, VxMatrix &out, const VxMatrix &in, const VxMatrix &in)", asFUNCTION(Vx3DInterpolateMatrix), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DInterpolateMatrixNoScale(float step, VxMatrix &out, const VxMatrix &in, const VxMatrix &in)", asFUNCTION(Vx3DInterpolateMatrixNoScale), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DTransposeMatrix(VxMatrix &out, const VxMatrix &in)", asFUNCTION(Vx3DTransposeMatrix), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("void Vx3DDecomposeMatrix(const VxMatrix &in, VxQuaternion &out, VxVector &out, VxVector &out)", asFUNCTION(Vx3DDecomposeMatrix), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float Vx3DDecomposeMatrixTotal(const VxMatrix &in, VxQuaternion &out, VxVector &out, VxVector &out, VxQuaternion &out)", asFUNCTION(Vx3DDecomposeMatrixTotal), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrix(VxMatrix &out resultMat, const VxMatrix &in matA, const VxMatrix &in matB)", asFUNCTION(Vx3DMultiplyMatrix), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMultiplyMatrix4(VxMatrix &out resultMat, const VxMatrix &in matA, const VxMatrix &in matB)", asFUNCTION(Vx3DMultiplyMatrix4), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DInverseMatrix(VxMatrix &out inverseMat, const VxMatrix &in mat)", asFUNCTION(Vx3DInverseMatrix), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float Vx3DMatrixDeterminant(const VxMatrix &in mat)", asFUNCTION(Vx3DMatrixDeterminant), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMatrixFromRotation(VxMatrix &out resultMat, const VxVector &in vector, float angle)", asFUNCTION(Vx3DMatrixFromRotation), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMatrixFromRotationAndOrigin(VxMatrix &out resultMat, const VxVector &in vector, const VxVector &in origin, float angle)", asFUNCTION(Vx3DMatrixFromRotationAndOrigin), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMatrixFromEulerAngles(VxMatrix &out mat, float eax, float eay, float eaz)", asFUNCTION(Vx3DMatrixFromEulerAngles), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DMatrixToEulerAngles(const VxMatrix &in mat, float &out eax, float &out eay, float &out eaz)", asFUNCTION(Vx3DMatrixToEulerAngles), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DInterpolateMatrix(float step, VxMatrix &out resultMat, const VxMatrix &in matA, const VxMatrix &in matB)", asFUNCTION(Vx3DInterpolateMatrix), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DInterpolateMatrixNoScale(float step, VxMatrix &out resultMat, const VxMatrix &in matA, const VxMatrix &in matB)", asFUNCTION(Vx3DInterpolateMatrixNoScale), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DTransposeMatrix(VxMatrix &out resultMat, const VxMatrix &in mat)", asFUNCTION(Vx3DTransposeMatrix), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void Vx3DDecomposeMatrix(const VxMatrix &in mat, VxQuaternion &out quat, VxVector &out pos, VxVector &out scale)", asFUNCTION(Vx3DDecomposeMatrix), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float Vx3DDecomposeMatrixTotal(const VxMatrix &in mat, VxQuaternion &out quat, VxVector &out pos, VxVector &out scale, VxQuaternion &out uRot)", asFUNCTION(Vx3DDecomposeMatrixTotal), asCALL_CDECL); assert(r >= 0);
 }
 
 // VxQuaternion
@@ -1739,54 +1741,54 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxQuaternion *self) { new(self) VxQuaternion(); }, (VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(const VxQuaternion &in)", asFUNCTIONPR([](const VxQuaternion &quat, VxQuaternion *self) { new(self) VxQuaternion(quat); }, (const VxQuaternion &, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, float)", asFUNCTIONPR([](const VxVector &v, float angle, VxQuaternion *self) { new(self) VxQuaternion(v, angle); }, (const VxVector &, float, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float x, float y, float z, float w, VxQuaternion *self) { new(self) VxQuaternion(x, y, z, w); }, (float, float, float, float, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(const VxQuaternion &in quat)", asFUNCTIONPR([](const VxQuaternion &quat, VxQuaternion *self) { new(self) VxQuaternion(quat); }, (const VxQuaternion &, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(const VxVector &in v, float angle)", asFUNCTIONPR([](const VxVector &v, float angle, VxQuaternion *self) { new(self) VxQuaternion(v, angle); }, (const VxVector &, float, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z, float w)", asFUNCTIONPR([](float x, float y, float z, float w, VxQuaternion *self) { new(self) VxQuaternion(x, y, z, w); }, (float, float, float, float, VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxQuaternion *self) { new(self) VxQuaternion(list[0], list[1], list[2], list[3]); }, (float *, VxQuaternion *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxQuaternion *self) { self->~VxQuaternion(); }, (VxQuaternion*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opAssign(const VxQuaternion &in)", asMETHODPR(VxQuaternion, operator=, (const VxQuaternion &), VxQuaternion &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opAssign(const VxQuaternion &in quat)", asMETHODPR(VxQuaternion, operator=, (const VxQuaternion &), VxQuaternion &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "bool opEquals(const VxQuaternion &in) const", asFUNCTIONPR(operator==, (const VxQuaternion &, const VxQuaternion &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "bool opEquals(const VxQuaternion &in quat) const", asFUNCTIONPR(operator==, (const VxQuaternion &, const VxQuaternion &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opMulAssign(float) const", asMETHODPR(VxQuaternion, operator*=, (float), VxQuaternion &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opMulAssign(float s) const", asMETHODPR(VxQuaternion, operator*=, (float), VxQuaternion &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opAdd(const VxQuaternion &in) const", asMETHODPR(VxQuaternion, operator+, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opSub(const VxQuaternion &in) const", asMETHODPR(VxQuaternion, operator-, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opMul(const VxQuaternion &in) const", asMETHODPR(VxQuaternion, operator*, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opDiv(const VxQuaternion &in) const", asMETHODPR(VxQuaternion, operator/, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opAdd(const VxQuaternion &in quat) const", asMETHODPR(VxQuaternion, operator+, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opSub(const VxQuaternion &in quat) const", asMETHODPR(VxQuaternion, operator-, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opMul(const VxQuaternion &in quat) const", asMETHODPR(VxQuaternion, operator*, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opDiv(const VxQuaternion &in quat) const", asMETHODPR(VxQuaternion, operator/, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opMul(float) const", asFUNCTIONPR(operator*, (const VxQuaternion &, float), VxQuaternion), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opMul(float s) const", asFUNCTIONPR(operator*, (const VxQuaternion &, float), VxQuaternion), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opNeg() const", asMETHODPR(VxQuaternion, operator-, () const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "float &opIndex(int)", asMETHODPR(VxQuaternion, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "const float &opIndex(int) const", asMETHODPR(VxQuaternion, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "float &opIndex(int index)", asMETHODPR(VxQuaternion, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "const float &opIndex(int index) const", asMETHODPR(VxQuaternion, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "void FromMatrix(const VxMatrix &in)", asMETHOD(VxQuaternion, FromMatrix), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "void ToMatrix(VxMatrix &out) const", asMETHOD(VxQuaternion, ToMatrix), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "void Multiply(const VxQuaternion &in)", asMETHOD(VxQuaternion, Multiply), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "void FromRotation(const VxVector &in, float)", asMETHOD(VxQuaternion, FromRotation), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "void FromEulerAngles(float, float, float)", asMETHOD(VxQuaternion, FromEulerAngles), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "void ToEulerAngles(float &out, float &out, float &out) const", asMETHOD(VxQuaternion, ToEulerAngles), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "void FromMatrix(const VxMatrix &in mat)", asMETHOD(VxQuaternion, FromMatrix), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "void ToMatrix(VxMatrix &out mat) const", asMETHOD(VxQuaternion, ToMatrix), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "void Multiply(const VxQuaternion &in quat)", asMETHOD(VxQuaternion, Multiply), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "void FromRotation(const VxVector &in v, float angle)", asMETHOD(VxQuaternion, FromRotation), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "void FromEulerAngles(float eax, float eay, float eaz)", asMETHOD(VxQuaternion, FromEulerAngles), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "void ToEulerAngles(float &out eax, float &out eay, float &out eaz) const", asMETHOD(VxQuaternion, ToEulerAngles), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxQuaternion", "void Normalize()", asMETHOD(VxQuaternion, Normalize), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxQuaternion", "float Magnitude() const", asFUNCTIONPR(Magnitude, (const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "float DotProduct(const VxQuaternion &in) const", asFUNCTIONPR(DotProduct, (const VxVector &, const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "float DotProduct(const VxQuaternion &in quat) const", asFUNCTIONPR(DotProduct, (const VxVector &, const VxVector &), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     
     // Function registration
-    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionSnuggle(VxQuaternion &in, VxVector &in)", asFUNCTION(Vx3DQuaternionSnuggle), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionFromMatrix(const VxMatrix &in)", asFUNCTION(Vx3DQuaternionFromMatrix), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionConjugate(const VxQuaternion &in)", asFUNCTION(Vx3DQuaternionConjugate), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionMultiply(const VxQuaternion &in, const VxQuaternion &in)", asFUNCTION(Vx3DQuaternionMultiply), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionDivide(const VxQuaternion &in, const VxQuaternion &in)", asFUNCTION(Vx3DQuaternionDivide), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("VxQuaternion Slerp(float, const VxQuaternion &in, const VxQuaternion &in)", asFUNCTION(Slerp), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("VxQuaternion Squad(float, const VxQuaternion &in, const VxQuaternion &in, const VxQuaternion &in, const VxQuaternion &in)", asFUNCTION(Squad), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("VxQuaternion LnDif(const VxQuaternion &in, const VxQuaternion &in)", asFUNCTION(LnDif), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("VxQuaternion Ln(const VxQuaternion &in)", asFUNCTION(Ln), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("VxQuaternion Exp(const VxQuaternion &in)", asFUNCTION(Exp), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionSnuggle(VxQuaternion &in quat, VxVector &in scale)", asFUNCTION(Vx3DQuaternionSnuggle), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionFromMatrix(const VxMatrix &in mat)", asFUNCTION(Vx3DQuaternionFromMatrix), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionConjugate(const VxQuaternion &in quat)", asFUNCTION(Vx3DQuaternionConjugate), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionMultiply(const VxQuaternion &in l, const VxQuaternion &in r)", asFUNCTION(Vx3DQuaternionMultiply), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionDivide(const VxQuaternion &in p, const VxQuaternion &in q)", asFUNCTION(Vx3DQuaternionDivide), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion Slerp(float theta, const VxQuaternion &in quat1, const VxQuaternion &in quat2)", asFUNCTION(Slerp), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion Squad(float theta, const VxQuaternion &in quat1, const VxQuaternion &in quat1Out, const VxQuaternion &in quat2In, const VxQuaternion &in quat2)", asFUNCTION(Squad), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion LnDif(const VxQuaternion &in p, const VxQuaternion &in q)", asFUNCTION(LnDif), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion Ln(const VxQuaternion &in quat)", asFUNCTION(Ln), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("VxQuaternion Exp(const VxQuaternion &in quat)", asFUNCTION(Exp), asCALL_CDECL); assert(r >= 0);
 }
 
 // VxRect
@@ -1808,8 +1810,8 @@ static void RegisterVxRect(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxRect *self) { new(self) VxRect(); }, (VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(const VxRect &in)", asFUNCTIONPR([](const VxRect &rect, VxRect *self) { new(self) VxRect(rect); }, (const VxRect &, VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float l, float t, float r, float b, VxRect *self) { new(self) VxRect(l, t, r, b); }, (float, float, float, float, VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(const VxRect &in rect)", asFUNCTIONPR([](const VxRect &rect, VxRect *self) { new(self) VxRect(rect); }, (const VxRect &, VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(float left, float top, float right, float bottom)", asFUNCTIONPR([](float l, float t, float r, float b, VxRect *self) { new(self) VxRect(l, t, r, b); }, (float, float, float, float, VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(Vx2DVector &in, Vx2DVector &in)", asFUNCTIONPR([](Vx2DVector &topleft, Vx2DVector &bottomright, VxRect *self) { new(self) VxRect(topleft, bottomright); }, (Vx2DVector &, Vx2DVector &, VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxRect *self) { new(self) VxRect(list[0], list[1], list[2], list[3]); }, (float *, VxRect *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
@@ -1817,66 +1819,66 @@ static void RegisterVxRect(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxRect *self) { self->~VxRect(); }, (VxRect*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     
     // Methods
-    r = engine->RegisterObjectMethod("VxRect", "VxRect &opAssign(const VxRect &in)", asMETHODPR(VxRect, operator=, (const VxRect &), VxRect &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "VxRect &opAssign(const VxRect &in rect)", asMETHODPR(VxRect, operator=, (const VxRect &), VxRect &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxRect", "bool opEquals(const VxRect &in) const", asFUNCTIONPR([](const VxRect &lhs, const VxRect &rhs) -> bool { return lhs == rhs; }, (const VxRect &, const VxRect &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "bool opEquals(const VxRect &in rect) const", asFUNCTIONPR([](const VxRect &lhs, const VxRect &rhs) -> bool { return lhs == rhs; }, (const VxRect &, const VxRect &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxRect", "VxRect &opAddAssign(const Vx2DVector &in)", asMETHODPR(VxRect, operator+=, (const Vx2DVector &), VxRect&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "VxRect &opSubAssign(const Vx2DVector &in)", asMETHODPR(VxRect, operator-=, (const Vx2DVector &), VxRect&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "VxRect &opMulAssign(const Vx2DVector &in)", asMETHODPR(VxRect, operator*=, (const Vx2DVector &), VxRect&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "VxRect &opDivAssign(const Vx2DVector &in)", asMETHODPR(VxRect, operator/=, (const Vx2DVector &), VxRect&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "VxRect &opAddAssign(const Vx2DVector &in t)", asMETHODPR(VxRect, operator+=, (const Vx2DVector &), VxRect&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "VxRect &opSubAssign(const Vx2DVector &in t)", asMETHODPR(VxRect, operator-=, (const Vx2DVector &), VxRect&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "VxRect &opMulAssign(const Vx2DVector &in t)", asMETHODPR(VxRect, operator*=, (const Vx2DVector &), VxRect&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "VxRect &opDivAssign(const Vx2DVector &in t)", asMETHODPR(VxRect, operator/=, (const Vx2DVector &), VxRect&), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxRect", "void SetWidth(float)", asMETHOD(VxRect, SetWidth), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetWidth(float w)", asMETHOD(VxRect, SetWidth), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "float GetWidth() const", asMETHOD(VxRect, GetWidth), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetHeight(float)", asMETHOD(VxRect, SetHeight), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetHeight(float h)", asMETHOD(VxRect, SetHeight), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "float GetHeight() const", asMETHOD(VxRect, GetHeight), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "float GetHCenter() const", asMETHOD(VxRect, GetHCenter), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "float GetVCenter() const", asMETHOD(VxRect, GetVCenter), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetSize(const Vx2DVector &in)", asMETHOD(VxRect, SetSize), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetSize(const Vx2DVector &in v)", asMETHOD(VxRect, SetSize), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "Vx2DVector GetSize() const", asMETHOD(VxRect, GetSize), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetHalfSize(const Vx2DVector &in)", asMETHOD(VxRect, SetHalfSize), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetHalfSize(const Vx2DVector &in v)", asMETHOD(VxRect, SetHalfSize), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "Vx2DVector GetHalfSize() const", asMETHOD(VxRect, GetHalfSize), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetCenter(const Vx2DVector &in)", asMETHODPR(VxRect, SetCenter, (const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetCenter(const Vx2DVector &in v)", asMETHODPR(VxRect, SetCenter, (const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "Vx2DVector GetCenter() const", asMETHODPR(VxRect, GetCenter, () const, Vx2DVector), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetTopLeft(const Vx2DVector &in)", asMETHODPR(VxRect, SetTopLeft, (const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetTopLeft(const Vx2DVector &in v)", asMETHODPR(VxRect, SetTopLeft, (const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "const Vx2DVector &GetTopLeft() const", asMETHODPR(VxRect, GetTopLeft, () const, const Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "Vx2DVector &GetTopLeft()", asMETHODPR(VxRect, GetTopLeft, (), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetBottomRight(const Vx2DVector &in)", asMETHOD(VxRect, SetBottomRight), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetBottomRight(const Vx2DVector &in v)", asMETHOD(VxRect, SetBottomRight), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "const Vx2DVector &GetBottomRight() const", asMETHODPR(VxRect, GetBottomRight, () const, const Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "Vx2DVector &GetBottomRight()", asMETHODPR(VxRect, GetBottomRight, (), Vx2DVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "void Clear()", asMETHOD(VxRect, Clear), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetCorners(const Vx2DVector &in, const Vx2DVector &in)", asMETHODPR(VxRect, SetCorners, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetCorners(float, float, float, float)", asMETHODPR(VxRect, SetCorners, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetDimension(const Vx2DVector &in, const Vx2DVector &in)", asMETHODPR(VxRect, SetDimension, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetDimension(float, float, float, float)", asMETHODPR(VxRect, SetDimension, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetCenter(const Vx2DVector &in, const Vx2DVector &in)", asMETHODPR(VxRect, SetCenter, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void SetCenter(float, float, float, float)", asMETHODPR(VxRect, SetCenter, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void CopyFrom(const CKRECT &in)", asMETHOD(VxRect, CopyFrom), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void CopyTo(CKRECT &out) const", asMETHOD(VxRect, CopyTo), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void Bounding(const Vx2DVector &in, const Vx2DVector &in)", asMETHODPR(VxRect, Bounding, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetCorners(const Vx2DVector &in topLeft, const Vx2DVector &in bottomRight)", asMETHODPR(VxRect, SetCorners, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetCorners(float left, float top, float right, float bottom)", asMETHODPR(VxRect, SetCorners, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetDimension(const Vx2DVector &in position, const Vx2DVector &in size)", asMETHODPR(VxRect, SetDimension, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetDimension(float x, float y, float w, float h)", asMETHODPR(VxRect, SetDimension, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetCenter(const Vx2DVector &in center, const Vx2DVector &in halfSize)", asMETHODPR(VxRect, SetCenter, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void SetCenter(float cx, float cy, float hw, float hh)", asMETHODPR(VxRect, SetCenter, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void CopyFrom(const CKRECT &in rect)", asMETHOD(VxRect, CopyFrom), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void CopyTo(CKRECT &out rect) const", asMETHOD(VxRect, CopyTo), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void Bounding(const Vx2DVector &in p1, const Vx2DVector &in p2)", asMETHODPR(VxRect, Bounding, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "void Normalize()", asMETHOD(VxRect, Normalize), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void Move(const Vx2DVector &in)", asMETHOD(VxRect, Move), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void Translate(const Vx2DVector &in)", asMETHOD(VxRect, Translate), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void HMove(float)", asMETHOD(VxRect, HMove), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void VMove(float)", asMETHOD(VxRect, VMove), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void HTranslate(float)", asMETHOD(VxRect, HTranslate), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void VTranslate(float)", asMETHOD(VxRect, VTranslate), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void TransformFromHomogeneous(Vx2DVector &out, const Vx2DVector &in) const", asMETHODPR(VxRect, TransformFromHomogeneous, (Vx2DVector &, const Vx2DVector &) const, void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void Scale(const Vx2DVector &in)", asMETHOD(VxRect, Scale), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void Inflate(const Vx2DVector &in)", asMETHOD(VxRect, Inflate), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void Interpolate(float, const VxRect &in)", asMETHOD(VxRect, Interpolate), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void Move(const Vx2DVector &in pos)", asMETHOD(VxRect, Move), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void Translate(const Vx2DVector &in t)", asMETHOD(VxRect, Translate), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void HMove(float h)", asMETHOD(VxRect, HMove), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void VMove(float v)", asMETHOD(VxRect, VMove), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void HTranslate(float h)", asMETHOD(VxRect, HTranslate), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void VTranslate(float v)", asMETHOD(VxRect, VTranslate), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void TransformFromHomogeneous(Vx2DVector &out dest, const Vx2DVector &in src) const", asMETHODPR(VxRect, TransformFromHomogeneous, (Vx2DVector &, const Vx2DVector &) const, void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void Scale(const Vx2DVector &in s)", asMETHOD(VxRect, Scale), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void Inflate(const Vx2DVector &in pt)", asMETHOD(VxRect, Inflate), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void Interpolate(float value, const VxRect &in a)", asMETHOD(VxRect, Interpolate), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "void Merge(const VxRect &in)", asMETHOD(VxRect, Merge), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "int IsInside(const VxRect &in) const", asMETHODPR(VxRect, IsInside, (const VxRect &) const, int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "bool IsOutside(const VxRect &in) const", asMETHOD(VxRect, IsOutside), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "bool IsInside(const Vx2DVector &in) const", asMETHODPR(VxRect, IsInside, (const Vx2DVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "int IsInside(const VxRect &in a) const", asMETHODPR(VxRect, IsInside, (const VxRect &) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "bool IsOutside(const VxRect &in clipRect) const", asMETHOD(VxRect, IsOutside), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "bool IsInside(const Vx2DVector &in pt) const", asMETHODPR(VxRect, IsInside, (const Vx2DVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "bool IsNull() const", asMETHODPR(VxRect, IsNull, () const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "bool IsEmpty() const", asMETHODPR(VxRect, IsEmpty, () const, XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "bool Clip(const VxRect &in)", asMETHODPR(VxRect, Clip, (const VxRect &), XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void Clip(Vx2DVector &out, bool = true) const", asMETHODPR(VxRect, Clip, (Vx2DVector &, XBOOL) const, void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void Transform(const VxRect &in, const VxRect &in)", asMETHODPR(VxRect, Transform, (const VxRect &, const VxRect &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void Transform(const Vx2DVector &in, const Vx2DVector &in)", asMETHODPR(VxRect, Transform, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void TransformToHomogeneous(const VxRect &in)", asMETHODPR(VxRect, TransformToHomogeneous, (const VxRect &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRect", "void TransformFromHomogeneous(const VxRect &in)", asMETHODPR(VxRect, TransformFromHomogeneous, (const VxRect &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "bool Clip(const VxRect &in clipRect)", asMETHODPR(VxRect, Clip, (const VxRect &), XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void Clip(Vx2DVector &out pt, bool excludeRightBottom = true) const", asMETHODPR(VxRect, Clip, (Vx2DVector &, XBOOL) const, void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void Transform(const VxRect &in destScreen, const VxRect &in srcScreen)", asMETHODPR(VxRect, Transform, (const VxRect &, const VxRect &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void Transform(const Vx2DVector &in destScreenSize, const Vx2DVector &in srcScreenSize)", asMETHODPR(VxRect, Transform, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void TransformToHomogeneous(const VxRect &in screen)", asMETHODPR(VxRect, TransformToHomogeneous, (const VxRect &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRect", "void TransformFromHomogeneous(const VxRect &in screen)", asMETHODPR(VxRect, TransformFromHomogeneous, (const VxRect &), void), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxOBB
@@ -1893,29 +1895,29 @@ static void RegisterVxOBB(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxOBB *self) { new(self) VxOBB(); }, (VxOBB *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_CONSTRUCT, "void f(const VxOBB &in)", asFUNCTIONPR([](const VxOBB &obb, VxOBB *self) { new(self) VxOBB(obb); }, (const VxOBB &, VxOBB*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_CONSTRUCT, "void f(const VxBbox &in, const VxMatrix &in)", asFUNCTIONPR([](const VxBbox &box, const VxMatrix &mat, VxOBB *self) { new(self) VxOBB(box, mat); }, (const VxBbox &, const VxMatrix &, VxOBB *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_CONSTRUCT, "void f(const VxOBB &in obb)", asFUNCTIONPR([](const VxOBB &obb, VxOBB *self) { new(self) VxOBB(obb); }, (const VxOBB &, VxOBB*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_CONSTRUCT, "void f(const VxBbox &in box, const VxMatrix &in mat)", asFUNCTIONPR([](const VxBbox &box, const VxMatrix &mat, VxOBB *self) { new(self) VxOBB(box, mat); }, (const VxBbox &, const VxMatrix &, VxOBB *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxOBB", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxOBB *self) { self->~VxOBB(); }, (VxOBB*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxOBB", "VxOBB &opAssign(const VxOBB &in)", asMETHODPR(VxOBB, operator=, (const VxOBB &), VxOBB &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxOBB", "VxOBB &opAssign(const VxOBB &in obb)", asMETHODPR(VxOBB, operator=, (const VxOBB &), VxOBB &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxOBB", "bool opEquals(const VxOBB &in) const", asMETHODPR(VxOBB, operator==, (const VxOBB &) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxOBB", "bool opEquals(const VxOBB &in obb) const", asMETHODPR(VxOBB, operator==, (const VxOBB &) const, bool), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxOBB", "VxVector &GetCenter()", asMETHODPR(VxOBB, GetCenter, (), VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxOBB", "const VxVector &GetCenter() const", asMETHODPR(VxOBB, GetCenter, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxOBB", "VxVector &GetAxis(int)", asMETHODPR(VxOBB, GetAxis, (int), VxVector &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxOBB", "const VxVector &GetAxis(int) const", asMETHODPR(VxOBB, GetAxis, (int) const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxOBB", "VxVector &GetAxis(int i)", asMETHODPR(VxOBB, GetAxis, (int), VxVector &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxOBB", "const VxVector &GetAxis(int i) const", asMETHODPR(VxOBB, GetAxis, (int) const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxOBB", "float &GetExtent(int)", asMETHODPR(VxOBB, GetExtent, (int), float &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxOBB", "const float &GetExtent(int) const", asMETHODPR(VxOBB, GetExtent, (int) const, const float &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxOBB", "float &GetExtent(int i)", asMETHODPR(VxOBB, GetExtent, (int), float &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxOBB", "const float &GetExtent(int i) const", asMETHODPR(VxOBB, GetExtent, (int) const, const float &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxOBB", "void Create(const VxBbox &in, const VxMatrix &in)", asMETHODPR(VxOBB, Create, (const VxBbox &, const VxMatrix &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxOBB", "bool VectorIn(const VxVector &in) const", asMETHODPR(VxOBB, VectorIn, (const VxVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxOBB", "bool IsBoxInside(const VxBbox &in) const", asMETHODPR(VxOBB, IsBoxInside, (const VxBbox &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxOBB", "void Create(const VxBbox &in box, const VxMatrix &in mat)", asMETHODPR(VxOBB, Create, (const VxBbox &, const VxMatrix &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxOBB", "bool VectorIn(const VxVector &in v) const", asMETHODPR(VxOBB, VectorIn, (const VxVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxOBB", "bool IsBoxInside(const VxBbox &in box) const", asMETHODPR(VxOBB, IsBoxInside, (const VxBbox &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxRay
@@ -1929,8 +1931,8 @@ static void RegisterVxRay(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxRay *self) { new(self) VxRay(); }, (VxRay *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_CONSTRUCT, "void f(const VxRay &in)", asFUNCTIONPR([](const VxRay &r, VxRay *self) { new(self) VxRay(r); }, (const VxRay &, VxRay*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in)", asFUNCTIONPR([](const VxVector &start, const VxVector &end, VxRay *self) { new(self) VxRay(start, end); }, (const VxVector &, const VxVector &, VxRay *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_CONSTRUCT, "void f(const VxRay &in ray)", asFUNCTIONPR([](const VxRay &r, VxRay *self) { new(self) VxRay(r); }, (const VxRay &, VxRay*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_CONSTRUCT, "void f(const VxVector &in start, const VxVector &in end)", asFUNCTIONPR([](const VxVector &start, const VxVector &end, VxRay *self) { new(self) VxRay(start, end); }, (const VxVector &, const VxVector &, VxRay *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxRay", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {VxVector, VxVector}", asFUNCTIONPR([](VxVector *list, VxRay *self) { new(self) VxRay(list[0], list[1]); }, (VxVector *, VxRay *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
@@ -1939,7 +1941,7 @@ static void RegisterVxRay(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxRay", "VxRay &opAssign(const VxRay &in)", asMETHODPR(VxRay, operator=, (const VxRay &), VxRay &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxRay", "bool opEquals(const VxRay &in) const", asMETHODPR(VxRay, operator==, (const VxRay &) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRay", "bool opEquals(const VxRay &in ray) const", asMETHODPR(VxRay, operator==, (const VxRay &) const, bool), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxRay", "const VxVector &GetOrigin() const", asMETHODPR(VxRay, GetOrigin, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRay", "VxVector &GetOrigin()", asMETHODPR(VxRay, GetOrigin, (), VxVector &), asCALL_THISCALL); assert(r >= 0);
@@ -1947,10 +1949,10 @@ static void RegisterVxRay(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxRay", "const VxVector &GetDirection() const", asMETHODPR(VxRay, GetDirection, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRay", "VxVector &GetDirection()", asMETHODPR(VxRay, GetDirection, (), VxVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxRay", "void Transform(VxRay &out, const VxMatrix &in)", asMETHODPR(VxRay, Transform, (VxRay &, const VxMatrix &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRay", "void Interpolate(VxVector &out, float) const", asMETHODPR(VxRay, Interpolate, (VxVector &, float) const, void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRay", "float SquareDistance(const VxVector &in) const", asMETHODPR(VxRay, SquareDistance, (const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxRay", "float Distance(const VxVector &in) const", asMETHODPR(VxRay, Distance, (const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRay", "void Transform(VxRay &out dest, const VxMatrix &in mat)", asMETHODPR(VxRay, Transform, (VxRay &, const VxMatrix &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRay", "void Interpolate(VxVector &out p, float t) const", asMETHODPR(VxRay, Interpolate, (VxVector &, float) const, void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRay", "float SquareDistance(const VxVector &in p) const", asMETHODPR(VxRay, SquareDistance, (const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxRay", "float Distance(const VxVector &in p) const", asMETHODPR(VxRay, Distance, (const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxSphere
@@ -1960,25 +1962,25 @@ static void RegisterVxSphere(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxSphere *self) { new(self) VxSphere(); }, (VxSphere *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_CONSTRUCT, "void f(const VxSphere &in)", asFUNCTIONPR([](const VxSphere &s, VxSphere *self) { new(self) VxSphere(s); }, (const VxSphere &, VxSphere*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, float)", asFUNCTIONPR([](const VxVector &center, float radius, VxSphere *self) { new(self) VxSphere(center, radius); }, (const VxVector &, float, VxSphere *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_CONSTRUCT, "void f(const VxSphere &in sphere)", asFUNCTIONPR([](const VxSphere &s, VxSphere *self) { new(self) VxSphere(s); }, (const VxSphere &, VxSphere*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_CONSTRUCT, "void f(const VxVector &in center, float radius)", asFUNCTIONPR([](const VxVector &center, float radius, VxSphere *self) { new(self) VxSphere(center, radius); }, (const VxVector &, float, VxSphere *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxSphere", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxSphere *self) { self->~VxSphere(); }, (VxSphere*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxSphere", "VxSphere &opAssign(const VxSphere &in)", asMETHODPR(VxSphere, operator=, (const VxSphere &), VxSphere &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSphere", "VxSphere &opAssign(const VxSphere &in sphere)", asMETHODPR(VxSphere, operator=, (const VxSphere &), VxSphere &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxSphere", "bool opEquals(const VxSphere &in) const", asMETHODPR(VxSphere, operator==, (const VxSphere &) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSphere", "bool opEquals(const VxSphere &in sphere) const", asMETHODPR(VxSphere, operator==, (const VxSphere &) const, bool), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSphere", "VxVector &Center()", asMETHODPR(VxSphere, Center, (), VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSphere", "const VxVector &Center() const", asMETHODPR(VxSphere, Center, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSphere", "float &Radius()", asMETHODPR(VxSphere, Radius, (), float &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSphere", "const float &Radius() const", asMETHODPR(VxSphere, Radius, () const, const float &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxSphere", "bool IsPointInside(const VxVector &in)", asMETHODPR(VxSphere, IsPointInside, (const VxVector &), bool), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSphere", "bool IsBoxTotallyInside(const VxBbox &in)", asMETHODPR(VxSphere, IsBoxTotallyInside, (const VxBbox &), bool), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSphere", "bool IsPointOnSurface(const VxVector &in)", asMETHODPR(VxSphere, IsPointOnSurface, (const VxVector &), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSphere", "bool IsPointInside(const VxVector &in point)", asMETHODPR(VxSphere, IsPointInside, (const VxVector &), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSphere", "bool IsBoxTotallyInside(const VxBbox &in point)", asMETHODPR(VxSphere, IsBoxTotallyInside, (const VxBbox &), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSphere", "bool IsPointOnSurface(const VxVector &in point)", asMETHODPR(VxSphere, IsPointOnSurface, (const VxVector &), bool), asCALL_THISCALL); assert(r >= 0);
 }
 
 // VxPlane
@@ -1992,32 +1994,32 @@ static void RegisterVxPlane(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxPlane *self) { new(self) VxPlane(); }, (VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxPlane &in)", asFUNCTIONPR([](const VxPlane &p, VxPlane *self) { new(self) VxPlane(p); }, (const VxPlane &, VxPlane*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, float)", asFUNCTIONPR([](const VxVector &n, float d, VxPlane *self) { new(self) VxPlane(n, d); }, (const VxVector &, float, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float a, float b, float c, float d, VxPlane *self) { new(self) VxPlane(a, b, c, d); }, (float, float, float, float, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in)", asFUNCTIONPR([](const VxVector &n, const VxVector &p, VxPlane *self) { new(self) VxPlane(n, p); }, (const VxVector &, const VxVector &, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in, const VxVector &in)", asFUNCTIONPR([](const VxVector &a, const VxVector &b, const VxVector &c, VxPlane *self) { new(self) VxPlane(a, b, c); }, (const VxVector &, const VxVector &, const VxVector &, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxPlane &in plane)", asFUNCTIONPR([](const VxPlane &p, VxPlane *self) { new(self) VxPlane(p); }, (const VxPlane &, VxPlane*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxVector &in n, float d)", asFUNCTIONPR([](const VxVector &n, float d, VxPlane *self) { new(self) VxPlane(n, d); }, (const VxVector &, float, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(float a, float b, float c, float d)", asFUNCTIONPR([](float a, float b, float c, float d, VxPlane *self) { new(self) VxPlane(a, b, c, d); }, (float, float, float, float, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxVector &in n, const VxVector &in p)", asFUNCTIONPR([](const VxVector &n, const VxVector &p, VxPlane *self) { new(self) VxPlane(n, p); }, (const VxVector &, const VxVector &, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_CONSTRUCT, "void f(const VxVector &in a, const VxVector &in b, const VxVector &in c)", asFUNCTIONPR([](const VxVector &a, const VxVector &b, const VxVector &c, VxPlane *self) { new(self) VxPlane(a, b, c); }, (const VxVector &, const VxVector &, const VxVector &, VxPlane *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxPlane", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxPlane *self) { self->~VxPlane(); }, (VxPlane*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxPlane", "VxPlane &opAssign(const VxPlane &in)", asMETHODPR(VxPlane, operator=, (const VxPlane &), VxPlane &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "VxPlane &opAssign(const VxPlane &in plane)", asMETHODPR(VxPlane, operator=, (const VxPlane &), VxPlane &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxPlane", "bool opEquals(const VxPlane &in) const", asMETHODPR(VxPlane, operator==, (const VxPlane &) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "bool opEquals(const VxPlane &in plane) const", asMETHODPR(VxPlane, operator==, (const VxPlane &) const, bool), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxPlane", "VxPlane opNeg() const", asFUNCTIONPR(operator-, (const VxPlane &), const VxPlane), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxPlane", "const VxVector &GetNormal() const", asMETHODPR(VxPlane, GetNormal, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxPlane", "float Classify(const VxVector &in) const", asMETHODPR(VxPlane, Classify, (const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxPlane", "float Classify(const VxBbox &in) const", asMETHODPR(VxPlane, Classify, (const VxBbox &) const, float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxPlane", "float Classify(const VxBbox &in, const VxMatrix &in) const", asMETHODPR(VxPlane, Classify, (const VxBbox &, const VxMatrix &) const, float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxPlane", "float ClassifyFace(const VxVector &in, const VxVector &in, const VxVector &in) const", asMETHODPR(VxPlane, ClassifyFace, (const VxVector &, const VxVector &, const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxPlane", "float Distance(const VxVector &in) const", asMETHODPR(VxPlane, Distance, (const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxPlane", "VxVector NearestPoint(const VxVector &in) const", asMETHODPR(VxPlane, NearestPoint, (const VxVector &) const, const VxVector), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxPlane", "void Create(const VxVector &in, const VxVector &in)", asMETHODPR(VxPlane, Create, (const VxVector &, const VxVector &), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxPlane", "void Create(const VxVector &in, const VxVector &in, const VxVector &in)", asMETHODPR(VxPlane, Create, (const VxVector &, const VxVector &, const VxVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "float Classify(const VxVector &in p) const", asMETHODPR(VxPlane, Classify, (const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "float Classify(const VxBbox &in box) const", asMETHODPR(VxPlane, Classify, (const VxBbox &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "float Classify(const VxBbox &in box, const VxMatrix &in mat) const", asMETHODPR(VxPlane, Classify, (const VxBbox &, const VxMatrix &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "float ClassifyFace(const VxVector &in pt0, const VxVector &in pt1, const VxVector &in pt2) const", asMETHODPR(VxPlane, ClassifyFace, (const VxVector &, const VxVector &, const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "float Distance(const VxVector &in p) const", asMETHODPR(VxPlane, Distance, (const VxVector &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "VxVector NearestPoint(const VxVector &in p) const", asMETHODPR(VxPlane, NearestPoint, (const VxVector &) const, const VxVector), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "void Create(const VxVector &in n, const VxVector &in p)", asMETHODPR(VxPlane, Create, (const VxVector &, const VxVector &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxPlane", "void Create(const VxVector &in a, const VxVector &in b, const VxVector &in c)", asMETHODPR(VxPlane, Create, (const VxVector &, const VxVector &, const VxVector &), void), asCALL_THISCALL); assert(r >= 0);
     // r = engine->RegisterObjectMethod("VxPlane", "float XClassify(const VxVector[4] &in) const", asMETHODPR(VxPlane, XClassify, (const VxVector[4] &) const, float), asCALL_THISCALL); assert(r >= 0);
 }
 
@@ -2027,8 +2029,8 @@ static void RegisterVxIntersect(asIScriptEngine *engine) {
     int r = 0;
 
     // Intersection Ray - Box
-    r = engine->RegisterGlobalFunction("bool VxIntersectRayBox(const VxRay &in, const VxBbox &in)", asFUNCTIONPR(VxIntersect::RayBox, (const VxRay &, const VxBbox &), XBOOL), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxIntersectRayBox(const VxRay &in, const VxBbox &in, VxVector &out)", asFUNCTIONPR(VxIntersect::RayBox, (const VxRay &, const VxBbox &, VxVector &, VxVector *, VxVector *, VxVector *), XBOOL), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectRayBox(const VxRay &in ray, const VxBbox &in box)", asFUNCTIONPR(VxIntersect::RayBox, (const VxRay &, const VxBbox &), XBOOL), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectRayBox(const VxRay &in ray, const VxBbox &in box, VxVector &out inPoint, VxVector &out outPoint = void, VxVector &out inNormal = void, VxVector &out outNormal = void)", asFUNCTIONPR(VxIntersect::RayBox, (const VxRay &, const VxBbox &, VxVector &, VxVector *, VxVector *, VxVector *), XBOOL), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Segment - Box
     r = engine->RegisterGlobalFunction("bool VxIntersectSegmentBox(const VxRay &in, const VxBbox &in)", asFUNCTIONPR(VxIntersect::SegmentBox, (const VxRay &, const VxBbox &), XBOOL), asCALL_CDECL); assert(r >= 0);
@@ -2039,55 +2041,55 @@ static void RegisterVxIntersect(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool VxIntersectLineBox(const VxRay &in, const VxBbox &in, VxVector &out)", asFUNCTIONPR(VxIntersect::LineBox, (const VxRay &, const VxBbox &, VxVector &, VxVector *, VxVector *, VxVector *), XBOOL), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Box - Box
-    r = engine->RegisterGlobalFunction("bool VxIntersectAABBAABB(const VxBbox &in, const VxBbox &in)", asFUNCTION(VxIntersect::AABBAABB), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxIntersectAABBOBB(const VxBbox &in, const VxOBB &in)", asFUNCTION(VxIntersect::AABBOBB), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxIntersectOBBOBB(const VxOBB &in, const VxOBB &in)", asFUNCTION(VxIntersect::OBBOBB), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectAABBAABB(const VxBbox &in box1, const VxBbox &in box2)", asFUNCTION(VxIntersect::AABBAABB), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectAABBOBB(const VxBbox &in box1, const VxOBB &in box2)", asFUNCTION(VxIntersect::AABBOBB), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectOBBOBB(const VxOBB &in box1, const VxOBB &in box2)", asFUNCTION(VxIntersect::OBBOBB), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Ray - Plane
-    r = engine->RegisterGlobalFunction("bool VxIntersectRayPlane(const VxRay &in, const VxPlane &in, VxVector &out, float &out)", asFUNCTION(VxIntersect::RayPlane), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxIntersectRayPlaneCulled(const VxRay &in, const VxPlane &in, VxVector &out, float &out)", asFUNCTION(VxIntersect::RayPlaneCulled), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectRayPlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::RayPlane), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectRayPlaneCulled(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::RayPlaneCulled), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Segment - Plane
-    r = engine->RegisterGlobalFunction("bool VxIntersectSegmentPlane(const VxRay &in, const VxPlane &in, VxVector &out, float &out)", asFUNCTION(VxIntersect::SegmentPlane), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxIntersectSegmentPlaneCulled(const VxRay &in, const VxPlane &in, VxVector &out, float &out)", asFUNCTION(VxIntersect::SegmentPlaneCulled), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectSegmentPlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::SegmentPlane), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectSegmentPlaneCulled(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::SegmentPlaneCulled), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Line - Plane
-    r = engine->RegisterGlobalFunction("bool VxIntersectLinePlane(const VxRay &in, const VxPlane &in, VxVector &out, float &out)", asFUNCTION(VxIntersect::LinePlane), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectLinePlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::LinePlane), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Box - Plane
-    r = engine->RegisterGlobalFunction("bool VxIntersectBoxPlane(const VxBbox &in, const VxPlane &in)", asFUNCTIONPR(VxIntersect::BoxPlane, (const VxBbox &, const VxPlane &), XBOOL), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxIntersectBoxPlane(const VxBbox &in, const VxMatrix &in, const VxPlane &in)", asFUNCTIONPR(VxIntersect::BoxPlane, (const VxBbox &, const VxMatrix &, const VxPlane &), XBOOL), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectBoxPlane(const VxBbox &in box, const VxPlane &in plane)", asFUNCTIONPR(VxIntersect::BoxPlane, (const VxBbox &, const VxPlane &), XBOOL), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectBoxPlane(const VxBbox &in box, const VxMatrix &in mat, const VxPlane &in plane)", asFUNCTIONPR(VxIntersect::BoxPlane, (const VxBbox &, const VxMatrix &, const VxPlane &), XBOOL), asCALL_CDECL); assert(r >= 0);
 
     // Intersection of 3 Planes
-    r = engine->RegisterGlobalFunction("bool VxIntersectPlanes(const VxPlane &in, const VxPlane &in, const VxPlane &in, VxVector &out)", asFUNCTION(VxIntersect::Planes), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectPlanes(const VxPlane &in plane1, const VxPlane &in plane2, const VxPlane &in plane3, VxVector &out p)", asFUNCTION(VxIntersect::Planes), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Face - Face
-    r = engine->RegisterGlobalFunction("bool VxIntersectFaceFace(const VxVector &in, const VxVector &in, const VxVector &in, const VxVector &in, const VxVector &in, const VxVector &in, const VxVector &in, const VxVector &in)", asFUNCTION(VxIntersect::FaceFace), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectFaceFace(const VxVector &in a0, const VxVector &in a1, const VxVector &in a2, const VxVector &in n0, const VxVector &in b0, const VxVector &in b1, const VxVector &in b2, const VxVector &in n1)", asFUNCTION(VxIntersect::FaceFace), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Ray - Face
-    r = engine->RegisterGlobalFunction("bool VxIntersectRayFace(const VxRay &in, const VxVector &in, const VxVector &in, const VxVector &in, const VxVector &in, VxVector &out, float &out)", asFUNCTIONPR(VxIntersect::RayFace, (const VxRay &, const VxVector &, const VxVector &, const VxVector &, const VxVector &, VxVector &, float &), XBOOL), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxIntersectRayFaceCulled(const VxRay &in, const VxVector &in, const VxVector &in, const VxVector &in, const VxVector &in, VxVector &out, float &out)", asFUNCTION(VxIntersect::RayFaceCulled), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectRayFace(const VxRay &in ray, const VxVector &in pt0, const VxVector &in pt1, const VxVector &in pt2, const VxVector &in norm, VxVector &out res, float &out dist)", asFUNCTIONPR(VxIntersect::RayFace, (const VxRay &, const VxVector &, const VxVector &, const VxVector &, const VxVector &, VxVector &, float &), XBOOL), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectRayFaceCulled(const VxRay &in ray, const VxVector &in pt0, const VxVector &in pt1, const VxVector &in pt2, const VxVector &in norm, VxVector &out res, float &out dist, int &out i1, int &out i2)", asFUNCTION(VxIntersect::RayFaceCulled), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Sphere - Sphere
-    r = engine->RegisterGlobalFunction("bool VxIntersectSphereSphere(const VxSphere &in, const VxVector &in, const VxSphere &in, const VxVector &in, float &out, float &out)", asFUNCTION(VxIntersect::SphereSphere), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectSphereSphere(const VxSphere &in s1, const VxVector &in p1, const VxSphere &in s2, const VxVector &in p2, float &out collisionTime1, float &out collisionTime2)", asFUNCTION(VxIntersect::SphereSphere), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Ray - Sphere
-    r = engine->RegisterGlobalFunction("int VxIntersectRaySphere(const VxRay &in, const VxSphere &in, VxVector &out)", asFUNCTION(VxIntersect::RaySphere), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int VxIntersectRaySphere(const VxRay &in ray, const VxSphere &in sphere, VxVector &out inter1, VxVector &out inter2)", asFUNCTION(VxIntersect::RaySphere), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Sphere - AABB
-    r = engine->RegisterGlobalFunction("int VxIntersectSphereAABB(const VxSphere &in, const VxBbox &in)", asFUNCTION(VxIntersect::SphereAABB), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int VxIntersectSphereAABB(const VxSphere &in sphere, const VxBbox &in box)", asFUNCTION(VxIntersect::SphereAABB), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Frustum - Face
-    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumFace(const VxFrustum &in, const VxVector &in, const VxVector &in, const VxVector &in)", asFUNCTION(VxIntersect::FrustumFace), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumFace(const VxFrustum &in frustum, const VxVector &in pt0, const VxVector &in pt1, const VxVector &in pt2)", asFUNCTION(VxIntersect::FrustumFace), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Frustum - AABB
-    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumAABB(const VxFrustum &in, const VxBbox &in)", asFUNCTION(VxIntersect::FrustumAABB), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumAABB(const VxFrustum &in frustum, const VxBbox &in box)", asFUNCTION(VxIntersect::FrustumAABB), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Frustum - OBB
-    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumOBB(const VxFrustum &in, const VxBbox &in, const VxMatrix &in)", asFUNCTION(VxIntersect::FrustumOBB), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumOBB(const VxFrustum &in frustum, const VxBbox &in box, const VxMatrix &in mat)", asFUNCTION(VxIntersect::FrustumOBB), asCALL_CDECL); assert(r >= 0);
 
     // Intersection Frustum - Box
-    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumBox(const VxFrustum &in, const VxBbox &in, const VxMatrix &in)", asFUNCTION(VxIntersect::FrustumBox), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumBox(const VxFrustum &in frustum, const VxBbox &in box, const VxMatrix &in mat)", asFUNCTION(VxIntersect::FrustumBox), asCALL_CDECL); assert(r >= 0);
 }
 
 // VxDistance
@@ -2096,30 +2098,30 @@ static void RegisterVxDistance(asIScriptEngine *engine) {
     int r = 0;
 
     // Lines - Lines Distances
-    r = engine->RegisterGlobalFunction("float VxLineLineSquareDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::LineLineSquareDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxLineRaySquareDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::LineRaySquareDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxLineSegmentSquareDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::LineSegmentSquareDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxRayRaySquareDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::RayRaySquareDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxRaySegmentSquareDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::RaySegmentSquareDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxSegmentSegmentSquareDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::SegmentSegmentSquareDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxLineLineSquareDistance(const VxRay &in line0, const VxRay &in line1, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::LineLineSquareDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxLineRaySquareDistance(const VxRay &in line, const VxRay &in ray, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::LineRaySquareDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxLineSegmentSquareDistance(const VxRay &in line, const VxRay &in segment, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::LineSegmentSquareDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxRayRaySquareDistance(const VxRay &in ray0, const VxRay &in ray1, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::RayRaySquareDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxRaySegmentSquareDistance(const VxRay &in ray, const VxRay &in segment, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::RaySegmentSquareDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxSegmentSegmentSquareDistance(const VxRay &in segment0, const VxRay &in segment1, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::SegmentSegmentSquareDistance), asCALL_CDECL); assert(r >= 0);
 
     // Lines - Lines Distances (Non-Square)
-    r = engine->RegisterGlobalFunction("float VxLineLineDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::LineLineDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxLineRayDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::LineRayDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxLineSegmentDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::LineSegmentDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxRayRayDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::RayRayDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxRaySegmentDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::RaySegmentDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxSegmentSegmentDistance(const VxRay &in, const VxRay &in, float &out = void, float &out = void)", asFUNCTION(VxDistance::SegmentSegmentDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxLineLineDistance(const VxRay &in line0, const VxRay &in line1, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::LineLineDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxLineRayDistance(const VxRay &in line, const VxRay &in ray, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::LineRayDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxLineSegmentDistance(const VxRay &in line, const VxRay &in segment, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::LineSegmentDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxRayRayDistance(const VxRay &in ray0, const VxRay &in ray1, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::RayRayDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxRaySegmentDistance(const VxRay &in ray, const VxRay &in segment, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::RaySegmentDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxSegmentSegmentDistance(const VxRay &in segment0, const VxRay &in segment1, float &out t0 = void, float &out t1 = void)", asFUNCTION(VxDistance::SegmentSegmentDistance), asCALL_CDECL); assert(r >= 0);
 
     // Point - Line distances
-    r = engine->RegisterGlobalFunction("float VxPointLineSquareDistance(const VxVector &in, const VxRay &in, float &out = void)", asFUNCTION(VxDistance::PointLineSquareDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxPointRaySquareDistance(const VxVector &in, const VxRay &in, float &out = void)", asFUNCTION(VxDistance::PointRaySquareDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxPointSegmentSquareDistance(const VxVector &in, const VxRay &in, float &out = void)", asFUNCTION(VxDistance::PointSegmentSquareDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxPointLineSquareDistance(const VxVector &in point, const VxRay &in line1, float &out t0 = void)", asFUNCTION(VxDistance::PointLineSquareDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxPointRaySquareDistance(const VxVector &in point, const VxRay &in ray, float &out t0 = void)", asFUNCTION(VxDistance::PointRaySquareDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxPointSegmentSquareDistance(const VxVector &in point, const VxRay &in segment, float &out = void)", asFUNCTION(VxDistance::PointSegmentSquareDistance), asCALL_CDECL); assert(r >= 0);
 
     // Point - Line distances (Non-Square)
-    r = engine->RegisterGlobalFunction("float VxPointLineDistance(const VxVector &in, const VxRay &in, float &out = void)", asFUNCTION(VxDistance::PointLineDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxPointRayDistance(const VxVector &in, const VxRay &in, float &out = void)", asFUNCTION(VxDistance::PointRayDistance), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("float VxPointSegmentDistance(const VxVector &in, const VxRay &in, float &out = void)", asFUNCTION(VxDistance::PointSegmentDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxPointLineDistance(const VxVector &in point, const VxRay &in line, float &out t0 = void)", asFUNCTION(VxDistance::PointLineDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxPointRayDistance(const VxVector &in point, const VxRay &in ray, float &out t0 = void)", asFUNCTION(VxDistance::PointRayDistance), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("float VxPointSegmentDistance(const VxVector &in point, const VxRay &in segment, float &out t0 = void)", asFUNCTION(VxDistance::PointSegmentDistance), asCALL_CDECL); assert(r >= 0);
 }
 
 // VxFrustum
@@ -2129,8 +2131,8 @@ static void RegisterVxFrustum(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxFrustum *self) { new(self) VxFrustum(); }, (VxFrustum *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_CONSTRUCT, "void f(const VxFrustum &in)", asFUNCTIONPR([](const VxFrustum &f, VxFrustum *self) { new(self) VxFrustum(f); }, (const VxFrustum &, VxFrustum*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_CONSTRUCT, "void f(const VxVector &in, const VxVector &in, const VxVector &in, const VxVector &in, float, float, float, float)",
+    r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_CONSTRUCT, "void f(const VxFrustum &in f)", asFUNCTIONPR([](const VxFrustum &f, VxFrustum *self) { new(self) VxFrustum(f); }, (const VxFrustum &, VxFrustum *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_CONSTRUCT, "void f(const VxVector &in origin, const VxVector &in right, const VxVector &in up, const VxVector &in dir, float nearPlane, float farPlane, float fov, float aspectRatio)",
         asFUNCTIONPR([](const VxVector &origin, const VxVector &right, const VxVector &up, const VxVector &dir, float nearplane, float farplane, float fov, float aspectratio, VxFrustum *self)
         { new(self) VxFrustum(origin, right, up, dir, nearplane, farplane, fov, aspectratio); },
         (const VxVector &, const VxVector &, const VxVector &, const VxVector &, float, float, float, float, VxFrustum *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -2139,9 +2141,9 @@ static void RegisterVxFrustum(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxFrustum", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxFrustum *self) { self->~VxFrustum(); }, (VxFrustum*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxFrustum", "VxFrustum &opAssign(const VxFrustum &in)", asMETHODPR(VxFrustum, operator=, (const VxFrustum &), VxFrustum &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxFrustum", "VxFrustum &opAssign(const VxFrustum &in f)", asMETHODPR(VxFrustum, operator=, (const VxFrustum &), VxFrustum &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxFrustum", "bool opEquals(const VxFrustum &in) const", asMETHODPR(VxFrustum, operator==, (const VxFrustum &) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxFrustum", "bool opEquals(const VxFrustum &in f) const", asMETHODPR(VxFrustum, operator==, (const VxFrustum &) const, bool), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxFrustum", "VxVector &GetOrigin()", asMETHODPR(VxFrustum, GetOrigin, (), VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxFrustum", "const VxVector &GetOrigin() const", asMETHODPR(VxFrustum, GetOrigin, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
@@ -2167,11 +2169,11 @@ static void RegisterVxFrustum(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxFrustum", "const VxPlane &GetUpPlane() const", asMETHOD(VxFrustum, GetUpPlane), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxFrustum", "const VxPlane &GetBottomPlane() const", asMETHOD(VxFrustum, GetBottomPlane), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxFrustum", "uint Classify(const VxVector &in) const", asMETHODPR(VxFrustum, Classify, (const VxVector &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxFrustum", "float Classify(const VxBbox &in) const", asMETHODPR(VxFrustum, Classify, (const VxBbox &) const, float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxFrustum", "float Classify(const VxBbox &in, const VxMatrix &in) const", asMETHODPR(VxFrustum, Classify, (const VxBbox &, const VxMatrix &) const, float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxFrustum", "bool IsInside(const VxVector &in) const", asMETHODPR(VxFrustum, IsInside, (const VxVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxFrustum", "void Transform(const VxMatrix &in)", asMETHODPR(VxFrustum, Transform, (const VxMatrix &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxFrustum", "uint Classify(const VxVector &in v) const", asMETHODPR(VxFrustum, Classify, (const VxVector &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxFrustum", "float Classify(const VxBbox &in box) const", asMETHODPR(VxFrustum, Classify, (const VxBbox &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxFrustum", "float Classify(const VxBbox &in box, const VxMatrix &in mat) const", asMETHODPR(VxFrustum, Classify, (const VxBbox &, const VxMatrix &) const, float), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxFrustum", "bool IsInside(const VxVector &in mat) const", asMETHODPR(VxFrustum, IsInside, (const VxVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxFrustum", "void Transform(const VxMatrix &in mat)", asMETHODPR(VxFrustum, Transform, (const VxMatrix &), void), asCALL_THISCALL); assert(r >= 0);
     // r = engine->RegisterObjectMethod("VxFrustum", "void ComputeVertices(VxVector[8]) const", asMETHOD(VxFrustum, ComputeVertices), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxFrustum", "void Update()", asMETHOD(VxFrustum, Update), asCALL_THISCALL); assert(r >= 0);
 }
@@ -2189,61 +2191,61 @@ static void RegisterVxColor(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxColor *self) { new(self) VxColor(); }, (VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(const VxColor &in)", asFUNCTIONPR([](const VxColor &f, VxColor *self) { new(self) VxColor(f); }, (const VxColor &, VxColor*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float, float, float, float)", asFUNCTIONPR([](float r, float g, float b, float a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (float, float, float, float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float, float, float)", asFUNCTIONPR([](float r, float g, float b, VxColor *self) { new(self) VxColor(r, g, b); }, (float, float, float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float)", asFUNCTIONPR([](float r, VxColor *self) { new(self) VxColor(r); }, (float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(uint)", asFUNCTIONPR([](unsigned long col, VxColor *self) { new(self) VxColor(col); }, (unsigned long, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int, int, int, int)", asFUNCTIONPR([](int r, int g, int b, int a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (int, int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int, int, int)", asFUNCTIONPR([](int r, int g, int b, VxColor *self) { new(self) VxColor(r, g, b); }, (int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(const VxColor &in color)", asFUNCTIONPR([](const VxColor &f, VxColor *self) { new(self) VxColor(f); }, (const VxColor &, VxColor*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float r, float g, float b, float a)", asFUNCTIONPR([](float r, float g, float b, float a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (float, float, float, float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float r, float g, float b)", asFUNCTIONPR([](float r, float g, float b, VxColor *self) { new(self) VxColor(r, g, b); }, (float, float, float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float r)", asFUNCTIONPR([](float r, VxColor *self) { new(self) VxColor(r); }, (float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(uint col)", asFUNCTIONPR([](unsigned long col, VxColor *self) { new(self) VxColor(col); }, (unsigned long, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int r, int g, int b, int a)", asFUNCTIONPR([](int r, int g, int b, int a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (int, int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int r, int g, int b)", asFUNCTIONPR([](int r, int g, int b, VxColor *self) { new(self) VxColor(r, g, b); }, (int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxColor *self) { new(self) VxColor(list[0], list[1], list[2], list[3]); }, (float *, VxColor *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxColor *self) { self->~VxColor(); }, (VxColor*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxColor", "VxColor &opAssign(const VxColor &in)", asMETHODPR(VxColor, operator=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor &opAssign(const VxColor &in color)", asMETHODPR(VxColor, operator=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxColor", "bool opEquals(const VxColor &in) const", asFUNCTIONPR(operator==, (const VxColor &, const VxColor &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "bool opEquals(const VxColor &in color) const", asFUNCTIONPR(operator==, (const VxColor &, const VxColor &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxColor", "VxColor &opAddAssign(const VxColor &in)", asMETHODPR(VxColor, operator+=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "VxColor &opSubAssign(const VxColor &in)", asMETHODPR(VxColor, operator-=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "VxColor &opMulAssign(const VxColor &in)", asMETHODPR(VxColor, operator*=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "VxColor &opDivAssign(const VxColor &in)", asMETHODPR(VxColor, operator/=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "VxColor &opMulAssign(float)", asMETHODPR(VxColor, operator*=, (float), VxColor &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "VxColor &opDivAssign(float)", asMETHODPR(VxColor, operator/=, (float), VxColor &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor &opAddAssign(const VxColor &in color)", asMETHODPR(VxColor, operator+=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor &opSubAssign(const VxColor &in color)", asMETHODPR(VxColor, operator-=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor &opMulAssign(const VxColor &in color)", asMETHODPR(VxColor, operator*=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor &opDivAssign(const VxColor &in color)", asMETHODPR(VxColor, operator/=, (const VxColor &), VxColor &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor &opMulAssign(float s)", asMETHODPR(VxColor, operator*=, (float), VxColor &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor &opDivAssign(float s)", asMETHODPR(VxColor, operator/=, (float), VxColor &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxColor", "VxColor opAdd(const VxColor &in) const", asFUNCTIONPR(operator+, (const VxColor &, const VxColor &), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "VxColor opSub(const VxColor &in) const", asFUNCTIONPR(operator-, (const VxColor &, const VxColor &), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "VxColor opMul(const VxColor &in) const", asFUNCTIONPR(operator*, (const VxColor &, const VxColor &), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "VxColor opDiv(const VxColor &in) const", asFUNCTIONPR(operator/, (const VxColor &, const VxColor &), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "VxColor opMul(float) const", asFUNCTIONPR(operator*, (const VxColor &, float), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor opAdd(const VxColor &in color) const", asFUNCTIONPR(operator+, (const VxColor &, const VxColor &), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor opSub(const VxColor &in color) const", asFUNCTIONPR(operator-, (const VxColor &, const VxColor &), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor opMul(const VxColor &in color) const", asFUNCTIONPR(operator*, (const VxColor &, const VxColor &), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor opDiv(const VxColor &in color) const", asFUNCTIONPR(operator/, (const VxColor &, const VxColor &), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "VxColor opMul(float s) const", asFUNCTIONPR(operator*, (const VxColor &, float), VxColor), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxColor", "void Clear()", asMETHOD(VxColor, Clear), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxColor", "void Check()", asMETHOD(VxColor, Check), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "void Set(float, float, float, float)", asMETHODPR(VxColor, Set, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "void Set(float, float, float)", asMETHODPR(VxColor, Set, (float, float, float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "void Set(uint)", asMETHODPR(VxColor, Set, (unsigned long), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "void Set(int, int, int, int)", asMETHODPR(VxColor, Set, (int, int, int, int), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "void Set(int, int, int)", asMETHODPR(VxColor, Set, (int, int, int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "void Set(float r, float g, float b, float a)", asMETHODPR(VxColor, Set, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "void Set(float r, float g, float b)", asMETHODPR(VxColor, Set, (float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "void Set(uint color)", asMETHODPR(VxColor, Set, (unsigned long), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "void Set(int r, int g, int b, int a)", asMETHODPR(VxColor, Set, (int, int, int, int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "void Set(int r, int g, int b)", asMETHODPR(VxColor, Set, (int, int, int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxColor", "uint GetRGBA() const", asMETHOD(VxColor, GetRGBA), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxColor", "uint GetRGB() const", asMETHOD(VxColor, GetRGB), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxColor", "float GetSquareDistance(const VxColor &in) const", asMETHOD(VxColor, GetSquareDistance), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxColor", "float GetSquareDistance(const VxColor &in color) const", asMETHOD(VxColor, GetSquareDistance), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterGlobalFunction("uint VxColorConvert(float, float, float, float = 1.0)", asFUNCTIONPR(VxColor::Convert, (float, float, float, float), unsigned long), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint VxColorConvert(int, int, int, int = 255)", asFUNCTIONPR(VxColor::Convert, (int, int, int, int), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint VxColorConvert(float r, float g, float b, float a = 1.0)", asFUNCTIONPR(VxColor::Convert, (float, float, float, float), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint VxColorConvert(int r, int g, int b, int a = 255)", asFUNCTIONPR(VxColor::Convert, (int, int, int, int), unsigned long), asCALL_CDECL); assert(r >= 0);
 
-    r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(float, float, float, float)", asFUNCTIONPR(RGBAFTOCOLOR, (float, float, float, float), unsigned long), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(const VxColor &in)", asFUNCTIONPR(RGBAFTOCOLOR, (const VxColor *), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(float r, float g, float b, float a)", asFUNCTIONPR(RGBAFTOCOLOR, (float, float, float, float), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(const VxColor &in color)", asFUNCTIONPR(RGBAFTOCOLOR, (const VxColor *), unsigned long), asCALL_CDECL); assert(r >= 0);
 
-    r = engine->RegisterGlobalFunction("uint ColorGetRed(uint)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetRed(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint ColorGetAlpha(uint)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetAlpha(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint ColorGetGreen(uint)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetGreen(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint ColorGetBlue(uint)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetBlue(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint ColorSetAlpha(uint, uint)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetAlpha(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint ColorSetRed(uint, uint)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetRed(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint ColorSetGreen(uint, uint)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetGreen(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint ColorSetBlue(uint, uint)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetBlue(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint ColorGetRed(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetRed(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint ColorGetAlpha(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetAlpha(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint ColorGetGreen(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetGreen(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint ColorGetBlue(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetBlue(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint ColorSetAlpha(uint rgba, uint x)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetAlpha(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint ColorSetRed(uint rgba, uint x)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetRed(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint ColorSetGreen(uint rgba, uint x)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetGreen(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint ColorSetBlue(uint rgba, uint x)", asFUNCTIONPR([](unsigned long rgba, unsigned long x) { return ColorSetBlue(rgba, x); }, (unsigned long, unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
 }
 
 // VxImageDescEx
@@ -2269,17 +2271,17 @@ static void RegisterVxImageDescEx(asIScriptEngine *engine) {
 
     // Constructor
     r = engine->RegisterObjectBehaviour("VxImageDescEx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxImageDescEx *self) { new(self) VxImageDescEx(); }, (VxImageDescEx *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("VxImageDescEx", asBEHAVE_CONSTRUCT, "void f(const VxImageDescEx &in)", asFUNCTIONPR([](const VxImageDescEx &desc, VxImageDescEx *self) { new(self) VxImageDescEx(desc); }, (const VxImageDescEx &, VxImageDescEx*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxImageDescEx", asBEHAVE_CONSTRUCT, "void f(const VxImageDescEx &in desc)", asFUNCTIONPR([](const VxImageDescEx &desc, VxImageDescEx *self) { new(self) VxImageDescEx(desc); }, (const VxImageDescEx &, VxImageDescEx*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxImageDescEx", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxImageDescEx *self) { self->~VxImageDescEx(); }, (VxImageDescEx*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxImageDescEx", "VxImageDescEx &opAssign(const VxImageDescEx &in)", asFUNCTIONPR([](VxImageDescEx &lhs, const VxImageDescEx &rhs) -> VxImageDescEx & { if (&lhs != &rhs) { lhs.Set(rhs); } return lhs; },  (VxImageDescEx &, const VxImageDescEx &), VxImageDescEx &), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "VxImageDescEx &opAssign(const VxImageDescEx &in desc)", asFUNCTIONPR([](VxImageDescEx &lhs, const VxImageDescEx &rhs) -> VxImageDescEx & { if (&lhs != &rhs) { lhs.Set(rhs); } return lhs; },  (VxImageDescEx &, const VxImageDescEx &), VxImageDescEx &), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxImageDescEx", "bool opEquals(const VxImageDescEx &in) const", asMETHODPR(VxImageDescEx, operator==, (const VxImageDescEx &), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "bool opEquals(const VxImageDescEx &in desc) const", asMETHODPR(VxImageDescEx, operator==, (const VxImageDescEx &), int), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxImageDescEx", "void Set(const VxImageDescEx &in)", asMETHOD(VxImageDescEx, Set), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "void Set(const VxImageDescEx &in desc)", asMETHOD(VxImageDescEx, Set), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxImageDescEx", "bool HasAlpha() const", asMETHOD(VxImageDescEx, HasAlpha), asCALL_THISCALL); assert(r >= 0);
 }
 
