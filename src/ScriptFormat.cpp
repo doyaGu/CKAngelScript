@@ -431,6 +431,77 @@ static void PrintGeneric(asIScriptGeneric *gen) {
     }
 }
 
+static std::string TypeOf(asIScriptGeneric *gen) {
+    asIScriptEngine *engine = gen->GetEngine();
+    const auto typeId = gen->GetArgTypeId(0);
+    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
+
+    if (addr == nullptr) {
+        return "null";
+    }
+
+    if (typeId == asTYPEID_VOID) {
+        return "void";
+    }
+
+    if (typeId >= asTYPEID_BOOL && typeId <= asTYPEID_DOUBLE) {
+        switch (typeId) {
+            case asTYPEID_BOOL:
+                return "bool";
+            case asTYPEID_INT8:
+                return "int8";
+            case asTYPEID_INT16:
+                return "int16";
+            case asTYPEID_INT32:
+                return "int32";
+            case asTYPEID_INT64:
+                return "int64";
+            case asTYPEID_UINT8:
+                return "uint8";
+            case asTYPEID_UINT16:
+                return "uint16";
+            case asTYPEID_UINT32:
+                return "uint32";
+            case asTYPEID_UINT64:
+                return "uint64";
+            case asTYPEID_FLOAT:
+                return "float";
+            case asTYPEID_DOUBLE:
+                return "double";
+            default:
+                break;
+        }
+    }
+
+    asITypeInfo *type = engine->GetTypeInfoById(typeId);
+    if (!type) {
+        return "unknown";
+    }
+    return type->GetName();
+}
+
+static void TypeOfGeneric(asIScriptGeneric *gen) {
+    new(gen->GetAddressOfReturnLocation()) std::string(std::move(TypeOf(gen)));
+}
+
+static size_t SizeOf(asIScriptGeneric *gen) {
+    asIScriptEngine *engine = gen->GetEngine();
+    const int typeId = gen->GetArgTypeId(0);
+    size_t size = engine->GetSizeOfPrimitiveType(typeId);
+    if (size == 0) {
+        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        if (!type) {
+            return 0;
+        }
+        size = type->GetSize();
+    }
+    return size;
+}
+
+static void SizeOfGeneric(asIScriptGeneric *gen) {
+    gen->SetReturnDWord(SizeOf(gen));
+}
+
 void RegisterScriptFormat(asIScriptEngine *engine, int argc) {
     assert(engine != nullptr);
 
@@ -461,4 +532,7 @@ void RegisterScriptFormat(asIScriptEngine *engine, int argc) {
         decl.pop_back();
         decl += ", ?&in)";
     }
+
+    r = engine->RegisterGlobalFunction("string typeof(?&in)", asFUNCTION(TypeOfGeneric), asCALL_GENERIC); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint sizeof(?&in)", asFUNCTION(SizeOfGeneric), asCALL_GENERIC); assert(r >= 0);
 }
