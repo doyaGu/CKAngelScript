@@ -223,38 +223,38 @@ void RegisterXString(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](XString *self) { new(self) XString(); }, (XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(const XString &in)", asFUNCTIONPR([](const XBaseString &str, XString *self) { new(self) XString(str); }, (const XBaseString &, XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(const string &in)", asFUNCTIONPR(ConstructXString, (const std::string &, XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(int)", asFUNCTIONPR([](int length, XString *self) { new(self) XString(length); }, (int, XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(const XString &in other)", asFUNCTIONPR([](const XBaseString &other, XString *self) { new(self) XString(other); }, (const XBaseString &, XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(const string &in str)", asFUNCTIONPR(ConstructXString, (const std::string &, XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("XString", asBEHAVE_CONSTRUCT, "void f(int length)", asFUNCTIONPR([](int length, XString *self) { new(self) XString(length); }, (int, XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("XString", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](XString *self) { self->~XString(); }, (XString *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
-    r = engine->RegisterObjectMethod("XString", "XString &opAssign(const XString &in)", asMETHODPR(XString, operator=, (const XString &), XString &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString &opAssign(const string &in)", asFUNCTIONPR(XStringAssign, (const std::string &, XString &), XString &), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAssign(const XString &in other)", asMETHODPR(XString, operator=, (const XString &), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAssign(const string &in str)", asFUNCTIONPR(XStringAssign, (const std::string &, XString &), XString &), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("XString", "bool opEquals(const XString &in) const", asFUNCTIONPR(XStringEquals, (const XString &, const XString &), bool), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "bool opEquals(const string &in) const", asFUNCTIONPR(XStringEquals, (const std::string &, const XString &), bool), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "int opCmp(const XString &in) const", asFUNCTIONPR(XStringCmp, (const XString &, const XString &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "int opCmp(const string &in) const", asFUNCTIONPR(XStringCmp, (const std::string &, const XString &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool opEquals(const XString &in other) const", asFUNCTIONPR(XStringEquals, (const XString &, const XString &), bool), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool opEquals(const string &in str) const", asFUNCTIONPR(XStringEquals, (const std::string &, const XString &), bool), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int opCmp(const XString &in other) const", asFUNCTIONPR(XStringCmp, (const XString &, const XString &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int opCmp(const string &in str) const", asFUNCTIONPR(XStringCmp, (const std::string &, const XString &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(const XString &in)", asMETHODPR(XString, operator+=, (const XString&), XString &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(const string &in)", asFUNCTIONPR(XStringAddAssign, (const std::string &, XString &), XString &), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(uint8)", asMETHODPR(XString, operator+=, (const char), XString &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(int)", asMETHODPR(XString, operator+=, (const int), XString &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(float)", asMETHODPR(XString, operator+=, (const float), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(const XString &in str)", asMETHODPR(XString, operator+=, (const XString&), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(const string &in str)", asFUNCTIONPR(XStringAddAssign, (const std::string &, XString &), XString &), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(uint8 v)", asMETHODPR(XString, operator+=, (const char), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(int v)", asMETHODPR(XString, operator+=, (const int), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(float v)", asMETHODPR(XString, operator+=, (const float), XString &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("XString", "XString opAdd(const XString &in) const", asMETHODPR(XString, operator+, (const XBaseString &) const, XString), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString opAdd(const string &in) const", asFUNCTIONPR(XStringAdd, (const std::string &, const XString &), XString), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString opAdd(uint8) const", asMETHODPR(XString, operator+, (const char) const, XString), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString opAdd(int) const", asMETHODPR(XString, operator+, (const int) const, XString), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString opAdd(float) const", asMETHODPR(XString, operator+, (const float) const, XString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(const XString &in str) const", asMETHODPR(XString, operator+, (const XBaseString &) const, XString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(const string &in str) const", asFUNCTIONPR(XStringAdd, (const std::string &, const XString &), XString), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(uint8 v) const", asMETHODPR(XString, operator+, (const char) const, XString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(int v) const", asMETHODPR(XString, operator+, (const int) const, XString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString opAdd(float v) const", asMETHODPR(XString, operator+, (const float) const, XString), asCALL_THISCALL); assert(r >= 0);
 
     // Register the index operator, both as a mutator and as an inspector
     // Note that we don't register the operator[] directly, as it doesn't do bounds checking
-    r = engine->RegisterObjectMethod("XString", "uint8 &opIndex(uint16)", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "const uint8 &opIndex(uint16) const", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint8 &opIndex(uint16 index)", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "const uint8 &opIndex(uint16 index) const", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("XString", "string opImplConv() const", asFUNCTION(XStringCastToString), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectMethod("string", "XString opImplConv() const", asFUNCTION(StringCastToXString), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -262,30 +262,30 @@ void RegisterXString(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("XString", "bool Empty() const", asMETHODPR(XString, Empty, () const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "uint16 Length() const", asMETHODPR(XString, Length, () const, XWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "uint16 Capacity() const", asMETHODPR(XString, Capacity, (), XWORD), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "void Resize(uint16)", asMETHODPR(XString, Resize, (XWORD), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "void Reserve(uint16)", asMETHODPR(XString, Reserve, (XWORD), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "void Resize(uint16 length)", asMETHODPR(XString, Resize, (XWORD), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "void Reserve(uint16 length)", asMETHODPR(XString, Reserve, (XWORD), void), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("XString", "XString &ToUpper()", asMETHODPR(XString, ToUpper, (), XString &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "XString &ToLower()", asMETHODPR(XString, ToLower, (), XString &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("XString", "int Compare(const XString &in) const", asMETHODPR(XString, Compare, (const XBaseString &) const, int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "int NCompare(const XString &in, int) const", asMETHODPR(XString, NCompare, (const XBaseString &, const int) const, int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "int ICompare(const XString &in) const", asMETHODPR(XString, ICompare, (const XBaseString &) const, int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "int NICompare(const XString &in, int) const", asMETHODPR(XString, NICompare, (const XBaseString &, const int) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int Compare(const XString &in str) const", asMETHODPR(XString, Compare, (const XBaseString &) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int NCompare(const XString &in str, int n) const", asMETHODPR(XString, NCompare, (const XBaseString &, const int) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int ICompare(const XString &in str) const", asMETHODPR(XString, ICompare, (const XBaseString &) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int NICompare(const XString &in str, int n) const", asMETHODPR(XString, NICompare, (const XBaseString &, const int) const, int), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("XString", "XString &Trim()", asMETHODPR(XString, Trim, (), XString &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "XString &Strip()", asMETHODPR(XString, Strip, (), XString &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "bool Contains(const XString &in) const", asMETHODPR(XString, Contains, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "bool StartsWith(const XString &in) const", asMETHODPR(XString, StartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "bool IStartsWith(const XString &in) const", asMETHODPR(XString, IStartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "bool EndsWith(const XString &in) const", asMETHODPR(XString, EndsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "bool IEndsWith(const XString &in) const", asMETHODPR(XString, IEndsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "uint16 Find(uint8, uint16 = 0) const", asMETHODPR(XString, Find, (char, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "uint16 Find(const XString &in, uint16 = 0) const", asMETHODPR(XString, Find, (const XBaseString &, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "uint16 RFind(uint8, uint16 = 0) const", asMETHODPR(XString, RFind, (char, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString Substring(uint16, uint16 = 0) const", asMETHODPR(XString, Substring, (XWORD, XWORD) const, XString), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString &Crop(uint16, uint16)", asMETHODPR(XString, Crop, (XWORD, XWORD), XString &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "XString &Cut(uint16, uint16)", asMETHODPR(XString, Cut, (XWORD, XWORD), XString &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "int Replace(uint8, uint8)", asMETHODPR(XString, Replace, (char, char), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("XString", "int Replace(const XString &in, const XString &in)", asMETHODPR(XString, Replace, (const XBaseString &, const XBaseString &), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool Contains(const XString &in str) const", asMETHODPR(XString, Contains, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool StartsWith(const XString &in str) const", asMETHODPR(XString, StartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool IStartsWith(const XString &in str) const", asMETHODPR(XString, IStartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool EndsWith(const XString &in str) const", asMETHODPR(XString, EndsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "bool IEndsWith(const XString &in str) const", asMETHODPR(XString, IEndsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint16 Find(uint8 c, uint16 start = 0) const", asMETHODPR(XString, Find, (char, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint16 Find(const XString &in str, uint16 start = 0) const", asMETHODPR(XString, Find, (const XBaseString &, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "uint16 RFind(uint8 c, uint16 start = 0) const", asMETHODPR(XString, RFind, (char, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString Substring(uint16 start, uint16 length = 0) const", asMETHODPR(XString, Substring, (XWORD, XWORD) const, XString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &Crop(uint16 start, uint16 length)", asMETHODPR(XString, Crop, (XWORD, XWORD), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "XString &Cut(uint16 start, uint16 length)", asMETHODPR(XString, Cut, (XWORD, XWORD), XString &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int Replace(uint8 src, uint8 dest)", asMETHODPR(XString, Replace, (char, char), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("XString", "int Replace(const XString &in srt, const XString &in dest)", asMETHODPR(XString, Replace, (const XBaseString &, const XBaseString &), int), asCALL_THISCALL); assert(r >= 0);
 }
