@@ -4,8 +4,16 @@ set(CKAS_HEADERS
         ScriptNativePointer.h
         ScriptNativeBuffer.h
         ScriptXString.h
+        ScriptXArray.h
         ScriptXBitArray.h
         ScriptVxMath.h
+        ScriptCKTypes.h
+        ScriptCKEnums.h
+        ScriptCKDefines.h
+        ScriptXObjectArray.h
+        ScriptCKContext.h
+        ScriptCKManagers.h
+        ScriptCKObjects.h
         ScriptCK2.h
 )
 
@@ -20,6 +28,13 @@ set(CKAS_SOURCES
         ScriptXString.cpp
         ScriptXBitArray.cpp
         ScriptVxMath.cpp
+        ScriptCKTypes.cpp
+        ScriptCKEnums.cpp
+        ScriptCKDefines.cpp
+        ScriptXObjectArray.cpp
+        ScriptCKContext.cpp
+        ScriptCKManagers.cpp
+        ScriptCKObjects.cpp
         ScriptCK2.cpp
 )
 

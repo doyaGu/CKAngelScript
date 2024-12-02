@@ -2,133 +2,170 @@
 
 #include <cassert>
 
-// Defines And Global Functions
-#include "CKDefines2.h"
-#include "CKGlobals.h"
-#include "CKBaseManager.h"
-#include "CKContext.h"
-#include "CKTimeProfiler.h"
-#include "CKInterfaceObjectManager.h"
-
-// Managers
-#include "CKObjectManager.h"
-#include "CKParameterManager.h"
-#include "CKTimeManager.h"
-#include "CKMessageManager.h"
-#include "CKRenderManager.h"
-#include "CKBehaviorManager.h"
-#include "CKAttributeManager.h"
-#include "CKPluginManager.h"
-#include "CKPathManager.h"
-
-// External Managers
-#include "CKFloorManager.h"
-#include "CKGridManager.h"
-#include "CKInterfaceManager.h"
-#include "CKSoundManager.h"
-#include "CKMidiManager.h"
-#include "CKInputManager.h"
-#include "CKCollisionManager.h"
-
-// Misc
-#include "CKMaterial.h"
-#include "CKTexture.h"
-#include "CKRenderContext.h"
-#include "CKSynchroObject.h"
-
-// Parameters
-#include "CKParameter.h"
-#include "CKParameterIn.h"
-#include "CKParameterOut.h"
-#include "CKParameterLocal.h"
-#include "CKParameterOperation.h"
-
-// Behaviors
-#include "CKBehaviorIO.h"
-#include "CKBehaviorLink.h"
-#include "CKBehaviorPrototype.h"
-#include "CKBehavior.h"
-#include "CKMessage.h"
-#include "CKObjectDeclaration.h"
-
-// Level/Scene/place
-#include "CKLevel.h"
-#include "CKPlace.h"
-#include "CKGroup.h"
-#include "CKScene.h"
-
-// Save/load
-#include "CKStateChunk.h"
-#include "CKFile.h"
-
-// Sound
-#include "CKSound.h"
-#include "CKWaveSound.h"
-#include "CKMidiSound.h"
-#include "CKSoundReader.h"
-
-// Curves
-#include "CK2dCurve.h"
-#include "CK2dCurvePoint.h"
-#include "CKCurve.h"
-#include "CKCurvePoint.h"
-
-// Character and Animation
-#include "CKAnimation.h"
-#include "CKKeyedAnimation.h"
-#include "CKObjectAnimation.h"
-#include "CKKinematicChain.h"
-#include "CKCharacter.h"
-
-// Base Objects
-#include "CKObject.h"
-#include "CKSceneObject.h"
-#include "CKRenderObject.h"
-#include "CKBeObject.h"
-#include "CKDependencies.h"
-
-// 2d Objects
-#include "CK2dEntity.h"
-#include "CKSprite.h"
-#include "CKSpriteText.h"
-
-// 3d Objects
-#include "CKMesh.h"
-#include "CKPatchMesh.h"
-#include "CK3dEntity.h"
-#include "CKCamera.h"
-#include "CKTargetCamera.h"
-#include "CKSprite3D.h"
-#include "CKLight.h"
-#include "CKTargetLight.h"
-#include "CK3dObject.h"
-#include "CKBodyPart.h"
-
-// Containers
-#include "CKDataArray.h"
-#include "CKDebugContext.h"
-#include "CKMemoryPool.h"
-
-static void RegisterCKTypedefs(asIScriptEngine *engine) {
-
-}
-
-static void RegisterCKEnums(asIScriptEngine *engine) {
-
-}
-
-static void RegisterCKObjectTypes(asIScriptEngine *engine) {
-
-}
-
-static void RegisterCKGlobalVariables(asIScriptEngine *engine) {
-
-}
-
-static void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
-
-}
+#include "ScriptCKTypes.h"
+#include "ScriptCKEnums.h"
+#include "ScriptXObjectArray.h"
+#include "ScriptCKDefines.h"
+#include "ScriptCKContext.h"
+#include "ScriptCKManagers.h"
+#include "ScriptCKObjects.h"
 
 void RegisterCK2(asIScriptEngine *engine) {
     assert(engine != nullptr);
+
+    RegisterCKTypedefs(engine);
+    RegisterCKEnums(engine);
+    RegisterCKObjectTypes(engine);
+
+    // Array derived types need to be registered earlier
+    RegisterXSObjectPointerArray(engine);
+    RegisterXSObjectArray(engine);
+    RegisterXObjectPointerArray(engine);
+    RegisterXObjectArray(engine);
+    RegisterXObjectDeclarationArray(engine);
+    RegisterCKDependencies(engine);
+
+    RegisterCKGlobalVariables(engine);
+    RegisterCKGlobalFunctions(engine);
+
+    RegisterCKFileInfo(engine);
+    RegisterCKStats(engine);
+    RegisterVxDriverDesc(engine);
+    RegisterVxIntersectionDesc(engine);
+    RegisterVxStats(engine);
+    RegisterCKGUID(engine);
+    RegisterCKClassDesc(engine);
+    RegisterCKPluginInfo(engine);
+    RegisterCKEnumStruct(engine);
+    RegisterCKFlagsStruct(engine);
+    RegisterCKStructStruct(engine);
+    RegisterCKParameterTypeDesc(engine);
+
+    RegisterCKBitmapProperties(engine);
+    RegisterCKMovieProperties(engine);
+
+    RegisterCKDataReader(engine);
+    RegisterCKModelReader(engine);
+    RegisterCKBitmapReader(engine);
+    RegisterCKSoundReader(engine);
+    RegisterCKMovieReader(engine);
+
+    RegisterCKPluginDll(engine);
+    RegisterCKPluginEntryReadersData(engine);
+    RegisterCKPluginEntryBehaviorsData(engine);
+    RegisterCKPluginEntry(engine);
+    RegisterCKPluginCategory(engine);
+
+    RegisterCKOperationDesc(engine);
+
+    RegisterCKAttributeVal(engine);
+
+    RegisterCKTimeProfiler(engine);
+
+    RegisterCKMessage(engine);
+    RegisterCKWaitingObject(engine);
+
+    RegisterCKPATHCATEGORY(engine);
+
+    RegisterCKPARAMETER_DESC(engine);
+    RegisterCKBEHAVIORIO_DESC(engine);
+    RegisterCKBehaviorPrototype(engine);
+
+    RegisterCKBitmapSlot(engine);
+    RegisterCKMovieInfo(engine);
+    RegisterCKBitmapData(engine);
+
+    RegisterSoundMinion(engine);
+    RegisterCKWaveSoundSettings(engine);
+    RegisterCKWaveSound3DSettings(engine);
+    RegisterCKListenerSettings(engine);
+    RegisterCKWaveFormat(engine);
+
+    RegisterCKPICKRESULT(engine);
+
+    RegisterCK2dCurvePoint(engine);
+    RegisterCK2dCurve(engine);
+
+    RegisterCKFileManagerData(engine);
+    RegisterCKFilePluginDependencies(engine);
+    RegisterCKFileObject(engine);
+
+    RegisterCKStateChunk(engine);
+    RegisterCKFile(engine);
+
+    RegisterCKDependenciesContext(engine);
+
+    RegisterCKDebugContext(engine);
+
+    RegisterCKObjectArray(engine);
+    RegisterCKObjectDeclaration(engine);
+
+    RegisterCKContext(engine);
+
+    RegisterCKPluginManager(engine);
+    RegisterCKBaseManager(engine);
+    RegisterCKParameterManager(engine);
+    RegisterCKAttributeManager(engine);
+    RegisterCKTimeManager(engine);
+    RegisterCKMessageManager(engine);
+    RegisterCKBehaviorManager(engine);
+    RegisterCKPathManager(engine);
+    RegisterCKRenderManager(engine);
+    RegisterCKFloorManager(engine);
+    RegisterCKGridManager(engine);
+    RegisterCKInterfaceManager(engine);
+    RegisterCKSoundManager(engine);
+    RegisterCKMidiManager(engine);
+    RegisterCKInputManager(engine);
+    RegisterCKCollisionManager(engine);
+
+    RegisterCKObject(engine);
+    RegisterCKInterfaceObjectManager(engine);
+    RegisterCKParameterIn(engine);
+    RegisterCKParameter(engine);
+    RegisterCKParameterOut(engine);
+    RegisterCKParameterLocal(engine);
+    RegisterCKParameterOperation(engine);
+    RegisterCKBehaviorLink(engine);
+    RegisterCKBehaviorIO(engine);
+    RegisterCKRenderContext(engine);
+    RegisterCKSynchroObject(engine);
+    RegisterCKStateObject(engine);
+    RegisterCKCriticalSectionObject(engine);
+    RegisterCKKinematicChain(engine);
+    RegisterCKLayer(engine);
+    RegisterCKSceneObject(engine);
+    RegisterCKBehavior(engine);
+    RegisterCKObjectAnimation(engine);
+    RegisterCKAnimation(engine);
+    RegisterCKKeyedAnimation(engine);
+    RegisterCKBeObject(engine);
+    RegisterCKScene(engine);
+    RegisterCKLevel(engine);
+    RegisterCKGroup(engine);
+    RegisterCKMaterial(engine);
+    RegisterCKTexture(engine);
+    RegisterCKMesh(engine);
+    RegisterCKPatchMesh(engine);
+    RegisterCKDataArray(engine);
+    RegisterCKSound(engine);
+    RegisterCKWaveSound(engine);
+    RegisterCKMidiSound(engine);
+    RegisterCKRenderObject(engine);
+    RegisterCK2dEntity(engine);
+    RegisterCKSprite(engine);
+    RegisterCKSpriteText(engine);
+    RegisterCK3dEntity(engine);
+    RegisterCKCamera(engine);
+    RegisterCKTargetCamera(engine);
+    RegisterCKPlace(engine);
+    RegisterCKCurvePoint(engine);
+    RegisterCKSprite3D(engine);
+    RegisterCKLight(engine);
+    RegisterCKTargetLight(engine);
+    RegisterCKCharacter(engine);
+    RegisterCK3dObject(engine);
+    RegisterCKBodyPart(engine);
+    RegisterCKCurve(engine);
+    RegisterCKGrid(engine);
 }
