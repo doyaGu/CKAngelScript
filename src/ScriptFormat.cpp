@@ -65,154 +65,182 @@ private:
     std::unordered_map<int, asIScriptFunction *> m_ToStringMap;
 };
 
-static std::string g_StringResult;
-
-asIScriptFunction *FindToString(asIScriptEngine *engine, int typeId) {
+asIScriptFunction *FindToStringCallback(asIScriptEngine *engine, int typeId) {
     auto *map = static_cast<ToStringMap *>(engine->GetUserData(TOSTRINGMAP_TYPE));
     if (!map) {
-        engine->WriteMessage("Print", 0, 0, asMSGTYPE_ERROR, "ToStringMap has been overwritten.");
+        engine->WriteMessage("print", 0, 0, asMSGTYPE_ERROR, "ToStringMap has been overwritten.");
         return nullptr;
     }
-    map->AddRef();
 
     auto *func = map->GetToStringFunction(typeId);
     if (func) {
-        map->Release();
         return func;
     }
 
-    asITypeInfo *type = engine->GetTypeInfoById(typeId);
-    assert(type);
+    const asITypeInfo *type = engine->GetTypeInfoById(typeId);
+    if (!type) {
+        engine->WriteMessage("print", 0, 0, asMSGTYPE_ERROR, "Type not found.");
+        return nullptr;
+    }
 
     // Special case - cast to string
     const char *name = type->GetName();
     if (strcmp(name, "string") == 0) {
         map->SetToStringFunction(typeId, nullptr);
-        map->Release();
         return nullptr;
     }
 
-    func = type->GetMethodByDecl("string toString() const");
+    func = type->GetMethodByDecl("string opImplConv() const");
     if (!func) {
-        func = type->GetMethodByDecl("string ToString() const");
+        func = type->GetMethodByDecl("string opConv() const");
     }
     if (!func) {
-        func = type->GetMethodByDecl("string toString()");
+        func = type->GetMethodByDecl("string opImplConv()");
     }
     if (!func) {
-        func = type->GetMethodByDecl("string ToString()");
-    }
-    if (!func) {
-        std::string msg("Missing ToString() for object '");
-        msg.append(name).append("'.");
-        engine->WriteMessage("Format", 0, 0, asMSGTYPE_ERROR, msg.c_str());
-        map->SetToStringFunction(typeId, nullptr);
-        map->Release();
-        return nullptr;
+        func = type->GetMethodByDecl("string opConv()");
     }
 
     map->SetToStringFunction(typeId, func);
-    map->Release();
     return func;
 }
 
-static std::string &ToString(asIScriptGeneric *gen, void *adr, int typeId) {
-    asIScriptEngine *engine = gen->GetEngine();
-    asIScriptFunction *func = FindToString(engine, typeId);
-
-    if (!func) {
-        // cast to string
-        std::string &value = **static_cast<std::string **>(adr);
-        return value;
-    }
-
-    // call function
-    asIScriptObject *obj = *static_cast<asIScriptObject **>(adr);
-    asIScriptContext *ctx = engine->RequestContext();
-    int r = ctx->Prepare(func);
-    if (r >= 0) {
-        r = ctx->SetObject(obj);
-        if (r >= 0)
-            r = ctx->Execute();
-    }
-    if (r < 0) {
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
-        const char *name = type->GetName();
-
-        std::string msg("Failed to call toString() on object '");
-        msg.append(name).append("' (").append(std::to_string(r)).append(").");
-        engine->WriteMessage("Format", 0, 0, asMSGTYPE_ERROR, msg.c_str());
-    }
-
-    void *retAdr = ctx->GetReturnAddress();
-    g_StringResult = *static_cast<std::string *>(retAdr);
-    engine->ReturnContext(ctx);
-    return g_StringResult;
-}
-
 static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstream &stream) {
-    auto typeId = gen->GetArgTypeId(index);
-    void *adr = gen->GetAddressOfArg(index);
+    asIScriptEngine *engine = gen->GetEngine();
+    const int typeId = gen->GetArgTypeId(index);
+    void *addr = *static_cast<void **>(gen->GetAddressOfArg(index));
 
-    switch (typeId) {
-        case asTYPEID_BOOL: {
-            bool value = **static_cast<bool **>(adr);
-            stream << (value ? "true" : "false");
-        }
-        break;
-        case asTYPEID_INT8: {
-            int8_t value = **static_cast<int8_t **>(adr);
-            stream << value;
-        }
-        break;
-        case asTYPEID_INT16: {
-            int16_t value = **static_cast<int16_t **>(adr);
-            stream << value;
-        }
-        break;
-        case asTYPEID_INT32: {
-            int32_t value = **static_cast<int32_t **>(adr);
-            stream << value;
-        }
-        break;
-        case asTYPEID_INT64: {
-            int64_t value = **static_cast<int64_t **>(adr);
-            stream << value;
-        }
-        break;
-        case asTYPEID_UINT8: {
-            uint8_t value = **static_cast<uint8_t **>(adr);
-            stream << value;
-        }
-        break;
-        case asTYPEID_UINT16: {
-            uint16_t value = **static_cast<uint16_t **>(adr);
-            stream << value;
-        }
-        break;
-        case asTYPEID_UINT32: {
-            uint32_t value = **static_cast<uint32_t **>(adr);
-            stream << value;
-        }
-        break;
-        case asTYPEID_UINT64: {
-            uint64_t value = **static_cast<uint64_t **>(adr);
-            stream << value;
-        }
-        break;
-        case asTYPEID_FLOAT: {
-            float value = **static_cast<float **>(adr);
-            stream << value;
-        }
-        break;
-        case asTYPEID_DOUBLE: {
-            double value = **static_cast<double **>(adr);
-            stream << value;
-        }
-        break;
-        default:
-            stream << ToString(gen, adr, typeId);
+    if (addr == nullptr) {
+        stream << "null";
+        return;
+    }
+
+    if (typeId == asTYPEID_VOID) {
+        stream << "void";
+    } else if (typeId >= asTYPEID_BOOL && typeId <= asTYPEID_DOUBLE) {
+        switch (typeId) {
+            case asTYPEID_BOOL: {
+                const bool value = *static_cast<bool *>(addr);
+                stream << (value ? "true" : "false");
+            }
             break;
+            case asTYPEID_INT8: {
+                const int8_t value = *static_cast<int8_t *>(addr);
+                stream << value;
+            }
+            break;
+            case asTYPEID_INT16: {
+                const int16_t value = *static_cast<int16_t *>(addr);
+                stream << value;
+            }
+            break;
+            case asTYPEID_INT32: {
+                const int32_t value = *static_cast<int32_t *>(addr);
+                stream << value;
+            }
+            break;
+            case asTYPEID_INT64: {
+                const int64_t value = *static_cast<int64_t *>(addr);
+                stream << value;
+            }
+            break;
+            case asTYPEID_UINT8: {
+                const uint8_t value = *static_cast<uint8_t *>(addr);
+                stream << value;
+            }
+            break;
+            case asTYPEID_UINT16: {
+                const uint16_t value = *static_cast<uint16_t *>(addr);
+                stream << value;
+            }
+            break;
+            case asTYPEID_UINT32: {
+                const uint32_t value = *static_cast<uint32_t *>(addr);
+                stream << value;
+            }
+            break;
+            case asTYPEID_UINT64: {
+                const uint64_t value = *static_cast<uint64_t *>(addr);
+                stream << value;
+            }
+            break;
+            case asTYPEID_FLOAT: {
+                const float value = *static_cast<float *>(addr);
+                stream << value;
+            }
+            break;
+            case asTYPEID_DOUBLE: {
+                const double value = *static_cast<double *>(addr);
+                stream << value;
+            }
+            break;
+            default:
+                break;
+        }
+    } else if (!(typeId & asTYPEID_MASK_OBJECT)) {
+        // The type is an enum, check if the value matches one of the defined enums
+        bool found = false;
+        const asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        const int value = *static_cast<int *>(addr);
+        for (int n = static_cast<int>(type->GetEnumValueCount()); --n > 0;) {
+            int enumVal;
+            const char *enumName = type->GetEnumValueByIndex(n, &enumVal);
+            if (enumVal == value) {
+                stream << enumName;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            stream << value;
+        }
+    } else if (typeId & asTYPEID_MASK_OBJECT) {
+        // Dereference handles, so we can see what it points to
+        if (typeId & asTYPEID_OBJHANDLE)
+            addr = *static_cast<void **>(addr);
+
+        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        if (!type) {
+            stream << "unknown";
+            return;
+        }
+
+        const char *typeName = type->GetName();
+        if (strcmp(typeName, "string") == 0) {
+            stream << *static_cast<std::string *>(addr);
+            return;
+        }
+
+        asIScriptFunction *func = FindToStringCallback(engine, typeId);
+        if (func) {
+            // Call function
+            asIScriptObject *obj = *static_cast<asIScriptObject **>(addr);
+            asIScriptContext *ctx = engine->RequestContext();
+            int r = ctx->Prepare(func);
+            if (r >= 0) {
+                r = ctx->SetObject(obj);
+                if (r >= 0)
+                    r = ctx->Execute();
+            }
+            if (r < 0) {
+                stream << "<" << typeName << ":" << addr << ">";
+                return;
+            }
+
+            void *retAddr = ctx->GetReturnAddress();
+            stream << *static_cast<std::string *>(retAddr);
+            engine->ReturnContext(ctx);
+        } else {
+            stream << "<" << typeName << ":" << addr << ">";
+        }
+    } else {
+        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        if (!type) {
+            stream << "unknown";
+            return;
+        }
+        const char *typeName = type->GetName();
+        stream << "<" << typeName << ":" << addr << ">";
     }
 }
 
@@ -227,73 +255,156 @@ static void ToStringGeneric(asIScriptGeneric *gen) {
 }
 
 static std::string FormatString(asIScriptGeneric *gen) {
+    asIScriptEngine *engine = gen->GetEngine();
     const std::string &fmt = **static_cast<std::string **>(gen->GetAddressOfArg(0));
     fmt::dynamic_format_arg_store<fmt::format_context> store;
 
     const int count = gen->GetArgCount();
     for (int i = 1; i < count; ++i) {
-        auto typeId = gen->GetArgTypeId(i);
-        void *adr = gen->GetAddressOfArg(i);
+        const int typeId = gen->GetArgTypeId(i);
+        void *addr = *static_cast<void**>(gen->GetAddressOfArg(i));
 
-        switch (typeId) {
-            case asTYPEID_BOOL: {
-                bool value = **static_cast<bool **>(adr);
-                store.push_back(value ? "true" : "false");
+        if (addr == nullptr) {
+            store.push_back("null");
+            continue;
+        }
+
+        if (typeId == asTYPEID_VOID) {
+            store.push_back("void");
+        } else if (typeId >= asTYPEID_BOOL && typeId <= asTYPEID_DOUBLE) {
+            switch (typeId) {
+                case asTYPEID_BOOL: {
+                    const bool value = *static_cast<bool *>(addr);
+                    store.push_back(value ? "true" : "false");
+                }
+                break;
+                case asTYPEID_INT8: {
+                    const int8_t value = *static_cast<int8_t *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                case asTYPEID_INT16: {
+                    const int16_t value = *static_cast<int16_t *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                case asTYPEID_INT32: {
+                    const int32_t value = *static_cast<int32_t *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                case asTYPEID_INT64: {
+                    const int64_t value = *static_cast<int64_t *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                case asTYPEID_UINT8: {
+                    const uint8_t value = *static_cast<uint8_t *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                case asTYPEID_UINT16: {
+                    const uint16_t value = *static_cast<uint16_t *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                case asTYPEID_UINT32: {
+                    const uint32_t value = *static_cast<uint32_t *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                case asTYPEID_UINT64: {
+                    const uint64_t value = *static_cast<uint64_t *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                case asTYPEID_FLOAT: {
+                    const float value = *static_cast<float *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                case asTYPEID_DOUBLE: {
+                    const double value = *static_cast<double *>(addr);
+                    store.push_back(value);
+                }
+                break;
+                default:
+                    break;
             }
-            break;
-            case asTYPEID_INT8: {
-                int8_t value = **static_cast<int8_t **>(adr);
+        } else if (!(typeId & asTYPEID_MASK_OBJECT)) {
+            // The type is an enum, check if the value matches one of the defined enums
+            bool found = false;
+            const asITypeInfo *type = engine->GetTypeInfoById(typeId);
+            if (!type) {
+                store.push_back("unknown");
+                continue;
+            }
+            const int value = *static_cast<int *>(addr);
+            for (int n = static_cast<int>(type->GetEnumValueCount()); --n > 0;) {
+                int enumVal;
+                const char *enumName = type->GetEnumValueByIndex(n, &enumVal);
+                if (enumVal == value) {
+                    store.push_back(enumName);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
                 store.push_back(value);
             }
-            break;
-            case asTYPEID_INT16: {
-                int16_t value = **static_cast<int16_t **>(adr);
-                store.push_back(value);
+        } else if (typeId & asTYPEID_MASK_OBJECT) {
+            // Dereference handles, so we can see what it points to
+            if (typeId & asTYPEID_OBJHANDLE)
+                addr = *static_cast<void **>(addr);
+
+            asITypeInfo *type = engine->GetTypeInfoById(typeId);
+            if (!type) {
+                store.push_back("unknown");
+                continue;
             }
-            break;
-            case asTYPEID_INT32: {
-                int32_t value = **static_cast<int32_t **>(adr);
-                store.push_back(value);
+            const char *typeName = type->GetName();
+            if (strcmp(typeName, "string") == 0) {
+                store.push_back(*static_cast<std::string *>(addr));
+                continue;
             }
-            break;
-            case asTYPEID_INT64: {
-                int64_t value = **static_cast<int64_t **>(adr);
-                store.push_back(value);
+
+            asIScriptFunction *func = FindToStringCallback(engine, typeId);
+            if (func) {
+                // Call function
+                asIScriptObject *obj = *static_cast<asIScriptObject **>(addr);
+                asIScriptContext *ctx = engine->RequestContext();
+                int r = ctx->Prepare(func);
+                if (r >= 0) {
+                    r = ctx->SetObject(obj);
+                    if (r >= 0)
+                        r = ctx->Execute();
+                }
+                if (r < 0) {
+                    std::stringstream stream;
+                    stream << "<" << typeName << ":" << addr << ">";
+                    store.push_back(stream.str());
+                    continue;
+                }
+
+                void *retAddr = ctx->GetReturnAddress();
+                store.push_back(*static_cast<std::string *>(retAddr));
+                engine->ReturnContext(ctx);
+            } else {
+                std::stringstream stream;
+                stream << "<" << typeName << ":" << addr << ">";
+                store.push_back(stream.str());
             }
-            break;
-            case asTYPEID_UINT8: {
-                uint8_t value = **static_cast<uint8_t **>(adr);
-                store.push_back(value);
+        } else {
+            asITypeInfo *type = engine->GetTypeInfoById(typeId);
+            if (!type) {
+                store.push_back("unknown");
+                continue;
             }
-            break;
-            case asTYPEID_UINT16: {
-                uint16_t value = **static_cast<uint16_t **>(adr);
-                store.push_back(value);
-            }
-            break;
-            case asTYPEID_UINT32: {
-                uint32_t value = **static_cast<uint32_t **>(adr);
-                store.push_back(value);
-            }
-            break;
-            case asTYPEID_UINT64: {
-                uint64_t value = **static_cast<uint64_t **>(adr);
-                store.push_back(value);
-            }
-            break;
-            case asTYPEID_FLOAT: {
-                float value = **static_cast<float **>(adr);
-                store.push_back(value);
-            }
-            break;
-            case asTYPEID_DOUBLE: {
-                double value = **static_cast<double **>(adr);
-                store.push_back(value);
-            }
-            break;
-            default:
-                store.push_back(ToString(gen, adr, typeId));
-            break;
+            const char *typeName = type->GetName();
+
+            std::stringstream stream;
+            stream << "<" << typeName << ":" << addr << ">";
+            store.push_back(stream.str());
         }
     }
 
@@ -320,7 +431,7 @@ static void PrintGeneric(asIScriptGeneric *gen) {
     }
 }
 
-void RegisterScriptFormat(asIScriptEngine *engine) {
+void RegisterScriptFormat(asIScriptEngine *engine, int argc) {
     assert(engine != nullptr);
 
     engine->SetUserData(ToStringMap::Create(), TOSTRINGMAP_TYPE);
@@ -336,7 +447,7 @@ void RegisterScriptFormat(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("string toString(?&in)", asFUNCTION(ToStringGeneric), asCALL_GENERIC); assert(r >= 0);
 
     std::string decl = "string format(const string &in)";
-    for (int i = 0; i <= 16; ++i) {
+    for (int i = 0; i <= argc; ++i) {
         r = engine->RegisterGlobalFunction(decl.c_str(), asFUNCTION(FormatStringGeneric), asCALL_GENERIC); assert(r >= 0);
         decl.pop_back();
         decl += ", ?&in)";
@@ -345,7 +456,7 @@ void RegisterScriptFormat(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void print(?&in)", asFUNCTION(PrintGeneric), asCALL_GENERIC); assert(r >= 0);
 
     decl = "void print(const string &in)";
-    for (int i = 0; i <= 16; ++i) {
+    for (int i = 0; i <= argc; ++i) {
         r = engine->RegisterGlobalFunction(decl.c_str(), asFUNCTION(PrintGeneric), asCALL_GENERIC); assert(r >= 0);
         decl.pop_back();
         decl += ", ?&in)";
