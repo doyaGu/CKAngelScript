@@ -695,6 +695,22 @@ static void RegisterVxMathObjectTypes(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectType("CKPOINT", sizeof(CKPOINT), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<CKPOINT>()); assert(r >= 0);
 
+    r = engine->RegisterObjectType("VxUV", sizeof(VxUV), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxUV>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("VxDisplayMode", sizeof(VxDisplayMode), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<VxDisplayMode>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("VxDrawPrimitiveData", sizeof(VxDrawPrimitiveData), asOBJ_VALUE | asGetTypeTraits<VxDrawPrimitiveData>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("VxTransformData", sizeof(VxTransformData), asOBJ_VALUE | asGetTypeTraits<VxTransformData>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("VxDirectXData", sizeof(VxDirectXData), asOBJ_VALUE | asGetTypeTraits<VxDirectXData>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("VxSpriteRenderOptions", sizeof(VxSpriteRenderOptions), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<VxSpriteRenderOptions>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("Vx2DCapsDesc", sizeof(Vx2DCapsDesc), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<Vx2DCapsDesc>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("Vx3DCapsDesc", sizeof(Vx3DCapsDesc), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<Vx3DCapsDesc>()); assert(r >= 0);
+
     r = engine->RegisterObjectType("VxMutex", sizeof(VxMutex), asOBJ_VALUE | asGetTypeTraits<VxMutex>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("VxMutexLock", sizeof(VxMutexLock), asOBJ_VALUE | asGetTypeTraits<VxMutexLock>()); assert(r >= 0);
@@ -706,6 +722,10 @@ static void RegisterVxMathObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("VxMemoryMappedFile", sizeof(VxMemoryMappedFile), asOBJ_VALUE | asGetTypeTraits<VxMemoryMappedFile>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("CKPathSplitter", sizeof(CKPathSplitter), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKPathSplitter>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("CKPathMaker", sizeof(CKPathMaker), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKPathMaker>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("CKFileExtension", sizeof(CKFileExtension), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKFileExtension>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("CKDirectoryParser", sizeof(CKDirectoryParser), asOBJ_VALUE | asGetTypeTraits<CKDirectoryParser>()); assert(r >= 0);
 
@@ -760,23 +780,23 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("float Tcos(int)", asFUNCTION(Tcos), asCALL_CDECL); assert(r >= 0);
 
     // Interpolation functions
-    // r = engine->RegisterGlobalFunction("void InterpolateFloatArray(void *Res, void *array1, void *array2, float factor, int count)", asFUNCTION(InterpolateFloatArray), asCALL_CDECL); assert(r >= 0);
-    // r = engine->RegisterGlobalFunction("void InterpolateVectorArray(void *Res, void *array1, void *array2, float factor, int count, XULONG StrideRes, XULONG StrideIn)", asFUNCTION(InterpolateVectorArray), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void InterpolateFloatArray(NativePointer Res, NativePointer array1, NativePointer array2, float factor, int count)", asFUNCTION(InterpolateFloatArray), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void InterpolateVectorArray(NativePointer Res, NativePointer array1, NativePointer array2, float factor, int count, uint StrideRes, uint StrideIn)", asFUNCTION(InterpolateVectorArray), asCALL_CDECL); assert(r >= 0);
 
     // Box and transformation functions
     r = engine->RegisterGlobalFunction("bool VxTransformBox2D(const VxMatrix &in, const VxBbox &in, VxRect &out, VxRect &out, VXCLIP_FLAGS &inout, VXCLIP_FLAGS &inout)", asFUNCTION(VxTransformBox2D), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxProjectBoxZExtents(const VxMatrix &in, const VxBbox &in, float &out, float &out)", asFUNCTION(VxProjectBoxZExtents), asCALL_CDECL); assert(r >= 0);
 
     // Structure copying functions
-    // r = engine->RegisterGlobalFunction("XBOOL VxFillStructure(int Count, void *Dst, XULONG Stride, XULONG SizeSrc, void *Src)", asFUNCTION(VxFillStructure), asCALL_CDECL); assert(r >= 0);
-    // r = engine->RegisterGlobalFunction("XBOOL VxCopyStructure(int Count, void *Dst, XULONG OutStride, XULONG SizeSrc, void *Src, XULONG InStride)", asFUNCTION(VxCopyStructure), asCALL_CDECL); assert(r >= 0);
-    // r = engine->RegisterGlobalFunction("XBOOL VxIndexedCopy(const VxStridedData &Dst, const VxStridedData &Src, XULONG SizeSrc, int *Indices, int IndexCount)", asFUNCTION(VxIndexedCopy), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxFillStructure(int Count, NativePointer Dst, uint Stride, uint SizeSrc, NativePointer Src)", asFUNCTION(VxFillStructure), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxCopyStructure(int Count, NativePointer Dst, uint OutStride, uint SizeSrc, NativePointer Src, uint InStride)", asFUNCTION(VxCopyStructure), asCALL_CDECL); assert(r >= 0);
+    // r = engine->RegisterGlobalFunction("bool VxIndexedCopy(const VxStridedData &Dst, const VxStridedData &Src, uint SizeSrc, int *Indices, int IndexCount)", asFUNCTION(VxIndexedCopy), asCALL_CDECL); assert(r >= 0);
 
     // Graphic utilities (Blitting)
     r = engine->RegisterGlobalFunction("void VxDoBlit(const VxImageDescEx &in, const VxImageDescEx &in)", asFUNCTION(VxDoBlit), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxDoBlitUpsideDown(const VxImageDescEx &in, const VxImageDescEx &in)", asFUNCTION(VxDoBlitUpsideDown), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxDoAlphaBlit(const VxImageDescEx &in, uint8 AlphaValue)", asFUNCTIONPR(VxDoAlphaBlit, (const VxImageDescEx &, XBYTE), void), asCALL_CDECL); assert(r >= 0);
-    // r = engine->RegisterGlobalFunction("void VxDoAlphaBlit(const VxImageDescEx &in, uint8 *AlphaValues)", asFUNCTIONPR(VxDoAlphaBlit, (const VxImageDescEx &, XBYTE *), void), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxDoAlphaBlit(const VxImageDescEx &in, NativePointer)", asFUNCTIONPR(VxDoAlphaBlit, (const VxImageDescEx &, XBYTE *), void), asCALL_CDECL); assert(r >= 0);
 
     // Inline functions
     r = engine->RegisterGlobalFunction("uint GetBitCount(uint)", asFUNCTION(GetBitCount), asCALL_CDECL); assert(r >= 0);
@@ -785,7 +805,7 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void VxGetBitShifts(const VxImageDescEx &in, uint &out, uint &out, uint &out, uint &out)", asFUNCTION(VxGetBitShifts), asCALL_CDECL); assert(r >= 0);
 
     // Graphic utilities (MipMaps and Resizing)
-    // r = engine->RegisterGlobalFunction("void VxGenerateMipMap(const VxImageDescEx &in, XBYTE *out)", asFUNCTION(VxGenerateMipMap), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxGenerateMipMap(const VxImageDescEx &in, NativePointer &out)", asFUNCTION(VxGenerateMipMap), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxResizeImage32(const VxImageDescEx &in, const VxImageDescEx &in)", asFUNCTION(VxResizeImage32), asCALL_CDECL); assert(r >= 0);
 
     // Conversion to normal/bump map
@@ -812,7 +832,232 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool VxPtInRect(const CKRECT &in, const CKPOINT &in)", asFUNCTION(VxPtInRect), asCALL_CDECL); assert(r >= 0);
 
     // Best-fit bounding box computation
-    // r = engine->RegisterGlobalFunction("bool VxComputeBestFitBBox(const uint8 *in, uint Stride, int Count, VxMatrix &out, float AdditionalBorder)", asFUNCTION(VxComputeBestFitBBox), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxComputeBestFitBBox(NativePointer, uint, int, VxMatrix &out, float)", asFUNCTION(VxComputeBestFitBBox), asCALL_CDECL); assert(r >= 0);
+}
+
+// VxUV
+
+static void RegisterVxUV(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("VxUV", "float u", asOFFSET(VxUV, u)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxUV", "float v", asOFFSET(VxUV, v)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxUV *self) { new(self) VxUV(); }, (VxUV *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f(float u = 0, float v = 0)", asFUNCTIONPR([](float u, float v, VxUV *self) { new(self) VxUV(u, v); }, (float, float, VxUV *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f(const VxUV &in)", asFUNCTIONPR([](const VxUV &uv, VxUV *self) { new(self) VxUV(uv); }, (const VxUV &, VxUV *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxUV *self) { self->~VxUV(); }, (VxUV *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxUV", "VxUV &opAddAssign(const VxUV &in)", asMETHODPR(VxUV, operator+=, (const VxUV &), VxUV &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV &opSubAssign(const VxUV &in)", asMETHODPR(VxUV, operator-=, (const VxUV &), VxUV &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV &opMulAssign(float)", asMETHODPR(VxUV, operator*=, (float), VxUV &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV &opDivAssign(float)", asMETHODPR(VxUV, operator/=, (float), VxUV &), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opNeg() const", asFUNCTIONPR([](const VxUV &uv) { return -uv; }, (const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opAdd(const VxUV &in) const", asFUNCTIONPR([](const VxUV &v1, const VxUV &v2) { return v1 + v2; }, (const VxUV &, const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opSub(const VxUV &in) const", asFUNCTIONPR([](const VxUV &v1, const VxUV &v2) { return v1 - v2; }, (const VxUV &, const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opMul(float) const", asFUNCTIONPR([](const VxUV &uv, float s) { return uv * s; }, (const VxUV &, float), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opDiv(float) const", asFUNCTIONPR([](const VxUV& uv, float s) { return uv / s; }, (const VxUV &, float), VxUV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+}
+
+// VxDisplayMode
+
+static void RegisterVxDisplayMode(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("VxDisplayMode", "int Width", asOFFSET(VxDisplayMode, Width)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDisplayMode", "int Height", asOFFSET(VxDisplayMode, Height)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDisplayMode", "int Bpp", asOFFSET(VxDisplayMode, Bpp)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDisplayMode", "int RefreshRate", asOFFSET(VxDisplayMode, RefreshRate)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxDisplayMode", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxDisplayMode *self) { new(self) VxDisplayMode(); }, (VxDisplayMode *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxDisplayMode", asBEHAVE_CONSTRUCT, "void f(const VxDisplayMode &in)", asFUNCTIONPR([](const VxDisplayMode &mode, VxDisplayMode *self) { new(self) VxDisplayMode(mode); }, (const VxDisplayMode &, VxDisplayMode *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxDisplayMode", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxDisplayMode *self) { self->~VxDisplayMode(); }, (VxDisplayMode *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxDisplayMode", "VxDisplayMode &opAssign(const VxDisplayMode &in)", asMETHODPR(VxDisplayMode, operator=, (const VxDisplayMode &), VxDisplayMode &), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxDisplayMode", "bool opEquals(const VxDisplayMode &in) const", asFUNCTIONPR([](const VxDisplayMode &lhs, const VxDisplayMode &rhs) { return lhs == rhs; }, (const VxDisplayMode &, const VxDisplayMode &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxDisplayMode", "bool opNotEquals(const VxDisplayMode &in) const", asFUNCTIONPR([](const VxDisplayMode &lhs, const VxDisplayMode &rhs) { return lhs != rhs; }, (const VxDisplayMode &, const VxDisplayMode &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+}
+
+// VxDrawPrimitiveData
+
+static void RegisterVxDrawPrimitiveData(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectBehaviour("VxDrawPrimitiveData", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxDrawPrimitiveData *self) { new(self) VxDrawPrimitiveData(); }, (VxDrawPrimitiveData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxDrawPrimitiveData", asBEHAVE_CONSTRUCT, "void f(const VxDrawPrimitiveData &in)", asFUNCTIONPR([](const VxDrawPrimitiveData &data, VxDrawPrimitiveData *self) { new(self) VxDrawPrimitiveData(data); }, (const VxDrawPrimitiveData &, VxDrawPrimitiveData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxDrawPrimitiveData", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxDrawPrimitiveData *self) { self->~VxDrawPrimitiveData(); }, (VxDrawPrimitiveData *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "VxDrawPrimitiveData &opAssign(const VxDrawPrimitiveData &in)", asMETHODPR(VxDrawPrimitiveData, operator=, (const VxDrawPrimitiveData &), VxDrawPrimitiveData &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// VxTransformData
+
+static void RegisterVxTransformData(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("VxTransformData", "NativePointer InVertices", asOFFSET(VxTransformData, InVertices)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxTransformData", "uint InStride", asOFFSET(VxTransformData, InStride)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxTransformData", "NativePointer OutVertices", asOFFSET(VxTransformData, OutVertices)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxTransformData", "uint OutStride", asOFFSET(VxTransformData, OutStride)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxTransformData", "NativePointer ScreenVertices", asOFFSET(VxTransformData, ScreenVertices)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxTransformData", "uint ScreenStride", asOFFSET(VxTransformData, ScreenStride)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxTransformData", "NativePointer ClipFlags", asOFFSET(VxTransformData, ClipFlags)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxTransformData", "CKRECT m_2dExtents", asOFFSET(VxTransformData, m_2dExtents)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxTransformData", "uint m_Offscreen", asOFFSET(VxTransformData, m_Offscreen)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxTransformData", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxTransformData *self) { new(self) VxTransformData(); }, (VxTransformData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxTransformData", asBEHAVE_CONSTRUCT, "void f(const VxTransformData &in)", asFUNCTIONPR([](const VxTransformData &data, VxTransformData *self) { new(self) VxTransformData(data); }, (const VxTransformData &, VxTransformData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxTransformData", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxTransformData *self) { self->~VxTransformData(); }, (VxTransformData *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxTransformData", "VxTransformData &opAssign(const VxTransformData &in)", asMETHODPR(VxTransformData, operator=, (const VxTransformData &), VxTransformData &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// VxDirectXData
+
+static void RegisterVxDirectXData(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("VxDirectXData", "NativePointer DDBackBuffer", asOFFSET(VxDirectXData, DDBackBuffer)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDirectXData", "NativePointer DDPrimaryBuffer", asOFFSET(VxDirectXData, DDPrimaryBuffer)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDirectXData", "NativePointer DDZBuffer", asOFFSET(VxDirectXData, DDZBuffer)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDirectXData", "NativePointer DirectDraw", asOFFSET(VxDirectXData, DirectDraw)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDirectXData", "NativePointer Direct3D", asOFFSET(VxDirectXData, Direct3D)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDirectXData", "NativePointer DDClipper", asOFFSET(VxDirectXData, DDClipper)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDirectXData", "NativePointer D3DDevice", asOFFSET(VxDirectXData, D3DDevice)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDirectXData", "NativePointer D3DViewport", asOFFSET(VxDirectXData, D3DViewport)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxDirectXData", "uint DxVersion", asOFFSET(VxDirectXData, DxVersion)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxDirectXData", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxDirectXData *self) { new(self) VxDirectXData(); }, (VxDirectXData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxDirectXData", asBEHAVE_CONSTRUCT, "void f(const VxDirectXData &in)", asFUNCTIONPR([](const VxDirectXData &data, VxDirectXData *self) { new(self) VxDirectXData(data); }, (const VxDirectXData &, VxDirectXData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxDirectXData", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxDirectXData *self) { self->~VxDirectXData(); }, (VxDirectXData *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxDirectXData", "VxDirectXData &opAssign(const VxDirectXData &in)", asMETHODPR(VxDirectXData, operator=, (const VxDirectXData &), VxDirectXData &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// VxSpriteRenderOptions
+
+static void RegisterVxSpriteRenderOptions(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectBehaviour("VxSpriteRenderOptions", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxSpriteRenderOptions *self) { new(self) VxSpriteRenderOptions(); }, (VxSpriteRenderOptions *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxSpriteRenderOptions", asBEHAVE_CONSTRUCT, "void f(const VxSpriteRenderOptions &in)", asFUNCTIONPR([](const VxSpriteRenderOptions &options, VxSpriteRenderOptions *self) { new(self) VxSpriteRenderOptions(options); }, (const VxSpriteRenderOptions &, VxSpriteRenderOptions *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxSpriteRenderOptions", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxSpriteRenderOptions *self) { self->~VxSpriteRenderOptions(); }, (VxSpriteRenderOptions *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VxSpriteRenderOptions &opAssign(const VxSpriteRenderOptions &in)", asMETHODPR(VxSpriteRenderOptions, operator=, (const VxSpriteRenderOptions &), VxSpriteRenderOptions &), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_ModulateColor() const",
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XULONG { return self->ModulateColor; }, (const VxSpriteRenderOptions *), XULONG),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_ModulateColor(uint)",
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XULONG value) { self->ModulateColor = value; }, (VxSpriteRenderOptions *, XULONG), void),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_Options() const",
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XULONG { return self->Options; }, (const VxSpriteRenderOptions *), XULONG),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_Options(uint)",
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XULONG value) { self->Options = value; }, (VxSpriteRenderOptions *, XULONG), void),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXCMPFUNC get_AlphaTestFunc() const",
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> VXCMPFUNC { return self->AlphaTestFunc; }, (const VxSpriteRenderOptions *), VXCMPFUNC),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_AlphaTestFunc(VXCMPFUNC)",
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, VXCMPFUNC value) { self->AlphaTestFunc = value; }, (VxSpriteRenderOptions *, VXCMPFUNC), void),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXBLEND_MODE get_SrcBlendMode() const",
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> VXBLEND_MODE { return self->SrcBlendMode; }, (const VxSpriteRenderOptions *), VXBLEND_MODE),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_SrcBlendMode(VXBLEND_MODE)",
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, VXBLEND_MODE value) { self->SrcBlendMode = value; }, (VxSpriteRenderOptions *, VXBLEND_MODE), void),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_Options2() const",
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XULONG { return self->Options2; }, (const VxSpriteRenderOptions *), XULONG),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_Options2(uint)",
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XULONG value) { self->Options2 = value; }, (VxSpriteRenderOptions *, XULONG), void),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXBLEND_MODE get_DstBlendMode() const",
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> VXBLEND_MODE { return self->DstBlendMode; }, (const VxSpriteRenderOptions *), VXBLEND_MODE),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_DstBlendMode(VXBLEND_MODE)",
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, VXBLEND_MODE value) { self->DstBlendMode = value; }, (VxSpriteRenderOptions *, VXBLEND_MODE), void),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint8 get_AlphaRefValue() const",
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XBYTE { return self->AlphaRefValue; }, (const VxSpriteRenderOptions *), XBYTE),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_AlphaRefValue(uint8)",
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XBYTE value) { self->AlphaRefValue = value; }, (VxSpriteRenderOptions *, XBYTE), void),
+                                     asCALL_CDECL_OBJFIRST); assert(r >= 0);
+}
+
+// Vx2DCapsDesc
+
+static void RegisterVx2DCapsDesc(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("Vx2DCapsDesc", "CKRST_RSTFAMILY Family", asOFFSET(Vx2DCapsDesc, Family)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx2DCapsDesc", "uint MaxVideoMemory", asOFFSET(Vx2DCapsDesc, MaxVideoMemory)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx2DCapsDesc", "uint AvailableVideoMemory", asOFFSET(Vx2DCapsDesc, AvailableVideoMemory)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx2DCapsDesc", "uint Caps", asOFFSET(Vx2DCapsDesc, Caps)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("Vx2DCapsDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](Vx2DCapsDesc *self) { new(self) Vx2DCapsDesc(); }, (Vx2DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("Vx2DCapsDesc", asBEHAVE_CONSTRUCT, "void f(const Vx2DCapsDesc &in)", asFUNCTIONPR([](const Vx2DCapsDesc &options, Vx2DCapsDesc *self) { new(self) Vx2DCapsDesc(options); }, (const Vx2DCapsDesc &, Vx2DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("Vx2DCapsDesc", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](Vx2DCapsDesc *self) { self->~Vx2DCapsDesc(); }, (Vx2DCapsDesc *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("Vx2DCapsDesc", "Vx2DCapsDesc &opAssign(const Vx2DCapsDesc &in)", asMETHODPR(Vx2DCapsDesc, operator=, (const Vx2DCapsDesc &), Vx2DCapsDesc &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// Vx3DCapsDesc
+
+static void RegisterVx3DCapsDesc(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint DevCaps", asOFFSET(Vx3DCapsDesc, DevCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint RenderBpps", asOFFSET(Vx3DCapsDesc, RenderBpps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint ZBufferBpps", asOFFSET(Vx3DCapsDesc, ZBufferBpps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint StencilBpps", asOFFSET(Vx3DCapsDesc, StencilBpps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint StencilCaps", asOFFSET(Vx3DCapsDesc, StencilCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MinTextureWidth", asOFFSET(Vx3DCapsDesc, MinTextureWidth)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MinTextureHeight", asOFFSET(Vx3DCapsDesc, MinTextureHeight)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MaxTextureWidth", asOFFSET(Vx3DCapsDesc, MaxTextureWidth)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MaxTextureHeight", asOFFSET(Vx3DCapsDesc, MaxTextureHeight)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MaxClipPlanes", asOFFSET(Vx3DCapsDesc, MaxClipPlanes)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint VertexCaps", asOFFSET(Vx3DCapsDesc, VertexCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MaxActiveLights", asOFFSET(Vx3DCapsDesc, MaxActiveLights)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MaxNumberBlendStage", asOFFSET(Vx3DCapsDesc, MaxNumberBlendStage)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MaxNumberTextureStage", asOFFSET(Vx3DCapsDesc, MaxNumberTextureStage)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MaxTextureRatio", asOFFSET(Vx3DCapsDesc, MaxTextureRatio)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint TextureFilterCaps", asOFFSET(Vx3DCapsDesc, TextureFilterCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint TextureAddressCaps", asOFFSET(Vx3DCapsDesc, TextureAddressCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint TextureCaps", asOFFSET(Vx3DCapsDesc, TextureCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint MiscCaps", asOFFSET(Vx3DCapsDesc, MiscCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint AlphaCmpCaps", asOFFSET(Vx3DCapsDesc, AlphaCmpCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint ZCmpCaps", asOFFSET(Vx3DCapsDesc, ZCmpCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint RasterCaps", asOFFSET(Vx3DCapsDesc, RasterCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint SrcBlendCaps", asOFFSET(Vx3DCapsDesc, SrcBlendCaps)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint DestBlendCaps", asOFFSET(Vx3DCapsDesc, DestBlendCaps)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("Vx3DCapsDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](Vx3DCapsDesc *self) { new(self) Vx3DCapsDesc(); }, (Vx3DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("Vx3DCapsDesc", asBEHAVE_CONSTRUCT, "void f(const Vx3DCapsDesc &in)", asFUNCTIONPR([](const Vx3DCapsDesc &options, Vx3DCapsDesc *self) { new(self) Vx3DCapsDesc(options); }, (const Vx3DCapsDesc &, Vx3DCapsDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("Vx3DCapsDesc", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](Vx3DCapsDesc *self) { self->~Vx3DCapsDesc(); }, (Vx3DCapsDesc *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("Vx3DCapsDesc", "Vx3DCapsDesc &opAssign(const Vx3DCapsDesc &in)", asMETHODPR(Vx3DCapsDesc, operator=, (const Vx3DCapsDesc &), Vx3DCapsDesc &), asCALL_THISCALL); assert(r >= 0);
 }
 
 // CKRECT
@@ -945,17 +1190,43 @@ static void RegisterVxMemoryMappedFile(asIScriptEngine *engine) {
 static void RegisterCKPathSplitter(asIScriptEngine *engine) {
     int r = 0;
 
-    // Constructor
     r = engine->RegisterObjectBehaviour("CKPathSplitter", asBEHAVE_CONSTRUCT, "void f(const string &in)", asFUNCTIONPR([](const std::string &fileName, CKPathSplitter *self) { new(self) CKPathSplitter((char *)fileName.c_str()); }, (const std::string &, CKPathSplitter *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    // Destructor
     r = engine->RegisterObjectBehaviour("CKPathSplitter", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPathSplitter *self) { self->~CKPathSplitter(); }, (CKPathSplitter *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    // Methods
     r = engine->RegisterObjectMethod("CKPathSplitter", "string GetDrive() const", asMETHOD(CKPathSplitter, GetDrive), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKPathSplitter", "string GetDir() const", asMETHOD(CKPathSplitter, GetDir), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKPathSplitter", "string GetName() const", asMETHOD(CKPathSplitter, GetName), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKPathSplitter", "string GetExtension() const", asMETHOD(CKPathSplitter, GetExtension), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKPathMaker
+
+static void RegisterCKPathMaker(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectBehaviour("CKPathMaker", asBEHAVE_CONSTRUCT, "void f(const string &in, const string &in, const string &in, const string &in)",
+        asFUNCTIONPR([](const std::string &Drive, const std::string &Directory, const std::string &Fname, const std::string &Extension, CKPathMaker *self) {
+            new(self) CKPathMaker((char *)Drive.c_str(), (char *)Directory.c_str(), (char *)Fname.c_str(), (char *)Extension.c_str());
+        }, (const std::string &, const std::string &, const std::string &, const std::string &, CKPathMaker *), void),
+        asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKPathMaker", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPathMaker *self) { self->~CKPathMaker(); }, (CKPathMaker *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKPathMaker", "string GetFileName() const", asMETHOD(CKPathMaker, GetFileName), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKFileExtension
+
+static void RegisterCKFileExtension(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectBehaviour("CKFileExtension", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKFileExtension *self) { new(self) CKFileExtension(); }, (CKFileExtension *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKFileExtension", asBEHAVE_CONSTRUCT, "void f(const string &in)", asFUNCTIONPR([](const std::string &s, CKFileExtension *self) { new(self) CKFileExtension((char *)s.c_str()); }, (const std::string &, CKFileExtension *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKFileExtension", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKFileExtension *self) { self->~CKFileExtension(); }, (CKFileExtension *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKFileExtension", "string opImplConv() const", asFUNCTIONPR([](CKFileExtension *self) { return std::string(*self); }, (CKFileExtension *), std::string), asCALL_CDECL_OBJLAST); assert(r >= 0);
 }
 
 // CKDirectoryParser
@@ -984,7 +1255,7 @@ static void RegisterCKDirectoryParser(asIScriptEngine *engine) {
 
     // Methods
     r = engine->RegisterObjectMethod("CKDirectoryParser", "string GetNextFile()", asFUNCTION(CKDirectoryParserGetNextFile), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKDirectoryParser", "void Reset(const string &in = '', const string &in = '', bool = false)", asFUNCTION(CKDirectoryParserReset), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDirectoryParser", "void Reset(const string &in = \"\", const string &in = \"\", bool = false)", asFUNCTION(CKDirectoryParserReset), asCALL_CDECL_OBJLAST); assert(r >= 0);
 }
 
 // VxWindowFunctions
@@ -2026,12 +2297,22 @@ void RegisterVxMath(asIScriptEngine *engine) {
 
     RegisterCKRECT(engine);
     RegisterCKPOINT(engine);
+    RegisterVxUV(engine);
+    RegisterVxDisplayMode(engine);
+    RegisterVxDrawPrimitiveData(engine);
+    RegisterVxTransformData(engine);
+    RegisterVxDirectXData(engine);
+    RegisterVxSpriteRenderOptions(engine);
+    RegisterVx2DCapsDesc(engine);
+    RegisterVx3DCapsDesc(engine);
 
     RegisterVxMutex(engine);
     RegisterVxTimeProfiler(engine);
     RegisterVxSharedLibrary(engine);
     RegisterVxMemoryMappedFile(engine);
     RegisterCKPathSplitter(engine);
+    RegisterCKPathMaker(engine);
+    RegisterCKFileExtension(engine);
     RegisterCKDirectoryParser(engine);
     RegisterVxWindowFunctions(engine);
 
