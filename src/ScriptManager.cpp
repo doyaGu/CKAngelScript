@@ -3,8 +3,6 @@
 #include "CKPathManager.h"
 
 #include "ScriptFormat.h"
-#include "ScriptXString.h"
-#include "ScriptXBitArray.h"
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
 
@@ -405,8 +403,6 @@ void ScriptManager::RegisterStdAddons(asIScriptEngine *engine) {
 void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
-    RegisterXString(m_ScriptEngine);
-    RegisterXBitArray(m_ScriptEngine);
     RegisterVxMath(m_ScriptEngine);
     RegisterCK2(m_ScriptEngine);
 }

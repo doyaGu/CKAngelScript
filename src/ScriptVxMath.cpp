@@ -9,6 +9,9 @@
 
 #include "add_on/scriptarray/scriptarray.h"
 
+#include "ScriptXString.h"
+#include "ScriptXBitArray.h"
+
 static float g_EPSILON = EPSILON;
 static float g_PI = PI;
 static float g_HALFPI = HALFPI;
@@ -1987,6 +1990,9 @@ void RegisterVxMath(asIScriptEngine *engine) {
     RegisterVxMathObjectTypes(engine);
     RegisterVxMathGlobalVariables(engine);
     RegisterVxMathGlobalFunctions(engine);
+
+    RegisterXString(engine);
+    RegisterXBitArray(engine);
 
     RegisterVxMutex(engine);
     RegisterVxTimeProfiler(engine);
