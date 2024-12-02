@@ -1,5 +1,6 @@
 #include "ScriptXString.h"
 
+#include <cassert>
 #include <string>
 #include <unordered_map>
 
@@ -190,8 +191,6 @@ static char *XStringCharAt(const XWORD i, XString &self) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
         ctx->SetException("Out of range");
-
-        // Return a null pointer
         return nullptr;
     }
 
@@ -207,8 +206,6 @@ static XString StringCastToXString(const std::string &str) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
         ctx->SetException("Oversized string");
-
-        // Return a null pointer
         return {};
     }
 
@@ -259,8 +256,8 @@ void RegisterXString(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("XString", "uint8 &opIndex(uint16)", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "const uint8 &opIndex(uint16) const", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("XString", "string opImplCast()", asFUNCTION(XStringCastToString), asCALL_CDECL_OBJLAST); assert( r >= 0 );
-    r = engine->RegisterObjectMethod("string", "XString opImplCast()", asFUNCTION(StringCastToXString), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("XString", "string opImplConv() const", asFUNCTION(XStringCastToString), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("string", "XString opImplConv() const", asFUNCTION(StringCastToXString), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("XString", "bool Empty() const", asMETHODPR(XString, Empty, () const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "uint16 Length() const", asMETHODPR(XString, Length, () const, XWORD), asCALL_THISCALL); assert(r >= 0);
