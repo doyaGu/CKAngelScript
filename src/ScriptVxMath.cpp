@@ -709,35 +709,35 @@ static void RegisterVxMathObjectTypes(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectType("CKDirectoryParser", sizeof(CKDirectoryParser), asOBJ_VALUE | asGetTypeTraits<CKDirectoryParser>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxVector", sizeof(VxVector), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxVector>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxVector", sizeof(VxVector), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxVector>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxVector4", sizeof(VxVector4), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxVector4>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxVector4", sizeof(VxVector4), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxVector4>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxBbox", sizeof(VxBbox), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxBbox>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxBbox", sizeof(VxBbox), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxBbox>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("VxCompressedVector", sizeof(VxCompressedVector), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxCompressedVector>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxCompressedVectorOld", sizeof(VxCompressedVectorOld), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxCompressedVectorOld>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxCompressedVectorOld", sizeof(VxCompressedVectorOld), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<VxCompressedVectorOld>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("Vx2DVector", sizeof(Vx2DVector), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<Vx2DVector>()); assert(r >= 0);
+    r = engine->RegisterObjectType("Vx2DVector", sizeof(Vx2DVector), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<Vx2DVector>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxMatrix", sizeof(VxMatrix), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxMatrix>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxMatrix", sizeof(VxMatrix), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxMatrix>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxQuaternion", sizeof(VxQuaternion), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxQuaternion>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxQuaternion", sizeof(VxQuaternion), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxQuaternion>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxRect", sizeof(VxRect), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxRect>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxRect", sizeof(VxRect), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxRect>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxOBB", sizeof(VxOBB), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxOBB>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxOBB", sizeof(VxOBB), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxOBB>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxRay", sizeof(VxRay), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxRay>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxRay", sizeof(VxRay), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxRay>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxSphere", sizeof(VxSphere), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxSphere>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxSphere", sizeof(VxSphere), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxSphere>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxPlane", sizeof(VxPlane), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxPlane>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxPlane", sizeof(VxPlane), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxPlane>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxFrustum", sizeof(VxFrustum), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxFrustum>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxFrustum", sizeof(VxFrustum), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxFrustum>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("VxColor", sizeof(VxColor), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxColor>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxColor", sizeof(VxColor), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxColor>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("VxImageDescEx", sizeof(VxImageDescEx), asOBJ_VALUE | asGetTypeTraits<VxImageDescEx>()); assert(r >= 0);
 }
