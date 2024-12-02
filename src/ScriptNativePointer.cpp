@@ -166,33 +166,33 @@ void RegisterNativePointer(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("NativePointer", sizeof(NativePointer), asOBJ_VALUE | asGetTypeTraits<NativePointer>()); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](NativePointer *self) { new(self) NativePointer(); }, (NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(uintptr_t)", asFUNCTIONPR([](uintptr_t ptr, NativePointer *self) { new(self) NativePointer(ptr); }, (uintptr_t, NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(intptr_t)", asFUNCTIONPR([](intptr_t ptr, NativePointer *self) { new(self) NativePointer(ptr); }, (intptr_t, NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(const NativePointer &in)", asFUNCTIONPR([](const NativePointer &other, NativePointer *self) { new(self) NativePointer(other); }, (const NativePointer &, NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(uintptr_t ptr)", asFUNCTIONPR([](uintptr_t ptr, NativePointer *self) { new(self) NativePointer(ptr); }, (uintptr_t, NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(intptr_t ptr)", asFUNCTIONPR([](intptr_t ptr, NativePointer *self) { new(self) NativePointer(ptr); }, (intptr_t, NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(const NativePointer &in other)", asFUNCTIONPR([](const NativePointer &other, NativePointer *self) { new(self) NativePointer(other); }, (const NativePointer &, NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](NativePointer *self) { self->~NativePointer(); }, (NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r= engine->RegisterObjectMethod("NativePointer", "NativePointer &opAssign(uintptr_t)", asMETHODPR(NativePointer, operator=, (uintptr_t), NativePointer &), asCALL_THISCALL); assert(r >= 0);
-    r= engine->RegisterObjectMethod("NativePointer", "NativePointer &opAssign(intptr_t)", asMETHODPR(NativePointer, operator=, (intptr_t), NativePointer &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAssign(const NativePointer &in)", asMETHODPR(NativePointer, operator=, (const NativePointer &), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r= engine->RegisterObjectMethod("NativePointer", "NativePointer &opAssign(uintptr_t ptr)", asMETHODPR(NativePointer, operator=, (uintptr_t), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r= engine->RegisterObjectMethod("NativePointer", "NativePointer &opAssign(intptr_t ptr)", asMETHODPR(NativePointer, operator=, (intptr_t), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAssign(const NativePointer &in other)", asMETHODPR(NativePointer, operator=, (const NativePointer &), NativePointer &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativePointer", "bool opEquals(const NativePointer &in) const", asMETHODPR(NativePointer, operator==, (const NativePointer &) const, bool), asCALL_THISCALL); assert(r >= 0);
-   r = engine->RegisterObjectMethod("NativePointer", "int opCmp(const NativePointer &in) const", asMETHODPR(NativePointer, Compare, (const NativePointer &) const, int), asCALL_THISCALL); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("NativePointer", "bool opEquals(const NativePointer &in other) const", asMETHODPR(NativePointer, operator==, (const NativePointer &) const, bool), asCALL_THISCALL); assert(r >= 0);
+   r = engine->RegisterObjectMethod("NativePointer", "int opCmp(const NativePointer &in other) const", asMETHODPR(NativePointer, Compare, (const NativePointer &) const, int), asCALL_THISCALL); assert( r >= 0 );
 
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAddAssign(int)", asMETHODPR(NativePointer, operator+=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opSubAssign(int)", asMETHODPR(NativePointer, operator-=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAndAssign(int)", asMETHODPR(NativePointer, operator&=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opOrAssign(int)", asMETHODPR(NativePointer, operator|=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opXorAssign(int)", asMETHODPR(NativePointer, operator^=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opShlAssign(int)", asMETHODPR(NativePointer, operator<<=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opShrAssign(int)", asMETHODPR(NativePointer, operator>>=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAddAssign(int rhs)", asMETHODPR(NativePointer, operator+=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opSubAssign(int rhs)", asMETHODPR(NativePointer, operator-=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAndAssign(int rhs)", asMETHODPR(NativePointer, operator&=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opOrAssign(int rhs)", asMETHODPR(NativePointer, operator|=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opXorAssign(int rhs)", asMETHODPR(NativePointer, operator^=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opShlAssign(int rhs)", asMETHODPR(NativePointer, operator<<=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opShrAssign(int rhs)", asMETHODPR(NativePointer, operator>>=, (int), NativePointer &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAdd(int) const", asMETHODPR(NativePointer, operator+, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opSub(int) const", asMETHODPR(NativePointer, operator-, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAnd(int) const", asMETHODPR(NativePointer, operator&, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opOr(int) const", asMETHODPR(NativePointer, operator|, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opXor(int) const", asMETHODPR(NativePointer, operator^, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opShl(int) const", asMETHODPR(NativePointer, operator<<, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opShr(int) const", asMETHODPR(NativePointer, operator>>, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAdd(int rhs) const", asMETHODPR(NativePointer, operator+, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opSub(int rhs) const", asMETHODPR(NativePointer, operator-, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAnd(int rhs) const", asMETHODPR(NativePointer, operator&, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opOr(int rhs) const", asMETHODPR(NativePointer, operator|, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opXor(int rhs) const", asMETHODPR(NativePointer, operator^, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opShl(int rhs) const", asMETHODPR(NativePointer, operator<<, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opShr(int rhs) const", asMETHODPR(NativePointer, operator>>, (int) const, NativePointer), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("NativePointer", "NativePointer opNeg() const", asFUNCTIONPR([](const NativePointer &v) -> NativePointer { return -v; }, (const NativePointer &), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("NativePointer", "NativePointer opCom() const", asFUNCTIONPR([](const NativePointer &v) -> NativePointer { return ~v; }, (const NativePointer &), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -203,34 +203,34 @@ void RegisterNativePointer(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("NativePointer", "string ToString() const", asMETHODPR(NativePointer, ToString, () const, std::string), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("NativePointer", "NativePointer ReadPointer() const", asMETHODPR(NativePointer, ReadPointer, () const, NativePointer), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "void WritePointer(const NativePointer &in)", asMETHODPR(NativePointer, WritePointer, (const NativePointer &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "void WritePointer(const NativePointer &in ptr)", asMETHODPR(NativePointer, WritePointer, (const NativePointer &), void), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("NativePointer", "uint Write(?&in)", asFUNCTION(NativePointerWriteGeneric), asCALL_GENERIC); assert(r >= 0);
     r = engine->RegisterObjectMethod("NativePointer", "uint Read(?&out)", asFUNCTION(NativePointerReadGeneric), asCALL_GENERIC); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteInt(int)", asMETHODPR(NativePointer, WriteInt, (int), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteUInt(uint)", asMETHODPR(NativePointer, WriteUInt, (unsigned int), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteFloat(float)", asMETHODPR(NativePointer, WriteFloat, (float), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteDouble(double)", asMETHODPR(NativePointer, WriteDouble, (double), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteShort(int16)", asMETHODPR(NativePointer, WriteShort, (short), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteChar(int8)", asMETHODPR(NativePointer, WriteChar, (char), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteUChar(uint8)", asMETHODPR(NativePointer, WriteUChar, (unsigned char), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteLong(int64)", asMETHODPR(NativePointer, WriteLong, (long), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteULong(uint64)", asMETHODPR(NativePointer, WriteULong, (unsigned long), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteString(const string &in)", asMETHODPR(NativePointer, WriteString, (const std::string &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteInt(int value)", asMETHODPR(NativePointer, WriteInt, (int), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteUInt(uint value)", asMETHODPR(NativePointer, WriteUInt, (unsigned int), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteFloat(float value)", asMETHODPR(NativePointer, WriteFloat, (float), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteDouble(double value)", asMETHODPR(NativePointer, WriteDouble, (double), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteShort(int16 value)", asMETHODPR(NativePointer, WriteShort, (short), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteChar(int8 value)", asMETHODPR(NativePointer, WriteChar, (char), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteUChar(uint8 value)", asMETHODPR(NativePointer, WriteUChar, (unsigned char), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteLong(int64 value)", asMETHODPR(NativePointer, WriteLong, (long), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteULong(uint64 value)", asMETHODPR(NativePointer, WriteULong, (unsigned long), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint WriteString(const string &in value)", asMETHODPR(NativePointer, WriteString, (const std::string &), size_t), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadInt(int &out)", asMETHODPR(NativePointer, ReadInt, (int &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadUInt(uint &out)", asMETHODPR(NativePointer, ReadUInt, (unsigned int &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadFloat(float &out)", asMETHODPR(NativePointer, ReadFloat, (float &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadDouble(double &out)", asMETHODPR(NativePointer, ReadDouble, (double &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadShort(int16 &out)", asMETHODPR(NativePointer, ReadShort, (short &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadChar(int8 &out)", asMETHODPR(NativePointer, ReadChar, (char &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadUChar(uint8 &out)", asMETHODPR(NativePointer, ReadUChar, (unsigned char &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadLong(int64 &out)", asMETHODPR(NativePointer, ReadLong, (long &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadULong(uint64 &out)", asMETHODPR(NativePointer, ReadULong, (unsigned long &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadString(string &out)", asMETHODPR(NativePointer, ReadString, (std::string &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadInt(int &out value)", asMETHODPR(NativePointer, ReadInt, (int &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadUInt(uint &out value)", asMETHODPR(NativePointer, ReadUInt, (unsigned int &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadFloat(float &out value)", asMETHODPR(NativePointer, ReadFloat, (float &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadDouble(double &out value)", asMETHODPR(NativePointer, ReadDouble, (double &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadShort(int16 &out value)", asMETHODPR(NativePointer, ReadShort, (short &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadChar(int8 &out value)", asMETHODPR(NativePointer, ReadChar, (char &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadUChar(uint8 &out value)", asMETHODPR(NativePointer, ReadUChar, (unsigned char &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadLong(int64 &out value)", asMETHODPR(NativePointer, ReadLong, (long &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadULong(uint64 &out value)", asMETHODPR(NativePointer, ReadULong, (unsigned long &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "uint ReadString(string &out value)", asMETHODPR(NativePointer, ReadString, (std::string &), size_t), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativePointer", "bool Fill(int, uint)", asMETHODPR(NativePointer, Fill, (int, size_t), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativePointer", "bool Fill(int value, uint size)", asMETHODPR(NativePointer, Fill, (int, size_t), bool), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("NativePointer", "bool IsNull() const", asMETHODPR(NativePointer, IsNull, () const, bool), asCALL_THISCALL); assert(r >= 0);
 }
