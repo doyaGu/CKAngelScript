@@ -1492,8 +1492,8 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opNeg() const", asMETHODPR(VxQuaternion, operator-, () const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "float& opIndex(int)", asMETHODPR(VxQuaternion, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxQuaternion", "const float& opIndex(int) const", asMETHODPR(VxQuaternion, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "float &opIndex(int)", asMETHODPR(VxQuaternion, operator[], (int), float&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "const float &opIndex(int) const", asMETHODPR(VxQuaternion, operator[], (int) const, const float&), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxQuaternion", "void FromMatrix(const VxMatrix &in)", asMETHOD(VxQuaternion, FromMatrix), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxQuaternion", "void ToMatrix(VxMatrix &out) const", asMETHOD(VxQuaternion, ToMatrix), asCALL_THISCALL); assert(r >= 0);
