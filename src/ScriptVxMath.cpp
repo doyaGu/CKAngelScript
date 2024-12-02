@@ -1993,6 +1993,8 @@ static void RegisterVxImageDescEx(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("VxImageDescEx", "uint AlphaMask", offsetof(VxImageDescEx, AlphaMask)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxImageDescEx", "int16 BytesPerColorEntry", offsetof(VxImageDescEx, BytesPerColorEntry)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxImageDescEx", "int16 ColorMapEntries", offsetof(VxImageDescEx, ColorMapEntries)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxImageDescEx", "NativePointer ColorMap", offsetof(VxImageDescEx, ColorMap)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxImageDescEx", "NativePointer Image", offsetof(VxImageDescEx, Image)); assert(r >= 0);
 
     // Constructor
     r = engine->RegisterObjectBehaviour("VxImageDescEx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxImageDescEx *self) { new(self) VxImageDescEx(); }, (VxImageDescEx *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
