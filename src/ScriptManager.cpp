@@ -45,7 +45,7 @@ static int PragmaCallback(const std::string &pragmaText, CScriptBuilder &builder
     return -1;
 }
 
-ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, "AngelScript Manager") {
+ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
     context->RegisterNewManager(this);
     int r = Init();
     assert(r >= 0);
@@ -56,7 +56,7 @@ ScriptManager::~ScriptManager() {
 }
 
 CKStateChunk *ScriptManager::SaveData(CKFile *SavedFile) {
-    return CK_OK;
+    return nullptr;
 }
 
 CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
