@@ -808,13 +808,13 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void InterpolateVectorArray(NativePointer res, NativePointer array1, NativePointer array2, float factor, int count, uint strideRes, uint strideIn)", asFUNCTION(InterpolateVectorArray), asCALL_CDECL); assert(r >= 0);
 
     // Box and transformation functions
-    r = engine->RegisterGlobalFunction("bool VxTransformBox2D(const VxMatrix &in, const VxBbox &in, VxRect &out, VxRect &out, VXCLIP_FLAGS &inout, VXCLIP_FLAGS &inout)", asFUNCTION(VxTransformBox2D), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxTransformBox2D(const VxMatrix &in, const VxBbox &in, VxRect &out, VxRect &out, VXCLIP_FLAGS &out, VXCLIP_FLAGS &out)", asFUNCTION(VxTransformBox2D), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxProjectBoxZExtents(const VxMatrix &in, const VxBbox &in, float &out, float &out)", asFUNCTION(VxProjectBoxZExtents), asCALL_CDECL); assert(r >= 0);
 
     // Structure copying functions
     r = engine->RegisterGlobalFunction("bool VxFillStructure(int count, NativePointer dst, uint stride, uint sizeSrc, NativePointer src)", asFUNCTION(VxFillStructure), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool VxCopyStructure(int count, NativePointer dst, uint outStride, uint sizeSrc, NativePointer src, uint inStride)", asFUNCTION(VxCopyStructure), asCALL_CDECL); assert(r >= 0);
-    // r = engine->RegisterGlobalFunction("bool VxIndexedCopy(const VxStridedData &Dst, const VxStridedData &Src, uint SizeSrc, int *Indices, int IndexCount)", asFUNCTION(VxIndexedCopy), asCALL_CDECL); assert(r >= 0);
+    // r = engine->RegisterGlobalFunction("bool VxIndexedCopy(const VxStridedData &dst, const VxStridedData &src, uint sizeSrc, NativePointer indices, int indexCount)", asFUNCTION(VxIndexedCopy), asCALL_CDECL); assert(r >= 0);
 
     // Graphic utilities (Blitting)
     r = engine->RegisterGlobalFunction("void VxDoBlit(const VxImageDescEx &in src, const VxImageDescEx &in dst)", asFUNCTION(VxDoBlit), asCALL_CDECL); assert(r >= 0);
@@ -1314,8 +1314,8 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("WIN_HANDLE VxWindowFromPoint(CKPOINT &in pt)", asFUNCTION(VxWindowFromPoint), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool VxGetClientRect(WIN_HANDLE win, CKRECT &out rect)", asFUNCTION(VxGetClientRect), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool VxGetWindowRect(WIN_HANDLE win, CKRECT &out rect)", asFUNCTION(VxGetWindowRect), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxScreenToClient(WIN_HANDLE win, CKPOINT &inout pt)", asFUNCTION(VxScreenToClient), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxClientToScreen(WIN_HANDLE win, CKPOINT &inout pt)", asFUNCTION(VxClientToScreen), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxScreenToClient(WIN_HANDLE win, CKPOINT &out pt)", asFUNCTION(VxScreenToClient), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxClientToScreen(WIN_HANDLE win, CKPOINT &out pt)", asFUNCTION(VxClientToScreen), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("WIN_HANDLE VxSetParent(WIN_HANDLE child, WIN_HANDLE parent)", asFUNCTION(VxSetParent), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("WIN_HANDLE VxGetParent(WIN_HANDLE win)", asFUNCTION(VxGetParent), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool VxMoveWindow(WIN_HANDLE win, int x, int y, int width, int height, bool repaint)", asFUNCTION(VxMoveWindow), asCALL_CDECL); assert(r >= 0);
