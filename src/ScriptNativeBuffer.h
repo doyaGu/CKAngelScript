@@ -62,6 +62,7 @@ public:
     bool Skip(size_t offset);
     void Reset() { m_CursorPos = 0; }
 
+    char *Data() const { return m_Buffer; }
     size_t Size() const { return m_Size; }
     char *Cursor() const { return &m_Buffer[m_CursorPos]; }
     size_t CursorPos() const { return m_CursorPos; }
