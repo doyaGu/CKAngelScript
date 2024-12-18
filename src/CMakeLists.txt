@@ -5,6 +5,7 @@ set(CKAS_HEADERS
         ScriptNativeBuffer.h
         ScriptXString.h
         ScriptXArray.h
+        ScriptXHashTable.h
         ScriptXBitArray.h
         ScriptVxMath.h
         ScriptCKTypes.h
