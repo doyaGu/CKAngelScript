@@ -10,9 +10,16 @@
 #include "CKMessageManager.h"
 #include "CKPathManager.h"
 #include "CKRenderContext.h"
+#include "CKCollisionManager.h"
 #include "CK2dCurvePoint.h"
 #include "CK2dCurve.h"
+#include "CKBodyPart.h"
 #include "CKPluginManager.h"
+#include "CKDataArray.h"
+#include "CKFloorManager.h"
+
+#include "ScriptXArray.h"
+#include "ScriptXHashTable.h"
 
 void RegisterCKTypedefs(asIScriptEngine *engine) {
     int r = 0;
@@ -47,7 +54,38 @@ void RegisterCKTypedefs(asIScriptEngine *engine) {
 void RegisterCKFuncdefs(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterFuncdef("VX_EFFECTCALLBACK_RETVAL CK_EFFECTCALLBACK(CKRenderContext @, CKMaterial @, int, any @)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("VX_EFFECTCALLBACK_RETVAL CK_EFFECTCALLBACK(CKRenderContext@ dev, CKMaterial@ mat, int stage)"); assert(r >= 0);
+
+    r = engine->RegisterFuncdef("CKERROR CK_INITINSTANCEFCT(CKContext@ context)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("CKERROR CK_EXITINSTANCEFCT(CKContext@ context)"); assert(r >= 0);
+
+    r = engine->RegisterFuncdef("int CKBEHAVIORFCT(const CKBehaviorContext &in context)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("CKERROR CKBEHAVIORCALLBACKFCT(const CKBehaviorContext &in context)"); assert(r >= 0);
+
+    r = engine->RegisterFuncdef("void CK_PARAMETEROPERATION(CKContext@ context, CKParameterOut@ res, CKParameterIn@ p1, CKParameterIn@ p2)"); assert(r >= 0);
+
+    r = engine->RegisterFuncdef("void CKDLL_OBJECTDECLARATIONFUNCTION(XObjectDeclarationArray &out declArray)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("CKERROR CKDLL_CREATEPROTOFUNCTION(CKBehaviorPrototype@ &out prototype)"); assert(r >= 0);
+
+    r = engine->RegisterFuncdef("void CK_RENDERCALLBACK(CKRenderContext@ dev)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("CKBOOL CK_RENDEROBJECT_CALLBACK(CKRenderContext@ dev, CKRenderObject@ entity)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("void CK_MESHRENDERCALLBACK(CKRenderContext@ dev, CK3dEntity@ mov, CKMesh@ object)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("void CK_SUBMESHRENDERCALLBACK(CKRenderContext@ dev, CK3dEntity@ mov, CKMesh@ object, CKMaterial@ mat)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("int CK_MATERIALCALLBACK(CKRenderContext@ dev, CKMaterial@ mat)"); assert(r >= 0);
+
+    r = engine->RegisterFuncdef("CKERROR CKUICALLBACKFCT(CKUICallbackStruct &in param)"); assert(r >= 0);
+
+    // r = engine->RegisterFuncdef("CK_LOADMODE CK_USERLOADCALLBACK(CK_CLASSID cid, string oldName, string newName, CKObject@ &out newObj)"); assert(r >= 0);
+    // r = engine->RegisterFuncdef("CK_LOADMODE CK_LOADRENAMECALLBACK(CK_CLASSID cid, string oldName, string newName, CKObject@ &out newObj)"); assert(r >= 0);
+
+    r = engine->RegisterFuncdef("CKERROR CK_PARAMETERCREATEDEFAULTFUNCTION(CKParameter@ param)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("void CK_PARAMETERDELETEFUNCTION(CKParameter@ param)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("void CK_PARAMETERCHECKFUNCTION(CKParameter@ param)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("void CK_PARAMETERREMAPFUNCTION(CKParameter@ param, CKDependenciesContext@ context)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("void CK_PARAMETERCOPYFUNCTION(CKParameter@ srcParam, CKParameter@ destParam)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("void CK_PARAMETERSAVELOADFUNCTION(CKParameter@ param, CKStateChunk@ &out chunk, bool load)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("int CK_PARAMETERSTRINGFUNCTION(CKParameter@ param, string valueString, bool readFromString)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("WIN_HANDLE CK_PARAMETERUICREATORFUNCTION(CKParameter@ param, WIN_HANDLE parentWindow, CKRECT &in rect)"); assert(r >= 0);
 }
 
 void RegisterCKObjectTypes(asIScriptEngine *engine) {
@@ -59,6 +97,10 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("VxIntersectionDesc", sizeof(VxIntersectionDesc), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxIntersectionDesc>()); assert(r >= 0);
     r = engine->RegisterObjectType("VxStats", sizeof(VxStats), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxStats>()); assert(r >= 0);
     r = engine->RegisterObjectType("CKGUID", sizeof(CKGUID), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKGUID>()); assert(r >= 0);
+    r = engine->RegisterObjectType("VxEffectDescription", sizeof(VxEffectDescription), asOBJ_VALUE | asGetTypeTraits<VxEffectDescription>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKBehaviorContext", sizeof(CKBehaviorContext), asOBJ_VALUE | asGetTypeTraits<CKBehaviorContext>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKUICallbackStruct", sizeof(CKUICallbackStruct), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKUICallbackStruct>()); assert(r >= 0);
+
     r = engine->RegisterObjectType("CKClassDesc", sizeof(CKClassDesc), asOBJ_VALUE | asGetTypeTraits<CKClassDesc>()); assert(r >= 0);
     r = engine->RegisterObjectType("CKPluginInfo", sizeof(CKPluginInfo), asOBJ_VALUE | asGetTypeTraits<CKPluginInfo>()); assert(r >= 0);
     r = engine->RegisterObjectType("CKEnumStruct", sizeof(CKEnumStruct), asOBJ_VALUE | asGetTypeTraits<CKEnumStruct>()); assert(r >= 0);
@@ -101,16 +143,28 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("CKMovieInfo", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKBitmapData", sizeof(CKBitmapData), asOBJ_VALUE | asGetTypeTraits<CKBitmapData>()); assert(r >= 0);
 
+    r = engine->RegisterObjectType("CKVertexBuffer", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+
+    r = engine->RegisterObjectType("CKFloorPoint", sizeof(CKFloorPoint), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKFloorPoint>()); assert(r >= 0);
+
     r = engine->RegisterObjectType("SoundMinion", sizeof(SoundMinion), asOBJ_VALUE | asGetTypeTraits<SoundMinion>()); assert(r >= 0);
     r = engine->RegisterObjectType("CKWaveSoundSettings", sizeof(CKWaveSoundSettings), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKWaveSoundSettings>()); assert(r >= 0);
     r = engine->RegisterObjectType("CKWaveSound3DSettings", sizeof(CKWaveSound3DSettings), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKWaveSound3DSettings>()); assert(r >= 0);
     r = engine->RegisterObjectType("CKListenerSettings", sizeof(CKListenerSettings), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKListenerSettings>()); assert(r >= 0);
     r = engine->RegisterObjectType("CKWaveFormat", sizeof(CKWaveFormat), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKWaveFormat>()); assert(r >= 0);
 
+    r = engine->RegisterObjectType("ImpactDesc", sizeof(ImpactDesc), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<ImpactDesc>()); assert(r >= 0);
+
     r = engine->RegisterObjectType("CKPICKRESULT", sizeof(CKPICKRESULT), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKPICKRESULT>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("CK2dCurvePoint", sizeof(CK2dCurvePoint), asOBJ_VALUE | asGetTypeTraits<CK2dCurvePoint>()); assert(r >= 0);
     r = engine->RegisterObjectType("CK2dCurve", sizeof(CK2dCurve), asOBJ_VALUE | asGetTypeTraits<CK2dCurve>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("CKSkinBoneData", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+    r = engine->RegisterObjectType("CKSkinVertexData", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+    r = engine->RegisterObjectType("CKSkin", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+
+    r = engine->RegisterObjectType("CKIkJoint", sizeof(CKIkJoint), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKIkJoint>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("CKFileManagerData", sizeof(CKFileManagerData), asOBJ_VALUE | asGetTypeTraits<CKFileManagerData>()); assert(r >= 0);
     r = engine->RegisterObjectType("CKFilePluginDependencies", sizeof(CKFilePluginDependencies), asOBJ_VALUE | asGetTypeTraits<CKFilePluginDependencies>()); assert(r >= 0);
@@ -198,3 +252,30 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("CKCurve", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKGrid", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
 }
+
+void RegisterCKContainers(asIScriptEngine *engine) {
+    RegisterXArray<XIntArray, int>(engine, "XIntArray", "int");
+    RegisterXArray<XArray<CKGUID>, CKGUID>(engine, "XGUIDArray", "CKGUID");
+    RegisterXArray<XObjectDeclarationArray, CKObjectDeclaration *>(engine, "XObjectDeclarationArray", "CKObjectDeclaration");
+
+    RegisterXClassArray<XClassInfoArray, CKClassDesc>(engine, "XClassInfoArray", "CKClassDesc");
+    RegisterXArray<XManagerArray, CKBaseManager *>(engine, "XManagerArray", "CKBaseManager@");
+
+    RegisterXSArray<XSArray<CKDWORD>, CKDWORD>(engine, "XDwordArray", "CKDWORD");
+    RegisterXSArray<CKDataRow, CKDWORD>(engine, "CKDataRow", "CKDWORD");
+    RegisterXSArray<XSArray<CK_CLASSID>, CK_CLASSID>(engine, "XClassIDArray", "CK_CLASSID");
+    RegisterXSArray<XSArray<VxImageDescEx>, VxImageDescEx>(engine, "XImageArray", "VxImageDescEx");
+
+    RegisterXClassArray<XClassArray<XString>, XString>(engine, "XStringArray", "XString");
+
+    RegisterXClassArray<CKPATHENTRYVECTOR, XString>(engine, "CKPATHENTRYVECTOR", "XString");
+    RegisterXClassArray<CKPATHCATEGORYVECTOR, XString>(engine, "CKPATHCATEGORYVECTOR", "CKPATHCATEGORY");
+
+    RegisterXHashTable<XManagerHashTable, CKBaseManager *, CKGUID>(engine, "XManagerHashTable", "CKGUID", "CKBaseManager@");
+    RegisterXHashTable<XObjDeclHashTable, CKObjectDeclaration *, CKGUID>(engine, "XObjDeclHashTable", "CKGUID", "CKObjectDeclaration@");
+    RegisterXHashTable<XFileObjectsTable, int, CK_ID>(engine, "XFileObjectsTable", "CK_ID", "int");
+
+    RegisterXNHashTable<XHashID, CK_ID, CK_ID>(engine, "XHashID", "CK_ID", "CK_ID");
+    RegisterXNHashTable<XHashGuidToType, int, CKGUID>(engine, "XHashGuidToType", "CKGUID", "int");
+}
+

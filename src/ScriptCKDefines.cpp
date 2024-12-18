@@ -18,12 +18,18 @@
 #include "CKMessageManager.h"
 #include "CKBehaviorPrototype.h"
 #include "CKPathManager.h"
+#include "CKRenderManager.h"
+#include "CKFloorManager.h"
 #include "CKSoundManager.h"
+#include "CKCollisionManager.h"
 #include "CKRenderContext.h"
 #include "CK2dCurvePoint.h"
 #include "CK2dCurve.h"
+#include "CKSkin.h"
+#include "CKBodyPart.h"
 
 #include "ScriptXArray.h"
+#include "ScriptNativeBuffer.h"
 
 static const int g_MAX_USER_PROFILE = MAX_USER_PROFILE;
 
@@ -928,7 +934,7 @@ void RegisterCKGUID(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKGUID", "uint d1", offsetof(CKGUID, d1)); assert(r >= 0);
     r = engine->RegisterObjectProperty("CKGUID", "uint d2", offsetof(CKGUID, d2)); assert(r >= 0);
 
-    r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKGUID *self) { new(self) CKGUID(); }, (CKGUID*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKGUID *self) { new(self) CKGUID(); }, (CKGUID *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_CONSTRUCT, "void f(uint = 0, uint = 0)", asFUNCTIONPR([](CKDWORD gd1, CKDWORD gd2, CKGUID *self) { new(self) CKGUID(gd1, gd2); }, (CKDWORD, CKDWORD, CKGUID*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_CONSTRUCT, "void f(const CKGUID &in)", asFUNCTIONPR([](const CKGUID &guid, CKGUID *self) { new(self) CKGUID(guid); }, (const CKGUID &, CKGUID *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {uint, uint}", asFUNCTIONPR([](CKDWORD *list, CKGUID *self) { new(self) CKGUID(list[0], list[1]); }, (CKDWORD *, CKGUID *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
@@ -939,6 +945,85 @@ void RegisterCKGUID(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKGUID", "int opCmp(const CKGUID &in) const", asFUNCTIONPR([](const CKGUID &lhs, const CKGUID &rhs) -> int { if (lhs == rhs) return 0; else if (lhs < rhs) return -1; else return 1; }, (const CKGUID &, const CKGUID &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
     r = engine->RegisterObjectMethod("CKGUID", "bool IsValid() const", asMETHOD(CKGUID, IsValid), asCALL_THISCALL); assert(r >= 0);
+}
+
+// VxEffectDescription
+
+void RegisterVxEffectDescription(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("VxEffectDescription", "VX_EFFECT EffectIndex", asOFFSET(VxEffectDescription, EffectIndex)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "string Summary", asOFFSET(VxEffectDescription, Summary)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "string Description", asOFFSET(VxEffectDescription, Description)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "string DescImage", asOFFSET(VxEffectDescription, DescImage)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "int MaxTextureCount", asOFFSET(VxEffectDescription, MaxTextureCount)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "int NeededTextureCoordsCount", asOFFSET(VxEffectDescription, NeededTextureCoordsCount)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "string Tex1Description", asOFFSET(VxEffectDescription, Tex1Description)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "string Tex2Description", asOFFSET(VxEffectDescription, Tex2Description)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "string Tex3Description", asOFFSET(VxEffectDescription, Tex3Description)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "NativePointer SetCallback", asOFFSET(VxEffectDescription, SetCallback)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "NativePointer CallbackArg", asOFFSET(VxEffectDescription, CallbackArg)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "CKGUID ParameterType", asOFFSET(VxEffectDescription, ParameterType)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "string ParameterDescription", asOFFSET(VxEffectDescription, ParameterDescription)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VxEffectDescription", "string ParameterDefaultValue", asOFFSET(VxEffectDescription, ParameterDefaultValue)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxEffectDescription", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxEffectDescription *self) { new(self) VxEffectDescription(); }, (VxEffectDescription *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("VxEffectDescription", asBEHAVE_CONSTRUCT, "void f(const VxEffectDescription &in)", asFUNCTIONPR([](const VxEffectDescription &desc, VxEffectDescription *self) { new(self) VxEffectDescription(desc); }, (const VxEffectDescription &, VxEffectDescription *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("VxEffectDescription", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxEffectDescription *self) { self->~VxEffectDescription(); }, (VxEffectDescription *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("VxEffectDescription", "VxEffectDescription &opAssign(const VxEffectDescription &in)", asMETHODPR(VxEffectDescription, operator=, (const VxEffectDescription &), VxEffectDescription &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKBehaviorContext
+
+void RegisterCKBehaviorContext(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKBehavior@ Behavior", asOFFSET(CKBehaviorContext, Behavior)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "float DeltaTime", asOFFSET(CKBehaviorContext, DeltaTime)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKContext@ Context", asOFFSET(CKBehaviorContext, Context)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKLevel@ CurrentLevel", asOFFSET(CKBehaviorContext, CurrentLevel)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKScene@ CurrentScene", asOFFSET(CKBehaviorContext, CurrentScene)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKScene@ PreviousScene", asOFFSET(CKBehaviorContext, PreviousScene)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKRenderContext@ CurrentRenderContext", asOFFSET(CKBehaviorContext, CurrentRenderContext)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKParameterManager@ ParameterManager", asOFFSET(CKBehaviorContext, ParameterManager)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKMessageManager@ MessageManager", asOFFSET(CKBehaviorContext, MessageManager)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKAttributeManager@ AttributeManager", asOFFSET(CKBehaviorContext, AttributeManager)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKTimeManager@ TimeManager", asOFFSET(CKBehaviorContext, TimeManager)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "CKDWORD CallbackMessage", asOFFSET(CKBehaviorContext, CallbackMessage)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBehaviorContext", "NativePointer CallbackArg", asOFFSET(CKBehaviorContext, CallbackArg)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKBehaviorContext", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKBehaviorContext *self) { new(self) CKBehaviorContext(); }, (CKBehaviorContext *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKBehaviorContext", asBEHAVE_CONSTRUCT, "void f(const CKBehaviorContext &in)", asFUNCTIONPR([](const CKBehaviorContext &ctx, CKBehaviorContext *self) { new(self) CKBehaviorContext(ctx); }, (const CKBehaviorContext &, CKBehaviorContext *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKBehaviorContext", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKBehaviorContext *self) { self->~CKBehaviorContext(); }, (CKBehaviorContext *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKBehaviorContext", "CKBehaviorContext &opAssign(const CKBehaviorContext &in)", asMETHODPR(CKBehaviorContext, operator=, (const CKBehaviorContext &), CKBehaviorContext &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKUICallbackStruct
+
+void RegisterCKUICallbackStruct(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKUICallbackStruct", "CKDWORD Reason", asOFFSET(CKUICallbackStruct, Reason)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKUICallbackStruct", "CKDWORD Param3", asOFFSET(CKUICallbackStruct, Param3)); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "uint get_Param1() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->Param1; }, (const CKUICallbackStruct *), CKDWORD), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_Param1(uint value)", asFUNCTIONPR([](CKUICallbackStruct *self, CKDWORD value) { self->Param1 = value; }, (CKUICallbackStruct *, CKDWORD), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "int get_NbObjectsLoaded() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->NbObjetsLoaded; }, (const CKUICallbackStruct *), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_NbObjectsLoaded(int value)", asFUNCTIONPR([](CKUICallbackStruct *self, int value) { self->NbObjetsLoaded = value; }, (CKUICallbackStruct *, int), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "bool get_DoBeep() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->DoBeep; }, (const CKUICallbackStruct *), CKBOOL), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_DoBeep(bool value)", asFUNCTIONPR([](CKUICallbackStruct *self, CKBOOL value) { self->DoBeep = value; }, (CKUICallbackStruct *, CKBOOL), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "uint get_Param2() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->Param2; }, (const CKUICallbackStruct *), CKDWORD), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_Param2(uint value)", asFUNCTIONPR([](CKUICallbackStruct *self, CKDWORD value) { self->Param2 = value; }, (CKUICallbackStruct *, CKDWORD), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "string get_ConsoleString() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->ConsoleString; }, (const CKUICallbackStruct *), CKSTRING), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_ConsoleString(const string &in value)", asFUNCTIONPR([](CKUICallbackStruct *self, CKSTRING value) { self->ConsoleString = value; }, (CKUICallbackStruct *, CKSTRING), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKClassDesc
@@ -1610,6 +1695,46 @@ void RegisterCKBitmapData(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKBitmapData", "bool ReadFromChunk(CKStateChunk@, CKContext@, CKFile@, CKDWORD[5])", asMETHOD(CKBitmapData, ReadFromChunk), asCALL_THISCALL); assert(r >= 0);
 }
 
+// CKVertexBuffer
+
+CKBOOL CKVertexBuffer_Draw(CKVertexBuffer *vb, CKRenderContext *Ctx, VXPRIMITIVETYPE pType, NativeBuffer buffer, CKDWORD startVertex, CKDWORD vertexCount) {
+    return vb->Draw(Ctx, pType, reinterpret_cast<CKWORD *>(buffer.Data()), static_cast<int>(buffer.Size() / sizeof(CKWORD)), startVertex, vertexCount);
+}
+
+void RegisterCKVertexBuffer(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectMethod("CKVertexBuffer", "void Destroy()", asMETHOD(CKVertexBuffer, Destroy), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKVertexBuffer", "CKVB_STATE Check(CKRenderContext@ ctx, uint maxVertexCount, CKRST_DPFLAGS format, bool dynamic = false)", asMETHOD(CKVertexBuffer, Check), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKVertexBuffer", "VxDrawPrimitiveData &Lock(CKRenderContext@ ctx, uint startVertex, uint vertexCount, CKLOCKFLAGS lockFlags = CK_LOCK_DEFAULT)", asMETHOD(CKVertexBuffer, Lock), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKVertexBuffer", "void Unlock(CKRenderContext@ ctx)", asMETHOD(CKVertexBuffer, Unlock), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKVertexBuffer", "bool Draw(CKRenderContext@ ctx, VXPRIMITIVETYPE pType, NativeBuffer indices, uint startVertex, uint vertexCount)", asFUNCTION(CKVertexBuffer_Draw), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+}
+
+// CKFloorPoint
+
+void RegisterCKFloorPoint(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKFloorPoint", "uint m_UpFloor", offsetof(CKFloorPoint, m_UpFloor)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKFloorPoint", "int m_UpFaceIndex", offsetof(CKFloorPoint, m_UpFaceIndex)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKFloorPoint", "VxVector m_UpNormal", offsetof(CKFloorPoint, m_UpNormal)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKFloorPoint", "float m_UpDistance", offsetof(CKFloorPoint, m_UpDistance)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKFloorPoint", "uint m_DownFloor", offsetof(CKFloorPoint, m_DownFloor)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKFloorPoint", "int m_DownFaceIndex", offsetof(CKFloorPoint, m_DownFaceIndex)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKFloorPoint", "VxVector m_DownNormal", offsetof(CKFloorPoint, m_DownNormal)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKFloorPoint", "float m_DownDistance", offsetof(CKFloorPoint, m_DownDistance)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKFloorPoint", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKFloorPoint *self) { new(self) CKFloorPoint(); }, (CKFloorPoint *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKFloorPoint", asBEHAVE_CONSTRUCT, "void f(const CKFloorPoint &in)", asFUNCTIONPR([](const CKFloorPoint &point, CKFloorPoint *self) { new(self) CKFloorPoint(point); }, (const CKFloorPoint &, CKFloorPoint *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKFloorPoint", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKFloorPoint *self) { self->~CKFloorPoint(); }, (CKFloorPoint *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKFloorPoint", "CKFloorPoint &opAssign(const CKFloorPoint &in)", asMETHODPR(CKFloorPoint, operator=, (const CKFloorPoint &), CKFloorPoint &), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKFloorPoint", "void Clear()", asMETHOD(CKFloorPoint, Clear), asCALL_THISCALL); assert(r >= 0);
+}
+
 // SoundMinion
 
 void RegisterSoundMinion(asIScriptEngine *engine) {
@@ -1637,6 +1762,12 @@ void RegisterSoundMinion(asIScriptEngine *engine) {
 void RegisterCKWaveSoundSettings(asIScriptEngine *engine) {
     int r = 0;
 
+    r = engine->RegisterObjectProperty("CKWaveSoundSettings", "float m_Gain", offsetof(CKWaveSoundSettings, m_Gain)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSoundSettings", "float m_Eq", offsetof(CKWaveSoundSettings, m_Eq)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSoundSettings", "float m_Pitch", offsetof(CKWaveSoundSettings, m_Pitch)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSoundSettings", "float m_Priority", offsetof(CKWaveSoundSettings, m_Priority)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSoundSettings", "float m_Pan", offsetof(CKWaveSoundSettings, m_Pan)); assert(r >= 0);
+
     r = engine->RegisterObjectBehaviour("CKWaveSoundSettings", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKWaveSoundSettings *self) { new(self) CKWaveSoundSettings(); }, (CKWaveSoundSettings *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("CKWaveSoundSettings", asBEHAVE_CONSTRUCT, "void f(const CKWaveSoundSettings &in)", asFUNCTIONPR([](const CKWaveSoundSettings &s, CKWaveSoundSettings *self) { new(self) CKWaveSoundSettings(s); }, (const CKWaveSoundSettings &, CKWaveSoundSettings *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
@@ -1649,7 +1780,19 @@ void RegisterCKWaveSoundSettings(asIScriptEngine *engine) {
 
 void RegisterCKWaveSound3DSettings(asIScriptEngine *engine) {
     int r = 0;
-    
+
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "uint16 m_HeadRelative", offsetof(CKWaveSound3DSettings, m_HeadRelative)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "uint16 m_MuteAfterMax", offsetof(CKWaveSound3DSettings, m_MuteAfterMax)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "float m_InAngle", offsetof(CKWaveSound3DSettings, m_InAngle)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "float m_OutAngle", offsetof(CKWaveSound3DSettings, m_OutAngle)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "float m_OutsideGain", offsetof(CKWaveSound3DSettings, m_OutsideGain)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "float m_MinDistance", offsetof(CKWaveSound3DSettings, m_MinDistance)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "float m_MaxDistance", offsetof(CKWaveSound3DSettings, m_MaxDistance)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "VxVector m_Position", offsetof(CKWaveSound3DSettings, m_Position)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "VxVector m_Velocity", offsetof(CKWaveSound3DSettings, m_Velocity)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "VxVector m_OrientationDir", offsetof(CKWaveSound3DSettings, m_OrientationDir)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveSound3DSettings", "VxVector m_OrientationUp", offsetof(CKWaveSound3DSettings, m_OrientationUp)); assert(r >= 0);
+
     r = engine->RegisterObjectBehaviour("CKWaveSound3DSettings", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKWaveSound3DSettings *self) { new(self) CKWaveSound3DSettings(); }, (CKWaveSound3DSettings *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("CKWaveSound3DSettings", asBEHAVE_CONSTRUCT, "void f(const CKWaveSound3DSettings &in)", asFUNCTIONPR([](const CKWaveSound3DSettings &s, CKWaveSound3DSettings *self) { new(self) CKWaveSound3DSettings(s); }, (const CKWaveSound3DSettings &, CKWaveSound3DSettings *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
@@ -1662,6 +1805,13 @@ void RegisterCKWaveSound3DSettings(asIScriptEngine *engine) {
 
 void RegisterCKListenerSettings(asIScriptEngine *engine) {
     int r = 0;
+
+    r = engine->RegisterObjectProperty("CKListenerSettings", "float m_DistanceFactor", offsetof(CKListenerSettings, m_DistanceFactor)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKListenerSettings", "float m_DopplerFactor", offsetof(CKListenerSettings, m_DopplerFactor)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKListenerSettings", "float m_RollOff", offsetof(CKListenerSettings, m_RollOff)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKListenerSettings", "float m_GlobalGain", offsetof(CKListenerSettings, m_GlobalGain)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKListenerSettings", "float m_PriorityBias", offsetof(CKListenerSettings, m_PriorityBias)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKListenerSettings", "uint m_SoftwareSources", offsetof(CKListenerSettings, m_SoftwareSources)); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("CKListenerSettings", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKListenerSettings *self) { new(self) CKListenerSettings(); }, (CKListenerSettings *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("CKListenerSettings", asBEHAVE_CONSTRUCT, "void f(const CKListenerSettings &in)", asFUNCTIONPR([](const CKListenerSettings &s, CKListenerSettings *self) { new(self) CKListenerSettings(s); }, (const CKListenerSettings &, CKListenerSettings *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1676,12 +1826,45 @@ void RegisterCKListenerSettings(asIScriptEngine *engine) {
 void RegisterCKWaveFormat(asIScriptEngine *engine) {
     int r = 0;
 
+    r = engine->RegisterObjectProperty("CKWaveFormat", "uint16 wFormatTag", offsetof(CKWaveFormat, wFormatTag)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveFormat", "uint16 nChannels", offsetof(CKWaveFormat, nChannels)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveFormat", "uint nSamplesPerSec", offsetof(CKWaveFormat, nSamplesPerSec)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveFormat", "uint nAvgBytesPerSec", offsetof(CKWaveFormat, nAvgBytesPerSec)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveFormat", "uint16 nBlockAlign", offsetof(CKWaveFormat, nBlockAlign)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveFormat", "uint16 wBitsPerSample", offsetof(CKWaveFormat, wBitsPerSample)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKWaveFormat", "uint16 cbSize", offsetof(CKWaveFormat, cbSize)); assert(r >= 0);
+
     r = engine->RegisterObjectBehaviour("CKWaveFormat", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKWaveFormat *self) { new(self) CKWaveFormat(); }, (CKWaveFormat *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("CKWaveFormat", asBEHAVE_CONSTRUCT, "void f(const CKWaveFormat &in)", asFUNCTIONPR([](const CKWaveFormat &s, CKWaveFormat *self) { new(self) CKWaveFormat(s); }, (const CKWaveFormat &, CKWaveFormat *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("CKWaveFormat", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKWaveFormat *self) { self->~CKWaveFormat(); }, (CKWaveFormat *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKWaveFormat", "CKWaveFormat &opAssign(const CKWaveFormat &in)", asMETHODPR(CKWaveFormat, operator=, (const CKWaveFormat &), CKWaveFormat &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// ImpactDesc
+
+void RegisterImpactDesc(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("ImpactDesc", "CK_ID m_OwnerEntity", offsetof(ImpactDesc, m_OwnerEntity)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "CK_ID m_ObstacleTouched", offsetof(ImpactDesc, m_ObstacleTouched)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "CK_ID m_SubObstacleTouched", offsetof(ImpactDesc, m_SubObstacleTouched)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "int m_TouchedVertex", offsetof(ImpactDesc, m_TouchedVertex)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "int m_TouchingVertex", offsetof(ImpactDesc, m_TouchingVertex)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "int m_TouchedFace", offsetof(ImpactDesc, m_TouchedFace)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "int m_TouchingFace", offsetof(ImpactDesc, m_TouchingFace)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "VxMatrix m_ImpactWorldMatrix", offsetof(ImpactDesc, m_ImpactWorldMatrix)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "VxVector m_ImpactPoint", offsetof(ImpactDesc, m_ImpactPoint)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "VxVector m_ImpactNormal", offsetof(ImpactDesc, m_ImpactNormal)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("ImpactDesc", "CK_ID m_Entity", offsetof(ImpactDesc, m_Entity)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("ImpactDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](ImpactDesc *self) { new(self) ImpactDesc(); }, (ImpactDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("ImpactDesc", asBEHAVE_CONSTRUCT, "void f(const ImpactDesc &in)", asFUNCTIONPR([](const ImpactDesc &desc, ImpactDesc *self) { new(self) ImpactDesc(desc); }, (const ImpactDesc &, ImpactDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("ImpactDesc", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](ImpactDesc *self) { self->~ImpactDesc(); }, (ImpactDesc *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("ImpactDesc", "ImpactDesc &opAssign(const ImpactDesc &in)", asMETHODPR(ImpactDesc, operator=, (const ImpactDesc &), ImpactDesc &), asCALL_THISCALL); assert(r >= 0);
 }
 
 // CKPICKRESULT
@@ -1761,6 +1944,64 @@ void RegisterCK2dCurve(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CK2dCurve", "CKStateChunk@ Dump()", asMETHOD(CK2dCurve, Dump), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CK2dCurve", "CKERROR Read(CKStateChunk@)", asMETHOD(CK2dCurve, Read), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKSkinBoneData
+
+void RegisterCKSkinBoneData(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectMethod("CKSkinBoneData", "void SetBone(CK3dEntity@ ent)", asMETHOD(CKSkinBoneData, SetBone), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkinBoneData", "CK3dEntity@ GetBone() const", asMETHOD(CKSkinBoneData, GetBone), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkinBoneData", "void SetBoneInitialInverseMatrix(const VxMatrix &in mat)", asMETHOD(CKSkinBoneData, SetBoneInitialInverseMatrix), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKSkinVertexData
+
+void RegisterCKSkinVertexData(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectMethod("CKSkinVertexData", "void SetBoneCount(int boneCount)", asMETHOD(CKSkinVertexData, SetBoneCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkinVertexData", "int GetBoneCount() const", asMETHOD(CKSkinVertexData, GetBoneCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkinVertexData", "int GetBone(int n) const", asMETHOD(CKSkinVertexData, GetBone), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkinVertexData", "void SetBone(int n, int boneIdx)", asMETHOD(CKSkinVertexData, SetBone), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkinVertexData", "float GetWeight(int n) const", asMETHOD(CKSkinVertexData, GetWeight), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkinVertexData", "void SetWeight(int n, float weight)", asMETHOD(CKSkinVertexData, SetWeight), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkinVertexData", "VxVector &GetInitialPos()", asMETHOD(CKSkinVertexData, GetInitialPos), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkinVertexData", "void SetInitialPos(const VxVector &in pos)", asMETHOD(CKSkinVertexData, SetInitialPos), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKSkin
+
+void RegisterCKSkin(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectMethod("CKSkin", "void SetObjectInitMatrix(const VxMatrix &in mat)", asMETHOD(CKSkin, SetObjectInitMatrix), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "void SetBoneCount(int boneCount)", asMETHOD(CKSkin, SetBoneCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "void SetVertexCount(int count)", asMETHOD(CKSkin, SetVertexCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "int GetBoneCount() const", asMETHOD(CKSkin, GetBoneCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "int GetVertexCount() const", asMETHOD(CKSkin, GetVertexCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "void ConstructBoneTransfoMatrices(CKContext@ context)", asMETHOD(CKSkin, ConstructBoneTransfoMatrices), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "bool CalcPoints(int vertexCount, NativePointer vertexPtr, uint vertexStride)", asMETHODPR(CKSkin, CalcPoints, (int, CKBYTE *, CKDWORD), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "CKSkinBoneData@ GetBoneData(int boneIdx) const", asMETHOD(CKSkin, GetBoneData), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "CKSkinVertexData@ GetVertexData(int vertexIdx) const", asMETHOD(CKSkin, GetVertexData), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "void RemapVertices(const XIntArray &in permutation)", asMETHOD(CKSkin, RemapVertices), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "void SetNormalCount(int count)", asMETHOD(CKSkin, SetNormalCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "int GetNormalCount() const", asMETHOD(CKSkin, GetNormalCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "void SetNormal(int index, const VxVector &in norm)", asMETHOD(CKSkin, SetNormal), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "VxVector &GetNormal(int index)", asMETHOD(CKSkin, GetNormal), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSkin", "bool CalcPoints(int vertexCount, NativePointer vertexPtr, uint vertexStride, NativePointer normalPtr, uint normalStride)", asMETHODPR(CKSkin, CalcPoints, (int, CKBYTE *, CKDWORD, CKBYTE *, CKDWORD), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKIkJoint
+
+void RegisterCKIkJoint(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKIkJoint", "CKDWORD m_Flags", offsetof(CKIkJoint, m_Flags)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKIkJoint", "VxVector m_Min", offsetof(CKIkJoint, m_Min)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKIkJoint", "VxVector m_Max", offsetof(CKIkJoint, m_Max)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKIkJoint", "VxVector m_Damping", offsetof(CKIkJoint, m_Damping)); assert(r >= 0);
 }
 
 // CKFileManagerData

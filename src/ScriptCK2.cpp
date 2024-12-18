@@ -16,6 +16,7 @@ void RegisterCK2(asIScriptEngine *engine) {
     RegisterCKTypedefs(engine);
     RegisterCKEnums(engine);
     RegisterCKObjectTypes(engine);
+    RegisterCKContainers(engine);
 
     // Array derived types need to be registered earlier
     RegisterXSObjectPointerArray(engine);
@@ -25,6 +26,7 @@ void RegisterCK2(asIScriptEngine *engine) {
     RegisterXObjectDeclarationArray(engine);
     RegisterCKDependencies(engine);
 
+    RegisterCKFuncdefs(engine);
     RegisterCKGlobalVariables(engine);
     RegisterCKGlobalFunctions(engine);
 
@@ -34,6 +36,9 @@ void RegisterCK2(asIScriptEngine *engine) {
     RegisterVxIntersectionDesc(engine);
     RegisterVxStats(engine);
     RegisterCKGUID(engine);
+    RegisterVxEffectDescription(engine);
+    RegisterCKBehaviorContext(engine);
+    RegisterCKUICallbackStruct(engine);
     RegisterCKClassDesc(engine);
     RegisterCKPluginInfo(engine);
     RegisterCKEnumStruct(engine);
@@ -75,16 +80,28 @@ void RegisterCK2(asIScriptEngine *engine) {
     RegisterCKMovieInfo(engine);
     RegisterCKBitmapData(engine);
 
+    RegisterCKVertexBuffer(engine);
+
+    RegisterCKFloorPoint(engine);
+
     RegisterSoundMinion(engine);
     RegisterCKWaveSoundSettings(engine);
     RegisterCKWaveSound3DSettings(engine);
     RegisterCKListenerSettings(engine);
     RegisterCKWaveFormat(engine);
 
+    RegisterImpactDesc(engine);
+
     RegisterCKPICKRESULT(engine);
 
     RegisterCK2dCurvePoint(engine);
     RegisterCK2dCurve(engine);
+
+    RegisterCKSkinBoneData(engine);
+    RegisterCKSkinVertexData(engine);
+    RegisterCKSkin(engine);
+
+    RegisterCKIkJoint(engine);
 
     RegisterCKFileManagerData(engine);
     RegisterCKFilePluginDependencies(engine);

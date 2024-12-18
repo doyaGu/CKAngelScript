@@ -12,6 +12,9 @@ void RegisterVxDriverDesc(asIScriptEngine *engine);
 void RegisterVxIntersectionDesc(asIScriptEngine *engine);
 void RegisterVxStats(asIScriptEngine *engine);
 void RegisterCKGUID(asIScriptEngine *engine);
+void RegisterVxEffectDescription(asIScriptEngine *engine);
+void RegisterCKBehaviorContext(asIScriptEngine *engine);
+void RegisterCKUICallbackStruct(asIScriptEngine *engine);
 void RegisterCKClassDesc(asIScriptEngine *engine);
 void RegisterCKPluginInfo(asIScriptEngine *engine);
 void RegisterCKEnumStruct(asIScriptEngine *engine);
@@ -53,16 +56,28 @@ void RegisterCKBitmapSlot(asIScriptEngine *engine);
 void RegisterCKMovieInfo(asIScriptEngine *engine);
 void RegisterCKBitmapData(asIScriptEngine *engine);
 
+void RegisterCKVertexBuffer(asIScriptEngine *engine);
+
+void RegisterCKFloorPoint(asIScriptEngine *engine);
+
 void RegisterSoundMinion(asIScriptEngine *engine);
 void RegisterCKWaveSoundSettings(asIScriptEngine *engine);
 void RegisterCKWaveSound3DSettings(asIScriptEngine *engine);
 void RegisterCKListenerSettings(asIScriptEngine *engine);
 void RegisterCKWaveFormat(asIScriptEngine *engine);
 
+void RegisterImpactDesc(asIScriptEngine *engine);
+
 void RegisterCKPICKRESULT(asIScriptEngine *engine);
 
 void RegisterCK2dCurvePoint(asIScriptEngine *engine);
 void RegisterCK2dCurve(asIScriptEngine *engine);
+
+void RegisterCKSkinBoneData(asIScriptEngine *engine);
+void RegisterCKSkinVertexData(asIScriptEngine *engine);
+void RegisterCKSkin(asIScriptEngine *engine);
+
+void RegisterCKIkJoint(asIScriptEngine *engine);
 
 void RegisterCKFileManagerData(asIScriptEngine *engine);
 void RegisterCKFilePluginDependencies(asIScriptEngine *engine);

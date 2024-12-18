@@ -14,6 +14,8 @@
 #include "CKTimeManager.h"
 #include "CKPathManager.h"
 #include "CKObject.h"
+#include "CKVertexBuffer.h"
+#include "CKBodyPart.h"
 
 void RegisterCKEnums(asIScriptEngine *engine) {
     int r = 0;
@@ -1004,6 +1006,18 @@ void RegisterCKEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CK_PATHMANAGER_CATEGORY", "DATA_PATH_IDX", DATA_PATH_IDX); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_PATHMANAGER_CATEGORY", "SOUND_PATH_IDX", SOUND_PATH_IDX); assert(r >= 0);
 
+    // CKLOCKFLAGS
+    r = engine->RegisterEnum("CKLOCKFLAGS"); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKLOCKFLAGS", "CK_LOCK_DEFAULT", CK_LOCK_DEFAULT); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKLOCKFLAGS", "CK_LOCK_NOOVERWRITE", CK_LOCK_NOOVERWRITE); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKLOCKFLAGS", "CK_LOCK_DISCARD", CK_LOCK_DISCARD); assert(r >= 0);
+
+    // CKVB_STATE
+    r = engine->RegisterEnum("CKVB_STATE"); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKVB_STATE", "CK_VB_OK", CK_VB_OK); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKVB_STATE", "CK_VB_LOST", CK_VB_LOST); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKVB_STATE", "CK_VB_FAILED", CK_VB_FAILED); assert(r >= 0);
+
     // CK_SOUNDMANAGER_CAPS
     r = engine->RegisterEnum("CK_SOUNDMANAGER_CAPS"); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_SOUNDMANAGER_CAPS", "CK_SOUNDMANAGER_ONFLYTYPE", CK_SOUNDMANAGER_ONFLYTYPE); assert(r >= 0);
@@ -1045,4 +1059,19 @@ void RegisterCKEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CK_DEPENDENCIES_FLAGS", "CK_DEPENDENCIES_CUSTOM", CK_DEPENDENCIES_CUSTOM); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_DEPENDENCIES_FLAGS", "CK_DEPENDENCIES_NONE", CK_DEPENDENCIES_NONE); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_DEPENDENCIES_FLAGS", "CK_DEPENDENCIES_FULL", CK_DEPENDENCIES_FULL); assert(r >= 0);
+
+    // CK_IKJOINT_FLAGS
+    r = engine->RegisterEnum("CK_IKJOINT_FLAGS"); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_ACTIVE_X", CK_IKJOINT_ACTIVE_X); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_ACTIVE_Y", CK_IKJOINT_ACTIVE_Y); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_ACTIVE_Z", CK_IKJOINT_ACTIVE_Z); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_ACTIVE",   CK_IKJOINT_ACTIVE); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_LIMIT_X",  CK_IKJOINT_LIMIT_X); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_LIMIT_Y",  CK_IKJOINT_LIMIT_Y); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_LIMIT_Z",  CK_IKJOINT_LIMIT_Z); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_LIMIT",    CK_IKJOINT_LIMIT); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_EASE_X",   CK_IKJOINT_EASE_X); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_EASE_Y",   CK_IKJOINT_EASE_Y); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_EASE_Z",   CK_IKJOINT_EASE_Z); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_EASE",     CK_IKJOINT_EASE); assert(r >= 0);
 }
