@@ -7,6 +7,25 @@
 #include <angelscript.h>
 
 template<class A, class B>
+B *StaticCast(A *a) {
+    if (!a) return nullptr;
+    return static_cast<B *>(a);
+}
+
+template <typename D, typename B>
+static void RegisterClassValueCast(asIScriptEngine *engine, const char *derived, const char *base) {
+    int r = 0;
+
+    std::string decl = derived;
+    decl.append(" opConv() const");
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((StaticCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+
+    decl = base;
+    decl.append(" opImplConv() const");
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((StaticCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+}
+
+template<class A, class B>
 B *RefCast(A *a) {
     if (!a) return nullptr;
     return dynamic_cast<B *>(a);

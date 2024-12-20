@@ -23,7 +23,6 @@ void RegisterCK2(asIScriptEngine *engine) {
     RegisterXSObjectArray(engine);
     RegisterXObjectPointerArray(engine);
     RegisterXObjectArray(engine);
-    RegisterXObjectDeclarationArray(engine);
     RegisterCKDependencies(engine);
 
     RegisterCKFuncdefs(engine);
@@ -94,8 +93,14 @@ void RegisterCK2(asIScriptEngine *engine) {
 
     RegisterCKPICKRESULT(engine);
 
+    RegisterCKSquare(engine);
+
     RegisterCK2dCurvePoint(engine);
     RegisterCK2dCurve(engine);
+
+    RegisterCKKeyframeData(engine);
+
+    RegisterCKAnimKey(engine);
 
     RegisterCKSkinBoneData(engine);
     RegisterCKSkinVertexData(engine);

@@ -70,8 +70,14 @@ void RegisterImpactDesc(asIScriptEngine *engine);
 
 void RegisterCKPICKRESULT(asIScriptEngine *engine);
 
+void RegisterCKSquare(asIScriptEngine *engine);
+
 void RegisterCK2dCurvePoint(asIScriptEngine *engine);
 void RegisterCK2dCurve(asIScriptEngine *engine);
+
+void RegisterCKKeyframeData(asIScriptEngine *engine);
+
+void RegisterCKAnimKey(asIScriptEngine *engine);
 
 void RegisterCKSkinBoneData(asIScriptEngine *engine);
 void RegisterCKSkinVertexData(asIScriptEngine *engine);
@@ -93,7 +99,5 @@ void RegisterCKDebugContext(asIScriptEngine *engine);
 
 void RegisterCKObjectArray(asIScriptEngine *engine);
 void RegisterCKObjectDeclaration(asIScriptEngine *engine);
-
-void RegisterXObjectDeclarationArray(asIScriptEngine *engine);
 
 #endif // CK_SCRIPTCKDEFINES_H

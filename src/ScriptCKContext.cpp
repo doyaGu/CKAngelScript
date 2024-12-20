@@ -124,8 +124,8 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "CK_FILE_WRITEMODE GetFileWriteMode()", asMETHODPR(CKContext, GetFileWriteMode, (), CK_FILE_WRITEMODE), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "CK_TEXTURE_SAVEOPTIONS GetGlobalImagesSaveOptions()", asMETHODPR(CKContext, GetGlobalImagesSaveOptions, (), CK_TEXTURE_SAVEOPTIONS), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "void SetGlobalImagesSaveOptions(CK_TEXTURE_SAVEOPTIONS options)", asMETHODPR(CKContext, SetGlobalImagesSaveOptions, (CK_TEXTURE_SAVEOPTIONS), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKContext", "CKBitmapProperties &GetGlobalImagesSaveFormat()", asMETHODPR(CKContext, GetGlobalImagesSaveFormat, (), CKBitmapProperties *), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKContext", "void SetGlobalImagesSaveFormat(const CKBitmapProperties &in format)", asMETHODPR(CKContext, SetGlobalImagesSaveFormat, (CKBitmapProperties *), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKContext", "CKBitmapProperties@ GetGlobalImagesSaveFormat()", asMETHODPR(CKContext, GetGlobalImagesSaveFormat, (), CKBitmapProperties *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKContext", "void SetGlobalImagesSaveFormat(CKBitmapProperties@ format)", asMETHODPR(CKContext, SetGlobalImagesSaveFormat, (CKBitmapProperties *), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "CK_SOUND_SAVEOPTIONS GetGlobalSoundsSaveOptions()", asMETHODPR(CKContext, GetGlobalSoundsSaveOptions, (), CK_SOUND_SAVEOPTIONS), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "void SetGlobalSoundsSaveOptions(CK_SOUND_SAVEOPTIONS options)", asMETHODPR(CKContext, SetGlobalSoundsSaveOptions, (CK_SOUND_SAVEOPTIONS), void), asCALL_THISCALL); assert(r >= 0);
 

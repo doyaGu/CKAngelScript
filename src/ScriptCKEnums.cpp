@@ -10,12 +10,14 @@
 #include "CKMovieReader.h"
 #include "CKMessage.h"
 #include "CKFile.h"
+#include "CKDebugContext.h"
 #include "CKBaseManager.h"
 #include "CKTimeManager.h"
 #include "CKPathManager.h"
 #include "CKObject.h"
 #include "CKVertexBuffer.h"
 #include "CKBodyPart.h"
+#include "CKObjectAnimation.h"
 
 void RegisterCKEnums(asIScriptEngine *engine) {
     int r = 0;
@@ -1049,16 +1051,54 @@ void RegisterCKEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CK_SOUNDMANAGER_CAPS", "CK_LISTENERSETTINGS_SOFTWARESOURCES", CK_LISTENERSETTINGS_SOFTWARESOURCES); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_SOUNDMANAGER_CAPS", "CK_LISTENERSETTINGS_ALL", CK_LISTENERSETTINGS_ALL); assert(r >= 0);
 
+    // CK_FO_OPTIONS
     r = engine->RegisterEnum("CK_FO_OPTIONS"); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_FO_OPTIONS", "CK_FO_DEFAULT", CKFileObject::CK_FO_DEFAULT); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_FO_OPTIONS", "CK_FO_RENAMEOBJECT", CKFileObject::CK_FO_RENAMEOBJECT); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_FO_OPTIONS", "CK_FO_REPLACEOBJECT", CKFileObject::CK_FO_REPLACEOBJECT); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_FO_OPTIONS", "CK_FO_DONTLOADOBJECT", CKFileObject::CK_FO_DONTLOADOBJECT); assert(r >= 0);
 
+    // CK_DEPENDENCIES_FLAGS
     r = engine->RegisterEnum("CK_DEPENDENCIES_FLAGS"); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_DEPENDENCIES_FLAGS", "CK_DEPENDENCIES_CUSTOM", CK_DEPENDENCIES_CUSTOM); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_DEPENDENCIES_FLAGS", "CK_DEPENDENCIES_NONE", CK_DEPENDENCIES_NONE); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_DEPENDENCIES_FLAGS", "CK_DEPENDENCIES_FULL", CK_DEPENDENCIES_FULL); assert(r >= 0);
+
+    // CKDEBUG_STATE
+    r = engine->RegisterEnum("CKDEBUG_STATE"); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKDEBUG_STATE", "CKDEBUG_NOP", CKDEBUG_NOP); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKDEBUG_STATE", "CKDEBUG_BEHEXECUTE", CKDEBUG_BEHEXECUTE); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKDEBUG_STATE", "CKDEBUG_BEHEXECUTEDONE", CKDEBUG_BEHEXECUTEDONE); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKDEBUG_STATE", "CKDEBUG_SCRIPTEXECUTEDONE", CKDEBUG_SCRIPTEXECUTEDONE); assert(r >= 0);
+
+    // CKBEZIERKEY_FLAGS
+    r = engine->RegisterEnum("CKBEZIERKEY_FLAGS"); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKBEZIERKEY_FLAGS", "BEZIER_KEY_AUTOSMOOTH", BEZIER_KEY_AUTOSMOOTH); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKBEZIERKEY_FLAGS", "BEZIER_KEY_LINEAR", BEZIER_KEY_LINEAR); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKBEZIERKEY_FLAGS", "BEZIER_KEY_STEP", BEZIER_KEY_STEP); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKBEZIERKEY_FLAGS", "BEZIER_KEY_FAST", BEZIER_KEY_FAST); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKBEZIERKEY_FLAGS", "BEZIER_KEY_SLOW", BEZIER_KEY_SLOW); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKBEZIERKEY_FLAGS", "BEZIER_KEY_TANGENTS", BEZIER_KEY_TANGENTS); assert(r >= 0);
+
+    // CKANIMATION_CONTROLLER
+    r = engine->RegisterEnum("CKANIMATION_CONTROLLER"); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_CONTROLLER_POS", CKANIMATION_CONTROLLER_POS); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_CONTROLLER_ROT", CKANIMATION_CONTROLLER_ROT); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_CONTROLLER_SCL", CKANIMATION_CONTROLLER_SCL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_CONTROLLER_SCLAXIS", CKANIMATION_CONTROLLER_SCLAXIS); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_CONTROLLER_MORPH", CKANIMATION_CONTROLLER_MORPH); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_CONTROLLER_MASK", CKANIMATION_CONTROLLER_MASK); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_LINPOS_CONTROL", CKANIMATION_LINPOS_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_LINROT_CONTROL", CKANIMATION_LINROT_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_LINSCL_CONTROL", CKANIMATION_LINSCL_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_LINSCLAXIS_CONTROL", CKANIMATION_LINSCLAXIS_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_TCBPOS_CONTROL", CKANIMATION_TCBPOS_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_TCBROT_CONTROL", CKANIMATION_TCBROT_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_TCBSCL_CONTROL", CKANIMATION_TCBSCL_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_TCBSCLAXIS_CONTROL", CKANIMATION_TCBSCLAXIS_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_BEZIERPOS_CONTROL", CKANIMATION_BEZIERPOS_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_BEZIERSCL_CONTROL", CKANIMATION_BEZIERSCL_CONTROL); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_MORPH_CONTROL", CKANIMATION_MORPH_CONTROL); assert(r >= 0);
 
     // CK_IKJOINT_FLAGS
     r = engine->RegisterEnum("CK_IKJOINT_FLAGS"); assert(r >= 0);

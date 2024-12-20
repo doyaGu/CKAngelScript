@@ -11,8 +11,11 @@
 #include "CKPathManager.h"
 #include "CKRenderContext.h"
 #include "CKCollisionManager.h"
+#include "CKSquare.h"
 #include "CK2dCurvePoint.h"
 #include "CK2dCurve.h"
+#include "CKKeyframeData.h"
+#include "CKObjectAnimation.h"
 #include "CKBodyPart.h"
 #include "CKPluginManager.h"
 #include "CKDataArray.h"
@@ -108,8 +111,8 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("CKStructStruct", sizeof(CKStructStruct), asOBJ_VALUE | asGetTypeTraits<CKStructStruct>()); assert(r >= 0);
     r = engine->RegisterObjectType("CKParameterTypeDesc", sizeof(CKParameterTypeDesc), asOBJ_VALUE | asGetTypeTraits<CKParameterTypeDesc>()); assert(r >= 0);
 
-    r = engine->RegisterObjectType("CKBitmapProperties", sizeof(CKBitmapProperties), asOBJ_VALUE | asGetTypeTraits<CKBitmapProperties>()); assert(r >= 0);
-    r = engine->RegisterObjectType("CKMovieProperties", sizeof(CKMovieProperties), asOBJ_VALUE | asGetTypeTraits<CKMovieProperties>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKBitmapProperties", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+    r = engine->RegisterObjectType("CKMovieProperties", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
 
     r = engine->RegisterObjectType("CKDataReader", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKModelReader", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
@@ -157,8 +160,23 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectType("CKPICKRESULT", sizeof(CKPICKRESULT), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKPICKRESULT>()); assert(r >= 0);
 
+    r = engine->RegisterObjectType("CKSquare", sizeof(CKSquare), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKSquare>()); assert(r >= 0);
+
     r = engine->RegisterObjectType("CK2dCurvePoint", sizeof(CK2dCurvePoint), asOBJ_VALUE | asGetTypeTraits<CK2dCurvePoint>()); assert(r >= 0);
     r = engine->RegisterObjectType("CK2dCurve", sizeof(CK2dCurve), asOBJ_VALUE | asGetTypeTraits<CK2dCurve>()); assert(r >= 0);
+
+    r = engine->RegisterObjectType("CKKey", sizeof(CKKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKKey>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKRotationKey", sizeof(CKRotationKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKRotationKey>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKPositionKey", sizeof(CKPositionKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKPositionKey>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKTCBPositionKey", sizeof(CKTCBPositionKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKTCBPositionKey>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKTCBRotationKey", sizeof(CKTCBRotationKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKTCBRotationKey>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKBezierKeyFlags", sizeof(CKBezierKeyFlags), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKBezierKeyFlags>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKBezierPositionKey", sizeof(CKBezierPositionKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKBezierPositionKey>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKMorphKey", sizeof(CKMorphKey), asOBJ_VALUE | asGetTypeTraits<CKMorphKey>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKAnimController", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+    r = engine->RegisterObjectType("CKMorphController", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+
+    r = engine->RegisterObjectType("CKAnimKey", sizeof(CKAnimKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKAnimKey>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("CKSkinBoneData", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKSkinVertexData", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
@@ -256,7 +274,7 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
 void RegisterCKContainers(asIScriptEngine *engine) {
     RegisterXArray<XIntArray, int>(engine, "XIntArray", "int");
     RegisterXArray<XArray<CKGUID>, CKGUID>(engine, "XGUIDArray", "CKGUID");
-    RegisterXArray<XObjectDeclarationArray, CKObjectDeclaration *>(engine, "XObjectDeclarationArray", "CKObjectDeclaration");
+    RegisterXArray<XObjectDeclarationArray, CKObjectDeclaration *>(engine, "XObjectDeclarationArray", "CKObjectDeclaration@");
 
     RegisterXClassArray<XClassInfoArray, CKClassDesc>(engine, "XClassInfoArray", "CKClassDesc");
     RegisterXArray<XManagerArray, CKBaseManager *>(engine, "XManagerArray", "CKBaseManager@");
@@ -267,6 +285,7 @@ void RegisterCKContainers(asIScriptEngine *engine) {
     RegisterXSArray<XSArray<VxImageDescEx>, VxImageDescEx>(engine, "XImageArray", "VxImageDescEx");
 
     RegisterXClassArray<XClassArray<XString>, XString>(engine, "XStringArray", "XString");
+    RegisterXClassArray<XClassArray<CKFilePluginDependencies>, CKFilePluginDependencies>(engine, "XFilePluginDependenciesArray", "CKFilePluginDependencies");
 
     RegisterXClassArray<CKPATHENTRYVECTOR, XString>(engine, "CKPATHENTRYVECTOR", "XString");
     RegisterXClassArray<CKPATHCATEGORYVECTOR, XString>(engine, "CKPATHCATEGORYVECTOR", "CKPATHCATEGORY");
@@ -277,5 +296,6 @@ void RegisterCKContainers(asIScriptEngine *engine) {
 
     RegisterXNHashTable<XHashID, CK_ID, CK_ID>(engine, "XHashID", "CK_ID", "CK_ID");
     RegisterXNHashTable<XHashGuidToType, int, CKGUID>(engine, "XHashGuidToType", "CKGUID", "int");
+    RegisterXNHashTable<XAttributeList, CKAttributeVal, CK_ID>(engine, "XAttributeList", "CK_ID", "CKAttributeVal");
 }
 
