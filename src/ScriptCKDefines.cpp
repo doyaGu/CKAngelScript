@@ -28,6 +28,7 @@
 #include "CK2dCurve.h"
 #include "CKKeyframeData.h"
 #include "CKObjectAnimation.h"
+#include "CKSceneObjectDesc.h"
 #include "CKSkin.h"
 #include "CKBodyPart.h"
 #include "CKDebugContext.h"
@@ -1664,62 +1665,62 @@ void RegisterCKBitmapData(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKBitmapData", "CKBitmapData &opAssign(const CKBitmapData &in other)", asMETHODPR(CKBitmapData, operator=, (const CKBitmapData &), CKBitmapData &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool CreateImage(int width, int height, int bpp = 32, int slot = 0)", asMETHOD(CKBitmapData, CreateImage), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImage(const string &in name, int slot = 0, bool useFormat = false)", asMETHOD(CKBitmapData, SaveImage), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImageAlpha(const string &in name, int slot = 0)", asMETHOD(CKBitmapData, SaveImageAlpha), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool CreateImage(int width, int height, int bpp = 32, int slot = 0)", asMETHODPR(CKBitmapData, CreateImage, (int, int, int, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImage(const string &in name, int slot = 0, bool useFormat = false)", asMETHODPR(CKBitmapData, SaveImage, (CKSTRING, int, CKBOOL), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImageAlpha(const string &in name, int slot = 0)", asMETHODPR(CKBitmapData, SaveImageAlpha, (CKSTRING, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "string GetMovieFileName()", asMETHOD(CKBitmapData, GetMovieFileName), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "CKMovieReader@ GetMovieReader()", asMETHOD(CKBitmapData, GetMovieReader), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "string GetMovieFileName()", asMETHODPR(CKBitmapData, GetMovieFileName, (), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "CKMovieReader@ GetMovieReader()", asMETHODPR(CKBitmapData, GetMovieReader, (), CKMovieReader *), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "NativePointer LockSurfacePtr(int slot = -1)", asMETHOD(CKBitmapData, LockSurfacePtr), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool ReleaseSurfacePtr(int slot = -1)", asMETHOD(CKBitmapData, ReleaseSurfacePtr), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "NativePointer LockSurfacePtr(int slot = -1)", asMETHODPR(CKBitmapData, LockSurfacePtr, (int), CKBYTE *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool ReleaseSurfacePtr(int slot = -1)", asMETHODPR(CKBitmapData, ReleaseSurfacePtr, (int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "string GetSlotFileName(int slot)", asMETHOD(CKBitmapData, GetSlotFileName), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetSlotFileName(int slot, const string &in filename)", asMETHOD(CKBitmapData, SetSlotFileName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "string GetSlotFileName(int slot)", asMETHODPR(CKBitmapData, GetSlotFileName, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetSlotFileName(int slot, const string &in filename)", asMETHODPR(CKBitmapData, SetSlotFileName, (int, CKSTRING), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "int GetWidth()", asMETHOD(CKBitmapData, GetWidth), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "int GetHeight()", asMETHOD(CKBitmapData, GetHeight), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool GetImageDesc(VxImageDescEx &out desc)", asMETHOD(CKBitmapData, GetImageDesc), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "int GetWidth()", asMETHODPR(CKBitmapData, GetWidth, (), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "int GetHeight()", asMETHODPR(CKBitmapData, GetHeight, (), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool GetImageDesc(VxImageDescEx &out desc)", asMETHODPR(CKBitmapData, GetImageDesc, (VxImageDescEx &), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "int GetSlotCount()", asMETHOD(CKBitmapData, GetSlotCount), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetSlotCount(int count)", asMETHOD(CKBitmapData, SetSlotCount), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetCurrentSlot(int slot)", asMETHOD(CKBitmapData, SetCurrentSlot), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "int GetCurrentSlot()", asMETHOD(CKBitmapData, GetCurrentSlot), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool ReleaseSlot(int slot)", asMETHOD(CKBitmapData, ReleaseSlot), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool ReleaseAllSlots()", asMETHOD(CKBitmapData, ReleaseAllSlots), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "int GetSlotCount()", asMETHODPR(CKBitmapData, GetSlotCount, (), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetSlotCount(int count)", asMETHODPR(CKBitmapData, SetSlotCount, (int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetCurrentSlot(int slot)", asMETHODPR(CKBitmapData, SetCurrentSlot, (int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "int GetCurrentSlot()", asMETHODPR(CKBitmapData, GetCurrentSlot, (), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool ReleaseSlot(int slot)", asMETHODPR(CKBitmapData, ReleaseSlot, (int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool ReleaseAllSlots()", asMETHODPR(CKBitmapData, ReleaseAllSlots, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetPixel(int x, int y, CKDWORD color, int slot = -1)", asMETHOD(CKBitmapData, SetPixel), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "CKDWORD GetPixel(int x, int y, int slot = -1)", asMETHOD(CKBitmapData, GetPixel), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetPixel(int x, int y, CKDWORD color, int slot = -1)", asMETHODPR(CKBitmapData, SetPixel, (int, int, CKDWORD, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "CKDWORD GetPixel(int x, int y, int slot = -1)", asMETHODPR(CKBitmapData, GetPixel, (int, int, int), CKDWORD), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "CKDWORD GetTransparentColor()", asMETHOD(CKBitmapData, GetTransparentColor), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetTransparentColor(CKDWORD color)", asMETHOD(CKBitmapData, SetTransparentColor), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetTransparent(bool transparency)", asMETHOD(CKBitmapData, SetTransparent), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool IsTransparent()", asMETHOD(CKBitmapData, IsTransparent), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "CKDWORD GetTransparentColor()", asMETHODPR(CKBitmapData, GetTransparentColor, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetTransparentColor(CKDWORD color)", asMETHODPR(CKBitmapData, SetTransparentColor, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetTransparent(bool transparency)", asMETHODPR(CKBitmapData, SetTransparent, (CKBOOL), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool IsTransparent()", asMETHODPR(CKBitmapData, IsTransparent, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "CK_TEXTURE_SAVEOPTIONS GetSaveOptions()", asMETHOD(CKBitmapData, GetSaveOptions), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetSaveOptions(CK_TEXTURE_SAVEOPTIONS options)", asMETHOD(CKBitmapData, SetSaveOptions), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "CKBitmapProperties@ GetSaveFormat()", asMETHOD(CKBitmapData, GetSaveFormat), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetSaveFormat(CKBitmapProperties@ format)", asMETHOD(CKBitmapData, SetSaveFormat), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "CK_TEXTURE_SAVEOPTIONS GetSaveOptions()", asMETHODPR(CKBitmapData, GetSaveOptions, (), CK_BITMAP_SAVEOPTIONS), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetSaveOptions(CK_TEXTURE_SAVEOPTIONS options)", asMETHODPR(CKBitmapData, SetSaveOptions, (CK_BITMAP_SAVEOPTIONS), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "CKBitmapProperties@ GetSaveFormat()", asMETHODPR(CKBitmapData, GetSaveFormat, (), CKBitmapProperties *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetSaveFormat(CKBitmapProperties@ format)", asMETHODPR(CKBitmapData, SetSaveFormat, (CKBitmapProperties *), void), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetPickThreshold(int pt)", asMETHOD(CKBitmapData, SetPickThreshold), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "int GetPickThreshold()", asMETHOD(CKBitmapData, GetPickThreshold), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetPickThreshold(int pt)", asMETHODPR(CKBitmapData, SetPickThreshold, (int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "int GetPickThreshold()", asMETHODPR(CKBitmapData, GetPickThreshold, (), int), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetCubeMap(bool cubeMap)", asMETHOD(CKBitmapData, SetCubeMap), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool IsCubeMap()", asMETHOD(CKBitmapData, IsCubeMap), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetCubeMap(bool cubeMap)", asMETHODPR(CKBitmapData, SetCubeMap, (CKBOOL), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool IsCubeMap()", asMETHODPR(CKBitmapData, IsCubeMap, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool ResizeImages(int width, int height)", asMETHOD(CKBitmapData, ResizeImages), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetDynamicHint(bool dynamic)", asMETHOD(CKBitmapData, SetDynamicHint), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool GetDynamicHint()", asMETHOD(CKBitmapData, GetDynamicHint), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool ResizeImages(int width, int height)", asMETHODPR(CKBitmapData, ResizeImages, (int, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetDynamicHint(bool dynamic)", asMETHODPR(CKBitmapData, SetDynamicHint, (CKBOOL), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool GetDynamicHint()", asMETHODPR(CKBitmapData, GetDynamicHint, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool ToRestore()", asMETHOD(CKBitmapData, ToRestore), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool LoadSlotImage(XString name, int slot = 0)", asMETHOD(CKBitmapData, LoadSlotImage), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool LoadMovieFile(XString name)", asMETHOD(CKBitmapData, LoadMovieFile), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "CKMovieInfo@ CreateMovieInfo(XString s, CKMovieProperties@ &out mp)", asMETHOD(CKBitmapData, CreateMovieInfo), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetMovieInfo(CKMovieInfo@ mi)", asMETHOD(CKBitmapData, SetMovieInfo), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool ToRestore()", asMETHODPR(CKBitmapData, ToRestore, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool LoadSlotImage(XString name, int slot = 0)", asMETHODPR(CKBitmapData, LoadSlotImage, (XString, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool LoadMovieFile(XString name)", asMETHODPR(CKBitmapData, LoadMovieFile, (XString), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "CKMovieInfo@ CreateMovieInfo(XString s, CKMovieProperties@ &out mp)", asMETHODPR(CKBitmapData, CreateMovieInfo, (XString, CKMovieProperties **), CKMovieInfo *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetMovieInfo(CKMovieInfo@ mi)", asMETHODPR(CKBitmapData, SetMovieInfo, (CKMovieInfo *), void), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetAlphaForTransparentColor(const VxImageDescEx &in desc)", asMETHOD(CKBitmapData, SetAlphaForTransparentColor), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "void SetBorderColorForClamp(const VxImageDescEx &in desc)", asMETHOD(CKBitmapData, SetBorderColorForClamp), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetSlotImage(int slot, NativePointer buffer, const VxImageDescEx &in desc)", asMETHOD(CKBitmapData, SetSlotImage), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetAlphaForTransparentColor(const VxImageDescEx &in desc)", asMETHODPR(CKBitmapData, SetAlphaForTransparentColor, (const VxImageDescEx &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "void SetBorderColorForClamp(const VxImageDescEx &in desc)", asMETHODPR(CKBitmapData, SetBorderColorForClamp, (const VxImageDescEx &), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetSlotImage(int slot, NativePointer buffer, const VxImageDescEx &in desc)", asMETHODPR(CKBitmapData, SetSlotImage, (int, void *, VxImageDescEx &), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
     // r = engine->RegisterObjectMethod("CKBitmapData", "bool DumpToChunk(CKStateChunk@ chunk, CKContext@ context, CKFile@ file, NativeBuffer Identifiers)", asMETHOD(CKBitmapData, DumpToChunk), asCALL_THISCALL); assert(r >= 0);
     // r = engine->RegisterObjectMethod("CKBitmapData", "bool ReadFromChunk(CKStateChunk@ chunk, CKContext@ context, CKFile@ file, NativeBuffer Identifiers)", asMETHOD(CKBitmapData, ReadFromChunk), asCALL_THISCALL); assert(r >= 0);
@@ -2193,6 +2194,34 @@ void RegisterCKAnimKey(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("CKAnimKey", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKAnimKey *self) { self->~CKAnimKey(); }, (CKAnimKey *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKAnimKey", "CKAnimKey &opAssign(const CKAnimKey &in other)", asMETHODPR(CKAnimKey, operator=, (const CKAnimKey &), CKAnimKey &), asCALL_THISCALL); assert(r >= 0);
+}
+
+// CKSceneObjectDesc
+
+void RegisterCKSceneObjectDesc(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKSceneObjectDesc", "CK_ID m_Object", asOFFSET(CKSceneObjectDesc, m_Object)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKSceneObjectDesc", "CKStateChunk@ m_InitialValue", asOFFSET(CKSceneObjectDesc, m_InitialValue)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKSceneObjectDesc", "CKDWORD m_Flags", asOFFSET(CKSceneObjectDesc, m_Flags)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKSceneObjectDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKSceneObjectDesc *self) { new(self) CKSceneObjectDesc(); }, (CKSceneObjectDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKSceneObjectDesc", asBEHAVE_CONSTRUCT, "void f(const CKSceneObjectDesc &in other)", asFUNCTIONPR([](const CKSceneObjectDesc &k, CKSceneObjectDesc *self) { new(self) CKSceneObjectDesc(k); }, (const CKSceneObjectDesc &, CKSceneObjectDesc *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKSceneObjectDesc", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKSceneObjectDesc *self) { self->~CKSceneObjectDesc(); }, (CKSceneObjectDesc *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKSceneObjectDesc &opAssign(const CKSceneObjectDesc &in other)", asMETHODPR(CKSceneObjectDesc, operator=, (const CKSceneObjectDesc &), CKSceneObjectDesc &), asCALL_THISCALL); assert(r >= 0);
+
+    // r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKERROR ReadState(CKStateChunk@ chunk)", asMETHODPR(CKSceneObjectDesc, ReadState, (CKStateChunk*), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKSceneObjectDesc", "int GetSize()", asMETHODPR(CKSceneObjectDesc, GetSize, (), int), asCALL_THISCALL); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKSceneObjectDesc", "void Clear()", asMETHODPR(CKSceneObjectDesc, Clear, (), void), asCALL_THISCALL); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKSceneObjectDesc", "void Init(CKObject@ obj = null)", asMETHODPR(CKSceneObjectDesc, Init, (CKObject*), void), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD ActiveAtStart()", asMETHODPR(CKSceneObjectDesc, ActiveAtStart, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD DeActiveAtStart()", asMETHODPR(CKSceneObjectDesc, DeActiveAtStart, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD NothingAtStart()", asMETHODPR(CKSceneObjectDesc, NothingAtStart, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD ResetAtStart()", asMETHODPR(CKSceneObjectDesc, ResetAtStart, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD IsActive()", asMETHODPR(CKSceneObjectDesc, IsActive, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
 }
 
 // CKSkinBoneData

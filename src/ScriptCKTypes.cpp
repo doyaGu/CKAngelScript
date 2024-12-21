@@ -16,6 +16,8 @@
 #include "CK2dCurve.h"
 #include "CKKeyframeData.h"
 #include "CKObjectAnimation.h"
+#include "CKSceneObjectDesc.h"
+#include "CKScene.h"
 #include "CKBodyPart.h"
 #include "CKPluginManager.h"
 #include "CKDataArray.h"
@@ -178,6 +180,8 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectType("CKAnimKey", sizeof(CKAnimKey), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKAnimKey>()); assert(r >= 0);
 
+    r = engine->RegisterObjectType("CKSceneObjectDesc", sizeof(CKSceneObjectDesc), asOBJ_VALUE | asGetTypeTraits<CKSceneObjectDesc>()); assert(r >= 0);
+
     r = engine->RegisterObjectType("CKSkinBoneData", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKSkinVertexData", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKSkin", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
@@ -293,6 +297,7 @@ void RegisterCKContainers(asIScriptEngine *engine) {
     RegisterXHashTable<XManagerHashTable, CKBaseManager *, CKGUID>(engine, "XManagerHashTable", "CKGUID", "CKBaseManager@");
     RegisterXHashTable<XObjDeclHashTable, CKObjectDeclaration *, CKGUID>(engine, "XObjDeclHashTable", "CKGUID", "CKObjectDeclaration@");
     RegisterXHashTable<XFileObjectsTable, int, CK_ID>(engine, "XFileObjectsTable", "CK_ID", "int");
+    RegisterXHashTable<CKSODHash, CKSceneObjectDesc, CK_ID>(engine, "CKSODHash", "CK_ID", "CKSceneObjectDesc");
 
     RegisterXNHashTable<XHashID, CK_ID, CK_ID>(engine, "XHashID", "CK_ID", "CK_ID");
     RegisterXNHashTable<XHashGuidToType, int, CKGUID>(engine, "XHashGuidToType", "CKGUID", "int");
