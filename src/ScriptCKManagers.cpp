@@ -2,26 +2,7 @@
 
 #include <string>
 
-#include "CKPluginManager.h"
-
-// Builtin Managers
-#include "CKBaseManager.h"
-#include "CKParameterManager.h"
-#include "CKTimeManager.h"
-#include "CKMessageManager.h"
-#include "CKRenderManager.h"
-#include "CKBehaviorManager.h"
-#include "CKAttributeManager.h"
-#include "CKPathManager.h"
-
-// External Managers
-#include "CKFloorManager.h"
-#include "CKGridManager.h"
-#include "CKInterfaceManager.h"
-#include "CKSoundManager.h"
-#include "CKMidiManager.h"
-#include "CKInputManager.h"
-#include "CKCollisionManager.h"
+#include "CKAll.h"
 
 #include "ScriptUtils.h"
 
@@ -127,8 +108,13 @@ static void RegisterCKBaseManagerMembers(asIScriptEngine *engine, const char *na
     r = engine->RegisterObjectMethod(name, "int GetFunctionPriority(CKMANAGER_FUNCTIONS functions)", asMETHODPR(T, GetFunctionPriority, (CKMANAGER_FUNCTIONS), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "CKDWORD GetValidFunctionsMask() const", asMETHODPR(T, GetValidFunctionsMask, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(T, CKDestroyObject, (CKObject *, CKDWORD, CKDependencies *), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(T, CKDestroyObject, (CK_ID, CKDWORD, CKDependencies *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(T, CKDestroyObject, (CKObject*, DWORD, CKDependencies*), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(T, CKDestroyObject, (CK_ID, DWORD, CKDependencies*), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObjects(XObjectArray &in, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR(CKBaseManager_CKDestroyObjects, (CKBaseManager *, XObjectArray &, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "CKObject@ CKGetObject(CK_ID id)", asMETHODPR(T, CKGetObject, (CK_ID), CKObject*), asCALL_THISCALL); assert(r >= 0);
 
@@ -316,7 +302,9 @@ void RegisterCKMessageManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMessageManager", "void RenameMessageType(CKMessageType msgType, const string &in newName)", asMETHODPR(CKMessageManager, RenameMessageType, (CKMessageType, CKSTRING), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKMessageManager", "void RenameMessageType(const string &in oldName, const string &in newName)", asMETHODPR(CKMessageManager, RenameMessageType, (CKSTRING, CKSTRING), void), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR SendMessage(CKMessage@ msg)", asMETHODPR(CKMessageManager, SendMessage, (CKMessage*), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKMessageManager", "CKMessage@ SendMessageSingle(int MsgType, CKBeObject@ dest, CKBeObject@ sender = null)", asMETHODPR(CKMessageManager, SendMessageSingle, (CKMessageType, CKBeObject*, CKBeObject*), CKMessage*), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKMessageManager", "CKMessage@ SendMessageGroup(int MsgType, CKGroup@ group, CKBeObject@ sender = null)", asMETHODPR(CKMessageManager, SendMessageGroup, (CKMessageType, CKGroup*, CKBeObject*), CKMessage*), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKMessageManager", "CKMessage@ SendMessageBroadcast(int MsgType, int id = 0, CKBeObject@ sender = null)", asMETHODPR(CKMessageManager, SendMessageBroadcast, (CKMessageType, CK_CLASSID, CKBeObject*), CKMessage*), asCALL_THISCALL); assert(r >= 0);
@@ -408,7 +396,9 @@ void RegisterCKRenderManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKRenderManager", "CKVertexBuffer@ CreateVertexBuffer()", asMETHODPR(CKRenderManager, CreateVertexBuffer, (), CKVertexBuffer*), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKRenderManager", "void DestroyVertexBuffer(CKVertexBuffer@ VB)", asMETHODPR(CKRenderManager, DestroyVertexBuffer, (CKVertexBuffer*), void), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKRenderManager", "void SetRenderOptions(const string &in option, uint value)", asMETHODPR(CKRenderManager, SetRenderOptions, (CKSTRING, CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("CKRenderManager", "const VxEffectDescription &GetEffectDescription(int effectIndex)", asMETHODPR(CKRenderManager, GetEffectDescription, (int), const VxEffectDescription&), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKRenderManager", "int GetEffectCount()", asMETHODPR(CKRenderManager, GetEffectCount, (), int), asCALL_THISCALL); assert(r >= 0);
@@ -467,7 +457,9 @@ void RegisterCKGridManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKGridManager", "int GetClassificationFromName(const string &in name)", asMETHODPR(CKGridManager, GetClassificationFromName, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKGridManager", "string GetClassificationName(int classification)", asMETHODPR(CKGridManager, GetClassificationName, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKGridManager", "int RegisterClassification(const string &in name)", asMETHODPR(CKGridManager, RegisterClassification, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKGridManager", "int GetGridClassificationCategory()", asMETHODPR(CKGridManager, GetGridClassificationCategory, (), int), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("CKGridManager", "const XObjectPointerArray &GetGridArray(int flag = 0)", asMETHODPR(CKGridManager, GetGridArray, (int), const XObjectPointerArray&), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKGridManager", "CKGrid@ GetNearestGrid(VxVector &in pos, CK3dEntity@ ref = null)", asMETHODPR(CKGridManager, GetNearestGrid, (VxVector*, CK3dEntity*), CKGrid*), asCALL_THISCALL); assert(r >= 0);
@@ -579,8 +571,10 @@ void RegisterCKInputManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyDown(uint key, uint &out stamp = 0)", asMETHODPR(CKInputManager, IsKeyDown, (CKDWORD, CKDWORD*), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyUp(uint key)", asMETHODPR(CKInputManager, IsKeyUp, (CKDWORD), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyToggled(uint key, uint &out stamp = 0)", asMETHODPR(CKInputManager, IsKeyToggled, (CKDWORD, CKDWORD*), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKInputManager", "int GetKeyName(uint key, string &out keyName)", asMETHODPR(CKInputManager, GetKeyName, (CKDWORD, CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKInputManager", "uint GetKeyFromName(const string &in keyName)", asMETHODPR(CKInputManager, GetKeyFromName, (CKSTRING), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKInputManager", "NativePointer GetKeyboardState()", asMETHODPR(CKInputManager, GetKeyboardState, (), unsigned char*), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyboardAttached()", asMETHODPR(CKInputManager, IsKeyboardAttached, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 

@@ -15,10 +15,19 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "CKObject@ GetObject(CK_ID id)", asMETHODPR(CKContext, GetObject, (CK_ID), CKObject*), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "int GetObjectCount()", asMETHODPR(CKContext, GetObjectCount, (), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "int GetObjectSize(CKObject@ obj)", asMETHODPR(CKContext, GetObjectSize, (CKObject*), int), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(CKContext, DestroyObject, (CKObject*, CKDWORD, CKDependencies*), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(CKContext, DestroyObject, (CK_ID, CKDWORD, CKDependencies*), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(CKContext, DestroyObject, (CKObject*, DWORD, CKDependencies*), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(CKContext, DestroyObject, (CK_ID, DWORD, CKDependencies*), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKContext", "CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR([](CKContext *ctx, const XObjectArray &objects, CKDWORD flags, CKDependencies *deps) { return ctx->DestroyObjects(objects.Begin(), objects.Size(), flags, deps); }, (CKContext *, const XObjectArray &, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#if CKVERSION == 0x13022002 
     r = engine->RegisterObjectMethod("CKContext", "void DestroyAllDynamicObjects()", asMETHODPR(CKContext, DestroyAllDynamicObjects, (), void), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod("CKContext", "void DestroyAllDynamicObjects(CKScene@ scene = null)", asMETHODPR(CKContext, DestroyAllDynamicObjects, (CKScene *), void), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKContext", "void ChangeObjectDynamic(CKObject@ obj, bool setDynamic = true)", asMETHODPR(CKContext, ChangeObjectDynamic, (CKObject*, CKBOOL), void), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKContext", "const XObjectPointerArray &CKFillObjectsUnused()", asMETHODPR(CKContext, CKFillObjectsUnused, (), const XObjectPointerArray &), asCALL_THISCALL); assert(r >= 0);
@@ -34,7 +43,11 @@ void RegisterCKContext(asIScriptEngine *engine) {
     // Engine runtime
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Play()", asMETHODPR(CKContext, Play, (), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Pause()", asMETHODPR(CKContext, Pause, (), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Reset()", asMETHODPR(CKContext, Reset, (), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR Reset(bool toLevelScene = false)", asMETHODPR(CKContext, Reset, (CKBOOL), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKContext", "bool IsPlaying()", asMETHODPR(CKContext, IsPlaying, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "bool IsReseted()", asMETHODPR(CKContext, IsReseted, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Process()", asMETHODPR(CKContext, Process, (), CKERROR), asCALL_THISCALL); assert(r >= 0);
@@ -111,7 +124,9 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "float GetLastUserProfileTime(CKDWORD slot)", asMETHODPR(CKContext, GetLastUserProfileTime, (CKDWORD), float), asCALL_THISCALL); assert(r >= 0);
 
     // Utilities
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKContext", "string GetStringBuffer(int size)", asMETHODPR(CKContext, GetStringBuffer, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKContext", "CKGUID GetSecureGuid()", asMETHODPR(CKContext, GetSecureGuid, (), CKGUID), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "CKDWORD GetStartOptions()", asMETHODPR(CKContext, GetStartOptions, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "WIN_HANDLE GetMainWindow()", asMETHODPR(CKContext, GetMainWindow, (), WIN_HANDLE), asCALL_THISCALL); assert(r >= 0);

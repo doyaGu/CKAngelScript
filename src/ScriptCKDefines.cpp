@@ -2,36 +2,7 @@
 
 #include <string>
 
-#include "CKDefines.h"
-#include "CKDataReader.h"
-#include "CKModelReader.h"
-#include "CKBitmapReader.h"
-#include "CKSoundReader.h"
-#include "CKMovieReader.h"
-#include "CKBitmapData.h"
-#include "CKPluginManager.h"
-#include "CKParameterManager.h"
-#include "CKAttributeManager.h"
-#include "CKTimeProfiler.h"
-#include "CKTimeManager.h"
-#include "CKMessage.h"
-#include "CKMessageManager.h"
-#include "CKBehaviorPrototype.h"
-#include "CKPathManager.h"
-#include "CKRenderManager.h"
-#include "CKFloorManager.h"
-#include "CKSoundManager.h"
-#include "CKCollisionManager.h"
-#include "CKRenderContext.h"
-#include "CKSquare.h"
-#include "CK2dCurvePoint.h"
-#include "CK2dCurve.h"
-#include "CKKeyframeData.h"
-#include "CKObjectAnimation.h"
-#include "CKSceneObjectDesc.h"
-#include "CKSkin.h"
-#include "CKBodyPart.h"
-#include "CKDebugContext.h"
+#include "CKAll.h"
 
 #include "ScriptUtils.h"
 #include "ScriptXArray.h"
@@ -784,25 +755,45 @@ void RegisterCKStats(asIScriptEngine *engine) {
 // VxDriverDesc
 
 static std::string VxDriverDescGetDriverDesc(const VxDriverDesc &desc) {
+#if CKVERSION == 0x13022002
     return desc.DriverDesc;
+#else
+    return desc.DriverDesc.CStr();
+#endif
 }
 
 static void VxDriverDescSetDriverDesc(VxDriverDesc &desc, const std::string &value) {
+#if CKVERSION == 0x13022002
     strncpy(desc.DriverDesc, value.c_str(), sizeof(desc.DriverDesc) - 1);
     desc.DriverDesc[value.length()] = '\0';
+#else
+    desc.DriverDesc = value.c_str();
+#endif
 }
 
 static std::string VxDriverDescGetDriverName(const VxDriverDesc &desc) {
+#if CKVERSION == 0x13022002
     return desc.DriverName;
+#else
+    return desc.DriverName.CStr();
+#endif
 }
 
 static void VxDriverDescSetDriverName(VxDriverDesc &desc, const std::string &value) {
+#if CKVERSION == 0x13022002
     strncpy(desc.DriverName, value.c_str(), sizeof(desc.DriverName) - 1);
     desc.DriverName[value.length()] = '\0';
+#else
+    desc.DriverName = value.c_str();
+#endif
 }
 
-static VxDisplayMode *VxDriverDescGetDisplayMode(const VxDriverDesc &desc, int index) {
+static VxDisplayMode *VxDriverDescGetDisplayMode(VxDriverDesc &desc, int index) {
+#if CKVERSION == 0x13022002
     if (index < 0 || index >= desc.DisplayModeCount) {
+#else
+    if (index < 0 || index >= desc.DisplayModes.Size()) {
+#endif
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
         ctx->SetException("Out of range");
@@ -812,7 +803,11 @@ static VxDisplayMode *VxDriverDescGetDisplayMode(const VxDriverDesc &desc, int i
 }
 
 static void VxDriverDescSetDisplayMode(VxDriverDesc &desc, int index, const VxDisplayMode &value) {
+#if CKVERSION == 0x13022002
     if (index < 0 || index >= desc.DisplayModeCount) {
+#else
+    if (index < 0 || index >= desc.DisplayModes.Size()) {
+#endif
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
         ctx->SetException("Out of range");
@@ -1459,6 +1454,7 @@ void RegisterCKMessage(asIScriptEngine *engine) {
 // CKWaitingObject
 
 void RegisterCKWaitingObject(asIScriptEngine *engine) {
+#if CKVERSION == 0x13022002
     int r = 0;
 
     r = engine->RegisterObjectProperty("CKWaitingObject", "CKBeObject@ m_BeObject", asOFFSET(CKWaitingObject, m_BeObject)); assert(r >= 0);
@@ -1471,6 +1467,7 @@ void RegisterCKWaitingObject(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("CKWaitingObject", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKWaitingObject *self) { self->~CKWaitingObject(); }, (CKWaitingObject *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKWaitingObject", "CKWaitingObject &opAssign(const CKWaitingObject &in other)", asMETHODPR(CKWaitingObject, operator=, (const CKWaitingObject &), CKWaitingObject &), asCALL_THISCALL); assert(r >= 0);
+#endif
 }
 
 // CKPATHCATEGORY
@@ -1559,6 +1556,7 @@ void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetOutParameterCount()", asMETHODPR(CKBehaviorPrototype, GetOutParameterCount, (), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetLocalParameterCount()", asMETHODPR(CKBehaviorPrototype, GetLocalParameterCount, (), int), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKBEHAVIORIO_DESC &GetInIOList(int index)", asFUNCTIONPR([](CKBehaviorPrototype *self, int index) -> CKBEHAVIORIO_DESC * {
         if (index >= 0 && index < self->GetInputCount() && self->GetInIOList()) {
             return self->GetInIOList()[index];
@@ -1593,9 +1591,12 @@ void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
         }
         return nullptr;
     }, (CKBehaviorPrototype *, int), CKPARAMETER_DESC *), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKObjectDeclaration@ GetSourceObjectDeclaration()", asMETHODPR(CKBehaviorPrototype, GetSoureObjectDeclaration, (), CKObjectDeclaration*), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetSourceObjectDeclaration(CKObjectDeclaration@)", asMETHODPR(CKBehaviorPrototype, SetSourceObjectDeclaration, (CKObjectDeclaration*), void), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetSourceObjectDeclaration(CKObjectDeclaration@ decl)", asMETHODPR(CKBehaviorPrototype, SetSourceObjectDeclaration, (CKObjectDeclaration*), void), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetInIOIndex(const string &in name)", asMETHODPR(CKBehaviorPrototype, GetInIOIndex, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetOutIOIndex(const string &in name)", asMETHODPR(CKBehaviorPrototype, GetOutIOIndex, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
@@ -1658,14 +1659,22 @@ void RegisterCKBitmapData(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKBitmapData", "CKDWORD m_BitmapFlags", asOFFSET(CKBitmapData, m_BitmapFlags)); assert(r >= 0);
     r = engine->RegisterObjectProperty("CKBitmapData", "CKDWORD m_TransColor", asOFFSET(CKBitmapData, m_TransColor)); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectBehaviour("CKBitmapData", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKBitmapData *self) { new(self) CKBitmapData(); }, (CKBitmapData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+#else
+    r = engine->RegisterObjectBehaviour("CKBitmapData", asBEHAVE_CONSTRUCT, "void f(CKContext@ context)", asFUNCTIONPR([](CKBitmapData *self, CKContext *context) { new(self) CKBitmapData(context); }, (CKBitmapData *, CKContext *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+#endif
     r = engine->RegisterObjectBehaviour("CKBitmapData", asBEHAVE_CONSTRUCT, "void f(const CKBitmapData &in other)", asFUNCTIONPR([](const CKBitmapData &data, CKBitmapData *self) { new(self) CKBitmapData(data); }, (const CKBitmapData &, CKBitmapData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("CKBitmapData", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKBitmapData *self) { self->~CKBitmapData(); }, (CKBitmapData *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKBitmapData", "CKBitmapData &opAssign(const CKBitmapData &in other)", asMETHODPR(CKBitmapData, operator=, (const CKBitmapData &), CKBitmapData &), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKBitmapData", "bool CreateImage(int width, int height, int bpp = 32, int slot = 0)", asMETHODPR(CKBitmapData, CreateImage, (int, int, int, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool CreateImage(int width, int height, int bpp = 32, int slot = 0, NativePointer imagePointer = 0)", asMETHODPR(CKBitmapData, CreateImage, (int, int, int, int, void *), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImage(const string &in name, int slot = 0, bool useFormat = false)", asMETHODPR(CKBitmapData, SaveImage, (CKSTRING, int, CKBOOL), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImageAlpha(const string &in name, int slot = 0)", asMETHODPR(CKBitmapData, SaveImageAlpha, (CKSTRING, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
@@ -1713,9 +1722,15 @@ void RegisterCKBitmapData(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBitmapData", "bool GetDynamicHint()", asMETHODPR(CKBitmapData, GetDynamicHint, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKBitmapData", "bool ToRestore()", asMETHODPR(CKBitmapData, ToRestore, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKBitmapData", "bool LoadSlotImage(XString name, int slot = 0)", asMETHODPR(CKBitmapData, LoadSlotImage, (XString, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapData", "bool LoadMovieFile(XString name)", asMETHODPR(CKBitmapData, LoadMovieFile, (XString), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapData", "CKMovieInfo@ CreateMovieInfo(XString s, CKMovieProperties@ &out mp)", asMETHODPR(CKBitmapData, CreateMovieInfo, (XString, CKMovieProperties **), CKMovieInfo *), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool LoadSlotImage(const XString &name, int slot = 0)", asMETHODPR(CKBitmapData, LoadSlotImage, (const XString &, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool LoadMovieFile(const XString &name)", asMETHODPR(CKBitmapData, LoadMovieFile, (const XString &), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "CKMovieInfo@ CreateMovieInfo(const XString &s, CKMovieProperties@ &out mp)", asMETHODPR(CKBitmapData, CreateMovieInfo, (const XString &, CKMovieProperties**), CKMovieInfo*), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKBitmapData", "void SetMovieInfo(CKMovieInfo@ mi)", asMETHODPR(CKBitmapData, SetMovieInfo, (CKMovieInfo *), void), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKBitmapData", "void SetAlphaForTransparentColor(const VxImageDescEx &in desc)", asMETHODPR(CKBitmapData, SetAlphaForTransparentColor, (const VxImageDescEx &), void), asCALL_THISCALL); assert(r >= 0);
@@ -1901,6 +1916,7 @@ void RegisterImpactDesc(asIScriptEngine *engine) {
 // CKPICKRESULT
 
 void RegisterCKPICKRESULT(asIScriptEngine *engine) {
+#if CKVERSION == 0x13022002
     int r = 0;
 
     r = engine->RegisterObjectProperty("CKPICKRESULT", "VxVector IntersectionPoint", asOFFSET(CKPICKRESULT, IntersectionPoint)); assert(r >= 0);
@@ -1917,6 +1933,7 @@ void RegisterCKPICKRESULT(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("CKPICKRESULT", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPICKRESULT *self) { self->~CKPICKRESULT(); }, (CKPICKRESULT *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKPICKRESULT", "CKPICKRESULT &opAssign(const CKPICKRESULT &in other)", asMETHODPR(CKPICKRESULT, operator=, (const CKPICKRESULT &), CKPICKRESULT &), asCALL_THISCALL); assert(r >= 0);
+#endif
 }
 
 // CKSquare
@@ -2217,11 +2234,13 @@ void RegisterCKSceneObjectDesc(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKSceneObjectDesc", "void Clear()", asMETHODPR(CKSceneObjectDesc, Clear, (), void), asCALL_THISCALL); assert(r >= 0);
     // r = engine->RegisterObjectMethod("CKSceneObjectDesc", "void Init(CKObject@ obj = null)", asMETHODPR(CKSceneObjectDesc, Init, (CKObject*), void), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD ActiveAtStart()", asMETHODPR(CKSceneObjectDesc, ActiveAtStart, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD DeActiveAtStart()", asMETHODPR(CKSceneObjectDesc, DeActiveAtStart, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD NothingAtStart()", asMETHODPR(CKSceneObjectDesc, NothingAtStart, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD ResetAtStart()", asMETHODPR(CKSceneObjectDesc, ResetAtStart, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKSceneObjectDesc", "CKDWORD IsActive()", asMETHODPR(CKSceneObjectDesc, IsActive, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+#endif
 }
 
 // CKSkinBoneData
@@ -2371,10 +2390,11 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "void Skip(int dwordCount)", asMETHODPR(CKStateChunk, Skip, (int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void Goto(int dwordCount)", asMETHODPR(CKStateChunk, Goto, (int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "int GetDataSize()", asMETHODPR(CKStateChunk, GetDataSize, (), int), asCALL_THISCALL); assert(r >= 0);
-
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKStateChunk", "CKDWORD ComputeCRC(CKDWORD adler)", asMETHODPR(CKStateChunk, ComputeCRC, (CKDWORD), CKDWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void Pack(int compressionLevel)", asMETHODPR(CKStateChunk, Pack, (int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "bool UnPack(int destSize)", asMETHODPR(CKStateChunk, UnPack, (int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteByte(CKCHAR byte)", asMETHODPR(CKStateChunk, WriteByte, (CKCHAR), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteWord(CKWORD data)", asMETHODPR(CKStateChunk, WriteWord, (CKWORD), void), asCALL_THISCALL); assert(r >= 0);
@@ -2382,7 +2402,11 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteDwordAsWords(CKDWORD data)", asMETHODPR(CKStateChunk, WriteDwordAsWords, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteInt(int data)", asMETHODPR(CKStateChunk, WriteInt, (int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteFloat(float data)", asMETHODPR(CKStateChunk, WriteFloat, (float), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteString(const string &in str)", asMETHODPR(CKStateChunk, WriteString, (char*), void), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteString(const string &in str)", asMETHODPR(CKStateChunk, WriteString, (char *), void), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteString(const string &in str)", asMETHODPR(CKStateChunk, WriteString, (const char *), void), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteObjectID(CK_ID id)", asMETHODPR(CKStateChunk, WriteObjectID, (CK_ID), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteObject(CKObject@ obj)", asMETHODPR(CKStateChunk, WriteObject, (CKObject*), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteGuid(CKGUID data)", asMETHODPR(CKStateChunk, WriteGuid, (CKGUID), void), asCALL_THISCALL); assert(r >= 0);
@@ -2443,8 +2467,11 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer_LEndian(int size, NativePointer buffer)", asMETHODPR(CKStateChunk, ReadAndFillBuffer_LEndian, (int, void*), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer_LEndian16(NativePointer buffer)", asMETHODPR(CKStateChunk, ReadAndFillBuffer_LEndian16, (void*), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer_LEndian16(int size, NativePointer buffer)", asMETHODPR(CKStateChunk, ReadAndFillBuffer_LEndian16, (int, void*), void), asCALL_THISCALL); assert(r >= 0);
-
-    r = engine->RegisterObjectMethod("CKStateChunk", "CKStateChunk@ ReadSubChunk()", asMETHODPR(CKStateChunk, ReadSubChunk, (), CKStateChunk*), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterObjectMethod("CKStateChunk", "CKStateChunk@ ReadSubChunk()", asMETHODPR(CKStateChunk, ReadSubChunk, (), CKStateChunk *), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod("CKStateChunk", "CKStateChunk@ ReadSubChunk(CK_READSUBCHUNK_FLAGS flags = CK_RSC_DEFAULT)", asMETHODPR(CKStateChunk, ReadSubChunk, (CK_READSUBCHUNK_FLAGS), CKStateChunk *), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKStateChunk", "int ReadBuffer(NativePointer &out buffer)", asMETHODPR(CKStateChunk, ReadBuffer, (void**), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "int ReadString(string &out str)", asMETHODPR(CKStateChunk, ReadString, (CKSTRING*), int), asCALL_THISCALL); assert(r >= 0);
 
@@ -2531,7 +2558,9 @@ void RegisterCKDependenciesContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKDependenciesContext", "bool IsInMode(CK_DEPENDENCIES_OPMODE m)", asMETHODPR(CKDependenciesContext, IsInMode, (CK_DEPENDENCIES_OPMODE), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDependenciesContext", "void SetCreationMode(CK_OBJECTCREATION_OPTIONS m)", asMETHODPR(CKDependenciesContext, SetCreationMode, (CK_OBJECTCREATION_OPTIONS), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDependenciesContext", "bool ContainClassID(CK_CLASSID cid)", asMETHODPR(CKDependenciesContext, ContainClassID, (CK_CLASSID), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKDependenciesContext", "CKERROR FinishPrepareDependencies(CKObject@ self, CK_CLASSID cid)", asMETHODPR(CKDependenciesContext, FinishPrepareDependencies, (CKObject*, CK_CLASSID), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKDependenciesContext", "const XHashID &GetDependenciesMap() const", asMETHODPR(CKDependenciesContext, GetDependenciesMap, () const, const XHashID&), asCALL_THISCALL); assert(r >= 0);
 }
 

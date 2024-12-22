@@ -2,22 +2,7 @@
 
 #include <cassert>
 
-#include "CKTypes.h"
-#include "CKEnums.h"
-#include "CKError.h"
-#include "CKBitmapReader.h"
-#include "CKSoundReader.h"
-#include "CKMovieReader.h"
-#include "CKMessage.h"
-#include "CKFile.h"
-#include "CKDebugContext.h"
-#include "CKBaseManager.h"
-#include "CKTimeManager.h"
-#include "CKPathManager.h"
-#include "CKObject.h"
-#include "CKVertexBuffer.h"
-#include "CKBodyPart.h"
-#include "CKObjectAnimation.h"
+#include "CKAll.h"
 
 void RegisterCKEnums(asIScriptEngine *engine) {
     int r = 0;

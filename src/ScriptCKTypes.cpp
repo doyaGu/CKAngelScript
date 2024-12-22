@@ -2,26 +2,7 @@
 
 #include <cassert>
 
-#include "CKDefines.h"
-#include "CKBitmapData.h"
-#include "CKBehaviorPrototype.h"
-#include "CKParameterManager.h"
-#include "CKTimeProfiler.h"
-#include "CKMessageManager.h"
-#include "CKPathManager.h"
-#include "CKRenderContext.h"
-#include "CKCollisionManager.h"
-#include "CKSquare.h"
-#include "CK2dCurvePoint.h"
-#include "CK2dCurve.h"
-#include "CKKeyframeData.h"
-#include "CKObjectAnimation.h"
-#include "CKSceneObjectDesc.h"
-#include "CKScene.h"
-#include "CKBodyPart.h"
-#include "CKPluginManager.h"
-#include "CKDataArray.h"
-#include "CKFloorManager.h"
+#include "CKAll.h"
 
 #include "ScriptXArray.h"
 #include "ScriptXHashTable.h"
@@ -136,7 +117,9 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("CKTimeProfiler", sizeof(CKTimeProfiler), asOBJ_VALUE | asGetTypeTraits<CKTimeProfiler>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("CKMessage", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectType("CKWaitingObject", sizeof(CKWaitingObject), asOBJ_VALUE | asGetTypeTraits<CKWaitingObject>()); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectType("CKPATHCATEGORY", sizeof(CKPATHCATEGORY), asOBJ_VALUE | asGetTypeTraits<CKPATHCATEGORY>()); assert(r >= 0);
 
@@ -160,7 +143,9 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectType("ImpactDesc", sizeof(ImpactDesc), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<ImpactDesc>()); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectType("CKPICKRESULT", sizeof(CKPICKRESULT), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKPICKRESULT>()); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectType("CKSquare", sizeof(CKSquare), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKSquare>()); assert(r >= 0);
 

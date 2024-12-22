@@ -87,8 +87,12 @@ int ScriptManager::Init() {
     if (IsInited())
         return -2;
 
-    asSetGlobalMemoryFunctions([](size_t size) { return VxMalloc(size); },
-                               [](void *ptr) { VxFree(ptr); });
+#if CKVERSION == 0x13022002
+    asSetGlobalMemoryFunctions(
+        [](size_t size) { return VxMalloc(size); },
+        [](void *ptr) { VxFree(ptr); }
+    );
+#endif
 
     m_ScriptEngine = asCreateScriptEngine();
     if (!m_ScriptEngine) {
@@ -247,7 +251,11 @@ int ScriptManager::LoadScript(const char *moduleName, const char *filename) {
     if (filename == nullptr)
         filename = moduleName;
 
-    int r = 0;
+    // Check if module is already loaded. If so, discard it to force a rebuild.
+    asIScriptModule *module = m_ScriptEngine->GetModule(moduleName, asGM_ONLY_IF_EXISTS);
+    if (module) {
+        module->Discard();
+    }
 
     // We will only initialize the global variables once we're
     // ready to execute, so disable the automatic initialization
@@ -259,7 +267,7 @@ int ScriptManager::LoadScript(const char *moduleName, const char *filename) {
     builder.SetPragmaCallback(PragmaCallback, nullptr);
 
     // Compile the script
-    r = builder.StartNewModule(m_ScriptEngine, moduleName);
+    int r = builder.StartNewModule(m_ScriptEngine, moduleName);
     if (r < 0) {
         m_ScriptEngine->WriteMessage(moduleName, 0, 0, asMSGTYPE_ERROR, "Failed to create module");
         return -1;
@@ -288,13 +296,14 @@ void ScriptManager::UnloadScript(const char *moduleName) {
         return;
 
     asIScriptModule *module = m_ScriptEngine->GetModule(moduleName, asGM_ONLY_IF_EXISTS);
-    if (!module)
-        return;
-
-    module->Discard();
+    if (module) {
+        module->Discard();
+    }
 }
 
 asIScriptModule *ScriptManager::GetScript(const char *moduleName) {
+    if (!m_ScriptEngine)
+        return nullptr;
     return m_ScriptEngine->GetModule(moduleName, asGM_ONLY_IF_EXISTS);
 }
 
@@ -308,8 +317,11 @@ int ScriptManager::ExecuteScript(const char *moduleName, const char *decl) {
         return -2;
 
     asIScriptModule *module = m_ScriptEngine->GetModule(moduleName, asGM_ONLY_IF_EXISTS);
-    if (!module)
+    if (!module) {
+        m_ScriptEngine->WriteMessage(moduleName, 0, 0, asMSGTYPE_ERROR,
+                                 "Module not found for ExecuteScript");
         return -1;
+    }
 
     // Find the function
     asIScriptFunction *func = nullptr;
@@ -336,7 +348,7 @@ int ScriptManager::ExecuteScript(const char *moduleName, const char *decl) {
     r = m_ScriptContext->Prepare(func);
     if (r < 0) {
         m_ScriptEngine->WriteMessage(moduleName, 0, 0, asMSGTYPE_ERROR,
-                                     "Failed while preparing the context for execution");
+                                     "Failed to prepare context for script function");
         return -1;
     }
 

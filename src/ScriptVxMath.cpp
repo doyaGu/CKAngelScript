@@ -59,8 +59,8 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("ProcessorsType", "PROC_PPC_G3", PROC_PPC_G3); assert(r >= 0);
     r = engine->RegisterEnumValue("ProcessorsType", "PROC_PPC_G4", PROC_PPC_G4); assert(r >= 0);
     r = engine->RegisterEnumValue("ProcessorsType", "PROC_PSX2", PROC_PSX2); assert(r >= 0);
-    r = engine->RegisterEnumValue("ProcessorsType", "PROC_XBOX2", PROC_XBOX2); assert(r >= 0);
-    r = engine->RegisterEnumValue("ProcessorsType", "PROC_PSP", PROC_PSP); assert(r >= 0);
+    //r = engine->RegisterEnumValue("ProcessorsType", "PROC_XBOX2", PROC_XBOX2); assert(r >= 0);
+    //r = engine->RegisterEnumValue("ProcessorsType", "PROC_PSP", PROC_PSP); assert(r >= 0);
 
     // VX_OSINFO
     r = engine->RegisterEnum("VX_OSINFO"); assert(r >= 0);
@@ -80,25 +80,25 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_WINCE2", VXOS_WINCE2); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_WINCE3", VXOS_WINCE3); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_PSX2", VXOS_PSX2); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_XBOX2", VXOS_XBOX2); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_WINVISTA", VXOS_WINVISTA); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_PSP", VXOS_PSP); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_XBOX360", VXOS_XBOX360); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_WII", VXOS_WII); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_WINSEVEN", VXOS_WINSEVEN); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_XBOX2", VXOS_XBOX2); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_WINVISTA", VXOS_WINVISTA); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_PSP", VXOS_PSP); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_XBOX360", VXOS_XBOX360); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_WII", VXOS_WII); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_OSINFO", "VXOS_WINSEVEN", VXOS_WINSEVEN); assert(r >= 0);
 
     // VX_PLATFORMINFO
-    r = engine->RegisterEnum("VX_PLATFORMINFO"); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_UNKNOWN", VXPLATFORM_UNKNOWN); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_WINDOWS", VXPLATFORM_WINDOWS); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_MAC", VXPLATFORM_MAC); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_XBOX", VXPLATFORM_XBOX); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_WINCE", VXPLATFORM_WINCE); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_LINUX", VXPLATFORM_LINUX); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_PSX2", VXPLATFORM_PSX2); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_XBOX2", VXPLATFORM_XBOX2); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_PSP", VXPLATFORM_PSP); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_WII", VXPLATFORM_WII); assert(r >= 0);
+    //r = engine->RegisterEnum("VX_PLATFORMINFO"); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_UNKNOWN", VXPLATFORM_UNKNOWN); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_WINDOWS", VXPLATFORM_WINDOWS); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_MAC", VXPLATFORM_MAC); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_XBOX", VXPLATFORM_XBOX); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_WINCE", VXPLATFORM_WINCE); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_LINUX", VXPLATFORM_LINUX); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_PSX2", VXPLATFORM_PSX2); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_XBOX2", VXPLATFORM_XBOX2); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_PSP", VXPLATFORM_PSP); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VX_PLATFORMINFO", "VXPLATFORM_WII", VXPLATFORM_WII); assert(r >= 0);
 
     // VX_PIXELFORMAT
     r = engine->RegisterEnum("VX_PIXELFORMAT"); assert(r >= 0);
@@ -520,20 +520,20 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_COLORVERTEX", VXRENDERSTATE_COLORVERTEX); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_LOCALVIEWER", VXRENDERSTATE_LOCALVIEWER); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_NORMALIZENORMALS", VXRENDERSTATE_NORMALIZENORMALS); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_DIFFUSEFROMVERTEX", VXRENDERSTATE_DIFFUSEFROMVERTEX); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SPECULARFROMVERTEX", VXRENDERSTATE_SPECULARFROMVERTEX); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_AMBIENTFROMVERTEX", VXRENDERSTATE_AMBIENTFROMVERTEX); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_EMISSIVEFROMVERTEX", VXRENDERSTATE_EMISSIVEFROMVERTEX); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_DIFFUSEFROMVERTEX", VXRENDERSTATE_DIFFUSEFROMVERTEX); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SPECULARFROMVERTEX", VXRENDERSTATE_SPECULARFROMVERTEX); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_AMBIENTFROMVERTEX", VXRENDERSTATE_AMBIENTFROMVERTEX); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_EMISSIVEFROMVERTEX", VXRENDERSTATE_EMISSIVEFROMVERTEX); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_VERTEXBLEND", VXRENDERSTATE_VERTEXBLEND); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SOFTWAREVPROCESSING", VXRENDERSTATE_SOFTWAREVPROCESSING); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE", VXRENDERSTATE_POINTSIZE); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE_MIN", VXRENDERSTATE_POINTSIZE_MIN); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE_MAX", VXRENDERSTATE_POINTSIZE_MAX); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSPRITEENABLE", VXRENDERSTATE_POINTSPRITEENABLE); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALEENABLE", VXRENDERSTATE_POINTSCALEENABLE); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_A", VXRENDERSTATE_POINTSCALE_A); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_B", VXRENDERSTATE_POINTSCALE_B); assert(r >= 0);
-    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_C", VXRENDERSTATETYPE::VXRENDERSTATE_POINTSCALE_C); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE", VXRENDERSTATE_POINTSIZE); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE_MIN", VXRENDERSTATE_POINTSIZE_MIN); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE_MAX", VXRENDERSTATE_POINTSIZE_MAX); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSPRITEENABLE", VXRENDERSTATE_POINTSPRITEENABLE); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALEENABLE", VXRENDERSTATE_POINTSCALEENABLE); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_A", VXRENDERSTATE_POINTSCALE_A); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_B", VXRENDERSTATE_POINTSCALE_B); assert(r >= 0);
+    //r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_C", VXRENDERSTATE_POINTSCALE_C); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_CLIPPLANEENABLE", VXRENDERSTATE_CLIPPLANEENABLE); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_INDEXVBLENDENABLE", VXRENDERSTATE_INDEXVBLENDENABLE); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_BLENDOP", VXRENDERSTATE_BLENDOP); assert(r >= 0);
@@ -573,14 +573,14 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX5", CKRST_SPECIFICCAPS_DX5); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX7", CKRST_SPECIFICCAPS_DX7); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX8", CKRST_SPECIFICCAPS_DX8); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX9", CKRST_SPECIFICCAPS_DX9); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX9", CKRST_SPECIFICCAPS_DX9); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_SUPPORTSHADERS", CKRST_SPECIFICCAPS_SUPPORTSHADERS); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_POINTSPRITES", CKRST_SPECIFICCAPS_POINTSPRITES); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_VERTEXCOLORABGR", CKRST_SPECIFICCAPS_VERTEXCOLORABGR); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_BLENDTEXTEFFECT", CKRST_SPECIFICCAPS_BLENDTEXTEFFECT); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_POINTSPRITES", CKRST_SPECIFICCAPS_POINTSPRITES); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_VERTEXCOLORABGR", CKRST_SPECIFICCAPS_VERTEXCOLORABGR); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_BLENDTEXTEFFECT", CKRST_SPECIFICCAPS_BLENDTEXTEFFECT); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_CANDOINDEXBUFFER", CKRST_SPECIFICCAPS_CANDOINDEXBUFFER); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_HW_SKINNING", CKRST_SPECIFICCAPS_HW_SKINNING); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_AUTGENMIPMAP", CKRST_SPECIFICCAPS_AUTGENMIPMAP); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_HW_SKINNING", CKRST_SPECIFICCAPS_HW_SKINNING); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_AUTGENMIPMAP", CKRST_SPECIFICCAPS_AUTGENMIPMAP); assert(r >= 0);
 
     // CKRST_TFILTERCAPS
     r = engine->RegisterEnum("CKRST_TFILTERCAPS"); assert(r >= 0);
@@ -606,10 +606,10 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_POW2", CKRST_TEXTURECAPS_POW2); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_ALPHA", CKRST_TEXTURECAPS_ALPHA); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_SQUAREONLY", CKRST_TEXTURECAPS_SQUAREONLY); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_CONDITIONALNONPOW2", CKRST_TEXTURECAPS_CONDITIONALNONPOW2); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_PROJECTED", CKRST_TEXTURECAPS_PROJECTED); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_CUBEMAP", CKRST_TEXTURECAPS_CUBEMAP); assert(r >= 0);
-    r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_VOLUMEMAP", CKRST_TEXTURECAPS_VOLUMEMAP); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_CONDITIONALNONPOW2", CKRST_TEXTURECAPS_CONDITIONALNONPOW2); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_PROJECTED", CKRST_TEXTURECAPS_PROJECTED); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_CUBEMAP", CKRST_TEXTURECAPS_CUBEMAP); assert(r >= 0);
+    //r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_VOLUMEMAP", CKRST_TEXTURECAPS_VOLUMEMAP); assert(r >= 0);
 
     // CKRST_STENCILCAPS
     r = engine->RegisterEnum("CKRST_STENCILCAPS"); assert(r >= 0);
@@ -939,8 +939,10 @@ static void RegisterVxDisplayMode(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxDisplayMode", "VxDisplayMode &opAssign(const VxDisplayMode &in other)", asMETHODPR(VxDisplayMode, operator=, (const VxDisplayMode &), VxDisplayMode &), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxDisplayMode", "bool opEquals(const VxDisplayMode &in other) const", asFUNCTIONPR([](const VxDisplayMode &lhs, const VxDisplayMode &rhs) { return lhs == rhs; }, (const VxDisplayMode &, const VxDisplayMode &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxDisplayMode", "bool opNotEquals(const VxDisplayMode &in other) const", asFUNCTIONPR([](const VxDisplayMode &lhs, const VxDisplayMode &rhs) { return lhs != rhs; }, (const VxDisplayMode &, const VxDisplayMode &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#endif
 }
 
 // VxDrawPrimitiveData
@@ -1015,17 +1017,17 @@ static void RegisterVxSpriteRenderOptions(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VxSpriteRenderOptions &opAssign(const VxSpriteRenderOptions &in other)", asMETHODPR(VxSpriteRenderOptions, operator=, (const VxSpriteRenderOptions &), VxSpriteRenderOptions &), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_ModulateColor() const",
-                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XULONG { return self->ModulateColor; }, (const VxSpriteRenderOptions *), XULONG),
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XDWORD { return self->ModulateColor; }, (const VxSpriteRenderOptions *), XDWORD),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_ModulateColor(uint value)",
-                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XULONG value) { self->ModulateColor = value; }, (VxSpriteRenderOptions *, XULONG), void),
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XDWORD value) { self->ModulateColor = value; }, (VxSpriteRenderOptions *, XDWORD), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_Options() const",
-                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XULONG { return self->Options; }, (const VxSpriteRenderOptions *), XULONG),
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XDWORD { return self->Options; }, (const VxSpriteRenderOptions *), XDWORD),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_Options(uint value)",
-                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XULONG value) { self->Options = value; }, (VxSpriteRenderOptions *, XULONG), void),
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XDWORD value) { self->Options = value; }, (VxSpriteRenderOptions *, XDWORD), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXCMPFUNC get_AlphaTestFunc() const",
@@ -1043,10 +1045,10 @@ static void RegisterVxSpriteRenderOptions(asIScriptEngine *engine) {
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_Options2() const",
-                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XULONG { return self->Options2; }, (const VxSpriteRenderOptions *), XULONG),
+                                     asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XDWORD { return self->Options2; }, (const VxSpriteRenderOptions *), XDWORD),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_Options2(uint value)",
-                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XULONG value) { self->Options2 = value; }, (VxSpriteRenderOptions *, XULONG), void),
+                                     asFUNCTIONPR([](VxSpriteRenderOptions *self, XDWORD value) { self->Options2 = value; }, (VxSpriteRenderOptions *, XDWORD), void),
                                      asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXBLEND_MODE get_DstBlendMode() const",
@@ -1153,8 +1155,9 @@ static void RegisterVxTimeProfiler(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxTimeProfiler", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxTimeProfiler *self) { self->~VxTimeProfiler(); }, (VxTimeProfiler *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     // Methods
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxTimeProfiler", "VxTimeProfiler &opAssign(const VxTimeProfiler &in other)", asMETHOD(VxTimeProfiler, operator=), asCALL_THISCALL); assert(r >= 0);
-
+#endif
     r = engine->RegisterObjectMethod("VxTimeProfiler", "void Reset()", asMETHOD(VxTimeProfiler, Reset), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxTimeProfiler", "float Current() const", asMETHOD(VxTimeProfiler, Current), asCALL_THISCALL); assert(r >= 0);
 }
@@ -1165,8 +1168,8 @@ static INSTANCE_HANDLE VxSharedLibraryLoad(const std::string &LibraryName, VxSha
     return shl.Load(const_cast<char *>(LibraryName.c_str()));
 }
 
-static FUNC_PTR VxSharedLibraryGetFunctionPtr(const std::string &FunctionName, VxSharedLibrary &shl) {
-    return reinterpret_cast<FUNC_PTR>(shl.GetFunctionPtr(const_cast<char *>(FunctionName.c_str())));
+static void *VxSharedLibraryGetFunctionPtr(const std::string &FunctionName, VxSharedLibrary &shl) {
+    return shl.GetFunctionPtr(const_cast<char *>(FunctionName.c_str()));
 }
 
 static void RegisterVxSharedLibrary(asIScriptEngine *engine) {
@@ -1183,7 +1186,7 @@ static void RegisterVxSharedLibrary(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxSharedLibrary", "INSTANCE_HANDLE Load(const string &in libraryName)", asMETHOD(VxSharedLibrary, Load), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSharedLibrary", "INSTANCE_HANDLE Load(const string &libraryName)", asFUNCTIONPR(VxSharedLibraryLoad, (const std::string &, VxSharedLibrary &), INSTANCE_HANDLE), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSharedLibrary", "void ReleaseLibrary()", asMETHODPR(VxSharedLibrary, ReleaseLibrary, (), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxSharedLibrary", "FUNC_PTR GetFunctionPtr(const string &functionName)", asFUNCTIONPR(VxSharedLibraryGetFunctionPtr, (const std::string &, VxSharedLibrary &), FUNC_PTR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSharedLibrary", "FUNC_PTR GetFunctionPtr(const string &functionName)", asFUNCTIONPR(VxSharedLibraryGetFunctionPtr, (const std::string &, VxSharedLibrary &), void *), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // VxMemoryMappedFile
@@ -1484,7 +1487,9 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxVector4", "const float &opIndex(int index) const", asFUNCTIONPR([](const VxVector4 &v, int i) -> const float & { return v[i]; }, (const VxVector4 &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
     r = engine->RegisterObjectMethod("VxVector4", "void Set(float x, float y, float z, float w)", asMETHODPR(VxVector4, Set, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxVector4", "void Set(float x, float y, float z)", asMETHODPR(VxVector4, Set, (float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("VxVector4", "float Dot(const VxVector4 &in v) const", asMETHODPR(VxVector4, Dot, (const VxVector4 &) const, float), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxVector4", "void Absolute()", asMETHOD(VxVector4, Absolute), asCALL_THISCALL); assert(r >= 0);
@@ -1498,8 +1503,8 @@ static void VxBboxClassifyVertices(const VxBbox &box, const CScriptArray &iVerti
     int count = (int)iVertices.GetSize();
     if(count != 0) {
         XBYTE *vertices = (XBYTE*)iVertices.At(0);
-        XULONG stride = sizeof(XBYTE);
-        XULONG *flags = (XULONG*)oFlags.At(0);
+        unsigned long stride = sizeof(XBYTE);
+        unsigned long *flags = (unsigned long *)oFlags.At(0);
         box.ClassifyVertices(count, vertices, stride, flags);
     }
 }
@@ -1508,8 +1513,8 @@ static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, const CScriptArray 
     int count = (int)iVertices.GetSize();
     if(count != 0) {
         XBYTE *vertices = (XBYTE*)iVertices.At(0);
-        XULONG stride = sizeof(XBYTE);
-        XULONG *flags = (XULONG*)oFlags.At(0);
+        unsigned long stride = sizeof(XBYTE);
+        unsigned long *flags = (unsigned long *)oFlags.At(0);
         box.ClassifyVerticesOneAxis(count, vertices, stride, iAxis, flags);
     }
 }
@@ -1534,7 +1539,9 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxBbox", "VxBbox &opAssign(const VxBbox &in box)", asMETHODPR(VxBbox, operator=, (const VxBbox &), VxBbox &), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxBbox", "bool opEquals(const VxVector &in v) const", asFUNCTIONPR([](const VxBbox &lhs, const VxBbox &rhs) -> bool { return lhs == rhs; }, (const VxBbox &, const VxBbox &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("VxBbox", "bool IsValid() const", asMETHOD(VxBbox, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "VxVector GetSize() const", asMETHOD(VxBbox, GetSize), asCALL_THISCALL); assert(r >= 0);
@@ -1546,8 +1553,10 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxBbox", "void Reset()", asMETHOD(VxBbox, Reset), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "void Merge(const VxBbox &in box)", asMETHODPR(VxBbox, Merge, (const VxBbox &), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "void Merge(const VxVector &in v)", asMETHODPR(VxBbox, Merge, (const VxVector &), void), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxBbox", "uint Classify(const VxVector &in point) const", asMETHODPR(VxBbox, Classify, (const VxVector &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "uint Classify(const VxBbox &in box) const", asMETHODPR(VxBbox, Classify, (const VxBbox &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("VxBbox", "int Classify(const VxBbox &in box, const VxVector &in point) const", asMETHODPR(VxBbox, Classify, (const VxBbox &, const VxVector &) const, int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVertices(const array<uint8> &in vertices, const array<uint32> &in flags) const", asFUNCTIONPR(VxBboxClassifyVertices, (const VxBbox &, const CScriptArray &, const CScriptArray &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVerticesOneAxis(const array<uint8> &in vertices, int axis, const array<uint32> &in flags) const", asFUNCTIONPR(VxBboxClassifyVerticesOneAxis, (const VxBbox &, const CScriptArray &, int, const CScriptArray &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -1904,7 +1913,9 @@ static void RegisterVxOBB(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxOBB", "VxOBB &opAssign(const VxOBB &in obb)", asMETHODPR(VxOBB, operator=, (const VxOBB &), VxOBB &), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxOBB", "bool opEquals(const VxOBB &in obb) const", asMETHODPR(VxOBB, operator==, (const VxOBB &) const, bool), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("VxOBB", "VxVector &GetCenter()", asMETHODPR(VxOBB, GetCenter, (), VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxOBB", "const VxVector &GetCenter() const", asMETHODPR(VxOBB, GetCenter, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
@@ -1916,8 +1927,10 @@ static void RegisterVxOBB(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxOBB", "const float &GetExtent(int i) const", asMETHODPR(VxOBB, GetExtent, (int) const, const float &), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxOBB", "void Create(const VxBbox &in box, const VxMatrix &in mat)", asMETHODPR(VxOBB, Create, (const VxBbox &, const VxMatrix &), void), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxOBB", "bool VectorIn(const VxVector &in v) const", asMETHODPR(VxOBB, VectorIn, (const VxVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxOBB", "bool IsBoxInside(const VxBbox &in box) const", asMETHODPR(VxOBB, IsBoxInside, (const VxBbox &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+#endif
 }
 
 // VxRay
@@ -1941,7 +1954,9 @@ static void RegisterVxRay(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxRay", "VxRay &opAssign(const VxRay &in)", asMETHODPR(VxRay, operator=, (const VxRay &), VxRay &), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxRay", "bool opEquals(const VxRay &in ray) const", asMETHODPR(VxRay, operator==, (const VxRay &) const, bool), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("VxRay", "const VxVector &GetOrigin() const", asMETHODPR(VxRay, GetOrigin, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRay", "VxVector &GetOrigin()", asMETHODPR(VxRay, GetOrigin, (), VxVector &), asCALL_THISCALL); assert(r >= 0);
@@ -1971,7 +1986,9 @@ static void RegisterVxSphere(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxSphere", "VxSphere &opAssign(const VxSphere &in sphere)", asMETHODPR(VxSphere, operator=, (const VxSphere &), VxSphere &), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxSphere", "bool opEquals(const VxSphere &in sphere) const", asMETHODPR(VxSphere, operator==, (const VxSphere &) const, bool), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("VxSphere", "VxVector &Center()", asMETHODPR(VxSphere, Center, (), VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSphere", "const VxVector &Center() const", asMETHODPR(VxSphere, Center, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
@@ -1979,7 +1996,9 @@ static void RegisterVxSphere(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxSphere", "const float &Radius() const", asMETHODPR(VxSphere, Radius, () const, const float &), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSphere", "bool IsPointInside(const VxVector &in point)", asMETHODPR(VxSphere, IsPointInside, (const VxVector &), bool), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxSphere", "bool IsBoxTotallyInside(const VxBbox &in point)", asMETHODPR(VxSphere, IsBoxTotallyInside, (const VxBbox &), bool), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("VxSphere", "bool IsPointOnSurface(const VxVector &in point)", asMETHODPR(VxSphere, IsPointOnSurface, (const VxVector &), bool), asCALL_THISCALL); assert(r >= 0);
 }
 
@@ -2006,7 +2025,9 @@ static void RegisterVxPlane(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxPlane", "VxPlane &opAssign(const VxPlane &in plane)", asMETHODPR(VxPlane, operator=, (const VxPlane &), VxPlane &), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxPlane", "bool opEquals(const VxPlane &in plane) const", asMETHODPR(VxPlane, operator==, (const VxPlane &) const, bool), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("VxPlane", "VxPlane opNeg() const", asFUNCTIONPR(operator-, (const VxPlane &), const VxPlane), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
@@ -2143,7 +2164,9 @@ static void RegisterVxFrustum(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxFrustum", "VxFrustum &opAssign(const VxFrustum &in f)", asMETHODPR(VxFrustum, operator=, (const VxFrustum &), VxFrustum &), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxFrustum", "bool opEquals(const VxFrustum &in f) const", asMETHODPR(VxFrustum, operator==, (const VxFrustum &) const, bool), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("VxFrustum", "VxVector &GetOrigin()", asMETHODPR(VxFrustum, GetOrigin, (), VxVector &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxFrustum", "const VxVector &GetOrigin() const", asMETHODPR(VxFrustum, GetOrigin, () const, const VxVector &), asCALL_THISCALL); assert(r >= 0);
@@ -2169,7 +2192,9 @@ static void RegisterVxFrustum(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxFrustum", "const VxPlane &GetUpPlane() const", asMETHOD(VxFrustum, GetUpPlane), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxFrustum", "const VxPlane &GetBottomPlane() const", asMETHOD(VxFrustum, GetBottomPlane), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxFrustum", "uint Classify(const VxVector &in v) const", asMETHODPR(VxFrustum, Classify, (const VxVector &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("VxFrustum", "float Classify(const VxBbox &in box) const", asMETHODPR(VxFrustum, Classify, (const VxBbox &) const, float), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxFrustum", "float Classify(const VxBbox &in box, const VxMatrix &in mat) const", asMETHODPR(VxFrustum, Classify, (const VxBbox &, const VxMatrix &) const, float), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxFrustum", "bool IsInside(const VxVector &in mat) const", asMETHODPR(VxFrustum, IsInside, (const VxVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
@@ -2195,7 +2220,9 @@ static void RegisterVxColor(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float r, float g, float b, float a)", asFUNCTIONPR([](float r, float g, float b, float a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (float, float, float, float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float r, float g, float b)", asFUNCTIONPR([](float r, float g, float b, VxColor *self) { new(self) VxColor(r, g, b); }, (float, float, float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(float r)", asFUNCTIONPR([](float r, VxColor *self) { new(self) VxColor(r); }, (float, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(uint col)", asFUNCTIONPR([](unsigned long col, VxColor *self) { new(self) VxColor(col); }, (unsigned long, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+#endif
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int r, int g, int b, int a)", asFUNCTIONPR([](int r, int g, int b, int a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (int, int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int r, int g, int b)", asFUNCTIONPR([](int r, int g, int b, VxColor *self) { new(self) VxColor(r, g, b); }, (int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxColor *self) { new(self) VxColor(list[0], list[1], list[2], list[3]); }, (float *, VxColor *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
@@ -2225,18 +2252,22 @@ static void RegisterVxColor(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxColor", "void Check()", asMETHOD(VxColor, Check), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxColor", "void Set(float r, float g, float b, float a)", asMETHODPR(VxColor, Set, (float, float, float, float), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxColor", "void Set(float r, float g, float b)", asMETHODPR(VxColor, Set, (float, float, float), void), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("VxColor", "void Set(uint color)", asMETHODPR(VxColor, Set, (unsigned long), void), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("VxColor", "void Set(int r, int g, int b, int a)", asMETHODPR(VxColor, Set, (int, int, int, int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxColor", "void Set(int r, int g, int b)", asMETHODPR(VxColor, Set, (int, int, int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxColor", "uint GetRGBA() const", asMETHOD(VxColor, GetRGBA), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxColor", "uint GetRGB() const", asMETHOD(VxColor, GetRGB), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxColor", "float GetSquareDistance(const VxColor &in color) const", asMETHOD(VxColor, GetSquareDistance), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterGlobalFunction("uint VxColorConvert(float r, float g, float b, float a = 1.0)", asFUNCTIONPR(VxColor::Convert, (float, float, float, float), unsigned long), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("uint VxColorConvert(int r, int g, int b, int a = 255)", asFUNCTIONPR(VxColor::Convert, (int, int, int, int), unsigned long), asCALL_CDECL); assert(r >= 0);
 
     r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(float r, float g, float b, float a)", asFUNCTIONPR(RGBAFTOCOLOR, (float, float, float, float), unsigned long), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("uint RGBAFTOCOLOR(const VxColor &in color)", asFUNCTIONPR(RGBAFTOCOLOR, (const VxColor *), unsigned long), asCALL_CDECL); assert(r >= 0);
+#endif
 
     r = engine->RegisterGlobalFunction("uint ColorGetRed(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetRed(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("uint ColorGetAlpha(uint rgb)", asFUNCTIONPR([](unsigned long rgb) { return ColorGetAlpha(rgb); }, (unsigned long), unsigned long), asCALL_CDECL); assert(r >= 0);
