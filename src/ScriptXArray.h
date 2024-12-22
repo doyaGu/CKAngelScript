@@ -161,7 +161,9 @@ void RegisterXArray(asIScriptEngine *engine, const char *className, const char *
     decl.Format("void FastRemove(const %s &in o)", elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, FastRemove, (const T &), void), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod(className, "void FastRemoveAt(int pos)", asMETHODPR(C, FastRemoveAt, (int), void), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     decl.Format("void Fill(const %s &in o)", elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Fill, (const T &), void), asCALL_THISCALL); assert(r >= 0);
@@ -174,10 +176,12 @@ void RegisterXArray(asIScriptEngine *engine, const char *className, const char *
     decl.Format("int GetPosition(const %s &in o) const", elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, GetPosition, (const T &) const, int), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod(className, "void Swap(int pos1, int pos2)", asMETHODPR(C, Swap, (int, int), void), asCALL_THISCALL); assert(r >= 0);
 
     decl.Format("void Swap(%s &inout other)", className);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XArray<T>, Swap, (XArray<T> &), void), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     decl.Format("const %s &Front() const", elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Front, () const, const T &), asCALL_THISCALL); assert(r >= 0);
@@ -204,7 +208,9 @@ void RegisterXArray(asIScriptEngine *engine, const char *className, const char *
     r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.REnd(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
 
     r = engine->RegisterObjectMethod(className, "int Size() const", asMETHODPR(C, Size, () const, int), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod(className, "bool IsEmpty() const", asMETHODPR(C, IsEmpty, () const, bool), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod(className, "int GetMemoryOccupation(bool addStatic = false) const", asMETHODPR(C, GetMemoryOccupation, (XBOOL) const, int), asCALL_THISCALL); assert(r >= 0);
 }
 
@@ -274,10 +280,12 @@ void RegisterXSArray(asIScriptEngine *engine, const char *className, const char 
     decl.Format("int GetPosition(const %s &in o) const", elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, GetPosition, (const T &) const, int), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod(className, "void Swap(int pos1, int pos2)", asMETHODPR(C, Swap, (int, int), void), asCALL_THISCALL); assert(r >= 0);
 
     decl.Format("void Swap(%s &inout other)", className);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XSArray<T>, Swap, (XSArray<T> &), void), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     decl.Format("%sIt Begin() const", className);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.Begin(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
@@ -338,10 +346,12 @@ void RegisterXClassArray(asIScriptEngine *engine, const char *className, const c
     decl.Format("int GetPosition(const %s &in o) const", elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, GetPosition, (const T &) const, int), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod(className, "void Swap(int pos1, int pos2)", asMETHODPR(C, Swap, (int, int), void), asCALL_THISCALL); assert(r >= 0);
 
     decl.Format("void Swap(%s &inout other)", className);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, Swap, (XClassArray<T> &), void), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     decl.Format("const %s &Back() const", elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, Back, () const, const T &), asCALL_THISCALL); assert(r >= 0);
