@@ -1036,6 +1036,12 @@ void RegisterCKEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CK_SOUNDMANAGER_CAPS", "CK_LISTENERSETTINGS_SOFTWARESOURCES", CK_LISTENERSETTINGS_SOFTWARESOURCES); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_SOUNDMANAGER_CAPS", "CK_LISTENERSETTINGS_ALL", CK_LISTENERSETTINGS_ALL); assert(r >= 0);
 
+    // CK_READSUBCHUNK_FLAGS
+    r = engine->RegisterEnum("CK_READSUBCHUNK_FLAGS"); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_READSUBCHUNK_FLAGS", "CK_RSC_DEFAULT", CK_RSC_DEFAULT); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_READSUBCHUNK_FLAGS", "CK_RSC_SKIP", CK_RSC_SKIP); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_READSUBCHUNK_FLAGS", "CK_RSC_SCRATCH", CK_RSC_SCRATCH); assert(r >= 0);
+
     // CK_FO_OPTIONS
     r = engine->RegisterEnum("CK_FO_OPTIONS"); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_FO_OPTIONS", "CK_FO_DEFAULT", CKFileObject::CK_FO_DEFAULT); assert(r >= 0);
