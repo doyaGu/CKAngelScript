@@ -167,6 +167,10 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectType("CKSceneObjectDesc", sizeof(CKSceneObjectDesc), asOBJ_VALUE | asGetTypeTraits<CKSceneObjectDesc>()); assert(r >= 0);
 
+    r = engine->RegisterObjectType("CKPatch", sizeof(CKPatch), asOBJ_VALUE | asGetTypeTraits<CKPatch>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKPatchEdge", sizeof(CKPatchEdge), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<CKPatchEdge>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKTVPatch", sizeof(CKTVPatch), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<CKTVPatch>()); assert(r >= 0);
+
     r = engine->RegisterObjectType("CKSkinBoneData", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKSkinVertexData", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKSkin", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);

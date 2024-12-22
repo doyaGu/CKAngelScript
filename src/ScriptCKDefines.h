@@ -81,6 +81,10 @@ void RegisterCKAnimKey(asIScriptEngine *engine);
 
 void RegisterCKSceneObjectDesc(asIScriptEngine *engine);
 
+void RegisterCKPatch(asIScriptEngine *engine);
+void RegisterCKPatchEdge(asIScriptEngine *engine);
+void RegisterCKTVPatch(asIScriptEngine *engine);
+
 void RegisterCKSkinBoneData(asIScriptEngine *engine);
 void RegisterCKSkinVertexData(asIScriptEngine *engine);
 void RegisterCKSkin(asIScriptEngine *engine);

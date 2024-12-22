@@ -1625,9 +1625,68 @@ void RegisterCKMesh(asIScriptEngine *engine) {
 void RegisterCKPatchMesh(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
+    int r = 0;
+
     RegisterCKMeshMembers<CKPatchMesh>(engine, "CKPatchMesh");
 
-    // TODO: Add PatchMesh specific methods
+    r = engine->RegisterObjectMethod("CKPatchMesh", "CKERROR FromMesh(CKMesh@ m)", asMETHODPR(CKPatchMesh, FromMesh, (CKMesh*), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "CKERROR ToMesh(CKMesh@ m, int stepCount)", asMETHODPR(CKPatchMesh, ToMesh, (CKMesh*, int), CKERROR), asCALL_THISCALL); assert(r >= 0);
+
+    // Tessellation
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetIterationCount(int count)", asMETHODPR(CKPatchMesh, SetIterationCount, (int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "int GetIterationCount()", asMETHODPR(CKPatchMesh, GetIterationCount, (), int), asCALL_THISCALL); assert(r >= 0);
+
+    // Mesh
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void BuildRenderMesh()", asMETHODPR(CKPatchMesh, BuildRenderMesh, (), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void CleanRenderMesh()", asMETHODPR(CKPatchMesh, CleanRenderMesh, (), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void Clear()", asMETHODPR(CKPatchMesh, Clear, (), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void ComputePatchAux(int index)", asMETHODPR(CKPatchMesh, ComputePatchAux, (int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void ComputePatchInteriors(int index)", asMETHODPR(CKPatchMesh, ComputePatchInteriors, (int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "CKDWORD GetPatchFlags()", asMETHODPR(CKPatchMesh, GetPatchFlags, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetPatchFlags(CKDWORD flags)", asMETHODPR(CKPatchMesh, SetPatchFlags, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
+
+    // Control Points
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetVertVecCount(int vertCount, int vecCount)", asMETHODPR(CKPatchMesh, SetVertVecCount, (int, int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "int GetVertCount()", asMETHODPR(CKPatchMesh, GetVertCount, (), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetVert(int index, VxVector &in cp)", asMETHODPR(CKPatchMesh, SetVert, (int, VxVector*), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void GetVert(int index, VxVector &out cp)", asMETHODPR(CKPatchMesh, GetVert, (int, VxVector*), void), asCALL_THISCALL); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKPatchMesh", "VxVector &GetVerts()", asMETHODPR(CKPatchMesh, GetVerts, (), VxVector*), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "int GetVecCount()", asMETHODPR(CKPatchMesh, GetVecCount, (), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetVec(int index, VxVector &in cp)", asMETHODPR(CKPatchMesh, SetVec, (int, VxVector*), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void GetVec(int index, VxVector &out cp)", asMETHODPR(CKPatchMesh, GetVec, (int, VxVector*), void), asCALL_THISCALL); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKPatchMesh", "VxVector &GetVecs()", asMETHODPR(CKPatchMesh, GetVecs, (), VxVector*), asCALL_THISCALL); assert(r >= 0);
+
+    // Edges
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetEdgeCount(int count)", asMETHODPR(CKPatchMesh, SetEdgeCount, (int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "int GetEdgeCount()", asMETHODPR(CKPatchMesh, GetEdgeCount, (), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetEdge(int index, CKPatchEdge &in edge)", asMETHODPR(CKPatchMesh, SetEdge, (int, CKPatchEdge*), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void GetEdge(int index, CKPatchEdge &out edge)", asMETHODPR(CKPatchMesh, GetEdge, (int, CKPatchEdge*), void), asCALL_THISCALL); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKPatchMesh", "CKPatchEdge &GetEdges()", asMETHODPR(CKPatchMesh, GetEdges, (), CKPatchEdge*), asCALL_THISCALL); assert(r >= 0);
+
+    // Patches
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetPatchCount(int count)", asMETHODPR(CKPatchMesh, SetPatchCount, (int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "int GetPatchCount()", asMETHODPR(CKPatchMesh, GetPatchCount, (), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetPatch(int index, CKPatch &in p)", asMETHODPR(CKPatchMesh, SetPatch, (int, CKPatch*), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void GetPatch(int index, CKPatch &out p)", asMETHODPR(CKPatchMesh, GetPatch, (int, CKPatch*), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "CKDWORD GetPatchSM(int index)", asMETHODPR(CKPatchMesh, GetPatchSM, (int), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetPatchSM(int index, CKDWORD smoothing)", asMETHODPR(CKPatchMesh, SetPatchSM, (int, CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "CKMaterial@ GetPatchMaterial(int index)", asMETHODPR(CKPatchMesh, GetPatchMaterial, (int), CKMaterial*), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetPatchMaterial(int index, CKMaterial@ mat)", asMETHODPR(CKPatchMesh, SetPatchMaterial, (int, CKMaterial*), void), asCALL_THISCALL); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKPatchMesh", "CKPatch &GetPatches()", asMETHODPR(CKPatchMesh, GetPatches, (), CKPatch*), asCALL_THISCALL); assert(r >= 0);
+
+    // Texture Patches
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetTVPatchCount(int count, int channel = -1)", asMETHODPR(CKPatchMesh, SetTVPatchCount, (int, int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "int GetTVPatchCount(int channel = -1)", asMETHODPR(CKPatchMesh, GetTVPatchCount, (int), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetTVPatch(int index, CKTVPatch &in tvPatch, int channel = -1)", asMETHODPR(CKPatchMesh, SetTVPatch, (int, CKTVPatch*, int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void GetTVPatch(int index, CKTVPatch &out tvPatch, int channel = -1)", asMETHODPR(CKPatchMesh, GetTVPatch, (int, CKTVPatch*, int), void), asCALL_THISCALL); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKPatchMesh", "CKTVPatch &GetTVPatches(int channel = -1)", asMETHODPR(CKPatchMesh, GetTVPatches, (int), CKTVPatch*), asCALL_THISCALL); assert(r >= 0);
+
+    // Texture Vertices
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetTVCount(int count, int channel = -1)", asMETHODPR(CKPatchMesh, SetTVCount, (int, int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "int GetTVCount(int channel = -1)", asMETHODPR(CKPatchMesh, GetTVCount, (int), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void SetTV(int index, float u, float v, int channel = -1)", asMETHODPR(CKPatchMesh, SetTV, (int, float, float, int), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatchMesh", "void GetTV(int index, float &out u, float &out v, int channel = -1)", asMETHODPR(CKPatchMesh, GetTV, (int, float*, float*, int), void), asCALL_THISCALL); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKPatchMesh", "VxUV &GetTVs(int channel = -1)", asMETHODPR(CKPatchMesh, GetTVs, (int), VxUV*), asCALL_THISCALL); assert(r >= 0);
 }
 
 void RegisterCKDataArray(asIScriptEngine *engine) {

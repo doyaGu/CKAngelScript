@@ -1085,6 +1085,18 @@ void RegisterCKEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_BEZIERSCL_CONTROL", CKANIMATION_BEZIERSCL_CONTROL); assert(r >= 0);
     r = engine->RegisterEnumValue("CKANIMATION_CONTROLLER", "CKANIMATION_MORPH_CONTROL", CKANIMATION_MORPH_CONTROL); assert(r >= 0);
 
+    // CK_PATCHMESH_FLAGS
+    r = engine->RegisterEnum("CK_PATCHMESH_FLAGS"); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_PATCHMESH_FLAGS", "CK_PATCHMESH_UPTODATE", CK_PATCHMESH_UPTODATE); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_PATCHMESH_FLAGS", "CK_PATCHMESH_BUILDNORMALS", CK_PATCHMESH_BUILDNORMALS); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_PATCHMESH_FLAGS", "CK_PATCHMESH_MATERIALSUPTODATE", CK_PATCHMESH_MATERIALSUPTODATE); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_PATCHMESH_FLAGS", "CK_PATCHMESH_AUTOSMOOTH", CK_PATCHMESH_AUTOSMOOTH); assert(r >= 0);
+
+    // CK_PATCH_FLAGS
+    r = engine->RegisterEnum("CK_PATCH_FLAGS"); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_PATCH_FLAGS", "CK_PATCH_TRI", CK_PATCH_TRI); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_PATCH_FLAGS", "CK_PATCH_QUAD", CK_PATCH_QUAD); assert(r >= 0);
+
     // CK_IKJOINT_FLAGS
     r = engine->RegisterEnum("CK_IKJOINT_FLAGS"); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_IKJOINT_FLAGS", "CK_IKJOINT_ACTIVE_X", CK_IKJOINT_ACTIVE_X); assert(r >= 0);

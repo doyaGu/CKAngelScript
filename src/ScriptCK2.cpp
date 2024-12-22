@@ -104,6 +104,10 @@ void RegisterCK2(asIScriptEngine *engine) {
 
     RegisterCKSceneObjectDesc(engine);
 
+    RegisterCKPatch(engine);
+    RegisterCKPatchEdge(engine);
+    RegisterCKTVPatch(engine);
+
     RegisterCKSkinBoneData(engine);
     RegisterCKSkinVertexData(engine);
     RegisterCKSkin(engine);

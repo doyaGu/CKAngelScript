@@ -2243,6 +2243,146 @@ void RegisterCKSceneObjectDesc(asIScriptEngine *engine) {
 #endif
 }
 
+// CKPatch
+
+static short int CKPatchGetV(CKPatch &patch, int index) {
+    if (index < 0 || index >= 4) {
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Index out of range for 'v'");
+        return 0;
+    }
+    return patch.v[index];
+}
+
+static void CKPatchSetV(CKPatch &patch, int index, short int value) {
+    if (index < 0 || index >= 4) {
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Index out of range for 'v'");
+        return;
+    }
+    patch.v[index] = value;
+}
+
+static short int CKPatchGetVec(CKPatch &patch, int index) {
+    if (index < 0 || index >= 8) {
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Index out of range for 'vec'");
+        return 0;
+    }
+    return patch.vec[index];
+}
+
+static void CKPatchSetVec(CKPatch &patch, int index, short int value) {
+    if (index < 0 || index >= 8) {
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Index out of range for 'vec'");
+        return;
+    }
+    patch.vec[index] = value;
+}
+
+static short int CKPatchGetInterior(CKPatch &patch, int index) {
+    if (index < 0 || index >= 4) {
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Index out of range for 'interior'");
+        return 0;
+    }
+    return patch.interior[index];
+}
+
+static void CKPatchSetInterior(CKPatch &patch, int index, short int value) {
+    if (index < 0 || index >= 4) {
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Index out of range for 'interior'");
+        return;
+    }
+    patch.interior[index] = value;
+}
+
+static short int CKPatchGetEdge(CKPatch &patch, int index) {
+    if (index < 0 || index >= 4) {
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Index out of range for 'edge'");
+        return 0;
+    }
+    return patch.edge[index];
+}
+
+static void CKPatchSetEdge(CKPatch &patch, int index, short int value) {
+    if (index < 0 || index >= 4) {
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Index out of range for 'edge'");
+        return;
+    }
+    patch.edge[index] = value;
+}
+
+void RegisterCKPatch(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKPatch", "CKDWORD type", asOFFSET(CKPatch, type)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPatch", "CKDWORD SmoothingGroup", asOFFSET(CKPatch, SmoothingGroup)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPatch", "CK_ID Material", asOFFSET(CKPatch, Material)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPatch", "VxVector &auxs", asOFFSET(CKPatch, auxs)); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKPatch", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKPatch *self) { new(self) CKPatch(); }, (CKPatch *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKPatch", asBEHAVE_CONSTRUCT, "void f(const CKPatch &in other)", asFUNCTIONPR([](const CKPatch &p, CKPatch *self) { new(self) CKPatch(p); }, (const CKPatch &, CKPatch *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectBehaviour("CKPatch", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPatch *self) { self->~CKPatch(); }, (CKPatch *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKPatch", "CKPatch &opAssign(const CKPatch &in other)", asMETHODPR(CKPatch, operator=, (const CKPatch &), CKPatch &), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKPatch", "int16 GetV(int index)", asFUNCTION(CKPatchGetV), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatch", "void SetV(int index, int16 value)", asFUNCTION(CKPatchSetV), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKPatch", "int16 GetVec(int index)", asFUNCTION(CKPatchGetVec), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatch", "void SetVec(int index, int16 value)", asFUNCTION(CKPatchSetVec), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKPatch", "int16 GetInterior(int index)", asFUNCTION(CKPatchGetInterior), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatch", "void SetInterior(int index, int16 value)", asFUNCTION(CKPatchSetInterior), asCALL_CDECL_OBJLAST); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("CKPatch", "int16 GetEdge(int index)", asFUNCTION(CKPatchGetEdge), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPatch", "void SetEdge(int index, int16 value)", asFUNCTION(CKPatchSetEdge), asCALL_CDECL_OBJLAST); assert(r >= 0);
+}
+
+void RegisterCKPatchEdge(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectProperty("CKPatchEdge", "int16 v1", asOFFSET(CKPatchEdge, v1)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPatchEdge", "int16 vec12", asOFFSET(CKPatchEdge, vec12)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPatchEdge", "int16 vec21", asOFFSET(CKPatchEdge, vec21)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPatchEdge", "int16 v2", asOFFSET(CKPatchEdge, v2)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPatchEdge", "int16 patch1", asOFFSET(CKPatchEdge, patch1)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKPatchEdge", "int16 patch2", asOFFSET(CKPatchEdge, patch2)); assert(r >= 0);
+}
+
+static short int CKTVPatchGetTV(CKTVPatch &patch, int index) {
+    if (index < 0 || index >= 4) {
+        // Set a script exception
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Out of range");
+        return 0;
+    }
+    return patch.tv[index];
+}
+
+static void CKTVPatchSetTV(CKTVPatch &patch, int index, short int tv) {
+    if (index < 0 || index >= 4) {
+        // Set a script exception
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Out of range");
+        return;
+    }
+    patch.tv[index] = tv;
+}
+
+void RegisterCKTVPatch(asIScriptEngine *engine) {
+    int r = 0;
+
+    r = engine->RegisterObjectMethod("CKTVPatch", "int16 GetTV(int index)", asFUNCTION(CKTVPatchGetTV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKTVPatch", "void SetTV(int index, int16 value)", asFUNCTION(CKTVPatchSetTV), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+}
+
 // CKSkinBoneData
 
 void RegisterCKSkinBoneData(asIScriptEngine *engine) {
@@ -2369,7 +2509,6 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void StartRead()", asMETHODPR(CKStateChunk, StartRead, (), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void StartWrite()", asMETHODPR(CKStateChunk, StartWrite, (), void), asCALL_THISCALL); assert(r >= 0);
-    // r = engine->RegisterObjectMethod("CKStateChunk", "void CheckSize(int size)", asMETHODPR(CKStateChunk, CheckSize, (int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void CloseChunk()", asMETHODPR(CKStateChunk, CloseChunk, (), void), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void Clear()", asMETHODPR(CKStateChunk, Clear, (), void), asCALL_THISCALL); assert(r >= 0);
