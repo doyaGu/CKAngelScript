@@ -13,7 +13,7 @@ namespace std {
         size_t operator()(const XString &str) const noexcept {
             size_t hash = 0;
 
-            if (!str.Empty()) {
+            if (str.Length() != 0) {
                 const char *pch = str.CStr();
                 while (char ch = *pch++) {
                     hash = hash * 131 + ch;
@@ -259,7 +259,9 @@ void RegisterXString(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("XString", "string opImplConv() const", asFUNCTION(XStringCastToString), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectMethod("string", "XString opImplConv() const", asFUNCTION(StringCastToXString), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("XString", "bool Empty() const", asMETHODPR(XString, Empty, () const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("XString", "uint16 Length() const", asMETHODPR(XString, Length, () const, XWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "uint16 Capacity() const", asMETHODPR(XString, Capacity, (), XWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "void Resize(uint16 length)", asMETHODPR(XString, Resize, (XWORD), void), asCALL_THISCALL); assert(r >= 0);
@@ -271,15 +273,19 @@ void RegisterXString(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("XString", "int Compare(const XString &in str) const", asMETHODPR(XString, Compare, (const XBaseString &) const, int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "int NCompare(const XString &in str, int n) const", asMETHODPR(XString, NCompare, (const XBaseString &, const int) const, int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "int ICompare(const XString &in str) const", asMETHODPR(XString, ICompare, (const XBaseString &) const, int), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("XString", "int NICompare(const XString &in str, int n) const", asMETHODPR(XString, NICompare, (const XBaseString &, const int) const, int), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("XString", "XString &Trim()", asMETHODPR(XString, Trim, (), XString &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "XString &Strip()", asMETHODPR(XString, Strip, (), XString &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "bool Contains(const XString &in str) const", asMETHODPR(XString, Contains, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("XString", "bool StartsWith(const XString &in str) const", asMETHODPR(XString, StartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "bool IStartsWith(const XString &in str) const", asMETHODPR(XString, IStartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "bool EndsWith(const XString &in str) const", asMETHODPR(XString, EndsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "bool IEndsWith(const XString &in str) const", asMETHODPR(XString, IEndsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("XString", "uint16 Find(uint8 c, uint16 start = 0) const", asMETHODPR(XString, Find, (char, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "uint16 Find(const XString &in str, uint16 start = 0) const", asMETHODPR(XString, Find, (const XBaseString &, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("XString", "uint16 RFind(uint8 c, uint16 start = 0) const", asMETHODPR(XString, RFind, (char, XWORD) const, XWORD), asCALL_THISCALL); assert(r >= 0);
