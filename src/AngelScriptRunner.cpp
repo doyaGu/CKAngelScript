@@ -110,16 +110,26 @@ CKERROR AngelScriptRunnerCallBack(const CKBehaviorContext &behcontext) {
 		return CKERR_INVALIDPARAMETER;
 	}
 
+	ScriptRunner *runner = nullptr;
+	beh->GetLocalParameterValue(0, &runner);
+	if (runner && runner->IsAttached()) {
+		asIScriptFunction *callback = nullptr;
+		beh->GetLocalParameterValue(2, &callback);
+		runner->ExecuteScript(callback, [behcontext](asIScriptContext *ctx) {
+			ctx->SetArgObject(0, (void *) &behcontext);
+		});
+	}
+
 	switch (behcontext.CallbackMessage)
 	{
 	case CKM_BEHAVIORCREATE:
 	case CKM_BEHAVIORLOAD: {
-		auto *runner = new ScriptRunner(man);
+		runner = new ScriptRunner(man);
 		beh->SetLocalParameterValue(0, &runner);
 	}
 		break;
 	case CKM_BEHAVIORDELETE: {
-		ScriptRunner *runner = nullptr;
+		runner = nullptr;
 		beh->GetLocalParameterValue(0, &runner);
 		if (runner) {
 			delete runner;
@@ -129,22 +139,12 @@ CKERROR AngelScriptRunnerCallBack(const CKBehaviorContext &behcontext) {
 	}
 	break;
 	case CKM_BEHAVIOREDITED: {
-		ScriptRunner *runner = nullptr;
+		runner = nullptr;
 		beh->GetLocalParameterValue(0, &runner);
 	}
 	break;
 	default:
 		break;
-	}
-
-	ScriptRunner *runner = nullptr;
-	beh->GetLocalParameterValue(0, &runner);
-	if (runner && runner->IsAttached()) {
-		asIScriptFunction *callback = nullptr;
-		beh->GetLocalParameterValue(2, &callback);
-		runner->ExecuteScript(callback, [behcontext](asIScriptContext *ctx) {
-			ctx->SetArgObject(0, (void *) &behcontext);
-		});
 	}
 
     return CKBR_OK;
