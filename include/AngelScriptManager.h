@@ -43,8 +43,10 @@ public:
     virtual asIScriptContext *GetScriptContext();
 
     // Script
-    virtual int LoadScript(const char *moduleName, const char *filename);
-    virtual void UnloadScript(const char *moduleName);
+    virtual int LoadScript(const char *scriptName, const char *filename);
+    virtual int LoadScript(const char *scriptName, const char **filenames, size_t count);
+    virtual int CompileScript(const char *scriptName, const char *scriptCode);
+    virtual void UnloadScript(const char *scriptName);
 
     static AngelScriptManager *GetManager(CKContext *context) {
         return (AngelScriptManager *)context->GetManagerByGuid(ANGEL_SCRIPT_MANAGER_GUID);

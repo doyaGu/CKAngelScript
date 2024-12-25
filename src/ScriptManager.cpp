@@ -22,29 +22,6 @@
 #include "add_on/scripthelper/scripthelper.h"
 #include "add_on/scriptbuilder/scriptbuilder.h"
 
-static int PragmaCallback(const std::string &pragmaText, CScriptBuilder &builder, void * /*userParam*/) {
-    asIScriptEngine *engine = builder.GetEngine();
-
-    // Filter the pragmaText so only what is of interest remains
-    // With this the user can add comments and use different whitespaces without affecting the result
-    asUINT pos = 0;
-    asUINT length = 0;
-    std::string cleanText;
-    while (pos < pragmaText.size()) {
-        asETokenClass tokenClass = engine->ParseToken(pragmaText.c_str() + pos, 0, &length);
-        if (tokenClass == asTC_IDENTIFIER || tokenClass == asTC_KEYWORD || tokenClass == asTC_VALUE) {
-            std::string token = pragmaText.substr(pos, length);
-            cleanText += " " + token;
-        }
-        if (tokenClass == asTC_UNKNOWN)
-            return -1;
-        pos += length;
-    }
-
-    // The #pragma directive was not accepted
-    return -1;
-}
-
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
     context->RegisterNewManager(this);
     int r = Init();
@@ -241,64 +218,66 @@ asIScriptContext *ScriptManager::GetScriptContext() {
     return m_ScriptContext;
 }
 
-int ScriptManager::LoadScript(const char *moduleName, const char *filename) {
-    if (!moduleName || moduleName[0] == '\0')
+int ScriptManager::LoadScript(const char *scriptName, const char *filename) {
+    if (!scriptName || scriptName[0] == '\0')
         return -1;
 
-    if (!m_ScriptEngine || !m_ScriptContext)
+    if (!m_ScriptEngine)
         return -2;
 
     if (filename == nullptr)
-        filename = moduleName;
-
-    // Check if module is already loaded. If so, discard it to force a rebuild.
-    asIScriptModule *module = m_ScriptEngine->GetModule(moduleName, asGM_ONLY_IF_EXISTS);
-    if (module) {
-        module->Discard();
-    }
-
-    // We will only initialize the global variables once we're
-    // ready to execute, so disable the automatic initialization
-    // m_ScriptEngine->SetEngineProperty(asEP_INIT_GLOBAL_VARS_AFTER_BUILD, false);
-
-    CScriptBuilder builder;
-
-    // Set the pragma callback, so we can detect if the script needs debugging
-    builder.SetPragmaCallback(PragmaCallback, nullptr);
-
-    // Compile the script
-    int r = builder.StartNewModule(m_ScriptEngine, moduleName);
-    if (r < 0) {
-        m_ScriptEngine->WriteMessage(moduleName, 0, 0, asMSGTYPE_ERROR, "Failed to create module");
-        return -1;
-    }
+        filename = scriptName;
 
     XString scriptFilename = filename;
+    //if (!scriptFilename.EndsWith(".as"))
+    //    scriptFilename += ".as";
     ResolveScriptFileName(scriptFilename);
 
-    r = builder.AddSectionFromFile(scriptFilename.CStr());
-    if (r < 0) {
-        m_ScriptEngine->WriteMessage(moduleName, 0, 0, asMSGTYPE_ERROR, "Failed to process file");
-        return -1;
-    }
-
-    r = builder.BuildModule();
-    if (r < 0) {
-        m_ScriptEngine->WriteMessage(moduleName, 0, 0, asMSGTYPE_ERROR, "Failed to build module");
-        return -1;
-    }
-
-    return r;
+    auto cache = m_ScriptCache.LoadScript(m_ScriptEngine, scriptName, scriptFilename.CStr());
+    if (!cache)
+        return -3;
+    return 0;
 }
 
-void ScriptManager::UnloadScript(const char *moduleName) {
-    if (!moduleName || moduleName[0] == '\0')
-        return;
+int ScriptManager::LoadScript(const char *scriptName, const char **filenames, size_t count) {
+    if (!scriptName || scriptName[0] == '\0')
+        return -1;
 
-    asIScriptModule *module = m_ScriptEngine->GetModule(moduleName, asGM_ONLY_IF_EXISTS);
-    if (module) {
-        module->Discard();
+    if (!m_ScriptEngine)
+        return -2;
+
+    std::vector<std::string> files;
+    for (size_t i = 0; i < count; i++) {
+        XString scriptFilename = filenames[i];
+        //if (!scriptFilename.IEndsWith(".as"))
+        //    scriptFilename += ".as";
+        ResolveScriptFileName(scriptFilename);
+        files.push_back(scriptFilename.CStr());
     }
+
+    auto cache = m_ScriptCache.LoadScript(m_ScriptEngine, scriptName, files);
+    if (!cache)
+        return -3;
+    return 0;
+}
+
+int ScriptManager::CompileScript(const char *scriptName, const char *scriptCode) {
+    if (!scriptName || scriptName[0] == '\0')
+        return -1;
+
+    if (!m_ScriptEngine)
+        return -2;
+
+    auto cache = m_ScriptCache.CompileScript(m_ScriptEngine, scriptName, scriptCode);
+    if (!cache)
+        return -3;
+    return 0;
+}
+
+void ScriptManager::UnloadScript(const char *scriptName) {
+    if (!scriptName || scriptName[0] == '\0')
+        return;
+    m_ScriptCache.Invalidate(scriptName);
 }
 
 asIScriptModule *ScriptManager::GetScript(const char *moduleName) {

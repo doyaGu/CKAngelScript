@@ -1,10 +1,12 @@
 #ifndef CK_SCRIPTMANAGER_H
 #define CK_SCRIPTMANAGER_H
 
+#include <angelscript.h>
+
 #include "CKBaseManager.h"
 #include "CKContext.h"
 
-#include <angelscript.h>
+#include "ScriptCache.h"
 
 #define SCRIPT_MANAGER_GUID CKGUID(0x70955bd2,0x30684456)
 
@@ -71,11 +73,17 @@ public:
     virtual asIScriptContext *GetScriptContext();
 
     // Script
-    virtual int LoadScript(const char *moduleName, const char *filename);
-    virtual void UnloadScript(const char *moduleName);
+    virtual int LoadScript(const char *scriptName, const char *filename);
+    virtual int LoadScript(const char *scriptName, const char **filenames, size_t count);
+    virtual int CompileScript(const char *scriptName, const char *scriptCode);
+    virtual void UnloadScript(const char *scriptName);
 
-    asIScriptModule *GetScript(const char *moduleName);
-    int ExecuteScript(const char *moduleName, const char *decl);
+    asIScriptModule *GetScript(const char *scriptName);
+    int ExecuteScript(const char *scriptName, const char *decl);
+
+    ScriptCache &GetScriptCache() {
+        return m_ScriptCache;
+    }
 
     bool IsInited() const {
         return (m_Flags & AS_INITED) != 0;
@@ -100,9 +108,10 @@ protected:
     CKERROR ResolveScriptFileName(XString &filename);
 
     int m_Flags = 0;
+    int m_ScriptPathCategoryIndex = -1;
     asIScriptEngine *m_ScriptEngine = nullptr;
     asIScriptContext *m_ScriptContext = nullptr;
-    int m_ScriptPathCategoryIndex = -1;
+    ScriptCache m_ScriptCache;
 };
 
 #endif // CK_SCRIPTMANAGER_H

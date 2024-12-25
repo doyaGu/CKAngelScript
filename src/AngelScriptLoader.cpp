@@ -12,10 +12,11 @@
 CKObjectDeclaration *FillBehaviorAngelScriptLoaderDecl();
 CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto);
 int AngelScriptLoader(const CKBehaviorContext &behcontext);
+CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext);
 
 CKObjectDeclaration *FillBehaviorAngelScriptLoaderDecl() {
-    CKObjectDeclaration *od = CreateCKObjectDeclaration("AngelScriptLoader");
-    od->SetDescription("Load angel script");
+    CKObjectDeclaration *od = CreateCKObjectDeclaration("AngelScript Loader");
+    od->SetDescription("Load AngelScript modules");
     od->SetCategory("AngelScript");
     od->SetType(CKDLL_BEHAVIORPROTOTYPE);
     od->SetGuid(CKGUID(0x599924bb, 0x12ec072a));
@@ -28,7 +29,7 @@ CKObjectDeclaration *FillBehaviorAngelScriptLoaderDecl() {
 }
 
 CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto) {
-    CKBehaviorPrototype *proto = CreateCKBehaviorPrototype("AngelScriptLoader");
+    CKBehaviorPrototype *proto = CreateCKBehaviorPrototype("AngelScript Loader");
     if (!proto) return CKERR_OUTOFMEMORY;
 
     proto->DeclareInput("Load");
@@ -39,15 +40,32 @@ CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto) {
     proto->DeclareOutput("Failed");
 
     proto->DeclareInParameter("Name", CKPGUID_STRING);
-    proto->DeclareInParameter("Path", CKPGUID_STRING);
-    proto->DeclareInParameter("Callback", CKPGUID_BOOL, "TRUE");
+    proto->DeclareInParameter("Filename", CKPGUID_STRING);
+
+    proto->DeclareLocalParameter(nullptr, CKPGUID_STATECHUNK);
+
+    proto->DeclareSetting("Use File List", CKPGUID_BOOL, "FALSE");
+    proto->DeclareSetting("Filename As Code", CKPGUID_BOOL, "FALSE");
+    proto->DeclareSetting("Trigger Callbacks", CKPGUID_BOOL, "TRUE");
 
     proto->SetFlags(CK_BEHAVIORPROTOTYPE_NORMAL);
     proto->SetFunction(AngelScriptLoader);
 
+    proto->SetBehaviorFlags((CK_BEHAVIOR_FLAGS) (CKBEHAVIOR_TARGETABLE |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDINPUTS |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDOUTPUTS |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDLOCALPARAMS));
+    proto->SetBehaviorCallbackFct(AngelScriptLoaderCallBack);
+
     *pproto = proto;
     return CK_OK;
 }
+
+#define USE_FILE_LIST 1
+#define FILENAME_AS_CODE 2
+#define TRIGGER_CALLBACKS 3
 
 int AngelScriptLoader(const CKBehaviorContext &behcontext) {
     CKBehavior *beh = behcontext.Behavior;
@@ -63,36 +81,84 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
         return CKBR_OK;
     }
 
-    XString filename;
-
-    CKSTRING path = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
-    if (path && path[0] != '\0') {
-        filename = path;
-    } else {
-        filename = name;
-    }
-
-    CKPathManager *pm = context->GetPathManager();
-    XString category = "Script Paths";
-    int catIdx = pm->GetCategoryIndex(category);
-    pm->ResolveFileName(filename, catIdx);
-
     CKBOOL callback = TRUE;
-    beh->GetInputParameterValue(2, &callback);
+    beh->GetLocalParameterValue(TRIGGER_CALLBACKS, &callback);
 
     if (beh->IsInputActive(0)) {
         // Load
         beh->ActivateInput(0, FALSE);
 
-        int r = man->LoadScript(name, filename.CStr());
-        if (r < 0) {
-            beh->ActivateOutput(2);
-            return CKBR_OK;
+        int r = 0;
+
+        CKBOOL useFileList = FALSE;
+        beh->GetLocalParameterValue(USE_FILE_LIST, &useFileList);
+
+        if (!useFileList) {
+            CKBOOL filenameAsCode = FALSE;
+            beh->GetLocalParameterValue(FILENAME_AS_CODE, &filenameAsCode);
+
+            if (!filenameAsCode) {
+                XString filename;
+
+                CKSTRING path = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
+                if (path && path[0] != '\0') {
+                    filename = path;
+                } else {
+                    filename = name;
+                }
+
+                r = man->LoadScript(name, filename.CStr());
+                if (r < 0) {
+                    beh->ActivateOutput(2);
+                    beh->SetOutputParameterValue(0, nullptr);
+                    return CKBR_OK;
+                }
+            } else {
+                CKSTRING code = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
+                r = man->CompileScript(name, code);
+                if (r < 0) {
+                    beh->ActivateOutput(2);
+                    beh->SetOutputParameterValue(0, nullptr);
+                    return CKBR_OK;
+                }
+            }
+        } else {
+            CKDataArray *da = (CKDataArray *) beh->GetInputParameterReadDataPtr(1);
+            if (!da) {
+                beh->ActivateOutput(2);
+                beh->SetOutputParameterValue(0, nullptr);
+                return CKBR_OK;
+            }
+
+            int column = 0;
+            beh->GetInputParameterValue(2, &column);
+
+            int count = da->GetRowCount();
+            if (count == 0) {
+                beh->ActivateOutput(2);
+                beh->SetOutputParameterValue(0, nullptr);
+                return CKBR_OK;
+            }
+
+            const char **filenames = new const char *[count];
+            for (int i = 0; i < count; i++) {
+                filenames[i] = (CKSTRING) da->GetElement(i, column);
+            }
+
+            r = man->LoadScript(name, filenames, count);
+            delete[] filenames;
+
+            if (r < 0) {
+                beh->ActivateOutput(2);
+                beh->SetOutputParameterValue(0, nullptr);
+                return CKBR_OK;
+            }
         }
 
-        asIScriptModule *module = man->GetScript(filename.CStr());
+        asIScriptModule *module = man->GetScript(name);
         if (!module) {
             beh->ActivateOutput(2);
+            beh->SetOutputParameterValue(0, nullptr);
             return CKBR_OK;
         }
 
@@ -104,12 +170,12 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
             if (func) {
                 r = module->ResetGlobalVars();
                 if (r < 0) {
-                    scriptEngine->WriteMessage(filename.CStr(), 0, 0, asMSGTYPE_ERROR,
+                    scriptEngine->WriteMessage(name, 0, 0, asMSGTYPE_ERROR,
                                                "Failed while initializing global variables");
                 } else {
                     r = scriptContext->Prepare(func);
                     if (r < 0) {
-                        scriptEngine->WriteMessage(filename.CStr(), 0, 0, asMSGTYPE_ERROR,
+                        scriptEngine->WriteMessage(name, 0, 0, asMSGTYPE_ERROR,
                                                    "Failed while preparing the context for execution");
                     } else {
                         scriptContext->Execute();
@@ -118,14 +184,16 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
             }
         }
 
+        beh->SetOutputParameterValue(0, nullptr);
         beh->ActivateOutput(0);
     } else if (beh->IsInputActive(1)) {
         // Unload
         beh->ActivateInput(1, FALSE);
 
-        asIScriptModule *module = man->GetScript(filename.CStr());
+        asIScriptModule *module = man->GetScript(name);
         if (!module) {
             beh->ActivateOutput(2);
+            beh->SetOutputParameterValue(0, nullptr);
             return CKBR_OK;
         }
 
@@ -136,7 +204,7 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
             asIScriptFunction *func = module->GetFunctionByDecl("void OnUnload()");
             if (func) {
                 if (scriptContext->Prepare(func) < 0) {
-                    scriptEngine->WriteMessage(filename.CStr(), 0, 0, asMSGTYPE_ERROR,
+                    scriptEngine->WriteMessage(name, 0, 0, asMSGTYPE_ERROR,
                                                "Failed while preparing the context for execution");
                 } else {
                     scriptContext->Execute();
@@ -144,9 +212,124 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
             }
         }
 
-        module->Discard();
+        man->UnloadScript(name);
 
+        beh->SetOutputParameterValue(0, nullptr);
         beh->ActivateOutput(1);
+    }
+
+    return CKBR_OK;
+}
+
+void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &script) {
+    int r = 0;
+
+    CKSTRING name = (CKSTRING) beh->GetInputParameterReadDataPtr(0);
+    if (!name || name[0] == '\0') {
+        return;
+    }
+
+    script->name = name;
+
+    CKBOOL useFileList = FALSE;
+    beh->GetLocalParameterValue(USE_FILE_LIST, &useFileList);
+
+    if (!useFileList) {
+        CKBOOL filenameAsCode = FALSE;
+        beh->GetLocalParameterValue(FILENAME_AS_CODE, &filenameAsCode);
+
+        if (!filenameAsCode) {
+            XString filename;
+
+            CKSTRING path = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
+            if (path && path[0] != '\0') {
+                filename = path;
+            } else {
+                filename = name;
+            }
+
+            script->sections.emplace_back(filename.CStr(), "");
+        } else {
+            CKSTRING code = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
+            script->sections.emplace_back("", code);
+        }
+    } else {
+        CKDataArray *da = (CKDataArray *) beh->GetInputParameterReadDataPtr(1);
+        if (!da) {
+            return;
+        }
+
+        int column = 0;
+        beh->GetInputParameterValue(2, &column);
+
+        int count = da->GetRowCount();
+        for (int i = 0; i < count; i++) {
+            script->sections.emplace_back((CKSTRING) da->GetElement(i, column), "");
+        }
+    }
+}
+
+CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
+    CKBehavior *beh = behcontext.Behavior;
+    CKContext *context = behcontext.Context;
+
+    if (!beh)
+        return CKBR_PARAMETERERROR;
+
+    ScriptManager *man = ScriptManager::GetManager(context);
+    if (!man)
+        return CKBR_OWNERERROR;
+
+    auto &cache = man->GetScriptCache();
+
+    switch (behcontext.CallbackMessage) {
+        case CKM_BEHAVIORLOAD: {
+            const std::string scriptName = (CKSTRING) beh->GetInputParameterReadDataPtr(0);
+            auto script = cache.NewCachedScript(scriptName);
+            if (!script->module) {
+                CKStateChunk *chunk = nullptr;
+                beh->GetLocalParameterValue(0, &chunk);
+                if (chunk) {
+                    script->LoadFromChunk(chunk);
+                }
+            }
+        }
+        break;
+        case CKM_BEHAVIORPRESAVE: {
+            auto script = std::make_shared<CachedScript>();
+            if (script) {
+                ReadScriptData(beh, script);
+                CKStateChunk *chunk = nullptr;
+                beh->GetLocalParameterValue(0, &chunk);
+                if (chunk) {
+                    script->SaveToChunk(chunk);
+                }
+            }
+        }
+        break;
+        case CKM_BEHAVIORSETTINGSEDITED: {
+            CKParameterIn *pin = beh->GetInputParameter(1);
+
+            CKBOOL useFileList = FALSE;
+            beh->GetLocalParameterValue(USE_FILE_LIST, &useFileList);
+            if (useFileList) {
+                pin->SetGUID(CKPGUID_DATAARRAY, TRUE, "File List");
+
+                beh->CreateInputParameter("List Column", CKPGUID_INT);
+            } else {
+                CKDestroyObject(beh->RemoveInputParameter(2));
+                CKBOOL filenameAsCode = FALSE;
+                beh->GetLocalParameterValue(FILENAME_AS_CODE, &filenameAsCode);
+                if (filenameAsCode) {
+                    pin->SetGUID(CKPGUID_STRING, TRUE, "Code");
+                } else {
+                    pin->SetGUID(CKPGUID_STRING, TRUE, "Filename");
+                }
+            }
+        }
+        break;
+        default:
+            break;
     }
 
     return CKBR_OK;

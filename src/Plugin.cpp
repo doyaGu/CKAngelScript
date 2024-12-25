@@ -67,5 +67,5 @@ void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg) {
 // #endif
 
     RegisterBehavior(reg, FillBehaviorAngelScriptLoaderDecl);
-    // RegisterBehavior(reg, FillBehaviorAngelScriptRunnerDecl);
+    RegisterBehavior(reg, FillBehaviorAngelScriptRunnerDecl);
 }

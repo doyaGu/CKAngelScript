@@ -1,5 +1,7 @@
 set(CKAS_HEADERS
         ScriptManager.h
+        ScriptCache.h
+        ScriptRunner.h
         ScriptFormat.h
         ScriptNativePointer.h
         ScriptNativeBuffer.h
@@ -21,8 +23,10 @@ set(CKAS_HEADERS
 set(CKAS_SOURCES
         Plugin.cpp
         ScriptManager.cpp
+        ScriptCache.cpp
+        ScriptRunner.cpp
         AngelScriptLoader.cpp
-        # AngelScriptRunner.cpp
+        AngelScriptRunner.cpp
         ScriptFormat.cpp
         ScriptNativePointer.cpp
         ScriptNativeBuffer.cpp
