@@ -105,13 +105,6 @@ int ScriptManager::Init() {
     // Register the Virtools API
     RegisterVirtools(m_ScriptEngine);
 
-    m_ScriptContext = m_ScriptEngine->CreateContext();
-    if (!m_ScriptContext) {
-        m_Context->OutputToConsole(const_cast<char *>("Failed to create script context."));
-        return -1;
-    }
-    m_ScriptContext->SetExceptionCallback(asMETHOD(ScriptManager, ExceptionCallback), this, asCALL_THISCALL);
-
     m_Flags |= AS_INITED;
     return 0;
 }
@@ -119,11 +112,6 @@ int ScriptManager::Init() {
 int ScriptManager::Shutdown() {
     if (!IsInited())
         return -2;
-
-    if (m_ScriptContext) {
-        m_ScriptContext->Release();
-        m_ScriptContext = nullptr;
-    }
 
     if (m_ScriptEngine) {
         m_ScriptEngine->ShutDownAndRelease();
@@ -214,10 +202,6 @@ asIScriptEngine *ScriptManager::GetScriptEngine() {
     return m_ScriptEngine;
 }
 
-asIScriptContext *ScriptManager::GetScriptContext() {
-    return m_ScriptContext;
-}
-
 int ScriptManager::LoadScript(const char *scriptName, const char *filename) {
     if (!scriptName || scriptName[0] == '\0')
         return -1;
@@ -225,13 +209,13 @@ int ScriptManager::LoadScript(const char *scriptName, const char *filename) {
     if (!m_ScriptEngine)
         return -2;
 
-    if (filename == nullptr)
-        filename = scriptName;
-
-    XString scriptFilename = filename;
-    //if (!scriptFilename.EndsWith(".as"))
-    //    scriptFilename += ".as";
-    ResolveScriptFileName(scriptFilename);
+    XString scriptFilename;
+    if (filename) {
+        scriptFilename = filename;
+    } else {
+        scriptFilename = scriptName;
+        scriptFilename += ".as";
+    }
 
     auto cache = m_ScriptCache.LoadScript(m_ScriptEngine, scriptName, scriptFilename.CStr());
     if (!cache)
@@ -239,7 +223,7 @@ int ScriptManager::LoadScript(const char *scriptName, const char *filename) {
     return 0;
 }
 
-int ScriptManager::LoadScript(const char *scriptName, const char **filenames, size_t count) {
+int ScriptManager::LoadScripts(const char *scriptName, const char **filenames, size_t count) {
     if (!scriptName || scriptName[0] == '\0')
         return -1;
 
@@ -249,10 +233,10 @@ int ScriptManager::LoadScript(const char *scriptName, const char **filenames, si
     std::vector<std::string> files;
     for (size_t i = 0; i < count; i++) {
         XString scriptFilename = filenames[i];
-        //if (!scriptFilename.IEndsWith(".as"))
-        //    scriptFilename += ".as";
+        if (scriptFilename.Find(".as") == XString::NOTFOUND)
+            scriptFilename += ".as";
         ResolveScriptFileName(scriptFilename);
-        files.push_back(scriptFilename.CStr());
+        files.emplace_back(scriptFilename.CStr());
     }
 
     auto cache = m_ScriptCache.LoadScript(m_ScriptEngine, scriptName, files);
@@ -286,53 +270,13 @@ asIScriptModule *ScriptManager::GetScript(const char *moduleName) {
     return m_ScriptEngine->GetModule(moduleName, asGM_ONLY_IF_EXISTS);
 }
 
-int ScriptManager::ExecuteScript(const char *moduleName, const char *decl) {
-    int r = 0;
-
-    if (!moduleName || moduleName[0] == '\0')
-        return -1;
-
-    if (!m_ScriptEngine || !m_ScriptContext)
-        return -2;
-
-    asIScriptModule *module = m_ScriptEngine->GetModule(moduleName, asGM_ONLY_IF_EXISTS);
-    if (!module) {
-        m_ScriptEngine->WriteMessage(moduleName, 0, 0, asMSGTYPE_ERROR,
-                                 "Module not found for ExecuteScript");
-        return -1;
+CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
+    CKPathManager *pm = m_Context->GetPathManager();
+    if (m_ScriptPathCategoryIndex == -1) {
+        XString category = "Script Paths";
+        m_ScriptPathCategoryIndex = pm->GetCategoryIndex(category);
     }
-
-    // Find the function
-    asIScriptFunction *func = nullptr;
-    if (decl) {
-        func = module->GetFunctionByDecl(decl);
-    } else {
-        func = module->GetFunctionByDecl("int main()");
-        if (!func) {
-            // Try again with "void main()"
-            func = module->GetFunctionByDecl("void main()");
-        }
-    }
-
-    if (!func) {
-        m_ScriptEngine->WriteMessage(moduleName, 0, 0, asMSGTYPE_ERROR, "Cannot find 'int main()' or 'void main()'");
-        return -1;
-    }
-
-    // Prepare the script context with the function we wish to execute. Prepare()
-    // must be called on the context before each new script function that will be
-    // executed. Note, that if you intend to execute the same function several
-    // times, it might be a good idea to store the function id returned by
-    // GetFunctionIDByDecl(), so that this relatively slow call can be skipped.
-    r = m_ScriptContext->Prepare(func);
-    if (r < 0) {
-        m_ScriptEngine->WriteMessage(moduleName, 0, 0, asMSGTYPE_ERROR,
-                                     "Failed to prepare context for script function");
-        return -1;
-    }
-
-    // Execute the `main()` function in the script.
-    return m_ScriptContext->Execute();
+    return pm->ResolveFileName(filename, m_ScriptPathCategoryIndex);
 }
 
 void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
@@ -423,13 +367,4 @@ void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
 
     RegisterVxMath(m_ScriptEngine);
     RegisterCK2(m_ScriptEngine);
-}
-
-CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
-    CKPathManager *pm = m_Context->GetPathManager();
-    if (m_ScriptPathCategoryIndex == -1) {
-        XString category = "Script Paths";
-        m_ScriptPathCategoryIndex = pm->GetCategoryIndex(category);
-    }
-    return pm->ResolveFileName(filename, m_ScriptPathCategoryIndex);
 }

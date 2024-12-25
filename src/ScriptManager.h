@@ -41,6 +41,7 @@ public:
     }
 
     // Engine
+    virtual asIScriptEngine *GetScriptEngine();
     virtual asIScriptEngine *CreateScriptEngine(asDWORD version = ANGELSCRIPT_VERSION);
     virtual const char *GetVersion();
     virtual const char *GetOptions();
@@ -69,21 +70,19 @@ public:
     // Auxiliary
     virtual asILockableSharedBool *CreateLockableSharedBool();
 
-    virtual asIScriptEngine *GetScriptEngine();
-    virtual asIScriptContext *GetScriptContext();
-
     // Script
     virtual int LoadScript(const char *scriptName, const char *filename);
-    virtual int LoadScript(const char *scriptName, const char **filenames, size_t count);
+    virtual int LoadScripts(const char *scriptName, const char **filenames, size_t count);
     virtual int CompileScript(const char *scriptName, const char *scriptCode);
     virtual void UnloadScript(const char *scriptName);
 
     asIScriptModule *GetScript(const char *scriptName);
-    int ExecuteScript(const char *scriptName, const char *decl);
 
     ScriptCache &GetScriptCache() {
         return m_ScriptCache;
     }
+
+    CKERROR ResolveScriptFileName(XString &filename);
 
     bool IsInited() const {
         return (m_Flags & AS_INITED) != 0;
@@ -105,12 +104,9 @@ protected:
     void RegisterStdAddons(asIScriptEngine *engine);
     void RegisterVirtools(asIScriptEngine *engine);
 
-    CKERROR ResolveScriptFileName(XString &filename);
-
     int m_Flags = 0;
     int m_ScriptPathCategoryIndex = -1;
     asIScriptEngine *m_ScriptEngine = nullptr;
-    asIScriptContext *m_ScriptContext = nullptr;
     ScriptCache m_ScriptCache;
 };
 

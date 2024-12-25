@@ -1,8 +1,8 @@
 #include "ScriptCache.h"
 
-#include <iostream>
 #include <utility>
 
+#include "ScriptManager.h"
 #include "add_on/scriptbuilder/scriptbuilder.h"
 
 static std::vector<std::string> g_EmptyMetadata;
@@ -195,6 +195,8 @@ bool CachedScript::Build(asIScriptEngine *engine) {
         return false;
     }
 
+    auto *man = static_cast<ScriptManager *>(engine->GetUserData());
+
     // We will only initialize the global variables once we're
     // ready to execute, so disable the automatic initialization
     // m_ScriptEngine->SetEngineProperty(asEP_INIT_GLOBAL_VARS_AFTER_BUILD, false);
@@ -222,8 +224,11 @@ bool CachedScript::Build(asIScriptEngine *engine) {
         std::string &filename = std::get<0>(section);
         std::string &code = std::get<1>(section);
 
+        XString resolvedFilename = filename.c_str();
+        man->ResolveScriptFileName(resolvedFilename);
+
         bool exists = false;
-        FILE *fp = fopen(filename.c_str(), "rb");
+        FILE *fp = fopen(resolvedFilename.CStr(), "rb");
         if (fp) {
             exists = true;
             fclose(fp);
@@ -237,7 +242,7 @@ bool CachedScript::Build(asIScriptEngine *engine) {
                 return false;
             }
         } else {
-            r = builder.AddSectionFromFile(filename.c_str());
+            r = builder.AddSectionFromFile(resolvedFilename.CStr());
             if (r < 0) {
                 engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR,
                                      "[CachedScript] Failed to load section from file");
@@ -258,13 +263,6 @@ bool CachedScript::Build(asIScriptEngine *engine) {
     if (!module) {
         engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Failed to retrieve module");
         return false;
-    }
-
-    sections.clear();
-    int count = (int) builder.GetSectionCount();
-    for (int i = 0; i < count; ++i) {
-        auto section = std::make_tuple<std::string, std::string>(builder.GetSectionName(i), "");
-        sections.emplace_back(std::move(section));
     }
 
     // Extract metadata from the builder
@@ -293,6 +291,24 @@ const char *CachedScript::GetSectionCode(int index) const {
     if (index < 0 || index >= (int) sections.size())
         return nullptr;
     return std::get<1>(sections[index]).c_str();
+}
+
+bool CachedScript::AddSection(const std::string &name, const std::string &code) {
+    auto it = std::find_if(sections.begin(), sections.end(),
+                           [&name](const std::tuple<std::string, std::string> &section) {
+                               return std::get<0>(section) == name;
+                           });
+    if (it != sections.end()) {
+        if (!code.empty()) {
+            std::get<1>(*it) = code;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    sections.emplace_back(name, code);
+    return true;
 }
 
 bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
@@ -329,12 +345,14 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         }
         std::string filename = str;
 
-        int size = chunk->ReadInt();
         std::string buffer;
-        buffer.resize(size);
-        chunk->ReadAndFillBuffer(size, buffer.data());
+        int size = chunk->ReadInt();
+        if (size != 0) {
+            buffer.resize(size);
+            chunk->ReadAndFillBuffer(size, buffer.data());
+        }
 
-        sections.emplace_back(std::make_tuple(filename, buffer));
+        sections.emplace_back(std::move(filename), std::move(buffer));
     }
 
     return true;
@@ -357,25 +375,12 @@ bool CachedScript::SaveToChunk(CKStateChunk *chunk) {
         std::string &filename = std::get<0>(section);
         chunk->WriteString(filename.data());
 
-        FILE *fp = fopen(filename.c_str(), "rb");
-        if (!fp) {
-            chunk->WriteInt(0);
-            continue;
+        std::string &code = std::get<1>(section);
+
+        chunk->WriteDword(code.size());
+        if (code.size() != 0) {
+            chunk->WriteBufferNoSize(code.size(), code.data());
         }
-
-        // Get the file size
-        fseek(fp, 0, SEEK_END);
-        size_t size = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-
-        chunk->WriteDword(size);
-
-        std::string buffer;
-        buffer.resize(size);
-        fread(buffer.data(), 1, size, fp);
-        fclose(fp);
-
-        chunk->WriteBufferNoSize(size, buffer.data());
     }
 
     chunk->CloseChunk();
@@ -529,14 +534,12 @@ void ScriptCache::Invalidate(const std::string &scriptName) {
 std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
                                                       const std::string &scriptName, const std::string &filename) {
     if (!engine) {
-        std::cerr << "[ScriptCache] LoadScript failed: engine is null.\n";
         return nullptr;
     }
 
     if (auto cached = GetCachedScript(scriptName)) {
         if (!cached->module) {
             if (!cached->Build(engine)) {
-                std::cerr << "[ScriptCache] LoadScript failed: Build failed.\n";
                 return nullptr;
             }
         }
@@ -545,10 +548,9 @@ std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
 
     auto newScript = std::make_shared<CachedScript>();
     newScript->name = scriptName;
-    newScript->sections.emplace_back(filename, "");
+    newScript->AddSection(filename);
 
     if (!newScript->Build(engine)) {
-        std::cerr << "[ScriptCache] LoadScript failed: Build failed.\n";
         return nullptr;
     }
 
@@ -561,14 +563,12 @@ std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
 std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
     const std::string &scriptName, const std::vector<std::string> &filenames) {
     if (!engine) {
-        std::cerr << "[ScriptCache] LoadScript failed: engine is null.\n";
         return nullptr;
     }
 
     if (auto cached = GetCachedScript(scriptName)) {
         if (!cached->module) {
             if (!cached->Build(engine)) {
-                std::cerr << "[ScriptCache] LoadScript failed: Build failed.\n";
                 return nullptr;
             }
         }
@@ -578,11 +578,10 @@ std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
     auto newScript = std::make_shared<CachedScript>();
     newScript->name = scriptName;
     for (auto &filename: filenames) {
-        newScript->sections.emplace_back(filename, "");
+        newScript->AddSection(filename);
     }
 
     if (!newScript->Build(engine)) {
-        std::cerr << "[ScriptCache] LoadScript failed: Build failed.\n";
         return nullptr;
     }
 
@@ -595,14 +594,12 @@ std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
 std::shared_ptr<CachedScript> ScriptCache::CompileScript(asIScriptEngine *engine,
     const std::string &scriptName, const std::string &scriptCode) {
     if (!engine) {
-        std::cerr << "[ScriptCache] LoadScript failed: engine is null.\n";
         return nullptr;
     }
 
     if (auto cached = GetCachedScript(scriptName)) {
         if (!cached->module) {
             if (!cached->Build(engine)) {
-                std::cerr << "[ScriptCache] LoadScript failed: Build failed.\n";
                 return nullptr;
             }
         }
@@ -611,10 +608,9 @@ std::shared_ptr<CachedScript> ScriptCache::CompileScript(asIScriptEngine *engine
 
     auto newScript = std::make_shared<CachedScript>();
     newScript->name = scriptName;
-    newScript->sections.emplace_back(scriptName, scriptCode);
+    newScript->AddSection(scriptName, scriptCode);
 
     if (!newScript->Build(engine)) {
-        std::cerr << "[ScriptCache] LoadScript failed: Build failed.\n";
         return nullptr;
     }
 

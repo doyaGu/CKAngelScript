@@ -145,7 +145,7 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
                 filenames[i] = (CKSTRING) da->GetElement(i, column);
             }
 
-            r = man->LoadScript(name, filenames, count);
+            r = man->LoadScripts(name, filenames, count);
             delete[] filenames;
 
             if (r < 0) {
@@ -164,7 +164,7 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
 
         if (callback) {
             asIScriptEngine *scriptEngine = man->GetScriptEngine();
-            asIScriptContext *scriptContext = man->GetScriptContext();
+            asIScriptContext *scriptContext = scriptEngine->RequestContext();
 
             asIScriptFunction *func = module->GetFunctionByDecl("void OnLoad()");
             if (func) {
@@ -199,7 +199,7 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
 
         if (callback) {
             asIScriptEngine *scriptEngine = man->GetScriptEngine();
-            asIScriptContext *scriptContext = man->GetScriptContext();
+            asIScriptContext *scriptContext = scriptEngine->RequestContext();
 
             asIScriptFunction *func = module->GetFunctionByDecl("void OnUnload()");
             if (func) {
@@ -222,7 +222,13 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
 }
 
 void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &script) {
-    int r = 0;
+    if (!beh)
+        return;
+
+    CKContext *context = beh->GetCKContext();
+    ScriptManager *man = ScriptManager::GetManager(context);
+    if (!man)
+        return;
 
     CKSTRING name = (CKSTRING) beh->GetInputParameterReadDataPtr(0);
     if (!name || name[0] == '\0') {
@@ -239,19 +245,34 @@ void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &script) {
         beh->GetLocalParameterValue(FILENAME_AS_CODE, &filenameAsCode);
 
         if (!filenameAsCode) {
-            XString filename;
-
+            std::string filename;
             CKSTRING path = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
             if (path && path[0] != '\0') {
                 filename = path;
             } else {
                 filename = name;
+                filename += ".as";
             }
 
-            script->sections.emplace_back(filename.CStr(), "");
+            std::string code;
+
+            XString resolvedFilename = filename.c_str();
+            man->ResolveScriptFileName(resolvedFilename);
+            FILE *fp = fopen(resolvedFilename.CStr(), "rb");
+            if (fp) {
+                fseek(fp, 0, SEEK_END);
+                size_t size = ftell(fp);
+                fseek(fp, 0, SEEK_SET);
+
+                code.resize(size);
+                fread(code.data(), 1, size, fp);
+                fclose(fp);
+            }
+
+            script->AddSection(filename, code);
         } else {
             CKSTRING code = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
-            script->sections.emplace_back("", code);
+            script->sections.emplace_back(name, code);
         }
     } else {
         CKDataArray *da = (CKDataArray *) beh->GetInputParameterReadDataPtr(1);
@@ -264,7 +285,24 @@ void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &script) {
 
         int count = da->GetRowCount();
         for (int i = 0; i < count; i++) {
-            script->sections.emplace_back((CKSTRING) da->GetElement(i, column), "");
+            auto filename = (CKSTRING) da->GetElement(i, column);
+
+            std::string code;
+
+            XString resolvedFilename = filename;
+            man->ResolveScriptFileName(resolvedFilename);
+            FILE *fp = fopen(filename, "rb");
+            if (fp) {
+                fseek(fp, 0, SEEK_END);
+                size_t size = ftell(fp);
+                fseek(fp, 0, SEEK_SET);
+
+                code.resize(size);
+                fread(code.data(), 1, size, fp);
+                fclose(fp);
+            }
+
+            script->AddSection(filename, code);
         }
     }
 }
@@ -295,8 +333,14 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
             }
         }
         break;
+        case CKM_BEHAVIORDELETE: {
+            const std::string scriptName = (CKSTRING) beh->GetInputParameterReadDataPtr(0);
+            cache.Invalidate(scriptName);
+        }
+        break;
         case CKM_BEHAVIORPRESAVE: {
-            auto script = std::make_shared<CachedScript>();
+            const std::string scriptName = (CKSTRING) beh->GetInputParameterReadDataPtr(0);
+            auto script = cache.GetCachedScript(scriptName);
             if (script) {
                 ReadScriptData(beh, script);
                 CKStateChunk *chunk = nullptr;

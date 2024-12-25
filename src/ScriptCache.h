@@ -113,7 +113,7 @@ struct ScriptMetadata {
 struct CachedScript : ICachedScript {
     asIScriptModule *module = nullptr;
     std::string name;
-    std::vector<std::tuple<std::string, std::string> > sections;
+    std::vector<std::tuple<std::string, std::string>> sections;
     ScriptMetadata metadata;
 
     ~CachedScript() override;
@@ -127,6 +127,8 @@ struct CachedScript : ICachedScript {
     int GetSectionCount() const override;
     const char *GetSectionFilename(int index) const override;
     const char *GetSectionCode(int index) const override;
+
+    bool AddSection(const std::string &name, const std::string &code = "");
 
     bool LoadFromChunk(CKStateChunk *chunk) override;
     bool SaveToChunk(CKStateChunk *chunk) override;
