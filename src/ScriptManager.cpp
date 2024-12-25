@@ -264,10 +264,10 @@ void ScriptManager::UnloadScript(const char *scriptName) {
     m_ScriptCache.Invalidate(scriptName);
 }
 
-asIScriptModule *ScriptManager::GetScript(const char *moduleName) {
+asIScriptModule *ScriptManager::GetScript(const char *scriptName) {
     if (!m_ScriptEngine)
         return nullptr;
-    return m_ScriptEngine->GetModule(moduleName, asGM_ONLY_IF_EXISTS);
+    return m_ScriptEngine->GetModule(scriptName, asGM_ONLY_IF_EXISTS);
 }
 
 CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
