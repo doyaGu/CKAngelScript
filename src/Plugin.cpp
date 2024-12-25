@@ -6,10 +6,6 @@
 #define ANGELSCRIPT_BEHAVIOR CKGUID(0x2d9c2922,0x29a5c30)
 
 CKERROR InitInstance(CKContext *context) {
-    CKPathManager *pm = context->GetPathManager();
-    XString category = "Script Paths";
-    pm->AddCategory(category);
-
     new ScriptManager(context);
 
     return CK_OK;
@@ -18,11 +14,6 @@ CKERROR InitInstance(CKContext *context) {
 CKERROR ExitInstance(CKContext *context) {
     ScriptManager *man = ScriptManager::GetManager(context);
     delete man;
-
-    CKPathManager *pm = context->GetPathManager();
-    XString category = "Script Paths";
-    int catIdx = pm->GetCategoryIndex(category);
-    pm->RemoveCategory(catIdx);
 
     return CK_OK;
 }

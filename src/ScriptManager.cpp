@@ -275,6 +275,8 @@ CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
     if (m_ScriptPathCategoryIndex == -1) {
         XString category = "Script Paths";
         m_ScriptPathCategoryIndex = pm->GetCategoryIndex(category);
+        if (m_ScriptPathCategoryIndex == -1)
+            m_ScriptPathCategoryIndex = pm->AddCategory(category);
     }
     return pm->ResolveFileName(filename, m_ScriptPathCategoryIndex);
 }
