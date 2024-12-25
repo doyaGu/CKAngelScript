@@ -67,7 +67,7 @@ int AngelScriptRunner(const CKBehaviorContext &behcontext) {
     CKBehavior *beh = behcontext.Behavior;
 
 	int ret = CKBR_OK;
-	bool error = false;
+	bool success = true;
 
 	ScriptRunner *runner = nullptr;
 	beh->GetLocalParameterValue(0, &runner);
@@ -78,7 +78,7 @@ int AngelScriptRunner(const CKBehaviorContext &behcontext) {
 
 		asIScriptFunction *function = nullptr;
 		beh->GetLocalParameterValue(1, &function);
-		error = runner->ExecuteScript(function, [behcontext](asIScriptContext *ctx) {
+		success = runner->ExecuteScript(function, [behcontext](asIScriptContext *ctx) {
 			ctx->SetArgObject(0, (void *) &behcontext);
 		}, [&ret](asIScriptContext *ctx) {
 			ret = static_cast<int>(ctx->GetReturnDWord());
@@ -87,7 +87,7 @@ int AngelScriptRunner(const CKBehaviorContext &behcontext) {
 
 	beh->ActivateInput(0, FALSE);
 
-	if (!error) {
+	if (success) {
 		beh->ActivateOutput(0);
 	} else {
 		beh->ActivateOutput(1);
