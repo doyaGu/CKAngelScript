@@ -38,7 +38,7 @@ bool ScriptRunner::Attach(CKBehavior *behavior) {
 
     auto *callbackName = (CKSTRING) behavior->GetInputParameterReadDataPtr(2);
     if (callbackName) {
-        auto *callback = GetFunctionByName(funcName);
+        auto *callback = GetFunctionByName(callbackName);
         behavior->SetLocalParameterValue(2, &callback);
     }
 
