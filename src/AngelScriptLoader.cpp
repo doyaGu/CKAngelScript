@@ -8,6 +8,7 @@
 #include "CKAll.h"
 
 #include "ScriptManager.h"
+#include "ScriptRunner.h"
 
 CKObjectDeclaration *FillBehaviorAngelScriptLoaderDecl();
 CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto);
@@ -42,11 +43,12 @@ CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto) {
     proto->DeclareInParameter("Name", CKPGUID_STRING);
     proto->DeclareInParameter("Filename", CKPGUID_STRING);
 
+    proto->DeclareLocalParameter(nullptr, CKPGUID_POINTER);
     proto->DeclareLocalParameter(nullptr, CKPGUID_STATECHUNK);
+    proto->DeclareLocalParameter(nullptr, CKPGUID_STRING);
 
     proto->DeclareSetting("Use File List", CKPGUID_BOOL, "FALSE");
     proto->DeclareSetting("Filename As Code", CKPGUID_BOOL, "FALSE");
-    proto->DeclareSetting("Trigger Callbacks", CKPGUID_BOOL, "TRUE");
 
     proto->SetFlags(CK_BEHAVIORPROTOTYPE_NORMAL);
     proto->SetFunction(AngelScriptLoader);
@@ -63,9 +65,8 @@ CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto) {
     return CK_OK;
 }
 
-#define USE_FILE_LIST 1
-#define FILENAME_AS_CODE 2
-#define TRIGGER_CALLBACKS 3
+#define USE_FILE_LIST 3
+#define FILENAME_AS_CODE 4
 
 int AngelScriptLoader(const CKBehaviorContext &behcontext) {
     CKBehavior *beh = behcontext.Behavior;
@@ -81,12 +82,37 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
         return CKBR_OK;
     }
 
-    CKBOOL callback = TRUE;
-    beh->GetLocalParameterValue(TRIGGER_CALLBACKS, &callback);
+    ScriptRunner *runner = nullptr;
+    beh->GetLocalParameterValue(0, &runner);
 
     if (beh->IsInputActive(0)) {
         // Load
         beh->ActivateInput(0, FALSE);
+
+        CKSTRING previous = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
+        if (previous && previous[0] != '\0') {
+            if (runner) {
+                if (runner->IsAttached()) {
+                    asIScriptFunction *func = runner->GetFunctionByName("OnUnload");
+                    if (func) {
+                        if (func->GetParamCount() > 0) {
+                            runner->ExecuteScript(
+                                func,
+                                [behcontext](asIScriptContext *ctx) {
+                                    ctx->SetArgObject(0, (void *) &behcontext);
+                                });
+                        } else {
+                            runner->ExecuteScript(func);
+                        }
+                    }
+                }
+
+                runner->Detach(beh);
+            }
+
+            man->UnloadScript(previous);
+            beh->SetLocalParameterValue(2, "");
+        }
 
         int r = 0;
 
@@ -162,24 +188,21 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
             return CKBR_OK;
         }
 
-        if (callback) {
-            asIScriptEngine *scriptEngine = man->GetScriptEngine();
-            asIScriptContext *scriptContext = scriptEngine->RequestContext();
+        beh->SetLocalParameterValue(2, name, strlen(name) + 1);
 
-            asIScriptFunction *func = module->GetFunctionByDecl("void OnLoad()");
+        if (runner) {
+            runner->Attach(beh);
+
+            asIScriptFunction *func = runner->GetFunctionByName("OnLoad");
             if (func) {
-                r = module->ResetGlobalVars();
-                if (r < 0) {
-                    scriptEngine->WriteMessage(name, 0, 0, asMSGTYPE_ERROR,
-                                               "Failed while initializing global variables");
+                if (func->GetParamCount() > 0) {
+                    runner->ExecuteScript(
+                        func,
+                        [behcontext](asIScriptContext *ctx) {
+                            ctx->SetArgObject(0, (void *) &behcontext);
+                        });
                 } else {
-                    r = scriptContext->Prepare(func);
-                    if (r < 0) {
-                        scriptEngine->WriteMessage(name, 0, 0, asMSGTYPE_ERROR,
-                                                   "Failed while preparing the context for execution");
-                    } else {
-                        scriptContext->Execute();
-                    }
+                    runner->ExecuteScript(func);
                 }
             }
         }
@@ -197,19 +220,23 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
             return CKBR_OK;
         }
 
-        if (callback) {
-            asIScriptEngine *scriptEngine = man->GetScriptEngine();
-            asIScriptContext *scriptContext = scriptEngine->RequestContext();
-
-            asIScriptFunction *func = module->GetFunctionByDecl("void OnUnload()");
-            if (func) {
-                if (scriptContext->Prepare(func) < 0) {
-                    scriptEngine->WriteMessage(name, 0, 0, asMSGTYPE_ERROR,
-                                               "Failed while preparing the context for execution");
-                } else {
-                    scriptContext->Execute();
+        if (runner) {
+            if (runner->IsAttached()) {
+                asIScriptFunction *func = runner->GetFunctionByName("OnUnload");
+                if (func) {
+                    if (func->GetParamCount() > 0) {
+                        runner->ExecuteScript(
+                            func,
+                            [behcontext](asIScriptContext *ctx) {
+                                ctx->SetArgObject(0, (void *) &behcontext);
+                            });
+                    } else {
+                        runner->ExecuteScript(func);
+                    }
                 }
             }
+
+            runner->Detach(beh);
         }
 
         man->UnloadScript(name);
@@ -320,33 +347,55 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
 
     auto &cache = man->GetScriptCache();
 
+    ScriptRunner *runner = nullptr;
+
     switch (behcontext.CallbackMessage) {
+        case CKM_BEHAVIORCREATE: {
+            runner = new ScriptRunner(man);
+            beh->SetLocalParameterValue(0, &runner);
+        }
+        break;
         case CKM_BEHAVIORLOAD: {
-            const std::string scriptName = (CKSTRING) beh->GetInputParameterReadDataPtr(0);
-            auto script = cache.NewCachedScript(scriptName);
-            if (!script->module) {
-                CKStateChunk *chunk = nullptr;
-                beh->GetLocalParameterValue(0, &chunk);
-                if (chunk) {
-                    script->LoadFromChunk(chunk);
+            const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
+            if (!scriptName.empty()) {
+                auto script = cache.NewCachedScript(scriptName);
+                if (!script->module) {
+                    CKStateChunk *chunk = nullptr;
+                    beh->GetLocalParameterValue(1, &chunk);
+                    if (chunk) {
+                        script->LoadFromChunk(chunk);
+                    }
                 }
             }
         }
         break;
         case CKM_BEHAVIORDELETE: {
-            const std::string scriptName = (CKSTRING) beh->GetInputParameterReadDataPtr(0);
-            cache.Invalidate(scriptName);
+            runner = nullptr;
+            beh->GetLocalParameterValue(0, &runner);
+            if (runner) {
+                runner->Detach(beh);
+                delete runner;
+                runner = nullptr;
+            }
+            beh->SetLocalParameterValue(0, &runner);
+
+            const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
+            if (!scriptName.empty()) {
+                cache.Invalidate(scriptName);
+            }
         }
         break;
         case CKM_BEHAVIORPRESAVE: {
-            const std::string scriptName = (CKSTRING) beh->GetInputParameterReadDataPtr(0);
-            auto script = cache.GetCachedScript(scriptName);
-            if (script) {
-                ReadScriptData(beh, script);
-                CKStateChunk *chunk = nullptr;
-                beh->GetLocalParameterValue(0, &chunk);
-                if (chunk) {
-                    script->SaveToChunk(chunk);
+            const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
+            if (!scriptName.empty()) {
+                auto script = cache.GetCachedScript(scriptName);
+                if (script) {
+                    ReadScriptData(beh, script);
+                    CKStateChunk *chunk = nullptr;
+                    beh->GetLocalParameterValue(1, &chunk);
+                    if (chunk) {
+                        script->SaveToChunk(chunk);
+                    }
                 }
             }
         }
@@ -368,6 +417,65 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
                     pin->SetGUID(CKPGUID_STRING, TRUE, "Code");
                 } else {
                     pin->SetGUID(CKPGUID_STRING, TRUE, "Filename");
+                }
+            }
+        }
+        break;
+        case CKM_BEHAVIORPAUSE: {
+            runner = nullptr;
+            beh->GetLocalParameterValue(0, &runner);
+            if (runner && runner->IsAttached()) {
+                asIScriptFunction *func = runner->GetFunctionByName("OnPause");
+                if (func) {
+                    if (func->GetParamCount() > 0) {
+                        runner->ExecuteScript(
+                            func,
+                            [behcontext](asIScriptContext *ctx) {
+                                ctx->SetArgObject(0, (void *) &behcontext);
+                            });
+                    } else {
+                        runner->ExecuteScript(func);
+                    }
+                }
+            }
+        }
+        break;
+        case CKM_BEHAVIORRESUME: {
+            runner = nullptr;
+            beh->GetLocalParameterValue(0, &runner);
+            if (runner && runner->IsAttached()) {
+                asIScriptFunction *func = runner->GetFunctionByName("OnResume");
+                if (func) {
+                    if (func->GetParamCount() > 0) {
+                        runner->ExecuteScript(
+                            func,
+                            [behcontext](asIScriptContext *ctx) {
+                                ctx->SetArgObject(0, (void *) &behcontext);
+                            });
+                    } else {
+                        runner->ExecuteScript(func);
+                    }
+                }
+            }
+        }
+        break;
+        case CKM_BEHAVIORRESET: {
+            runner = nullptr;
+            beh->GetLocalParameterValue(0, &runner);
+            if (runner) {
+                if (runner->IsAttached()) {
+                    asIScriptFunction *func = runner->GetFunctionByName("OnReset");
+                    if (func) {
+                        if (func->GetParamCount() > 0) {
+                            runner->ExecuteScript(
+                                func,
+                                [behcontext](asIScriptContext *ctx) {
+                                    ctx->SetArgObject(0, (void *) &behcontext);
+                                });
+                        } else {
+                            runner->ExecuteScript(func);
+                        }
+                    }
                 }
             }
         }

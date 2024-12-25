@@ -40,7 +40,6 @@ CKERROR CreateAngelScriptRunnerProto(CKBehaviorPrototype **pproto) {
 
     proto->DeclareInParameter("Script", CKPGUID_STRING);
     proto->DeclareInParameter("Function", CKPGUID_STRING);
-    proto->DeclareInParameter("Callback", CKPGUID_STRING);
 
     proto->DeclareOutParameter("Error Message", CKPGUID_STRING);
 
@@ -52,10 +51,10 @@ CKERROR CreateAngelScriptRunnerProto(CKBehaviorPrototype **pproto) {
     proto->SetFunction(AngelScriptRunner);
 
     proto->SetBehaviorFlags((CK_BEHAVIOR_FLAGS) (CKBEHAVIOR_TARGETABLE |
-                                                 CKBEHAVIOR_INTERNALLYCREATEDINPUTS |
-                                                 CKBEHAVIOR_INTERNALLYCREATEDOUTPUTS |
-                                                 CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS |
-                                                 CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS |
+                                                 CKBEHAVIOR_VARIABLEINPUTS |
+                                                 CKBEHAVIOR_VARIABLEOUTPUTS |
+                                                 CKBEHAVIOR_VARIABLEPARAMETERINPUTS|
+                                                 CKBEHAVIOR_VARIABLEPARAMETERINPUTS |
                                                  CKBEHAVIOR_INTERNALLYCREATEDLOCALPARAMS));
     proto->SetBehaviorCallbackFct(AngelScriptRunnerCallBack);
 
@@ -71,19 +70,28 @@ int AngelScriptRunner(const CKBehaviorContext &behcontext) {
 
 	ScriptRunner *runner = nullptr;
 	beh->GetLocalParameterValue(0, &runner);
-	if (runner) {
-		if (!runner->IsAttached()) {
-			runner->Attach(beh);
-		}
+    if (runner) {
+	    if (!runner->IsAttached()) {
+		    runner->Attach(beh, true);
+	    }
 
-		asIScriptFunction *function = nullptr;
-		beh->GetLocalParameterValue(1, &function);
-		success = runner->ExecuteScript(function, [behcontext](asIScriptContext *ctx) {
-			ctx->SetArgObject(0, (void *) &behcontext);
-		}, [&ret](asIScriptContext *ctx) {
-			ret = static_cast<int>(ctx->GetReturnDWord());
-		});
-	}
+	    asIScriptFunction *func = nullptr;
+	    beh->GetLocalParameterValue(1, &func);
+	    if (func) {
+		    if (func->GetParamCount() > 0) {
+			    success = runner->ExecuteScript(
+				    func,
+				    [behcontext](asIScriptContext *ctx) {
+					    ctx->SetArgObject(0, (void *) &behcontext);
+				    },
+				    [&ret](asIScriptContext *ctx) {
+					    ret = static_cast<int>(ctx->GetReturnDWord());
+				    });
+		    } else {
+			    success = runner->ExecuteScript(func);
+		    }
+	    }
+    }
 
 	beh->ActivateInput(0, FALSE);
 
@@ -111,14 +119,6 @@ CKERROR AngelScriptRunnerCallBack(const CKBehaviorContext &behcontext) {
 	}
 
 	ScriptRunner *runner = nullptr;
-	beh->GetLocalParameterValue(0, &runner);
-	if (runner && runner->IsAttached()) {
-		asIScriptFunction *callback = nullptr;
-		beh->GetLocalParameterValue(2, &callback);
-		runner->ExecuteScript(callback, [behcontext](asIScriptContext *ctx) {
-			ctx->SetArgObject(0, (void *) &behcontext);
-		});
-	}
 
 	switch (behcontext.CallbackMessage)
 	{
@@ -132,6 +132,7 @@ CKERROR AngelScriptRunnerCallBack(const CKBehaviorContext &behcontext) {
 		runner = nullptr;
 		beh->GetLocalParameterValue(0, &runner);
 		if (runner) {
+			runner->Detach(beh, true);
 			delete runner;
 			runner = nullptr;
 		}
@@ -141,6 +142,26 @@ CKERROR AngelScriptRunnerCallBack(const CKBehaviorContext &behcontext) {
 	case CKM_BEHAVIOREDITED: {
 		runner = nullptr;
 		beh->GetLocalParameterValue(0, &runner);
+		if (runner) {
+			runner->Detach(beh, true);
+		}
+	}
+	break;
+	case CKM_BEHAVIORRESET: {
+		runner = nullptr;
+		beh->GetLocalParameterValue(0, &runner);
+		if (runner) {
+			runner->Detach(beh, true);
+			runner->Reset();
+		}
+	}
+	break;
+	case CKM_BEHAVIORDEACTIVATESCRIPT: {
+		runner = nullptr;
+		beh->GetLocalParameterValue(0, &runner);
+		if (runner) {
+			runner->Detach(beh, true);
+		}
 	}
 	break;
 	default:

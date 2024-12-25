@@ -12,10 +12,8 @@ ScriptRunner::~ScriptRunner() {
     }
 }
 
-bool ScriptRunner::Attach(CKBehavior *behavior) {
-    if (IsAttached()) {
-        Detach(behavior);
-    }
+bool ScriptRunner::Attach(CKBehavior *behavior, bool runner) {
+    Detach(behavior);
 
     if (!behavior) {
         return false;
@@ -30,29 +28,34 @@ bool ScriptRunner::Attach(CKBehavior *behavior) {
         return false;
     }
 
-    auto *funcName = (CKSTRING) behavior->GetInputParameterReadDataPtr(1);
-    if (funcName) {
-        auto *func = GetFunctionByName(funcName);
-        behavior->SetLocalParameterValue(1, &func);
-    }
-
-    auto *callbackName = (CKSTRING) behavior->GetInputParameterReadDataPtr(2);
-    if (callbackName) {
-        auto *callback = GetFunctionByName(callbackName);
-        behavior->SetLocalParameterValue(2, &callback);
+    if (runner) {
+        auto *funcName = (CKSTRING) behavior->GetInputParameterReadDataPtr(1);
+        if (funcName) {
+            auto *func = GetFunctionByName(funcName);
+            func->AddRef();
+            behavior->SetLocalParameterValue(1, &func);
+        }
     }
 
     m_Attached = true;
     return true;
 }
 
-void ScriptRunner::Detach(CKBehavior *behavior) {
+void ScriptRunner::Detach(CKBehavior *behavior, bool runner) {
+    if (!IsAttached()) {
+        return;
+    }
+
     ResetScript();
 
-    if (behavior) {
-        void *ptr = nullptr;
-        behavior->SetLocalParameterValue(1, &ptr);
-        behavior->SetLocalParameterValue(2, &ptr);
+    if (runner && behavior) {
+        asIScriptFunction *func = nullptr;
+        behavior->GetLocalParameterValue(1, &func);
+        if (func) {
+            func->Release();
+            func = nullptr;
+        }
+        behavior->SetLocalParameterValue(1, &func);
     }
 
     m_Attached = false;
@@ -212,4 +215,10 @@ const std::string &ScriptRunner::GetStackTrace() const {
 
 void ScriptRunner::SetStackTrace(const std::string& trace) {
     m_StackTrace = trace;
+}
+
+void ScriptRunner::Reset() {
+    ResetScript();
+    SetErrorMessage("");
+    SetStackTrace("");
 }

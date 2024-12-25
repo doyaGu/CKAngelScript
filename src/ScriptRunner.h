@@ -23,8 +23,8 @@ public:
     ScriptRunner& operator=(const ScriptRunner&) = delete;
 
     bool IsAttached() const { return m_Attached; }
-    bool Attach(CKBehavior *behavior);
-    void Detach(CKBehavior *behavior);
+    bool Attach(CKBehavior *behavior, bool runner = false);
+    void Detach(CKBehavior *behavior, bool runner = false);
 
     asIScriptContext *GetContext() const;
     void SetContext(asIScriptContext *ctx);
@@ -35,7 +35,7 @@ public:
     asIScriptFunction *GetFunctionByName(const char *name);
     asIScriptFunction *GetFunctionByDecl(const char *decl);
 
-    bool ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler, const ScriptFunctionArgumentHandler &retHandler = nullptr);
+    bool ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
 
     // Timing / metrics
     void StartTiming();
@@ -48,6 +48,8 @@ public:
 
     const std::string &GetStackTrace() const;
     void SetStackTrace(const std::string& trace);
+
+    void Reset();
 
 private:
     ScriptManager *m_ScriptManager = nullptr;
