@@ -88,12 +88,6 @@ private:
             } else {
                 ctx->SetArgObject(index, value);
             }
-        } else if constexpr (std::is_class_v<T>) {
-            if (isReturn) {
-                value = *reinterpret_cast<T *>(ctx->GetReturnObject());
-            } else {
-                ctx->SetArgObject(index, &value);
-            }
         } else {
             throw std::invalid_argument("Unsupported argument or return type");
         }
@@ -109,54 +103,6 @@ private:
         HandleFallback(ctx, 0, value, true);
     }
 };
-
-// template<typename Ret, typename... Args>
-// Ret GenericScriptCallback(Args... args, void *data) {
-//     auto *cb = static_cast<asIScriptFunction *>(data);
-//     if (!cb) {
-//         throw std::runtime_error("Invalid script function pointer");
-//     }
-//
-//     asIScriptEngine *engine = cb->GetEngine();
-//     asIScriptContext *ctx = engine->RequestContext();
-//     if (!ctx)
-//         throw std::runtime_error("Failed to create AngelScript context");
-//
-//     if (cb->GetFuncType() == asFUNC_DELEGATE) {
-//         asIScriptFunction *callback = cb->GetDelegateFunction();
-//         void *callbackObject = cb->GetDelegateObject();
-//         ctx->Prepare(callback);
-//         ctx->SetObject(callbackObject);
-//     } else {
-//         ctx->Prepare(cb);
-//     }
-//
-//     // Set arguments using ScriptTypeRegistry
-//     int index = 0;
-//     (..., ScriptTypeRegistry::SetArg(ctx, index++, args));
-//
-//     int r = ctx->Execute();
-//     engine->ReturnContext(ctx);
-//
-//     if (r == asEXECUTION_EXCEPTION) {
-//         const char *exception = ctx->GetExceptionString();
-//         std::string funcName = cb->GetDeclaration();
-//         throw std::runtime_error("Script execution exception in function '" +
-//                                  funcName + "': " +
-//                                  (exception ? exception : "Unknown exception"));
-//     } else if (r != asEXECUTION_FINISHED) {
-//         throw std::runtime_error("Script execution failed with result code: " + std::to_string(r));
-//     }
-//
-//     // Use ScriptTypeRegistry for return value handling
-//     if constexpr (std::is_same_v<Ret, void>) {
-//         return; // For void return type
-//     } else {
-//         Ret result;
-//         ScriptTypeRegistry::GetReturn(ctx, result);
-//         return result;
-//     }
-// }
 
 template<typename First, typename... Rest>
 static constexpr decltype(auto) GetLastArgument(First &&first, Rest &&... rest) {
