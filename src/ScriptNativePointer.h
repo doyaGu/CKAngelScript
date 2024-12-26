@@ -9,9 +9,9 @@
 class NativePointer {
 public:
     NativePointer() = default;
-    explicit NativePointer(void *ptr) { m_Ptr = static_cast<uint8_t *>(ptr); }
-    explicit NativePointer(intptr_t addr) { m_Ptr = reinterpret_cast<uint8_t *>(addr); }
-    explicit NativePointer(uintptr_t addr) { m_Ptr = reinterpret_cast<uint8_t *>(addr); }
+    NativePointer(void *ptr) { m_Ptr = static_cast<uint8_t *>(ptr); }
+    NativePointer(intptr_t addr) { m_Ptr = reinterpret_cast<uint8_t *>(addr); }
+    NativePointer(uintptr_t addr) { m_Ptr = reinterpret_cast<uint8_t *>(addr); }
     NativePointer(const NativePointer &rhs) { m_Ptr = rhs.m_Ptr; }
 
     NativePointer &operator=(const NativePointer &rhs) {
@@ -162,6 +162,8 @@ public:
     NativePointer operator*() const { return *this; }
 
     explicit operator void *() const { return m_Ptr; }
+
+    char *Get() const { return reinterpret_cast<char *>(m_Ptr); }
 
     uintptr_t ToUInt() const { return reinterpret_cast<uintptr_t>(m_Ptr); }
     intptr_t ToInt() const { return reinterpret_cast<intptr_t>(m_Ptr); }
