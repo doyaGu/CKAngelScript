@@ -185,19 +185,24 @@ size_t NativeBuffer::Save(const char *filename, size_t size) {
 void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = static_cast<void**>(gen->GetAddressOfArg(0));;
+    void *addr = static_cast<void **>(gen->GetAddressOfArg(0));;
     auto *self = static_cast<NativeBuffer *>(gen->GetObject());
     size_t size = 0;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
-        // Not supported for now
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Cannot write script objects to buffer");
         gen->SetReturnDWord(0);
         return;
     }
 
     if (typeId & asTYPEID_APPOBJECT) {
-        if (typeId & asTYPEID_OBJHANDLE)
-            addr = *static_cast<void **>(addr);
+        if (typeId & asTYPEID_OBJHANDLE) {
+            asIScriptContext *ctx = asGetActiveContext();
+            ctx->SetException("Cannot write object handle to buffer");
+            gen->SetReturnDWord(0);
+            return;
+        }
 
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
@@ -214,6 +219,8 @@ void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
                 if (type->GetFlags() & asOBJ_POD) {
                     size = type->GetSize();
                 } else {
+                    asIScriptContext *ctx = asGetActiveContext();
+                    ctx->SetException("Cannot write non-POD object to buffer");
                     gen->SetReturnDWord(0);
                     return;
                 }
@@ -239,19 +246,24 @@ void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
 void NativeBufferReadGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = static_cast<void**>(gen->GetAddressOfArg(0));;
+    void *addr = static_cast<void **>(gen->GetAddressOfArg(0));;
     auto *self = static_cast<NativeBuffer *>(gen->GetObject());
     size_t size = 0;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
-        // Not supported for now
+        asIScriptContext *ctx = asGetActiveContext();
+        ctx->SetException("Cannot read script objects from buffer");
         gen->SetReturnDWord(0);
         return;
     }
 
     if (typeId & asTYPEID_APPOBJECT) {
-        if (typeId & asTYPEID_OBJHANDLE)
-            addr = *static_cast<void **>(addr);
+        if (typeId & asTYPEID_OBJHANDLE) {
+            asIScriptContext *ctx = asGetActiveContext();
+            ctx->SetException("Cannot read object handle from buffer");
+            gen->SetReturnDWord(0);
+            return;
+        }
 
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
@@ -268,6 +280,8 @@ void NativeBufferReadGeneric(asIScriptGeneric *gen) {
                 if (type->GetFlags() & asOBJ_POD) {
                     size = type->GetSize();
                 } else {
+                    asIScriptContext *ctx = asGetActiveContext();
+                    ctx->SetException("Cannot read non-POD object from buffer");
                     gen->SetReturnDWord(0);
                     return;
                 }
