@@ -148,6 +148,15 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
         SetContext(ctx);
     }
 
+    if (func->GetFuncType() == asFUNC_DELEGATE) {
+        asIScriptFunction *delegate = func->GetDelegateFunction();
+        void *delegateObject = func->GetDelegateObject();
+        ctx->Prepare(delegate);
+        ctx->SetObject(delegateObject);
+    } else {
+        ctx->Prepare(func);
+    }
+
     int r = ctx->Prepare(func);
     if (r < 0) {
         SetErrorMessage("Failed to prepare script function.");
