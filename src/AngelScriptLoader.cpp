@@ -72,16 +72,24 @@ static void TriggerCallback(ScriptRunner *runner, const char *name, const CKBeha
     if (!runner || !runner->IsAttached())
         return;
 
+    CKContext *context = behcontext.Context;
+
     asIScriptFunction *func = runner->GetFunctionByName(name);
     if (func) {
+        bool success = true;
         if (func->GetParamCount() > 0) {
-            runner->ExecuteScript(
+            success = runner->ExecuteScript(
                 func,
                 [behcontext](asIScriptContext *ctx) {
                     ctx->SetArgObject(0, (void *) &behcontext);
                 });
         } else {
-            runner->ExecuteScript(func);
+            success = runner->ExecuteScript(func);
+        }
+
+        if (!success) {
+            context->OutputToConsole(const_cast<CKSTRING>(runner->GetErrorMessage().c_str()));
+            context->OutputToConsole(const_cast<CKSTRING>(runner->GetStackTrace().c_str()));
         }
     }
 }
