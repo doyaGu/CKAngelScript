@@ -477,6 +477,9 @@ static std::string TypeOf(asIScriptGeneric *gen) {
     if (!type) {
         return "unknown";
     }
+
+    if (typeId & asTYPEID_OBJHANDLE)
+        return std::string(type->GetName()) + "@";
     return type->GetName();
 }
 
