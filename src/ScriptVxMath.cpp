@@ -1351,8 +1351,8 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("VXFONTINFO", "XString FaceName", asOFFSET(VXFONTINFO, FaceName)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VXFONTINFO", "int Height", asOFFSET(VXFONTINFO, Height)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VXFONTINFO", "int Weight", asOFFSET(VXFONTINFO, Weight)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("VXFONTINFO", "bool Italic", asOFFSET(VXFONTINFO, Italic)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("VXFONTINFO", "bool Underline", asOFFSET(VXFONTINFO, Underline)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VXFONTINFO", "int Italic", asOFFSET(VXFONTINFO, Italic)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("VXFONTINFO", "int Underline", asOFFSET(VXFONTINFO, Underline)); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("VXFONTINFO", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VXFONTINFO *self) { new(self) VXFONTINFO(); }, (VXFONTINFO*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VXFONTINFO", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VXFONTINFO *self) { self->~VXFONTINFO(); }, (VXFONTINFO*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
