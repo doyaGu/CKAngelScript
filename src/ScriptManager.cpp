@@ -64,12 +64,12 @@ int ScriptManager::Init() {
     if (IsInited())
         return -2;
 
-#if CKVERSION == 0x13022002
-    asSetGlobalMemoryFunctions(
-        [](size_t size) { return VxMalloc(size); },
-        [](void *ptr) { VxFree(ptr); }
-    );
-#endif
+// #if CKVERSION == 0x13022002
+//     asSetGlobalMemoryFunctions(
+//         [](size_t size) { return VxMalloc(size); },
+//         [](void *ptr) { VxFree(ptr); }
+//     );
+// #endif
 
     m_ScriptEngine = asCreateScriptEngine();
     if (!m_ScriptEngine) {
