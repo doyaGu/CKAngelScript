@@ -41,8 +41,6 @@ CKERROR CreateAngelScriptRunnerProto(CKBehaviorPrototype **pproto) {
     proto->DeclareInParameter("Script", CKPGUID_STRING);
     proto->DeclareInParameter("Function", CKPGUID_STRING);
 
-    proto->DeclareOutParameter("Error Message", CKPGUID_STRING);
-
     proto->DeclareLocalParameter(nullptr, CKPGUID_POINTER);
     proto->DeclareLocalParameter(nullptr, CKPGUID_POINTER);
     proto->DeclareLocalParameter(nullptr, CKPGUID_POINTER);
@@ -64,6 +62,7 @@ CKERROR CreateAngelScriptRunnerProto(CKBehaviorPrototype **pproto) {
 
 int AngelScriptRunner(const CKBehaviorContext &behcontext) {
     CKBehavior *beh = behcontext.Behavior;
+	CKContext *context = behcontext.Context;
 
 	int ret = CKBR_OK;
 	bool success = true;
@@ -98,8 +97,9 @@ int AngelScriptRunner(const CKBehaviorContext &behcontext) {
 	if (success) {
 		beh->ActivateOutput(0);
 	} else {
+		context->OutputToConsole(const_cast<CKSTRING>(runner->GetErrorMessage().c_str()));
+		context->OutputToConsole(const_cast<CKSTRING>(runner->GetStackTrace().c_str()));
 		beh->ActivateOutput(1);
-		beh->SetOutputParameterValue(0, runner->GetErrorMessage().c_str());
 	}
 
     return ret;
