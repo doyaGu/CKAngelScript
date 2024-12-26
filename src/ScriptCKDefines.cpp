@@ -576,7 +576,7 @@ void RegisterCKGlobalVariables(asIScriptEngine *engine) {
 void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterGlobalFunction("string CKErrorToString(CKERROR err)", asFUNCTION(CKErrorToString), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string CKErrorToString(CKERROR err)", asFUNCTIONPR([](CKERROR err) -> std::string { return CKErrorToString(err); }, (CKERROR), std::string), asCALL_CDECL); assert(r >= 0);
 
     r = engine->RegisterGlobalFunction("CKERROR CKStartUp()", asFUNCTION(CKStartUp), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKERROR CKShutdown()", asFUNCTION(CKShutdown), asCALL_CDECL); assert(r >= 0);
@@ -586,8 +586,8 @@ void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("CKERROR CKCreateContext(CKContext@ &out context, WIN_HANDLE win, int renderEngine, CKDWORD flags)", asFUNCTION(CKCreateContext), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKERROR CKCloseContext(CKContext@ context)", asFUNCTION(CKCloseContext), asCALL_CDECL); assert(r >= 0);
 
-    r = engine->RegisterGlobalFunction("string CKGetStartPath()", asFUNCTION(CKGetStartPath), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("string CKGetPluginsPath()", asFUNCTION(CKGetPluginsPath), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string CKGetStartPath()", asFUNCTIONPR([]() -> std::string { return CKGetStartPath(); }, (), std::string), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string CKGetPluginsPath()", asFUNCTIONPR([]() -> std::string { return CKGetPluginsPath(); }, (), std::string), asCALL_CDECL); assert(r >= 0);
 
     r = engine->RegisterGlobalFunction("void CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in dep = void)", asFUNCTION(CKDestroyObject), asCALL_CDECL); assert(r >= 0);
 
@@ -604,14 +604,14 @@ void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("CKObjectDeclaration@ CKGetObjectDeclarationFromGuid(CKGUID guid)", asFUNCTION(CKGetObjectDeclarationFromGuid), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKBehaviorPrototype@ CKGetPrototypeFromGuid(CKGUID guid)", asFUNCTION(CKGetPrototypeFromGuid), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKERROR CKRemovePrototypeDeclaration(CKObjectDeclaration@ decl)", asFUNCTION(CKRemovePrototypeDeclaration), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("CKObjectDeclaration@ CreateCKObjectDeclaration(const string &in name)", asFUNCTION(CreateCKObjectDeclaration), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("CKBehaviorPrototype@ CreateCKBehaviorPrototype(const string &in name)", asFUNCTION(CreateCKBehaviorPrototype), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("CKBehaviorPrototype@ CreateCKBehaviorPrototypeRunTime(const string &in name)", asFUNCTION(CreateCKBehaviorPrototypeRunTime), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("CKObjectDeclaration@ CreateCKObjectDeclaration(const string &in name)", asFUNCTIONPR([](const std::string &name) { return CreateCKObjectDeclaration(const_cast<CKSTRING>(name.c_str())); }, (const std::string &), CKObjectDeclaration *), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("CKBehaviorPrototype@ CreateCKBehaviorPrototype(const string &in name)", asFUNCTIONPR([](const std::string &name) { return CreateCKBehaviorPrototype(const_cast<CKSTRING>(name.c_str())); }, (const std::string &), CKBehaviorPrototype *), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("CKBehaviorPrototype@ CreateCKBehaviorPrototypeRunTime(const string &in name)", asFUNCTIONPR([](const std::string &name) { return CreateCKBehaviorPrototypeRunTime(const_cast<CKSTRING>(name.c_str())); }, (const std::string &), CKBehaviorPrototype *), asCALL_CDECL); assert(r >= 0);
 
     r = engine->RegisterGlobalFunction("int CKGetClassCount()", asFUNCTION(CKGetClassCount), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKClassDesc &CKGetClassDesc(CK_CLASSID cid)", asFUNCTION(CKGetClassDesc), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("string CKClassIDToString(CK_CLASSID cid)", asFUNCTION(CKClassIDToString), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("CK_CLASSID CKStringToClassID(const string &in className)", asFUNCTION(CKStringToClassID), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string CKClassIDToString(CK_CLASSID cid)", asFUNCTIONPR([](CK_CLASSID cid) -> std::string { return CKClassIDToString(cid); }, (CK_CLASSID), std::string), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("CK_CLASSID CKStringToClassID(const string &in className)", asFUNCTIONPR([](const std::string &className) { return CKStringToClassID(const_cast<CKSTRING>(className.c_str())); }, (const std::string &), CK_CLASSID), asCALL_CDECL); assert(r >= 0);
 
     r = engine->RegisterGlobalFunction("bool CKIsChildClassOf(CK_CLASSID child, CK_CLASSID parent)", asFUNCTIONPR(CKIsChildClassOf, (CK_CLASSID, CK_CLASSID), CKBOOL), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool CKIsChildClassOf(CKObject@ obj, CK_CLASSID parent)", asFUNCTIONPR(CKIsChildClassOf, (CKObject *, CK_CLASSID), CKBOOL), asCALL_CDECL); assert(r >= 0);
@@ -629,9 +629,9 @@ void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("CKStateChunk@ CKSaveObjectState(CKObject@ obj, CKDWORD flags = CK_STATESAVE_ALL)", asFUNCTIONPR(CKSaveObjectState, (CKObject *, CKDWORD), CKStateChunk *), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKERROR CKReadObjectState(CKObject@ obj, CKStateChunk@ chunk)", asFUNCTIONPR(CKReadObjectState, (CKObject *, CKStateChunk *), CKERROR), asCALL_CDECL); assert(r >= 0);
 
-    r = engine->RegisterGlobalFunction("BITMAP_HANDLE CKLoadBitmap(const string &in filename)", asFUNCTION(CKLoadBitmap), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool CKSaveBitmap(const string &in filename, BITMAP_HANDLE bm)", asFUNCTIONPR(CKSaveBitmap, (CKSTRING, BITMAP_HANDLE), CKBOOL), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool CKSaveBitmap(const string &in filename, VxImageDescEx &in desc)", asFUNCTIONPR(CKSaveBitmap, (CKSTRING, VxImageDescEx &), CKBOOL), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BITMAP_HANDLE CKLoadBitmap(const string &in filename)", asFUNCTIONPR([](const std::string &filename) { return CKLoadBitmap(const_cast<CKSTRING>(filename.c_str())); }, (const std::string &), BITMAP_HANDLE), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool CKSaveBitmap(const string &in filename, BITMAP_HANDLE bm)", asFUNCTIONPR([](const std::string &filename, BITMAP_HANDLE bm) -> bool { return CKSaveBitmap(const_cast<CKSTRING>(filename.c_str()), bm); }, (const std::string &, BITMAP_HANDLE), bool), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool CKSaveBitmap(const string &in filename, VxImageDescEx &in desc)", asFUNCTIONPR([](const std::string &filename, VxImageDescEx &desc) -> bool { return CKSaveBitmap(const_cast<CKSTRING>(filename.c_str()), desc); }, (const std::string &, VxImageDescEx &), bool), asCALL_CDECL); assert(r >= 0);
 
     r = engine->RegisterGlobalFunction("void CKConvertEndianArray32(NativePointer buf, int dwordCount)", asFUNCTION(CKConvertEndianArray32), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void CKConvertEndianArray16(NativePointer buf, int dwordCount)", asFUNCTION(CKConvertEndianArray16), asCALL_CDECL); assert(r >= 0);
@@ -1009,7 +1009,7 @@ void RegisterCKUICallbackStruct(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "uint get_Param2() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->Param2; }, (const CKUICallbackStruct *), CKDWORD), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_Param2(uint value)", asFUNCTIONPR([](CKUICallbackStruct *self, CKDWORD value) { self->Param2 = value; }, (CKUICallbackStruct *, CKDWORD), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKUICallbackStruct", "string get_ConsoleString() const", asFUNCTIONPR([](const CKUICallbackStruct *self) { return self->ConsoleString; }, (const CKUICallbackStruct *), CKSTRING), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "string get_ConsoleString() const", asFUNCTIONPR([](const CKUICallbackStruct *self) -> std::string { return self->ConsoleString; }, (const CKUICallbackStruct *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     // r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_ConsoleString(const string &in value)", asFUNCTIONPR([](CKUICallbackStruct *self, CKSTRING value) { self->ConsoleString = value; }, (CKUICallbackStruct *, CKSTRING), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
@@ -1106,7 +1106,7 @@ void RegisterCKEnumStruct(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKEnumStruct", "int GetNumEnums() const", asMETHOD(CKEnumStruct, GetNumEnums), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKEnumStruct", "int GetEnumValue(int index) const", asMETHOD(CKEnumStruct, GetEnumValue), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKEnumStruct", "string GetEnumDescription(int index) const", asMETHOD(CKEnumStruct, GetEnumDescription), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKEnumStruct", "string GetEnumDescription(int index) const", asFUNCTIONPR([](CKEnumStruct *self, int index) -> std::string { return self->GetEnumDescription(index); }, (CKEnumStruct *, int), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKFlagsStruct
@@ -1120,9 +1120,9 @@ void RegisterCKFlagsStruct(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKFlagsStruct", "CKFlagsStruct &opAssign(const CKFlagsStruct &in other)", asMETHODPR(CKFlagsStruct, operator=, (const CKFlagsStruct &), CKFlagsStruct &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKFlagsStruct", "int GetNumFlags()", asMETHOD(CKFlagsStruct, GetNumFlags), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKFlagsStruct", "int GetFlagValue(int index)", asMETHOD(CKFlagsStruct, GetFlagValue), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKFlagsStruct", "string GetFlagDescription(int index)", asMETHOD(CKFlagsStruct, GetFlagDescription), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKFlagsStruct", "int GetNumFlags() const", asMETHOD(CKFlagsStruct, GetNumFlags), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKFlagsStruct", "int GetFlagValue(int index) const", asMETHOD(CKFlagsStruct, GetFlagValue), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKFlagsStruct", "string GetFlagDescription(int index) const", asFUNCTIONPR([](CKFlagsStruct *self, int index) -> std::string { return self->GetFlagDescription(index); }, (CKFlagsStruct *, int), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKStructStruct
@@ -1139,7 +1139,7 @@ void RegisterCKStructStruct(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKStructStruct", "int GetNumSubParam() const", asMETHOD(CKStructStruct, GetNumSubParam), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStructStruct", "CKGUID &GetSubParamGuid(int index) const", asMETHOD(CKStructStruct, GetSubParamGuid), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKStructStruct", "string GetSubParamDescription(int index) const", asMETHOD(CKStructStruct, GetSubParamDescription), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKStructStruct", "string GetSubParamDescription(int index) const", asFUNCTIONPR([](CKStructStruct *self, int index) -> std::string { return self->GetSubParamDescription(index); }, (CKStructStruct *, int), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKParameterTypeDesc
@@ -1208,7 +1208,7 @@ static void RegisterCKDataReaderMembers(asIScriptEngine *engine, const char *nam
     r = engine->RegisterObjectMethod(name, "void Release()", asMETHODPR(T, Release, (), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "CKPluginInfo &GetReaderInfo()", asMETHODPR(T, GetReaderInfo, (), CKPluginInfo*), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "int GetOptionsCount()", asMETHODPR(T, GetOptionsCount, (), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "string GetOptionDescription(int i)", asMETHODPR(T, GetOptionDescription, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "string GetOptionDescription(int i)", asFUNCTIONPR([](T *self, int i) -> std::string { return self->GetOptionDescription(i); }, (T *, int), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "CK_DATAREADER_FLAGS GetFlags()", asMETHODPR(T, GetFlags, (), CK_DATAREADER_FLAGS), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKDataReader") != 0) {
@@ -1227,8 +1227,8 @@ void RegisterCKModelReader(asIScriptEngine *engine) {
 
     RegisterCKDataReaderMembers<CKModelReader>(engine, "CKModelReader");
 
-    r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Load(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD loadFlags, CKCharacter@ carac = null)", asMETHODPR(CKModelReader, Load, (CKContext*, CKSTRING, CKObjectArray*, CKDWORD, CKCharacter*), CKERROR), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Save(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD saveFlags)", asMETHODPR(CKModelReader, Save, (CKContext*, CKSTRING, CKObjectArray*, CKDWORD), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Load(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD loadFlags, CKCharacter@ carac = null)", asFUNCTIONPR([](CKModelReader *self, CKContext *context, const std::string &filename, CKObjectArray *objArray, CKDWORD loadFlags, CKCharacter *carac) { return self->Load(context, const_cast<CKSTRING>(filename.c_str()), objArray, loadFlags, carac); }, (CKModelReader*, CKContext*, const std::string&, CKObjectArray*, CKDWORD, CKCharacter*), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Save(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD saveFlags)", asFUNCTIONPR([](CKModelReader *self, CKContext *context, const std::string &filename, CKObjectArray *objArray, CKDWORD saveFlags) { return self->Save(context, const_cast<CKSTRING>(filename.c_str()), objArray, saveFlags); }, (CKModelReader*, CKContext*, const std::string&, CKObjectArray*, CKDWORD), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKBitmapReader
@@ -1241,10 +1241,10 @@ void RegisterCKBitmapReader(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBitmapReader", "bool IsAlphaSaved(CKBitmapProperties@ bp)", asMETHODPR(CKBitmapReader, IsAlphaSaved, (CKBitmapProperties*), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapReader", "void GetBitmapDefaultProperties(CKBitmapProperties@ &out bp)", asMETHODPR(CKBitmapReader, GetBitmapDefaultProperties, (CKBitmapProperties**), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapReader", "void SetBitmapDefaultProperties(CKBitmapProperties@ bp)", asMETHODPR(CKBitmapReader, SetBitmapDefaultProperties, (CKBitmapProperties*), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadFile(const string &in name, CKBitmapProperties@ &out bp)", asMETHODPR(CKBitmapReader, ReadFile, (char*, CKBitmapProperties**), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadFile(const string &in name, CKBitmapProperties@ &out bp)", asFUNCTIONPR([](CKBitmapReader *self, const std::string &name, CKBitmapProperties **bp) -> int { return self->ReadFile(const_cast<char*>(name.c_str()), bp); }, (CKBitmapReader *, const std::string &, CKBitmapProperties **), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadMemory(NativePointer memory, int size, CKBitmapProperties@ &out bp)", asMETHODPR(CKBitmapReader, ReadMemory, (void*, int, CKBitmapProperties**), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadASynchronousFile(string, CKBitmapProperties@ &out bp)", asMETHODPR(CKBitmapReader, ReadASynchronousFile, (char*, CKBitmapProperties**), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapReader", "int SaveFile(const string &in name, CKBitmapProperties@ bp)", asMETHODPR(CKBitmapReader, SaveFile, (char*, CKBitmapProperties*), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadASynchronousFile(const string &in name, CKBitmapProperties@ &out bp)", asFUNCTIONPR([](CKBitmapReader *self, const std::string &name, CKBitmapProperties **bp) -> int { return self->ReadASynchronousFile(const_cast<char*>(name.c_str()), bp); }, (CKBitmapReader *, const std::string &, CKBitmapProperties **), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapReader", "int SaveFile(const string &in name, CKBitmapProperties@ bp)", asFUNCTIONPR([](CKBitmapReader *self, const std::string &name, CKBitmapProperties *bp) -> int { return self->SaveFile(const_cast<char*>(name.c_str()), bp); }, (CKBitmapReader *, const std::string &, CKBitmapProperties *), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapReader", "int SaveMemory(NativePointer &out memory, CKBitmapProperties@ bp)", asMETHODPR(CKBitmapReader, SaveMemory, (void**, CKBitmapProperties*), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapReader", "void ReleaseMemory(NativePointer memory)", asMETHODPR(CKBitmapReader, ReleaseMemory, (void*), void), asCALL_THISCALL); assert(r >= 0);
 }
@@ -1256,7 +1256,7 @@ void RegisterCKSoundReader(asIScriptEngine *engine) {
 
     RegisterCKDataReaderMembers<CKSoundReader>(engine, "CKSoundReader");
 
-    r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR OpenFile(const string &in filename)", asMETHODPR(CKSoundReader, OpenFile, (char *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR OpenFile(const string &in filename)", asFUNCTIONPR([](CKSoundReader *self, const std::string &filename) -> CKERROR { return self->OpenFile(const_cast<char *>(filename.c_str())); }, (CKSoundReader *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR Decode()", asMETHODPR(CKSoundReader, Decode, (), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR GetDataBuffer(NativePointer &out buf, int &out size)", asMETHODPR(CKSoundReader, GetDataBuffer, (CKBYTE **, int *), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR GetWaveFormat(CKWaveFormat &out wfe)", asMETHODPR(CKSoundReader, GetWaveFormat, (CKWaveFormat *), CKERROR), asCALL_THISCALL); assert(r >= 0);
@@ -1280,9 +1280,9 @@ void RegisterCKMovieReader(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMovieReader", "int GetMovieFrameCount() const", asMETHODPR(CKMovieReader, GetMovieFrameCount, (), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKMovieReader", "int GetMovieLength() const", asMETHODPR(CKMovieReader, GetMovieLength, (), int), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenFile(const string &in name)", asMETHODPR(CKMovieReader, OpenFile, (char *), CKERROR), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenMemory(const string &in name)", asMETHODPR(CKMovieReader, OpenMemory, (char *), CKERROR), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenAsynchronousFile(const string &in name)", asMETHODPR(CKMovieReader, OpenAsynchronousFile, (char *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenFile(const string &in name)", asFUNCTIONPR([](CKMovieReader *self, const std::string &name) { return self->OpenFile(const_cast<char*>(name.c_str())); }, (CKMovieReader *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenMemory(const string &in name)", asFUNCTIONPR([](CKMovieReader *self, const std::string &name) { return self->OpenMemory(const_cast<char*>(name.c_str())); }, (CKMovieReader *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenAsynchronousFile(const string &in name)", asFUNCTIONPR([](CKMovieReader *self, const std::string &name) { return self->OpenAsynchronousFile(const_cast<char*>(name.c_str())); }, (CKMovieReader *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR ReadFrame(int f, CKMovieProperties@ &out prop)", asMETHODPR(CKMovieReader, ReadFrame, (int, CKMovieProperties **), CKERROR), asCALL_THISCALL); assert(r >= 0);
 }
@@ -1303,7 +1303,7 @@ void RegisterCKPluginDll(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKPluginDll", "CKPluginDll &opAssign(const CKPluginDll &in other)", asMETHODPR(CKPluginDll, operator=, (const CKPluginDll &), CKPluginDll &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKPluginDll", "NativePointer GetFunctionPtr(const string &in functionName) const", asMETHODPR(CKPluginDll, GetFunctionPtr, (CKSTRING), void *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPluginDll", "NativePointer GetFunctionPtr(const string &in functionName) const", asFUNCTIONPR([](CKPluginDll *self, const std::string &functionName) -> void* { return self->GetFunctionPtr(const_cast<char*>(functionName.c_str())); }, (CKPluginDll *, const std::string &), void *), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKPluginEntryReadersData
@@ -1413,13 +1413,13 @@ void RegisterCKAttributeVal(asIScriptEngine *engine) {
 void RegisterCKTimeProfiler(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectBehaviour("CKTimeProfiler", asBEHAVE_CONSTRUCT, "void f(const string &in title, CKContext@ context, int startingCount = 4)", asFUNCTIONPR([](const char *iTitle, CKContext *iContext, int iStartingCount, CKTimeProfiler *self) { new(self) CKTimeProfiler(iTitle, iContext, iStartingCount); }, (const char *, CKContext *, int, CKTimeProfiler *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("CKTimeProfiler", asBEHAVE_CONSTRUCT, "void f(const string &in title, CKContext@ context, int startingCount = 4)", asFUNCTIONPR([](const std::string &iTitle, CKContext *iContext, int iStartingCount, CKTimeProfiler *self) { new(self) CKTimeProfiler(iTitle.c_str(), iContext, iStartingCount); }, (const std::string &, CKContext *, int, CKTimeProfiler *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("CKTimeProfiler", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKTimeProfiler *self) { self->~CKTimeProfiler(); }, (CKTimeProfiler *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKTimeProfiler", "void opCall(const string &in str)", asMETHODPR(CKTimeProfiler, operator(), (const char*), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKTimeProfiler", "void opCall(const string &in str)", asFUNCTIONPR([](CKTimeProfiler *self, const std::string &str) { (*self)(str.c_str()); }, (CKTimeProfiler *, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKTimeProfiler", "void Reset()", asMETHODPR(CKTimeProfiler, Reset, (), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKTimeProfiler", "void Dump(string &out buffer, const string &in separator = \" | \")", asMETHODPR(CKTimeProfiler, Dump, (char*, char*), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKTimeProfiler", "void Dump(string &out buffer, const string &in separator = \" | \")", asFUNCTIONPR([](CKTimeProfiler *self, std::string &buffer, const std::string &separator) { self->Dump(const_cast<char*>(buffer.c_str()), const_cast<char*>(separator.c_str())); }, (CKTimeProfiler *, std::string &, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKMessage
@@ -1524,16 +1524,16 @@ void RegisterCKBEHAVIORIO_DESC(asIScriptEngine *engine) {
 void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInput(const string &in name)", asMETHODPR(CKBehaviorPrototype, DeclareInput, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutput(const string &in name)", asMETHODPR(CKBehaviorPrototype, DeclareOutput, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInParameter(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asMETHODPR(CKBehaviorPrototype, DeclareInParameter, (CKSTRING, CKGUID, CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asMETHODPR(CKBehaviorPrototype, DeclareInParameter, (CKSTRING, CKGUID, void*, int), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutParameter(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asMETHODPR(CKBehaviorPrototype, DeclareOutParameter, (CKSTRING, CKGUID, CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asMETHODPR(CKBehaviorPrototype, DeclareOutParameter, (CKSTRING, CKGUID, void*, int), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareLocalParameter(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asMETHODPR(CKBehaviorPrototype, DeclareLocalParameter, (CKSTRING, CKGUID, CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareLocalParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asMETHODPR(CKBehaviorPrototype, DeclareLocalParameter, (CKSTRING, CKGUID, void*, int), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareSetting(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asMETHODPR(CKBehaviorPrototype, DeclareSetting, (CKSTRING, CKGUID, CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareSetting(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asMETHODPR(CKBehaviorPrototype, DeclareSetting, (CKSTRING, CKGUID, void*, int), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInput(const string &in name)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name) { return self->DeclareInput(const_cast<CKSTRING>(name.c_str())); }, (CKBehaviorPrototype *, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutput(const string &in name)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name) { return self->DeclareOutput(const_cast<CKSTRING>(name.c_str())); }, (CKBehaviorPrototype *, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInParameter(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) { return self->DeclareInParameter(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str())); }, (CKBehaviorPrototype *, const std::string &, CKGUID, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, void *defaultVal, int valSize) { return self->DeclareInParameter(const_cast<CKSTRING>(name.c_str()), guidType, defaultVal, valSize); }, (CKBehaviorPrototype *, const std::string &, CKGUID, void *, int), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutParameter(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) { return self->DeclareOutParameter(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str())); }, (CKBehaviorPrototype *, const std::string &, CKGUID, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, void *defaultVal, int valSize) { return self->DeclareOutParameter(const_cast<CKSTRING>(name.c_str()), guidType, defaultVal, valSize); }, (CKBehaviorPrototype *, const std::string &, CKGUID, void *, int), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareLocalParameter(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) { return self->DeclareLocalParameter(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str())); }, (CKBehaviorPrototype *, const std::string &, CKGUID, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareLocalParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, void *defaultVal, int valSize) { return self->DeclareLocalParameter(const_cast<CKSTRING>(name.c_str()), guidType, defaultVal, valSize); }, (CKBehaviorPrototype *, const std::string &, CKGUID, void *, int), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareSetting(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) { return self->DeclareSetting(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str())); }, (CKBehaviorPrototype *, const std::string &, CKGUID, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareSetting(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, void *defaultVal, int valSize) { return self->DeclareSetting(const_cast<CKSTRING>(name.c_str()), guidType, defaultVal, valSize); }, (CKBehaviorPrototype *, const std::string &, CKGUID, void *, int), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetGuid(const CKGUID &in guid)", asMETHODPR(CKBehaviorPrototype, SetGuid, (CKGUID), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKGUID GetGuid()", asMETHODPR(CKBehaviorPrototype, GetGuid, (), CKGUID), asCALL_THISCALL); assert(r >= 0);
@@ -1548,7 +1548,7 @@ void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetBehaviorFlags(CK_BEHAVIOR_FLAGS flags)", asMETHODPR(CKBehaviorPrototype, SetBehaviorFlags, (CK_BEHAVIOR_FLAGS), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CK_BEHAVIOR_FLAGS GetBehaviorFlags()", asMETHODPR(CKBehaviorPrototype, GetBehaviorFlags, (), CK_BEHAVIOR_FLAGS), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "string GetName()", asMETHODPR(CKBehaviorPrototype, GetName, (), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "string GetName()", asFUNCTIONPR([](CKBehaviorPrototype *self) -> std::string { return self->GetName(); }, (CKBehaviorPrototype *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetInputCount()", asMETHODPR(CKBehaviorPrototype, GetInputCount, (), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetOutputCount()", asMETHODPR(CKBehaviorPrototype, GetOutputCount, (), int), asCALL_THISCALL); assert(r >= 0);
@@ -1598,18 +1598,11 @@ void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetSourceObjectDeclaration(CKObjectDeclaration@ decl)", asMETHODPR(CKBehaviorPrototype, SetSourceObjectDeclaration, (CKObjectDeclaration*), void), asCALL_THISCALL); assert(r >= 0);
 #endif
 
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetInIOIndex(const string &in name)", asMETHODPR(CKBehaviorPrototype, GetInIOIndex, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetOutIOIndex(const string &in name)", asMETHODPR(CKBehaviorPrototype, GetOutIOIndex, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetInParamIndex(const string &in name)", asMETHODPR(CKBehaviorPrototype, GetInParamIndex, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetOutParamIndex(const string &in name)", asMETHODPR(CKBehaviorPrototype, GetOutParamIndex, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetLocalParamIndex(const string &in name)", asMETHODPR(CKBehaviorPrototype, GetLocalParamIndex, (CKSTRING), int), asCALL_THISCALL); assert(r >= 0);
-
-    // Not existing in Virtools 2.1
-    // r = engine->RegisterObjectMethod("CKBehaviorPrototype", "string GetInIOName(int)", asMETHODPR(CKBehaviorPrototype, GetInIOName, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
-    // r = engine->RegisterObjectMethod("CKBehaviorPrototype", "string GetOutIOIndex(int)", asMETHODPR(CKBehaviorPrototype, GetOutIOIndex, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
-    // r = engine->RegisterObjectMethod("CKBehaviorPrototype", "string GetInParamIndex(int)", asMETHODPR(CKBehaviorPrototype, GetInParamIndex, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
-    // r = engine->RegisterObjectMethod("CKBehaviorPrototype", "string GetOutParamIndex(int)", asMETHODPR(CKBehaviorPrototype, GetOutParamIndex, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
-    // r = engine->RegisterObjectMethod("CKBehaviorPrototype", "string GetLocalParamIndex(int)", asMETHODPR(CKBehaviorPrototype, GetLocalParamIndex, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetInIOIndex(const string &in name)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name) { return self->GetInIOIndex(const_cast<CKSTRING>(name.c_str())); }, (CKBehaviorPrototype *, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetOutIOIndex(const string &in name)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name) { return self->GetOutIOIndex(const_cast<CKSTRING>(name.c_str())); }, (CKBehaviorPrototype *, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetInParamIndex(const string &in name)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name) { return self->GetInParamIndex(const_cast<CKSTRING>(name.c_str())); }, (CKBehaviorPrototype *, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetOutParamIndex(const string &in name)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name) { return self->GetOutParamIndex(const_cast<CKSTRING>(name.c_str())); }, (CKBehaviorPrototype *, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetLocalParamIndex(const string &in name)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name) { return self->GetLocalParamIndex(const_cast<CKSTRING>(name.c_str())); }, (CKBehaviorPrototype *, const std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "bool IsRunTime()", asMETHODPR(CKBehaviorPrototype, IsRunTime, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 }
@@ -1620,7 +1613,7 @@ void RegisterCKBitmapSlot(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectProperty("CKBitmapSlot", "NativePointer m_DataBuffer", asOFFSET(CKBitmapSlot, m_DataBuffer)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("CKBitmapSlot", "string m_FileName", asOFFSET(CKBitmapSlot, m_FileName)); assert(r >= 0);
+    r = engine->RegisterObjectProperty("CKBitmapSlot", "XString m_FileName", asOFFSET(CKBitmapSlot, m_FileName)); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("CKBitmapSlot", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKBitmapSlot *self) { new(self) CKBitmapSlot(); }, (CKBitmapSlot*), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("CKBitmapSlot", asBEHAVE_CONSTRUCT, "void f(const CKBitmapSlot &in other)", asFUNCTIONPR([](const CKBitmapSlot &slot, CKBitmapSlot *self) { new(self) CKBitmapSlot(slot); }, (const CKBitmapSlot &, CKBitmapSlot *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -1675,17 +1668,17 @@ void RegisterCKBitmapData(asIScriptEngine *engine) {
 #else
     r = engine->RegisterObjectMethod("CKBitmapData", "bool CreateImage(int width, int height, int bpp = 32, int slot = 0, NativePointer imagePointer = 0)", asMETHODPR(CKBitmapData, CreateImage, (int, int, int, int, void *), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 #endif
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImage(const string &in name, int slot = 0, bool useFormat = false)", asMETHODPR(CKBitmapData, SaveImage, (CKSTRING, int, CKBOOL), CKBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImageAlpha(const string &in name, int slot = 0)", asMETHODPR(CKBitmapData, SaveImageAlpha, (CKSTRING, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImage(const string &in name, int slot = 0, bool useFormat = false)", asFUNCTIONPR([](CKBitmapData *self, const std::string &name, int slot, bool useFormat) -> bool { return self->SaveImage(const_cast<CKSTRING>(name.c_str()), slot, useFormat); }, (CKBitmapData *, const std::string &, int, bool), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "bool SaveImageAlpha(const string &in name, int slot = 0)", asFUNCTIONPR([](CKBitmapData *self, const std::string &name, int slot) -> bool { return self->SaveImageAlpha(const_cast<CKSTRING>(name.c_str()), slot); }, (CKBitmapData *, const std::string &, int), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "string GetMovieFileName()", asMETHODPR(CKBitmapData, GetMovieFileName, (), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "string GetMovieFileName()", asFUNCTIONPR([](CKBitmapData *self) -> std::string { return self->GetMovieFileName(); }, (CKBitmapData *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapData", "CKMovieReader@ GetMovieReader()", asMETHODPR(CKBitmapData, GetMovieReader, (), CKMovieReader *), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKBitmapData", "NativePointer LockSurfacePtr(int slot = -1)", asMETHODPR(CKBitmapData, LockSurfacePtr, (int), CKBYTE *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapData", "bool ReleaseSurfacePtr(int slot = -1)", asMETHODPR(CKBitmapData, ReleaseSurfacePtr, (int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapData", "string GetSlotFileName(int slot)", asMETHODPR(CKBitmapData, GetSlotFileName, (int), CKSTRING), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBitmapData", "bool SetSlotFileName(int slot, const string &in filename)", asMETHODPR(CKBitmapData, SetSlotFileName, (int, CKSTRING), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapData", "string GetSlotFileName(int slot)", asFUNCTIONPR([](CKBitmapData *self, int slot) -> std::string { return self->GetSlotFileName(slot); }, (CKBitmapData *, int), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+        r = engine->RegisterObjectMethod("CKBitmapData", "bool SetSlotFileName(int slot, const string &in filename)", asFUNCTIONPR([](CKBitmapData *self, int slot, const std::string &filename) -> bool { return self->SetSlotFileName(slot, const_cast<CKSTRING>(filename.c_str())); }, (CKBitmapData *, int, const std::string &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKBitmapData", "int GetWidth()", asMETHODPR(CKBitmapData, GetWidth, (), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapData", "int GetHeight()", asMETHODPR(CKBitmapData, GetHeight, (), int), asCALL_THISCALL); assert(r >= 0);
@@ -2542,9 +2535,9 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteInt(int data)", asMETHODPR(CKStateChunk, WriteInt, (int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteFloat(float data)", asMETHODPR(CKStateChunk, WriteFloat, (float), void), asCALL_THISCALL); assert(r >= 0);
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteString(const string &in str)", asMETHODPR(CKStateChunk, WriteString, (char *), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteString(const string &in str)", asFUNCTIONPR([](CKStateChunk *self, const std::string &str) { self->WriteString(const_cast<CKSTRING>(str.c_str())); }, (CKStateChunk *, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 #else
-    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteString(const string &in str)", asMETHODPR(CKStateChunk, WriteString, (const char *), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteString(const string &in str)", asFUNCTIONPR([](CKStateChunk *self, const std::string &str) { self->WriteString(str.c_str()); }, (CKStateChunk *, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 #endif
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteObjectID(CK_ID id)", asMETHODPR(CKStateChunk, WriteObjectID, (CK_ID), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteObject(CKObject@ obj)", asMETHODPR(CKStateChunk, WriteObject, (CKObject*), void), asCALL_THISCALL); assert(r >= 0);
@@ -2553,7 +2546,7 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteMatrix(const VxMatrix &in mat)", asMETHODPR(CKStateChunk, WriteMatrix, (const VxMatrix&), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteObjectArray(CKObjectArray@ objArray, CKContext@ context = null)", asMETHODPR(CKStateChunk, WriteObjectArray, (CKObjectArray*, CKContext*), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteSubChunk(CKStateChunk@ sub)", asMETHODPR(CKStateChunk, WriteSubChunk, (CKStateChunk*), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteBitmap(BITMAP_HANDLE bitmap, const string &in ext = void)", asMETHODPR(CKStateChunk, WriteBitmap, (BITMAP_HANDLE, CKSTRING), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteBitmap(BITMAP_HANDLE bitmap, const string &in ext = void)", asFUNCTIONPR([](CKStateChunk *self, BITMAP_HANDLE bitmap, const std::string &ext) { self->WriteBitmap(bitmap, ext.empty() ? nullptr : const_cast<CKSTRING>(ext.c_str())); }, (CKStateChunk *, BITMAP_HANDLE, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteReaderBitmap(const VxImageDescEx &in desc, CKBitmapReader@ reader, CKBitmapProperties@ bp)", asMETHODPR(CKStateChunk, WriteReaderBitmap, (const VxImageDescEx&, CKBitmapReader*, CKBitmapProperties*), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteManagerInt(CKGUID manager, int val)", asMETHODPR(CKStateChunk, WriteManagerInt, (CKGUID, int), void), asCALL_THISCALL); assert(r >= 0);
 
@@ -2612,7 +2605,7 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "CKStateChunk@ ReadSubChunk(CK_READSUBCHUNK_FLAGS flags = CK_RSC_DEFAULT)", asMETHODPR(CKStateChunk, ReadSubChunk, (CK_READSUBCHUNK_FLAGS), CKStateChunk *), asCALL_THISCALL); assert(r >= 0);
 #endif
     r = engine->RegisterObjectMethod("CKStateChunk", "int ReadBuffer(NativePointer &out buffer)", asMETHODPR(CKStateChunk, ReadBuffer, (void**), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKStateChunk", "int ReadString(string &out str)", asMETHODPR(CKStateChunk, ReadString, (CKSTRING*), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKStateChunk", "int ReadString(string &out str)", asFUNCTIONPR([](CKStateChunk *self, std::string &str) { CKSTRING buffer = nullptr; int result = self->ReadString(&buffer); if (buffer) { str = buffer; } return result; }, (CKStateChunk *, std::string &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "BITMAP_HANDLE ReadBitmap()", asMETHODPR(CKStateChunk, ReadBitmap, (), BITMAP_HANDLE), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKStateChunk", "bool ReadReaderBitmap(const VxImageDescEx &in desc)", asMETHODPR(CKStateChunk, ReadReaderBitmap, (const VxImageDescEx&), CKBOOL), asCALL_THISCALL); assert(r >= 0);
@@ -2639,26 +2632,26 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
 void RegisterCKFile(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectMethod("CKFile", "CKERROR OpenFile(const string &in filename, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)", asMETHODPR(CKFile, OpenFile, (CKSTRING, CK_LOAD_FLAGS), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKFile", "CKERROR OpenFile(const string &in filename, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)", asFUNCTIONPR([](CKFile *self, const std::string &filename, CK_LOAD_FLAGS flags) { return self->OpenFile(const_cast<CKSTRING>(filename.c_str()), flags); }, (CKFile *, const std::string &, CK_LOAD_FLAGS), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "CKERROR OpenMemory(NativePointer buffer, int bufferSize, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)", asMETHODPR(CKFile, OpenMemory, (void*, int, CK_LOAD_FLAGS), CKERROR), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKFile", "CKERROR LoadFileData(CKObjectArray@ objArray)", asMETHODPR(CKFile, LoadFileData, (CKObjectArray*), CKERROR), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKFile", "CKERROR Load(const string &in filename, CKObjectArray@ objArray, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)", asMETHODPR(CKFile, Load, (CKSTRING, CKObjectArray*, CK_LOAD_FLAGS), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKFile", "CKERROR Load(const string &in filename, CKObjectArray@ objArray, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)", asFUNCTIONPR([](CKFile *self, const std::string &filename, CKObjectArray *objArray, CK_LOAD_FLAGS flags) { return self->Load(const_cast<CKSTRING>(filename.c_str()), objArray, flags); }, (CKFile *, const std::string &, CKObjectArray *, CK_LOAD_FLAGS), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "CKERROR Load(NativePointer buffer, int bufferSize, CKObjectArray@ objArray, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)", asMETHODPR(CKFile, Load, (void*, int, CKObjectArray*, CK_LOAD_FLAGS), CKERROR), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKFile", "void UpdateAndApplyAnimationsTo(CKCharacter@ character)", asMETHODPR(CKFile, UpdateAndApplyAnimationsTo, (CKCharacter*), void), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKFile", "CKERROR StartSave(const string &in filename, CKDWORD flags = CK_STATESAVE_ALL)", asMETHODPR(CKFile, StartSave, (CKSTRING, CKDWORD), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKFile", "CKERROR StartSave(const string &in filename, CKDWORD flags = CK_STATESAVE_ALL)", asFUNCTIONPR([](CKFile *self, const std::string &filename, CKDWORD flags) { return self->StartSave(const_cast<CKSTRING>(filename.c_str()), flags); }, (CKFile *, const std::string &, CKDWORD), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "void SaveObject(CKObject@ obj, CKDWORD flags = CK_STATESAVE_ALL)", asMETHODPR(CKFile, SaveObject, (CKObject*, CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "void SaveObjects(CKObjectArray@ objArray, CKDWORD flags = CK_STATESAVE_ALL)", asMETHODPR(CKFile, SaveObjects, (CKObjectArray*, CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "void SaveObjects(const XObjectArray &in ids, CKDWORD flags = CK_STATESAVE_ALL)", asFUNCTIONPR([](CKFile *file, const XObjectArray &objects, CKDWORD flags) { file->SaveObjects(objects.Begin(), objects.Size(), flags); }, (CKFile *, const XObjectArray &, CKDWORD), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "void SaveObjectAsReference(CKObject@ obj)", asMETHODPR(CKFile, SaveObjectAsReference, (CKObject*), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "CKERROR EndSave()", asMETHODPR(CKFile, EndSave, (), CKERROR), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKFile", "bool IncludeFile(const string &in file, int searchPathCategory = -1)", asMETHODPR(CKFile, IncludeFile, (CKSTRING, int), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKFile", "bool IncludeFile(const string &in file, int searchPathCategory = -1)", asFUNCTIONPR([](CKFile *self, const std::string &file, int searchPathCategory) -> bool { return self->IncludeFile(const_cast<CKSTRING>(file.c_str()), searchPathCategory); }, (CKFile *, const std::string &, int), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "bool IsObjectToBeSaved(CK_ID id)", asMETHODPR(CKFile, IsObjectToBeSaved, (CK_ID), CKBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKFile", "void LoadAndSave(const string &in filename, const string &in newFileName)", asMETHODPR(CKFile, LoadAndSave, (CKSTRING, CKSTRING), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKFile", "void LoadAndSave(const string &in filename, const string &in newFileName)", asFUNCTIONPR([](CKFile *self, const std::string &filename, const std::string &newFileName) { self->LoadAndSave(const_cast<CKSTRING>(filename.c_str()), const_cast<CKSTRING>(newFileName.c_str())); }, (CKFile *, const std::string &, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "void RemapManagerInt(CKGUID &in manager, NativePointer conversionTable, int tableSize)", asMETHODPR(CKFile, RemapManagerInt, (CKGUID, int*, int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKFile", "XFilePluginDependenciesArray &GetMissingPlugins()", asMETHODPR(CKFile, GetMissingPlugins, (), XClassArray<CKFilePluginDependencies>*), asCALL_THISCALL); assert(r >= 0);
 }
@@ -2812,8 +2805,8 @@ void RegisterCKObjectDeclaration(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKObjectDeclaration", "int m_PluginIndex", offsetof(CKObjectDeclaration, m_PluginIndex)); assert(r >= 0);
     r = engine->RegisterObjectProperty("CKObjectDeclaration", "XGUIDArray m_ManagersGuid", offsetof(CKObjectDeclaration, m_ManagersGuid)); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetDescription(const string &in description)", asMETHODPR(CKObjectDeclaration, SetDescription, (CKSTRING), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKObjectDeclaration", "string GetDescription()", asMETHODPR(CKObjectDeclaration, GetDescription, (), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetDescription(const string &in description)", asFUNCTIONPR([](CKObjectDeclaration *self, const std::string &description) { self->SetDescription(const_cast<CKSTRING>(description.c_str())); }, (CKObjectDeclaration *, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKObjectDeclaration", "string GetDescription()", asFUNCTIONPR([](CKObjectDeclaration *self) -> std::string { return self->GetDescription(); }, (CKObjectDeclaration *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetGuid(CKGUID guid)", asMETHODPR(CKObjectDeclaration, SetGuid, (CKGUID), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "CKGUID GetGuid()", asMETHODPR(CKObjectDeclaration, GetGuid, (), CKGUID), asCALL_THISCALL); assert(r >= 0);
@@ -2829,8 +2822,8 @@ void RegisterCKObjectDeclaration(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetAuthorGuid(CKGUID guid)", asMETHODPR(CKObjectDeclaration, SetAuthorGuid, (CKGUID), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "CKGUID GetAuthorGuid()", asMETHODPR(CKObjectDeclaration, GetAuthorGuid, (), CKGUID), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetAuthorName(const string &in name)", asMETHODPR(CKObjectDeclaration, SetAuthorName, (CKSTRING), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKObjectDeclaration", "string GetAuthorName()", asMETHODPR(CKObjectDeclaration, GetAuthorName, (), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetAuthorName(const string &in name)", asFUNCTIONPR([](CKObjectDeclaration *self, const std::string &name) { self->SetAuthorName(const_cast<CKSTRING>(name.c_str())); }, (CKObjectDeclaration *, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKObjectDeclaration", "string GetAuthorName()", asFUNCTIONPR([](CKObjectDeclaration *self) -> std::string { return self->GetAuthorName(); }, (CKObjectDeclaration *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetVersion(CKDWORD verion)", asMETHODPR(CKObjectDeclaration, SetVersion, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "CKDWORD GetVersion()", asMETHODPR(CKObjectDeclaration, GetVersion, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
@@ -2838,10 +2831,10 @@ void RegisterCKObjectDeclaration(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetCompatibleClassId(CK_CLASSID cid)", asMETHODPR(CKObjectDeclaration, SetCompatibleClassId, (CK_CLASSID), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "CK_CLASSID GetCompatibleClassId()", asMETHODPR(CKObjectDeclaration, GetCompatibleClassId, (), CK_CLASSID), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetCategory(const string &in category)", asMETHODPR(CKObjectDeclaration, SetCategory, (CKSTRING), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKObjectDeclaration", "string GetCategory()", asMETHODPR(CKObjectDeclaration, GetCategory, (), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetCategory(const string &in category)", asFUNCTIONPR([](CKObjectDeclaration *self, const std::string &category) { self->SetCategory(const_cast<CKSTRING>(category.c_str())); }, (CKObjectDeclaration *, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKObjectDeclaration", "string GetCategory()", asFUNCTIONPR([](CKObjectDeclaration *self) -> std::string { return self->GetCategory(); }, (CKObjectDeclaration *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKObjectDeclaration", "string GetName()", asMETHODPR(CKObjectDeclaration, GetName, (), CKSTRING), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKObjectDeclaration", "string GetName()", asFUNCTIONPR([](CKObjectDeclaration *self) -> std::string { return self->GetName(); }, (CKObjectDeclaration *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "int GetPluginIndex()", asMETHODPR(CKObjectDeclaration, GetPluginIndex, (), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetPluginIndex(int)", asMETHODPR(CKObjectDeclaration, SetPluginIndex, (int), void), asCALL_THISCALL); assert(r >= 0);

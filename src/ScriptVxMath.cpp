@@ -839,14 +839,14 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     // Pixel format conversion functions
     r = engine->RegisterGlobalFunction("VX_PIXELFORMAT VxImageDesc2PixelFormat(const VxImageDescEx &in desc)", asFUNCTION(VxImageDesc2PixelFormat), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxPixelFormat2ImageDesc(VX_PIXELFORMAT pf, VxImageDescEx &out desc)", asFUNCTION(VxPixelFormat2ImageDesc), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("string VxPixelFormat2String(VX_PIXELFORMAT pf)", asFUNCTION(VxPixelFormat2String), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string VxPixelFormat2String(VX_PIXELFORMAT pf)", asFUNCTIONPR([](VX_PIXELFORMAT pf) { return std::string(VxPixelFormat2String(pf)); }, (VX_PIXELFORMAT), std::string), asCALL_CDECL); assert(r >= 0);
 
     // Miscellaneous
     r = engine->RegisterGlobalFunction("int GetQuantizationSamplingFactor()", asFUNCTION(GetQuantizationSamplingFactor), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void SetQuantizationSamplingFactor(int sf)", asFUNCTION(SetQuantizationSamplingFactor), asCALL_CDECL); assert(r >= 0);
 
     // Processor features
-    r = engine->RegisterGlobalFunction("string GetProcessorDescription()", asFUNCTION(GetProcessorDescription), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string GetProcessorDescription()", asFUNCTIONPR([]() { return std::string(GetProcessorDescription()); }, (), std::string), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("int GetProcessorFrequency()", asFUNCTION(GetProcessorFrequency), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("uint GetProcessorFeatures()", asFUNCTION(GetProcessorFeatures), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void ModifyProcessorFeatures(uint add, uint remove)", asFUNCTION(ModifyProcessorFeatures), asCALL_CDECL); assert(r >= 0);
@@ -1282,6 +1282,66 @@ static void RegisterCKDirectoryParser(asIScriptEngine *engine) {
 
 // VxWindowFunctions
 
+static int VxScanCodeToNameWrapper(unsigned int scancode, std::string &out) {
+    int size = VxScanCodeToName(scancode, nullptr);
+    out.resize(size);
+    return VxScanCodeToName(scancode, out.data());
+}
+
+// VxAddLibrarySearchPath
+
+static void VxAddLibrarySearchPathWrapper(const std::string &path) {
+    VxAddLibrarySearchPath(const_cast<char *>(path.c_str()));
+}
+
+static bool VxGetEnvironmentVariableWrapper(const std::string &envName, std::string &envValue) {
+    XString value;
+    bool ret = VxGetEnvironmentVariable(const_cast<char *>(envName.c_str()), value);
+    envValue = value.CStr();
+    return ret;
+}
+
+static bool VxSetEnvironmentVariableWrapper(const std::string &envName, const std::string &envValue) {
+    return VxSetEnvironmentVariable(const_cast<char *>(envName.c_str()), const_cast<char *>(envValue.c_str()));
+}
+
+static bool VxMakeDirectoryWrapper(const std::string &dir) {
+    return VxMakeDirectory(const_cast<char *>(dir.c_str()));
+}
+
+static bool VxRemoveDirectoryWrapper(const std::string &dir) {
+    return VxRemoveDirectory(const_cast<char *>(dir.c_str()));
+}
+
+static bool VxDeleteDirectoryWrapper(const std::string &dir) {
+    return VxDeleteDirectory(const_cast<char *>(dir.c_str()));
+}
+
+static bool VxGetCurrentDirectoryWrapper(std::string &dir) {
+    dir.resize(260);
+    return VxGetCurrentDirectory(dir.data());
+}
+
+static bool VxSetCurrentDirectoryWrapper(const std::string &dir) {
+    return VxSetCurrentDirectory(const_cast<char *>(dir.c_str()));
+}
+
+static bool VxTestDiskSpaceWrapper(const std::string &dir, unsigned int size) {
+    return VxTestDiskSpace(const_cast<char *>(dir.c_str()), size);
+}
+
+static unsigned int VxURLDownloadToCacheFileWrapper(const std::string &url, const std::string &cacheFile, int timeout) {
+    return VxURLDownloadToCacheFile(const_cast<char *>(url.c_str()), const_cast<char *>(cacheFile.c_str()), timeout);
+}
+
+static FONT_HANDLE VxCreateFontWrapper(const std::string &fontName, int fontSize, int weight, bool italic, bool underline) {
+    return VxCreateFont(const_cast<char *>(fontName.c_str()), fontSize, weight, italic, underline);
+}
+
+static bool VxDrawBitmapTextWrapper(BITMAP_HANDLE bitmap, FONT_HANDLE font, const std::string &str, CKRECT &rect, unsigned int align, unsigned int bkColor, unsigned int fontColor) {
+    return VxDrawBitmapText(bitmap, font, const_cast<char *>(str.c_str()), &rect, align, bkColor, fontColor);
+}
+
 static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1299,7 +1359,7 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
 
     // Keyboard and cursor functions
     // r = engine->RegisterGlobalFunction("uint8 VxScanCodeToAscii(uint scancode, uint8[256] &in)", asFUNCTION(VxScanCodeToAscii), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("int VxScanCodeToName(uint scancode, string &in)", asFUNCTION(VxScanCodeToName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int VxScanCodeToName(uint scancode, string &out name)", asFUNCTION(VxScanCodeToNameWrapper), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("int VxShowCursor(bool show)", asFUNCTION(VxShowCursor), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool VxSetCursor(VXCURSOR_POINTER cursorID)", asFUNCTION(VxSetCursor), asCALL_CDECL); assert(r >= 0);
 
@@ -1309,9 +1369,9 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void VxSetBaseFPUControlWord()", asFUNCTION(VxSetBaseFPUControlWord), asCALL_CDECL); assert(r >= 0);
 
     // Library and environment functions
-    r = engine->RegisterGlobalFunction("void VxAddLibrarySearchPath(string &in path)", asFUNCTION(VxAddLibrarySearchPath), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxGetEnvironmentVariable(string &in envName, string &out envValue)", asFUNCTION(VxGetEnvironmentVariable), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxSetEnvironmentVariable(string &in envName, string &in envValue)", asFUNCTION(VxSetEnvironmentVariable), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void VxAddLibrarySearchPath(const string &in path)", asFUNCTION(VxAddLibrarySearchPathWrapper), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxGetEnvironmentVariable(const string &in envName, string &out envValue)", asFUNCTION(VxGetEnvironmentVariableWrapper), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxSetEnvironmentVariable(const string &in envName, const string &in envValue)", asFUNCTION(VxSetEnvironmentVariableWrapper), asCALL_CDECL); assert(r >= 0);
 
     // Window functions
     r = engine->RegisterGlobalFunction("WIN_HANDLE VxWindowFromPoint(CKPOINT &in pt)", asFUNCTION(VxWindowFromPoint), asCALL_CDECL); assert(r >= 0);
@@ -1324,15 +1384,15 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool VxMoveWindow(WIN_HANDLE win, int x, int y, int width, int height, bool repaint)", asFUNCTION(VxMoveWindow), asCALL_CDECL); assert(r >= 0);
 
     // File and directory functions
-    r = engine->RegisterGlobalFunction("bool VxMakeDirectory(string &in path)", asFUNCTION(VxMakeDirectory), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxRemoveDirectory(string &in path)", asFUNCTION(VxRemoveDirectory), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxDeleteDirectory(string &in path)", asFUNCTION(VxDeleteDirectory), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxGetCurrentDirectory(string &out path)", asFUNCTION(VxGetCurrentDirectory), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxSetCurrentDirectory(string &in path)", asFUNCTION(VxSetCurrentDirectory), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxTestDiskSpace(string &in dir, uint size)", asFUNCTION(VxTestDiskSpace), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxMakeDirectory(const string &in path)", asFUNCTION(VxMakeDirectoryWrapper), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxRemoveDirectory(const string &in path)", asFUNCTION(VxRemoveDirectoryWrapper), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxDeleteDirectory(const string &in path)", asFUNCTION(VxDeleteDirectoryWrapper), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxGetCurrentDirectory(string &out path)", asFUNCTION(VxGetCurrentDirectoryWrapper), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxSetCurrentDirectory(const string &in path)", asFUNCTION(VxSetCurrentDirectoryWrapper), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxTestDiskSpace(const string &in dir, uint size)", asFUNCTION(VxTestDiskSpaceWrapper), asCALL_CDECL); assert(r >= 0);
 
     // URL functions
-    r = engine->RegisterGlobalFunction("uint VxURLDownloadToCacheFile(string &in file, string &out cachedFile, int szCachedFile)", asFUNCTION(VxURLDownloadToCacheFile), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint VxURLDownloadToCacheFile(const string &in file, const string &in cachedFile, int szCachedFile)", asFUNCTION(VxURLDownloadToCacheFileWrapper), asCALL_CDECL); assert(r >= 0);
 
     // Bitmap functions
     r = engine->RegisterGlobalFunction("BITMAP_HANDLE VxCreateBitmap(const VxImageDescEx &in)", asFUNCTION(VxCreateBitmap), asCALL_CDECL); assert(r >= 0);
@@ -1341,9 +1401,9 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void VxDeleteBitmap(BITMAP_HANDLE)", asFUNCTION(VxDeleteBitmap), asCALL_CDECL); assert(r >= 0);
 
     // Font functions
-    r = engine->RegisterGlobalFunction("FONT_HANDLE VxCreateFont(string &in fontName, int fontSize, int weight, bool italic, bool underline)", asFUNCTION(VxCreateFont), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("FONT_HANDLE VxCreateFont(const string &in fontName, int fontSize, int weight, bool italic, bool underline)", asFUNCTION(VxCreateFontWrapper), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool VxGetFontInfo(FONT_HANDLE Font, VXFONTINFO &out desc)", asFUNCTION(VxGetFontInfo), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool VxDrawBitmapText(BITMAP_HANDLE bitmap, FONT_HANDLE font, string &in str, CKRECT &in rect, uint align, uint bkColor, uint fontColor)", asFUNCTION(VxDrawBitmapText), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool VxDrawBitmapText(BITMAP_HANDLE bitmap, FONT_HANDLE font, string &in str, CKRECT &in rect, uint align, uint bkColor, uint fontColor)", asFUNCTION(VxDrawBitmapTextWrapper), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxDeleteFont(FONT_HANDLE font)", asFUNCTION(VxDeleteFont), asCALL_CDECL); assert(r >= 0);
 }
 
