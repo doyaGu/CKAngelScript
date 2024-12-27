@@ -369,6 +369,13 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
         }
         break;
         case CKM_BEHAVIORLOAD: {
+            runner = nullptr;
+            beh->GetLocalParameterValue(0, &runner);
+            if (!runner) {
+                runner = new ScriptRunner(man);
+                beh->SetLocalParameterValue(0, &runner);
+            }
+
             const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
             if (!scriptName.empty()) {
                 auto script = cache.NewCachedScript(scriptName);
@@ -379,21 +386,6 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
                         script->LoadFromChunk(chunk);
                     }
                 }
-            }
-        }
-        break;
-        case CKM_BEHAVIORDETACH: {
-            CKSTRING scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
-            if (scriptName && scriptName[0] != '\0') {
-                runner = nullptr;
-                beh->GetLocalParameterValue(0, &runner);
-                if (runner) {
-                    TriggerCallback(runner, "OnUnload", behcontext);
-                    runner->Detach(beh);
-                }
-
-                man->UnloadScript(scriptName);
-                beh->SetLocalParameterValue(2, "");
             }
         }
         break;
