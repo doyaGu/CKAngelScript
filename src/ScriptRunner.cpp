@@ -66,11 +66,14 @@ asIScriptContext* ScriptRunner::GetContext() const {
 }
 
 void ScriptRunner::SetContext(asIScriptContext* ctx) {
-    // If there was a previous context, release it first
+    // If there was a previous context, return it first
     if (m_Context) {
         m_Context->Release();
+        m_ScriptManager->GetScriptEngine()->ReturnContext(m_Context);
     }
+
     m_Context = ctx;
+
     // AddRef to manage lifetime (AngelScript reference counting)
     if (m_Context) {
         m_Context->AddRef();
@@ -148,16 +151,17 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
         SetContext(ctx);
     }
 
+    int r = 0;
+
     if (func->GetFuncType() == asFUNC_DELEGATE) {
         asIScriptFunction *delegate = func->GetDelegateFunction();
         void *delegateObject = func->GetDelegateObject();
-        ctx->Prepare(delegate);
+        r = ctx->Prepare(delegate);
         ctx->SetObject(delegateObject);
     } else {
-        ctx->Prepare(func);
+        r = ctx->Prepare(func);
     }
 
-    int r = ctx->Prepare(func);
     if (r < 0) {
         SetErrorMessage("Failed to prepare script function.");
         return false;
@@ -175,9 +179,7 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
             // Gather exception info
             asIScriptFunction *exFunc = ctx->GetExceptionFunction();
             std::string exceptMsg = ctx->GetExceptionString();
-            std::string stackTrace = "Exception in "
-                + std::string(exFunc->GetDeclaration())
-                + ": " + exceptMsg;
+            std::string stackTrace = "Exception in " + std::string(exFunc->GetDeclaration()) + ": " + exceptMsg;
             SetStackTrace(stackTrace);
             SetErrorMessage("Script Execution Threw Exception.");
         } else if (r == asEXECUTION_SUSPENDED) {
