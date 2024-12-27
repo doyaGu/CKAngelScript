@@ -58,4 +58,29 @@ inline std::string ScriptStringify(const char *str) {
     return str;
 }
 
+inline int ExecuteScriptFunction(asIScriptContext *ctx, asIScriptFunction *func) {
+    int r = ctx->Execute();
+    if (r == asEXECUTION_EXCEPTION) {
+        const char *section;
+        int col;
+        int row = ctx->GetLineNumber(0, &col, &section);
+        std::string funcName = func->GetDeclaration();
+        const char *exception = ctx->GetExceptionString();
+        std::string msg = "Script execution exception in function '" + funcName + "': " + (exception ? exception : "Unknown exception");
+
+        asIScriptEngine *engine = func->GetEngine();
+        engine->WriteMessage(section, row, col, asMSGTYPE_ERROR, msg.c_str());
+    } else if (r != asEXECUTION_FINISHED) {
+        const char *section;
+        int col;
+        int row = ctx->GetLineNumber(0, &col, &section);
+        std::string msg = "Script execution failed with result code: " + std::to_string(r);
+
+        asIScriptEngine *engine = func->GetEngine();
+        engine->WriteMessage(section, row, col, asMSGTYPE_ERROR, msg.c_str());
+    }
+
+    return r;
+}
+
 #endif // CK_SCRIPTUTILS_H
