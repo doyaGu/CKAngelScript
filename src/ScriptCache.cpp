@@ -237,15 +237,13 @@ bool CachedScript::Build(asIScriptEngine *engine) {
         if (!exists && code.size() != 0) {
             r = builder.AddSectionFromMemory(filename.c_str(), code.c_str(), code.size(), 0);
             if (r < 0) {
-                engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR,
-                                     "[CachedScript] Failed to load section from memory");
+                engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Failed to load section from memory");
                 return false;
             }
         } else {
             r = builder.AddSectionFromFile(resolvedFilename.CStr());
             if (r < 0) {
-                engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR,
-                                     "[CachedScript] Failed to load section from file");
+                engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Failed to load section from file");
                 return false;
             }
         }
