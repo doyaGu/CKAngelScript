@@ -214,11 +214,10 @@ static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstrea
         asIScriptFunction *func = FindToStringCallback(engine, typeId);
         if (func) {
             // Call function
-            asIScriptObject *obj = *static_cast<asIScriptObject **>(addr);
             asIScriptContext *ctx = engine->RequestContext();
             int r = ctx->Prepare(func);
             if (r >= 0) {
-                r = ctx->SetObject(obj);
+                r = ctx->SetObject(addr);
                 if (r >= 0)
                     r = ctx->Execute();
             }
@@ -371,11 +370,10 @@ static std::string FormatString(asIScriptGeneric *gen) {
             asIScriptFunction *func = FindToStringCallback(engine, typeId);
             if (func) {
                 // Call function
-                asIScriptObject *obj = *static_cast<asIScriptObject **>(addr);
                 asIScriptContext *ctx = engine->RequestContext();
                 int r = ctx->Prepare(func);
                 if (r >= 0) {
-                    r = ctx->SetObject(obj);
+                    r = ctx->SetObject(addr);
                     if (r >= 0)
                         r = ctx->Execute();
                 }
