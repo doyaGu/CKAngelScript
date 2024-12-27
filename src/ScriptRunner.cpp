@@ -5,10 +5,15 @@
 ScriptRunner::ScriptRunner(ScriptManager *man) : m_ScriptManager(man) {}
 
 ScriptRunner::~ScriptRunner() {
-    // Release the AngelScript context if it exists
+    // Return the AngelScript context if it exists
     if (m_Context) {
         m_Context->Release();
-        m_Context = nullptr;
+        m_ScriptManager->GetScriptEngine()->ReturnContext(m_Context);
+    }
+
+    // Release the cached script
+    if (m_CachedScript) {
+        m_CachedScript = nullptr;
     }
 }
 
