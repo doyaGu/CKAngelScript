@@ -64,6 +64,11 @@ bool NativePointer::Fill(int value, size_t size) {
     return true;
 }
 
+static void ConstructNativePointerGeneric(asIScriptGeneric *gen) {
+    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
+    new (gen->GetObject()) NativePointer(addr);
+}
+
 static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
@@ -179,6 +184,7 @@ void RegisterNativePointer(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("NativePointer", sizeof(NativePointer), asOBJ_VALUE | asGetTypeTraits<NativePointer>()); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](NativePointer *self) { new(self) NativePointer(); }, (NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(?&in)", asFUNCTION(ConstructNativePointerGeneric), asCALL_GENERIC); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(uintptr_t ptr)", asFUNCTIONPR([](uintptr_t ptr, NativePointer *self) { new(self) NativePointer(ptr); }, (uintptr_t, NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(intptr_t ptr)", asFUNCTIONPR([](intptr_t ptr, NativePointer *self) { new(self) NativePointer(ptr); }, (intptr_t, NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("NativePointer", asBEHAVE_CONSTRUCT, "void f(const NativePointer &in other)", asFUNCTIONPR([](const NativePointer &other, NativePointer *self) { new(self) NativePointer(other); }, (const NativePointer &, NativePointer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
