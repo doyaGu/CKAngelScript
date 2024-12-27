@@ -9,6 +9,7 @@ add_library(angelscript_addon STATIC
         angelscript/add_on/scriptstdstring/scriptstdstring.cpp
         angelscript/add_on/scriptstdstring/scriptstdstring_utils.cpp
         angelscript/add_on/scriptdictionary/scriptdictionary.cpp
+        angelscript/add_on/scriptgrid/scriptgrid.cpp
         angelscript/add_on/scriptmath/scriptmath.cpp
         angelscript/add_on/scriptmath/scriptmathcomplex.cpp
         angelscript/add_on/scripthandle/scripthandle.cpp

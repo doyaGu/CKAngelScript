@@ -9,19 +9,23 @@
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
 
-#include "add_on/scriptany/scriptany.h"
-#include "add_on/scriptarray/scriptarray.h"
-#include "add_on/scriptstdstring/scriptstdstring.h"
-#include "add_on/scriptdictionary/scriptdictionary.h"
-#include "add_on/scriptmath/scriptmath.h"
-#include "add_on/scriptmath/scriptmathcomplex.h"
-#include "add_on/scripthandle/scripthandle.h"
-#include "add_on/weakref/weakref.h"
-#include "add_on/datetime/datetime.h"
-#include "add_on/scriptfile/scriptfile.h"
-#include "add_on/scriptfile/scriptfilesystem.h"
+// Application modules
 #include "add_on/scripthelper/scripthelper.h"
 #include "add_on/scriptbuilder/scriptbuilder.h"
+
+// Script extensions
+#include "add_on/scriptstdstring/scriptstdstring.h"
+#include "add_on/scriptarray/scriptarray.h"
+#include "add_on/scriptany/scriptany.h"
+#include "add_on/scripthandle/scripthandle.h"
+#include "add_on/weakref/weakref.h"
+#include "add_on/scriptdictionary/scriptdictionary.h"
+#include "add_on/scriptfile/scriptfile.h"
+#include "add_on/scriptfile/scriptfilesystem.h"
+#include "add_on/scriptmath/scriptmath.h"
+#include "add_on/scriptmath/scriptmathcomplex.h"
+#include "add_on/scriptgrid/scriptgrid.h"
+#include "add_on/datetime/datetime.h"
 
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
     context->RegisterNewManager(this);
@@ -369,18 +373,19 @@ void ScriptManager::RegisterStdTypes(asIScriptEngine *engine) {
 void ScriptManager::RegisterStdAddons(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
-    RegisterScriptAny(engine);
-    RegisterScriptArray(engine, true);
     RegisterStdString(engine);
+    RegisterScriptArray(engine, true);
     RegisterStdStringUtils(engine);
-    RegisterScriptDictionary(engine);
-    RegisterScriptMath(engine);
-    RegisterScriptMathComplex(engine);
+    RegisterScriptAny(engine);
     RegisterScriptHandle(engine);
     RegisterScriptWeakRef(engine);
+    RegisterScriptDictionary(engine);
     RegisterScriptDateTime(engine);
     RegisterScriptFile(engine);
     RegisterScriptFileSystem(engine);
+    RegisterScriptMath(engine);
+    RegisterScriptMathComplex(engine);
+    RegisterScriptGrid(engine);
     RegisterExceptionRoutines(engine);
 }
 
