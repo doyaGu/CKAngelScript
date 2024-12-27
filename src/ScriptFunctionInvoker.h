@@ -76,11 +76,17 @@ private:
             } else {
                 ctx->SetArgDWord(index, static_cast<asDWORD>(value));
             }
-        } else if constexpr (std::is_floating_point_v<T>) {
+        } else if constexpr (std::is_same_v<std::remove_cv<T>, float>) {
             if (isReturn) {
                 value = ctx->GetReturnFloat();
             } else {
                 ctx->SetArgFloat(index, value);
+            }
+        } else if constexpr (std::is_same_v<std::remove_cv<T>, double>) {
+            if (isReturn) {
+                value = ctx->GetReturnDouble();
+            } else {
+                ctx->SetArgDouble(index, value);
             }
         } else if constexpr (std::is_pointer_v<T>) {
             if (isReturn) {
