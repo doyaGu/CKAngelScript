@@ -319,7 +319,7 @@ int ScriptManager::SetupScriptEngine() {
         return -1;
     }
 
-    m_ScriptEngine->SetUserData(this);
+    m_ScriptEngine->SetUserData(this, SCRIPT_MANAGER_TYPE);
     m_ScriptEngine->SetEngineProperty(asEP_USE_CHARACTER_LITERALS, true);
     m_ScriptEngine->SetEngineProperty(asEP_ALLOW_UNSAFE_REFERENCES, true);
     m_ScriptEngine->SetEngineProperty(asEP_ALLOW_IMPLICIT_HANDLE_TYPES, true);

@@ -195,7 +195,7 @@ bool CachedScript::Build(asIScriptEngine *engine) {
         return false;
     }
 
-    auto *man = static_cast<ScriptManager *>(engine->GetUserData());
+    auto *man = ScriptManager::GetManager(engine);
 
     // We will only initialize the global variables once we're
     // ready to execute, so disable the automatic initialization

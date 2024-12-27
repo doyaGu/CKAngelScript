@@ -10,6 +10,8 @@
 
 #define SCRIPT_MANAGER_GUID CKGUID(0x70955bd2,0x30684456)
 
+#define SCRIPT_MANAGER_TYPE 3000
+
 class ScriptManager : public CKBaseManager {
 public:
     enum Flag {
@@ -96,7 +98,11 @@ public:
     XString GetCallStack(asIScriptContext*context);
 
     static ScriptManager *GetManager(CKContext *context) {
-        return (ScriptManager *)context->GetManagerByGuid(SCRIPT_MANAGER_GUID);
+        return (ScriptManager *) context->GetManagerByGuid(SCRIPT_MANAGER_GUID);
+    }
+
+    static ScriptManager *GetManager(asIScriptEngine *engine) {
+        return (ScriptManager *) engine->GetUserData(SCRIPT_MANAGER_TYPE);
     }
 
 protected:
