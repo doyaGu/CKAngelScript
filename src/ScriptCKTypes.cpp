@@ -28,7 +28,7 @@ void RegisterCKTypedefs(asIScriptEngine *engine) {
     r = engine->RegisterTypedef("CKAttributeType", "int"); assert(r >= 0);
     r = engine->RegisterTypedef("CKAttributeCategory", "int"); assert(r >= 0);
 
-    if (sizeof(void *) == 4) {
+    if constexpr (sizeof(void *) == 4) {
         // r = engine->RegisterTypedef("CKSTRING", "uint"); assert(r >= 0);
         r = engine->RegisterTypedef("CKSOUNDHANDLE", "uint"); assert(r >= 0);
     } else {

@@ -21,7 +21,7 @@ static float g_MAX_PIXEL_FORMATS = MAX_PIXEL_FORMATS;
 static void RegisterVxMathTypedefs(asIScriptEngine *engine) {
     int r = 0;
 
-    if (sizeof(void *) == 4) {
+    if constexpr (sizeof(void *) == 4) {
         r = engine->RegisterTypedef("FUNC_PTR", "uint"); assert(r >= 0);
         r = engine->RegisterTypedef("WIN_HANDLE", "uint"); assert(r >= 0);
         r = engine->RegisterTypedef("INSTANCE_HANDLE", "uint"); assert(r >= 0);
