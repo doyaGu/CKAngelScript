@@ -3,6 +3,8 @@
 #include <cassert>
 #include <sstream>
 
+#include <add_on/scriptarray/scriptarray.h>
+
 std::string NativePointer::ToString() const {
     std::stringstream stream;
     stream << m_Ptr;
@@ -65,8 +67,22 @@ bool NativePointer::Fill(int value, size_t size) {
 }
 
 static void ConstructNativePointerGeneric(asIScriptGeneric *gen) {
-    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
-    new (gen->GetObject()) NativePointer(addr);
+    asIScriptEngine *engine = gen->GetEngine();
+
+    const int typeId = gen->GetArgTypeId(0);
+    asITypeInfo *type = engine->GetTypeInfoById(typeId);
+    if (!type) {
+        gen->SetReturnDWord(0);
+        return;
+    }
+
+    if (strcmp(type->GetName(), "array") == 0) {
+        auto *array = *static_cast<CScriptArray **>(gen->GetAddressOfArg(0));
+        new (gen->GetObject()) NativePointer(array->GetBuffer());
+    } else {
+        void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
+        new (gen->GetObject()) NativePointer(addr);
+    }
 }
 
 static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
