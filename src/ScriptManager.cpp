@@ -65,51 +65,14 @@ int ScriptManager::Init() {
     if (IsInited())
         return -2;
 
-// #if CKVERSION == 0x13022002
-//     asSetGlobalMemoryFunctions(
-//         [](size_t size) { return VxMalloc(size); },
-//         [](void *ptr) { VxFree(ptr); }
-//     );
-// #endif
+    SetupScriptPathCategory();
 
-    m_ScriptEngine = asCreateScriptEngine();
-    if (!m_ScriptEngine) {
-        m_Context->OutputToConsole(const_cast<char *>("Failed to create script engine."));
-        return -1;
-    }
-
-    m_ScriptEngine->SetUserData(this);
-    m_ScriptEngine->SetEngineProperty(asEP_USE_CHARACTER_LITERALS, true);
-    m_ScriptEngine->SetEngineProperty(asEP_ALLOW_UNSAFE_REFERENCES, true);
-    m_ScriptEngine->SetEngineProperty(asEP_ALLOW_IMPLICIT_HANDLE_TYPES, true);
-    m_ScriptEngine->SetEngineProperty(asEP_BUILD_WITHOUT_LINE_CUES, true);
-    m_ScriptEngine->SetEngineProperty(asEP_PROPERTY_ACCESSOR_MODE, 1);
-
-    // The script compiler will send any compiler messages to the callback
-    int r = m_ScriptEngine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), this, asCALL_THISCALL);
+    int r = SetupScriptEngine();
     if (r < 0)
         return r;
 
-    // Register the standard types
-    RegisterStdTypes(m_ScriptEngine);
-
-    // Register the standard add-ons
-    RegisterStdAddons(m_ScriptEngine);
-
-    // Register the native types
-    RegisterNativePointer(m_ScriptEngine);
-    RegisterNativeBuffer(m_ScriptEngine);
-
-    // Register the function that we want the scripts to call
-    RegisterScriptFormat(m_ScriptEngine);
-
-    RegisterScriptInfo(m_ScriptEngine);
-
-    // Register the Virtools API
-    RegisterVirtools(m_ScriptEngine);
-
     m_Flags |= AS_INITED;
-    return 0;
+    return r;
 }
 
 int ScriptManager::Shutdown() {
@@ -276,10 +239,7 @@ asIScriptModule *ScriptManager::GetScript(const char *scriptName) {
 CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
     CKPathManager *pm = m_Context->GetPathManager();
     if (m_ScriptPathCategoryIndex == -1) {
-        XString category = "Script Paths";
-        m_ScriptPathCategoryIndex = pm->GetCategoryIndex(category);
-        if (m_ScriptPathCategoryIndex == -1)
-            m_ScriptPathCategoryIndex = pm->AddCategory(category);
+        SetupScriptPathCategory();
     }
     return pm->ResolveFileName(filename, m_ScriptPathCategoryIndex);
 }
@@ -329,6 +289,63 @@ XString ScriptManager::GetCallStack(asIScriptContext *context) {
     }
 
     return str;
+}
+
+void ScriptManager::SetupScriptPathCategory() {
+    if (m_ScriptPathCategoryIndex == -1) {
+        XString category = "Script Paths";
+        CKPathManager *pm = m_Context->GetPathManager();
+        m_ScriptPathCategoryIndex = pm->GetCategoryIndex(category);
+        if (m_ScriptPathCategoryIndex == -1)
+            m_ScriptPathCategoryIndex = pm->AddCategory(category);
+    }
+}
+
+int ScriptManager::SetupScriptEngine() {
+    // #if CKVERSION == 0x13022002
+    //     asSetGlobalMemoryFunctions(
+    //         [](size_t size) { return VxMalloc(size); },
+    //         [](void *ptr) { VxFree(ptr); }
+    //     );
+    // #endif
+
+    m_ScriptEngine = asCreateScriptEngine();
+    if (!m_ScriptEngine) {
+        m_Context->OutputToConsole(const_cast<char *>("Failed to create script engine."));
+        return -1;
+    }
+
+    m_ScriptEngine->SetUserData(this);
+    m_ScriptEngine->SetEngineProperty(asEP_USE_CHARACTER_LITERALS, true);
+    m_ScriptEngine->SetEngineProperty(asEP_ALLOW_UNSAFE_REFERENCES, true);
+    m_ScriptEngine->SetEngineProperty(asEP_ALLOW_IMPLICIT_HANDLE_TYPES, true);
+    m_ScriptEngine->SetEngineProperty(asEP_BUILD_WITHOUT_LINE_CUES, true);
+    m_ScriptEngine->SetEngineProperty(asEP_PROPERTY_ACCESSOR_MODE, 1);
+
+    // The script compiler will send any compiler messages to the callback
+    int r = m_ScriptEngine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), this, asCALL_THISCALL);
+    if (r < 0)
+        return r;
+
+    // Register the standard types
+    RegisterStdTypes(m_ScriptEngine);
+
+    // Register the standard add-ons
+    RegisterStdAddons(m_ScriptEngine);
+
+    // Register the native types
+    RegisterNativePointer(m_ScriptEngine);
+    RegisterNativeBuffer(m_ScriptEngine);
+
+    // Register the function that we want the scripts to call
+    RegisterScriptFormat(m_ScriptEngine);
+
+    RegisterScriptInfo(m_ScriptEngine);
+
+    // Register the Virtools API
+    RegisterVirtools(m_ScriptEngine);
+
+    return r;
 }
 
 void ScriptManager::RegisterStdTypes(asIScriptEngine *engine) {
