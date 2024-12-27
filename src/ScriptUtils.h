@@ -6,6 +6,9 @@
 
 #include <angelscript.h>
 
+#define AS_TEMPORARY_FLAG_TYPE 3011
+#define AS_RELEASED_ONCE_FLAG_TYPE 3012
+
 template<class A, class B>
 B *StaticCast(A *a) {
     if (!a) return nullptr;
@@ -81,6 +84,42 @@ inline int ExecuteScriptFunction(asIScriptContext *ctx, asIScriptFunction *func)
     }
 
     return r;
+}
+
+inline void MarkAsTemporary(asIScriptFunction *func) {
+    if (func)
+        func->SetUserData(func, AS_TEMPORARY_FLAG_TYPE);
+}
+
+inline void ClearTemporaryMark(asIScriptFunction *func) {
+    if (func)
+        func->SetUserData(nullptr, AS_TEMPORARY_FLAG_TYPE);
+}
+
+inline bool IsMarkedAsTemporary(asIScriptFunction *func) {
+    if (!func) return false;
+    void *p = func->GetUserData(AS_TEMPORARY_FLAG_TYPE);
+    if (p != func)
+        return false;
+    return true;
+}
+
+inline void MarkAsReleasedOnce(asIScriptFunction *func) {
+    if (func)
+        func->SetUserData(func, AS_RELEASED_ONCE_FLAG_TYPE);
+}
+
+inline void ClearReleasedOnceMark(asIScriptFunction *func) {
+    if (func)
+        func->SetUserData(nullptr, AS_RELEASED_ONCE_FLAG_TYPE);
+}
+
+inline bool IsMarkedAsReleasedOnce(asIScriptFunction *func) {
+    if (!func) return false;
+    void *p = func->GetUserData(AS_RELEASED_ONCE_FLAG_TYPE);
+    if (p != func)
+        return false;
+    return true;
 }
 
 #endif // CK_SCRIPTUTILS_H
