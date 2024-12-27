@@ -13,7 +13,7 @@
 
 #include "RefCount.h"
 
-#define TOSTRINGMAP_TYPE 0x40000
+#define TOSTRINGMAP_TYPE 3001
 
 class ToStringMap {
 public:
