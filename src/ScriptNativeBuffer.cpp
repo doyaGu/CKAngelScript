@@ -182,10 +182,10 @@ size_t NativeBuffer::Save(const char *filename, size_t size) {
     return size;
 }
 
-void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
+static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = static_cast<void **>(gen->GetAddressOfArg(0));;
+    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));;
     auto *self = static_cast<NativeBuffer *>(gen->GetObject());
     size_t size = 0;
 
@@ -243,10 +243,10 @@ void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
     gen->SetReturnDWord(size);
 }
 
-void NativeBufferReadGeneric(asIScriptGeneric *gen) {
+static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = static_cast<void **>(gen->GetAddressOfArg(0));;
+    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));;
     auto *self = static_cast<NativeBuffer *>(gen->GetObject());
     size_t size = 0;
 

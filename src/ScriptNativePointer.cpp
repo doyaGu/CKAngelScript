@@ -64,10 +64,10 @@ bool NativePointer::Fill(int value, size_t size) {
     return true;
 }
 
-void NativePointerWriteGeneric(asIScriptGeneric *gen) {
+static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = static_cast<void **>(gen->GetAddressOfArg(0));
+    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
     auto *self = static_cast<NativePointer *>(gen->GetObject());
     size_t size = 0;
 
@@ -117,10 +117,10 @@ void NativePointerWriteGeneric(asIScriptGeneric *gen) {
     gen->SetReturnDWord(size);
 }
 
-void NativePointerReadGeneric(asIScriptGeneric *gen) {
+static void NativePointerReadGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = static_cast<void **>(gen->GetAddressOfArg(0));
+    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
     auto *self = static_cast<NativePointer *>(gen->GetObject());
     size_t size = 0;
 
