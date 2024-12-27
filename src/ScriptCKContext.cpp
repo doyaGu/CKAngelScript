@@ -5,6 +5,8 @@
 
 #include "CKContext.h"
 
+#include "ScriptUtils.h"
+
 void RegisterCKContext(asIScriptEngine *engine) {
     int r = 0;
 
@@ -146,8 +148,8 @@ void RegisterCKContext(asIScriptEngine *engine) {
     // Save/Load functions
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Load(const string &in fileName, CKObjectArray@ list, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT, CKGUID &in readerGuid = void)", asFUNCTIONPR([](CKContext *ctx, const std::string &fileName, CKObjectArray *list, CK_LOAD_FLAGS loadFlags, CKGUID *readerGuid) { return ctx->Load(const_cast<CKSTRING>(fileName.c_str()), list, loadFlags, readerGuid); }, (CKContext *, const std::string &, CKObjectArray *, CK_LOAD_FLAGS, CKGUID *), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     // r = engine->RegisterObjectMethod("CKContext", "CKERROR Load(NativeBuffer, CKObjectArray@, CK_LOAD_FLAGS = CK_LOAD_DEFAULT)", asMETHODPR(CKContext, Load, (int, void*, CKObjectArray*, CK_LOAD_FLAGS), CKERROR), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKContext", "string GetLastFileLoaded()", asFUNCTIONPR([](CKContext *self) -> std::string { return self->GetLastFileLoaded(); }, (CKContext *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKContext", "string GetLastCmoLoaded()", asFUNCTIONPR([](CKContext *self) -> std::string { return self->GetLastCmoLoaded(); }, (CKContext *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKContext", "string GetLastFileLoaded()", asFUNCTIONPR([](CKContext *self) -> std::string { return ScriptStringify(self->GetLastFileLoaded()); }, (CKContext *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKContext", "string GetLastCmoLoaded()", asFUNCTIONPR([](CKContext *self) -> std::string { return ScriptStringify(self->GetLastCmoLoaded()); }, (CKContext *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "void SetLastCmoLoaded(const string &in str)", asFUNCTIONPR([](CKContext *ctx, const std::string &str) { ctx->SetLastCmoLoaded(const_cast<CKSTRING>(str.c_str())); }, (CKContext *, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR GetFileInfo(const string &in fileName, CKFileInfo &out fileInfo)", asFUNCTIONPR([](CKContext *ctx, const std::string &fileName, CKFileInfo *fileInfo) { return ctx->GetFileInfo(const_cast<CKSTRING>(fileName.c_str()), fileInfo); }, (CKContext *, const std::string &, CKFileInfo *), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     // r = engine->RegisterObjectMethod("CKContext", "CKERROR GetFileInfo(NativeBuffer, CKFileInfo@)", asMETHODPR(CKContext, GetFileInfo, (int, void*, CKFileInfo*), CKERROR), asCALL_THISCALL); assert(r >= 0);

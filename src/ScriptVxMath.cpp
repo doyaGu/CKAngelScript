@@ -9,6 +9,7 @@
 
 #include "add_on/scriptarray/scriptarray.h"
 
+#include "ScriptUtils.h"
 #include "ScriptXString.h"
 #include "ScriptXBitArray.h"
 
@@ -839,14 +840,14 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     // Pixel format conversion functions
     r = engine->RegisterGlobalFunction("VX_PIXELFORMAT VxImageDesc2PixelFormat(const VxImageDescEx &in desc)", asFUNCTION(VxImageDesc2PixelFormat), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void VxPixelFormat2ImageDesc(VX_PIXELFORMAT pf, VxImageDescEx &out desc)", asFUNCTION(VxPixelFormat2ImageDesc), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("string VxPixelFormat2String(VX_PIXELFORMAT pf)", asFUNCTIONPR([](VX_PIXELFORMAT pf) { return std::string(VxPixelFormat2String(pf)); }, (VX_PIXELFORMAT), std::string), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string VxPixelFormat2String(VX_PIXELFORMAT pf)", asFUNCTIONPR([](VX_PIXELFORMAT pf) -> std::string { return ScriptStringify(VxPixelFormat2String(pf)); }, (VX_PIXELFORMAT), std::string), asCALL_CDECL); assert(r >= 0);
 
     // Miscellaneous
     r = engine->RegisterGlobalFunction("int GetQuantizationSamplingFactor()", asFUNCTION(GetQuantizationSamplingFactor), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void SetQuantizationSamplingFactor(int sf)", asFUNCTION(SetQuantizationSamplingFactor), asCALL_CDECL); assert(r >= 0);
 
     // Processor features
-    r = engine->RegisterGlobalFunction("string GetProcessorDescription()", asFUNCTIONPR([]() { return std::string(GetProcessorDescription()); }, (), std::string), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string GetProcessorDescription()", asFUNCTIONPR([]() -> std::string { return ScriptStringify(GetProcessorDescription()); }, (), std::string), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("int GetProcessorFrequency()", asFUNCTION(GetProcessorFrequency), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("uint GetProcessorFeatures()", asFUNCTION(GetProcessorFeatures), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void ModifyProcessorFeatures(uint add, uint remove)", asFUNCTION(ModifyProcessorFeatures), asCALL_CDECL); assert(r >= 0);
@@ -1216,10 +1217,10 @@ static void RegisterCKPathSplitter(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectBehaviour("CKPathSplitter", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPathSplitter *self) { self->~CKPathSplitter(); }, (CKPathSplitter *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetDrive() const", asMETHOD(CKPathSplitter, GetDrive), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetDir() const", asMETHOD(CKPathSplitter, GetDir), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetName() const", asMETHOD(CKPathSplitter, GetName), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetExtension() const", asMETHOD(CKPathSplitter, GetExtension), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetDrive() const", asFUNCTIONPR([](CKPathSplitter *self) -> std::string { return ScriptStringify(self->GetDrive()); }, (CKPathSplitter *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetDir() const", asFUNCTIONPR([](CKPathSplitter *self) -> std::string { return ScriptStringify(self->GetDir()); }, (CKPathSplitter *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetName() const", asFUNCTIONPR([](CKPathSplitter *self) -> std::string { return ScriptStringify(self->GetName()); }, (CKPathSplitter *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetExtension() const", asFUNCTIONPR([](CKPathSplitter *self) -> std::string { return ScriptStringify(self->GetExtension()); }, (CKPathSplitter *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKPathMaker
@@ -1235,7 +1236,7 @@ static void RegisterCKPathMaker(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectBehaviour("CKPathMaker", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPathMaker *self) { self->~CKPathMaker(); }, (CKPathMaker *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKPathMaker", "string GetFileName() const", asMETHOD(CKPathMaker, GetFileName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetFileName() const", asFUNCTIONPR([](CKPathMaker *self) -> std::string { return ScriptStringify(self->GetFileName()); }, (CKPathMaker *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKFileExtension
@@ -1248,7 +1249,7 @@ static void RegisterCKFileExtension(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectBehaviour("CKFileExtension", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKFileExtension *self) { self->~CKFileExtension(); }, (CKFileExtension *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKFileExtension", "string opImplConv() const", asFUNCTIONPR([](CKFileExtension *self) { return std::string(*self); }, (CKFileExtension *), std::string), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKFileExtension", "string opImplConv() const", asFUNCTIONPR([](CKFileExtension *self) -> std::string { return ScriptStringify(*self); }, (CKFileExtension *), std::string), asCALL_CDECL_OBJLAST); assert(r >= 0);
 }
 
 // CKDirectoryParser
@@ -1258,8 +1259,7 @@ static void ConstructCKDirectoryParser(const std::string &dir, const std::string
 }
 
 static std::string CKDirectoryParserGetNextFile(CKDirectoryParser *self) {
-    char *result = self->GetNextFile();
-    return result ? std::string(result) : "";
+    return ScriptStringify(self->GetNextFile());
 }
 
 static void CKDirectoryParserReset(const std::string &dir, const std::string &fileMask, bool recurse, CKDirectoryParser *self) {
@@ -1327,7 +1327,7 @@ static bool VxSetCurrentDirectoryWrapper(const std::string &dir) {
 }
 
 static bool VxTestDiskSpaceWrapper(const std::string &dir, unsigned int size) {
-    return VxTestDiskSpace(const_cast<char *>(dir.c_str()), size);
+    return VxTestDiskSpace(dir.c_str(), size);
 }
 
 static unsigned int VxURLDownloadToCacheFileWrapper(const std::string &url, const std::string &cacheFile, int timeout) {

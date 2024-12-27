@@ -52,4 +52,10 @@ static void RegisterClassRefCast(asIScriptEngine *engine, const char *derived, c
     r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((RefCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 }
 
+inline std::string ScriptStringify(const char *str) {
+    if (str == nullptr)
+        return {};
+    return str;
+}
+
 #endif // CK_SCRIPTUTILS_H
