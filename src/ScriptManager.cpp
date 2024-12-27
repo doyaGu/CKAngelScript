@@ -2,6 +2,7 @@
 
 #include "CKPathManager.h"
 
+#include "ScriptInfo.h"
 #include "ScriptFormat.h"
 #include "ScriptNativePointer.h"
 #include "ScriptNativeBuffer.h"
@@ -101,6 +102,8 @@ int ScriptManager::Init() {
 
     // Register the function that we want the scripts to call
     RegisterScriptFormat(m_ScriptEngine);
+
+    RegisterScriptInfo(m_ScriptEngine);
 
     // Register the Virtools API
     RegisterVirtools(m_ScriptEngine);
