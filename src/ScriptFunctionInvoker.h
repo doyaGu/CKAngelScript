@@ -128,53 +128,59 @@ template<typename Ret, typename... Args>
 struct ScriptFunctionInvoker<Ret(*)(Args...)> {
     static Ret Invoke(Args... args) {
         void *data = GetLastArgument(args...);
-        auto *cb = static_cast<asIScriptFunction *>(data);
-        if (!cb) {
+        auto *func = static_cast<asIScriptFunction *>(data);
+        if (!func) {
             throw std::runtime_error("Invalid script function pointer");
         }
 
-        asIScriptEngine *engine = cb->GetEngine();
+        asIScriptEngine *engine = func->GetEngine();
         asIScriptContext *ctx = engine->RequestContext();
         if (!ctx)
             throw std::runtime_error("Failed to create AngelScript context");
 
-        if (cb->GetFuncType() == asFUNC_DELEGATE) {
-            asIScriptFunction *callback = cb->GetDelegateFunction();
-            void *callbackObject = cb->GetDelegateObject();
-            ctx->Prepare(callback);
+        int r = 0;
+
+        if (func->GetFuncType() == asFUNC_DELEGATE) {
+            asIScriptFunction *callback = func->GetDelegateFunction();
+            void *callbackObject = func->GetDelegateObject();
+            r = ctx->Prepare(callback);
             ctx->SetObject(callbackObject);
         } else {
-            ctx->Prepare(cb);
+            r = ctx->Prepare(func);
         }
+
+         if (r < 0) {
+             engine->ReturnContext(ctx);
+             throw std::runtime_error("Failed to prepare script function");
+         }
 
         // Set arguments using ScriptTypeRegistry
         int index = 0;
         (..., ScriptTypeRegistry::SetArg(ctx, index++, args));
 
-        int r = ctx->Execute();
-        engine->ReturnContext(ctx);
-
+        r = ctx->Execute();
         if (r == asEXECUTION_EXCEPTION) {
             const char *exception = ctx->GetExceptionString();
-            std::string funcName = cb->GetDeclaration();
-            throw std::runtime_error("Script execution exception in function '" +
-                                     funcName + "': " +
+            std::string funcName = func->GetDeclaration();
+            engine->ReturnContext(ctx);
+            throw std::runtime_error("Script execution exception in function '" + funcName + "': " +
                                      (exception ? exception : "Unknown exception"));
         } else if (r != asEXECUTION_FINISHED) {
+            engine->ReturnContext(ctx);
             throw std::runtime_error("Script execution failed with result code: " + std::to_string(r));
         }
 
         // Use ScriptTypeRegistry for return value handling
         if constexpr (std::is_same_v<Ret, void>) {
+            engine->ReturnContext(ctx);
             return; // For void return type
         } else {
             Ret result;
             ScriptTypeRegistry::GetReturn(ctx, result);
+            engine->ReturnContext(ctx);
             return result;
         }
     }
 };
-
-
 
 #endif // CK_SCRIPTFUNCTIONINVOKER_H
