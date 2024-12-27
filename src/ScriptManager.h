@@ -95,7 +95,10 @@ public:
 
     void MessageCallback(const asSMessageInfo &msg);
     void ExceptionCallback(asIScriptContext *context);
-    XString GetCallStack(asIScriptContext*context);
+    XString GetCallStack(asIScriptContext *context);
+
+    asIScriptContext *RequestContextFromPool();
+    void ReturnContextToPool(asIScriptContext *ctx);
 
     static ScriptManager *GetManager(CKContext *context) {
         return (ScriptManager *) context->GetManagerByGuid(SCRIPT_MANAGER_GUID);
@@ -117,6 +120,7 @@ protected:
     int m_ScriptPathCategoryIndex = -1;
     asIScriptEngine *m_ScriptEngine = nullptr;
     ScriptCache m_ScriptCache;
+    std::vector<asIScriptContext *> m_ScriptContexts;
 };
 
 #endif // CK_SCRIPTMANAGER_H

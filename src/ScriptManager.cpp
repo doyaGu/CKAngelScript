@@ -83,6 +83,10 @@ int ScriptManager::Shutdown() {
     if (!IsInited())
         return -2;
 
+    for (auto *context : m_ScriptContexts) {
+        context->Release();
+    }
+
     if (m_ScriptEngine) {
         m_ScriptEngine->ShutDownAndRelease();
         m_ScriptEngine = nullptr;
@@ -295,6 +299,24 @@ XString ScriptManager::GetCallStack(asIScriptContext *context) {
     return str;
 }
 
+asIScriptContext *ScriptManager::RequestContextFromPool() {
+    asIScriptContext *ctx = nullptr;
+    if (!m_ScriptContexts.empty()) {
+        ctx = *m_ScriptContexts.rbegin();
+        m_ScriptContexts.pop_back();
+    } else
+        ctx = m_ScriptEngine->CreateContext();
+    return ctx;
+}
+
+void ScriptManager::ReturnContextToPool(asIScriptContext *ctx) {
+    m_ScriptContexts.push_back(ctx);
+
+    // Unprepare the context to free any objects that might be held
+    // as we don't know when the context will be used again.
+    ctx->Unprepare();
+}
+
 void ScriptManager::SetupScriptPathCategory() {
     if (m_ScriptPathCategoryIndex == -1) {
         XString category = "Script Paths";
@@ -328,6 +350,17 @@ int ScriptManager::SetupScriptEngine() {
 
     // The script compiler will send any compiler messages to the callback
     int r = m_ScriptEngine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), this, asCALL_THISCALL);
+    if (r < 0)
+        return r;
+
+    // The script handle the pool of script contexts.
+    r = m_ScriptEngine->SetContextCallbacks([](asIScriptEngine *, void *param) {
+        auto *man = static_cast<ScriptManager *>(param);
+        return man->RequestContextFromPool();
+    }, [](asIScriptEngine *, asIScriptContext *ctx, void *param) {
+        auto *man = static_cast<ScriptManager *>(param);
+        man->ReturnContextToPool(ctx);
+    }, this);
     if (r < 0)
         return r;
 
