@@ -9,9 +9,9 @@
 class NativePointer {
 public:
     NativePointer() = default;
-    NativePointer(void *ptr) { m_Ptr = static_cast<uint8_t *>(ptr); }
-    NativePointer(intptr_t addr) { m_Ptr = reinterpret_cast<uint8_t *>(addr); }
-    NativePointer(uintptr_t addr) { m_Ptr = reinterpret_cast<uint8_t *>(addr); }
+    NativePointer(void *ptr) { m_Ptr = static_cast<char *>(ptr); }
+    NativePointer(intptr_t addr) { m_Ptr = reinterpret_cast<char *>(addr); }
+    NativePointer(uintptr_t addr) { m_Ptr = reinterpret_cast<char *>(addr); }
     NativePointer(const NativePointer &rhs) { m_Ptr = rhs.m_Ptr; }
 
     NativePointer &operator=(const NativePointer &rhs) {
@@ -22,17 +22,17 @@ public:
     }
 
     NativePointer &operator=(void *ptr) {
-        m_Ptr = static_cast<uint8_t *>(ptr);
+        m_Ptr = static_cast<char *>(ptr);
         return *this;
     }
 
     NativePointer &operator=(intptr_t addr) {
-        m_Ptr = reinterpret_cast<uint8_t *>(addr);
+        m_Ptr = reinterpret_cast<char *>(addr);
         return *this;
     }
 
     NativePointer &operator=(uintptr_t addr) {
-        m_Ptr = reinterpret_cast<uint8_t *>(addr);
+        m_Ptr = reinterpret_cast<char *>(addr);
         return *this;
     }
 
@@ -75,27 +75,27 @@ public:
     }
 
     NativePointer &operator&=(int rhs) {
-        m_Ptr = reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) & rhs);
+        m_Ptr = reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) & rhs);
         return *this;
     }
 
     NativePointer &operator|=(int rhs) {
-        m_Ptr = reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) | rhs);
+        m_Ptr = reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) | rhs);
         return *this;
     }
 
     NativePointer &operator^=(int rhs) {
-        m_Ptr = reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) ^ rhs);
+        m_Ptr = reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) ^ rhs);
         return *this;
     }
 
     NativePointer &operator<<=(int rhs) {
-        m_Ptr = reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) << rhs);
+        m_Ptr = reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) << rhs);
         return *this;
     }
 
     NativePointer &operator>>=(int rhs) {
-        m_Ptr = reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) >> rhs);
+        m_Ptr = reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) >> rhs);
         return *this;
     }
 
@@ -163,7 +163,7 @@ public:
 
     explicit operator void *() const { return m_Ptr; }
 
-    char *Get() const { return reinterpret_cast<char *>(m_Ptr); }
+    char *Get() const { return m_Ptr; }
 
     uintptr_t ToUInt() const { return reinterpret_cast<uintptr_t>(m_Ptr); }
     intptr_t ToInt() const { return reinterpret_cast<intptr_t>(m_Ptr); }
@@ -171,11 +171,11 @@ public:
     std::string ToString() const;
 
     NativePointer ReadPointer() const {
-        return NativePointer(*reinterpret_cast<uint8_t **>(m_Ptr));
+        return NativePointer(*reinterpret_cast<char **>(m_Ptr));
     }
 
     void WritePointer(const NativePointer &ptr) {
-        *reinterpret_cast<uint8_t **>(m_Ptr) = ptr.m_Ptr;
+        *reinterpret_cast<char **>(m_Ptr) = ptr.m_Ptr;
     }
 
     size_t Write(void *x, size_t size);
@@ -215,7 +215,7 @@ public:
     bool IsNull() const { return m_Ptr == nullptr; }
 
 private:
-    uint8_t *m_Ptr = nullptr;
+    char *m_Ptr = nullptr;
 };
 
 void RegisterNativePointer(asIScriptEngine *engine);

@@ -268,4 +268,7 @@ void RegisterNativePointer(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("NativePointer", "bool Fill(int value, uint size)", asMETHODPR(NativePointer, Fill, (int, size_t), bool), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("NativePointer", "bool IsNull() const", asMETHODPR(NativePointer, IsNull, () const, bool), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterGlobalFunction("NativePointer malloc(size_t size)", asFUNCTIONPR([](size_t size) { return NativePointer(asAllocMem(size)); }, (size_t), NativePointer), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void free(NativePointer ptr)", asFUNCTIONPR([](NativePointer ptr) { asFreeMem(ptr.Get()); }, (NativePointer), void), asCALL_CDECL); assert(r >= 0);
 }
