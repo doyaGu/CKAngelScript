@@ -68,30 +68,26 @@ CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto) {
 #define USE_FILE_LIST 3
 #define FILENAME_AS_CODE 4
 
-static void TriggerCallback(ScriptRunner *runner, const char *name, const CKBehaviorContext &behcontext) {
+static bool TriggerCallback(ScriptRunner *runner, const char *name, const CKBehaviorContext &behcontext) {
     if (!runner || !runner->IsAttached())
-        return;
-
-    CKContext *context = behcontext.Context;
+        return false;
 
     asIScriptFunction *func = runner->GetFunctionByName(name);
-    if (func) {
-        bool success = true;
-        if (func->GetParamCount() > 0) {
-            success = runner->ExecuteScript(
-                func,
-                [behcontext](asIScriptContext *ctx) {
-                    ctx->SetArgObject(0, (void *) &behcontext);
-                });
-        } else {
-            success = runner->ExecuteScript(func);
-        }
+    if (!func)
+        return false;
 
-        if (!success) {
-            context->OutputToConsole(const_cast<CKSTRING>(runner->GetErrorMessage().c_str()));
-            context->OutputToConsole(const_cast<CKSTRING>(runner->GetStackTrace().c_str()));
-        }
+    bool success = true;
+    if (func->GetParamCount() > 0) {
+        success = runner->ExecuteScript(
+            func,
+            [behcontext](asIScriptContext *ctx) {
+                ctx->SetArgObject(0, (void *) &behcontext);
+            });
+    } else {
+        success = runner->ExecuteScript(func);
     }
+
+    return success;
 }
 
 static int OnLoadScript(const CKBehaviorContext &behcontext) {
