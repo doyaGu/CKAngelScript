@@ -9,10 +9,10 @@
 #define AS_TEMPORARY_FLAG_TYPE 3011
 #define AS_RELEASED_ONCE_FLAG_TYPE 3012
 
-template<class A, class B>
-B *StaticCast(A *a) {
+template<typename A, typename B>
+B *ForceCast(A *a) {
     if (!a) return nullptr;
-    return static_cast<B *>(a);
+    return (B *) a;
 }
 
 template <typename D, typename B>
@@ -21,17 +21,11 @@ static void RegisterClassValueCast(asIScriptEngine *engine, const char *derived,
 
     std::string decl = derived;
     decl.append(" opConv() const");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((StaticCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((ForceCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     decl = base;
     decl.append(" opImplConv() const");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((StaticCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
-}
-
-template<class A, class B>
-B *RefCast(A *a) {
-    if (!a) return nullptr;
-    return dynamic_cast<B *>(a);
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ForceCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 }
 
 template <typename D, typename B>
@@ -40,19 +34,19 @@ static void RegisterClassRefCast(asIScriptEngine *engine, const char *derived, c
 
     std::string decl = derived;
     decl.append("@ opCast()");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((RefCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((ForceCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     decl = base;
     decl.append("@ opImplCast()");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((RefCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ForceCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     decl = "const ";
     decl.append(derived).append("@ opCast() const");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((RefCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((ForceCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 
     decl = "const ";
     decl.append(base).append("@ opImplCast() const");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((RefCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ForceCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
 }
 
 inline std::string ScriptStringify(const char *str) {
