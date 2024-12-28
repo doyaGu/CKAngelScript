@@ -403,12 +403,12 @@ void ScriptManager::RegisterStdTypes(asIScriptEngine *engine) {
     int r = 0;
 
     if constexpr (sizeof(void *) == 4) {
-        r = engine->RegisterTypedef("size_t", "int"); assert(r >= 0);
+        r = engine->RegisterTypedef("size_t", "uint"); assert(r >= 0);
         r = engine->RegisterTypedef("ptrdiff_t", "int"); assert(r >= 0);
         r = engine->RegisterTypedef("intptr_t", "int"); assert(r >= 0);
         r = engine->RegisterTypedef("uintptr_t", "uint"); assert(r >= 0);
     } else {
-        r = engine->RegisterTypedef("size_t", "int64"); assert(r >= 0);
+        r = engine->RegisterTypedef("size_t", "uint64"); assert(r >= 0);
         r = engine->RegisterTypedef("ptrdiff_t", "int64"); assert(r >= 0);
         r = engine->RegisterTypedef("intptr_t", "int64"); assert(r >= 0);
         r = engine->RegisterTypedef("uintptr_t", "uint64"); assert(r >= 0);
