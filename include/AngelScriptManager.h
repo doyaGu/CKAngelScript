@@ -12,7 +12,6 @@ class AngelScriptManager : public CKBaseManager {
 public:
     // Engine
     virtual asIScriptEngine *GetScriptEngine() = 0;
-    virtual asIScriptEngine *CreateScriptEngine(asDWORD version = ANGELSCRIPT_VERSION) = 0;
     virtual const char *GetVersion() = 0;
     virtual const char *GetOptions() = 0;
 

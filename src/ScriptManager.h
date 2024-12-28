@@ -44,7 +44,6 @@ public:
 
     // Engine
     virtual asIScriptEngine *GetScriptEngine();
-    virtual asIScriptEngine *CreateScriptEngine(asDWORD version = ANGELSCRIPT_VERSION);
     virtual const char *GetVersion();
     virtual const char *GetOptions();
 

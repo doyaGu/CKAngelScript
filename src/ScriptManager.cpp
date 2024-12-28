@@ -96,10 +96,6 @@ int ScriptManager::Shutdown() {
     return 0;
 }
 
-asIScriptEngine *ScriptManager::CreateScriptEngine(asDWORD version) {
-    return asCreateScriptEngine(version);
-}
-
 const char *ScriptManager::GetVersion() {
     return asGetLibraryVersion();
 }
