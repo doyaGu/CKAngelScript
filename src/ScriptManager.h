@@ -76,7 +76,7 @@ public:
     virtual int LoadScript(const char *scriptName, const char *filename);
     virtual int LoadScripts(const char *scriptName, const char **filenames, size_t count);
     virtual int CompileScript(const char *scriptName, const char *scriptCode);
-    virtual void UnloadScript(const char *scriptName);
+    virtual bool UnloadScript(const char *scriptName);
 
     asIScriptModule *GetScript(const char *scriptName);
 

@@ -27,6 +27,7 @@ public:
     virtual asIScriptModule *GetScriptModule() const = 0;
 
     virtual bool Build(asIScriptEngine *engine) = 0;
+    virtual bool Discard() = 0;
 
     virtual const char *GetName() const = 0;
 
@@ -121,6 +122,7 @@ struct CachedScript : ICachedScript {
     asIScriptModule *GetScriptModule() const override;
 
     bool Build(asIScriptEngine *engine) override;
+    bool Discard() override;
 
     const char *GetName() const override;
 
@@ -172,6 +174,8 @@ public:
 
     std::shared_ptr<CachedScript> CompileScript(asIScriptEngine *engine,
                                                 const std::string &scriptName, const std::string &scriptCode);
+
+    bool UnloadScript(const std::string &scriptName);
 
 private:
     std::unordered_map<std::string, std::shared_ptr<CachedScript>> m_CachedScripts;

@@ -232,10 +232,10 @@ int ScriptManager::CompileScript(const char *scriptName, const char *scriptCode)
     return 0;
 }
 
-void ScriptManager::UnloadScript(const char *scriptName) {
+bool ScriptManager::UnloadScript(const char *scriptName) {
     if (!scriptName || scriptName[0] == '\0')
-        return;
-    m_ScriptCache.Invalidate(scriptName);
+        return false;
+    return m_ScriptCache.UnloadScript(scriptName);
 }
 
 asIScriptModule *ScriptManager::GetScript(const char *scriptName) {

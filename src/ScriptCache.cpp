@@ -271,6 +271,16 @@ bool CachedScript::Build(asIScriptEngine *engine) {
     return true;
 }
 
+bool CachedScript::Discard() {
+    if (module) {
+        module->Discard();
+        module = nullptr;
+        metadata.Clear();
+        return true;
+    }
+    return false;
+}
+
 const char *CachedScript::GetName() const {
     return name.c_str();
 }
@@ -616,4 +626,11 @@ std::shared_ptr<CachedScript> ScriptCache::CompileScript(asIScriptEngine *engine
     CacheScript(scriptName, newScript);
 
     return newScript;
+}
+
+bool ScriptCache::UnloadScript(const std::string &scriptName) {
+    if (auto cached = GetCachedScript(scriptName)) {
+        return cached->Discard();
+    }
+    return false;
 }

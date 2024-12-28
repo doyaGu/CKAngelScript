@@ -44,7 +44,7 @@ public:
     virtual int LoadScript(const char *scriptName, const char *filename) = 0;
     virtual int LoadScripts(const char *scriptName, const char **filenames, size_t count) = 0;
     virtual int CompileScript(const char *scriptName, const char *scriptCode) = 0;
-    virtual void UnloadScript(const char *scriptName) = 0;
+    virtual bool UnloadScript(const char *scriptName) = 0;
 
     static AngelScriptManager *GetManager(CKContext *context) {
         return (AngelScriptManager *)context->GetManagerByGuid(ANGEL_SCRIPT_MANAGER_GUID);
