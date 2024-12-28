@@ -252,6 +252,18 @@ CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
     return pm->ResolveFileName(filename, m_ScriptPathCategoryIndex);
 }
 
+void * ScriptManager::GetCKObjectData(CK_ID id) const {
+    const auto it = m_CKObjectDataMap.find(id);
+    if (it == m_CKObjectDataMap.end()) {
+        return nullptr;
+    }
+    return it->second;
+}
+
+void ScriptManager::SetCKObjectData(CK_ID id, void *data) {
+    m_CKObjectDataMap[id] = data;
+}
+
 void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
     const char *type = "NULL";
     switch (msg.type) {

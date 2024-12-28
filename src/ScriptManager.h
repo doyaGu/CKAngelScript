@@ -86,6 +86,9 @@ public:
 
     CKERROR ResolveScriptFileName(XString &filename);
 
+    void *GetCKObjectData(CK_ID id) const;
+    void SetCKObjectData(CK_ID id, void *data);
+
     bool IsInited() const {
         return (m_Flags & AS_INITED) != 0;
     }
@@ -121,6 +124,7 @@ protected:
     asIScriptEngine *m_ScriptEngine = nullptr;
     ScriptCache m_ScriptCache;
     std::vector<asIScriptContext *> m_ScriptContexts;
+    std::unordered_map<CK_ID, void *> m_CKObjectDataMap;
 };
 
 #endif // CK_SCRIPTMANAGER_H
