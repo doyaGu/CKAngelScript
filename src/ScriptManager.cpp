@@ -1,5 +1,7 @@
 #include "ScriptManager.h"
 
+#include <fmt/format.h>
+
 #include "CKPathManager.h"
 
 #include "ScriptInfo.h"
@@ -277,34 +279,27 @@ void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
 }
 
 void ScriptManager::ExceptionCallback(asIScriptContext *context) {
-    XString message;
-    XString callStackString = GetCallStack(context);
-    message.Format("Exception - '%s' in '%s'\n%s", context->GetExceptionString(),
-                   context->GetExceptionFunction()->GetDeclaration(), callStackString.CStr());
+    std::string callStack = GetCallStack(context);
+    std::string message = fmt::format("Exception in '{}': '{}'\n{}",
+        context->GetExceptionFunction()->GetDeclaration(), context->GetExceptionString(), callStack);
 
     asSMessageInfo info = {};
     info.row = context->GetExceptionLineNumber(&info.col, &info.section);
     info.type = asMSGTYPE_ERROR;
-    info.message = message.CStr();
+    info.message = message.c_str();
     MessageCallback(info);
 }
 
-XString ScriptManager::GetCallStack(asIScriptContext *context) {
-    XString str("AngelScript Callstack:\n");
-
-    // Append the call stack
+std::string ScriptManager::GetCallStack(asIScriptContext *context) {
+    std::string str;
     for (asUINT i = 0; i < context->GetCallstackSize(); i++) {
         asIScriptFunction *func = context->GetFunction(i);
         int column;
-        const char *scriptSection;
-        int line = context->GetLineNumber(i, &column, &scriptSection);
-
-        XString buf;
-        buf.Format("\t%s at %s(%d,%d)\n",  func->GetDeclaration(), scriptSection, line, column);
-        str << buf;
+        const char *section;
+        int line = context->GetLineNumber(i, &column, &section);
+        str.append(fmt::format("\t{} at {}({},{})\n", func->GetDeclaration(), section, line, column));
     }
-
-    return str;
+    return std::move(str);
 }
 
 asIScriptContext *ScriptManager::RequestContextFromPool() {
@@ -314,6 +309,8 @@ asIScriptContext *ScriptManager::RequestContextFromPool() {
         m_ScriptContexts.pop_back();
     } else
         ctx = m_ScriptEngine->CreateContext();
+
+    ctx->SetExceptionCallback(asMETHOD(ScriptManager, ExceptionCallback), this, asCALL_THISCALL);
     return ctx;
 }
 

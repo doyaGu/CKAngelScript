@@ -97,7 +97,7 @@ public:
 
     void MessageCallback(const asSMessageInfo &msg);
     void ExceptionCallback(asIScriptContext *context);
-    XString GetCallStack(asIScriptContext *context);
+    std::string GetCallStack(asIScriptContext *context);
 
     asIScriptContext *RequestContextFromPool();
     void ReturnContextToPool(asIScriptContext *ctx);
