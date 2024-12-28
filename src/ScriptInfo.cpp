@@ -6,13 +6,13 @@
 #include <fmt/format.h>
 
 void PrintEnumList(asIScriptEngine *engine, std::ofstream &file) {
-    for (int i = 0; i < engine->GetEnumCount(); i++) {
+    for (asUINT i = 0; i < engine->GetEnumCount(); i++) {
         const auto e = engine->GetEnumByIndex(i);
         if (!e) continue;
         const std::string_view ns = e->GetNamespace();
         if (!ns.empty()) file << fmt::format("namespace {} {{\n", ns);
         file << fmt::format("enum {} {{\n", e->GetName());
-        for (int j = 0; j < e->GetEnumValueCount(); ++j) {
+        for (asUINT j = 0; j < e->GetEnumValueCount(); ++j) {
             file << fmt::format("\t{}", e->GetEnumValueByIndex(j, nullptr));
             if (j < e->GetEnumValueCount() - 1) file << ",";
             file << "\n";
@@ -23,7 +23,7 @@ void PrintEnumList(asIScriptEngine *engine, std::ofstream &file) {
 }
 
 void PrintClassTypeList(asIScriptEngine *engine, std::ofstream &file) {
-    for (int i = 0; i < engine->GetObjectTypeCount(); i++) {
+    for (asUINT i = 0; i < engine->GetObjectTypeCount(); i++) {
         const auto t = engine->GetObjectTypeByIndex(i);
         if (!t) continue;
 
@@ -33,7 +33,7 @@ void PrintClassTypeList(asIScriptEngine *engine, std::ofstream &file) {
         file << fmt::format("class {}", t->GetName());
         if (t->GetSubTypeCount() > 0) {
             file << "<";
-            for (int sub = 0; sub < t->GetSubTypeCount(); ++sub) {
+            for (asUINT sub = 0; sub < t->GetSubTypeCount(); ++sub) {
                 if (sub < t->GetSubTypeCount() - 1) file << ", ";
                 const auto st = t->GetSubType(sub);
                 file << st->GetName();
@@ -43,21 +43,21 @@ void PrintClassTypeList(asIScriptEngine *engine, std::ofstream &file) {
         }
 
         file << "{\n";
-        for (int j = 0; j < t->GetBehaviourCount(); ++j) {
+        for (asUINT j = 0; j < t->GetBehaviourCount(); ++j) {
             asEBehaviours behaviours;
             const auto f = t->GetBehaviourByIndex(j, &behaviours);
             if (behaviours == asBEHAVE_CONSTRUCT || behaviours == asBEHAVE_DESTRUCT) {
                 file << fmt::format("\t{};\n", f->GetDeclaration(false, true, true));
             }
         }
-        for (int j = 0; j < t->GetMethodCount(); ++j) {
+        for (asUINT j = 0; j < t->GetMethodCount(); ++j) {
             const auto m = t->GetMethodByIndex(j);
             file << fmt::format("\t{};\n", m->GetDeclaration(false, true, true));
         }
-        for (int j = 0; j < t->GetPropertyCount(); ++j) {
+        for (asUINT j = 0; j < t->GetPropertyCount(); ++j) {
             file << fmt::format("\t{};\n", t->GetPropertyDeclaration(j, true));
         }
-        for (int j = 0; j < t->GetChildFuncdefCount(); ++j) {
+        for (asUINT j = 0; j < t->GetChildFuncdefCount(); ++j) {
             file << fmt::format("\tfuncdef {};\n", t->GetChildFuncdef(j)->GetFuncdefSignature()->GetDeclaration(false));
         }
         file << "}\n";
@@ -66,7 +66,7 @@ void PrintClassTypeList(asIScriptEngine *engine, std::ofstream &file) {
 }
 
 void PrintGlobalFunctionList(asIScriptEngine *engine, std::ofstream &file) {
-    for (int i = 0; i < engine->GetGlobalFunctionCount(); i++) {
+    for (asUINT i = 0; i < engine->GetGlobalFunctionCount(); i++) {
         const auto f = engine->GetGlobalFunctionByIndex(i);
         if (!f) continue;
         const std::string_view ns = f->GetNamespace();
@@ -78,7 +78,7 @@ void PrintGlobalFunctionList(asIScriptEngine *engine, std::ofstream &file) {
 }
 
 void PrintGlobalPropertyList(asIScriptEngine *engine, std::ofstream &file) {
-    for (int i = 0; i < engine->GetGlobalPropertyCount(); i++) {
+    for (asUINT i = 0; i < engine->GetGlobalPropertyCount(); i++) {
         const char *name;
         const char *ns0;
         int type;
@@ -97,7 +97,7 @@ void PrintGlobalPropertyList(asIScriptEngine *engine, std::ofstream &file) {
 }
 
 void PrintGlobalTypedef(asIScriptEngine *engine, std::ofstream &file) {
-    for (int i = 0; i < engine->GetTypedefCount(); ++i) {
+    for (asUINT i = 0; i < engine->GetTypedefCount(); ++i) {
         const auto type = engine->GetTypedefByIndex(i);
         if (!type) continue;
         const std::string_view ns = type->GetNamespace();
