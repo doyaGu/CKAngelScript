@@ -7,7 +7,6 @@
 #include "ScriptUtils.h"
 #include "ScriptXArray.h"
 #include "ScriptNativePointer.h"
-#include "ScriptNativeBuffer.h"
 
 static const int g_MAX_USER_PROFILE = MAX_USER_PROFILE;
 
@@ -1739,18 +1738,14 @@ void RegisterCKBitmapData(asIScriptEngine *engine) {
 
 // CKVertexBuffer
 
-CKBOOL CKVertexBuffer_Draw(CKVertexBuffer *vb, CKRenderContext *Ctx, VXPRIMITIVETYPE pType, NativeBuffer buffer, CKDWORD startVertex, CKDWORD vertexCount) {
-    return vb->Draw(Ctx, pType, reinterpret_cast<CKWORD *>(buffer.Data()), static_cast<int>(buffer.Size() / sizeof(CKWORD)), startVertex, vertexCount);
-}
-
 void RegisterCKVertexBuffer(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectMethod("CKVertexBuffer", "void Destroy()", asMETHOD(CKVertexBuffer, Destroy), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKVertexBuffer", "CKVB_STATE Check(CKRenderContext@ ctx, uint maxVertexCount, CKRST_DPFLAGS format, bool dynamic = false)", asFUNCTIONPR([](CKVertexBuffer *self, CKRenderContext *ctx, unsigned int maxVertexCount, CKRST_DPFLAGS format, bool dynamic) { return self->Check(ctx, maxVertexCount, format, dynamic); }, (CKVertexBuffer *, CKRenderContext *, unsigned int, CKRST_DPFLAGS, bool), CKVB_STATE), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKVertexBuffer", "VxDrawPrimitiveData &Lock(CKRenderContext@ ctx, uint startVertex, uint vertexCount, CKLOCKFLAGS lockFlags = CK_LOCK_DEFAULT)", asMETHOD(CKVertexBuffer, Lock), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKVertexBuffer", "CKVB_STATE Check(CKRenderContext@ ctx, uint maxVertexCount, CKRST_DPFLAGS format, bool dynamic = false)", asFUNCTIONPR([](CKVertexBuffer *self, CKRenderContext *ctx, CKDWORD maxVertexCount, CKRST_DPFLAGS format, bool dynamic) { return self->Check(ctx, maxVertexCount, format, dynamic); }, (CKVertexBuffer *, CKRenderContext *, CKDWORD, CKRST_DPFLAGS, bool), CKVB_STATE), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKVertexBuffer", "VxDrawPrimitiveData &Lock(CKRenderContext@ ctx, CKDWORD startVertex, CKDWORD vertexCount, CKLOCKFLAGS lockFlags = CK_LOCK_DEFAULT)", asMETHOD(CKVertexBuffer, Lock), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKVertexBuffer", "void Unlock(CKRenderContext@ ctx)", asMETHOD(CKVertexBuffer, Unlock), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKVertexBuffer", "bool Draw(CKRenderContext@ ctx, VXPRIMITIVETYPE pType, NativeBuffer indices, uint startVertex, uint vertexCount)", asFUNCTIONPR([](CKVertexBuffer *self, CKRenderContext *ctx, VXPRIMITIVETYPE pType, CKWORD *indices, int indexCount, CKDWORD startVertex, CKDWORD vertexCount) -> bool { return self->Draw(ctx, pType, indices, indexCount, startVertex, vertexCount); }, (CKVertexBuffer *, CKRenderContext *, VXPRIMITIVETYPE, CKWORD *, int, CKDWORD, CKDWORD), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKVertexBuffer", "bool Draw(CKRenderContext@ ctx, VXPRIMITIVETYPE pType, NativePointer indices, int indexCount, CKDWORD startVertex, CKDWORD vertexCount)", asFUNCTIONPR([](CKVertexBuffer *self, CKRenderContext *ctx, VXPRIMITIVETYPE pType, NativePointer indices, int indexCount, CKDWORD startVertex, CKDWORD vertexCount) -> bool { return self->Draw(ctx, pType, reinterpret_cast<CKWORD *>(indices.Get()), indexCount, startVertex, vertexCount); }, (CKVertexBuffer *, CKRenderContext *, VXPRIMITIVETYPE, NativePointer, int, CKDWORD, CKDWORD), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKFloorPoint
