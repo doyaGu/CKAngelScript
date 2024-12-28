@@ -5,13 +5,29 @@
 
 #include <angelscript.h>
 
+#include "RefCount.h"
+#include "ScriptNativePointer.h"
+
 class NativeBuffer {
 public:
-    NativeBuffer();
-    NativeBuffer(void *buffer, size_t size);
-    NativeBuffer(const NativeBuffer &other);
+    static NativeBuffer *Create(size_t size) {
+        void *self = asAllocMem(sizeof(NativeBuffer));
+        return new(self) NativeBuffer(size);
+    }
 
-    NativeBuffer &operator=(const NativeBuffer &);
+    static NativeBuffer *Create(void *buffer, size_t size) {
+        void *self = asAllocMem(sizeof(NativeBuffer));
+        return new(self) NativeBuffer(buffer, size);
+    }
+
+    explicit NativeBuffer(size_t size);
+    NativeBuffer(void *buffer, size_t size);
+    ~NativeBuffer();
+
+    NativeBuffer(const NativeBuffer &other) = delete;
+    NativeBuffer(NativeBuffer &&other) noexcept = delete;
+    NativeBuffer &operator=(const NativeBuffer &) = delete;
+    NativeBuffer &operator=(NativeBuffer &&) noexcept = delete;
 
     bool operator==(const NativeBuffer &rhs) const {
         return m_Buffer == rhs.m_Buffer && m_Size == rhs.m_Size;
@@ -20,6 +36,10 @@ public:
     bool operator!=(const NativeBuffer &rhs) const {
         return !(*this == rhs);
     }
+
+    int AddRef() const;
+    int Release() const;
+    asILockableSharedBool *GetWeakRefFlag();
 
     char &operator[](size_t index);
     const char &operator[](size_t index) const;
@@ -72,7 +92,8 @@ public:
 
     int Compare(const NativeBuffer &other, size_t size) const;
     size_t Merge(const NativeBuffer &other, bool truncate = false);
-    NativeBuffer Extract(size_t size);
+    NativeBuffer *Extract(size_t size);
+    NativePointer ToPointer() const;
 
     size_t Load(const char *filename, size_t size, int offset = 0);
     size_t Save(const char *filename, size_t size);
@@ -81,6 +102,9 @@ private:
     char *m_Buffer;
     size_t m_Size;
     size_t m_CursorPos;
+    bool m_Owned;
+    mutable RefCount m_RefCount;
+    asILockableSharedBool *m_WeakRefFlag = nullptr;
 };
 
 void RegisterNativeBuffer(asIScriptEngine *engine);

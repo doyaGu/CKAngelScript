@@ -4,17 +4,49 @@
 #include <cstring>
 #include <cstdio>
 
-NativeBuffer::NativeBuffer(): m_Buffer(nullptr), m_Size(0), m_CursorPos(0) {}
-NativeBuffer::NativeBuffer(void *buffer, size_t size): m_CursorPos(0), m_Buffer(static_cast<char *>(buffer)), m_Size(size) {}
-NativeBuffer::NativeBuffer(const NativeBuffer &other): m_Buffer(other.m_Buffer), m_Size(other.m_Size), m_CursorPos(0) {}
+NativeBuffer::NativeBuffer(size_t size) {
+    m_Buffer = static_cast<char *>(asAllocMem(size));
+    m_Size = size;
+    m_CursorPos = 0;
+    m_Owned = true;
+}
 
-NativeBuffer &NativeBuffer::operator=(const NativeBuffer &other) {
-    if (this != &other) {
-        m_Buffer = other.m_Buffer;
-        m_Size = other.m_Size;
-        m_CursorPos = other.m_CursorPos;
+NativeBuffer::NativeBuffer(void *buffer, size_t size): m_Buffer(static_cast<char *>(buffer)), m_Size(size), m_CursorPos(0), m_Owned(false) {}
+
+NativeBuffer::~NativeBuffer() {
+    if (m_Owned && m_Buffer) {
+        asFreeMem(m_Buffer);
+        m_Buffer = nullptr;
     }
-    return *this;
+
+    m_Size = 0;
+    m_CursorPos = 0;
+
+    if(m_WeakRefFlag) {
+        // Tell the ones that hold weak references that the object is destroyed
+        m_WeakRefFlag->Set(true);
+        m_WeakRefFlag->Release();
+    }
+}
+
+int NativeBuffer::AddRef() const {
+    return m_RefCount.AddRef();
+}
+
+int NativeBuffer::Release() const {
+    const int r = m_RefCount.Release();
+    if (r == 0) {
+        std::atomic_thread_fence(std::memory_order_acquire);
+        this->~NativeBuffer();
+        asFreeMem(const_cast<NativeBuffer *>(this));
+    }
+    return r;
+}
+
+asILockableSharedBool *NativeBuffer::GetWeakRefFlag() {
+    if(!m_WeakRefFlag)
+        m_WeakRefFlag = asCreateLockableSharedBool();
+    return m_WeakRefFlag;
 }
 
 char &NativeBuffer::operator[](size_t index) {
@@ -143,13 +175,17 @@ size_t NativeBuffer::Merge(const NativeBuffer &other, bool truncate) {
     return size;
 }
 
-NativeBuffer NativeBuffer::Extract(size_t size) {
+NativeBuffer *NativeBuffer::Extract(size_t size) {
     if (!m_Buffer || m_CursorPos + size > m_Size)
-        return {};
+        return nullptr;
 
-    auto buffer = NativeBuffer(&m_Buffer[m_CursorPos], size);
+    auto *buffer = Create(&m_Buffer[m_CursorPos], size);
     m_CursorPos += size;
     return buffer;
+}
+
+NativePointer NativeBuffer::ToPointer() const {
+    return NativePointer(&m_Buffer[m_CursorPos]);
 }
 
 size_t NativeBuffer::Load(const char *filename, size_t size, int offset) {
@@ -304,63 +340,63 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
     gen->SetReturnDWord(size);
 }
 
-
 void RegisterNativeBuffer(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectType("NativeBuffer", sizeof(NativeBuffer), asOBJ_VALUE | asGetTypeTraits<NativeBuffer>()); assert(r >= 0);
+    r = engine->RegisterObjectType("NativeBuffer", 0, asOBJ_REF); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_FACTORY, "NativeBuffer@ f(size_t size)", asFUNCTIONPR(NativeBuffer::Create, (size_t), NativeBuffer *), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_FACTORY, "NativeBuffer@ f(uintptr_t buf, size_t size)", asFUNCTIONPR(NativeBuffer::Create, (void *, size_t), NativeBuffer *), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_FACTORY, "NativeBuffer@ f(NativePointer ptr, size_t size)", asFUNCTIONPR([](NativePointer ptr, size_t size) { return NativeBuffer::Create(ptr.Get(), size); }, (NativePointer, size_t), NativeBuffer *), asCALL_CDECL); assert(r >= 0);
 
-    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](NativeBuffer *self) { new(self) NativeBuffer(); }, (NativeBuffer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_CONSTRUCT, "void f(uint addr, int size)", asFUNCTIONPR([](uint32_t addr, int size, NativeBuffer *self) { new(self) NativeBuffer(reinterpret_cast<void *>(addr), size); }, (uint32_t, int, NativeBuffer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_CONSTRUCT, "void f(const NativeBuffer &in other)", asFUNCTIONPR([](const NativeBuffer &other, NativeBuffer *self) { new(self) NativeBuffer(other); }, (const NativeBuffer &, NativeBuffer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](NativeBuffer *self) { self->~NativeBuffer(); }, (NativeBuffer *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
-
-    r = engine->RegisterObjectMethod("NativeBuffer", "NativeBuffer &opAssign(const NativeBuffer &in other)", asMETHODPR(NativeBuffer, operator=, (const NativeBuffer &), NativeBuffer &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_ADDREF, "void f()", asMETHOD(NativeBuffer, AddRef), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_RELEASE, "void f()", asMETHOD(NativeBuffer, Release), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_GET_WEAKREF_FLAG, "int &f()", asMETHOD(NativeBuffer, GetWeakRefFlag), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("NativeBuffer", "uint8 &opIndex(uint index)", asMETHODPR(NativeBuffer, operator[], (size_t), char &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("NativeBuffer", "const uint8 &opIndex(uint index) const", asMETHODPR(NativeBuffer, operator[], (size_t) const, const char &), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint Write(?&in)", asFUNCTION(NativeBufferWriteGeneric), asCALL_GENERIC); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint Read(?&out)", asFUNCTION(NativeBufferReadGeneric), asCALL_GENERIC); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Write(?&in)", asFUNCTION(NativeBufferWriteGeneric), asCALL_GENERIC); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Read(?&out)", asFUNCTION(NativeBufferReadGeneric), asCALL_GENERIC); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteInt(int value)", asMETHODPR(NativeBuffer, WriteInt, (int), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteUInt(uint value)", asMETHODPR(NativeBuffer, WriteUInt, (unsigned int), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteFloat(float value)", asMETHODPR(NativeBuffer, WriteFloat, (float), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteDouble(double value)", asMETHODPR(NativeBuffer, WriteDouble, (double), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteShort(int16 value)", asMETHODPR(NativeBuffer, WriteShort, (short), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteChar(int8 value)", asMETHODPR(NativeBuffer, WriteChar, (char), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteUChar(uint8 value)", asMETHODPR(NativeBuffer, WriteUChar, (unsigned char), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteLong(int64 value)", asMETHODPR(NativeBuffer, WriteLong, (long), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteULong(uint64 value)", asMETHODPR(NativeBuffer, WriteULong, (unsigned long), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint WriteString(const string &in value)", asMETHODPR(NativeBuffer, WriteString, (const std::string &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteInt(int value)", asMETHODPR(NativeBuffer, WriteInt, (int), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteUInt(uint value)", asMETHODPR(NativeBuffer, WriteUInt, (unsigned int), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteFloat(float value)", asMETHODPR(NativeBuffer, WriteFloat, (float), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteDouble(double value)", asMETHODPR(NativeBuffer, WriteDouble, (double), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteShort(int16 value)", asMETHODPR(NativeBuffer, WriteShort, (short), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteChar(int8 value)", asMETHODPR(NativeBuffer, WriteChar, (char), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteUChar(uint8 value)", asMETHODPR(NativeBuffer, WriteUChar, (unsigned char), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteLong(int64 value)", asMETHODPR(NativeBuffer, WriteLong, (long), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteULong(uint64 value)", asMETHODPR(NativeBuffer, WriteULong, (unsigned long), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t WriteString(const string &in value)", asMETHODPR(NativeBuffer, WriteString, (const std::string &), size_t), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadInt(int &out value)", asMETHODPR(NativeBuffer, ReadInt, (int &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadUInt(uint &out value)", asMETHODPR(NativeBuffer, ReadUInt, (unsigned int &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadFloat(float &out value)", asMETHODPR(NativeBuffer, ReadFloat, (float &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadDouble(double &out value)", asMETHODPR(NativeBuffer, ReadDouble, (double &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadShort(int16 &out value)", asMETHODPR(NativeBuffer, ReadShort, (short &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadChar(int8 &out value)", asMETHODPR(NativeBuffer, ReadChar, (char &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadUChar(uint8 &out value)", asMETHODPR(NativeBuffer, ReadUChar, (unsigned char &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadLong(int64 &out value)", asMETHODPR(NativeBuffer, ReadLong, (long &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadULong(uint64 &out value)", asMETHODPR(NativeBuffer, ReadULong, (unsigned long &), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint ReadString(string &out value)", asMETHODPR(NativeBuffer, ReadString, (std::string &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadInt(int &out value)", asMETHODPR(NativeBuffer, ReadInt, (int &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadUInt(uint &out value)", asMETHODPR(NativeBuffer, ReadUInt, (unsigned int &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadFloat(float &out value)", asMETHODPR(NativeBuffer, ReadFloat, (float &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadDouble(double &out value)", asMETHODPR(NativeBuffer, ReadDouble, (double &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadShort(int16 &out value)", asMETHODPR(NativeBuffer, ReadShort, (short &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadChar(int8 &out value)", asMETHODPR(NativeBuffer, ReadChar, (char &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadUChar(uint8 &out value)", asMETHODPR(NativeBuffer, ReadUChar, (unsigned char &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadLong(int64 &out value)", asMETHODPR(NativeBuffer, ReadLong, (long &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadULong(uint64 &out value)", asMETHODPR(NativeBuffer, ReadULong, (unsigned long &), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t ReadString(string &out value)", asMETHODPR(NativeBuffer, ReadString, (std::string &), size_t), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "bool Fill(int value, uint size)", asMETHODPR(NativeBuffer, Fill, (int, size_t), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "bool Fill(int value, size_t size)", asMETHODPR(NativeBuffer, Fill, (int, size_t), bool), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "bool Seek(uint pos)", asMETHODPR(NativeBuffer, Seek, (size_t), bool), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "bool Skip(uint offset)", asMETHODPR(NativeBuffer, Skip, (size_t), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "bool Seek(size_t pos)", asMETHODPR(NativeBuffer, Seek, (size_t), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "bool Skip(size_t offset)", asMETHODPR(NativeBuffer, Skip, (size_t), bool), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("NativeBuffer", "void Reset()", asMETHODPR(NativeBuffer, Reset, (), void), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint Size() const", asMETHODPR(NativeBuffer, Size, () const, size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint CursorPos() const", asMETHODPR(NativeBuffer, CursorPos, () const, size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Size() const", asMETHODPR(NativeBuffer, Size, () const, size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t CursorPos() const", asMETHODPR(NativeBuffer, CursorPos, () const, size_t), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("NativeBuffer", "bool IsValid() const", asMETHODPR(NativeBuffer, IsValid, () const, bool), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("NativeBuffer", "bool IsEmpty() const", asMETHODPR(NativeBuffer, IsEmpty, () const, bool), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "int Compare(const NativeBuffer &in other, uint size) const", asMETHODPR(NativeBuffer, Compare, (const NativeBuffer &, size_t) const, int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint Merge(const NativeBuffer &in other, bool truncate = false)", asMETHODPR(NativeBuffer, Merge, (const NativeBuffer &, bool), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "NativeBuffer Extract(uint)", asMETHODPR(NativeBuffer, Extract, (size_t), NativeBuffer), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "int Compare(const NativeBuffer &in other, size_t size) const", asMETHODPR(NativeBuffer, Compare, (const NativeBuffer &, size_t) const, int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Merge(const NativeBuffer &in other, bool truncate = false)", asMETHODPR(NativeBuffer, Merge, (const NativeBuffer &, bool), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "NativeBuffer@ Extract(size_t size)", asMETHODPR(NativeBuffer, Extract, (size_t), NativeBuffer *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "NativePointer ToPointer() const", asMETHODPR(NativeBuffer, ToPointer, () const, NativePointer), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint Load(const string &in filename, uint size, int offset = 0)", asMETHODPR(NativeBuffer, Load, (const char *, size_t, int), size_t), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint Save(const string &in filename, uint size)", asMETHODPR(NativeBuffer, Save, (const char *, size_t), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Load(const string &in filename, size_t size, int offset = 0)", asMETHODPR(NativeBuffer, Load, (const char *, size_t, int), size_t), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Save(const string &in filename, size_t size)", asMETHODPR(NativeBuffer, Save, (const char *, size_t), size_t), asCALL_THISCALL); assert(r >= 0);
 }
