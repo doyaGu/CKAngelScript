@@ -291,7 +291,7 @@ void ScriptManager::ExceptionCallback(asIScriptContext *context) {
 }
 
 std::string ScriptManager::GetCallStack(asIScriptContext *context) {
-    std::string str;
+    std::string str("Callstack:\n");
     for (asUINT i = 0; i < context->GetCallstackSize(); i++) {
         asIScriptFunction *func = context->GetFunction(i);
         int column;
