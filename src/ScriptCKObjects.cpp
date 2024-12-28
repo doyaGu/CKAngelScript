@@ -68,7 +68,7 @@ static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "CKObject@ CKGetObject(CK_ID id)", asMETHODPR(T, CKGetObject, (CK_ID), CKObject*), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKObject") != 0) {
-        RegisterClassRefCast<T, CKObject>(engine, name, "CKObject");
+        RegisterCKObjectCast<T, CKObject>(engine, name, "CKObject");
     }
 }
 
@@ -131,7 +131,7 @@ static void RegisterCKObjectMembers<CKScene>(asIScriptEngine *engine, const char
     r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR([](CKScene *obj, const XObjectArray &objects, CKDWORD flags, CKDependencies *deps) { return obj->CKDestroyObjects(objects.Begin(), objects.Size(), flags, deps); }, (CKScene *, const XObjectArray &, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "CKObject@ CKGetObject(CK_ID id)", asMETHODPR(CKScene, CKGetObject, (CK_ID), CKObject*), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterClassRefCast<CKScene, CKObject>(engine, name, "CKObject");
+    RegisterCKObjectCast<CKScene, CKObject>(engine, name, "CKObject");
 }
 
 void RegisterCKObject(asIScriptEngine *engine) {
@@ -232,7 +232,7 @@ static void RegisterCKParameterInMembers(asIScriptEngine *engine, const char *na
     r = engine->RegisterObjectMethod(name, "CKObject@ GetOwner()", asMETHODPR(T, GetOwner, (), CKObject*), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKParameterIn") != 0) {
-        RegisterClassRefCast<T, CKParameterIn>(engine, name, "CKParameterIn");
+        RegisterCKObjectCast<T, CKParameterIn>(engine, name, "CKParameterIn");
     }
 }
 
@@ -396,7 +396,7 @@ static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name
     // r = engine->RegisterObjectMethod(name, "bool IsCandidateForFixedSize(CKParameterTypeDesc &in type)", asFUNCTIONPR([](T *obj, CKParameterTypeDesc &type) { return obj->IsCandidateForFixedSize(&type); }, (T *, CKParameterTypeDesc &), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     if (strcmp(name, "CKParameter") != 0) {
-        RegisterClassRefCast<T, CKParameter>(engine, name, "CKParameter");
+        RegisterCKObjectCast<T, CKParameter>(engine, name, "CKParameter");
     }
 }
 
@@ -422,7 +422,7 @@ static void RegisterCKParameterOutMembers(asIScriptEngine *engine, const char *n
     // r = engine->RegisterObjectMethod(name, "void Update()", asMETHODPR(T, Update, (), void), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKParameterOut") != 0) {
-        RegisterClassRefCast<T, CKParameterOut>(engine, name, "CKParameterOut");
+        RegisterCKObjectCast<T, CKParameterOut>(engine, name, "CKParameterOut");
     }
 }
 
@@ -442,7 +442,7 @@ static void RegisterCKParameterLocalMembers(asIScriptEngine *engine, const char 
     r = engine->RegisterObjectMethod(name, "bool IsMyselfParameter()", asFUNCTIONPR([](T *self) -> bool { return self->IsMyselfParameter(); }, (T *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     if (strcmp(name, "CKParameterLocal") != 0) {
-        RegisterClassRefCast<T, CKParameterLocal>(engine, name, "CKParameterLocal");
+        RegisterCKObjectCast<T, CKParameterLocal>(engine, name, "CKParameterLocal");
     }
 }
 
@@ -473,7 +473,7 @@ static void RegisterCKParameterOperationMembers(asIScriptEngine *engine, const c
     r = engine->RegisterObjectMethod(name, "uintptr_t GetOperationFunction()", asMETHODPR(T, GetOperationFunction, (), CK_PARAMETEROPERATION), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKParameterOperation") != 0) {
-        RegisterClassRefCast<T, CKParameterOperation>(engine, name, "CKParameterOperation");
+        RegisterCKObjectCast<T, CKParameterOperation>(engine, name, "CKParameterOperation");
     }
 }
 
@@ -855,7 +855,7 @@ static void RegisterCKSceneObjectMembers(asIScriptEngine *engine, const char *na
     r = engine->RegisterObjectMethod(name, "CKScene@ GetSceneIn(int index)", asMETHODPR(T, GetSceneIn, (int), CKScene *), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKSceneObject") != 0) {
-        RegisterClassRefCast<T, CKSceneObject>(engine, name, "CKSceneObject");
+        RegisterCKObjectCast<T, CKSceneObject>(engine, name, "CKSceneObject");
     }
 }
 
@@ -1392,7 +1392,7 @@ static void RegisterCKAnimationMembers(asIScriptEngine *engine, const char *name
     r = engine->RegisterObjectMethod(name, "float CreateTransition(CKAnimation@ input, CKAnimation@ output, CKDWORD outTransitionMode, float length = 6.0, float frameTo = 0)", asMETHODPR(T, CreateTransition, (CKAnimation*, CKAnimation*, CKDWORD, float, float), float), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKAnimation") != 0) {
-        RegisterClassRefCast<T, CKAnimation>(engine, name, "CKAnimation");
+        RegisterCKObjectCast<T, CKAnimation>(engine, name, "CKAnimation");
     }
 }
 
@@ -1451,7 +1451,7 @@ static void RegisterCKBeObjectMembers(asIScriptEngine *engine, const char *name)
     r = engine->RegisterObjectMethod(name, "void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)", asMETHODPR(T, ApplyPatchForOlderVersion, (int, CKFileObject*), void), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKBeObject") != 0) {
-        RegisterClassRefCast<T, CKBeObject>(engine, name, "CKBeObject");
+        RegisterCKObjectCast<T, CKBeObject>(engine, name, "CKBeObject");
     }
 }
 
@@ -1488,7 +1488,7 @@ static void RegisterCKBeObjectMembers<CKWaveSound>(asIScriptEngine *engine, cons
     r = engine->RegisterObjectMethod(name, "float GetLastExecutionTime()", asMETHODPR(CKWaveSound, GetLastExecutionTime, (), float), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)", asMETHODPR(CKWaveSound, ApplyPatchForOlderVersion, (int, CKFileObject*), void), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterClassRefCast<CKWaveSound, CKBeObject>(engine, name, "CKBeObject");
+    RegisterCKObjectCast<CKWaveSound, CKBeObject>(engine, name, "CKBeObject");
 }
 
 void RegisterCKBeObject(asIScriptEngine *engine) {
@@ -2113,7 +2113,7 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
     }, (T *, asIScriptFunction *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     if (strcmp(name, "CKMesh") != 0) {
-        RegisterClassRefCast<T, CKMesh>(engine, name, "CKMesh");
+        RegisterCKObjectCast<T, CKMesh>(engine, name, "CKMesh");
     }
 }
 
@@ -2272,7 +2272,7 @@ static void RegisterCKSoundMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void SetSaveOptions(CK_SOUND_SAVEOPTIONS options)", asMETHOD(T, SetSaveOptions), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKSound") != 0) {
-        RegisterClassRefCast<T, CKSound>(engine, name, "CKSound");
+        RegisterCKObjectCast<T, CKSound>(engine, name, "CKSound");
     }
 }
 
@@ -2288,7 +2288,7 @@ static void RegisterCKSoundMembers<CKWaveSound>(asIScriptEngine *engine, const c
     r = engine->RegisterObjectMethod(name, "void SetSaveOptions(CK_SOUND_SAVEOPTIONS options)", asMETHOD(CKWaveSound, SetSaveOptions), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKSound") != 0) {
-        RegisterClassRefCast<CKWaveSound, CKSound>(engine, name, "CKSound");
+        RegisterCKObjectCast<CKWaveSound, CKSound>(engine, name, "CKSound");
     }
 }
 
@@ -2516,7 +2516,7 @@ static void RegisterCKRenderObjectMembers(asIScriptEngine *engine, const char *n
     r = engine->RegisterObjectMethod(name, "void RemoveAllCallbacks()", asMETHODPR(T, RemoveAllCallbacks, (), void), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CKRenderObject") != 0) {
-        RegisterClassRefCast<T, CKRenderObject>(engine, name, "CKRenderObject");
+        RegisterCKObjectCast<T, CKRenderObject>(engine, name, "CKRenderObject");
     }
 }
 
@@ -2593,7 +2593,7 @@ void RegisterCK2dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void RestoreInitialSize()", asMETHODPR(T, RestoreInitialSize, (), void), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, "CK2dEntity") != 0) {
-        RegisterClassRefCast<T, CK2dEntity>(engine, name, "CK2dEntity");
+        RegisterCKObjectCast<T, CK2dEntity>(engine, name, "CK2dEntity");
     }
 }
 
@@ -2675,7 +2675,7 @@ void RegisterCKSpriteMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "bool ToRestore()", asFUNCTIONPR([](T *self) -> bool { return self->ToRestore(); }, (T *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     if (strcmp(name, "CKSprite") != 0) {
-        RegisterClassRefCast<T, CKSprite>(engine, name, "CKSprite");
+        RegisterCKObjectCast<T, CKSprite>(engine, name, "CKSprite");
     }
 }
 
@@ -2831,7 +2831,7 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "float GetRadius()", asMETHODPR(T, GetRadius, (), float), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, name) != 0) {
-        RegisterClassRefCast<T, CK3dEntity>(engine, name, name);
+        RegisterCKObjectCast<T, CK3dEntity>(engine, name, name);
     }
 }
 
@@ -2875,7 +2875,7 @@ void RegisterCKCameraMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void SetTarget(CK3dEntity@ target)", asMETHODPR(T, SetTarget, (CK3dEntity *), void), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, name) != 0) {
-        RegisterClassRefCast<T, CKCamera>(engine, name, name);
+        RegisterCKObjectCast<T, CKCamera>(engine, name, name);
     }
 }
 
@@ -3009,7 +3009,7 @@ void RegisterCKLightMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void SetLightPower(float power = 1.0)", asMETHODPR(T, SetLightPower, (float), void), asCALL_THISCALL); assert(r >= 0);
 
     if (strcmp(name, name) != 0) {
-        RegisterClassRefCast<T, CKLight>(engine, name, name);
+        RegisterCKObjectCast<T, CKLight>(engine, name, name);
     }
 }
 
@@ -3076,7 +3076,7 @@ void RegisterCK3dObjectMembers(asIScriptEngine *engine, const char *name) {
     RegisterCK3dEntityMembers<T>(engine, name);
 
     if (strcmp(name, name) != 0) {
-        RegisterClassRefCast<T, CK3dObject>(engine, name, name);
+        RegisterCKObjectCast<T, CK3dObject>(engine, name, name);
     }
 }
 
