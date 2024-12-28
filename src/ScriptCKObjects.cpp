@@ -550,7 +550,7 @@ static void CKRenderContext_RenderCallback(CKRenderContext *dev, void *data) {
 
     ctx->SetArgObject(0, dev);
 
-    r = ExecuteScriptFunction(ctx, func);
+    ctx->Execute();
 
     engine->ReturnContext(ctx);
 
@@ -1875,7 +1875,7 @@ static void CKMesh_MeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, CKM
     ctx->SetArgObject(1, mov);
     ctx->SetArgObject(2, object);
 
-    r = ExecuteScriptFunction(ctx, func);
+    ctx->Execute();
 
     engine->ReturnContext(ctx);
 
@@ -1914,7 +1914,7 @@ static void CKMesh_SubMeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, 
     ctx->SetArgObject(2, object);
     ctx->SetArgObject(3, mat);
 
-    r = ExecuteScriptFunction(ctx, func);
+    ctx->Execute();
 
     engine->ReturnContext(ctx);
 
@@ -2453,7 +2453,7 @@ static CKBOOL CKRenderObject_Callback(CKRenderContext *dev, CKRenderObject *ent,
     ctx->SetArgObject(0, dev);
     ctx->SetArgObject(1, ent);
 
-    r = ExecuteScriptFunction(ctx, func);
+    ctx->Execute();
 
     engine->ReturnContext(ctx);
 
