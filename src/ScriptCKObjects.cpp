@@ -13,8 +13,8 @@ static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
 
     r = engine->RegisterObjectMethod(name, "void SetName(const string &in name, bool shared = false)", asFUNCTIONPR([](T *self, const std::string &name, bool shared) { self->SetName(const_cast<CKSTRING>(name.c_str()), shared); }, (T *, const std::string &, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod(name, "uintptr_t GetAppData()", asMETHODPR(T, GetAppData, (), void *), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "void SetAppData(uintptr_t data)", asMETHODPR(T, SetAppData, (void *), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "NativePointer GetAppData()", asFUNCTIONPR([](T *self) { return NativePointer(self->GetAppData()); }, (T *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "void SetAppData(NativePointer data)", asFUNCTIONPR([](T *self, NativePointer data) { self->SetAppData(data.Get()); }, (T *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod(name, "void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)", asMETHODPR(T, Show, (CK_OBJECT_SHOWOPTION), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "bool IsHiddenByParent()", asFUNCTIONPR([](T *self) -> bool { return self->IsHiddenByParent(); }, (T *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -77,8 +77,8 @@ static void RegisterCKObjectMembers<CKScene>(asIScriptEngine *engine, const char
 
     r = engine->RegisterObjectMethod(name, "void SetName(const string &in name, bool shared = false)", asFUNCTIONPR([](CKScene *self, const std::string &name, bool shared) { self->SetName(const_cast<CKSTRING>(name.c_str()), shared); }, (CKScene *, const std::string &, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod(name, "uintptr_t GetAppData()", asMETHODPR(CKScene, GetAppData, (), void *), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "void SetAppData(uintptr_t data)", asMETHODPR(CKScene, SetAppData, (void *), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "NativePointer GetAppData()", asFUNCTIONPR([](CKScene *self) { return NativePointer(self->GetAppData()); }, (CKScene *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "void SetAppData(NativePointer data)", asFUNCTIONPR([](CKScene *self, NativePointer data) { self->SetAppData(data.Get()); }, (CKScene *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod(name, "void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)", asMETHODPR(CKScene, Show, (CK_OBJECT_SHOWOPTION), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "bool IsHiddenByParent()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsHiddenByParent(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
