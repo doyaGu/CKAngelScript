@@ -1,5 +1,7 @@
 #include "ScriptRunner.h"
 
+#include <fmt/format.h>
+
 #include "ScriptManager.h"
 
 ScriptRunner::ScriptRunner(ScriptManager *man) : m_ScriptManager(man) {}
@@ -130,6 +132,11 @@ asIScriptFunction *ScriptRunner::GetFunctionByDecl(const char *decl) {
 }
 
 bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler, const ScriptFunctionArgumentHandler &retHandler) {
+    if (!m_CachedScript) {
+        SetErrorMessage("No script to execute.");
+        return false;
+    }
+
     if (!func) {
         SetErrorMessage("No function to execute.");
         return false;
@@ -140,11 +147,6 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
         SetErrorMessage("Script engine is null.");
         return false;
     }
-
-    if (!m_CachedScript) {
-        SetErrorMessage("No script to execute.");
-        return false;
-    };
 
     asIScriptContext *ctx = GetContext();
     if (!ctx) {
@@ -176,21 +178,36 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
         argsHandler(ctx);
     }
 
-    StartTiming();
+    if (IsProfiling())
+        StartTiming();
 
     r = ctx->Execute();
     if (r != asEXECUTION_FINISHED) {
         if (r == asEXECUTION_EXCEPTION) {
             // Gather exception info
+            const char *section;
+            int col;
+            int row = ctx->GetExceptionLineNumber(&col, &section);
+
             asIScriptFunction *exFunc = ctx->GetExceptionFunction();
-            std::string exceptMsg = ctx->GetExceptionString();
-            std::string stackTrace = "Exception in " + std::string(exFunc->GetDeclaration()) + ": " + exceptMsg;
+            std::string exStr = ctx->GetExceptionString();
+
+            std::string stackTrace = fmt::format("Exception in '{}' at {}({},{}): '{}'\n",
+                exFunc->GetDeclaration(), section, row, col, exStr);
+
+            // Append the call stack
+            for (asUINT i = 0; i < ctx->GetCallstackSize(); i++) {
+                asIScriptFunction *f = ctx->GetFunction(i);
+                row = ctx->GetLineNumber(i, &col, &section);
+                stackTrace.append(fmt::format("\t{} at {}({},{})\n", f->GetDeclaration(), section, row, col));
+            }
+
             SetStackTrace(stackTrace);
             SetErrorMessage("Script Execution Threw Exception.");
         } else if (r == asEXECUTION_SUSPENDED) {
             SetErrorMessage("Script Execution Suspended.");
         } else {
-            SetErrorMessage("Script did not complete normally.");
+            SetErrorMessage("Script execution failed with result code: " + std::to_string(r));
         }
         return false;
     }
@@ -199,7 +216,8 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
         retHandler(ctx);
     }
 
-    EndTiming();
+    if (IsProfiling())
+        EndTiming();
 
     return true;
 }

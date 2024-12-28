@@ -38,6 +38,8 @@ public:
     bool ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
 
     // Timing / metrics
+    bool IsProfiling() const { return m_Profiling; }
+    void EnableProfiling(bool enable = true) { m_Profiling = enable; }
     void StartTiming();
     void EndTiming();
     double GetElapsedTimeMs() const;
@@ -56,6 +58,7 @@ private:
     asIScriptContext *m_Context = nullptr;
     std::shared_ptr<CachedScript> m_CachedScript;
     bool m_Attached = false;
+    bool m_Profiling = false;
     std::chrono::time_point<std::chrono::high_resolution_clock> m_StartTime;
     double m_ElapsedMs = 0.0;
     std::string m_ErrorMessage;
