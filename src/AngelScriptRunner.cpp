@@ -43,7 +43,8 @@ CKERROR CreateAngelScriptRunnerProto(CKBehaviorPrototype **pproto) {
 
     proto->DeclareLocalParameter(nullptr, CKPGUID_POINTER);
     proto->DeclareLocalParameter(nullptr, CKPGUID_POINTER);
-    proto->DeclareLocalParameter(nullptr, CKPGUID_POINTER);
+
+	proto->DeclareSetting("Output Error Message", CKPGUID_BOOL, "FALSE");
 
     proto->SetFlags(CK_BEHAVIORPROTOTYPE_NORMAL);
     proto->SetFunction(AngelScriptRunner);
@@ -51,8 +52,8 @@ CKERROR CreateAngelScriptRunnerProto(CKBehaviorPrototype **pproto) {
     proto->SetBehaviorFlags((CK_BEHAVIOR_FLAGS) (CKBEHAVIOR_TARGETABLE |
                                                  CKBEHAVIOR_VARIABLEINPUTS |
                                                  CKBEHAVIOR_VARIABLEOUTPUTS |
-                                                 CKBEHAVIOR_VARIABLEPARAMETERINPUTS |
-                                                 CKBEHAVIOR_VARIABLEPARAMETEROUTPUTS |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS |
                                                  CKBEHAVIOR_INTERNALLYCREATEDLOCALPARAMS));
     proto->SetBehaviorCallbackFct(AngelScriptRunnerCallBack);
 
@@ -62,10 +63,9 @@ CKERROR CreateAngelScriptRunnerProto(CKBehaviorPrototype **pproto) {
 
 int AngelScriptRunner(const CKBehaviorContext &behcontext) {
     CKBehavior *beh = behcontext.Behavior;
-	CKContext *context = behcontext.Context;
 
 	int ret = CKBR_OK;
-	bool success = true;
+	bool success = false;
 
 	ScriptRunner *runner = nullptr;
 	beh->GetLocalParameterValue(0, &runner);
@@ -76,19 +76,17 @@ int AngelScriptRunner(const CKBehaviorContext &behcontext) {
 
 	    asIScriptFunction *func = nullptr;
 	    beh->GetLocalParameterValue(1, &func);
-	    if (func) {
-		    if (func->GetParamCount() > 0) {
-			    success = runner->ExecuteScript(
-				    func,
-				    [behcontext](asIScriptContext *ctx) {
-					    ctx->SetArgObject(0, (void *) &behcontext);
-				    },
-				    [&ret](asIScriptContext *ctx) {
-					    ret = static_cast<int>(ctx->GetReturnDWord());
-				    });
-		    } else {
-			    success = runner->ExecuteScript(func);
-		    }
+	    if (func && func->GetParamCount() > 0) {
+		    success = runner->ExecuteScript(
+			    func,
+			    [behcontext](asIScriptContext *ctx) {
+				    ctx->SetArgObject(0, (void *) &behcontext);
+			    },
+			    [&ret](asIScriptContext *ctx) {
+				    ret = static_cast<int>(ctx->GetReturnDWord());
+			    });
+	    } else {
+		    success = runner->ExecuteScript(func);
 	    }
     }
 
@@ -97,8 +95,13 @@ int AngelScriptRunner(const CKBehaviorContext &behcontext) {
 	if (success) {
 		beh->ActivateOutput(0);
 	} else {
-		context->OutputToConsole(const_cast<CKSTRING>(runner->GetErrorMessage().c_str()));
-		context->OutputToConsole(const_cast<CKSTRING>(runner->GetStackTrace().c_str()));
+		CKBOOL outputError = FALSE;
+		beh->GetLocalParameterValue(2, &outputError);
+		if (outputError) {
+			beh->SetOutputParameterValue(0, runner->GetErrorMessage().c_str());
+			beh->SetOutputParameterValue(1, runner->GetStackTrace().c_str());
+		}
+
 		beh->ActivateOutput(1);
 	}
 
@@ -146,6 +149,22 @@ CKERROR AngelScriptRunnerCallBack(const CKBehaviorContext &behcontext) {
 			runner->Detach(beh, true);
 		}
 	}
+	break;
+		case CKM_BEHAVIORSETTINGSEDITED: {
+			CKBOOL outputError = FALSE;
+			beh->GetLocalParameterValue(2, &outputError);
+			if (beh->GetOutputParameterCount() == 2) {
+				if (!outputError) {
+					CKDestroyObject(beh->RemoveOutputParameter(0));
+					CKDestroyObject(beh->RemoveOutputParameter(0));
+				}
+			} else {
+				if (outputError) {
+					beh->CreateOutputParameter("Error", CKPGUID_STRING);
+					beh->CreateOutputParameter("StackTrace", CKPGUID_STRING);
+				}
+			}
+		}
 	break;
 	case CKM_BEHAVIORRESET: {
 		runner = nullptr;
