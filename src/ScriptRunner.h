@@ -32,8 +32,8 @@ public:
     bool SetScript(const char *scriptName);
     void ResetScript();
 
-    asIScriptFunction *GetFunctionByName(const char *name);
-    asIScriptFunction *GetFunctionByDecl(const char *decl);
+    asIScriptFunction *GetFunctionByName(const char *name) const;
+    asIScriptFunction *GetFunctionByDecl(const char *decl) const;
 
     bool ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
 

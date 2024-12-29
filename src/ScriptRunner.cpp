@@ -68,7 +68,7 @@ void ScriptRunner::Detach(CKBehavior *behavior, bool runner) {
     m_Attached = false;
 }
 
-asIScriptContext* ScriptRunner::GetContext() const {
+asIScriptContext *ScriptRunner::GetContext() const {
     return m_Context;
 }
 
@@ -105,7 +105,7 @@ void ScriptRunner::ResetScript() {
     }
 }
 
-asIScriptFunction *ScriptRunner::GetFunctionByName(const char *name) {
+asIScriptFunction *ScriptRunner::GetFunctionByName(const char *name) const {
     if (!m_CachedScript) {
         return nullptr;
     }
@@ -118,7 +118,7 @@ asIScriptFunction *ScriptRunner::GetFunctionByName(const char *name) {
     return func;
 }
 
-asIScriptFunction *ScriptRunner::GetFunctionByDecl(const char *decl) {
+asIScriptFunction *ScriptRunner::GetFunctionByDecl(const char *decl) const {
     if (!m_CachedScript) {
         return nullptr;
     }
