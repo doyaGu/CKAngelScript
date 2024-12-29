@@ -92,7 +92,7 @@ static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context)", asMETHODPR(T, PrepareDependencies, (CKDependenciesContext &), CKERROR), asCALL_THISCALL); assert(r >= 0);
 #else
-    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context, bool caller = true)", asMETHODPR(T, PrepareDependencies, (CKDependenciesContext &, CKBOOL), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context, bool caller = true)", asFUNCTIONPR([](T *self, CKDependenciesContext &context, bool caller) -> CKERROR { return self->PrepareDependencies(context, caller); }, (T *, CKDependenciesContext &, bool), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 #endif
     r = engine->RegisterObjectMethod(name, "CKERROR RemapDependencies(CKDependenciesContext &in context)", asMETHODPR(T, RemapDependencies, (CKDependenciesContext &), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asMETHODPR(T, Copy, (CKObject&, CKDependenciesContext &), CKERROR), asCALL_THISCALL); assert(r >= 0);
@@ -1147,7 +1147,7 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     // Execution
     r = engine->RegisterObjectMethod("CKBehavior", "bool IsActive()", asFUNCTIONPR([](CKBehavior *self) -> bool { return self->IsActive(); }, (CKBehavior *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "int Execute(float delta)", asMETHODPR(CKBehavior, Execute, (float), int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehavior", "bool IsParentScriptActiveInScene(CKScene@ scn)", asMETHODPR(CKBehavior, IsParentScriptActiveInScene, (CKScene*), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehavior", "bool IsParentScriptActiveInScene(CKScene@ scn)", asFUNCTIONPR([](CKBehavior *self, CKScene *scn) -> bool { return self->IsParentScriptActiveInScene(scn); }, (CKBehavior *, CKScene *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "int GetShortestDelay(CKBehavior@ beh)", asMETHODPR(CKBehavior, GetShortestDelay, (CKBehavior *), int), asCALL_THISCALL); assert(r >= 0);
 
     // Owner and Parent
@@ -1582,7 +1582,7 @@ void RegisterCKScene(asIScriptEngine *engine) {
 
     // Ambient Light
     r = engine->RegisterObjectMethod("CKScene", "void SetAmbientLight(CKDWORD color)", asMETHODPR(CKScene, SetAmbientLight, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKScene", "uint GetAmbientLight()", asMETHODPR(CKScene, GetAmbientLight, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKScene", "CKDWORD GetAmbientLight()", asMETHODPR(CKScene, GetAmbientLight, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
 
     // Fog Access
     r = engine->RegisterObjectMethod("CKScene", "void SetFogMode(VXFOG_MODE mode)", asMETHODPR(CKScene, SetFogMode, (VXFOG_MODE), void), asCALL_THISCALL); assert(r >= 0);
@@ -1611,7 +1611,7 @@ void RegisterCKScene(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKScene", "CKLevel@ GetLevel()", asMETHODPR(CKScene, GetLevel, (), CKLevel*), asCALL_THISCALL); assert(r >= 0);
 
     // Merge functions
-    r = engine->RegisterObjectMethod("CKScene", "CKERROR Merge(CKScene@ mergedScene, CKLevel@ fromLevel = null)", asMETHODPR(CKScene, Merge, (CKScene*, CKLevel*), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKScene", "CKERROR Merge(CKScene@ mergedScene, CKLevel@ fromLevel = null)", asMETHODPR(CKScene, Merge, (CKScene *, CKLevel*), CKERROR), asCALL_THISCALL); assert(r >= 0);
 }
 
 void RegisterCKLevel(asIScriptEngine *engine) {
@@ -1639,16 +1639,16 @@ void RegisterCKLevel(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKLevel", "int GetPlaceCount()", asMETHODPR(CKLevel, GetPlaceCount, (), int), asCALL_THISCALL); assert(r >= 0);
 
     // Scene Management
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR AddScene(CKScene@ scene)", asMETHODPR(CKLevel, AddScene, (CKScene*), CKERROR), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR RemoveScene(CKScene@ scene)", asMETHODPR(CKLevel, RemoveScene, (CKScene*), CKERROR), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKLevel", "CKScene@ RemoveScene(int pos)", asMETHODPR(CKLevel, RemoveScene, (int), CKScene*), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKLevel", "CKScene@ GetScene(int pos)", asMETHODPR(CKLevel, GetScene, (int), CKScene*), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR AddScene(CKScene@ scene)", asMETHODPR(CKLevel, AddScene, (CKScene *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR RemoveScene(CKScene@ scene)", asMETHODPR(CKLevel, RemoveScene, (CKScene *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKLevel", "CKScene@ RemoveScene(int pos)", asMETHODPR(CKLevel, RemoveScene, (int), CKScene *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKLevel", "CKScene@ GetScene(int pos)", asMETHODPR(CKLevel, GetScene, (int), CKScene *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKLevel", "int GetSceneCount()", asMETHODPR(CKLevel, GetSceneCount, (), int), asCALL_THISCALL); assert(r >= 0);
 
     // Active Scene
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR SetNextActiveScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)", asMETHODPR(CKLevel, SetNextActiveScene, (CKScene*, CK_SCENEOBJECTACTIVITY_FLAGS, CK_SCENEOBJECTRESET_FLAGS), CKERROR), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR LaunchScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)", asMETHODPR(CKLevel, LaunchScene, (CKScene*, CK_SCENEOBJECTACTIVITY_FLAGS, CK_SCENEOBJECTRESET_FLAGS), CKERROR), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKLevel", "CKScene@ GetCurrentScene()", asMETHODPR(CKLevel, GetCurrentScene, (), CKScene*), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR SetNextActiveScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)", asMETHODPR(CKLevel, SetNextActiveScene, (CKScene *, CK_SCENEOBJECTACTIVITY_FLAGS, CK_SCENEOBJECTRESET_FLAGS), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR LaunchScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)", asMETHODPR(CKLevel, LaunchScene, (CKScene *, CK_SCENEOBJECTACTIVITY_FLAGS, CK_SCENEOBJECTRESET_FLAGS), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKLevel", "CKScene@ GetCurrentScene()", asMETHODPR(CKLevel, GetCurrentScene, (), CKScene *), asCALL_THISCALL); assert(r >= 0);
 
     // Render Context functions
     r = engine->RegisterObjectMethod("CKLevel", "void AddRenderContext(CKRenderContext@ dev, bool main = false)", asFUNCTIONPR([](CKLevel *level, CKRenderContext *dev, bool main) { level->AddRenderContext(dev, main); }, (CKLevel *, CKRenderContext *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -1657,7 +1657,7 @@ void RegisterCKLevel(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKLevel", "CKRenderContext@ GetRenderContext(int count)", asMETHODPR(CKLevel, GetRenderContext, (int), CKRenderContext*), asCALL_THISCALL); assert(r >= 0);
 
     // Main Scene for this Level
-    r = engine->RegisterObjectMethod("CKLevel", "CKScene@ GetLevelScene()", asMETHODPR(CKLevel, GetLevelScene, (), CKScene*), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKLevel", "CKScene@ GetLevelScene()", asMETHODPR(CKLevel, GetLevelScene, (), CKScene *), asCALL_THISCALL); assert(r >= 0);
 
     // Merge
     r = engine->RegisterObjectMethod("CKLevel", "CKERROR Merge(CKLevel@ mergedLevel, bool asScene)", asFUNCTIONPR([](CKLevel *level, CKLevel *mergedLevel, bool asScene) { return level->Merge(mergedLevel, asScene); }, (CKLevel *, CKLevel *, bool), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -2013,8 +2013,8 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "NativePointer GetNormalsPtr(NativePointer stride)", asFUNCTIONPR([](T *self, NativePointer stride) { return NativePointer(self->GetNormalsPtr(reinterpret_cast<CKDWORD *>(stride.Get()))); }, (T *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "NativePointer GetPositionsPtr(NativePointer stride)", asFUNCTIONPR([](T *self, NativePointer stride) { return NativePointer(self->GetPositionsPtr(reinterpret_cast<CKDWORD *>(stride.Get()))); }, (T *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "NativePointer GetTextureCoordinatesPtr(NativePointer stride, int channel = -1)", asFUNCTIONPR([](T *self, NativePointer stride, int channel) { return NativePointer(self->GetTextureCoordinatesPtr(reinterpret_cast<CKDWORD *>(stride.Get()), channel)); }, (T *, NativePointer, int), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "uint32 GetVertexColor(int index) const", asMETHODPR(T, GetVertexColor, (int), CKDWORD), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "uint32 GetVertexSpecularColor(int index) const", asMETHODPR(T, GetVertexSpecularColor, (int), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "CKDWORD GetVertexColor(int index) const", asMETHODPR(T, GetVertexColor, (int), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "CKDWORD GetVertexSpecularColor(int index) const", asMETHODPR(T, GetVertexSpecularColor, (int), CKDWORD), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void GetVertexNormal(int index, VxVector &out vector)", asMETHODPR(T, GetVertexNormal, (int, VxVector *), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void GetVertexPosition(int index, VxVector &out vector)", asMETHODPR(T, GetVertexPosition, (int, VxVector *), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void GetVertexTextureCoordinates(int index, float &out u, float &out v, int channel = -1)", asMETHODPR(T, GetVertexTextureCoordinates, (int, float *, float *, int), void), asCALL_THISCALL); assert(r >= 0);
@@ -2379,8 +2379,8 @@ void RegisterCKWaveSound(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKWaveSound", "void Stop(float fadeOut = 0)", asMETHODPR(CKWaveSound, Stop, (float), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKWaveSound", "void Pause()", asMETHODPR(CKWaveSound, Pause, (), void), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKWaveSound", "CKBOOL IsPlaying()", asMETHODPR(CKWaveSound, IsPlaying, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKWaveSound", "CKBOOL IsPaused()", asMETHODPR(CKWaveSound, IsPaused, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKWaveSound", "bool IsPlaying()", asFUNCTIONPR([](CKWaveSound *self) -> bool { return self->IsPlaying(); }, (CKWaveSound *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKWaveSound", "bool IsPaused()", asFUNCTIONPR([](CKWaveSound *self) -> bool { return self->IsPaused(); }, (CKWaveSound *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKWaveSound", "void SetGain(float gain)", asMETHODPR(CKWaveSound, SetGain, (float), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKWaveSound", "float GetGain()", asMETHODPR(CKWaveSound, GetGain, (), float), asCALL_THISCALL); assert(r >= 0);
@@ -2462,8 +2462,8 @@ void RegisterCKMidiSound(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMidiSound", "CKERROR Stop()", asMETHODPR(CKMidiSound, Stop, (), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKMidiSound", "CKERROR Pause(bool pause = true)", asFUNCTIONPR([](CKMidiSound *obj, bool pause) { return obj->Pause(pause); }, (CKMidiSound *, bool), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKMidiSound", "CKBOOL IsPlaying()", asMETHODPR(CKMidiSound, IsPlaying, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKMidiSound", "CKBOOL IsPaused()", asMETHODPR(CKMidiSound, IsPaused, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKMidiSound", "bool IsPlaying()", asFUNCTIONPR([](CKMidiSound *self) -> bool { return self->IsPlaying(); }, (CKMidiSound *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKMidiSound", "bool IsPaused()", asFUNCTIONPR([](CKMidiSound *self) -> bool { return self->IsPaused(); }, (CKMidiSound *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // Not existing in Virtools 2.1
     // r = engine->RegisterObjectMethod("CKMidiSound", "CKERROR OpenFile()", asMETHODPR(CKMidiSound, OpenFile, (), CKERROR), asCALL_THISCALL); assert(r >= 0);
@@ -2605,9 +2605,9 @@ void RegisterCK2dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void SetClipToParent(bool clip = true)", asFUNCTIONPR([](T *self, bool clip) { self->SetClipToParent(clip); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "bool IsClipToParent()", asFUNCTIONPR([](T *self) -> bool { return self->IsClipToParent(); }, (T *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod(name, "void SetFlags(uint flags)", asMETHODPR(T, SetFlags, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "void ModifyFlags(uint add, uint remove = 0)", asMETHODPR(T, ModifyFlags, (CKDWORD, CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "uint GetFlags()", asMETHODPR(T, GetFlags, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "void SetFlags(CKDWORD flags)", asMETHODPR(T, SetFlags, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "void ModifyFlags(CKDWORD add, CKDWORD remove = 0)", asMETHODPR(T, ModifyFlags, (CKDWORD, CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "CKDWORD GetFlags()", asMETHODPR(T, GetFlags, (), CKDWORD), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod(name, "void EnableRatioOffset(bool ratio = true)", asFUNCTIONPR([](T *self, bool ratio) { self->EnableRatioOffset(ratio); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "bool IsRatioOffset()", asFUNCTIONPR([](T *self) -> bool { return self->IsRatioOffset(); }, (T *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -2632,8 +2632,8 @@ void RegisterCK2dEntityMembers(asIScriptEngine *engine, const char *name) {
 
     r = engine->RegisterObjectMethod(name, "int Draw(CKRenderContext@ context)", asMETHODPR(T, Draw, (CKRenderContext*), CKERROR), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod(name, "void GetExtents(VxRect &out srcrect, VxRect &out rect)", asMETHODPR(T, GetExtents, (VxRect&, VxRect&), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "void SetExtents(const VxRect &in srcrect, const VxRect &in rect)", asMETHODPR(T, SetExtents, (const VxRect&, const VxRect&), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "void GetExtents(VxRect &out srcRect, VxRect &out rect)", asMETHODPR(T, GetExtents, (VxRect&, VxRect&), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "void SetExtents(const VxRect &in srcRect, const VxRect &in rect)", asMETHODPR(T, SetExtents, (const VxRect&, const VxRect&), void), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod(name, "void RestoreInitialSize()", asMETHODPR(T, RestoreInitialSize, (), void), asCALL_THISCALL); assert(r >= 0);
 
@@ -2772,8 +2772,8 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "bool CheckIfSameKindOfHierarchy(CK3dEntity@ mov, bool sameOrder = false) const", asFUNCTIONPR([](T *self, CK3dEntity *mov, bool sameOrder) -> bool { return self->CheckIfSameKindOfHierarchy(mov, sameOrder); }, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "CK3dEntity@ HierarchyParser(CK3dEntity@ current) const", asMETHODPR(T, HierarchyParser, (CK3dEntity *) const, CK3dEntity *), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod(name, "uint GetFlags() const", asMETHODPR(T, GetFlags, () const, CKDWORD), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "void SetFlags(uint flags)", asMETHODPR(T, SetFlags, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "CKDWORD GetFlags() const", asMETHODPR(T, GetFlags, () const, CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "void SetFlags(CKDWORD flags)", asMETHODPR(T, SetFlags, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod(name, "void SetPickable(bool pick = true)", asFUNCTIONPR([](T *self, bool pick) { self->SetPickable(pick); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "bool IsPickable() const", asFUNCTIONPR([](const T *self) -> bool { return self->IsPickable(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -2792,10 +2792,10 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
 
     r = engine->RegisterObjectMethod(name, "void SetRenderAsTransparent(bool trans = true)", asFUNCTIONPR([](T *self, bool trans) { self->SetRenderAsTransparent(trans); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod(name, "uint GetMoveableFlags() const", asMETHODPR(T, GetMoveableFlags, () const, CKDWORD), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(name, "void SetMoveableFlags(uint flags)", asMETHODPR(T, SetMoveableFlags, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "CKDWORD GetMoveableFlags() const", asMETHODPR(T, GetMoveableFlags, () const, CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "void SetMoveableFlags(CKDWORD flags)", asMETHODPR(T, SetMoveableFlags, (CKDWORD), void), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod(name, "uint ModifyMoveableFlags(uint add, uint remove)", asMETHODPR(T, ModifyMoveableFlags, (CKDWORD, CKDWORD), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "CKDWORD ModifyMoveableFlags(CKDWORD add, CKDWORD remove)", asMETHODPR(T, ModifyMoveableFlags, (CKDWORD, CKDWORD), CKDWORD), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod(name, "CKMesh@ GetCurrentMesh() const", asMETHODPR(T, GetCurrentMesh, () const, CKMesh*), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "CKMesh@ SetCurrentMesh(CKMesh@ m, bool addIfNotHere = true)", asFUNCTIONPR([](T *self, CKMesh *m, bool addIfNotHere) -> CKMesh* { return self->SetCurrentMesh(m, addIfNotHere); }, (T *, CKMesh *, bool), CKMesh *), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -3093,7 +3093,7 @@ void RegisterCKCharacter(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKCharacter", "CKAnimation@ GetActiveAnimation()", asMETHODPR(CKCharacter, GetActiveAnimation, (), CKAnimation *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKCharacter", "CKAnimation@ GetNextActiveAnimation()", asMETHODPR(CKCharacter, GetNextActiveAnimation, (), CKAnimation *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKCharacter", "CKERROR SetActiveAnimation(CKAnimation@ anim)", asMETHODPR(CKCharacter, SetActiveAnimation, (CKAnimation *), CKERROR), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR SetNextActiveAnimation(CKAnimation@ anim, uint transitionMode, float warpLength = 0.0)", asMETHODPR(CKCharacter, SetNextActiveAnimation, (CKAnimation *, CKDWORD, float), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR SetNextActiveAnimation(CKAnimation@ anim, CKDWORD transitionMode, float warpLength = 0.0)", asMETHODPR(CKCharacter, SetNextActiveAnimation, (CKAnimation *, CKDWORD, float), CKERROR), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKCharacter", "void ProcessAnimation(float delta = 1.0)", asMETHODPR(CKCharacter, ProcessAnimation, (float), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKCharacter", "void SetAutomaticProcess(bool process = true)", asFUNCTIONPR([](CKCharacter *self, bool process) { self->SetAutomaticProcess(process); }, (CKCharacter *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -3111,7 +3111,7 @@ void RegisterCKCharacter(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKCharacter", "void SetFloorReferenceObject(CK3dEntity@ floorRef)", asMETHODPR(CKCharacter, SetFloorReferenceObject, (CK3dEntity *), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKCharacter", "void SetAnimationLevelOfDetail(float lod)", asMETHODPR(CKCharacter, SetAnimationLevelOfDetail, (float), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKCharacter", "float GetAnimationLevelOfDetail()", asMETHODPR(CKCharacter, GetAnimationLevelOfDetail, (), float), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKCharacter", "void GetWarperParameters(uint &out transitionMode, CKAnimation@ &out animSrc, float &out frameSrc, CKAnimation@ &out animDest, float &out frameDest)", asMETHODPR(CKCharacter, GetWarperParameters, (CKDWORD *, CKAnimation **, float *, CKAnimation **, float *), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKCharacter", "void GetWarperParameters(CKDWORD &out transitionMode, CKAnimation@ &out animSrc, float &out frameSrc, CKAnimation@ &out animDest, float &out frameDest)", asMETHODPR(CKCharacter, GetWarperParameters, (CKDWORD *, CKAnimation **, float *, CKAnimation **, float *), void), asCALL_THISCALL); assert(r >= 0);
 }
 
 template<typename T>
