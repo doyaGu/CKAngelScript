@@ -73,12 +73,7 @@ D *CKObjectDowncast(B *base) {
     if (!base)
         return nullptr;
 
-    D *derived = D::Cast(base);
-    if (!derived) {
-        asGetActiveContext()->SetException("Downcast failed");
-    }
-
-    return derived;
+    return D::Cast(base);
 }
 
 template <typename D, typename B>
