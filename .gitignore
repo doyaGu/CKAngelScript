@@ -12,5 +12,6 @@ _deps
 CMakeUserPresets.json
 .idea/
 build/
+build-*/
 cmake-*/
 deps/angelscript
