@@ -35,6 +35,8 @@ public:
     virtual const char *GetSectionFilename(int index) const = 0;
     virtual const char *GetSectionCode(int index) const = 0;
 
+    virtual void ClearCodeCache() = 0;
+
     virtual bool LoadFromChunk(CKStateChunk *chunk) = 0;
     virtual bool SaveToChunk(CKStateChunk *chunk) = 0;
 
@@ -68,6 +70,8 @@ public:
     // Class variable (property) metadata
     virtual int GetClassVarMetadataCount(int typeId, int varIdx) const = 0;
     virtual const char *GetClassVarMetadata(int typeId, int varIdx, int metaIndex) const = 0;
+
+    virtual void ClearMetadata() = 0;
 };
 
 struct ScriptMetadata {
@@ -130,6 +134,8 @@ struct CachedScript : ICachedScript {
     const char *GetSectionFilename(int index) const override;
     const char *GetSectionCode(int index) const override;
 
+    void ClearCodeCache() override;
+
     bool AddSection(const std::string &name, const std::string &code = "");
 
     bool LoadFromChunk(CKStateChunk *chunk) override;
@@ -151,6 +157,8 @@ struct CachedScript : ICachedScript {
 
     int GetClassVarMetadataCount(int typeId, int varIdx) const override;
     const char *GetClassVarMetadata(int typeId, int varIdx, int metaIndex) const override;
+
+    void ClearMetadata() override;
 };
 
 class ScriptCache {

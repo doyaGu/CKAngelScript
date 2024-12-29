@@ -275,7 +275,7 @@ bool CachedScript::Discard() {
     if (module) {
         module->Discard();
         module = nullptr;
-        metadata.Clear();
+        ClearMetadata();
         return true;
     }
     return false;
@@ -299,6 +299,12 @@ const char *CachedScript::GetSectionCode(int index) const {
     if (index < 0 || index >= (int) sections.size())
         return nullptr;
     return std::get<1>(sections[index]).c_str();
+}
+
+void CachedScript::ClearCodeCache() {
+    for (auto &section: sections) {
+        std::get<1>(section).clear();
+    }
 }
 
 bool CachedScript::AddSection(const std::string &name, const std::string &code) {
@@ -493,6 +499,10 @@ const char *CachedScript::GetClassVarMetadata(int typeId, int varIdx, int metaIn
         return nullptr;
 
     return vec[metaIndex].c_str();
+}
+
+void CachedScript::ClearMetadata() {
+    metadata.Clear();
 }
 
 ScriptCache::ScriptCache() = default;

@@ -49,6 +49,7 @@ CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto) {
 
     proto->DeclareSetting("Use File List", CKPGUID_BOOL, "FALSE");
     proto->DeclareSetting("Filename As Code", CKPGUID_BOOL, "FALSE");
+    proto->DeclareSetting("No Script Cache", CKPGUID_BOOL, "FALSE");
 
     proto->SetFlags(CK_BEHAVIORPROTOTYPE_NORMAL);
     proto->SetFunction(AngelScriptLoader);
@@ -67,6 +68,7 @@ CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto) {
 
 #define USE_FILE_LIST 3
 #define FILENAME_AS_CODE 4
+#define NO_SCRIPT_CACHE 5
 
 static bool TriggerCallback(ScriptRunner *runner, const char *name, const CKBehaviorContext &behcontext) {
     if (!runner || !runner->IsAttached())
@@ -372,14 +374,18 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
                 beh->SetLocalParameterValue(0, &runner);
             }
 
-            const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
-            if (!scriptName.empty()) {
-                auto script = cache.NewCachedScript(scriptName);
-                if (!script->module) {
-                    CKStateChunk *chunk = nullptr;
-                    beh->GetLocalParameterValue(1, &chunk);
-                    if (chunk) {
-                        script->LoadFromChunk(chunk);
+            CKBOOL noScriptCache = FALSE;
+            beh->GetLocalParameterValue(NO_SCRIPT_CACHE, &noScriptCache);
+            if (!noScriptCache) {
+                const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
+                if (!scriptName.empty()) {
+                    auto script = cache.NewCachedScript(scriptName);
+                    if (!script->module) {
+                        CKStateChunk *chunk = nullptr;
+                        beh->GetLocalParameterValue(1, &chunk);
+                        if (chunk) {
+                            script->LoadFromChunk(chunk);
+                        }
                     }
                 }
             }
@@ -408,15 +414,19 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
         }
         break;
         case CKM_BEHAVIORPRESAVE: {
-            const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
-            if (!scriptName.empty()) {
-                auto script = cache.GetCachedScript(scriptName);
-                if (script) {
-                    ReadScriptData(beh, script);
-                    CKStateChunk *chunk = nullptr;
-                    beh->GetLocalParameterValue(1, &chunk);
-                    if (chunk) {
-                        script->SaveToChunk(chunk);
+            CKBOOL noScriptCache = FALSE;
+            beh->GetLocalParameterValue(NO_SCRIPT_CACHE, &noScriptCache);
+            if (!noScriptCache) {
+                const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
+                if (!scriptName.empty()) {
+                    auto script = cache.GetCachedScript(scriptName);
+                    if (script) {
+                        ReadScriptData(beh, script);
+                        CKStateChunk *chunk = nullptr;
+                        beh->GetLocalParameterValue(1, &chunk);
+                        if (chunk) {
+                            script->SaveToChunk(chunk);
+                        }
                     }
                 }
             }
@@ -439,6 +449,24 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
                     pin->SetGUID(CKPGUID_STRING, TRUE, "Code");
                 } else {
                     pin->SetGUID(CKPGUID_STRING, TRUE, "Filename");
+                }
+            }
+
+            CKBOOL noScriptCache = FALSE;
+            beh->GetLocalParameterValue(NO_SCRIPT_CACHE, &noScriptCache);
+            if (noScriptCache) {
+                const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
+                if (!scriptName.empty()) {
+                    auto script = cache.GetCachedScript(scriptName);
+                    if (script) {
+                        script->ClearCodeCache();
+                    }
+                }
+
+                CKStateChunk *chunk = nullptr;
+                beh->GetLocalParameterValue(1, &chunk);
+                if (chunk) {
+                    chunk->Clear();
                 }
             }
         }
