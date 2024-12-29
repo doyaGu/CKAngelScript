@@ -1,5 +1,7 @@
 #include "ScriptCKObjects.h"
 
+#include <type_traits>
+
 #include "CKAll.h"
 
 #include "ScriptManager.h"
@@ -7,6 +9,49 @@
 #include "ScriptNativePointer.h"
 
 #undef GetObject
+
+template<typename B, typename D>
+B *CKObjectUpcast(D *derived) {
+    static_assert(std::is_base_of_v<CKObject, B> == true);
+    static_assert(std::is_base_of_v<CKObject, D> == true);
+
+    if (!derived)
+        return nullptr;
+
+    return (D *) derived;
+}
+
+template<typename B, typename D>
+D *CKObjectDowncast(B *base) {
+    static_assert(std::is_base_of_v<CKObject, B> == true);
+    static_assert(std::is_base_of_v<CKObject, D> == true);
+
+    if (!base)
+        return nullptr;
+
+    return D::Cast(base);
+}
+
+template <typename D, typename B>
+static void RegisterCKObjectCast(asIScriptEngine *engine, const char *derived, const char *base) {
+    int r = 0;
+
+    std::string decl = derived;
+    decl.append("@ opCast()");
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CKObjectDowncast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+
+    decl = base;
+    decl.append("@ opImplCast()");
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKObjectUpcast<B, D>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+
+    decl = "const ";
+    decl.append(derived).append("@ opCast() const");
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CKObjectDowncast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+
+    decl = "const ";
+    decl.append(base).append("@ opImplCast() const");
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKObjectUpcast<B, D>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+}
 
 template <typename T>
 static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
