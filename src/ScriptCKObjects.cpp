@@ -2235,6 +2235,122 @@ void RegisterCKPatchMesh(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKPatchMesh", "VxUV &GetTVs(int channel = -1)", asMETHODPR(CKPatchMesh, GetTVs, (int), VxUV*), asCALL_THISCALL); assert(r >= 0);
 }
 
+static void CKDataArrayGetElementValueGeneric(asIScriptGeneric *gen) {
+    asIScriptEngine *engine = gen->GetEngine();
+    asIScriptContext *ctx = asGetActiveContext();
+
+    auto *self = static_cast<CKDataArray *>(gen->GetObject());
+    int i = gen->GetArgDWord(0);
+    int c = gen->GetArgDWord(1);
+    const int typeId = gen->GetArgTypeId(2);
+    void *buf = *static_cast<void **>(gen->GetAddressOfArg(2));
+
+    CKERROR err = CK_OK;
+
+    if (typeId & asTYPEID_SCRIPTOBJECT) {
+        ctx->SetException("Cannot read script objects from buffer");
+        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+        return;
+    }
+
+    if (typeId & asTYPEID_APPOBJECT) {
+        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        if (!type) {
+            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+            return;
+        }
+
+        if (typeId & asTYPEID_OBJHANDLE) {
+            ctx->SetException("Cannot read object handle from buffer");
+            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+            return;
+        }
+
+        if (strcmp(type->GetName(), "string") == 0) {
+            std::string &str = *static_cast<std::string *>(buf);
+            CKSTRING value = (CKSTRING) self->GetElement(i, c);
+            if (value)
+                str = value;
+            else
+                err = CKERR_INVALIDPARAMETER;
+        } else {
+            int size = engine->GetSizeOfPrimitiveType(typeId);
+            if (size == 0) {
+                if (type->GetFlags() & asOBJ_POD) {
+                    err = self->GetElementValue(i, c, buf);
+                } else {
+                    ctx->SetException("Cannot read non-POD objects from buffer");
+                    gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+                    return;
+                }
+            }
+        }
+    } else {
+        int size = engine->GetSizeOfPrimitiveType(typeId);
+        if (size != 0) {
+            err = self->GetElementValue(i, c, buf);
+        }
+    }
+
+    gen->SetReturnDWord(err);
+}
+
+static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
+    asIScriptEngine *engine = gen->GetEngine();
+    asIScriptContext *ctx = asGetActiveContext();
+
+    auto *self = static_cast<CKDataArray *>(gen->GetObject());
+    int i = gen->GetArgDWord(0);
+    int c = gen->GetArgDWord(1);
+    const int typeId = gen->GetArgTypeId(2);
+    void *buf = *static_cast<void **>(gen->GetAddressOfArg(2));
+
+    CKERROR err = CK_OK;
+
+    if (typeId & asTYPEID_SCRIPTOBJECT) {
+        ctx->SetException("Cannot write script objects to buffer");
+        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+        return;
+    }
+
+    if (typeId & asTYPEID_APPOBJECT) {
+        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        if (!type) {
+            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+            return;
+        }
+
+        if (typeId & asTYPEID_OBJHANDLE) {
+            ctx->SetException("Cannot write object handle to buffer");
+            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+            return;
+        }
+
+        if (strcmp(type->GetName(), "string") == 0) {
+            std::string &str = *static_cast<std::string *>(buf);
+            err = self->SetElementStringValue(i, c, str.data());
+        } else {
+            int size = engine->GetSizeOfPrimitiveType(typeId);
+            if (size == 0) {
+                if (type->GetFlags() & asOBJ_POD) {
+                    err = self->SetElementValue(i, c, buf);
+                } else {
+                    ctx->SetException("Cannot write non-POD objects to buffer");
+                    gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+                    return;
+                }
+            }
+        }
+    } else {
+        int size = engine->GetSizeOfPrimitiveType(typeId);
+        if (size != 0) {
+            err = self->SetElementValue(i, c, buf);
+        }
+    }
+
+    gen->SetReturnDWord(err);
+}
+
 void RegisterCKDataArray(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -2243,12 +2359,12 @@ void RegisterCKDataArray(asIScriptEngine *engine) {
     RegisterCKBeObjectMembers<CKDataArray>(engine, "CKDataArray");
 
     // Column/Format Functions
-    r = engine->RegisterObjectMethod("CKDataArray", "void InsertColumn(int cDest, CK_ARRAYTYPE type, const string &in name, CKGUID paramGuid)", asFUNCTIONPR([](CKDataArray *array, int cDest, CK_ARRAYTYPE type, const std::string &name, CKGUID paramGuid) { array->InsertColumn(cDest, type, const_cast<char *>(name.c_str()), paramGuid); }, (CKDataArray *, int, CK_ARRAYTYPE, const std::string &, CKGUID), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDataArray", "void InsertColumn(int cDest, CK_ARRAYTYPE type, const string &in name, CKGUID paramGuid = CKGUID(0, 0))", asFUNCTIONPR([](CKDataArray *array, int cDest, CK_ARRAYTYPE type, const std::string &name, CKGUID paramGuid) { array->InsertColumn(cDest, type, const_cast<char *>(name.c_str()), paramGuid); }, (CKDataArray *, int, CK_ARRAYTYPE, const std::string &, CKGUID), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "void MoveColumn(int cSrc, int cDest)", asMETHODPR(CKDataArray, MoveColumn, (int, int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "void RemoveColumn(int c)", asMETHODPR(CKDataArray, RemoveColumn, (int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "void SetColumnName(int c, const string &in name)", asFUNCTIONPR([](CKDataArray *array, int c, const std::string &name) { array->SetColumnName(c, const_cast<char *>(name.c_str())); }, (CKDataArray *, int, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "string GetColumnName(int c)", asFUNCTIONPR([](CKDataArray *self, int c) -> std::string { return ScriptStringify(self->GetColumnName(c)); }, (CKDataArray *, int), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKDataArray", "void SetColumnType(int c, CK_ARRAYTYPE type, CKGUID paramGuid)", asMETHODPR(CKDataArray, SetColumnType, (int, CK_ARRAYTYPE, CKGUID), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDataArray", "void SetColumnType(int c, CK_ARRAYTYPE type, CKGUID paramGuid = CKGUID(0, 0))", asMETHODPR(CKDataArray, SetColumnType, (int, CK_ARRAYTYPE, CKGUID), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "CK_ARRAYTYPE GetColumnType(int c)", asMETHODPR(CKDataArray, GetColumnType, (int), CK_ARRAYTYPE), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "CKGUID GetColumnParameterGuid(int c)", asMETHODPR(CKDataArray, GetColumnParameterGuid, (int), CKGUID), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "int GetKeyColumn()", asMETHODPR(CKDataArray, GetKeyColumn, (), int), asCALL_THISCALL); assert(r >= 0);
@@ -2256,10 +2372,12 @@ void RegisterCKDataArray(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKDataArray", "int GetColumnCount()", asMETHODPR(CKDataArray, GetColumnCount, (), int), asCALL_THISCALL); assert(r >= 0);
 
     // Elements Functions
-    r = engine->RegisterObjectMethod("CKDataArray", "CKDWORD &GetElement(int i, int c)", asMETHODPR(CKDataArray, GetElement, (int, int), CKDWORD*), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKDataArray", "bool GetElementValue(int i, int c, NativePointer value)", asFUNCTIONPR([](CKDataArray *self, int i, int c, NativePointer value) -> bool { return self->GetElementValue(i, c, value.Get()); }, (CKDataArray *, int, int, NativePointer), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDataArray", "NativePointer GetElement(int i, int c)", asFUNCTIONPR([](CKDataArray *self, int i, int c) -> NativePointer { return NativePointer(self->GetElement(i, c)); }, (CKDataArray *, int, int), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKDataArray", "bool GetElementValue(int i, int c, NativePointer value)", asFUNCTIONPR([](CKDataArray *self, int i, int c, NativePointer value) -> bool { return self->GetElementValue(i, c, value.Get()); }, (CKDataArray *, int, int, NativePointer), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDataArray", "bool GetElementValue(int i, int c, ?&out value)", asFUNCTION(CKDataArrayGetElementValueGeneric), asCALL_GENERIC); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "CKObject@ GetElementObject(int i, int c)", asMETHODPR(CKDataArray, GetElementObject, (int, int), CKObject*), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementValue(int i, int c, NativePointer value, int size = 0)", asFUNCTIONPR([](CKDataArray *self, int i, int c, NativePointer value, int size) -> bool { return self->SetElementValue(i, c, value.Get(), size); }, (CKDataArray *, int, int, NativePointer, int), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    // r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementValue(int i, int c, NativePointer value, int size = 0)", asFUNCTIONPR([](CKDataArray *self, int i, int c, NativePointer value, int size) -> bool { return self->SetElementValue(i, c, value.Get(), size); }, (CKDataArray *, int, int, NativePointer, int), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementValue(int i, int c, ?&in value)", asFUNCTION(CKDataArraySetElementValueGeneric), asCALL_GENERIC); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementValueFromParameter(int i, int c, CKParameter@ pout)", asFUNCTIONPR([](CKDataArray *self, int i, int c, CKParameter *pout) -> bool { return self->SetElementValueFromParameter(i, c, pout); }, (CKDataArray *, int, int, CKParameter *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementObject(int i, int c, CKObject@ obj)", asFUNCTIONPR([](CKDataArray *self, int i, int c, CKObject *obj) -> bool { return self->SetElementObject(i, c, obj); }, (CKDataArray *, int, int, CKObject *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
@@ -2278,12 +2396,12 @@ void RegisterCKDataArray(asIScriptEngine *engine) {
 
     // Rows Functions
     r = engine->RegisterObjectMethod("CKDataArray", "int GetRowCount()", asMETHODPR(CKDataArray, GetRowCount, (), int), asCALL_THISCALL); assert(r >= 0);
-    // r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &GetRow(int)", asMETHODPR(CKDataArray, GetRow, (int), CKDataRow*), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &GetRow(int n)", asMETHODPR(CKDataArray, GetRow, (int), CKDataRow *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "void AddRow()", asMETHODPR(CKDataArray, AddRow, (), void), asCALL_THISCALL); assert(r >= 0);
-    // r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &InsertRow(int)", asMETHODPR(CKDataArray, InsertRow, (int), CKDataRow*), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &InsertRow(int n = -1)", asMETHODPR(CKDataArray, InsertRow, (int), CKDataRow *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "bool TestRow(int row, int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0)", asFUNCTIONPR([](CKDataArray *self, int row, int c, CK_COMPOPERATOR op, CKDWORD key, int size) -> bool { return self->TestRow(row, c, op, key, size); }, (CKDataArray *, int, int, CK_COMPOPERATOR, CKDWORD, int), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "int FindRowIndex(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startingIndex = 0)", asMETHODPR(CKDataArray, FindRowIndex, (int, CK_COMPOPERATOR, CKDWORD, int, int), int), asCALL_THISCALL); assert(r >= 0);
-    // r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &FindRow(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startIndex = 0)", asMETHODPR(CKDataArray, FindRow, (int, CK_COMPOPERATOR, CKDWORD, int, int), CKDataRow *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &FindRow(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startIndex = 0)", asMETHODPR(CKDataArray, FindRow, (int, CK_COMPOPERATOR, CKDWORD, int, int), CKDataRow *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "void RemoveRow(int row)", asMETHODPR(CKDataArray, RemoveRow, (int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "void MoveRow(int rSrc, int rDest)", asMETHODPR(CKDataArray, MoveRow, (int, int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKDataArray", "void SwapRows(int i1, int i2)", asMETHODPR(CKDataArray, SwapRows, (int, int), void), asCALL_THISCALL); assert(r >= 0);
