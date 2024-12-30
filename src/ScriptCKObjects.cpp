@@ -747,7 +747,7 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKRenderContext", "CKRenderObject@ Pick(int x, int y, CKPICKRESULT &out res, bool ignoreUnpickable = false)", asFUNCTIONPR([](CKRenderContext *self, int x, int y, CKPICKRESULT *res, bool ignoreUnpickable) { return self->Pick(x, y, res, ignoreUnpickable); }, (CKRenderContext *, int, int, CKPICKRESULT *, bool), CKRenderObject *), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKRenderContext", "CKRenderObject@ Pick(CKPOINT pt, CKPICKRESULT &out res, bool ignoreUnpickable = false)", asFUNCTIONPR([](CKRenderContext *self, CKPOINT pt, CKPICKRESULT *res, bool ignoreUnpickable) { return self->Pick(pt, res, ignoreUnpickable); }, (CKRenderContext *, CKPOINT, CKPICKRESULT *, bool), CKRenderObject *), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 #else
-
+    r = engine->RegisterObjectMethod("CKRenderContext", "CKRenderObject@ Pick(int x, int y, VxIntersectionDesc &out res, bool ignoreUnpickable = false)", asFUNCTIONPR([](CKRenderContext *self, int x, int y, VxIntersectionDesc *res, bool ignoreUnpickable) { return self->Pick(x, y, res, ignoreUnpickable); }, (CKRenderContext *, int, int, VxIntersectionDesc *, bool), CKRenderObject *), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 #endif
 
     r = engine->RegisterObjectMethod("CKRenderContext", "CKERROR RectPick(const VxRect &in rect, XObjectPointerArray &out objects, bool intersect = true)", asFUNCTIONPR([](CKRenderContext *self, const VxRect &rect, XObjectPointerArray &objects, bool intersect) { return self->RectPick(rect, objects, intersect); }, (CKRenderContext *, const VxRect &, XObjectPointerArray &, bool), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);

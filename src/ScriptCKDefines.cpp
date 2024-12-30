@@ -1186,7 +1186,7 @@ void RegisterCKBitmapProperties(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKBitmapProperties", "VxImageDescEx m_Format", asOFFSET(CKBitmapProperties, m_Format)); assert(r >= 0);
     // r = engine->RegisterObjectProperty("CKBitmapProperties", "uintptr_t m_Data", asOFFSET(CKBitmapProperties, m_Data)); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapProperties", "NativePointer get_m_Data() const", asFUNCTIONPR([](const CKBitmapProperties *self) -> NativePointer { return NativePointer(self->m_Data); }, (const CKBitmapProperties *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapProperties", "NativePointer get_m_Data() const", asFUNCTIONPR([](const CKBitmapProperties *self) { return NativePointer(self->m_Data); }, (const CKBitmapProperties *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKMovieProperties
@@ -1200,7 +1200,7 @@ void RegisterCKMovieProperties(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKMovieProperties", "VxImageDescEx m_Format", asOFFSET(CKMovieProperties, m_Format)); assert(r >= 0);
     // r = engine->RegisterObjectProperty("CKMovieProperties", "uintptr_t m_Data", asOFFSET(CKMovieProperties, m_Data)); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKMovieProperties", "NativePointer get_m_Data() const", asFUNCTIONPR([](const CKMovieProperties *self) -> NativePointer { return NativePointer(self->m_Data); }, (const CKMovieProperties *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKMovieProperties", "NativePointer get_m_Data() const", asFUNCTIONPR([](const CKMovieProperties *self) { return NativePointer(self->m_Data); }, (const CKMovieProperties *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKDataReader
@@ -1510,7 +1510,7 @@ void RegisterCKPARAMETER_DESC(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "string get_Name() const", asFUNCTIONPR([](const CKPARAMETER_DESC *self) -> std::string { return ScriptStringify(self->Name); }, (const CKPARAMETER_DESC *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "string get_DefaultValueString() const", asFUNCTIONPR([](const CKPARAMETER_DESC *self) -> std::string { return ScriptStringify(self->DefaultValueString); }, (const CKPARAMETER_DESC *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "NativePointer get_DefaultValue() const", asFUNCTIONPR([](const CKPARAMETER_DESC *self) -> NativePointer { return NativePointer(self->DefaultValue); }, (const CKPARAMETER_DESC *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "NativePointer get_DefaultValue() const", asFUNCTIONPR([](const CKPARAMETER_DESC *self) { return NativePointer(self->DefaultValue); }, (const CKPARAMETER_DESC *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 void RegisterCKBEHAVIORIO_DESC(asIScriptEngine *engine) {
@@ -1637,7 +1637,7 @@ void RegisterCKBitmapSlot(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBitmapSlot", "void Resize(VxImageDescEx & src, VxImageDescEx & dest)", asMETHOD(CKBitmapSlot, Resize), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBitmapSlot", "void Flush()", asMETHOD(CKBitmapSlot, Flush), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKBitmapSlot", "NativePointer get_m_DataBuffer() const", asFUNCTIONPR([](const CKBitmapSlot *self) -> NativePointer { return NativePointer(self->m_DataBuffer); }, (const CKBitmapSlot *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBitmapSlot", "NativePointer get_m_DataBuffer() const", asFUNCTIONPR([](const CKBitmapSlot *self) { return NativePointer(self->m_DataBuffer); }, (const CKBitmapSlot *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 // CKMovieInfo
