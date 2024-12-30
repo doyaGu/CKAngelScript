@@ -31,8 +31,6 @@
 
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
     context->RegisterNewManager(this);
-    int r = Init();
-    assert(r >= 0);
 }
 
 ScriptManager::~ScriptManager() {
@@ -48,6 +46,18 @@ CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
 }
 
 CKERROR ScriptManager::PostClearAll() {
+    return CK_OK;
+}
+
+CKERROR ScriptManager::OnCKInit() {
+    int r = Init();
+    if (r < 0)
+        return CKERR_NOTINITIALIZED;
+    return CK_OK;
+}
+
+CKERROR ScriptManager::OnCKEnd() {
+    Shutdown();
     return CK_OK;
 }
 
@@ -70,8 +80,6 @@ CKERROR ScriptManager::OnPostCopy(CKDependenciesContext &context) {
 int ScriptManager::Init() {
     if (IsInited())
         return -2;
-
-    SetupScriptPathCategory();
 
     int r = SetupScriptEngine();
     if (r < 0)

@@ -27,6 +27,9 @@ public:
 
     CKERROR PostClearAll() override;
 
+    CKERROR OnCKInit() override;
+    CKERROR OnCKEnd() override;
+
     CKERROR OnCKReset() override;
     CKERROR OnCKPause() override;
 
@@ -36,6 +39,8 @@ public:
 
     CKDWORD GetValidFunctionsMask() override {
         return CKMANAGER_FUNC_PostClearAll |
+               CKMANAGER_FUNC_OnCKInit |
+               CKMANAGER_FUNC_OnCKEnd |
                CKMANAGER_FUNC_OnCKReset |
                CKMANAGER_FUNC_OnCKPause |
                CKMANAGER_FUNC_PostLoad |
