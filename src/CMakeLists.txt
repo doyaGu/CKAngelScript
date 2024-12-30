@@ -1,3 +1,5 @@
+configure_file(Version.h.in "${CMAKE_CURRENT_SOURCE_DIR}/Version.h")
+
 set(CKAS_HEADERS
         ScriptManager.h
         ScriptCache.h
@@ -43,6 +45,8 @@ set(CKAS_SOURCES
         ScriptCKManagers.cpp
         ScriptCKObjects.cpp
         ScriptCK2.cpp
+
+        AngelScript.rc
 )
 
 add_library(CKAngelScript SHARED ${CKAS_SOURCES} ${CKAS_HEADERS})
