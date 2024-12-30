@@ -54,9 +54,11 @@ CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto) {
     proto->SetFlags(CK_BEHAVIORPROTOTYPE_NORMAL);
     proto->SetFunction(AngelScriptLoader);
 
-    proto->SetBehaviorFlags((CK_BEHAVIOR_FLAGS) (CKBEHAVIOR_TARGETABLE |
-                                                 CKBEHAVIOR_INTERNALLYCREATEDINPUTS |
+    proto->SetBehaviorFlags((CK_BEHAVIOR_FLAGS) (CKBEHAVIOR_INTERNALLYCREATEDINPUTS |
                                                  CKBEHAVIOR_INTERNALLYCREATEDOUTPUTS |
+                                                 CKBEHAVIOR_MESSAGESENDER |
+                                                 CKBEHAVIOR_MESSAGERECEIVER |
+                                                 CKBEHAVIOR_TARGETABLE |
                                                  CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS |
                                                  CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS |
                                                  CKBEHAVIOR_INTERNALLYCREATEDLOCALPARAMS));
