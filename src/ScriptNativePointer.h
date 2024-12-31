@@ -100,31 +100,31 @@ public:
     }
 
     NativePointer operator+(int rhs) const {
-        return NativePointer(m_Ptr + rhs);
+        return {m_Ptr + rhs};
     }
 
     NativePointer operator-(int rhs) const {
-        return NativePointer(m_Ptr - rhs);
+        return {m_Ptr - rhs};
     }
 
     NativePointer operator&(int rhs) const {
-        return NativePointer(reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) & rhs));
+        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) & rhs)};
     }
 
     NativePointer operator|(int rhs) const {
-        return NativePointer(reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) | rhs));
+        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) | rhs)};
     }
 
     NativePointer operator^(int rhs) const {
-        return NativePointer(reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) ^ rhs));
+        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) ^ rhs)};
     }
 
     NativePointer operator<<(int rhs) const {
-        return NativePointer(reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) << rhs));
+        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) << rhs)};
     }
 
     NativePointer operator>>(int rhs) const {
-        return NativePointer(reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) >> rhs));
+        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) >> rhs)};
     }
 
     NativePointer &operator++() {
@@ -150,11 +150,11 @@ public:
     }
 
     NativePointer operator-() const {
-        return NativePointer(reinterpret_cast<uint8_t *>(-reinterpret_cast<intptr_t>(m_Ptr)));
+        return {reinterpret_cast<uint8_t *>(-reinterpret_cast<intptr_t>(m_Ptr))};
     }
 
     NativePointer operator~() const {
-        return NativePointer(reinterpret_cast<uint8_t *>(~reinterpret_cast<intptr_t>(m_Ptr)));
+        return {reinterpret_cast<uint8_t *>(~reinterpret_cast<intptr_t>(m_Ptr))};
     }
 
     NativePointer operator+() const { return *this; }
@@ -165,13 +165,16 @@ public:
 
     char *Get() const { return m_Ptr; }
 
+    template<typename T>
+    T *As() const { return reinterpret_cast<T *>(m_Ptr); }
+
     uintptr_t ToUInt() const { return reinterpret_cast<uintptr_t>(m_Ptr); }
     intptr_t ToInt() const { return reinterpret_cast<intptr_t>(m_Ptr); }
 
     std::string ToString() const;
 
     NativePointer ReadPointer() const {
-        return NativePointer(*reinterpret_cast<char **>(m_Ptr));
+        return {*reinterpret_cast<char **>(m_Ptr)};
     }
 
     void WritePointer(const NativePointer &ptr) {

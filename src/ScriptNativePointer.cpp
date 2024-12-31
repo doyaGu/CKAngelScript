@@ -1,14 +1,12 @@
 #include "ScriptNativePointer.h"
 
 #include <cassert>
-#include <sstream>
+#include <fmt/format.h>
 
 #include <add_on/scriptarray/scriptarray.h>
 
 std::string NativePointer::ToString() const {
-    std::stringstream stream;
-    stream << m_Ptr;
-    return stream.str();
+    return fmt::format("0x{:X}", reinterpret_cast<uintptr_t>(m_Ptr));
 }
 
 size_t NativePointer::Write(void *x, size_t size) {
@@ -44,7 +42,7 @@ size_t NativePointer::ReadString(char *outStr, size_t maxSize) {
     if (!m_Ptr) return 0;
     if (!outStr) return 0;
     if (maxSize == 0) return 0;
-    size_t len = strlen(reinterpret_cast<char *>(m_Ptr));
+    size_t len = strlen(m_Ptr);
     if (len == 0) return 0;
     if (len > maxSize) return 0;
     memcpy(outStr, m_Ptr, len + 1);
@@ -53,9 +51,9 @@ size_t NativePointer::ReadString(char *outStr, size_t maxSize) {
 
 size_t NativePointer::ReadString(std::string &str) {
     if (!m_Ptr) return 0;
-    size_t len = strlen(reinterpret_cast<char *>(m_Ptr));
+    size_t len = strlen(m_Ptr);
     if (len == 0) return 0;
-    str.assign(reinterpret_cast<char *>(m_Ptr), len);
+    str.assign(m_Ptr, len);
     return len + 1;
 }
 
