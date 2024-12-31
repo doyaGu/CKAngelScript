@@ -8,8 +8,6 @@
 #include "VxMath.h"
 #include "CKDefines.h"
 
-#include "add_on/scriptarray/scriptarray.h"
-
 #include "ScriptUtils.h"
 #include "ScriptNativePointer.h"
 #include "ScriptXString.h"
@@ -1632,24 +1630,12 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
 
 // VxBbox
 
-static void VxBboxClassifyVertices(const VxBbox &box, const CScriptArray &iVertices, const CScriptArray &oFlags) {
-    int count = (int) iVertices.GetSize();
-    if(count != 0) {
-        XBYTE *vertices = (XBYTE*) iVertices.At(0);
-        unsigned long stride = sizeof(XBYTE);
-        unsigned long *flags = (unsigned long *) oFlags.At(0);
-        box.ClassifyVertices(count, vertices, stride, flags);
-    }
+static void VxBboxClassifyVertices(const VxBbox &box, int iVcount, NativePointer iVertices, unsigned long iStride, NativePointer oFlags) {
+    box.ClassifyVertices(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, reinterpret_cast<unsigned long *>(oFlags.Get()));
 }
 
-static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, const CScriptArray &iVertices, int iAxis, const CScriptArray &oFlags) {
-    int count = (int) iVertices.GetSize();
-    if(count != 0) {
-        XBYTE *vertices = (XBYTE*) iVertices.At(0);
-        unsigned long stride = sizeof(XBYTE);
-        unsigned long *flags = (unsigned long *) oFlags.At(0);
-        box.ClassifyVerticesOneAxis(count, vertices, stride, iAxis, flags);
-    }
+static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, int iVcount, NativePointer iVertices, unsigned long iStride, int iAxis, NativePointer oFlags) {
+    box.ClassifyVerticesOneAxis(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, iAxis, reinterpret_cast<unsigned long *>(oFlags.Get()));
 }
 
 static void RegisterVxBbox(asIScriptEngine *engine) {
@@ -1691,8 +1677,8 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxBbox", "uint Classify(const VxBbox &in box) const", asMETHODPR(VxBbox, Classify, (const VxBbox &) const, XULONG), asCALL_THISCALL); assert(r >= 0);
 #endif
     r = engine->RegisterObjectMethod("VxBbox", "int Classify(const VxBbox &in box, const VxVector &in point) const", asMETHODPR(VxBbox, Classify, (const VxBbox &, const VxVector &) const, int), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVertices(const array<uint8> &in vertices, const array<uint32> &in flags) const", asFUNCTIONPR(VxBboxClassifyVertices, (const VxBbox &, const CScriptArray &, const CScriptArray &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVerticesOneAxis(const array<uint8> &in vertices, int axis, const array<uint32> &in flags) const", asFUNCTIONPR(VxBboxClassifyVerticesOneAxis, (const VxBbox &, const CScriptArray &, int, const CScriptArray &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVertices(int count, NativePointer vertices, uint stride, NativePointer flags) const", asFUNCTION(VxBboxClassifyVertices), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVerticesOneAxis(int count, NativePointer vertices, uint stride, int axis, NativePointer flags) const", asFUNCTION(VxBboxClassifyVerticesOneAxis), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "void Intersect(const VxBbox &in box)", asMETHODPR(VxBbox, Intersect, (const VxBbox &), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "bool VectorIn(const VxVector &in v) const", asMETHODPR(VxBbox, VectorIn, (const VxVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxBbox", "bool IsBoxInside(const VxBbox &in box) const", asMETHODPR(VxBbox, IsBoxInside, (const VxBbox &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
