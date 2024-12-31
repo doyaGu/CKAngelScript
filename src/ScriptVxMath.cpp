@@ -911,10 +911,10 @@ static void RegisterVxStridedData(asIScriptEngine *engine) {
     int r = 0;
 
 #if CKVERSION == 0x05082002
-    r = engine->RegisterObjectProperty("VxStridedData", "NativePointer Ptr", asOFFSET(VxStridedData, DataPtr)); assert(r >= 0);
+    // r = engine->RegisterObjectProperty("VxStridedData", "NativePointer Ptr", asOFFSET(VxStridedData, DataPtr)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxStridedData", "uint Stride", asOFFSET(VxStridedData, DataStride)); assert(r >= 0);
 #else
-    r = engine->RegisterObjectProperty("VxStridedData", "NativePointer Ptr", asOFFSET(VxStridedData, Ptr)); assert(r >= 0);
+    // r = engine->RegisterObjectProperty("VxStridedData", "NativePointer Ptr", asOFFSET(VxStridedData, Ptr)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxStridedData", "uint Stride", asOFFSET(VxStridedData, Stride)); assert(r >= 0);
 #endif
 
@@ -925,6 +925,12 @@ static void RegisterVxStridedData(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxStridedData", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxStridedData *self) { self->~VxStridedData(); }, (VxStridedData *self), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxStridedData", "VxStridedData &opAssign(const VxStridedData &in other)", asMETHODPR(VxStridedData, operator=, (const VxStridedData &), VxStridedData &), asCALL_THISCALL); assert(r >= 0);
+
+#if CKVERSION == 0x05082002
+    r = engine->RegisterObjectMethod("VxStridedData", "NativePointer get_Ptr() const", asFUNCTIONPR([](const VxStridedData *self) { return NativePointer(self->DataPtr); }, (const VxStridedData *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod("VxStridedData", "NativePointer get_Ptr() const", asFUNCTIONPR([](const VxStridedData *self) { return NativePointer(self->Ptr); }, (const VxStridedData *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#endif
 }
 
 // VxUV
@@ -2477,6 +2483,7 @@ void RegisterVxMath(asIScriptEngine *engine) {
 
     RegisterCKRECT(engine);
     RegisterCKPOINT(engine);
+    RegisterVxStridedData(engine);
     RegisterVxUV(engine);
     RegisterVxDisplayMode(engine);
     RegisterVxDrawPrimitiveData(engine);
