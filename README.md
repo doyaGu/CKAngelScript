@@ -8,6 +8,7 @@ CKAngelScript integrates the AngelScript scripting language into Virtools, provi
 
 - **Full Bindings of the Virtools SDK**: Access and utilize the entire Virtools SDK through AngelScript for seamless integration of custom scripting with Virtools' extensive API.
 - **AngelScript Integration**: Leverage the AngelScript scripting language to achieve greater flexibility and control in your 3D projects.
+- **Foreign Function Interface (FFI)**: Call native C functions directly from AngelScript using FFI, powered by DynCall, enabling seamless interaction with external libraries and APIs.
 - **Building Blocks**:
   - **AngelScript Loader**: Load and unload AngelScript modules dynamically.
   - **AngelScript Runner**: Execute specific functions within AngelScript modules with precision.
@@ -68,13 +69,26 @@ The **AngelScript Runner** executes specific functions within loaded AngelScript
 
 Before you begin, ensure the following:
 
-1. **Virtools 2.1 or higher** is installed on your system.
-2. **Microsoft Visual Studio** (any version compatible with Virtools SDK).
-3. The **AngelScript SDK**, which must be prepared as described below.
+1. **Virtools SDK (2.1 or higher)**: Required to access the APIs and resources for building this project.
+2. **DynCall Library**: Required to enable Foreign Function Interface (FFI).
+3. **AngelScript SDK**: Required to compile the AngelScript integration.
+4. **Microsoft Visual Studio**: This project can only be compiled using Visual Studio.
 
 ---
 
-### Preparing the AngelScript SDK
+### Preparing the Dependencies
+
+#### 1. Preparing Virtools SDK
+
+- Ensure the Virtools SDK is installed and accessible.
+- Use the appropriate path when configuring CMake (see below).
+
+#### 2. Preparing DynCall
+
+- Download the DynCall suite from its [official website](http://www.dyncall.org/).
+- Extract and install the library.
+
+#### 3. Preparing AngelScript SDK
 
 1. Download the AngelScript SDK from its [official website](http://www.angelcode.com/angelscript/).
 2. Extract the downloaded SDK package.
@@ -82,7 +96,7 @@ Before you begin, ensure the following:
 
 ---
 
-### Installation
+### Building with CMake
 
 1. **Clone the Repository**:
    ```bash
@@ -94,8 +108,19 @@ Before you begin, ensure the following:
    git submodule update --init --recursive
    ```
 
-3. **Prepare the AngelScript SDK**:
-   Complete the preparation steps outlined in the "Preparing the AngelScript SDK" section.
+3. **Prepare the Dependencies**:
+   Complete the preparation steps outlined in the "Preparing the Dependencies" section.
+
+4. **Run CMake**:
+   Provide paths to your Virtools SDK, DynCall, and AngelScript SDK, and then run the following command.
+
+   ```bash
+   cmake -B build -G "Visual Studio 16 2022" -A Win32 \
+            -DVIRTOOLS_SDK_PATH=/path/to/virtools/sdk \
+            -DDYNCALL_ROOT=/path/to/dyncall \
+            -DDYNCALLBACK_ROOT=/path/to/dyncall \
+            -DDYNLOAD_ROOT=/path/to/dyncall
+   ```
 
 4. **Build the Project**:
    Open the project in **Microsoft Visual Studio**, configure the build settings to match your Virtools SDK installation, and build the project. The process will generate the following file:
@@ -103,13 +128,16 @@ Before you begin, ensure the following:
    AngelScript.dll
    ```
 
-5. **Integrate with Virtools**:
-   Copy the `AngelScript.dll` file into the `BuildingBlocks` directory of your Virtools installation. For example:
-   ```
-   C:\Program Files\Virtools\BuildingBlocks\
+5. **Build the Project**:
+   ```bash
+   cmake --build .
    ```
 
-6. Launch Virtools. The **AngelScript Loader** and **AngelScript Runner** building blocks will now be available in the Building Blocks palette.
+6. **Integrate with Virtools**:
+   After the build completes, copy the generated `AngelScript.dll` to the `BuildingBlocks` directory of your Virtools installation:
+   ```bash
+   cp AngelScript.dll /path/to/virtools/BuildingBlocks/
+   ```
 
 ---
 
@@ -225,4 +253,5 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 ## Acknowledgments
 
 - **[AngelScript](http://www.angelcode.com/angelscript/)**: The scripting language integrated into this project.
+- **[DynCall](http://www.dyncall.org/)**: The dynamic call library powering FFI.
 - **[Virtools](https://en.wikipedia.org/wiki/Virtools/)**: The 3D engine platform extended by CKAngelScript.
