@@ -8,6 +8,7 @@ set(CKAS_HEADERS
         ScriptFormat.h
         ScriptNativePointer.h
         ScriptNativeBuffer.h
+        ScriptDynCall.h
         ScriptXString.h
         ScriptXArray.h
         ScriptXHashTable.h
@@ -34,6 +35,7 @@ set(CKAS_SOURCES
         ScriptFormat.cpp
         ScriptNativePointer.cpp
         ScriptNativeBuffer.cpp
+        ScriptDynCall.cpp
         ScriptXString.cpp
         ScriptXBitArray.cpp
         ScriptVxMath.cpp
@@ -57,12 +59,18 @@ target_include_directories(CKAngelScript
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
         PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${DYNCALL_INCLUDE_DIR}
+        ${DYNCALLBACK_INCLUDE_DIR}
+        ${DYNLOAD_INCLUDE_DIR}
 )
 
 target_link_libraries(CKAngelScript PRIVATE
         CK2 VxMath
         angelscript angelscript_addon
         fmt::fmt
+        ${DYNCALL_LIBRARY}
+        ${DYNCALLBACK_LIBRARY}
+        ${DYNLOAD_LIBRARY}
 )
 
 if (NOT SKIP_INSTALL_ALL)

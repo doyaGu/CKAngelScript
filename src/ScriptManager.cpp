@@ -8,6 +8,7 @@
 #include "ScriptFormat.h"
 #include "ScriptNativePointer.h"
 #include "ScriptNativeBuffer.h"
+#include "ScriptDynCall.h"
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
 
@@ -386,6 +387,11 @@ int ScriptManager::SetupScriptEngine() {
     // Register the native types
     RegisterNativePointer(m_ScriptEngine);
     RegisterNativeBuffer(m_ScriptEngine);
+
+    // Register the DynCall APIs
+    RegisterScriptDynCall(m_ScriptEngine);
+    RegisterScriptDynCallback(m_ScriptEngine);
+    RegisterScriptDynLoad(m_ScriptEngine);
 
     // Register the function that we want the scripts to call
     RegisterScriptFormat(m_ScriptEngine);

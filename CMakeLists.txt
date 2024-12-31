@@ -44,6 +44,9 @@ add_compile_definitions(
 )
 
 find_package(VirtoolsSDK REQUIRED)
+find_package(DynCall REQUIRED)
+find_package(DynCallback REQUIRED)
+find_package(DynLoad REQUIRED)
 
 add_subdirectory(deps)
 add_subdirectory(src)
