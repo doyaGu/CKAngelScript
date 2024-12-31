@@ -928,8 +928,10 @@ static void RegisterVxStridedData(asIScriptEngine *engine) {
 
 #if CKVERSION == 0x05082002
     r = engine->RegisterObjectMethod("VxStridedData", "NativePointer get_Ptr() const", asFUNCTIONPR([](const VxStridedData *self) { return NativePointer(self->DataPtr); }, (const VxStridedData *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxStridedData", "void set_Ptr(NativePointer ptr)", asFUNCTIONPR([](VxStridedData *self, NativePointer ptr) { self->DataPtr = ptr.Get(); }, (VxStridedData *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 #else
     r = engine->RegisterObjectMethod("VxStridedData", "NativePointer get_Ptr() const", asFUNCTIONPR([](const VxStridedData *self) { return NativePointer(self->Ptr); }, (const VxStridedData *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxStridedData", "void set_Ptr(NativePointer ptr)", asFUNCTIONPR([](VxStridedData *self, NativePointer ptr) { self->Ptr = ptr.Get(); }, (VxStridedData *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 #endif
 }
 
@@ -2466,7 +2468,10 @@ static void RegisterVxImageDescEx(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxImageDescEx", "bool HasAlpha() const", asMETHOD(VxImageDescEx, HasAlpha), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxImageDescEx", "NativePointer get_ColorMap() const", asFUNCTIONPR([](const VxImageDescEx *self) { return NativePointer(self->ColorMap); }, (const VxImageDescEx *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "void set_ColorMap(NativePointer ptr)", asFUNCTIONPR([](VxImageDescEx *self, NativePointer ptr) { self->ColorMap = reinterpret_cast<XBYTE *>(ptr.Get()); }, (VxImageDescEx *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+
     r = engine->RegisterObjectMethod("VxImageDescEx", "NativePointer get_Image() const", asFUNCTIONPR([](const VxImageDescEx *self) { return NativePointer(self->Image); }, (const VxImageDescEx *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "void set_Image(NativePointer ptr)", asFUNCTIONPR([](VxImageDescEx *self, NativePointer ptr) { self->Image = reinterpret_cast<XBYTE *>(ptr.Get()); }, (VxImageDescEx *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 void RegisterVxMath(asIScriptEngine *engine) {

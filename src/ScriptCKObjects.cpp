@@ -515,7 +515,7 @@ static void RegisterCKParameterOperationMembers(asIScriptEngine *engine, const c
     r = engine->RegisterObjectMethod(name, "CKGUID GetOperationGuid()", asMETHODPR(T, GetOperationGuid, (), CKGUID), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void Reconstruct(const string &in name, CKGUID opGuid, CKGUID resGuid, CKGUID p1Guid, CKGUID p2Guid)", asFUNCTIONPR([](T *self, const std::string &name, CKGUID opGuid, CKGUID resGuid, CKGUID p1Guid, CKGUID p2Guid) { self->Reconstruct(const_cast<CKSTRING>(name.c_str()), opGuid, resGuid, p1Guid, p2Guid); }, (T *, const std::string&, CKGUID, CKGUID, CKGUID, CKGUID), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod(name, "uintptr_t GetOperationFunction()", asMETHODPR(T, GetOperationFunction, (), CK_PARAMETEROPERATION), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(name, "NativePointer GetOperationFunction()", asFUNCTIONPR([](T *self) { return NativePointer(self->GetOperationFunction()); }, (T *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     if (strcmp(name, "CKParameterOperation") != 0) {
         RegisterCKObjectCast<T, CKParameterOperation>(engine, name, "CKParameterOperation");
@@ -1136,11 +1136,11 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehavior", "void SetCompatibleClassID(CK_CLASSID cid)", asMETHODPR(CKBehavior, SetCompatibleClassID, (CK_CLASSID), void), asCALL_THISCALL); assert(r >= 0);
 
     // Function
-    r = engine->RegisterObjectMethod("CKBehavior", "void SetFunction(uintptr_t fct)", asMETHODPR(CKBehavior, SetFunction, (CKBEHAVIORFCT), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehavior", "uintptr_t GetFunction()", asMETHODPR(CKBehavior, GetFunction, (), CKBEHAVIORFCT), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehavior", "void SetFunction(NativePointer fct)", asFUNCTIONPR([](CKBehavior *self, NativePointer fct) { self->SetFunction(reinterpret_cast<CKBEHAVIORFCT>(fct.Get())); }, (CKBehavior *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetFunction()", asFUNCTIONPR([](CKBehavior *self) { return NativePointer(self->GetFunction()); }, (CKBehavior *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // Callbacks
-    r = engine->RegisterObjectMethod("CKBehavior", "void SetCallbackFunction(uintptr_t fct)", asMETHODPR(CKBehavior, SetCallbackFunction, (CKBEHAVIORCALLBACKFCT), void), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehavior", "void SetCallbackFunction(NativePointer fct)", asFUNCTIONPR([](CKBehavior *self, NativePointer fct) { self->SetCallbackFunction(reinterpret_cast<CKBEHAVIORCALLBACKFCT>(fct.Get())); }, (CKBehavior *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "int CallCallbackFunction(CKDWORD message)", asMETHODPR(CKBehavior, CallCallbackFunction, (CKDWORD), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "int CallSubBehaviorsCallbackFunction(CKDWORD message, CKGUID &in behguid = void)", asMETHODPR(CKBehavior, CallSubBehaviorsCallbackFunction, (CKDWORD, CKGUID*), int), asCALL_THISCALL); assert(r >= 0);
 
@@ -1772,8 +1772,8 @@ void RegisterCKMaterial(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMaterial", "CKBYTE GetAlphaRef() const", asMETHODPR(CKMaterial, GetAlphaRef, (), CKBYTE), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKMaterial", "void SetAlphaRef(CKBYTE alphaRef = 0)", asMETHODPR(CKMaterial, SetAlphaRef, (CKBYTE), void), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("CKMaterial", "void SetCallback(uintptr_t fct, uintptr_t argument)", asMETHODPR(CKMaterial, SetCallback, (CK_MATERIALCALLBACK, void *), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKMaterial", "uintptr_t GetCallback(uintptr_t &out argument = void) const", asMETHODPR(CKMaterial, GetCallback, (void **), CK_MATERIALCALLBACK), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKMaterial", "void SetCallback(NativePointer fct, NativePointer argument)", asFUNCTIONPR([](CKMaterial *self, NativePointer fct, NativePointer argument) { self->SetCallback(reinterpret_cast<CK_MATERIALCALLBACK>(fct.Get()), argument.Get()); }, (CKMaterial *, NativePointer, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKMaterial", "NativePointer GetCallback(NativePointer &out argument = void) const", asFUNCTIONPR([](CKMaterial *self, NativePointer* argument) { return NativePointer(self->GetCallback(reinterpret_cast<void**>(argument))); }, (CKMaterial *, NativePointer *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKMaterial", "void SetEffect(VX_EFFECT effect)", asMETHODPR(CKMaterial, SetEffect, (VX_EFFECT), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKMaterial", "VX_EFFECT GetEffect() const", asMETHODPR(CKMaterial, GetEffect, (), VX_EFFECT), asCALL_THISCALL); assert(r >= 0);
