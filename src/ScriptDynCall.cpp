@@ -3,7 +3,6 @@
 #include <cassert>
 #include <string>
 #include <type_traits>
-#include <stdexcept>
 
 #include <dyncall.h>
 #include <dyncall_callback.h>
@@ -148,12 +147,14 @@ public:
         return m_WeakRefFlag;
     }
 
-    void Reset() {
+    DynCall &Reset() {
         dcReset(vm);
+        return *this;
     }
 
-    void SetMode(int mode) {
+    DynCall &Mode(int mode) {
         dcMode(vm, mode);
+        return *this;
     }
 
     DynCall &BeginCallAggr(const DynAggregate &aggr) {
@@ -206,6 +207,11 @@ public:
         return *this;
     }
 
+    DynCall &ArgString(std::string &value) {
+        dcArgPointer(vm, value.data());
+        return *this;
+    }
+
     DynCall &ArgAggregate(const DynAggregate &aggr, const void *value) {
         dcArgAggr(vm, aggr.Get(), value);
         return *this;
@@ -249,6 +255,11 @@ public:
 
     void *CallPointer(void *funcptr) {
         return dcCallPointer(vm, funcptr);
+    }
+
+    std::string CallString(void *funcptr) {
+        auto *str = static_cast<char *>(dcCallPointer(vm, funcptr));
+        return str ? str : "";
     }
 
     void *CallAggregate(void *funcptr, const DynAggregate &aggr, void *ret) {
@@ -478,7 +489,6 @@ public:
         if (lib) {
             return false;
         }
-
         lib = dlLoadLibrary(libPath.c_str());
         if (!lib) {
             return false;
@@ -491,10 +501,9 @@ public:
         if (!lib) {
             return nullptr;
         }
-
         void *symbol = dlFindSymbol(lib, symbolName.c_str());
         if (!symbol) {
-            throw std::runtime_error("Failed to find symbol: " + symbolName);
+            return nullptr;
         }
         return symbol;
     }
@@ -579,7 +588,6 @@ public:
         if (syms) {
             return false;
         }
-
         syms = dlSymsInit(libPath.c_str());
         if (!syms) {
             return false;
@@ -768,9 +776,9 @@ static void RegisterDynCall(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("DynCall", asBEHAVE_RELEASE, "void f()", asMETHOD(DynCall, Release), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("DynCall", asBEHAVE_GET_WEAKREF_FLAG, "int &f()", asMETHOD(DynCall, GetWeakRefFlag), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("DynCall", "void Reset()", asMETHOD(DynCall, Reset), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("DynCall", "DynCall &Reset()", asMETHOD(DynCall, Reset), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("DynCall", "void SetMode(int mode)", asMETHOD(DynCall, SetMode), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("DynCall", "DynCall &Mode(int mode)", asMETHOD(DynCall, Mode), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("DynCall", "DynCall &BeginCallAggr(const DynAggregate&)", asMETHODPR(DynCall, BeginCallAggr, (const DynAggregate &), DynCall &), asCALL_THISCALL); assert(r >= 0);
 
@@ -783,6 +791,7 @@ static void RegisterDynCall(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("DynCall", "DynCall &ArgFloat(float value)", asMETHODPR(DynCall, ArgFloat, (float), DynCall &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynCall", "DynCall &ArgDouble(double value)", asMETHODPR(DynCall, ArgDouble, (double), DynCall &), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynCall", "DynCall &ArgPointer(NativePointer value)", asFUNCTIONPR([](DynCall *self, NativePointer value) -> DynCall & { self->ArgPointer(value.Get()); return *self; }, (DynCall *, NativePointer), DynCall &), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("DynCall", "DynCall &ArgString(string &in value)", asFUNCTIONPR([](DynCall *self, std::string &value) -> DynCall & { self->ArgString(value); return *self; }, (DynCall *, std::string &), DynCall &), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynCall", "DynCall &ArgAggregate(const DynAggregate &in ag, NativePointer value)", asFUNCTIONPR([](DynCall *self, const DynAggregate &aggr, NativePointer value) -> DynCall & { self->ArgAggregate(aggr, value.Get()); return *self; }, (DynCall *, const DynAggregate &, NativePointer), DynCall &), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("DynCall", "void CallVoid(NativePointer funcptr)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr) { self->CallVoid(funcptr.Get()); }, (DynCall *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -795,6 +804,7 @@ static void RegisterDynCall(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("DynCall", "float CallFloat(NativePointer funcptr)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr) { return self->CallFloat(funcptr.Get()); }, (DynCall *, NativePointer), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynCall", "double CallDouble(NativePointer funcptr)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr) { return self->CallDouble(funcptr.Get()); }, (DynCall *, NativePointer), double), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynCall", "NativePointer CallPointer(NativePointer funcptr)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr) { return NativePointer(self->CallPointer(funcptr.Get())); }, (DynCall *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("DynCall", "string CallString(NativePointer funcptr)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr)  { return self->CallString(funcptr.Get()); }, (DynCall *, NativePointer), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynCall", "NativePointer CallAggregate(NativePointer, const DynAggregate &, NativePointer)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr, const DynAggregate &aggr, NativePointer ret) { return NativePointer(self->CallAggregate(funcptr.Get(), aggr, ret.Get())); }, (DynCall *, NativePointer, const DynAggregate &, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("DynCall", "int GetError() const", asFUNCTIONPR([](const DynCall *self) -> int { return self->GetError(); }, (const DynCall *), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -845,10 +855,10 @@ static void RegisterDynValue(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("DynValue", "void SetDouble(double value)", asFUNCTIONPR([](DCValue *obj, double d) { obj->d = d; }, (DCValue *, double), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("DynValue", "NativePointer GetPointer() const", asFUNCTIONPR([](const DCValue *obj) -> NativePointer { return NativePointer(obj->p); }, (const DCValue *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("DynValue", "void SetPointer(NativePointer ptr)", asFUNCTIONPR([](DCValue *obj, NativePointer p) { obj->p = p.Get(); }, (DCValue *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("DynValue", "void SetPointer(NativePointer value)", asFUNCTIONPR([](DCValue *obj, NativePointer p) { obj->p = p.Get(); }, (DCValue *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("DynValue", "string GetString() const", asFUNCTIONPR([](const DCValue *obj) -> std::string { return obj->Z ? std::string(obj->Z) : ""; }, (const DCValue *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("DynValue", "void SetString(NativePointer str)", asFUNCTIONPR([](DCValue *obj, NativePointer str) { obj->Z = str.Get(); }, (DCValue *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("DynValue", "void SetString(string &in value)", asFUNCTIONPR([](DCValue *obj, std::string &str) { obj->Z = str.data(); }, (DCValue *, std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 static void RegisterDynArgs(asIScriptEngine *engine) {
@@ -870,6 +880,7 @@ static void RegisterDynArgs(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("DynArgs", "float ArgFloat()", asFUNCTIONPR([](DCArgs *args) { return dcbArgFloat(args); }, (DCArgs *), float), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynArgs", "double ArgDouble()", asFUNCTIONPR([](DCArgs *args) { return dcbArgDouble(args); }, (DCArgs *), double), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynArgs", "NativePointer ArgPointer()", asFUNCTIONPR([](DCArgs *args) { return NativePointer(dcbArgPointer(args)); }, (DCArgs *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("DynArgs", "string ArgString()", asFUNCTIONPR([](DCArgs *args) -> std::string { auto *str = static_cast<char *>(dcbArgPointer(args)); return str ? str : ""; }, (DCArgs *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynArgs", "NativePointer ArgAggregate(NativePointer target)", asFUNCTIONPR([](DCArgs *args, NativePointer target) { return NativePointer(dcbArgAggr(args, target.Get())); }, (DCArgs *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("DynArgs", "void ReturnAggregate(DynValue@ result, NativePointer ret)", asFUNCTIONPR([](DCArgs *args, DCValue *result, NativePointer ret) { dcbReturnAggr(args, result, ret.Get()); }, (DCArgs *, DCValue *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
