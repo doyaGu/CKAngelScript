@@ -31,6 +31,10 @@
 #include "add_on/datetime/datetime.h"
 
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
+    int r = Init();
+    if (r < 0)
+        return;
+
     context->RegisterNewManager(this);
 }
 
@@ -51,14 +55,10 @@ CKERROR ScriptManager::PostClearAll() {
 }
 
 CKERROR ScriptManager::OnCKInit() {
-    int r = Init();
-    if (r < 0)
-        return CKERR_NOTINITIALIZED;
     return CK_OK;
 }
 
 CKERROR ScriptManager::OnCKEnd() {
-    Shutdown();
     return CK_OK;
 }
 
