@@ -555,7 +555,7 @@ void ScriptCache::Clear() {
 }
 
 std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
-                                                      const std::string &scriptName, const std::string &filename) {
+    const std::string &scriptName, const std::string &filename) {
     if (!engine) {
         return nullptr;
     }
