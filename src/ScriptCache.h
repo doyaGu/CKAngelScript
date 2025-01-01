@@ -174,6 +174,8 @@ public:
 
     void Invalidate(const std::string &scriptName);
 
+    void Clear();
+
     std::shared_ptr<CachedScript> LoadScript(asIScriptEngine *engine,
                                              const std::string &scriptName, const std::string &filename);
 

@@ -98,6 +98,8 @@ int ScriptManager::Shutdown() {
         context->Release();
     }
 
+    m_ScriptCache.Clear();
+
     if (m_ScriptEngine) {
         m_ScriptEngine->ShutDownAndRelease();
         m_ScriptEngine = nullptr;

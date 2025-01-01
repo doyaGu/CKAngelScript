@@ -549,6 +549,11 @@ void ScriptCache::Invalidate(const std::string &scriptName) {
     }
 }
 
+void ScriptCache::Clear() {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    m_CachedScripts.clear();
+}
+
 std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
                                                       const std::string &scriptName, const std::string &filename) {
     if (!engine) {
