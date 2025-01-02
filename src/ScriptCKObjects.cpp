@@ -1772,8 +1772,10 @@ void RegisterCKMaterial(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMaterial", "CKBYTE GetAlphaRef() const", asMETHODPR(CKMaterial, GetAlphaRef, (), CKBYTE), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKMaterial", "void SetAlphaRef(CKBYTE alphaRef = 0)", asMETHODPR(CKMaterial, SetAlphaRef, (CKBYTE), void), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION != 0x26052005
     r = engine->RegisterObjectMethod("CKMaterial", "void SetCallback(NativePointer fct, NativePointer argument)", asFUNCTIONPR([](CKMaterial *self, NativePointer fct, NativePointer argument) { self->SetCallback(reinterpret_cast<CK_MATERIALCALLBACK>(fct.Get()), argument.Get()); }, (CKMaterial *, NativePointer, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKMaterial", "NativePointer GetCallback(NativePointer &out argument = void) const", asFUNCTIONPR([](CKMaterial *self, NativePointer* argument) { return NativePointer(self->GetCallback(reinterpret_cast<void**>(argument))); }, (CKMaterial *, NativePointer *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKMaterial", "NativePointer GetCallback(NativePointer &out argument = void) const", asFUNCTIONPR([](CKMaterial *self, NativePointer *argument) { return NativePointer(self->GetCallback(reinterpret_cast<void**>(argument))); }, (CKMaterial *, NativePointer *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod("CKMaterial", "void SetEffect(VX_EFFECT effect)", asMETHODPR(CKMaterial, SetEffect, (VX_EFFECT), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKMaterial", "VX_EFFECT GetEffect() const", asMETHODPR(CKMaterial, GetEffect, (), VX_EFFECT), asCALL_THISCALL); assert(r >= 0);
@@ -1998,7 +2000,11 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "NativePointer GetModifierUVs(NativePointer stride, int channel = -1)", asFUNCTIONPR([](T *self, NativePointer stride, int channel) { return NativePointer(self->GetModifierUVs(reinterpret_cast<CKDWORD *>(stride.Get()), channel)); }, (T *, NativePointer, int), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "int GetModifierUVCount(int channel = -1) const", asMETHODPR(T, GetModifierUVCount, (int), int), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION != 0x26052005
     r = engine->RegisterObjectMethod(name, "void ModifierUVMove()", asMETHODPR(T, ModifierUVMove, (), void), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod(name, "void ModifierUVMove(int channel = -1)", asMETHODPR(T, ModifierUVMove, (int), void), asCALL_THISCALL); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod(name, "int GetVertexCount() const", asMETHODPR(T, GetVertexCount, (), int), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "bool SetVertexCount(int count)", asFUNCTIONPR([](T *self, int count) -> bool { return self->SetVertexCount(count); }, (T *, int), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -2025,7 +2031,11 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void RotateVertices(const VxVector &in vector, float angle)", asMETHODPR(T, RotateVertices, (VxVector *, float), void), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod(name, "void VertexMove()", asMETHODPR(T, VertexMove, (), void), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION != 0x26052005
     r = engine->RegisterObjectMethod(name, "void UVChanged()", asMETHODPR(T, UVChanged, (), void), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod(name, "void UVChanged(int channel = -1)", asMETHODPR(T, UVChanged, (int), void), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod(name, "void NormalChanged()", asMETHODPR(T, NormalChanged, (), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void ColorChanged()", asMETHODPR(T, ColorChanged, (), void), asCALL_THISCALL); assert(r >= 0);
 
@@ -2041,9 +2051,13 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void SetFaceVertexIndex(int faceIndex, int vertex1, int vertex2, int vertex3)", asMETHODPR(T, SetFaceVertexIndex, (int, int, int, int), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void SetFaceMaterial(NativePointer faceIndices, int faceCount, CKMaterial@ mat)", asFUNCTIONPR([](T *self, NativePointer faceIndices, int faceCount, CKMaterial *mat) { self->SetFaceMaterialEx(reinterpret_cast<int *>(faceIndices.Get()), faceCount, mat); }, (T *, NativePointer, int, CKMaterial *), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void SetFaceMaterial(int faceIndex, CKMaterial@ mat)", asMETHODPR(T, SetFaceMaterial, (int, CKMaterial *), void), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION != 0x26052005
     r = engine->RegisterObjectMethod(name, "void SetFaceChannelMask(int faceIndex, CKWORD channelMask)", asMETHODPR(T, SetFaceChannelMask, (int, CKWORD), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void ReplaceMaterial(CKMaterial@ oldMat, CKMaterial@ newMat)", asMETHODPR(T, ReplaceMaterial, (CKMaterial *, CKMaterial *), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void ChangeFaceChannelMask(int faceIndex, CKWORD addChannelMask, CKWORD removeChannelMask)", asMETHODPR(T, ChangeFaceChannelMask, (int, CKWORD, CKWORD), void), asCALL_THISCALL); assert(r >= 0);
+#else
+    r = engine->RegisterObjectMethod(name, "void ReplaceMaterial(CKMaterial@ oldMat, CKMaterial@ newMat, bool merge = false)", asFUNCTIONPR([](T* self, CKMaterial *oldMat, CKMaterial *newMat, bool merge) { self->ReplaceMaterial(oldMat, newMat, merge); }, (T *, CKMaterial *, CKMaterial *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod(name, "void ApplyGlobalMaterial(CKMaterial@ mat)", asMETHODPR(T, ApplyGlobalMaterial, (CKMaterial *), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void DissociateAllFaces()", asMETHODPR(T, DissociateAllFaces, (), void), asCALL_THISCALL); assert(r >= 0);
 
@@ -2896,8 +2910,10 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void SetPickable(bool pick = true)", asFUNCTIONPR([](T *self, bool pick) { self->SetPickable(pick); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "bool IsPickable() const", asFUNCTIONPR([](const T *self) -> bool { return self->IsPickable(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
+#if CKVERSION != 0x26052005
     r = engine->RegisterObjectMethod(name, "void SetRenderChannels(bool renderChannels = true)", asFUNCTIONPR([](T *self, bool renderChannels) { self->SetRenderChannels(renderChannels); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "bool AreRenderChannelsVisible() const", asFUNCTIONPR([](const T *self) -> bool { return self->AreRenderChannelsVisible(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectMethod(name, "bool IsInViewFrustrum(CKRenderContext@ dev, CKDWORD flags = 0)", asFUNCTIONPR([](T *self, CKRenderContext *dev, CKDWORD flags) -> bool { return self->IsInViewFrustrum(dev, flags); }, (T *, CKRenderContext *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "bool IsInViewFrustrumHierarchic(CKRenderContext@ Dev)", asFUNCTIONPR([](T *self, CKRenderContext *Dev) -> bool { return self->IsInViewFrustrumHierarchic(Dev); }, (T *, CKRenderContext *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);

@@ -57,7 +57,9 @@ void RegisterCKFuncdefs(asIScriptEngine *engine) {
     r = engine->RegisterFuncdef("CKBOOL CK_RENDEROBJECT_CALLBACK(CKRenderContext@ dev, CKRenderObject@ entity)"); assert(r >= 0);
     r = engine->RegisterFuncdef("void CK_MESHRENDERCALLBACK(CKRenderContext@ dev, CK3dEntity@ mov, CKMesh@ object)"); assert(r >= 0);
     r = engine->RegisterFuncdef("void CK_SUBMESHRENDERCALLBACK(CKRenderContext@ dev, CK3dEntity@ mov, CKMesh@ object, CKMaterial@ mat)"); assert(r >= 0);
+#if CKVERSION != 0x26052005
     r = engine->RegisterFuncdef("int CK_MATERIALCALLBACK(CKRenderContext@ dev, CKMaterial@ mat)"); assert(r >= 0);
+#endif
 
     r = engine->RegisterFuncdef("CKERROR CKUICALLBACKFCT(CKUICallbackStruct &in param)"); assert(r >= 0);
 

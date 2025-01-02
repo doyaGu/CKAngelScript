@@ -210,6 +210,8 @@ bool CachedScript::Build(asIScriptEngine *engine) {
     builder.DefineWord("VT21");
 #elif CKVERSION == 0x05082002
     builder.DefineWord("VT25");
+#elif CKVERSION == 0x26052005
+    builder.DefineWord("VT35");
 #endif
 
     // Start a new module

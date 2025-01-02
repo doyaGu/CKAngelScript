@@ -91,8 +91,11 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "CKERROR ShowSetup(int)", asMETHODPR(CKContext, ShowSetup, (CK_ID), CKERROR), asCALL_THISCALL); assert(r >= 0);
     // r = engine->RegisterObjectMethod("CKContext", "int ChooseObject(uintptr_t dialogParentWnd)", asMETHODPR(CKContext, ChooseObject, (void *), CK_ID), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Select(const XObjectArray &in objects, bool clearSelection = true)", asFUNCTIONPR([](CKContext *self, const XObjectArray &objects, bool clearSelection) { return self->Select(objects, clearSelection); }, (CKContext *, const XObjectArray &, bool), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+#if CKVERSION != 0x26052005
     r = engine->RegisterObjectMethod("CKContext", "CKDWORD SendInterfaceMessage(CKDWORD reason, CKDWORD param1, CKDWORD param2)", asMETHODPR(CKContext, SendInterfaceMessage, (CKDWORD, CKDWORD, CKDWORD), CKDWORD), asCALL_THISCALL); assert(r >= 0);
-
+#else
+    r = engine->RegisterObjectMethod("CKContext", "CKDWORD SendInterfaceMessage(CKDWORD reason, CKDWORD param1, CKDWORD param2, CKDWORD param3 = 0)", asMETHODPR(CKContext, SendInterfaceMessage, (CKDWORD, CKDWORD, CKDWORD, CKDWORD), CKDWORD), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKContext", "CKERROR UICopyObjects(const XObjectArray &in, bool iClearClipboard = true)", asFUNCTIONPR([](CKContext *self, const XObjectArray &objects, bool iClearClipboard) { return self->UICopyObjects(objects, iClearClipboard); }, (CKContext *, const XObjectArray &, bool), CKERROR), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR UIPasteObjects(const XObjectArray &in)", asMETHODPR(CKContext, UIPasteObjects, (const XObjectArray&), CKERROR), asCALL_THISCALL); assert(r >= 0);
 

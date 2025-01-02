@@ -115,7 +115,9 @@ void RegisterCKEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("VX_MOVEABLE_FLAGS", "VX_MOVEABLE_PICKABLE", VX_MOVEABLE_PICKABLE); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_MOVEABLE_FLAGS", "VX_MOVEABLE_VISIBLE", VX_MOVEABLE_VISIBLE); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_MOVEABLE_FLAGS", "VX_MOVEABLE_UPTODATE", VX_MOVEABLE_UPTODATE); assert(r >= 0);
+#if CKVERSION != 0x26052005
     r = engine->RegisterEnumValue("VX_MOVEABLE_FLAGS", "VX_MOVEABLE_RENDERCHANNELS", VX_MOVEABLE_RENDERCHANNELS); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("VX_MOVEABLE_FLAGS", "VX_MOVEABLE_USERBOX", VX_MOVEABLE_USERBOX); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_MOVEABLE_FLAGS", "VX_MOVEABLE_EXTENTSUPTODATE", VX_MOVEABLE_EXTENTSUPTODATE); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_MOVEABLE_FLAGS", "VX_MOVEABLE_BOXVALID", VX_MOVEABLE_BOXVALID); assert(r >= 0);
@@ -139,7 +141,9 @@ void RegisterCKEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("VXMESH_FLAGS", "VXMESH_BOUNDINGUPTODATE", VXMESH_BOUNDINGUPTODATE); assert(r >= 0);
     r = engine->RegisterEnumValue("VXMESH_FLAGS", "VXMESH_VISIBLE", VXMESH_VISIBLE); assert(r >= 0);
     r = engine->RegisterEnumValue("VXMESH_FLAGS", "VXMESH_OPTIMIZED", VXMESH_OPTIMIZED); assert(r >= 0);
+#if CKVERSION != 0x26052005
     r = engine->RegisterEnumValue("VXMESH_FLAGS", "VXMESH_RENDERCHANNELS", VXMESH_RENDERCHANNELS); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("VXMESH_FLAGS", "VXMESH_HASTRANSPARENCY", VXMESH_HASTRANSPARENCY); assert(r >= 0);
     r = engine->RegisterEnumValue("VXMESH_FLAGS", "VXMESH_PRELITMODE", VXMESH_PRELITMODE); assert(r >= 0);
     r = engine->RegisterEnumValue("VXMESH_FLAGS", "VXMESH_WRAPU", VXMESH_WRAPU); assert(r >= 0);

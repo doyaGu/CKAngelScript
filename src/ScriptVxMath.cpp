@@ -1121,7 +1121,7 @@ static void RegisterVxSpriteRenderOptions(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint get_Options2() const", asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XDWORD { return self->Options2; }, (const VxSpriteRenderOptions *), XDWORD), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_Options2(uint value)", asFUNCTIONPR([](VxSpriteRenderOptions *self, XDWORD value) { self->Options2 = value; }, (VxSpriteRenderOptions *, XDWORD), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXBLEND_MODE get_DstBlendMode() const", asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> VXBLEND_MODE { return self->DstBlendMode; }, (const VxSpriteRenderOptions *), VXBLEND_MODE), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "VXBLEND_MODE get_DstBlendMode() const", asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> VXBLEND_MODE { return (VXBLEND_MODE) self->DstBlendMode; }, (const VxSpriteRenderOptions *), VXBLEND_MODE), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "void set_DstBlendMode(VXBLEND_MODE value)", asFUNCTIONPR([](VxSpriteRenderOptions *self, VXBLEND_MODE value) { self->DstBlendMode = value; }, (VxSpriteRenderOptions *, VXBLEND_MODE), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxSpriteRenderOptions", "uint8 get_AlphaRefValue() const", asFUNCTIONPR([](const VxSpriteRenderOptions *self) -> XBYTE { return self->AlphaRefValue; }, (const VxSpriteRenderOptions *), XBYTE), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -2000,7 +2000,9 @@ static void RegisterVxRect(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxRect", "bool IsOutside(const VxRect &in clipRect) const", asMETHOD(VxRect, IsOutside), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "bool IsInside(const Vx2DVector &in pt) const", asMETHODPR(VxRect, IsInside, (const Vx2DVector &) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "bool IsNull() const", asMETHODPR(VxRect, IsNull, () const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+#if CKVERSION != 0x26052005
     r = engine->RegisterObjectMethod("VxRect", "bool IsEmpty() const", asMETHODPR(VxRect, IsEmpty, () const, XBOOL), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("VxRect", "bool Clip(const VxRect &in clipRect)", asMETHODPR(VxRect, Clip, (const VxRect &), XBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "void Clip(Vx2DVector &out pt, bool excludeRightBottom = true) const", asMETHODPR(VxRect, Clip, (Vx2DVector &, XBOOL) const, void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxRect", "void Transform(const VxRect &in destScreen, const VxRect &in srcScreen)", asMETHODPR(VxRect, Transform, (const VxRect &, const VxRect &), void), asCALL_THISCALL); assert(r >= 0);
