@@ -133,10 +133,10 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_32_V16U16", _32_V16U16); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_16_L6V5U5", _16_L6V5U5); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_32_X8L8V8U8", _32_X8L8V8U8); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_8_ABGR8888_CLUT", _8_ABGR8888_CLUT); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_8_ARGB8888_CLUT", _8_ARGB8888_CLUT); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_4_ABGR8888_CLUT", _4_ABGR8888_CLUT); assert(r >= 0);
-    r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_4_ARGB8888_CLUT", _4_ARGB8888_CLUT); assert(r >= 0);
+    // r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_8_ABGR8888_CLUT", _8_ABGR8888_CLUT); assert(r >= 0);
+    // r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_8_ARGB8888_CLUT", _8_ARGB8888_CLUT); assert(r >= 0);
+    // r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_4_ABGR8888_CLUT", _4_ABGR8888_CLUT); assert(r >= 0);
+    // r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_4_ARGB8888_CLUT", _4_ARGB8888_CLUT); assert(r >= 0);
 
     // VXCLIP_FLAGS
     r = engine->RegisterEnum("VXCLIP_FLAGS"); assert(r >= 0);
