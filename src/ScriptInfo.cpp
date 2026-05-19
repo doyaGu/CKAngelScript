@@ -119,7 +119,9 @@ void PrintAngelScriptInfo(asIScriptEngine *engine, std::ofstream &file) {
 void DumpAngelScriptDefinitions(const std::string &filename) {
     std::ofstream file(filename);
     if (file.is_open()) {
-        PrintAngelScriptInfo(asGetActiveContext()->GetEngine(), file);
+        asIScriptContext *ctx = asGetActiveContext();
+        if (!ctx || !ctx->GetEngine()) return;
+        PrintAngelScriptInfo(ctx->GetEngine(), file);
     }
 }
 
