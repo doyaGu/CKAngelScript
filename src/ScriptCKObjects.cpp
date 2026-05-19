@@ -1119,7 +1119,7 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     // BuildingBlock or Graph
     r = engine->RegisterObjectMethod("CKBehavior", "void UseGraph()", asMETHODPR(CKBehavior, UseGraph, (), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "void UseFunction()", asMETHODPR(CKBehavior, UseFunction, (), void), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehavior", "int IsUsingFunction()", asFUNCTIONPR([](CKBehavior *self) -> bool { return self->IsUsingFunction(); }, (CKBehavior *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehavior", "bool IsUsingFunction()", asFUNCTIONPR([](CKBehavior *self) -> bool { return self->IsUsingFunction(); }, (CKBehavior *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // Targetable Behavior
     r = engine->RegisterObjectMethod("CKBehavior", "bool IsTargetable()", asFUNCTIONPR([](CKBehavior *self) -> bool { return self->IsTargetable(); }, (CKBehavior *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -3296,10 +3296,20 @@ void RegisterCKCurve(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKCurve", "CKERROR GetPos(float step, VxVector &out pos, VxVector &out dir = void) const", asMETHODPR(CKCurve, GetPos, (float, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKCurve", "CKERROR GetLocalPos(float step, VxVector &out pos, VxVector &out dir = void) const", asMETHODPR(CKCurve, GetLocalPos, (float, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
+    r = engine->RegisterObjectMethod("CKCurve", "CKERROR GetTangents(int index, VxVector &out input, VxVector &out output) const", asMETHODPR(CKCurve, GetTangentsByIndex, (int, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKCurve", "CKERROR GetTangentsByIndex(int index, VxVector &out input, VxVector &out output) const", asMETHODPR(CKCurve, GetTangentsByIndex, (int, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#else
     r = engine->RegisterObjectMethod("CKCurve", "CKERROR GetTangents(int index, VxVector &out input, VxVector &out output) const", asMETHODPR(CKCurve, GetTangents, (int, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKCurve", "CKERROR GetTangents(CKCurvePoint@ pt, VxVector &out input, VxVector &out output) const", asMETHODPR(CKCurve, GetTangents, (CKCurvePoint *, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
 
+#if CKVERSION == 0x13022002
+    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangents(int index, VxVector &in input, VxVector &in output)", asMETHODPR(CKCurve, SetTangentsByIndex, (int, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangentsByIndex(int index, VxVector &in input, VxVector &in output)", asMETHODPR(CKCurve, SetTangentsByIndex, (int, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#else
     r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangents(int index, VxVector &in input, VxVector &in output)", asMETHODPR(CKCurve, SetTangents, (int, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
+#endif
     r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangents(CKCurvePoint@ pt, VxVector &in input, VxVector &in output)", asMETHODPR(CKCurve, SetTangents, (CKCurvePoint *, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKCurve", "void SetFittingCoeff(float fit)", asMETHODPR(CKCurve, SetFittingCoeff, (float), void), asCALL_THISCALL); assert(r >= 0);

@@ -232,9 +232,21 @@ void RegisterCKEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_NONE", CKBEHAVIOR_NONE); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_ACTIVE", CKBEHAVIOR_ACTIVE); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_SCRIPT", CKBEHAVIOR_SCRIPT); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_PRIORITY", CKBEHAVIOR_PRIORITY); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_RESERVED1", CKBEHAVIOR_PRIORITY); assert(r >= 0);
+#else
+    r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_PRIORITY", CKBEHAVIOR_RESERVED1); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_RESERVED1", CKBEHAVIOR_RESERVED1); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_USEFUNCTION", CKBEHAVIOR_USEFUNCTION); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_COMPATIBLECLASSID", CKBEHAVIOR_COMPATIBLECLASSID); assert(r >= 0);
+    r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_RESERVED2", CKBEHAVIOR_COMPATIBLECLASSID); assert(r >= 0);
+#else
+    r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_COMPATIBLECLASSID", CKBEHAVIOR_RESERVED2); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_RESERVED2", CKBEHAVIOR_RESERVED2); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_CUSTOMSETTINGSEDITDIALOG", CKBEHAVIOR_CUSTOMSETTINGSEDITDIALOG); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_WAITSFORMESSAGE", CKBEHAVIOR_WAITSFORMESSAGE); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_BEHAVIOR_FLAGS", "CKBEHAVIOR_VARIABLEINPUTS", CKBEHAVIOR_VARIABLEINPUTS); assert(r >= 0);
@@ -1039,12 +1051,6 @@ void RegisterCKEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CK_SOUNDMANAGER_CAPS", "CK_LISTENERSETTINGS_PRIORITY", CK_LISTENERSETTINGS_PRIORITY); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_SOUNDMANAGER_CAPS", "CK_LISTENERSETTINGS_SOFTWARESOURCES", CK_LISTENERSETTINGS_SOFTWARESOURCES); assert(r >= 0);
     r = engine->RegisterEnumValue("CK_SOUNDMANAGER_CAPS", "CK_LISTENERSETTINGS_ALL", CK_LISTENERSETTINGS_ALL); assert(r >= 0);
-
-    // CK_READSUBCHUNK_FLAGS
-    r = engine->RegisterEnum("CK_READSUBCHUNK_FLAGS"); assert(r >= 0);
-    r = engine->RegisterEnumValue("CK_READSUBCHUNK_FLAGS", "CK_RSC_DEFAULT", CK_RSC_DEFAULT); assert(r >= 0);
-    r = engine->RegisterEnumValue("CK_READSUBCHUNK_FLAGS", "CK_RSC_SKIP", CK_RSC_SKIP); assert(r >= 0);
-    r = engine->RegisterEnumValue("CK_READSUBCHUNK_FLAGS", "CK_RSC_SCRATCH", CK_RSC_SCRATCH); assert(r >= 0);
 
     // CK_FO_OPTIONS
     r = engine->RegisterEnum("CK_FO_OPTIONS"); assert(r >= 0);

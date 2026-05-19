@@ -70,7 +70,7 @@ void RegisterCKFuncdefs(asIScriptEngine *engine) {
     r = engine->RegisterFuncdef("void CK_PARAMETERDELETEFUNCTION(CKParameter@ param)"); assert(r >= 0);
     r = engine->RegisterFuncdef("void CK_PARAMETERCHECKFUNCTION(CKParameter@ param)"); assert(r >= 0);
     r = engine->RegisterFuncdef("void CK_PARAMETERREMAPFUNCTION(CKParameter@ param, CKDependenciesContext@ context)"); assert(r >= 0);
-    r = engine->RegisterFuncdef("void CK_PARAMETERCOPYFUNCTION(CKParameter@ srcParam, CKParameter@ destParam)"); assert(r >= 0);
+    r = engine->RegisterFuncdef("void CK_PARAMETERCOPYFUNCTION(CKParameter@ destParam, CKParameter@ srcParam)"); assert(r >= 0);
     r = engine->RegisterFuncdef("void CK_PARAMETERSAVELOADFUNCTION(CKParameter@ param, CKStateChunk@ &out chunk, bool load)"); assert(r >= 0);
     r = engine->RegisterFuncdef("int CK_PARAMETERSTRINGFUNCTION(CKParameter@ param, string valueString, bool readFromString)"); assert(r >= 0);
     r = engine->RegisterFuncdef("WIN_HANDLE CK_PARAMETERUICREATORFUNCTION(CKParameter@ param, WIN_HANDLE parentWindow, CKRECT &in rect)"); assert(r >= 0);
@@ -115,6 +115,10 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("CKOperationDesc", sizeof(CKOperationDesc), asOBJ_VALUE | asGetTypeTraits<CKOperationDesc>()); assert(r >= 0);
 
     r = engine->RegisterObjectType("CKAttributeVal", sizeof(CKAttributeVal), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<CKAttributeVal>()); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterObjectType("CKAttributeDesc", sizeof(CKAttributeDesc), asOBJ_VALUE | asGetTypeTraits<CKAttributeDesc>()); assert(r >= 0);
+    r = engine->RegisterObjectType("CKAttributeCategoryDesc", sizeof(CKAttributeCategoryDesc), asOBJ_VALUE | asGetTypeTraits<CKAttributeCategoryDesc>()); assert(r >= 0);
+#endif
 
     r = engine->RegisterObjectType("CKTimeProfiler", sizeof(CKTimeProfiler), asOBJ_VALUE | asGetTypeTraits<CKTimeProfiler>()); assert(r >= 0);
 
@@ -199,6 +203,9 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectType("CKPluginManager", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKBaseManager", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterObjectType("CKObjectManager", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
+#endif
     r = engine->RegisterObjectType("CKParameterManager", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKAttributeManager", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
     r = engine->RegisterObjectType("CKTimeManager", 0, asOBJ_REF | asOBJ_NOCOUNT); assert(r >= 0);
