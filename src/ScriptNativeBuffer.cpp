@@ -201,7 +201,7 @@ NativePointer NativeBuffer::ToPointer() const {
 }
 
 size_t NativeBuffer::Load(const char *filename, size_t size, int offset) {
-    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !filename)
+    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !filename || offset < 0)
         return 0;
 
     FILE *fp = fopen(filename, "rb");
