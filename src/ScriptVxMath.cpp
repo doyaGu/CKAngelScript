@@ -1834,7 +1834,7 @@ static void RegisterVxMatrix(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxMatrix", "bool opEquals(const VxMatrix &in mat) const", asMETHODPR(VxMatrix, operator==, (const VxMatrix&) const, XBOOL), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix &opMulAssign(const VxMatrix &in mat) const", asMETHODPR(VxMatrix, operator*=, (const VxMatrix&), VxMatrix&), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix &opMulAssign(const VxMatrix &in mat)", asMETHODPR(VxMatrix, operator*=, (const VxMatrix&), VxMatrix&), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix opMul(const VxMatrix &in mat) const", asMETHODPR(VxMatrix, operator*, (const VxMatrix&) const, VxMatrix), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxMatrix", "VxVector opMul(const VxVector &in mat) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector&), VxVector), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxMatrix", "VxVector4 opMul(const VxVector4 &in mat) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector4&), VxVector4), asCALL_CDECL_OBJFIRST); assert(r >= 0);
@@ -1905,7 +1905,7 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxQuaternion", "bool opEquals(const VxQuaternion &in quat) const", asFUNCTIONPR(operator==, (const VxQuaternion &, const VxQuaternion &), int), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opMulAssign(float s) const", asMETHODPR(VxQuaternion, operator*=, (float), VxQuaternion &), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opMulAssign(float s)", asMETHODPR(VxQuaternion, operator*=, (float), VxQuaternion &), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opAdd(const VxQuaternion &in quat) const", asMETHODPR(VxQuaternion, operator+, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opSub(const VxQuaternion &in quat) const", asMETHODPR(VxQuaternion, operator-, (const VxQuaternion &) const, VxQuaternion), asCALL_THISCALL); assert(r >= 0);
