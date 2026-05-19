@@ -938,7 +938,7 @@ static void RegisterDynCallback(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectType("DynCallback", 0, asOBJ_REF); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_FACTORY, "DynCallback@ f(const string &in signature, DynCallbackHandler@ handler)", asFUNCTIONPR(DynCallback::Create, (const std::string &, asIScriptFunction *), DynCallback *), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_FACTORY, "DynCallback@ f(size_t size, DynCallbackHandler@ handler, const DynAggregate &in aggrs)", asFUNCTIONPR(DynCallback::Create, (const std::string &, asIScriptFunction *, const DynAggregate &), DynCallback *), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_FACTORY, "DynCallback@ f(const string &in signature, DynCallbackHandler@ handler, const DynAggregate &in aggrs)", asFUNCTIONPR(DynCallback::Create, (const std::string &, asIScriptFunction *, const DynAggregate &), DynCallback *), asCALL_CDECL); assert(r >= 0);
 
     r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_ADDREF, "void f()", asMETHOD(DynCallback, AddRef), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_RELEASE, "void f()", asMETHOD(DynCallback, Release), asCALL_THISCALL); assert(r >= 0);
