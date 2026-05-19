@@ -1,5 +1,6 @@
 #include "ScriptCache.h"
 
+#include <climits>
 #include <utility>
 
 #include "ScriptManager.h"
@@ -369,14 +370,14 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         str = nullptr;
 
         std::string buffer;
-        int size = chunk->ReadInt();
-        if (size < 0) {
+        CKDWORD size = chunk->ReadDword();
+        if (size > static_cast<CKDWORD>(INT_MAX)) {
             chunk->CloseChunk();
             return false;
         }
         if (size != 0) {
             buffer.resize(size);
-            chunk->ReadAndFillBuffer(size, buffer.data());
+            chunk->ReadAndFillBuffer(static_cast<int>(size), buffer.data());
         }
 
         sections.emplace_back(std::move(filename), std::move(buffer));
@@ -405,9 +406,14 @@ bool CachedScript::SaveToChunk(CKStateChunk *chunk) {
 
         std::string &code = std::get<1>(section);
 
-        chunk->WriteDword(code.size());
+        if (code.size() > static_cast<size_t>(INT_MAX)) {
+            chunk->CloseChunk();
+            return false;
+        }
+
+        chunk->WriteDword(static_cast<CKDWORD>(code.size()));
         if (code.size() != 0) {
-            chunk->WriteBufferNoSize(code.size(), code.data());
+            chunk->WriteBufferNoSize(static_cast<int>(code.size()), code.data());
         }
     }
 
