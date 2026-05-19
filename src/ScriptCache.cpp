@@ -646,8 +646,28 @@ std::shared_ptr<CachedScript> ScriptCache::CompileScript(asIScriptEngine *engine
 }
 
 bool ScriptCache::UnloadScript(const std::string &scriptName) {
-    if (auto cached = GetCachedScript(scriptName)) {
-        return cached->Discard();
+    std::shared_ptr<CachedScript> cached;
+
+    {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        auto it = m_CachedScripts.find(scriptName);
+        if (it == m_CachedScripts.end()) {
+            return false;
+        }
+        cached = it->second;
     }
-    return false;
+
+    if (cached) {
+        cached->Discard();
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        auto it = m_CachedScripts.find(scriptName);
+        if (it != m_CachedScripts.end() && it->second == cached) {
+            m_CachedScripts.erase(it);
+        }
+    }
+
+    return true;
 }

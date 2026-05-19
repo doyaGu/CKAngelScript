@@ -327,11 +327,14 @@ asIScriptContext *ScriptManager::RequestContextFromPool() {
 }
 
 void ScriptManager::ReturnContextToPool(asIScriptContext *ctx) {
-    m_ScriptContexts.push_back(ctx);
+    if (!ctx) {
+        return;
+    }
 
     // Unprepare the context to free any objects that might be held
     // as we don't know when the context will be used again.
     ctx->Unprepare();
+    m_ScriptContexts.push_back(ctx);
 }
 
 void ScriptManager::SetupScriptPathCategory() {

@@ -7,11 +7,7 @@
 ScriptRunner::ScriptRunner(ScriptManager *man) : m_ScriptManager(man) {}
 
 ScriptRunner::~ScriptRunner() {
-    // Return the AngelScript context if it exists
-    if (m_Context) {
-        m_Context->Release();
-        m_ScriptManager->GetScriptEngine()->ReturnContext(m_Context);
-    }
+    ReleaseContext();
 
     // Release the cached script
     if (m_CachedScript) {
@@ -62,9 +58,11 @@ bool ScriptRunner::Attach(CKBehavior *behavior, bool runner) {
 
 void ScriptRunner::Detach(CKBehavior *behavior, bool runner) {
     if (!IsAttached()) {
+        ReleaseContext();
         return;
     }
 
+    ReleaseContext();
     ResetScript();
 
     if (runner && behavior) {
@@ -85,17 +83,26 @@ asIScriptContext *ScriptRunner::GetContext() const {
 }
 
 void ScriptRunner::SetContext(asIScriptContext* ctx) {
-    // If there was a previous context, return it first
-    if (m_Context) {
-        m_Context->Release();
-        m_ScriptManager->GetScriptEngine()->ReturnContext(m_Context);
+    if (m_Context == ctx) {
+        return;
     }
 
+    ReleaseContext();
     m_Context = ctx;
+}
 
-    // AddRef to manage lifetime (AngelScript reference counting)
-    if (m_Context) {
-        m_Context->AddRef();
+void ScriptRunner::ReleaseContext() {
+    if (!m_Context) {
+        return;
+    }
+
+    auto *ctx = m_Context;
+    m_Context = nullptr;
+
+    if (m_ScriptManager && m_ScriptManager->GetScriptEngine()) {
+        m_ScriptManager->GetScriptEngine()->ReturnContext(ctx);
+    } else {
+        ctx->Release();
     }
 }
 
@@ -264,6 +271,7 @@ void ScriptRunner::SetStackTrace(const std::string& trace) {
 }
 
 void ScriptRunner::Reset() {
+    ReleaseContext();
     ResetScript();
     SetErrorMessage("");
     SetStackTrace("");

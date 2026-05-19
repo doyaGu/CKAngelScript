@@ -54,6 +54,8 @@ public:
     void Reset();
 
 private:
+    void ReleaseContext();
+
     ScriptManager *m_ScriptManager = nullptr;
     asIScriptContext *m_Context = nullptr;
     std::shared_ptr<CachedScript> m_CachedScript;
