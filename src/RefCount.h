@@ -24,13 +24,13 @@ public:
      * @brief Increment reference count.
      * @return Current reference count.
      */
-    int AddRef() { return m_RefCount.fetch_add(1, std::memory_order_relaxed); }
+    int AddRef() { return m_RefCount.fetch_add(1, std::memory_order_relaxed) + 1; }
 
     /**
      * @brief Decrement reference count.
      * @return Current reference count.
      */
-    int Release() { return m_RefCount.fetch_sub(1, std::memory_order_release); }
+    int Release() { return m_RefCount.fetch_sub(1, std::memory_order_release) - 1; }
 
     /**
      * @brief Get reference count.
