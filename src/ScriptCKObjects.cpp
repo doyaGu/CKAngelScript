@@ -382,7 +382,7 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
             int size = engine->GetSizeOfPrimitiveType(typeId);
             if (size == 0) {
                 if (type->GetFlags() & asOBJ_POD) {
-                    err = self->SetValue(buf, size);
+                    err = self->SetValue(buf, type->GetSize());
                 } else {
                     ctx->SetException("Cannot write non-POD objects to buffer");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
