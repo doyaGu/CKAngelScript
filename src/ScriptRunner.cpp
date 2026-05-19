@@ -23,11 +23,13 @@ bool ScriptRunner::Attach(CKBehavior *behavior, bool runner) {
     Detach(behavior);
 
     if (!behavior) {
+        SetErrorMessage("No behavior to attach.");
         return false;
     }
 
     auto *scriptName = (CKSTRING) behavior->GetInputParameterReadDataPtr(0);
-    if (!scriptName) {
+    if (!scriptName || scriptName[0] == '\0') {
+        SetErrorMessage("No script module specified.");
         return false;
     }
 
@@ -37,11 +39,21 @@ bool ScriptRunner::Attach(CKBehavior *behavior, bool runner) {
 
     if (runner) {
         auto *funcName = (CKSTRING) behavior->GetInputParameterReadDataPtr(1);
-        if (funcName) {
-            auto *func = GetFunctionByName(funcName);
-            func->AddRef();
-            behavior->SetLocalParameterValue(1, &func);
+        if (!funcName || funcName[0] == '\0') {
+            SetErrorMessage("No function specified.");
+            ResetScript();
+            return false;
         }
+
+        auto *func = GetFunctionByName(funcName);
+        if (!func) {
+            SetErrorMessage("Function not found: " + std::string(funcName));
+            ResetScript();
+            return false;
+        }
+
+        func->AddRef();
+        behavior->SetLocalParameterValue(1, &func);
     }
 
     m_Attached = true;

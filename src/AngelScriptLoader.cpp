@@ -319,7 +319,7 @@ static void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &scrip
 
             XString resolvedFilename = filename;
             man->ResolveScriptFileName(resolvedFilename);
-            FILE *fp = fopen(filename, "rb");
+            FILE *fp = fopen(resolvedFilename.CStr(), "rb");
             if (fp) {
                 fseek(fp, 0, SEEK_END);
                 size_t size = ftell(fp);

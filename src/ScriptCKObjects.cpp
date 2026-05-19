@@ -1222,7 +1222,7 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKBehavior", "CKERROR GetOutputParameterValue(int pos, NativePointer buf)", asMETHODPR(CKBehavior, GetOutputParameterValue, (int, void *), CKERROR), asCALL_THISCALL); assert(r >= 0);
     // r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetOutputParameterValue(int pos, const NativePointer buf, int size = 0)", asMETHODPR(CKBehavior, SetOutputParameterValue, (int, const void *, int), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR GetOutputParameterValue(int pos, ?&out value)", asFUNCTION(CKBehaviorGetParameterValueGeneric<1>), asCALL_GENERIC); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetOutputParameterValue(?&in value)", asFUNCTION(CKBehaviorSetParameterValueGeneric<1>), asCALL_GENERIC); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetOutputParameterValue(int pos, ?&in value)", asFUNCTION(CKBehaviorSetParameterValueGeneric<1>), asCALL_GENERIC); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetOutputParameterWriteDataPtr(int pos)", asMETHODPR(CKBehavior, GetOutputParameterWriteDataPtr, (int), void *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetOutputParameterObject(int pos, CKObject@ obj)", asMETHODPR(CKBehavior, SetOutputParameterObject, (int, CKObject*), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "CKObject@ GetOutputParameterObject(int pos)", asMETHODPR(CKBehavior, GetOutputParameterObject, (int), CKObject*), asCALL_THISCALL); assert(r >= 0);
@@ -1240,7 +1240,7 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKBehavior", "CKERROR GetLocalParameterValue(int pos, NativePointer buf)", asMETHODPR(CKBehavior, GetLocalParameterValue, (int, void *), CKERROR), asCALL_THISCALL); assert(r >= 0);
     // r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetLocalParameterValue(int pos, const NativePointer buf, int size = 0)", asMETHODPR(CKBehavior, SetLocalParameterValue, (int, const void *, int), CKERROR), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR GetLocalParameterValue(int pos, ?&out value)", asFUNCTION(CKBehaviorGetParameterValueGeneric<2>), asCALL_GENERIC); assert(r >= 0);
-    r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetLocalParameterValue(?&in value)", asFUNCTION(CKBehaviorSetParameterValueGeneric<2>), asCALL_GENERIC); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKBehavior", "CKERROR SetLocalParameterValue(int pos, ?&in value)", asFUNCTION(CKBehaviorSetParameterValueGeneric<2>), asCALL_GENERIC); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetLocalParameterWriteDataPtr(int pos)", asMETHODPR(CKBehavior, GetLocalParameterWriteDataPtr, (int), void *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetLocalParameterReadDataPtr(int pos)", asMETHODPR(CKBehavior, GetLocalParameterReadDataPtr, (int), void *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKBehavior", "CKObject@ GetLocalParameterObject(int pos)", asMETHODPR(CKBehavior, GetLocalParameterObject, (int), CKObject *), asCALL_THISCALL); assert(r >= 0);
