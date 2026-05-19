@@ -24,7 +24,7 @@ BEGIN
             VALUE "FileDescription", "AngelScript building blocks for Virtools"
             VALUE "FileVersion", CKAS_VERSION
             VALUE "InternalName", "AngelScript.dll"
-            VALUE "LegalCopyright", "Copyright (C) 2024"
+            VALUE "LegalCopyright", "Copyright (C) 2026"
             VALUE "OriginalFilename", "AngelScript.dll"
             VALUE "ProductName", "CKAngelScript"
             VALUE "ProductVersion", CKAS_VERSION
