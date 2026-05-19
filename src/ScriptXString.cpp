@@ -137,8 +137,10 @@ static bool CheckStringSize(const std::string &str) {
 }
 
 static void ConstructXString(const std::string &str, XString *self) {
-    if (!CheckStringSize(str))
+    if (!CheckStringSize(str)) {
+        new(self) XString();
         return;
+    }
 
     new(self) XString(str.c_str());
 }
