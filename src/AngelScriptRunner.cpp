@@ -127,10 +127,17 @@ CKERROR AngelScriptRunnerCallBack(const CKBehaviorContext &behcontext) {
 
 	switch (behcontext.CallbackMessage)
 	{
-	case CKM_BEHAVIORCREATE:
-	case CKM_BEHAVIORLOAD: {
+	case CKM_BEHAVIORCREATE: {
 		runner = new ScriptRunner(man);
 		beh->SetLocalParameterValue(0, &runner);
+	}
+		break;
+	case CKM_BEHAVIORLOAD: {
+		beh->GetLocalParameterValue(0, &runner);
+		if (!runner) {
+			runner = new ScriptRunner(man);
+			beh->SetLocalParameterValue(0, &runner);
+		}
 	}
 		break;
 	case CKM_BEHAVIORDELETE: {
