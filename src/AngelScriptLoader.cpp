@@ -175,6 +175,12 @@ static int OnLoadScript(const CKBehaviorContext &behcontext) {
         int column = 0;
         beh->GetInputParameterValue(2, &column);
 
+        if (column < 0 || column >= da->GetColumnCount()) {
+            beh->ActivateOutput(2);
+            beh->SetOutputParameterValue(0, nullptr);
+            return CKBR_OK;
+        }
+
         int count = da->GetRowCount();
         if (count == 0) {
             beh->ActivateOutput(2);
@@ -182,9 +188,19 @@ static int OnLoadScript(const CKBehaviorContext &behcontext) {
             return CKBR_OK;
         }
 
+        std::vector<std::string> filenameStore;
+        filenameStore.reserve(count);
         const char **filenames = new const char *[count];
         for (int i = 0; i < count; i++) {
-            filenames[i] = (CKSTRING) da->GetElement(i, column);
+            char filename[4096] = {};
+            if (!da->GetElementStringValue(i, column, filename) || filename[0] == '\0') {
+                delete[] filenames;
+                beh->ActivateOutput(2);
+                beh->SetOutputParameterValue(0, nullptr);
+                return CKBR_OK;
+            }
+            filenameStore.emplace_back(filename);
+            filenames[i] = filenameStore.back().c_str();
         }
 
         r = man->LoadScripts(name, filenames, count);
@@ -295,11 +311,16 @@ static void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &scrip
             FILE *fp = fopen(resolvedFilename.CStr(), "rb");
             if (fp) {
                 fseek(fp, 0, SEEK_END);
-                size_t size = ftell(fp);
-                fseek(fp, 0, SEEK_SET);
+                long size = ftell(fp);
+                if (size >= 0) {
+                    fseek(fp, 0, SEEK_SET);
 
-                code.resize(size);
-                fread(code.data(), 1, size, fp);
+                    code.resize(size);
+                    size_t read = fread(code.data(), 1, size, fp);
+                    if (read != static_cast<size_t>(size)) {
+                        code.clear();
+                    }
+                }
                 fclose(fp);
             }
 
@@ -317,9 +338,16 @@ static void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &scrip
         int column = 0;
         beh->GetInputParameterValue(2, &column);
 
+        if (column < 0 || column >= da->GetColumnCount()) {
+            return;
+        }
+
         int count = da->GetRowCount();
         for (int i = 0; i < count; i++) {
-            auto filename = (CKSTRING) da->GetElement(i, column);
+            char filename[4096] = {};
+            if (!da->GetElementStringValue(i, column, filename) || filename[0] == '\0') {
+                continue;
+            }
 
             std::string code;
 
@@ -328,11 +356,16 @@ static void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &scrip
             FILE *fp = fopen(resolvedFilename.CStr(), "rb");
             if (fp) {
                 fseek(fp, 0, SEEK_END);
-                size_t size = ftell(fp);
-                fseek(fp, 0, SEEK_SET);
+                long size = ftell(fp);
+                if (size >= 0) {
+                    fseek(fp, 0, SEEK_SET);
 
-                code.resize(size);
-                fread(code.data(), 1, size, fp);
+                    code.resize(size);
+                    size_t read = fread(code.data(), 1, size, fp);
+                    if (read != static_cast<size_t>(size)) {
+                        code.clear();
+                    }
+                }
                 fclose(fp);
             }
 
