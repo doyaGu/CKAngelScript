@@ -600,9 +600,9 @@ static void CKRenderContext_RenderCallback(CKRenderContext *dev, void *data) {
     engine->ReturnContext(ctx);
 
     if (IsMarkedAsTemporary(func)) {
-        func->Release();
         ClearTemporaryMark(func);
         MarkAsReleasedOnce(func);
+        func->Release();
     }
 }
 
@@ -639,7 +639,7 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
         scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); self->AddPreRenderCallBack(CKRenderContext_RenderCallback, scriptFunc, temporary);
     }, (CKRenderContext *, asIScriptFunction *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePreRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTIONPR([](CKRenderContext *self, asIScriptFunction *scriptFunc) {
-        self->RemovePreRenderCallBack(CKRenderContext_RenderCallback, scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else scriptFunc->Release();
+        self->RemovePreRenderCallBack(CKRenderContext_RenderCallback, scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); }
     }, (CKRenderContext *, asIScriptFunction *), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // r = engine->RegisterObjectMethod("CKRenderContext", "void AddPostRenderCallBack(uintptr_t, uintptr_t, bool = false, bool = false)", asMETHODPR(CKRenderContext, AddPostRenderCallBack, (CK_RENDERCALLBACK, void *, CKBOOL, CKBOOL), void), asCALL_THISCALL); assert(r >= 0);
@@ -648,7 +648,7 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
         scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); self->AddPostRenderCallBack(CKRenderContext_RenderCallback, scriptFunc, temporary);
     }, (CKRenderContext *, asIScriptFunction *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePostRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTIONPR([](CKRenderContext *self, asIScriptFunction *scriptFunc) {
-        self->RemovePostRenderCallBack(CKRenderContext_RenderCallback, scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else scriptFunc->Release();
+        self->RemovePostRenderCallBack(CKRenderContext_RenderCallback, scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); }
     }, (CKRenderContext *, asIScriptFunction *), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // r = engine->RegisterObjectMethod("CKRenderContext", "void AddPostSpriteRenderCallBack(uintptr_t, uintptr_t, bool = false)", asMETHODPR(CKRenderContext, AddPostSpriteRenderCallBack, (CK_RENDERCALLBACK, void *, CKBOOL), void), asCALL_THISCALL); assert(r >= 0);
@@ -657,7 +657,7 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
         scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); self->AddPostSpriteRenderCallBack(CKRenderContext_RenderCallback, scriptFunc, temporary);
     }, (CKRenderContext *, asIScriptFunction *, bool), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePostSpriteRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTIONPR([](CKRenderContext *self, asIScriptFunction *scriptFunc) {
-        self->RemovePostSpriteRenderCallBack(CKRenderContext_RenderCallback, scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else scriptFunc->Release();
+        self->RemovePostSpriteRenderCallBack(CKRenderContext_RenderCallback, scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); }
     }, (CKRenderContext *, asIScriptFunction *), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "VxDrawPrimitiveData &GetDrawPrimitiveStructure(CKRST_DPFLAGS flags, int vretexCount)", asMETHODPR(CKRenderContext, GetDrawPrimitiveStructure, (CKRST_DPFLAGS, int), VxDrawPrimitiveData *), asCALL_THISCALL); assert(r >= 0);
@@ -1927,9 +1927,9 @@ static void CKMesh_MeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, CKM
     engine->ReturnContext(ctx);
 
     if (IsMarkedAsTemporary(func)) {
-        func->Release();
         ClearTemporaryMark(func);
         MarkAsReleasedOnce(func);
+        func->Release();
     }
 }
 
@@ -1966,9 +1966,9 @@ static void CKMesh_SubMeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, 
     engine->ReturnContext(ctx);
 
     if (IsMarkedAsTemporary(func)) {
-        func->Release();
         ClearTemporaryMark(func);
         MarkAsReleasedOnce(func);
+        func->Release();
     }
 }
 
@@ -2105,7 +2105,7 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
         scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); bool result = self->AddPreRenderCallBack(CKMesh_MeshRenderCallback, scriptFunc, temporary); if (result) { auto *man = ScriptManager::GetManager(scriptFunc->GetEngine()); if (man) man->TrackCKObjectCallback(self->GetID(), scriptFunc); } else { if (temporary) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } return result;
     }, (T *, asIScriptFunction *, bool), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void RemovePreRenderCallBack(CK_MESHRENDERCALLBACK@ callback)", asFUNCTIONPR([](T *self, asIScriptFunction *scriptFunc) -> bool {
-        bool result = self->RemovePreRenderCallBack(CKMesh_MeshRenderCallback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else scriptFunc->Release(); } return result;
+        bool result = self->RemovePreRenderCallBack(CKMesh_MeshRenderCallback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } } return result;
     }, (T *, asIScriptFunction *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // r = engine->RegisterObjectMethod(name, "bool AddPostRenderCallBack(uintptr_t func, uintptr_t argument, bool temporary = false)", asMETHODPR(T, AddPostRenderCallBack, (CK_MESHRENDERCALLBACK, void *, CKBOOL), CKBOOL), asCALL_THISCALL); assert(r >= 0);
@@ -2114,7 +2114,7 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
         scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); bool result = self->AddPostRenderCallBack(CKMesh_MeshRenderCallback, scriptFunc, temporary); if (result) { auto *man = ScriptManager::GetManager(scriptFunc->GetEngine()); if (man) man->TrackCKObjectCallback(self->GetID(), scriptFunc); } else { if (temporary) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } return result;
     }, (T *, asIScriptFunction *, bool), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void RemovePostRenderCallBack(CK_MESHRENDERCALLBACK@ callback)", asFUNCTIONPR([](T *self, asIScriptFunction *scriptFunc) -> bool {
-        bool result = self->RemovePostRenderCallBack(CKMesh_MeshRenderCallback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else scriptFunc->Release(); } return result;
+        bool result = self->RemovePostRenderCallBack(CKMesh_MeshRenderCallback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } } return result;
     }, (T *, asIScriptFunction *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // r = engine->RegisterObjectMethod(name, "void SetRenderCallBack(uintptr_t func, uintptr_t argument)", asMETHODPR(T, SetRenderCallBack, (CK_MESHRENDERCALLBACK, void *), void), asCALL_THISCALL); assert(r >= 0);
@@ -2166,7 +2166,7 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
         scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); bool result = self->AddSubMeshPreRenderCallBack(CKMesh_SubMeshRenderCallback, scriptFunc, temporary); if (result) { auto *man = ScriptManager::GetManager(scriptFunc->GetEngine()); if (man) man->TrackCKObjectCallback(self->GetID(), scriptFunc); } else { if (temporary) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } return result;
     }, (T *, asIScriptFunction *, bool), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void RemoveSubMeshPreRenderCallBack(CK_SUBMESHRENDERCALLBACK@ callback)", asFUNCTIONPR([](T *self, asIScriptFunction *scriptFunc) -> bool {
-        bool result = self->RemoveSubMeshPreRenderCallBack(CKMesh_SubMeshRenderCallback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else scriptFunc->Release(); } return result;
+        bool result = self->RemoveSubMeshPreRenderCallBack(CKMesh_SubMeshRenderCallback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } } return result;
     }, (T *, asIScriptFunction *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // r = engine->RegisterObjectMethod(name, "bool AddSubMeshPostRenderCallBack(uintptr_t func, uintptr_t argument, bool temporary = false)", asMETHODPR(T, AddSubMeshPostRenderCallBack, (CK_SUBMESHRENDERCALLBACK, void *, CKBOOL), CKBOOL), asCALL_THISCALL); assert(r >= 0);
@@ -2175,7 +2175,7 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
         scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); bool result = self->AddSubMeshPostRenderCallBack(CKMesh_SubMeshRenderCallback, scriptFunc, temporary); if (result) { auto *man = ScriptManager::GetManager(scriptFunc->GetEngine()); if (man) man->TrackCKObjectCallback(self->GetID(), scriptFunc); } else { if (temporary) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } return result;
     }, (T *, asIScriptFunction *, bool), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void RemoveSubMeshPostRenderCallBack(CK_SUBMESHRENDERCALLBACK@ callback)", asFUNCTIONPR([](T *self, asIScriptFunction *scriptFunc) -> bool {
-        bool result = self->RemoveSubMeshPostRenderCallBack(CKMesh_SubMeshRenderCallback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else scriptFunc->Release(); } return result;
+        bool result = self->RemoveSubMeshPostRenderCallBack(CKMesh_SubMeshRenderCallback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } } return result;
     }, (T *, asIScriptFunction *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     if (strcmp(name, "CKMesh") != 0) {
@@ -2642,9 +2642,9 @@ static CKBOOL CKRenderObject_Callback(CKRenderContext *dev, CKRenderObject *ent,
     engine->ReturnContext(ctx);
 
     if (IsMarkedAsTemporary(func)) {
-        func->Release();
         ClearTemporaryMark(func);
         MarkAsReleasedOnce(func);
+        func->Release();
     }
 
     return r >= 0;
@@ -2672,7 +2672,7 @@ static void RegisterCKRenderObjectMembers(asIScriptEngine *engine, const char *n
         scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); bool result = self->AddPreRenderCallBack(CKRenderObject_Callback, scriptFunc, temporary); if (result) { auto *man = ScriptManager::GetManager(scriptFunc->GetEngine()); if (man) man->TrackCKObjectCallback(self->GetID(), scriptFunc); } else { if (temporary) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } return result;
     }, (T *, asIScriptFunction *, bool), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void RemovePreRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)", asFUNCTIONPR([](T *self, asIScriptFunction *scriptFunc) -> bool {
-        bool result = self->RemovePreRenderCallBack(CKRenderObject_Callback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else scriptFunc->Release(); } return result;
+        bool result = self->RemovePreRenderCallBack(CKRenderObject_Callback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } } return result;
     }, (T *, asIScriptFunction *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     // r = engine->RegisterObjectMethod(name, "bool SetRenderCallBack(uintptr_t func, uintptr_t argument)", asMETHODPR(T, SetRenderCallBack, (CK_RENDEROBJECT_CALLBACK, void *), CKBOOL), asCALL_THISCALL); assert(r >= 0);
@@ -2707,7 +2707,7 @@ static void RegisterCKRenderObjectMembers(asIScriptEngine *engine, const char *n
         scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); bool result = self->AddPostRenderCallBack(CKRenderObject_Callback, scriptFunc, temporary); if (result) { auto *man = ScriptManager::GetManager(scriptFunc->GetEngine()); if (man) man->TrackCKObjectCallback(self->GetID(), scriptFunc); } else { if (temporary) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } return result;
     }, (T *, asIScriptFunction *, bool), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void RemovePostRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)", asFUNCTIONPR([](T *self, asIScriptFunction *scriptFunc) -> bool {
-        bool result = self->RemovePostRenderCallBack(CKRenderObject_Callback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else scriptFunc->Release(); } return result;
+        bool result = self->RemovePostRenderCallBack(CKRenderObject_Callback, scriptFunc); if (result) { auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) man->UntrackCKObjectCallback(self->GetID(), scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); } } return result;
     }, (T *, asIScriptFunction *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod(name, "void RemoveAllCallbacks()", asFUNCTIONPR([](T *self) { self->RemoveAllCallbacks(); auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) { man->ReleaseCKObjectCallbacks(self->GetID()); man->ReleaseCKObjectData(self->GetID()); } }, (T *), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);

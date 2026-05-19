@@ -314,6 +314,9 @@ void ScriptManager::ClearCKObjectData() {
             if (IsMarkedAsReleasedOnce(func)) {
                 ClearReleasedOnceMark(func);
             } else {
+                if (IsMarkedAsTemporary(func)) {
+                    ClearTemporaryMark(func);
+                }
                 func->Release();
             }
         }
@@ -361,6 +364,9 @@ void ScriptManager::ReleaseCKObjectCallbacks(CK_ID id) {
         if (IsMarkedAsReleasedOnce(func)) {
             ClearReleasedOnceMark(func);
         } else {
+            if (IsMarkedAsTemporary(func)) {
+                ClearTemporaryMark(func);
+            }
             func->Release();
         }
     }
