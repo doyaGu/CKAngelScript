@@ -2,6 +2,7 @@
 #define CK_SCRIPTCKDEFINES_H
 
 #include <angelscript.h>
+#include "CKAll.h"
 
 void RegisterCKGlobalVariables(asIScriptEngine *engine);
 void RegisterCKGlobalFunctions(asIScriptEngine *engine);
@@ -40,6 +41,10 @@ void RegisterCKPluginCategory(asIScriptEngine *engine);
 void RegisterCKOperationDesc(asIScriptEngine *engine);
 
 void RegisterCKAttributeVal(asIScriptEngine *engine);
+#if CKVERSION == 0x13022002
+void RegisterCKAttributeDesc(asIScriptEngine *engine);
+void RegisterCKAttributeCategoryDesc(asIScriptEngine *engine);
+#endif
 
 void RegisterCKTimeProfiler(asIScriptEngine *engine);
 

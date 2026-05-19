@@ -2,9 +2,13 @@
 #define CK_SCRIPTCKMANAGERS_H
 
 #include <angelscript.h>
+#include "CKAll.h"
 
 void RegisterCKPluginManager(asIScriptEngine *engine);
 void RegisterCKBaseManager(asIScriptEngine *engine);
+#if CKVERSION == 0x13022002
+void RegisterCKObjectManager(asIScriptEngine *engine);
+#endif
 void RegisterCKParameterManager(asIScriptEngine *engine);
 void RegisterCKAttributeManager(asIScriptEngine *engine);
 void RegisterCKTimeManager(asIScriptEngine *engine);

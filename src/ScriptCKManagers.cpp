@@ -132,6 +132,19 @@ void RegisterCKBaseManager(asIScriptEngine *engine) {
     RegisterCKBaseManagerMembers<CKBaseManager>(engine, "CKBaseManager");
 }
 
+#if CKVERSION == 0x13022002
+void RegisterCKObjectManager(asIScriptEngine *engine) {
+    assert(engine != nullptr);
+
+    int r = 0;
+
+    RegisterCKBaseManagerMembers<CKObjectManager>(engine, "CKObjectManager");
+
+    r = engine->RegisterObjectMethod("CKObjectManager", "int GetObjectsCount()", asMETHODPR(CKObjectManager, GetObjectsCount, (), int), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("CKObjectManager", "CKObject@ GetObject(CK_ID id)", asFUNCTIONPR([](CKObjectManager *self, CK_ID id) { return self->CKGetObject(id); }, (CKObjectManager *, CK_ID), CKObject *), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+}
+#endif
+
 void RegisterCKParameterManager(asIScriptEngine *engine) {
     assert(engine != nullptr);
 

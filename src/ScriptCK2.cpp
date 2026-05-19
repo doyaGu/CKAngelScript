@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include "CKAll.h"
+
 #include "ScriptCKTypes.h"
 #include "ScriptCKEnums.h"
 #include "ScriptXObjectArray.h"
@@ -63,6 +65,10 @@ void RegisterCK2(asIScriptEngine *engine) {
     RegisterCKOperationDesc(engine);
 
     RegisterCKAttributeVal(engine);
+#if CKVERSION == 0x13022002
+    RegisterCKAttributeDesc(engine);
+    RegisterCKAttributeCategoryDesc(engine);
+#endif
 
     RegisterCKTimeProfiler(engine);
 
@@ -132,6 +138,9 @@ void RegisterCK2(asIScriptEngine *engine) {
 
     RegisterCKPluginManager(engine);
     RegisterCKBaseManager(engine);
+#if CKVERSION == 0x13022002
+    RegisterCKObjectManager(engine);
+#endif
     RegisterCKParameterManager(engine);
     RegisterCKAttributeManager(engine);
     RegisterCKTimeManager(engine);
