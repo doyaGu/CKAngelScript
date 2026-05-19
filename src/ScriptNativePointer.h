@@ -174,10 +174,16 @@ public:
     std::string ToString() const;
 
     NativePointer ReadPointer() const {
+        if (!m_Ptr) {
+            return {};
+        }
         return {*reinterpret_cast<char **>(m_Ptr)};
     }
 
     void WritePointer(const NativePointer &ptr) {
+        if (!m_Ptr) {
+            return;
+        }
         *reinterpret_cast<char **>(m_Ptr) = ptr.m_Ptr;
     }
 

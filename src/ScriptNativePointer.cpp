@@ -44,7 +44,7 @@ size_t NativePointer::ReadString(char *outStr, size_t maxSize) {
     if (maxSize == 0) return 0;
     size_t len = strlen(m_Ptr);
     if (len == 0) return 0;
-    if (len > maxSize) return 0;
+    if (len + 1 > maxSize) return 0;
     memcpy(outStr, m_Ptr, len + 1);
     return len + 1;
 }
@@ -92,7 +92,8 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Cannot write script objects to buffer");
+        if (ctx)
+            ctx->SetException("Cannot write script objects to buffer");
         gen->SetReturnDWord(0);
         return;
     }
@@ -100,7 +101,8 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
     if (typeId & asTYPEID_APPOBJECT) {
         if (typeId & asTYPEID_OBJHANDLE) {
             asIScriptContext *ctx = asGetActiveContext();
-            ctx->SetException("Cannot write object handle to buffer");
+            if (ctx)
+                ctx->SetException("Cannot write object handle to buffer");
             gen->SetReturnDWord(0);
             return;
         }
@@ -121,7 +123,8 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
                     size = type->GetSize();
                 } else {
                     asIScriptContext *ctx = asGetActiveContext();
-                    ctx->SetException("Cannot write non-POD object to buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot write non-POD object to buffer");
                     gen->SetReturnDWord(0);
                 }
             }
@@ -145,7 +148,8 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Cannot read script objects from buffer");
+        if (ctx)
+            ctx->SetException("Cannot read script objects from buffer");
         gen->SetReturnDWord(0);
         return;
     }
@@ -153,7 +157,8 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
     if (typeId & asTYPEID_APPOBJECT) {
         if (typeId & asTYPEID_OBJHANDLE) {
             asIScriptContext *ctx = asGetActiveContext();
-            ctx->SetException("Cannot read object handle from buffer");
+            if (ctx)
+                ctx->SetException("Cannot read object handle from buffer");
             gen->SetReturnDWord(0);
             return;
         }
@@ -174,7 +179,8 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
                     size = type->GetSize();
                 } else {
                     asIScriptContext *ctx = asGetActiveContext();
-                    ctx->SetException("Cannot read non-POD object from buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot read non-POD object from buffer");
                     gen->SetReturnDWord(0);
                     return;
                 }
