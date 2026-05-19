@@ -51,9 +51,10 @@ asILockableSharedBool *NativeBuffer::GetWeakRefFlag() {
 
 char &NativeBuffer::operator[](size_t index) {
     static char dummy = 0;
-    if (index >= m_Size) {
+    if (!m_Buffer || index >= m_Size) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of bounds");
+        if (ctx)
+            ctx->SetException("Index out of bounds");
         return dummy;
     }
     return m_Buffer[index];
@@ -61,16 +62,17 @@ char &NativeBuffer::operator[](size_t index) {
 
 const char &NativeBuffer::operator[](size_t index) const {
     static constexpr char dummy = 0;
-    if (index >= m_Size) {
+    if (!m_Buffer || index >= m_Size) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of bounds");
+        if (ctx)
+            ctx->SetException("Index out of bounds");
         return dummy;
     }
     return m_Buffer[index];
 }
 
 size_t NativeBuffer::Write(void *x, size_t size) {
-    if (!m_Buffer || m_CursorPos + size > m_Size || !x)
+    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !x)
         return 0;
     memcpy(&m_Buffer[m_CursorPos], x, size);
     m_CursorPos += size;
@@ -78,7 +80,7 @@ size_t NativeBuffer::Write(void *x, size_t size) {
 }
 
 size_t NativeBuffer::Read(void *x, size_t size) {
-    if (!m_Buffer || m_CursorPos + size > m_Size || !x)
+    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !x)
         return 0;
     memcpy(x, &m_Buffer[m_CursorPos], size);
     m_CursorPos += size;
@@ -97,19 +99,19 @@ size_t NativeBuffer::WriteString(const std::string &str) {
 }
 
 size_t NativeBuffer::ReadString(char *outStr, size_t maxSize) {
-    if (!m_Buffer || m_CursorPos >= m_Size)
+    if (!m_Buffer || m_CursorPos >= m_Size || !outStr || maxSize == 0)
         return 0;
 
     size_t i = 0;
     for (; i < maxSize - 1 && m_CursorPos < m_Size; ++i) {
         outStr[i] = m_Buffer[m_CursorPos++];
-        if (outStr[i] == '\0')
-            break;
+        if (outStr[i] == '\0') {
+            return i + 1;
+        }
     }
 
     outStr[i] = '\0';
-    m_CursorPos += i + 1;
-    return i + 1;
+    return i;
 }
 
 size_t NativeBuffer::ReadString(std::string &str) {
@@ -126,12 +128,11 @@ size_t NativeBuffer::ReadString(std::string &str) {
         str.push_back(c);
     }
 
-    m_CursorPos += count + 1;
     return count;
 }
 
 bool NativeBuffer::Fill(int value, size_t size) {
-    if (!m_Buffer || m_CursorPos + size >= m_Size)
+    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
         return false;
 
     memset(&m_Buffer[m_CursorPos], value, size);
@@ -140,33 +141,42 @@ bool NativeBuffer::Fill(int value, size_t size) {
 }
 
 bool NativeBuffer::Seek(size_t pos) {
-    if (pos >= m_Size)
+    if (pos > m_Size)
         return false;
     m_CursorPos = pos;
     return true;
 }
 
 bool NativeBuffer::Skip(size_t offset) {
+    if (m_CursorPos > m_Size || offset > m_Size - m_CursorPos)
+        return false;
     return Seek(m_CursorPos + offset);
 }
 
 int NativeBuffer::Compare(const NativeBuffer &other, size_t size) const {
-    if (!m_Buffer || m_CursorPos + size > m_Size)
+    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
         return -1;
-    if (other.CursorPos() + size > other.Size())
+    if (other.CursorPos() > other.Size() || size > other.Size() - other.CursorPos())
+        return 1;
+    if (size > 0 && !other.Cursor())
         return 1;
     return memcmp(&m_Buffer[m_CursorPos], other.Cursor(), size);
 }
 
 size_t NativeBuffer::Merge(const NativeBuffer &other, bool truncate) {
-    int size = other.Size() - other.CursorPos();
-    if (size == 0 || !m_Buffer)
+    if (!m_Buffer || m_CursorPos > m_Size || other.CursorPos() > other.Size())
+        return 0;
+
+    size_t size = other.Size() - other.CursorPos();
+    if (size == 0)
+        return 0;
+    if (!other.Cursor())
         return 0;
 
     if (truncate) {
-        if (m_CursorPos + size > m_Size)
+        if (size > m_Size - m_CursorPos)
             size = m_Size - m_CursorPos;
-    } else if (m_CursorPos + size > m_Size) {
+    } else if (size > m_Size - m_CursorPos) {
         return 0;
     }
 
@@ -176,7 +186,7 @@ size_t NativeBuffer::Merge(const NativeBuffer &other, bool truncate) {
 }
 
 NativeBuffer *NativeBuffer::Extract(size_t size) {
-    if (!m_Buffer || m_CursorPos + size > m_Size)
+    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
         return nullptr;
 
     auto *buffer = Create(&m_Buffer[m_CursorPos], size);
@@ -185,19 +195,23 @@ NativeBuffer *NativeBuffer::Extract(size_t size) {
 }
 
 NativePointer NativeBuffer::ToPointer() const {
+    if (!m_Buffer || m_CursorPos > m_Size)
+        return NativePointer();
     return NativePointer(&m_Buffer[m_CursorPos]);
 }
 
 size_t NativeBuffer::Load(const char *filename, size_t size, int offset) {
-    if (!m_Buffer || m_CursorPos + size > m_Size)
+    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !filename)
         return 0;
 
     FILE *fp = fopen(filename, "rb");
     if (!fp)
         return 0;
 
-    if (offset > 0)
-        fseek(fp, offset, SEEK_SET);
+    if (offset > 0 && fseek(fp, offset, SEEK_SET) != 0) {
+        fclose(fp);
+        return 0;
+    }
     size = fread(&m_Buffer[m_CursorPos], sizeof(char), size, fp);
     fclose(fp);
     m_CursorPos += size;
@@ -205,7 +219,7 @@ size_t NativeBuffer::Load(const char *filename, size_t size, int offset) {
 }
 
 size_t NativeBuffer::Save(const char *filename, size_t size) {
-    if (!m_Buffer || m_CursorPos + size > m_Size)
+    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !filename)
         return 0;
 
     FILE *fp = fopen(filename, "wb");

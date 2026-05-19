@@ -84,7 +84,7 @@ public:
 
     char *Data() const { return m_Buffer; }
     size_t Size() const { return m_Size; }
-    char *Cursor() const { return &m_Buffer[m_CursorPos]; }
+    char *Cursor() const { return m_Buffer && m_CursorPos <= m_Size ? &m_Buffer[m_CursorPos] : nullptr; }
     size_t CursorPos() const { return m_CursorPos; }
 
     bool IsValid() const { return m_Buffer != nullptr && m_Size > 0; }
