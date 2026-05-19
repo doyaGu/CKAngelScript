@@ -2298,8 +2298,8 @@ static void CKDataArrayGetElementValueGeneric(asIScriptGeneric *gen) {
 
         if (strcmp(type->GetName(), "string") == 0) {
             std::string &str = *static_cast<std::string *>(buf);
-            CKSTRING value = (CKSTRING) self->GetElement(i, c);
-            if (value)
+            char value[4096] = {};
+            if (self->GetElementStringValue(i, c, value))
                 str = value;
             else
                 err = CKERR_INVALIDPARAMETER;
