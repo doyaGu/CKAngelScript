@@ -310,15 +310,14 @@ static void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &scrip
             man->ResolveScriptFileName(resolvedFilename);
             FILE *fp = fopen(resolvedFilename.CStr(), "rb");
             if (fp) {
-                fseek(fp, 0, SEEK_END);
-                long size = ftell(fp);
-                if (size >= 0) {
-                    fseek(fp, 0, SEEK_SET);
-
-                    code.resize(size);
-                    size_t read = fread(code.data(), 1, size, fp);
-                    if (read != static_cast<size_t>(size)) {
-                        code.clear();
+                if (fseek(fp, 0, SEEK_END) == 0) {
+                    long size = ftell(fp);
+                    if (size >= 0 && fseek(fp, 0, SEEK_SET) == 0) {
+                        code.resize(size);
+                        size_t read = fread(code.data(), 1, size, fp);
+                        if (read != static_cast<size_t>(size)) {
+                            code.clear();
+                        }
                     }
                 }
                 fclose(fp);
@@ -355,15 +354,14 @@ static void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &scrip
             man->ResolveScriptFileName(resolvedFilename);
             FILE *fp = fopen(resolvedFilename.CStr(), "rb");
             if (fp) {
-                fseek(fp, 0, SEEK_END);
-                long size = ftell(fp);
-                if (size >= 0) {
-                    fseek(fp, 0, SEEK_SET);
-
-                    code.resize(size);
-                    size_t read = fread(code.data(), 1, size, fp);
-                    if (read != static_cast<size_t>(size)) {
-                        code.clear();
+                if (fseek(fp, 0, SEEK_END) == 0) {
+                    long size = ftell(fp);
+                    if (size >= 0 && fseek(fp, 0, SEEK_SET) == 0) {
+                        code.resize(size);
+                        size_t read = fread(code.data(), 1, size, fp);
+                        if (read != static_cast<size_t>(size)) {
+                            code.clear();
+                        }
                     }
                 }
                 fclose(fp);
