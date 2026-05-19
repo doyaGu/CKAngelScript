@@ -360,6 +360,8 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
             continue;
         }
         std::string filename = str;
+        CKDeletePointer(str);
+        str = nullptr;
 
         std::string buffer;
         int size = chunk->ReadInt();
