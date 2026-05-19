@@ -1053,7 +1053,8 @@ static CK_CLASSID CKClassDescGetToNotify(const CKClassDesc &desc, int index) {
     if (index < 0 || index >= desc.ToNotify.Size()) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Out of range");
+        if (ctx)
+            ctx->SetException("Out of range");
         return -1;
     }
     return desc.ToNotify[index];
@@ -1063,7 +1064,8 @@ static void CKClassDescSetToNotify(CKClassDesc &desc, int index, CK_CLASSID valu
     if (index < 0 || index >= desc.ToNotify.Size()) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Out of range");
+        if (ctx)
+            ctx->SetException("Out of range");
         return;
     }
     desc.ToNotify[index] = value;
