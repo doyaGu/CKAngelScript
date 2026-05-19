@@ -904,7 +904,7 @@ static void RegisterDynValue(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("DynValue", "void SetPointer(NativePointer value)", asFUNCTIONPR([](DCValue *obj, NativePointer p) { obj->p = p.Get(); }, (DCValue *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("DynValue", "string GetString() const", asFUNCTIONPR([](const DCValue *obj) -> std::string { return obj->Z ? std::string(obj->Z) : ""; }, (const DCValue *), std::string), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("DynValue", "void SetString(string &in value)", asFUNCTIONPR([](DCValue *obj, std::string &str) { obj->Z = str.data(); }, (DCValue *, std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
+    r = engine->RegisterObjectMethod("DynValue", "void SetString(const string &in value)", asFUNCTIONPR([](DCValue *obj, const std::string &str) { static thread_local std::string value; value = str; obj->Z = value.c_str(); }, (DCValue *, const std::string &), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 }
 
 static void RegisterDynArgs(asIScriptEngine *engine) {
