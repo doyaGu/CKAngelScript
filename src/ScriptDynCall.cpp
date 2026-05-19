@@ -296,33 +296,35 @@ public:
     }
 
     DynCallback(const std::string &signature, asIScriptFunction *func) {
-        if (func) {
-            func->AddRef();
-        }
-
         callback = dcbNewCallback(signature.c_str(), ScriptCallbackHandler, func);
         if (!callback) {
             auto *ctx = asGetActiveContext();
             if (ctx)
                 ctx->SetException("Failed to create callback.");
+        } else if (func) {
+            func->AddRef();
         }
     }
 
     DynCallback(const std::string &signature, asIScriptFunction *func, const DynAggregate &aggregate) {
-        if (func) {
-            func->AddRef();
-        }
-
         callback = dcbNewCallback2(signature.c_str(), ScriptCallbackHandler, func, &aggregate.aggr);
         if (!callback) {
             auto *ctx = asGetActiveContext();
             if (ctx)
                 ctx->SetException("Failed to create callback.");
+        } else if (func) {
+            func->AddRef();
         }
     }
 
     ~DynCallback() {
-        dcbFreeCallback(callback);
+        auto *handler = GetHandler();
+        if (handler) {
+            handler->Release();
+        }
+        if (callback) {
+            dcbFreeCallback(callback);
+        }
     }
 
     DynCallback(const DynCallback &other) = delete;
@@ -359,6 +361,13 @@ public:
     }
 
     void Init(const std::string &signature, asIScriptFunction *func) {
+        if (!callback) {
+            auto *ctx = asGetActiveContext();
+            if (ctx)
+                ctx->SetException("Callback is not initialized.");
+            return;
+        }
+
         auto *handler = GetHandler();
         if (handler) {
             handler->Release();
@@ -372,6 +381,13 @@ public:
     }
 
     void Init(const std::string &signature, asIScriptFunction *func, const DynAggregate &aggregate) {
+        if (!callback) {
+            auto *ctx = asGetActiveContext();
+            if (ctx)
+                ctx->SetException("Callback is not initialized.");
+            return;
+        }
+
         auto *handler = GetHandler();
         if (handler) {
             handler->Release();
@@ -385,6 +401,9 @@ public:
     }
 
     asIScriptFunction *GetHandler() const {
+        if (!callback) {
+            return nullptr;
+        }
         return static_cast<asIScriptFunction *>(dcbGetUserData(callback));
     }
 
