@@ -9,6 +9,7 @@
 #include "ScriptNativePointer.h"
 #include "ScriptNativeBuffer.h"
 #include "ScriptDynCall.h"
+#include "ScriptUtils.h"
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
 
@@ -379,6 +380,16 @@ int ScriptManager::SetupScriptEngine() {
     }, this);
     if (r < 0)
         return r;
+
+    m_ScriptEngine->SetEngineUserDataCleanupCallback([](asIScriptEngine *engine) {
+        engine->SetUserData(nullptr, SCRIPT_MANAGER_TYPE);
+    }, SCRIPT_MANAGER_TYPE);
+    m_ScriptEngine->SetFunctionUserDataCleanupCallback([](asIScriptFunction *func) {
+        func->SetUserData(nullptr, AS_TEMPORARY_FLAG_TYPE);
+    }, AS_TEMPORARY_FLAG_TYPE);
+    m_ScriptEngine->SetFunctionUserDataCleanupCallback([](asIScriptFunction *func) {
+        func->SetUserData(nullptr, AS_RELEASED_ONCE_FLAG_TYPE);
+    }, AS_RELEASED_ONCE_FLAG_TYPE);
 
     // Register the standard types
     RegisterStdTypes(m_ScriptEngine);
