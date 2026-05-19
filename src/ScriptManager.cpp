@@ -236,6 +236,9 @@ int ScriptManager::CompileScript(const char *scriptName, const char *scriptCode)
     if (!scriptName || scriptName[0] == '\0')
         return -1;
 
+    if (!scriptCode)
+        return -1;
+
     if (!m_ScriptEngine)
         return -2;
 

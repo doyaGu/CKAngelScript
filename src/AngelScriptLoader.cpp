@@ -151,6 +151,12 @@ static int OnLoadScript(const CKBehaviorContext &behcontext) {
             }
         } else {
             CKSTRING code = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
+            if (!code) {
+                beh->ActivateOutput(2);
+                beh->SetOutputParameterValue(0, nullptr);
+                return CKBR_OK;
+            }
+
             r = man->CompileScript(name, code);
             if (r < 0) {
                 beh->ActivateOutput(2);
@@ -300,7 +306,7 @@ static void ReadScriptData(CKBehavior *beh, std::shared_ptr<CachedScript> &scrip
             script->AddSection(filename, code);
         } else {
             CKSTRING code = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
-            script->sections.emplace_back(name, code);
+            script->sections.emplace_back(name, code ? code : "");
         }
     } else {
         CKDataArray *da = (CKDataArray *) beh->GetInputParameterReadDataPtr(1);
@@ -440,17 +446,28 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
             CKBOOL useFileList = FALSE;
             beh->GetLocalParameterValue(USE_FILE_LIST, &useFileList);
             if (useFileList) {
-                pin->SetGUID(CKPGUID_DATAARRAY, TRUE, "File List");
+                if (pin) {
+                    pin->SetGUID(CKPGUID_DATAARRAY, TRUE, "File List");
+                }
 
-                beh->CreateInputParameter("List Column", CKPGUID_INT);
+                if (beh->GetInputParameterCount() < 3) {
+                    beh->CreateInputParameter("List Column", CKPGUID_INT);
+                }
             } else {
-                CKDestroyObject(beh->RemoveInputParameter(2));
+                if (beh->GetInputParameterCount() > 2) {
+                    CKParameterIn *removed = beh->RemoveInputParameter(2);
+                    if (removed) {
+                        CKDestroyObject(removed);
+                    }
+                }
                 CKBOOL filenameAsCode = FALSE;
                 beh->GetLocalParameterValue(FILENAME_AS_CODE, &filenameAsCode);
-                if (filenameAsCode) {
-                    pin->SetGUID(CKPGUID_STRING, TRUE, "Code");
-                } else {
-                    pin->SetGUID(CKPGUID_STRING, TRUE, "Filename");
+                if (pin) {
+                    if (filenameAsCode) {
+                        pin->SetGUID(CKPGUID_STRING, TRUE, "Code");
+                    } else {
+                        pin->SetGUID(CKPGUID_STRING, TRUE, "Filename");
+                    }
                 }
             }
 
