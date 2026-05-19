@@ -244,7 +244,7 @@ static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstrea
                 if (r >= 0)
                     r = ctx->Execute();
             }
-            if (r < 0) {
+            if (r != asEXECUTION_FINISHED) {
                 stream << "<" << typeName << ":" << addr << ">";
                 engine->ReturnContext(ctx);
                 return;
@@ -401,7 +401,7 @@ static std::string FormatString(asIScriptGeneric *gen) {
                     if (r >= 0)
                         r = ctx->Execute();
                 }
-                if (r < 0) {
+                if (r != asEXECUTION_FINISHED) {
                     std::stringstream stream;
                     stream << "<" << typeName << ":" << addr << ">";
                     store.push_back(stream.str());

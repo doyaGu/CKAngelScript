@@ -438,7 +438,11 @@ public:
         ctx->SetArgObject(1, args);
         ctx->SetArgObject(2, result);
 
-        ctx->Execute();
+        r = ctx->Execute();
+        if (r != asEXECUTION_FINISHED) {
+            engine->ReturnContext(ctx);
+            return DC_SIGCHAR_VOID;
+        }
 
         auto signature = static_cast<DCsigchar>(ctx->GetReturnByte());
 
