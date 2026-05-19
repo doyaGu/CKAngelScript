@@ -129,7 +129,8 @@ static bool CheckStringSize(const std::string &str) {
     if (str.size() >= UINT16_MAX) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Oversized string");
+        if (ctx)
+            ctx->SetException("Oversized string");
         return false;
     }
     return true;
@@ -190,7 +191,8 @@ static char *XStringCharAt(const XWORD i, XString &self) {
     if (i >= self.Length()) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Out of range");
+        if (ctx)
+            ctx->SetException("Out of range");
         return nullptr;
     }
 
@@ -205,7 +207,8 @@ static XString StringCastToXString(const std::string &str) {
     if (str.size() >= UINT16_MAX) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Oversized string");
+        if (ctx)
+            ctx->SetException("Oversized string");
         return {};
     }
 

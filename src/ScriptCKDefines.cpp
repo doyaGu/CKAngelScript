@@ -714,7 +714,8 @@ static float CKStatsGetUserProfile(const CKStats &stats, int index) {
     if (index < 0 || index >= MAX_USER_PROFILE) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Out of range");
+        if (ctx)
+            ctx->SetException("Out of range");
         return 0.0f;
     }
     return stats.UserProfiles[index];
@@ -724,7 +725,8 @@ static void CKStatsSetUserProfile(CKStats &stats, int index, float value) {
     if (index < 0 || index >= MAX_USER_PROFILE) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Out of range");
+        if (ctx)
+            ctx->SetException("Out of range");
         return;
     }
     stats.UserProfiles[index] = value;
@@ -773,7 +775,7 @@ static std::string VxDriverDescGetDriverDesc(const VxDriverDesc &desc) {
 static void VxDriverDescSetDriverDesc(VxDriverDesc &desc, const std::string &value) {
 #if CKVERSION == 0x13022002
     strncpy(desc.DriverDesc, value.c_str(), sizeof(desc.DriverDesc) - 1);
-    desc.DriverDesc[value.length()] = '\0';
+    desc.DriverDesc[sizeof(desc.DriverDesc) - 1] = '\0';
 #else
     desc.DriverDesc = value.c_str();
 #endif
@@ -790,7 +792,7 @@ static std::string VxDriverDescGetDriverName(const VxDriverDesc &desc) {
 static void VxDriverDescSetDriverName(VxDriverDesc &desc, const std::string &value) {
 #if CKVERSION == 0x13022002
     strncpy(desc.DriverName, value.c_str(), sizeof(desc.DriverName) - 1);
-    desc.DriverName[value.length()] = '\0';
+    desc.DriverName[sizeof(desc.DriverName) - 1] = '\0';
 #else
     desc.DriverName = value.c_str();
 #endif
@@ -804,7 +806,8 @@ static VxDisplayMode *VxDriverDescGetDisplayMode(VxDriverDesc &desc, int index) 
 #endif
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Out of range");
+        if (ctx)
+            ctx->SetException("Out of range");
         return nullptr;
     }
     return &desc.DisplayModes[index];
@@ -818,7 +821,8 @@ static void VxDriverDescSetDisplayMode(VxDriverDesc &desc, int index, const VxDi
 #endif
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Out of range");
+        if (ctx)
+            ctx->SetException("Out of range");
         return;
     }
     desc.DisplayModes[index] = value;
@@ -2399,7 +2403,8 @@ void RegisterCKSceneObjectDesc(asIScriptEngine *engine) {
 static short int CKPatchGetV(CKPatch &patch, int index) {
     if (index < 0 || index >= 4) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of range for 'v'");
+        if (ctx)
+            ctx->SetException("Index out of range for 'v'");
         return 0;
     }
     return patch.v[index];
@@ -2408,7 +2413,8 @@ static short int CKPatchGetV(CKPatch &patch, int index) {
 static void CKPatchSetV(CKPatch &patch, int index, short int value) {
     if (index < 0 || index >= 4) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of range for 'v'");
+        if (ctx)
+            ctx->SetException("Index out of range for 'v'");
         return;
     }
     patch.v[index] = value;
@@ -2417,7 +2423,8 @@ static void CKPatchSetV(CKPatch &patch, int index, short int value) {
 static short int CKPatchGetVec(CKPatch &patch, int index) {
     if (index < 0 || index >= 8) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of range for 'vec'");
+        if (ctx)
+            ctx->SetException("Index out of range for 'vec'");
         return 0;
     }
     return patch.vec[index];
@@ -2426,7 +2433,8 @@ static short int CKPatchGetVec(CKPatch &patch, int index) {
 static void CKPatchSetVec(CKPatch &patch, int index, short int value) {
     if (index < 0 || index >= 8) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of range for 'vec'");
+        if (ctx)
+            ctx->SetException("Index out of range for 'vec'");
         return;
     }
     patch.vec[index] = value;
@@ -2435,7 +2443,8 @@ static void CKPatchSetVec(CKPatch &patch, int index, short int value) {
 static short int CKPatchGetInterior(CKPatch &patch, int index) {
     if (index < 0 || index >= 4) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of range for 'interior'");
+        if (ctx)
+            ctx->SetException("Index out of range for 'interior'");
         return 0;
     }
     return patch.interior[index];
@@ -2444,7 +2453,8 @@ static short int CKPatchGetInterior(CKPatch &patch, int index) {
 static void CKPatchSetInterior(CKPatch &patch, int index, short int value) {
     if (index < 0 || index >= 4) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of range for 'interior'");
+        if (ctx)
+            ctx->SetException("Index out of range for 'interior'");
         return;
     }
     patch.interior[index] = value;
@@ -2453,7 +2463,8 @@ static void CKPatchSetInterior(CKPatch &patch, int index, short int value) {
 static short int CKPatchGetEdge(CKPatch &patch, int index) {
     if (index < 0 || index >= 4) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of range for 'edge'");
+        if (ctx)
+            ctx->SetException("Index out of range for 'edge'");
         return 0;
     }
     return patch.edge[index];
@@ -2462,7 +2473,8 @@ static short int CKPatchGetEdge(CKPatch &patch, int index) {
 static void CKPatchSetEdge(CKPatch &patch, int index, short int value) {
     if (index < 0 || index >= 4) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Index out of range for 'edge'");
+        if (ctx)
+            ctx->SetException("Index out of range for 'edge'");
         return;
     }
     patch.edge[index] = value;
@@ -2511,7 +2523,8 @@ static short int CKTVPatchGetTV(CKTVPatch &patch, int index) {
     if (index < 0 || index >= 4) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Out of range");
+        if (ctx)
+            ctx->SetException("Out of range");
         return 0;
     }
     return patch.tv[index];
@@ -2521,7 +2534,8 @@ static void CKTVPatchSetTV(CKTVPatch &patch, int index, short int tv) {
     if (index < 0 || index >= 4) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Out of range");
+        if (ctx)
+            ctx->SetException("Out of range");
         return;
     }
     patch.tv[index] = tv;
