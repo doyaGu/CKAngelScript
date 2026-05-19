@@ -352,7 +352,12 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
     CKDeletePointer(str);
     str = nullptr;
 
-    const int numSections = (int) chunk->ReadDword();
+    const int numSections = chunk->ReadInt();
+    if (numSections < 0) {
+        chunk->CloseChunk();
+        return false;
+    }
+
     for (int i = 0; i < numSections; ++i) {
         chunk->ReadString(&str);
         if (!str) {
@@ -365,6 +370,10 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
 
         std::string buffer;
         int size = chunk->ReadInt();
+        if (size < 0) {
+            chunk->CloseChunk();
+            return false;
+        }
         if (size != 0) {
             buffer.resize(size);
             chunk->ReadAndFillBuffer(size, buffer.data());
@@ -373,6 +382,7 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         sections.emplace_back(std::move(filename), std::move(buffer));
     }
 
+    chunk->CloseChunk();
     return true;
 }
 
