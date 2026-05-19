@@ -53,7 +53,7 @@ public:
     }
 
     bool operator>(const NativePointer &rhs) const {
-        return *this < rhs;
+        return rhs < *this;
     }
 
     bool operator<=(const NativePointer &rhs) const {
