@@ -183,7 +183,8 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
         asIScriptFunction *delegate = func->GetDelegateFunction();
         void *delegateObject = func->GetDelegateObject();
         r = ctx->Prepare(delegate);
-        ctx->SetObject(delegateObject);
+        if (r >= 0)
+            ctx->SetObject(delegateObject);
     } else {
         r = ctx->Prepare(func);
     }

@@ -577,13 +577,16 @@ static void CKRenderContext_RenderCallback(CKRenderContext *dev, void *data) {
 
     asIScriptEngine *engine = func->GetEngine();
     asIScriptContext *ctx = engine->RequestContext();
+    if (!ctx)
+        return;
 
     int r = 0;
     if (func->GetFuncType() == asFUNC_DELEGATE) {
         asIScriptFunction *callback = func->GetDelegateFunction();
         void *callbackObject = func->GetDelegateObject();
         r = ctx->Prepare(callback);
-        ctx->SetObject(callbackObject);
+        if (r >= 0)
+            ctx->SetObject(callbackObject);
     } else {
         r = ctx->Prepare(func);
     }
@@ -1902,13 +1905,16 @@ static void CKMesh_MeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, CKM
 
     asIScriptEngine *engine = func->GetEngine();
     asIScriptContext *ctx = engine->RequestContext();
+    if (!ctx)
+        return;
 
     int r = 0;
     if (func->GetFuncType() == asFUNC_DELEGATE) {
         asIScriptFunction *callback = func->GetDelegateFunction();
         void *callbackObject = func->GetDelegateObject();
         r = ctx->Prepare(callback);
-        ctx->SetObject(callbackObject);
+        if (r >= 0)
+            ctx->SetObject(callbackObject);
     } else {
         r = ctx->Prepare(func);
     }
@@ -1940,13 +1946,16 @@ static void CKMesh_SubMeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, 
 
     asIScriptEngine *engine = func->GetEngine();
     asIScriptContext *ctx = engine->RequestContext();
+    if (!ctx)
+        return;
 
     int r = 0;
     if (func->GetFuncType() == asFUNC_DELEGATE) {
         asIScriptFunction *callback = func->GetDelegateFunction();
         void *callbackObject = func->GetDelegateObject();
         r = ctx->Prepare(callback);
-        ctx->SetObject(callbackObject);
+        if (r >= 0)
+            ctx->SetObject(callbackObject);
     } else {
         r = ctx->Prepare(func);
     }
@@ -2618,13 +2627,16 @@ static CKBOOL CKRenderObject_Callback(CKRenderContext *dev, CKRenderObject *ent,
 
     asIScriptEngine *engine = func->GetEngine();
     asIScriptContext *ctx = engine->RequestContext();
+    if (!ctx)
+        return FALSE;
 
     int r = 0;
     if (func->GetFuncType() == asFUNC_DELEGATE) {
         asIScriptFunction *callback = func->GetDelegateFunction();
         void *callbackObject = func->GetDelegateObject();
         r = ctx->Prepare(callback);
-        ctx->SetObject(callbackObject);
+        if (r >= 0)
+            ctx->SetObject(callbackObject);
     } else {
         r = ctx->Prepare(func);
     }
@@ -2637,7 +2649,7 @@ static CKBOOL CKRenderObject_Callback(CKRenderContext *dev, CKRenderObject *ent,
     ctx->SetArgObject(0, dev);
     ctx->SetArgObject(1, ent);
 
-    ctx->Execute();
+    r = ctx->Execute();
 
     engine->ReturnContext(ctx);
 
@@ -2647,7 +2659,7 @@ static CKBOOL CKRenderObject_Callback(CKRenderContext *dev, CKRenderObject *ent,
         func->Release();
     }
 
-    return r >= 0;
+    return r == asEXECUTION_FINISHED;
 }
 
 template <typename T>

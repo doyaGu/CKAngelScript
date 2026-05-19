@@ -418,13 +418,16 @@ public:
 
         asIScriptEngine *engine = func->GetEngine();
         asIScriptContext *ctx = engine->RequestContext();
+        if (!ctx)
+            return DC_SIGCHAR_VOID;
 
         int r = 0;
         if (func->GetFuncType() == asFUNC_DELEGATE) {
             asIScriptFunction *callback = func->GetDelegateFunction();
             void *callbackObject = func->GetDelegateObject();
             r = ctx->Prepare(callback);
-            ctx->SetObject(callbackObject);
+            if (r >= 0)
+                ctx->SetObject(callbackObject);
         } else {
             r = ctx->Prepare(func);
         }

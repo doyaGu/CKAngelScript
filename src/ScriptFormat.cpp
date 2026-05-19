@@ -238,6 +238,10 @@ static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstrea
         if (func) {
             // Call function
             asIScriptContext *ctx = engine->RequestContext();
+            if (!ctx) {
+                stream << "<" << typeName << ":" << addr << ">";
+                return;
+            }
             int r = ctx->Prepare(func);
             if (r >= 0) {
                 r = ctx->SetObject(addr);
@@ -395,6 +399,12 @@ static std::string FormatString(asIScriptGeneric *gen) {
             if (func) {
                 // Call function
                 asIScriptContext *ctx = engine->RequestContext();
+                if (!ctx) {
+                    std::stringstream stream;
+                    stream << "<" << typeName << ":" << addr << ">";
+                    store.push_back(stream.str());
+                    continue;
+                }
                 int r = ctx->Prepare(func);
                 if (r >= 0) {
                     r = ctx->SetObject(addr);
