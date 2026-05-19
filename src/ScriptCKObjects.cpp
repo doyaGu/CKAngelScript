@@ -208,7 +208,8 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
     CKERROR err = CK_OK;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
-        ctx->SetException("Cannot read script objects from buffer");
+        if (ctx)
+            ctx->SetException("Cannot read script objects from buffer");
         gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
         return;
     }
@@ -221,7 +222,8 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
         }
 
         if (typeId & asTYPEID_OBJHANDLE) {
-            ctx->SetException("Cannot read object handle from buffer");
+            if (ctx)
+                ctx->SetException("Cannot read object handle from buffer");
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
         }
@@ -239,7 +241,8 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
                 if (type->GetFlags() & asOBJ_POD) {
                     err = p->GetValue(buf);
                 } else {
-                    ctx->SetException("Cannot read non-POD objects from buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot read non-POD objects from buffer");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                     return;
                 }
@@ -299,7 +302,8 @@ static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
     CKERROR err = CK_OK;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
-        ctx->SetException("Cannot read script objects from buffer");
+        if (ctx)
+            ctx->SetException("Cannot read script objects from buffer");
         gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
         return;
     }
@@ -312,7 +316,8 @@ static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
         }
 
         if (typeId & asTYPEID_OBJHANDLE) {
-            ctx->SetException("Cannot read object handle from buffer");
+            if (ctx)
+                ctx->SetException("Cannot read object handle from buffer");
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
         }
@@ -330,7 +335,8 @@ static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
                 if (type->GetFlags() & asOBJ_POD) {
                     err = self->GetValue(buf, update);
                 } else {
-                    ctx->SetException("Cannot read non-POD objects from buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot read non-POD objects from buffer");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                     return;
                 }
@@ -357,7 +363,8 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
     CKERROR err = CK_OK;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
-        ctx->SetException("Cannot write script objects to buffer");
+        if (ctx)
+            ctx->SetException("Cannot write script objects to buffer");
         gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
         return;
     }
@@ -370,7 +377,8 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
         }
 
         if (typeId & asTYPEID_OBJHANDLE) {
-            ctx->SetException("Cannot write object handle to buffer");
+            if (ctx)
+                ctx->SetException("Cannot write object handle to buffer");
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
         }
@@ -384,7 +392,8 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
                 if (type->GetFlags() & asOBJ_POD) {
                     err = self->SetValue(buf, type->GetSize());
                 } else {
-                    ctx->SetException("Cannot write non-POD objects to buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot write non-POD objects to buffer");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                     return;
                 }
@@ -926,7 +935,8 @@ static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
     CKERROR err = CK_OK;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
-        ctx->SetException("Cannot read script objects from buffer");
+        if (ctx)
+            ctx->SetException("Cannot read script objects from buffer");
         gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
         return;
     }
@@ -939,7 +949,8 @@ static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
         }
 
         if (typeId & asTYPEID_OBJHANDLE) {
-            ctx->SetException("Cannot read object handle from buffer");
+            if (ctx)
+                ctx->SetException("Cannot read object handle from buffer");
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
         }
@@ -958,7 +969,8 @@ static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
                     value = (CKSTRING) self->GetLocalParameterReadDataPtr(pos);
                     break;
                 default:
-                    ctx->SetException("Invalid parameter type");
+                    if (ctx)
+                        ctx->SetException("Invalid parameter type");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                     return;
             }
@@ -981,12 +993,14 @@ static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
                             err = self->GetLocalParameterValue(pos, buf);
                         break;
                         default:
-                            ctx->SetException("Invalid parameter type");
+                            if (ctx)
+                                ctx->SetException("Invalid parameter type");
                             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                             return;
                     }
                 } else {
-                    ctx->SetException("Cannot read non-POD objects from buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot read non-POD objects from buffer");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                     return;
                 }
@@ -1006,7 +1020,8 @@ static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
                     err = self->GetLocalParameterValue(pos, buf);
                 break;
                 default:
-                    ctx->SetException("Invalid parameter type");
+                    if (ctx)
+                        ctx->SetException("Invalid parameter type");
                 gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                 return;
             }
@@ -1029,7 +1044,8 @@ static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
     CKERROR err = CK_OK;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
-        ctx->SetException("Cannot write script objects to buffer");
+        if (ctx)
+            ctx->SetException("Cannot write script objects to buffer");
         gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
         return;
     }
@@ -1042,7 +1058,8 @@ static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
         }
 
         if (typeId & asTYPEID_OBJHANDLE) {
-            ctx->SetException("Cannot write object handle from buffer");
+            if (ctx)
+                ctx->SetException("Cannot write object handle from buffer");
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
         }
@@ -1057,7 +1074,8 @@ static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
                     err = self->SetLocalParameterValue(pos, str.data());
                 break;
                 default:
-                    ctx->SetException("Invalid parameter type");
+                    if (ctx)
+                        ctx->SetException("Invalid parameter type");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                     return;
             }
@@ -1073,12 +1091,14 @@ static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
                             err = self->SetLocalParameterValue(pos, buf);
                         break;
                         default:
-                            ctx->SetException("Invalid parameter type");
+                            if (ctx)
+                                ctx->SetException("Invalid parameter type");
                         gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                         return;
                     }
                 } else {
-                    ctx->SetException("Cannot write non-POD objects to buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot write non-POD objects to buffer");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                     return;
                 }
@@ -1095,7 +1115,8 @@ static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
                     err = self->SetLocalParameterValue(pos, buf);
                 break;
                 default:
-                    ctx->SetException("Invalid parameter type");
+                    if (ctx)
+                        ctx->SetException("Invalid parameter type");
                 gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                 return;
             }
@@ -2278,7 +2299,8 @@ static void CKDataArrayGetElementValueGeneric(asIScriptGeneric *gen) {
     CKERROR err = CK_OK;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
-        ctx->SetException("Cannot read script objects from buffer");
+        if (ctx)
+            ctx->SetException("Cannot read script objects from buffer");
         gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
         return;
     }
@@ -2291,7 +2313,8 @@ static void CKDataArrayGetElementValueGeneric(asIScriptGeneric *gen) {
         }
 
         if (typeId & asTYPEID_OBJHANDLE) {
-            ctx->SetException("Cannot read object handle from buffer");
+            if (ctx)
+                ctx->SetException("Cannot read object handle from buffer");
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
         }
@@ -2309,7 +2332,8 @@ static void CKDataArrayGetElementValueGeneric(asIScriptGeneric *gen) {
                 if (type->GetFlags() & asOBJ_POD) {
                     err = self->GetElementValue(i, c, buf);
                 } else {
-                    ctx->SetException("Cannot read non-POD objects from buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot read non-POD objects from buffer");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                     return;
                 }
@@ -2338,7 +2362,8 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
     CKERROR err = CK_OK;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
-        ctx->SetException("Cannot write script objects to buffer");
+        if (ctx)
+            ctx->SetException("Cannot write script objects to buffer");
         gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
         return;
     }
@@ -2351,7 +2376,8 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
         }
 
         if (typeId & asTYPEID_OBJHANDLE) {
-            ctx->SetException("Cannot write object handle to buffer");
+            if (ctx)
+                ctx->SetException("Cannot write object handle to buffer");
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
         }
@@ -2365,7 +2391,8 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
                 if (type->GetFlags() & asOBJ_POD) {
                     err = self->SetElementValue(i, c, buf);
                 } else {
-                    ctx->SetException("Cannot write non-POD objects to buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot write non-POD objects to buffer");
                     gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
                     return;
                 }
