@@ -241,7 +241,8 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Cannot write script objects to buffer");
+        if (ctx)
+            ctx->SetException("Cannot write script objects to buffer");
         gen->SetReturnDWord(0);
         return;
     }
@@ -249,7 +250,8 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
     if (typeId & asTYPEID_APPOBJECT) {
         if (typeId & asTYPEID_OBJHANDLE) {
             asIScriptContext *ctx = asGetActiveContext();
-            ctx->SetException("Cannot write object handle to buffer");
+            if (ctx)
+                ctx->SetException("Cannot write object handle to buffer");
             gen->SetReturnDWord(0);
             return;
         }
@@ -270,13 +272,14 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
                     size = type->GetSize();
                 } else {
                     asIScriptContext *ctx = asGetActiveContext();
-                    ctx->SetException("Cannot write non-POD object to buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot write non-POD object to buffer");
                     gen->SetReturnDWord(0);
                     return;
                 }
             }
 
-            if (size != 0 && self->CursorPos() + size <= self->Size()) {
+            if (size != 0 && self->CursorPos() <= self->Size() && size <= self->Size() - self->CursorPos()) {
                 size = self->Write(addr, size);
             } else {
                 gen->SetReturnDWord(0);
@@ -285,7 +288,7 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
         }
     } else {
         size = engine->GetSizeOfPrimitiveType(typeId);
-        if (size != 0 && self->CursorPos() + size <= self->Size()) {
+        if (size != 0 && self->CursorPos() <= self->Size() && size <= self->Size() - self->CursorPos()) {
             size = self->Write(addr, size);
         }
     }
@@ -302,7 +305,8 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         asIScriptContext *ctx = asGetActiveContext();
-        ctx->SetException("Cannot read script objects from buffer");
+        if (ctx)
+            ctx->SetException("Cannot read script objects from buffer");
         gen->SetReturnDWord(0);
         return;
     }
@@ -310,7 +314,8 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
     if (typeId & asTYPEID_APPOBJECT) {
         if (typeId & asTYPEID_OBJHANDLE) {
             asIScriptContext *ctx = asGetActiveContext();
-            ctx->SetException("Cannot read object handle from buffer");
+            if (ctx)
+                ctx->SetException("Cannot read object handle from buffer");
             gen->SetReturnDWord(0);
             return;
         }
@@ -331,13 +336,14 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
                     size = type->GetSize();
                 } else {
                     asIScriptContext *ctx = asGetActiveContext();
-                    ctx->SetException("Cannot read non-POD object from buffer");
+                    if (ctx)
+                        ctx->SetException("Cannot read non-POD object from buffer");
                     gen->SetReturnDWord(0);
                     return;
                 }
             }
 
-            if (size != 0 && self->CursorPos() + size <= self->Size()) {
+            if (size != 0 && self->CursorPos() <= self->Size() && size <= self->Size() - self->CursorPos()) {
                 size = self->Read(addr, size);
             } else {
                 gen->SetReturnDWord(0);
@@ -346,7 +352,7 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
         }
     } else {
         size = engine->GetSizeOfPrimitiveType(typeId);
-        if (size != 0 && self->CursorPos() + size <= self->Size()) {
+        if (size != 0 && self->CursorPos() <= self->Size() && size <= self->Size() - self->CursorPos()) {
             size = self->Read(addr, size);
         }
     }
