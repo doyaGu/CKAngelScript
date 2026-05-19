@@ -29,6 +29,10 @@ public:
 
     ~DynAggregate() {
         dcFreeAggr(aggr);
+        if (m_WeakRefFlag) {
+            m_WeakRefFlag->Set(true);
+            m_WeakRefFlag->Release();
+        }
     }
 
     DynAggregate(const DynAggregate &other) = delete;
@@ -112,6 +116,10 @@ public:
 
     ~DynCall() {
         dcFree(vm);
+        if (m_WeakRefFlag) {
+            m_WeakRefFlag->Set(true);
+            m_WeakRefFlag->Release();
+        }
     }
 
     DynCall(const DynCall &other) = delete;
@@ -325,6 +333,10 @@ public:
         if (callback) {
             dcbFreeCallback(callback);
         }
+        if (m_WeakRefFlag) {
+            m_WeakRefFlag->Set(true);
+            m_WeakRefFlag->Release();
+        }
     }
 
     DynCallback(const DynCallback &other) = delete;
@@ -472,6 +484,10 @@ public:
 
     ~DynLibrary() {
         dlFreeLibrary(lib);
+        if (m_WeakRefFlag) {
+            m_WeakRefFlag->Set(true);
+            m_WeakRefFlag->Release();
+        }
     }
 
     DynLibrary(const DynLibrary &other) = delete;
@@ -564,6 +580,10 @@ public:
 
     ~DynSymbols() {
         dlSymsCleanup(syms);
+        if (m_WeakRefFlag) {
+            m_WeakRefFlag->Set(true);
+            m_WeakRefFlag->Release();
+        }
     }
 
     DynSymbols(const DynSymbols &other) = delete;
