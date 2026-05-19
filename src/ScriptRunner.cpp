@@ -209,16 +209,26 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
             int row = ctx->GetExceptionLineNumber(&col, &section);
 
             asIScriptFunction *exFunc = ctx->GetExceptionFunction();
-            std::string exStr = ctx->GetExceptionString();
+            const char *exFuncDecl = exFunc ? exFunc->GetDeclaration() : nullptr;
+            const char *exStr = ctx->GetExceptionString();
 
             std::string stackTrace = fmt::format("Exception in '{}' at {}({},{}): '{}'\n",
-                exFunc->GetDeclaration(), section, row, col, exStr);
+                exFuncDecl ? exFuncDecl : "<unknown function>",
+                section ? section : "<unknown section>",
+                row,
+                col,
+                exStr ? exStr : "");
 
             // Append the call stack
             for (asUINT i = 0; i < ctx->GetCallstackSize(); i++) {
                 asIScriptFunction *f = ctx->GetFunction(i);
                 row = ctx->GetLineNumber(i, &col, &section);
-                stackTrace.append(fmt::format("\t{} at {}({},{})\n", f->GetDeclaration(), section, row, col));
+                const char *funcDecl = f ? f->GetDeclaration() : nullptr;
+                stackTrace.append(fmt::format("\t{} at {}({},{})\n",
+                    funcDecl ? funcDecl : "<unknown function>",
+                    section ? section : "<unknown section>",
+                    row,
+                    col));
             }
 
             SetStackTrace(stackTrace);

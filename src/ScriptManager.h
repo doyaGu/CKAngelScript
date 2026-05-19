@@ -92,6 +92,8 @@ public:
 
     void *GetCKObjectData(CK_ID id) const;
     void SetCKObjectData(CK_ID id, void *data);
+    void ReleaseCKObjectData(CK_ID id);
+    void ClearCKObjectData();
 
     bool IsInited() const {
         return (m_Flags & AS_INITED) != 0;

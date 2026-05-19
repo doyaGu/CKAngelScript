@@ -52,6 +52,7 @@ CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
 }
 
 CKERROR ScriptManager::PostClearAll() {
+    ClearCKObjectData();
     return CK_OK;
 }
 
@@ -98,7 +99,9 @@ int ScriptManager::Shutdown() {
     for (auto *context : m_ScriptContexts) {
         context->Release();
     }
+    m_ScriptContexts.clear();
 
+    ClearCKObjectData();
     m_ScriptCache.Clear();
 
     if (m_ScriptEngine) {
@@ -271,7 +274,34 @@ void * ScriptManager::GetCKObjectData(CK_ID id) const {
 }
 
 void ScriptManager::SetCKObjectData(CK_ID id, void *data) {
-    m_CKObjectDataMap[id] = data;
+    if (data) {
+        m_CKObjectDataMap[id] = data;
+    } else {
+        m_CKObjectDataMap.erase(id);
+    }
+}
+
+void ScriptManager::ReleaseCKObjectData(CK_ID id) {
+    const auto it = m_CKObjectDataMap.find(id);
+    if (it == m_CKObjectDataMap.end()) {
+        return;
+    }
+
+    auto *func = static_cast<asIScriptFunction *>(it->second);
+    m_CKObjectDataMap.erase(it);
+    if (func) {
+        func->Release();
+    }
+}
+
+void ScriptManager::ClearCKObjectData() {
+    for (const auto &entry : m_CKObjectDataMap) {
+        auto *func = static_cast<asIScriptFunction *>(entry.second);
+        if (func) {
+            func->Release();
+        }
+    }
+    m_CKObjectDataMap.clear();
 }
 
 void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
@@ -287,16 +317,28 @@ void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
             type = "INFO";
             break;
     }
-    m_Context->OutputToConsoleEx(const_cast<char *>("%s(%d,%d): %s: %s"), msg.section, msg.row, msg.col, type, msg.message);
+    m_Context->OutputToConsoleEx(const_cast<char *>("%s(%d,%d): %s: %s"),
+        msg.section ? msg.section : "<unknown section>",
+        msg.row,
+        msg.col,
+        type,
+        msg.message ? msg.message : "");
 }
 
 void ScriptManager::ExceptionCallback(asIScriptContext *context) {
     std::string callStack = GetCallStack(context);
+    asIScriptFunction *func = context ? context->GetExceptionFunction() : nullptr;
+    const char *funcDecl = func ? func->GetDeclaration() : nullptr;
+    const char *exception = context ? context->GetExceptionString() : nullptr;
     std::string message = fmt::format("Exception in '{}': '{}'\n{}",
-        context->GetExceptionFunction()->GetDeclaration(), context->GetExceptionString(), callStack);
+        funcDecl ? funcDecl : "<unknown function>",
+        exception ? exception : "",
+        callStack);
 
     asSMessageInfo info = {};
-    info.row = context->GetExceptionLineNumber(&info.col, &info.section);
+    if (context) {
+        info.row = context->GetExceptionLineNumber(&info.col, &info.section);
+    }
     info.type = asMSGTYPE_ERROR;
     info.message = message.c_str();
     MessageCallback(info);
@@ -304,12 +346,21 @@ void ScriptManager::ExceptionCallback(asIScriptContext *context) {
 
 std::string ScriptManager::GetCallStack(asIScriptContext *context) {
     std::string str("Callstack:\n");
+    if (!context) {
+        return str;
+    }
+
     for (asUINT i = 0; i < context->GetCallstackSize(); i++) {
         asIScriptFunction *func = context->GetFunction(i);
         int column;
         const char *section;
         int line = context->GetLineNumber(i, &column, &section);
-        str.append(fmt::format("\t{} at {}({},{})\n", func->GetDeclaration(), section, line, column));
+        const char *funcDecl = func ? func->GetDeclaration() : nullptr;
+        str.append(fmt::format("\t{} at {}({},{})\n",
+            funcDecl ? funcDecl : "<unknown function>",
+            section ? section : "<unknown section>",
+            line,
+            column));
     }
     return std::move(str);
 }

@@ -2121,12 +2121,19 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
     // r = engine->RegisterObjectMethod(name, "void SetDefaultRenderCallBack()", asMETHODPR(T, SetDefaultRenderCallBack, (), void), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void SetRenderCallBack(CK_MESHRENDERCALLBACK@ callback)", asFUNCTIONPR([](T *self, asIScriptFunction *scriptFunc) {
         scriptFunc->AddRef();
-        auto *man = ScriptManager::GetManager(scriptFunc->GetEngine()); if (man) man->SetCKObjectData(self->GetID(), scriptFunc);
+        auto *man = ScriptManager::GetManager(scriptFunc->GetEngine());
+        if (man) {
+            man->ReleaseCKObjectData(self->GetID());
+            man->SetCKObjectData(self->GetID(), scriptFunc);
+        }
         self->SetRenderCallBack(CKMesh_MeshRenderCallback, scriptFunc);
     }, (T *, asIScriptFunction *), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void SetDefaultRenderCallBack()", asFUNCTIONPR([](T *self) {
         self->SetDefaultRenderCallBack();
-        auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) { auto *func = static_cast<asIScriptFunction *>(man->GetCKObjectData(self->GetID())); if (func) func->Release(); }
+        auto *man = ScriptManager::GetManager(self->GetCKContext());
+        if (man) {
+            man->ReleaseCKObjectData(self->GetID());
+        }
     }, (T *), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
     r = engine->RegisterObjectMethod(name, "void RemoveAllCallbacks()", asMETHODPR(T, RemoveAllCallbacks, (), void), asCALL_THISCALL); assert(r >= 0);
@@ -2672,12 +2679,25 @@ static void RegisterCKRenderObjectMembers(asIScriptEngine *engine, const char *n
     // r = engine->RegisterObjectMethod(name, "bool RemoveRenderCallBack()", asMETHODPR(T, RemoveRenderCallBack, (), CKBOOL), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void SetRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)", asFUNCTIONPR([](T *self, asIScriptFunction *scriptFunc) -> bool {
         scriptFunc->AddRef();
-        auto *man = ScriptManager::GetManager(scriptFunc->GetEngine()); if (man) man->SetCKObjectData(self->GetID(), scriptFunc);
-        return self->SetRenderCallBack(CKRenderObject_Callback, scriptFunc);
+        auto *man = ScriptManager::GetManager(scriptFunc->GetEngine());
+        if (man) {
+            man->ReleaseCKObjectData(self->GetID());
+            man->SetCKObjectData(self->GetID(), scriptFunc);
+        }
+        bool result = self->SetRenderCallBack(CKRenderObject_Callback, scriptFunc);
+        if (!result && man) {
+            man->ReleaseCKObjectData(self->GetID());
+        }
+        return result;
     }, (T *, asIScriptFunction *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod(name, "void RemoveRenderCallBack()", asFUNCTIONPR([](T *self) -> bool {
         bool result = self->RemoveRenderCallBack();
-        auto *man = ScriptManager::GetManager(self->GetCKContext()); if (man) { auto *func = static_cast<asIScriptFunction *>(man->GetCKObjectData(self->GetID())); if (func) func->Release(); }
+        if (result) {
+            auto *man = ScriptManager::GetManager(self->GetCKContext());
+            if (man) {
+                man->ReleaseCKObjectData(self->GetID());
+            }
+        }
         return result;
     }, (T *), bool), asCALL_CDECL_OBJFIRST); assert(r >= 0);
 
