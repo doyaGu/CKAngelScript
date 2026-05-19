@@ -27,7 +27,14 @@ public:
     ToStringMap(const ToStringMap &rhs) = delete;
     ToStringMap(ToStringMap &&rhs) noexcept = delete;
 
-    ~ToStringMap() = default;
+    ~ToStringMap() {
+        for (const auto &entry : m_ToStringMap) {
+            if (entry.second) {
+                entry.second->Release();
+            }
+        }
+        m_ToStringMap.clear();
+    }
 
     ToStringMap &operator=(const ToStringMap &rhs) = delete;
     ToStringMap &operator=(ToStringMap &&rhs) noexcept = delete;
@@ -56,7 +63,23 @@ public:
 
     void SetToStringFunction(int typeId, asIScriptFunction *func) {
         std::lock_guard<std::mutex> lock{m_Mutex};
-        m_ToStringMap[typeId] = func;
+        auto it = m_ToStringMap.find(typeId);
+        if (it != m_ToStringMap.end() && it->second == func) {
+            return;
+        }
+
+        if (func) {
+            func->AddRef();
+        }
+        if (it != m_ToStringMap.end() && it->second) {
+            it->second->Release();
+        }
+
+        if (func) {
+            m_ToStringMap[typeId] = func;
+        } else if (it != m_ToStringMap.end()) {
+            m_ToStringMap.erase(it);
+        }
     }
 
 private:
@@ -223,6 +246,7 @@ static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstrea
             }
             if (r < 0) {
                 stream << "<" << typeName << ":" << addr << ">";
+                engine->ReturnContext(ctx);
                 return;
             }
 
@@ -381,6 +405,7 @@ static std::string FormatString(asIScriptGeneric *gen) {
                     std::stringstream stream;
                     stream << "<" << typeName << ":" << addr << ">";
                     store.push_back(stream.str());
+                    engine->ReturnContext(ctx);
                     continue;
                 }
 
