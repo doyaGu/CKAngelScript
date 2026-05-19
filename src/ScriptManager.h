@@ -94,6 +94,9 @@ public:
     void SetCKObjectData(CK_ID id, void *data);
     void ReleaseCKObjectData(CK_ID id);
     void ClearCKObjectData();
+    void TrackCKObjectCallback(CK_ID id, asIScriptFunction *func);
+    void UntrackCKObjectCallback(CK_ID id, asIScriptFunction *func);
+    void ReleaseCKObjectCallbacks(CK_ID id);
 
     bool IsInited() const {
         return (m_Flags & AS_INITED) != 0;
@@ -131,6 +134,7 @@ protected:
     ScriptCache m_ScriptCache;
     std::vector<asIScriptContext *> m_ScriptContexts;
     std::unordered_map<CK_ID, void *> m_CKObjectDataMap;
+    std::unordered_map<CK_ID, std::vector<asIScriptFunction *> > m_CKObjectCallbackMap;
 };
 
 #endif // CK_SCRIPTMANAGER_H

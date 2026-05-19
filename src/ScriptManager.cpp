@@ -305,6 +305,65 @@ void ScriptManager::ClearCKObjectData() {
         }
     }
     m_CKObjectDataMap.clear();
+
+    for (const auto &entry : m_CKObjectCallbackMap) {
+        for (auto *func : entry.second) {
+            if (!func) {
+                continue;
+            }
+            if (IsMarkedAsReleasedOnce(func)) {
+                ClearReleasedOnceMark(func);
+            } else {
+                func->Release();
+            }
+        }
+    }
+    m_CKObjectCallbackMap.clear();
+}
+
+void ScriptManager::TrackCKObjectCallback(CK_ID id, asIScriptFunction *func) {
+    if (func) {
+        m_CKObjectCallbackMap[id].push_back(func);
+    }
+}
+
+void ScriptManager::UntrackCKObjectCallback(CK_ID id, asIScriptFunction *func) {
+    auto it = m_CKObjectCallbackMap.find(id);
+    if (it == m_CKObjectCallbackMap.end()) {
+        return;
+    }
+
+    auto &callbacks = it->second;
+    for (auto cb = callbacks.begin(); cb != callbacks.end(); ++cb) {
+        if (*cb == func) {
+            callbacks.erase(cb);
+            break;
+        }
+    }
+
+    if (callbacks.empty()) {
+        m_CKObjectCallbackMap.erase(it);
+    }
+}
+
+void ScriptManager::ReleaseCKObjectCallbacks(CK_ID id) {
+    auto it = m_CKObjectCallbackMap.find(id);
+    if (it == m_CKObjectCallbackMap.end()) {
+        return;
+    }
+
+    auto callbacks = std::move(it->second);
+    m_CKObjectCallbackMap.erase(it);
+    for (auto *func : callbacks) {
+        if (!func) {
+            continue;
+        }
+        if (IsMarkedAsReleasedOnce(func)) {
+            ClearReleasedOnceMark(func);
+        } else {
+            func->Release();
+        }
+    }
 }
 
 void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
