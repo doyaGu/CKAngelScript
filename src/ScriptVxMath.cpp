@@ -133,10 +133,6 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_32_V16U16", _32_V16U16); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_16_L6V5U5", _16_L6V5U5); assert(r >= 0);
     r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_32_X8L8V8U8", _32_X8L8V8U8); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_8_ABGR8888_CLUT", _8_ABGR8888_CLUT); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_8_ARGB8888_CLUT", _8_ARGB8888_CLUT); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_4_ABGR8888_CLUT", _4_ABGR8888_CLUT); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VX_PIXELFORMAT", "_4_ARGB8888_CLUT", _4_ARGB8888_CLUT); assert(r >= 0);
 
     // VXCLIP_FLAGS
     r = engine->RegisterEnum("VXCLIP_FLAGS"); assert(r >= 0);
@@ -522,23 +518,50 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_COLORVERTEX", VXRENDERSTATE_COLORVERTEX); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_LOCALVIEWER", VXRENDERSTATE_LOCALVIEWER); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_NORMALIZENORMALS", VXRENDERSTATE_NORMALIZENORMALS); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_DIFFUSEFROMVERTEX", VXRENDERSTATE_DIFFUSEFROMVERTEX); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SPECULARFROMVERTEX", VXRENDERSTATE_SPECULARFROMVERTEX); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_AMBIENTFROMVERTEX", VXRENDERSTATE_AMBIENTFROMVERTEX); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_EMISSIVEFROMVERTEX", VXRENDERSTATE_EMISSIVEFROMVERTEX); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_DIFFUSEFROMVERTEX", VXRENDERSTATE_DIFFUSEFROMVERTEX); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SPECULARFROMVERTEX", VXRENDERSTATE_SPECULARFROMVERTEX); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_AMBIENTFROMVERTEX", VXRENDERSTATE_AMBIENTFROMVERTEX); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_EMISSIVEFROMVERTEX", VXRENDERSTATE_EMISSIVEFROMVERTEX); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_VERTEXBLEND", VXRENDERSTATE_VERTEXBLEND); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SOFTWAREVPROCESSING", VXRENDERSTATE_SOFTWAREVPROCESSING); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE", VXRENDERSTATE_POINTSIZE); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE_MIN", VXRENDERSTATE_POINTSIZE_MIN); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE_MAX", VXRENDERSTATE_POINTSIZE_MAX); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSPRITEENABLE", VXRENDERSTATE_POINTSPRITEENABLE); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALEENABLE", VXRENDERSTATE_POINTSCALEENABLE); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_A", VXRENDERSTATE_POINTSCALE_A); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_B", VXRENDERSTATE_POINTSCALE_B); assert(r >= 0);
-    // r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_C", VXRENDERSTATE_POINTSCALE_C); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE", VXRENDERSTATE_POINTSIZE); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE_MIN", VXRENDERSTATE_POINTSIZE_MIN); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSIZE_MAX", VXRENDERSTATE_POINTSIZE_MAX); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSPRITEENABLE", VXRENDERSTATE_POINTSPRITEENABLE); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALEENABLE", VXRENDERSTATE_POINTSCALEENABLE); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_A", VXRENDERSTATE_POINTSCALE_A); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_B", VXRENDERSTATE_POINTSCALE_B); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_POINTSCALE_C", VXRENDERSTATE_POINTSCALE_C); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_CLIPPLANEENABLE", VXRENDERSTATE_CLIPPLANEENABLE); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_INDEXVBLENDENABLE", VXRENDERSTATE_INDEXVBLENDENABLE); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_COLORWRITEENABLE", VXRENDERSTATE_COLORWRITEENABLE); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_BLENDOP", VXRENDERSTATE_BLENDOP); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SCISSORTESTENABLE", VXRENDERSTATE_SCISSORTESTENABLE); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SLOPESCALEDEPTHBIAS", VXRENDERSTATE_SLOPESCALEDEPTHBIAS); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_ANTIALIASEDLINEENABLE", VXRENDERSTATE_ANTIALIASEDLINEENABLE); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_TWOSIDEDSTENCILMODE", VXRENDERSTATE_TWOSIDEDSTENCILMODE); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_CCW_STENCILFAIL", VXRENDERSTATE_CCW_STENCILFAIL); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_CCW_STENCILZFAIL", VXRENDERSTATE_CCW_STENCILZFAIL); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_CCW_STENCILPASS", VXRENDERSTATE_CCW_STENCILPASS); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_CCW_STENCILFUNC", VXRENDERSTATE_CCW_STENCILFUNC); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_COLORWRITEENABLE1", VXRENDERSTATE_COLORWRITEENABLE1); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_COLORWRITEENABLE2", VXRENDERSTATE_COLORWRITEENABLE2); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_COLORWRITEENABLE3", VXRENDERSTATE_COLORWRITEENABLE3); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_BLENDFACTOR", VXRENDERSTATE_BLENDFACTOR); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SRGBWRITEENABLE", VXRENDERSTATE_SRGBWRITEENABLE); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_DEPTHBIAS", VXRENDERSTATE_DEPTHBIAS); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SEPARATEALPHABLENDENABLE", VXRENDERSTATE_SEPARATEALPHABLENDENABLE); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_SRCBLENDALPHA", VXRENDERSTATE_SRCBLENDALPHA); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_DESTBLENDALPHA", VXRENDERSTATE_DESTBLENDALPHA); assert(r >= 0);
+    r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_BLENDOPALPHA", VXRENDERSTATE_BLENDOPALPHA); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_TEXTURETARGET", VXRENDERSTATE_TEXTURETARGET); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_INVERSEWINDING", VXRENDERSTATE_INVERSEWINDING); assert(r >= 0);
     r = engine->RegisterEnumValue("VXRENDERSTATETYPE", "VXRENDERSTATE_MAXSTATE", VXRENDERSTATE_MAXSTATE); assert(r >= 0);
@@ -575,14 +598,21 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX5", CKRST_SPECIFICCAPS_DX5); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX7", CKRST_SPECIFICCAPS_DX7); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX8", CKRST_SPECIFICCAPS_DX8); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX9", CKRST_SPECIFICCAPS_DX9); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_DX9", CKRST_SPECIFICCAPS_DX9); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_SUPPORTSHADERS", CKRST_SPECIFICCAPS_SUPPORTSHADERS); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_POINTSPRITES", CKRST_SPECIFICCAPS_POINTSPRITES); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_VERTEXCOLORABGR", CKRST_SPECIFICCAPS_VERTEXCOLORABGR); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_BLENDTEXTEFFECT", CKRST_SPECIFICCAPS_BLENDTEXTEFFECT); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_POINTSPRITES", CKRST_SPECIFICCAPS_POINTSPRITES); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_VERTEXCOLORABGR", CKRST_SPECIFICCAPS_VERTEXCOLORABGR); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_BLENDTEXTEFFECT", CKRST_SPECIFICCAPS_BLENDTEXTEFFECT); assert(r >= 0);
+#endif
     r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_CANDOINDEXBUFFER", CKRST_SPECIFICCAPS_CANDOINDEXBUFFER); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_HW_SKINNING", CKRST_SPECIFICCAPS_HW_SKINNING); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_AUTGENMIPMAP", CKRST_SPECIFICCAPS_AUTGENMIPMAP); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_HW_SKINNING", CKRST_SPECIFICCAPS_HW_SKINNING); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_AUTGENMIPMAP", CKRST_SPECIFICCAPS_AUTGENMIPMAP); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKRST_SPECIFICCAPS", "CKRST_SPECIFICCAPS_EXPLICITSWAPCHAIN", CKRST_SPECIFICCAPS_EXPLICITSWAPCHAIN); assert(r >= 0);
+#endif
 
     // CKRST_TFILTERCAPS
     r = engine->RegisterEnum("CKRST_TFILTERCAPS"); assert(r >= 0);
@@ -608,10 +638,13 @@ static void RegisterVxMathEnums(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_POW2", CKRST_TEXTURECAPS_POW2); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_ALPHA", CKRST_TEXTURECAPS_ALPHA); assert(r >= 0);
     r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_SQUAREONLY", CKRST_TEXTURECAPS_SQUAREONLY); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_CONDITIONALNONPOW2", CKRST_TEXTURECAPS_CONDITIONALNONPOW2); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_PROJECTED", CKRST_TEXTURECAPS_PROJECTED); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_CUBEMAP", CKRST_TEXTURECAPS_CUBEMAP); assert(r >= 0);
-    // r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_VOLUMEMAP", CKRST_TEXTURECAPS_VOLUMEMAP); assert(r >= 0);
+#if CKVERSION == 0x13022002
+    r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_CONDITIONALNONPOW2", CKRST_TEXTURECAPS_CONDITIONALNONPOW2); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_PROJECTED", CKRST_TEXTURECAPS_PROJECTED); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_CUBEMAP", CKRST_TEXTURECAPS_CUBEMAP); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_VOLUMEMAP", CKRST_TEXTURECAPS_VOLUMEMAP); assert(r >= 0);
+    r = engine->RegisterEnumValue("CKRST_TEXTURECAPS", "CKRST_TEXTURECAPS_NONPOW2", CKRST_TEXTURECAPS_NONPOW2); assert(r >= 0);
+#endif
 
     // CKRST_STENCILCAPS
     r = engine->RegisterEnum("CKRST_STENCILCAPS"); assert(r >= 0);
@@ -908,13 +941,8 @@ static void RegisterCKPOINT(asIScriptEngine *engine) {
 static void RegisterVxStridedData(asIScriptEngine *engine) {
     int r = 0;
 
-#if CKVERSION == 0x05082002
-    // r = engine->RegisterObjectProperty("VxStridedData", "NativePointer Ptr", asOFFSET(VxStridedData, DataPtr)); assert(r >= 0);
-    r = engine->RegisterObjectProperty("VxStridedData", "uint Stride", asOFFSET(VxStridedData, DataStride)); assert(r >= 0);
-#else
     // r = engine->RegisterObjectProperty("VxStridedData", "NativePointer Ptr", asOFFSET(VxStridedData, Ptr)); assert(r >= 0);
     r = engine->RegisterObjectProperty("VxStridedData", "uint Stride", asOFFSET(VxStridedData, Stride)); assert(r >= 0);
-#endif
 
     r = engine->RegisterObjectBehaviour("VxStridedData", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxStridedData *self) { new(self) VxStridedData(); }, (VxStridedData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
     r = engine->RegisterObjectBehaviour("VxStridedData", asBEHAVE_CONSTRUCT, "void f(NativePointer ptr, uint stride)", asFUNCTIONPR([](NativePointer ptr, unsigned int stride, VxStridedData *self) { new(self) VxStridedData(ptr.Get(), stride); }, (NativePointer, unsigned int, VxStridedData *), void), asCALL_CDECL_OBJLAST); assert(r >= 0);
@@ -924,13 +952,8 @@ static void RegisterVxStridedData(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxStridedData", "VxStridedData &opAssign(const VxStridedData &in other)", asMETHODPR(VxStridedData, operator=, (const VxStridedData &), VxStridedData &), asCALL_THISCALL); assert(r >= 0);
 
-#if CKVERSION == 0x05082002
-    r = engine->RegisterObjectMethod("VxStridedData", "NativePointer get_Ptr() const", asFUNCTIONPR([](const VxStridedData *self) { return NativePointer(self->DataPtr); }, (const VxStridedData *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("VxStridedData", "void set_Ptr(NativePointer ptr)", asFUNCTIONPR([](VxStridedData *self, NativePointer ptr) { self->DataPtr = ptr.Get(); }, (VxStridedData *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-#else
     r = engine->RegisterObjectMethod("VxStridedData", "NativePointer get_Ptr() const", asFUNCTIONPR([](const VxStridedData *self) { return NativePointer(self->Ptr); }, (const VxStridedData *), NativePointer), asCALL_CDECL_OBJFIRST); assert(r >= 0);
     r = engine->RegisterObjectMethod("VxStridedData", "void set_Ptr(NativePointer ptr)", asFUNCTIONPR([](VxStridedData *self, NativePointer ptr) { self->Ptr = ptr.Get(); }, (VxStridedData *, NativePointer), void), asCALL_CDECL_OBJFIRST); assert(r >= 0);
-#endif
 }
 
 // VxUV
