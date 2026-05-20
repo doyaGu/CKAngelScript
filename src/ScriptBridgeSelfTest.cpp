@@ -762,6 +762,26 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     }
 
     const std::string firstSignature = layout->Signature;
+    BehaviorLayout layoutHandle(bridge, behavior->GetID());
+    ParamInfo *pinInfo = layoutHandle.Pin(0);
+    if (layoutHandle.InputCount() != 1 ||
+        layoutHandle.OutputCount() != 1 ||
+        layoutHandle.PinCount() != 1 ||
+        layoutHandle.PoutCount() != 1 ||
+        layoutHandle.LocalCount() != 1 ||
+        layoutHandle.FindPin("Value", 0) != 0 ||
+        layoutHandle.FindPout("Result", 0) != 0 ||
+        !pinInfo ||
+        pinInfo->GetTypeGuid() != CKPGUID_INT) {
+        if (pinInfo) {
+            pinInfo->Release();
+        }
+        DestroySelfTestObject(context, behavior);
+        error = "BehaviorLayout cache-backed query self-test failed.";
+        return false;
+    }
+    pinInfo->Release();
+
     behavior->CreateInputParameter(const_cast<CKSTRING>("Second"), CKPGUID_STRING);
     const ScriptBridgeLayoutRecord *refreshed = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
     if (!refreshed ||
@@ -804,6 +824,25 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(std::string &error) {
     ParamValue intValue(MakeScriptParamInt(3));
     if (intValue.AsFloat() != 3.0f) {
         error = "ParamValue int-to-float safe conversion self-test failed.";
+        return false;
+    }
+
+    ParamValue typedText(MakeScriptParamText("1", CKPGUID_BOOL, "Boolean"));
+    if (typedText.TypeName() != "Boolean") {
+        error = "Typed ParamValue text TypeName self-test failed.";
+        return false;
+    }
+
+    ParamValue typedEnum(MakeScriptParamEnum(CKPGUID_INT, "Test Enum", 2));
+    if (typedEnum.TypeName() != "Test Enum" || typedEnum.AsInt() != 2) {
+        error = "Typed ParamValue enum TypeName self-test failed.";
+        return false;
+    }
+
+    VxVector rawVector(1.0f, 2.0f, 3.0f);
+    ParamValue typedRaw(MakeScriptParamRaw(CKPGUID_VECTOR, "Vector", &rawVector, sizeof(rawVector)));
+    if (typedRaw.TypeName() != "Vector") {
+        error = "Typed ParamValue raw TypeName self-test failed.";
         return false;
     }
 
