@@ -19,6 +19,7 @@
 
 #include "ScriptManager.h"
 #include "ScriptBehaviorBridge.h"
+#include "ScriptBridgeHandles.h"
 #include "ScriptParameterConversion.h"
 #include "ScriptRunner.h"
 
@@ -27,7 +28,7 @@ CKERROR CreateAngelScriptComponentProto(CKBehaviorPrototype **pproto);
 int AngelScriptComponent(const CKBehaviorContext &behcontext);
 CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext);
 
-namespace {
+namespace AngelScriptComponentInternal {
 
 constexpr int COMPONENT_STATE = 0;
 constexpr int OUTPUT_ERROR_MESSAGE = 1;
@@ -141,36 +142,36 @@ bool IsComponentBindingKeyword(const std::string &keyword) {
            key == "bb";
 }
 
-ScriptBridgeValueKind ValueKindFromComponentKind(ScriptComponentBindingKind kind) {
+ScriptParamValueKind ValueKindFromComponentKind(ScriptComponentBindingKind kind) {
     switch (kind) {
-        case ScriptComponentBindingKind::Int: return ScriptBridgeValueKind::Int;
-        case ScriptComponentBindingKind::Float: return ScriptBridgeValueKind::Float;
-        case ScriptComponentBindingKind::Bool: return ScriptBridgeValueKind::Bool;
-        case ScriptComponentBindingKind::String: return ScriptBridgeValueKind::String;
-        case ScriptComponentBindingKind::Guid: return ScriptBridgeValueKind::Guid;
-        case ScriptComponentBindingKind::Vector: return ScriptBridgeValueKind::Vector;
-        case ScriptComponentBindingKind::Vector2: return ScriptBridgeValueKind::Vector2;
-        case ScriptComponentBindingKind::Color: return ScriptBridgeValueKind::Color;
-        case ScriptComponentBindingKind::Quaternion: return ScriptBridgeValueKind::Quaternion;
-        case ScriptComponentBindingKind::Matrix: return ScriptBridgeValueKind::Matrix;
-        case ScriptComponentBindingKind::ObjectArray: return ScriptBridgeValueKind::ObjectArray;
-        default: return ScriptBridgeValueKind::None;
+        case ScriptComponentBindingKind::Int: return ScriptParamValueKind::Int;
+        case ScriptComponentBindingKind::Float: return ScriptParamValueKind::Float;
+        case ScriptComponentBindingKind::Bool: return ScriptParamValueKind::Bool;
+        case ScriptComponentBindingKind::String: return ScriptParamValueKind::String;
+        case ScriptComponentBindingKind::Guid: return ScriptParamValueKind::Guid;
+        case ScriptComponentBindingKind::Vector: return ScriptParamValueKind::Vector;
+        case ScriptComponentBindingKind::Vector2: return ScriptParamValueKind::Vector2;
+        case ScriptComponentBindingKind::Color: return ScriptParamValueKind::Color;
+        case ScriptComponentBindingKind::Quaternion: return ScriptParamValueKind::Quaternion;
+        case ScriptComponentBindingKind::Matrix: return ScriptParamValueKind::Matrix;
+        case ScriptComponentBindingKind::ObjectArray: return ScriptParamValueKind::ObjectArray;
+        default: return ScriptParamValueKind::Empty;
     }
 }
 
-ScriptComponentBindingKind ComponentKindFromValueKind(ScriptBridgeValueKind kind) {
+ScriptComponentBindingKind ComponentKindFromValueKind(ScriptParamValueKind kind) {
     switch (kind) {
-        case ScriptBridgeValueKind::Int: return ScriptComponentBindingKind::Int;
-        case ScriptBridgeValueKind::Float: return ScriptComponentBindingKind::Float;
-        case ScriptBridgeValueKind::Bool: return ScriptComponentBindingKind::Bool;
-        case ScriptBridgeValueKind::String: return ScriptComponentBindingKind::String;
-        case ScriptBridgeValueKind::Guid: return ScriptComponentBindingKind::Guid;
-        case ScriptBridgeValueKind::Vector: return ScriptComponentBindingKind::Vector;
-        case ScriptBridgeValueKind::Vector2: return ScriptComponentBindingKind::Vector2;
-        case ScriptBridgeValueKind::Color: return ScriptComponentBindingKind::Color;
-        case ScriptBridgeValueKind::Quaternion: return ScriptComponentBindingKind::Quaternion;
-        case ScriptBridgeValueKind::Matrix: return ScriptComponentBindingKind::Matrix;
-        case ScriptBridgeValueKind::ObjectArray: return ScriptComponentBindingKind::ObjectArray;
+        case ScriptParamValueKind::Int: return ScriptComponentBindingKind::Int;
+        case ScriptParamValueKind::Float: return ScriptComponentBindingKind::Float;
+        case ScriptParamValueKind::Bool: return ScriptComponentBindingKind::Bool;
+        case ScriptParamValueKind::String: return ScriptComponentBindingKind::String;
+        case ScriptParamValueKind::Guid: return ScriptComponentBindingKind::Guid;
+        case ScriptParamValueKind::Vector: return ScriptComponentBindingKind::Vector;
+        case ScriptParamValueKind::Vector2: return ScriptComponentBindingKind::Vector2;
+        case ScriptParamValueKind::Color: return ScriptComponentBindingKind::Color;
+        case ScriptParamValueKind::Quaternion: return ScriptComponentBindingKind::Quaternion;
+        case ScriptParamValueKind::Matrix: return ScriptComponentBindingKind::Matrix;
+        case ScriptParamValueKind::ObjectArray: return ScriptComponentBindingKind::ObjectArray;
         default: return ScriptComponentBindingKind::Auto;
     }
 }
@@ -180,12 +181,18 @@ ScriptComponentBindingKind KindFromTypeName(const std::string &typeName) {
     if (type.empty() || type == "auto") {
         return ScriptComponentBindingKind::Auto;
     }
-    const ScriptBridgeValueKind valueKind = ScriptValueKindFromTypeName(type);
-    if (valueKind != ScriptBridgeValueKind::None) {
+    const ScriptParamValueKind valueKind = ScriptParamValueKindFromTypeName(type);
+    if (valueKind != ScriptParamValueKind::Empty) {
         return ComponentKindFromValueKind(valueKind);
     }
     if (type == "behaviorref") {
         return ScriptComponentBindingKind::BehaviorRef;
+    }
+    if (type == "paramref") {
+        return ScriptComponentBindingKind::ParamRef;
+    }
+    if (type == "paramvalue" || type == "value") {
+        return ScriptComponentBindingKind::ParamValue;
     }
     if (type == "bb" || type == "bbprototype" || type == "buildingblock") {
         return ScriptComponentBindingKind::BBPrototype;
@@ -214,18 +221,21 @@ CKGUID GuidFromClassId(CKContext *context, CK_CLASSID cid, CKGUID fallback = CKP
 
 CKGUID GuidFromTypeName(CKContext *context, const std::string &typeName, ScriptComponentBindingKind kind) {
     const std::string type = ToLower(StripQuotes(typeName));
-    CKGUID registered = ScriptResolveParameterGuid(context, typeName, ScriptBridgeValueKind::None);
+    CKGUID registered = ScriptResolveParameterGuid(context, typeName);
     if (registered != CKGUID()) {
         return registered;
     }
     if (kind == ScriptComponentBindingKind::BBPrototype && (type == "behavior" || type == "ckbehavior")) {
         return GuidFromClassId(context, CKCID_BEHAVIOR, CKPGUID_BEHAVIOR);
     }
-    const ScriptBridgeValueKind valueKind = ValueKindFromComponentKind(kind);
-    if (valueKind != ScriptBridgeValueKind::None) {
-        return ScriptResolveParameterGuid(context, "", valueKind);
+    const ScriptParamValueKind valueKind = ValueKindFromComponentKind(kind);
+    if (valueKind != ScriptParamValueKind::Empty) {
+        return ScriptParameterGuidForValueKind(valueKind);
     }
     if (kind == ScriptComponentBindingKind::BBPrototype) {
+        return CKPGUID_STRING;
+    }
+    if (kind == ScriptComponentBindingKind::ParamRef || kind == ScriptComponentBindingKind::ParamValue) {
         return CKPGUID_STRING;
     }
     if (kind == ScriptComponentBindingKind::BehaviorRef || type == "behavior" || type == "ckbehavior") {
@@ -275,7 +285,7 @@ CKGUID GuidFromPropertyType(CKContext *context, asIScriptEngine *engine, int typ
     }
 
     const std::string name = type->GetName() ? type->GetName() : "";
-    CKGUID registered = ScriptResolveParameterGuid(context, name, ScriptBridgeValueKind::None);
+    CKGUID registered = ScriptResolveParameterGuid(context, name);
     if (registered != CKGUID()) {
         return registered;
     }
@@ -388,12 +398,18 @@ ScriptComponentBindingKind InferKindFromProperty(asIScriptEngine *engine, int ty
     if (typeId == asTYPEID_BOOL) {
         return ScriptComponentBindingKind::Bool;
     }
-    const ScriptBridgeValueKind valueKind = ScriptValueKindFromAngelScriptType(engine, typeId);
-    if (valueKind != ScriptBridgeValueKind::None) {
+    const ScriptParamValueKind valueKind = ScriptParamValueKindFromAngelScriptType(engine, typeId);
+    if (valueKind != ScriptParamValueKind::Empty) {
         return ComponentKindFromValueKind(valueKind);
     }
     if (typeId == engine->GetTypeIdByDecl("BehaviorRef@")) {
         return ScriptComponentBindingKind::BehaviorRef;
+    }
+    if (typeId == engine->GetTypeIdByDecl("ParamRef@")) {
+        return ScriptComponentBindingKind::ParamRef;
+    }
+    if (typeId == engine->GetTypeIdByDecl("ParamValue@")) {
+        return ScriptComponentBindingKind::ParamValue;
     }
     if (typeId == engine->GetTypeIdByDecl("BBPrototype@")) {
         return ScriptComponentBindingKind::BBPrototype;
@@ -437,10 +453,16 @@ bool IsCompatiblePropertyType(asIScriptEngine *engine,
         case ScriptComponentBindingKind::Quaternion:
         case ScriptComponentBindingKind::Matrix:
         case ScriptComponentBindingKind::ObjectArray:
-            return IsScriptValueKindCompatibleWithAngelScriptType(engine, typeId, ValueKindFromComponentKind(kind), expected);
+            return IsScriptParamValueKindCompatibleWithAngelScriptType(engine, typeId, ValueKindFromComponentKind(kind), expected);
         case ScriptComponentBindingKind::BehaviorRef:
             expected = "BehaviorRef@";
             return typeId == engine->GetTypeIdByDecl("BehaviorRef@");
+        case ScriptComponentBindingKind::ParamRef:
+            expected = "ParamRef@";
+            return typeId == engine->GetTypeIdByDecl("ParamRef@");
+        case ScriptComponentBindingKind::ParamValue:
+            expected = "ParamValue@";
+            return typeId == engine->GetTypeIdByDecl("ParamValue@");
         case ScriptComponentBindingKind::BBPrototype:
             expected = "BBPrototype@";
             return typeId == engine->GetTypeIdByDecl("BBPrototype@");
@@ -721,12 +743,18 @@ bool SetParameterDefaultValue(CKParameterLocal *local, const ScriptComponentBind
         return true;
     }
 
-    const ScriptBridgeValueKind valueKind = ValueKindFromComponentKind(binding.Kind);
-    if (valueKind != ScriptBridgeValueKind::None) {
-        return SetParameterDefaultText(local, valueKind, binding.DefaultValue);
+    const ScriptParamValueKind valueKind = ValueKindFromComponentKind(binding.Kind);
+    if (valueKind != ScriptParamValueKind::Empty) {
+        std::string error;
+        return SetParameterDefaultText(local, binding.DefaultValue, error);
     }
 
     switch (binding.Kind) {
+        case ScriptComponentBindingKind::ParamRef:
+        case ScriptComponentBindingKind::ParamValue: {
+            std::string error;
+            return SetParameterDefaultText(local, binding.DefaultValue, error);
+        }
         case ScriptComponentBindingKind::BBPrototype:
             return local->SetStringValue(const_cast<CKSTRING>(binding.DefaultValue.c_str())) == CK_OK;
         case ScriptComponentBindingKind::Object:
@@ -747,7 +775,7 @@ bool SetParameterDefaultValue(CKParameterLocal *local, const ScriptComponentBind
     }
 }
 
-int FindInputParameterIndex(CKBehavior *beh, const std::string &name) {
+int FindComponentInputParameterIndex(CKBehavior *beh, const std::string &name) {
     if (!beh) {
         return -1;
     }
@@ -832,7 +860,7 @@ bool SyncDeclaredInputParameters(CKBehavior *beh, ScriptComponentState *state, s
 
     state->ManagedInputParameterNames.clear();
     for (ScriptComponentBinding &binding : bindings) {
-        int index = FindInputParameterIndex(beh, binding.ParameterName);
+        int index = FindComponentInputParameterIndex(beh, binding.ParameterName);
         if (index >= 0 && index < FIXED_INPUT_PARAMETER_COUNT) {
             error = "Component input parameter name is reserved: " + binding.ParameterName;
             return false;
@@ -867,7 +895,7 @@ bool SyncDeclaredInputParameters(CKBehavior *beh, ScriptComponentState *state, s
 }
 
 bool ReadStringValue(CKParameter *source, std::string &value) {
-    return ReadParameterString(source, value);
+    return ReadParameterText(source, value);
 }
 
 CKObject *ReadObjectValue(CKParameter *source, CKContext *context) {
@@ -963,6 +991,27 @@ bool AssignBBPrototypeHandle(ScriptBehaviorBridge *bridge, asIScriptObject *obje
     return true;
 }
 
+template <typename T>
+bool AssignRefCountedHandle(asIScriptObject *object, int propertyIndex, T *value) {
+    void **slot = GetHandleSlot(object, propertyIndex);
+    if (!slot) {
+        if (value) {
+            value->Release();
+        }
+        return false;
+    }
+
+    if (*slot == value) {
+        return true;
+    }
+
+    if (*slot) {
+        static_cast<T *>(*slot)->Release();
+    }
+    *slot = value;
+    return true;
+}
+
 bool ValidateObjectFieldValue(asIScriptEngine *engine, const ScriptComponentBinding &binding, CKObject *value, std::string &error) {
     if (!value) {
         return true;
@@ -1014,7 +1063,7 @@ BBPrototype *CreatePrototypeFromParameter(ScriptBehaviorBridge *bridge,
         : bridge->CreatePrototype(behcontext, prototypeName);
 }
 
-bool AssignComponentValueField(const ScriptBridgeValue &value,
+bool AssignComponentValueField(const ScriptParamValue &value,
                                void *propertyAddress,
                                const ScriptComponentBinding &binding,
                                std::string &error) {
@@ -1024,44 +1073,44 @@ bool AssignComponentValueField(const ScriptBridgeValue &value,
     }
 
     switch (value.Kind) {
-        case ScriptBridgeValueKind::Int:
+        case ScriptParamValueKind::Int:
             if (binding.PropertyTypeId == asTYPEID_UINT32) {
-                *static_cast<asUINT *>(propertyAddress) = static_cast<asUINT>(value.IntValue);
+                *static_cast<asUINT *>(propertyAddress) = static_cast<asUINT>(value.Data.IntValue);
             } else {
-                *static_cast<int *>(propertyAddress) = value.IntValue;
+                *static_cast<int *>(propertyAddress) = value.Data.IntValue;
             }
             return true;
-        case ScriptBridgeValueKind::Float:
-            *static_cast<float *>(propertyAddress) = value.FloatValue;
+        case ScriptParamValueKind::Float:
+            *static_cast<float *>(propertyAddress) = value.Data.FloatValue;
             return true;
-        case ScriptBridgeValueKind::Bool:
-            *static_cast<bool *>(propertyAddress) = value.BoolValue;
+        case ScriptParamValueKind::Bool:
+            *static_cast<bool *>(propertyAddress) = value.Data.BoolValue;
             return true;
-        case ScriptBridgeValueKind::String:
-            *static_cast<std::string *>(propertyAddress) = value.StringValue;
+        case ScriptParamValueKind::String:
+            *static_cast<std::string *>(propertyAddress) = value.Text();
             return true;
-        case ScriptBridgeValueKind::Guid:
-            *static_cast<CKGUID *>(propertyAddress) = value.GuidValue;
+        case ScriptParamValueKind::Guid:
+            *static_cast<CKGUID *>(propertyAddress) = value.Data.GuidValue;
             return true;
-        case ScriptBridgeValueKind::Vector:
-            *static_cast<VxVector *>(propertyAddress) = value.VectorValue;
+        case ScriptParamValueKind::Vector:
+            *static_cast<VxVector *>(propertyAddress) = value.Data.VectorValue;
             return true;
-        case ScriptBridgeValueKind::Vector2:
-            *static_cast<Vx2DVector *>(propertyAddress) = value.Vector2Value;
+        case ScriptParamValueKind::Vector2:
+            *static_cast<Vx2DVector *>(propertyAddress) = value.Data.Vector2Value;
             return true;
-        case ScriptBridgeValueKind::Color:
-            *static_cast<VxColor *>(propertyAddress) = value.ColorValue;
+        case ScriptParamValueKind::Color:
+            *static_cast<VxColor *>(propertyAddress) = value.Data.ColorValue;
             return true;
-        case ScriptBridgeValueKind::Quaternion:
-            *static_cast<VxQuaternion *>(propertyAddress) = value.QuaternionValue;
+        case ScriptParamValueKind::Quaternion:
+            *static_cast<VxQuaternion *>(propertyAddress) = value.Data.QuaternionValue;
             return true;
-        case ScriptBridgeValueKind::Matrix:
-            *static_cast<VxMatrix *>(propertyAddress) = value.MatrixValue;
+        case ScriptParamValueKind::Matrix:
+            *static_cast<VxMatrix *>(propertyAddress) = value.Data.MatrixValue;
             return true;
-        case ScriptBridgeValueKind::ObjectArray: {
+        case ScriptParamValueKind::ObjectArray: {
             XObjectArray *array = static_cast<XObjectArray *>(propertyAddress);
             array->Clear();
-            for (CK_ID id : value.ObjectIds) {
+            for (CK_ID id : value.ObjectIds()) {
                 array->PushBack(id);
             }
             return true;
@@ -1114,9 +1163,9 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
             return false;
         }
 
-        const ScriptBridgeValueKind valueKind = ValueKindFromComponentKind(binding.Kind);
-        if (valueKind != ScriptBridgeValueKind::None) {
-            ScriptBridgeValue value;
+        const ScriptParamValueKind valueKind = ValueKindFromComponentKind(binding.Kind);
+        if (valueKind != ScriptParamValueKind::Empty) {
+            ScriptParamValue value;
             std::string readError;
             if (!ReadParameterValueAs(source, valueKind, value, readError)) {
                 error = readError + " (" + binding.ParameterName + ")";
@@ -1237,6 +1286,41 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                     error = "Failed to assign object Component field: " + binding.FieldName;
                     return false;
                 }
+                break;
+            }
+            case ScriptComponentBindingKind::ParamRef: {
+                if (!bridge) {
+                    error = "ParamRef Component injection requires ScriptBehaviorBridge.";
+                    return false;
+                }
+                const CK_ID inputId = input->GetID();
+                if (!initial && binding.HandleInjected && binding.LastObjectId == inputId) {
+                    break;
+                }
+                ParamRef *ref = new ParamRef(bridge, inputId, ScriptBridgeSlotKind::Pin, binding.InputParameterIndex, state->BehaviorId);
+                if (!AssignRefCountedHandle<ParamRef>(state->Object, binding.PropertyIndex, ref)) {
+                    error = "Failed to assign ParamRef Component field: " + binding.FieldName;
+                    return false;
+                }
+                binding.HandleInjected = true;
+                binding.LastObjectId = inputId;
+                break;
+            }
+            case ScriptComponentBindingKind::ParamValue: {
+                std::string readError;
+                ScriptParamValue readValue = ReadParameterValue(source, &readError);
+                if (readValue.Kind == ScriptParamValueKind::Empty && !readError.empty()) {
+                    error = readError + " (" + binding.ParameterName + ")";
+                    return false;
+                }
+                readValue.TypeGuid = source->GetGUID();
+                readValue.Type = source->GetType();
+                ParamValue *value = new ParamValue(readValue);
+                if (!AssignRefCountedHandle<ParamValue>(state->Object, binding.PropertyIndex, value)) {
+                    error = "Failed to assign ParamValue Component field: " + binding.FieldName;
+                    return false;
+                }
+                binding.HandleInjected = true;
                 break;
             }
             case ScriptComponentBindingKind::BehaviorRef: {
@@ -1692,7 +1776,9 @@ void SyncErrorOutputParameters(CKBehavior *beh) {
     }
 }
 
-} // namespace
+} // namespace AngelScriptComponentInternal
+
+using namespace AngelScriptComponentInternal;
 
 CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl() {
     CKObjectDeclaration *od = CreateCKObjectDeclaration("AngelScript Component");

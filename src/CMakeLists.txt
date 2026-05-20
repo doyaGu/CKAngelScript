@@ -24,6 +24,7 @@ set(CKAS_HEADERS
         ScriptCK2.h
         ScriptParameterConversion.h
         ScriptParameterRegistry.h
+        ScriptRefCounted.h
         ScriptBehaviorBridge.h
         ScriptBridgeCommon.h
         ScriptBridgeHandles.h

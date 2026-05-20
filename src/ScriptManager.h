@@ -19,6 +19,7 @@
 
 class CKBehavior;
 class ScriptBehaviorBridge;
+class ScriptParameterRegistry;
 class ScriptRunner;
 
 enum class ScriptComponentBindingKind {
@@ -35,6 +36,8 @@ enum class ScriptComponentBindingKind {
     Matrix,
     ObjectArray,
     Object,
+    ParamRef,
+    ParamValue,
     BehaviorRef,
     BBPrototype
 };
@@ -195,6 +198,9 @@ public:
     void ClearComponentStates();
 
     ScriptBehaviorBridge *GetBehaviorBridge();
+    ScriptParameterRegistry *GetParameterRegistry() const {
+        return m_ParameterRegistry.get();
+    }
 
     bool IsInited() const {
         return (m_Flags & AS_INITED) != 0;
@@ -235,6 +241,7 @@ protected:
     std::unordered_map<CK_ID, std::vector<asIScriptFunction *> > m_CKObjectCallbackMap;
     std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > m_ComponentStates;
     std::unique_ptr<ScriptBehaviorBridge> m_BehaviorBridge;
+    std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
 };
 
 #endif // CK_SCRIPTMANAGER_H

@@ -129,6 +129,10 @@ int ScriptManager::Init() {
     if (IsInited())
         return -2;
 
+    if (!m_ParameterRegistry) {
+        m_ParameterRegistry = std::make_unique<ScriptParameterRegistry>(m_Context);
+    }
+
     int r = SetupScriptEngine();
     if (r < 0)
         return r;
@@ -155,6 +159,7 @@ int ScriptManager::Shutdown() {
     m_ScriptCache.Clear();
 
     m_BehaviorBridge.reset();
+    m_ParameterRegistry.reset();
 
     if (m_ScriptEngine) {
         m_ScriptEngine->ShutDownAndRelease();
