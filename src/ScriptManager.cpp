@@ -1,5 +1,7 @@
 #include "ScriptManager.h"
 
+#include <cstdlib>
+
 #include <fmt/format.h>
 
 #include "CKPathManager.h"
@@ -34,6 +36,19 @@
 #include "add_on/scriptmath/scriptmathcomplex.h"
 #include "add_on/scriptgrid/scriptgrid.h"
 #include "add_on/datetime/datetime.h"
+
+namespace ScriptManagerInternal {
+
+bool IsTruthyEnvironmentValue(const char *name) {
+    const char *value = std::getenv(name);
+    return value && value[0] != '\0' && !(value[0] == '0' && value[1] == '\0');
+}
+
+bool ShouldRunStartupSelfTests() {
+    return IsTruthyEnvironmentValue("CKAS_RUN_SELFTESTS") || IsTruthyEnvironmentValue("CKAS_SELFTEST_MARKER");
+}
+
+} // namespace ScriptManagerInternal
 
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
     int r = Init();
@@ -73,6 +88,10 @@ CKERROR ScriptManager::PostProcess() {
 }
 
 CKERROR ScriptManager::OnCKInit() {
+    if (!ScriptManagerInternal::ShouldRunStartupSelfTests()) {
+        return CK_OK;
+    }
+
     std::string conversionError;
     if (!RunScriptParameterConversionSelfTest(conversionError)) {
         if (m_Context) {
