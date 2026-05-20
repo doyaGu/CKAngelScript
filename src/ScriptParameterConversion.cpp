@@ -120,6 +120,15 @@ std::string &ScriptParamValue::MutableText() {
     return EnsurePayload().Text;
 }
 
+const std::string &ScriptParamValue::TypeNameText() const {
+    static const std::string empty;
+    return Payload ? Payload->TypeName : empty;
+}
+
+std::string &ScriptParamValue::MutableTypeNameText() {
+    return EnsurePayload().TypeName;
+}
+
 const std::vector<CK_ID> &ScriptParamValue::ObjectIds() const {
     static const std::vector<CK_ID> empty;
     return Payload ? Payload->ObjectIds : empty;
@@ -558,8 +567,6 @@ CKERROR WriteTextOrReport(CKParameter *target, const std::string &text, ScriptPa
 
 } // namespace ScriptParamCodecInternal
 
-using namespace ScriptParamCodecInternal;
-
 ScriptParamValue MakeScriptParamInt(int value) {
     ScriptParamValue result;
     result.Kind = ScriptParamValueKind::Int;
@@ -589,11 +596,13 @@ ScriptParamValue MakeScriptParamString(const std::string &value) {
 }
 
 ScriptParamValue MakeScriptParamText(const std::string &text, CKGUID typeGuid, const std::string &typeName) {
-    (void) typeName;
     ScriptParamValue result;
     result.Kind = ScriptParamValueKind::Text;
     result.TypeGuid = typeGuid;
     result.MutableText() = text;
+    if (!typeName.empty()) {
+        result.MutableTypeNameText() = typeName;
+    }
     return result;
 }
 
@@ -657,36 +666,44 @@ ScriptParamValue MakeScriptParamObjectArray(const XObjectArray &value) {
 }
 
 ScriptParamValue MakeScriptParamEnum(CKGUID typeGuid, const std::string &typeName, CKDWORD value) {
-    (void) typeName;
     ScriptParamValue result;
     result.Kind = ScriptParamValueKind::Enum;
     result.Data.DwordValue = value;
     result.TypeGuid = typeGuid;
+    if (!typeName.empty()) {
+        result.MutableTypeNameText() = typeName;
+    }
     return result;
 }
 
 ScriptParamValue MakeScriptParamFlags(CKGUID typeGuid, const std::string &typeName, CKDWORD value) {
-    (void) typeName;
     ScriptParamValue result;
     result.Kind = ScriptParamValueKind::Flags;
     result.Data.DwordValue = value;
     result.TypeGuid = typeGuid;
+    if (!typeName.empty()) {
+        result.MutableTypeNameText() = typeName;
+    }
     return result;
 }
 
 ScriptParamValue MakeScriptParamStruct(CKGUID typeGuid, const std::string &typeName) {
-    (void) typeName;
     ScriptParamValue result;
     result.Kind = ScriptParamValueKind::Struct;
     result.TypeGuid = typeGuid;
+    if (!typeName.empty()) {
+        result.MutableTypeNameText() = typeName;
+    }
     return result;
 }
 
 ScriptParamValue MakeScriptParamRaw(CKGUID typeGuid, const std::string &typeName, const void *data, int size) {
-    (void) typeName;
     ScriptParamValue result;
     result.Kind = ScriptParamValueKind::Raw;
     result.TypeGuid = typeGuid;
+    if (!typeName.empty()) {
+        result.MutableTypeNameText() = typeName;
+    }
     if (data && size > 0) {
         const auto *bytes = static_cast<const char *>(data);
         result.MutableRawBytes().assign(bytes, bytes + size);
@@ -724,12 +741,12 @@ std::string ScriptGuidToString(CKGUID guid) {
 }
 
 bool ParseScriptGuidString(const std::string &value, CKGUID &guid) {
-    std::string text = TrimString(value);
+    std::string text = ScriptParamCodecInternal::TrimString(value);
     if (text.empty()) {
         return false;
     }
 
-    const std::string lower = ToLower(text);
+    const std::string lower = ScriptParamCodecInternal::ToLower(text);
     if (lower.rfind("guid:", 0) == 0) {
         text = text.substr(5);
     }
@@ -747,7 +764,7 @@ bool ParseScriptGuidString(const std::string &value, CKGUID &guid) {
         const std::size_t space = text.find_first_of(" \t\r\n", offset);
         std::size_t end = std::min(comma == std::string::npos ? text.size() : comma,
                                    space == std::string::npos ? text.size() : space);
-        const std::string token = TrimString(text.substr(offset, end - offset));
+        const std::string token = ScriptParamCodecInternal::TrimString(text.substr(offset, end - offset));
         if (!token.empty()) {
             tokens.push_back(token);
         }
@@ -763,7 +780,7 @@ bool ParseScriptGuidString(const std::string &value, CKGUID &guid) {
 
     CKDWORD a = 0;
     CKDWORD b = 0;
-    if (!ParseGuidToken(tokens[0], a) || !ParseGuidToken(tokens[1], b)) {
+    if (!ScriptParamCodecInternal::ParseGuidToken(tokens[0], a) || !ScriptParamCodecInternal::ParseGuidToken(tokens[1], b)) {
         return false;
     }
 
@@ -773,7 +790,7 @@ bool ParseScriptGuidString(const std::string &value, CKGUID &guid) {
 
 bool ParseScriptFloatList(const std::string &value, std::vector<float> &out) {
     out.clear();
-    std::string text = StripQuotes(value);
+    std::string text = ScriptParamCodecInternal::StripQuotes(value);
     for (char &c : text) {
         if (c == '(' || c == ')' || c == '[' || c == ']' || c == ';' || c == '|') {
             c = ',';
@@ -784,7 +801,7 @@ bool ParseScriptFloatList(const std::string &value, std::vector<float> &out) {
     while (offset <= text.size()) {
         const std::size_t comma = text.find(',', offset);
         const std::size_t end = comma == std::string::npos ? text.size() : comma;
-        const std::string token = TrimString(text.substr(offset, end - offset));
+        const std::string token = ScriptParamCodecInternal::TrimString(text.substr(offset, end - offset));
         if (!token.empty()) {
             char *parseEnd = nullptr;
             const double parsed = std::strtod(token.c_str(), &parseEnd);
@@ -821,7 +838,7 @@ bool ParseScriptVector2Text(const std::string &value, Vx2DVector &out) {
 }
 
 bool ParseScriptColorText(const std::string &value, VxColor &out) {
-    if (ParseHexColorText(value, out)) {
+    if (ScriptParamCodecInternal::ParseHexColorText(value, out)) {
         return true;
     }
     std::vector<float> values;
@@ -851,11 +868,11 @@ bool ParseScriptMatrixText(const std::string &value, VxMatrix &out) {
 }
 
 ScriptParamValueKind ScriptParamValueKindFromTypeName(const std::string &typeName) {
-    const std::string type = ToLower(StripQuotes(typeName));
+    const std::string type = ScriptParamCodecInternal::ToLower(ScriptParamCodecInternal::StripQuotes(typeName));
     if (type.empty()) {
         return ScriptParamValueKind::Empty;
     }
-    for (const TypeAlias &alias : kTypeAliases) {
+    for (const ScriptParamCodecInternal::TypeAlias &alias : ScriptParamCodecInternal::kTypeAliases) {
         if (type == alias.Name) {
             return alias.Kind;
         }
@@ -979,27 +996,27 @@ CKGUID ScriptParameterGuidForValueKind(ScriptParamValueKind kind) {
 }
 
 CKGUID ScriptParameterGuidForValue(const ScriptParamValue &value) {
-    if (GuidIsValid(value.TypeGuid)) {
+    if (ScriptParamCodecInternal::GuidIsValid(value.TypeGuid)) {
         return value.TypeGuid;
     }
     return ScriptParameterGuidForValueKind(value.Kind);
 }
 
 CKGUID ScriptResolveParameterGuid(CKContext *context, const std::string &typeName, CKGUID fallbackGuid) {
-    CKParameterManager *pm = ParameterManagerFromContext(context);
-    const std::string text = StripQuotes(typeName);
+    CKParameterManager *pm = ScriptParamCodecInternal::ParameterManagerFromContext(context);
+    const std::string text = ScriptParamCodecInternal::StripQuotes(typeName);
     if (pm && !text.empty()) {
         CKGUID parsed;
-        if (ParseScriptGuidString(text, parsed) && IsRegisteredGuid(pm, parsed)) {
+        if (ParseScriptGuidString(text, parsed) && ScriptParamCodecInternal::IsRegisteredGuid(pm, parsed)) {
             return parsed;
         }
 
         const CKGUID byName = pm->ParameterNameToGuid(const_cast<CKSTRING>(text.c_str()));
-        if (IsRegisteredGuid(pm, byName)) {
+        if (ScriptParamCodecInternal::IsRegisteredGuid(pm, byName)) {
             return byName;
         }
 
-        const std::string lower = ToLower(text);
+        const std::string lower = ScriptParamCodecInternal::ToLower(text);
         const int typeCount = pm->GetParameterTypesCount();
         for (int i = 0; i < typeCount; ++i) {
             CKParameterTypeDesc *desc = pm->GetParameterTypeDescription(i);
@@ -1007,13 +1024,13 @@ CKGUID ScriptResolveParameterGuid(CKContext *context, const std::string &typeNam
                 continue;
             }
             const char *name = desc->TypeName.CStr();
-            if (name && ToLower(name) == lower) {
+            if (name && ScriptParamCodecInternal::ToLower(name) == lower) {
                 return desc->Guid;
             }
         }
     }
 
-    if (GuidIsValid(fallbackGuid)) {
+    if (ScriptParamCodecInternal::GuidIsValid(fallbackGuid)) {
         return fallbackGuid;
     }
     const ScriptParamValueKind fallbackKind = ScriptParamValueKindFromTypeName(text);
@@ -1035,8 +1052,8 @@ ScriptParamTypeTraits GetScriptParamTypeTraits(CKContext *context, CKGUID guid) 
         }
     }
 
-    CKParameterManager *pm = ParameterManagerFromContext(context);
-    CKParameterTypeDesc *desc = pm && GuidIsValid(guid) ? pm->GetParameterTypeDescription(guid) : nullptr;
+    CKParameterManager *pm = ScriptParamCodecInternal::ParameterManagerFromContext(context);
+    CKParameterTypeDesc *desc = pm && ScriptParamCodecInternal::GuidIsValid(guid) ? pm->GetParameterTypeDescription(guid) : nullptr;
     if (!desc) {
         return traits;
     }
@@ -1051,17 +1068,17 @@ ScriptParamTypeTraits GetScriptParamTypeTraits(CKContext *context, CKGUID guid) 
     SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::VariableSize, (desc->dwFlags & CKPARAMETERTYPE_VARIABLESIZE) != 0);
     SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::HasLifecycle, desc->DeleteFunction != nullptr || desc->SaveLoadFunction != nullptr);
     SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::FixedSize, desc->DefaultSize > 0 && !traits.Has(ScriptParamTypeCaps::VariableSize));
-    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::ObjectLike, desc->Cid != 0 || IsTypeCompatible(context, desc->Guid, CKPGUID_OBJECT));
-    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::CollectionLike, IsTypeCompatible(context, desc->Guid, CKPGUID_OBJECTARRAY));
+    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::ObjectLike, desc->Cid != 0 || ScriptParamCodecInternal::IsTypeCompatible(context, desc->Guid, CKPGUID_OBJECT));
+    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::CollectionLike, ScriptParamCodecInternal::IsTypeCompatible(context, desc->Guid, CKPGUID_OBJECTARRAY));
     SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::StructLike, (desc->dwFlags & CKPARAMETERTYPE_STRUCT) != 0);
     SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::EnumLike, (desc->dwFlags & CKPARAMETERTYPE_ENUMS) != 0);
     SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::FlagsLike, (desc->dwFlags & CKPARAMETERTYPE_FLAGS) != 0);
-    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::IntLike, IsTypeCompatible(context, desc->Guid, CKPGUID_INT) ||
-        IsTypeCompatible(context, desc->Guid, CKPGUID_CLASSID) ||
-        IsTypeCompatible(context, desc->Guid, CKPGUID_PARAMETERTYPE));
-    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::FloatLike, IsTypeCompatible(context, desc->Guid, CKPGUID_FLOAT));
-    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::BoolLike, IsTypeCompatible(context, desc->Guid, CKPGUID_BOOL));
-    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::StringLike, IsTypeCompatible(context, desc->Guid, CKPGUID_STRING));
+    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::IntLike, ScriptParamCodecInternal::IsTypeCompatible(context, desc->Guid, CKPGUID_INT) ||
+        ScriptParamCodecInternal::IsTypeCompatible(context, desc->Guid, CKPGUID_CLASSID) ||
+        ScriptParamCodecInternal::IsTypeCompatible(context, desc->Guid, CKPGUID_PARAMETERTYPE));
+    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::FloatLike, ScriptParamCodecInternal::IsTypeCompatible(context, desc->Guid, CKPGUID_FLOAT));
+    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::BoolLike, ScriptParamCodecInternal::IsTypeCompatible(context, desc->Guid, CKPGUID_BOOL));
+    SetScriptParamTypeCap(traits.Caps, ScriptParamTypeCaps::StringLike, ScriptParamCodecInternal::IsTypeCompatible(context, desc->Guid, CKPGUID_STRING));
     if (traits.Has(ScriptParamTypeCaps::StructLike)) {
         traits.Family = ScriptParamTypeFamily::Struct;
     } else if (traits.Has(ScriptParamTypeCaps::FlagsLike)) {
@@ -1089,8 +1106,8 @@ ScriptParamTypeTraits GetScriptParamTypeTraits(CKParameter *param) {
 }
 
 std::string DescribeScriptParamType(CKContext *context, CKGUID guid) {
-    CKParameterManager *pm = ParameterManagerFromContext(context);
-    CKSTRING name = pm && GuidIsValid(guid) ? pm->ParameterGuidToName(guid) : nullptr;
+    CKParameterManager *pm = ScriptParamCodecInternal::ParameterManagerFromContext(context);
+    CKSTRING name = pm && ScriptParamCodecInternal::GuidIsValid(guid) ? pm->ParameterGuidToName(guid) : nullptr;
     std::ostringstream out;
     if (name && name[0] != '\0') {
         out << name << " ";
@@ -1102,7 +1119,7 @@ std::string DescribeScriptParamType(CKContext *context, CKGUID guid) {
 std::string DescribeScriptParamValueKind(const ScriptParamValue &value) {
     std::ostringstream out;
     out << ScriptParamValueKindName(value.Kind);
-    if (GuidIsValid(value.TypeGuid)) {
+    if (ScriptParamCodecInternal::GuidIsValid(value.TypeGuid)) {
         out << " " << ScriptGuidToString(value.TypeGuid);
     }
     return out.str();
@@ -1191,7 +1208,7 @@ bool ReadParameterText(CKParameter *source, std::string &value, std::string *err
     const ScriptParamTypeTraits traits = GetScriptParamTypeTraits(source);
     if (!traits.Has(ScriptParamTypeCaps::Stringable)) {
         if (error) {
-            *error = "Parameter '" + ParameterName(source) + "' has no SDK string conversion.";
+            *error = "Parameter '" + ScriptParamCodecInternal::ParameterName(source) + "' has no SDK string conversion.";
         }
         return false;
     }
@@ -1206,7 +1223,7 @@ bool ReadParameterText(CKParameter *source, std::string &value, std::string *err
     const int written = source->GetStringValue(buffer.data(), TRUE);
     if (written < 0) {
         if (error) {
-            *error = "Failed to read parameter text from '" + ParameterName(source) + "'.";
+            *error = "Failed to read parameter text from '" + ScriptParamCodecInternal::ParameterName(source) + "'.";
         }
         return false;
     }
@@ -1223,14 +1240,14 @@ CKERROR WriteParameterText(CKParameter *target, const std::string &value, std::s
 
     const ScriptParamTypeTraits traits = GetScriptParamTypeTraits(target);
     if (!traits.Has(ScriptParamTypeCaps::Stringable)) {
-        error = "Parameter '" + ParameterName(target) + "' has no SDK string conversion.";
+        error = "Parameter '" + ScriptParamCodecInternal::ParameterName(target) + "' has no SDK string conversion.";
         return CKERR_INVALIDOPERATION;
     }
 
     CKERROR err = target->SetStringValue(const_cast<CKSTRING>(value.c_str()));
     if (err != CK_OK) {
         std::ostringstream out;
-        out << "Failed to set text for parameter '" << ParameterName(target) << "'"
+        out << "Failed to set text for parameter '" << ScriptParamCodecInternal::ParameterName(target) << "'"
             << " expected " << DescribeScriptParamType(target->GetCKContext(), target->GetGUID())
             << ", CKERROR " << err << ".";
         error = out.str();
@@ -1245,15 +1262,15 @@ CKERROR WriteParameterRaw(CKParameter *target, const void *data, int size, CKGUI
     }
 
     const ScriptParamTypeTraits traits = GetScriptParamTypeTraits(target);
-    if (!CanRawAccess(traits)) {
-        error = "Raw write rejected for parameter '" + ParameterName(target) + "' expected " +
+    if (!ScriptParamCodecInternal::CanRawAccess(traits)) {
+        error = "Raw write rejected for parameter '" + ScriptParamCodecInternal::ParameterName(target) + "' expected " +
                 DescribeScriptParamType(target->GetCKContext(), target->GetGUID()) +
                 " because the CK type is not fixed-size POD storage.";
         return CKERR_INVALIDPARAMETERTYPE;
     }
 
-    if (GuidIsValid(sourceGuid) && !IsTypeCompatible(target->GetCKContext(), target->GetGUID(), sourceGuid)) {
-        error = "Raw write type mismatch for parameter '" + ParameterName(target) + "' expected " +
+    if (ScriptParamCodecInternal::GuidIsValid(sourceGuid) && !ScriptParamCodecInternal::IsTypeCompatible(target->GetCKContext(), target->GetGUID(), sourceGuid)) {
+        error = "Raw write type mismatch for parameter '" + ScriptParamCodecInternal::ParameterName(target) + "' expected " +
                 DescribeScriptParamType(target->GetCKContext(), target->GetGUID()) +
                 ", got " + (!sourceTypeName.empty() ? sourceTypeName : DescribeScriptParamType(target->GetCKContext(), sourceGuid)) + ".";
         return CKERR_INVALIDPARAMETERTYPE;
@@ -1262,7 +1279,7 @@ CKERROR WriteParameterRaw(CKParameter *target, const void *data, int size, CKGUI
     const int expectedSize = target->GetDataSize() > 0 ? target->GetDataSize() : traits.DefaultSize;
     if (size != expectedSize) {
         std::ostringstream out;
-        out << "Raw size mismatch for parameter '" << ParameterName(target) << "' expected "
+        out << "Raw size mismatch for parameter '" << ScriptParamCodecInternal::ParameterName(target) << "' expected "
             << expectedSize << " bytes, got " << size << ".";
         error = out.str();
         return CKERR_INVALIDPARAMETER;
@@ -1271,7 +1288,7 @@ CKERROR WriteParameterRaw(CKParameter *target, const void *data, int size, CKGUI
     const CKERROR err = target->SetValue(data, size);
     if (err != CK_OK) {
         std::ostringstream out;
-        out << "Raw write failed for parameter '" << ParameterName(target) << "' CKERROR " << err << ".";
+        out << "Raw write failed for parameter '" << ScriptParamCodecInternal::ParameterName(target) << "' CKERROR " << err << ".";
         error = out.str();
     }
     return err;
@@ -1303,13 +1320,13 @@ CKERROR WriteParameterValue(CKParameter *target, const ScriptParamValue &value, 
 
     const ScriptParamTypeTraits traits = GetScriptParamTypeTraits(target);
     if (!traits.Has(ScriptParamTypeCaps::Valid)) {
-        error = ConversionError(target, value, "target CK parameter type is not registered");
+        error = ScriptParamCodecInternal::ConversionError(target, value, "target CK parameter type is not registered");
         return CKERR_INVALIDPARAMETERTYPE;
     }
 
     switch (value.Kind) {
         case ScriptParamValueKind::Text:
-            return WriteTypedTextValue(target, value.Text(), value.Kind, error);
+            return ScriptParamCodecInternal::WriteTypedTextValue(target, value.Text(), value.Kind, error);
         case ScriptParamValueKind::Raw:
             return WriteParameterRaw(target,
                                      value.RawBytes().empty() ? nullptr : value.RawBytes().data(),
@@ -1318,61 +1335,61 @@ CKERROR WriteParameterValue(CKParameter *target, const ScriptParamValue &value, 
                                      std::string(),
                                      error);
         case ScriptParamValueKind::String:
-            return WriteTypedTextValue(target, value.Text(), value.Kind, error);
+            return ScriptParamCodecInternal::WriteTypedTextValue(target, value.Text(), value.Kind, error);
         case ScriptParamValueKind::Enum: {
             if (!traits.Has(ScriptParamTypeCaps::EnumLike) && !traits.Has(ScriptParamTypeCaps::IntLike)) {
-                error = ConversionError(target, value, "target is not enum-compatible");
+                error = ScriptParamCodecInternal::ConversionError(target, value, "target is not enum-compatible");
                 return CKERR_INVALIDPARAMETERTYPE;
             }
-            if (GuidIsValid(value.TypeGuid) && !IsTypeCompatible(target->GetCKContext(), target->GetGUID(), value.TypeGuid)) {
-                error = ConversionError(target, value, "enum type is not compatible with target parameter");
+            if (ScriptParamCodecInternal::GuidIsValid(value.TypeGuid) && !ScriptParamCodecInternal::IsTypeCompatible(target->GetCKContext(), target->GetGUID(), value.TypeGuid)) {
+                error = ScriptParamCodecInternal::ConversionError(target, value, "enum type is not compatible with target parameter");
                 return CKERR_INVALIDPARAMETERTYPE;
             }
             const CKDWORD dwordValue = value.Data.DwordValue;
-            return WriteFixedValue(target, dwordValue);
+            return ScriptParamCodecInternal::WriteFixedValue(target, dwordValue);
         }
         case ScriptParamValueKind::Flags: {
             if (!traits.Has(ScriptParamTypeCaps::FlagsLike) && !traits.Has(ScriptParamTypeCaps::IntLike)) {
-                error = ConversionError(target, value, "target is not flags-compatible");
+                error = ScriptParamCodecInternal::ConversionError(target, value, "target is not flags-compatible");
                 return CKERR_INVALIDPARAMETERTYPE;
             }
-            if (GuidIsValid(value.TypeGuid) && !IsTypeCompatible(target->GetCKContext(), target->GetGUID(), value.TypeGuid)) {
-                error = ConversionError(target, value, "flags type is not compatible with target parameter");
+            if (ScriptParamCodecInternal::GuidIsValid(value.TypeGuid) && !ScriptParamCodecInternal::IsTypeCompatible(target->GetCKContext(), target->GetGUID(), value.TypeGuid)) {
+                error = ScriptParamCodecInternal::ConversionError(target, value, "flags type is not compatible with target parameter");
                 return CKERR_INVALIDPARAMETERTYPE;
             }
             const CKDWORD dwordValue = value.Data.DwordValue;
-            return WriteFixedValue(target, dwordValue);
+            return ScriptParamCodecInternal::WriteFixedValue(target, dwordValue);
         }
         case ScriptParamValueKind::Struct:
-            return WriteStructParameterValue(target, value, error);
+            return ScriptParamCodecInternal::WriteStructParameterValue(target, value, error);
         case ScriptParamValueKind::Guid: {
             if (target->GetGUID() == CKPGUID_PARAMETERTYPE) {
-                CKParameterManager *pm = ParameterManagerFromParameter(target);
+                CKParameterManager *pm = ScriptParamCodecInternal::ParameterManagerFromParameter(target);
                 const CKParameterType type = pm ? pm->ParameterGuidToType(value.Data.GuidValue) : -1;
                 if (type >= 0) {
-                    return WriteFixedValue(target, type);
+                    return ScriptParamCodecInternal::WriteFixedValue(target, type);
                 }
             }
-            return WriteTextOrReport(target, ScriptGuidToString(value.Data.GuidValue), value.Kind, error);
+            return ScriptParamCodecInternal::WriteTextOrReport(target, ScriptGuidToString(value.Data.GuidValue), value.Kind, error);
         }
         case ScriptParamValueKind::Object: {
             if (!traits.Has(ScriptParamTypeCaps::ObjectLike)) {
-                error = ConversionError(target, value, "target is not an object parameter");
+                error = ScriptParamCodecInternal::ConversionError(target, value, "target is not an object parameter");
                 return CKERR_INVALIDPARAMETERTYPE;
             }
-            if (!IsObjectCompatible(target->GetCKContext(), traits.ClassId, value.Data.ObjectId)) {
-                error = ConversionError(target, value, "object class is not compatible with target parameter class");
+            if (!ScriptParamCodecInternal::IsObjectCompatible(target->GetCKContext(), traits.ClassId, value.Data.ObjectId)) {
+                error = ScriptParamCodecInternal::ConversionError(target, value, "object class is not compatible with target parameter class");
                 return CKERR_INVALIDPARAMETERTYPE;
             }
             const CK_ID id = value.Data.ObjectId;
-            return WriteFixedValue(target, id);
+            return ScriptParamCodecInternal::WriteFixedValue(target, id);
         }
         case ScriptParamValueKind::ObjectArray:
-            return WriteObjectArrayParameterValue(target, value, error);
+            return ScriptParamCodecInternal::WriteObjectArrayParameterValue(target, value, error);
         case ScriptParamValueKind::Int: {
             if (traits.Has(ScriptParamTypeCaps::BoolLike)) {
                 const CKBOOL boolValue = value.Data.IntValue != 0 ? TRUE : FALSE;
-                return WriteFixedValue(target, boolValue);
+                return ScriptParamCodecInternal::WriteFixedValue(target, boolValue);
             }
             if ((traits.Has(ScriptParamTypeCaps::IntLike) ||
                  traits.Has(ScriptParamTypeCaps::EnumLike) ||
@@ -1383,18 +1400,18 @@ CKERROR WriteParameterValue(CKParameter *target, const ScriptParamValue &value, 
                 !traits.Has(ScriptParamTypeCaps::ObjectLike) &&
                 !traits.Has(ScriptParamTypeCaps::CollectionLike)) {
                 const CKDWORD dwordValue = static_cast<CKDWORD>(value.Data.IntValue);
-                return WriteFixedValue(target, dwordValue);
+                return ScriptParamCodecInternal::WriteFixedValue(target, dwordValue);
             }
-            if (WriteStringFallback(target, value, error)) {
+            if (ScriptParamCodecInternal::WriteStringFallback(target, value, error)) {
                 return CK_OK;
             }
             return CKERR_INVALIDPARAMETERTYPE;
         }
         case ScriptParamValueKind::Float: {
             if (traits.Has(ScriptParamTypeCaps::FloatLike) && target->GetDataSize() == static_cast<int>(sizeof(float))) {
-                return WriteFixedValue(target, value.Data.FloatValue);
+                return ScriptParamCodecInternal::WriteFixedValue(target, value.Data.FloatValue);
             }
-            if (WriteStringFallback(target, value, error)) {
+            if (ScriptParamCodecInternal::WriteStringFallback(target, value, error)) {
                 return CK_OK;
             }
             return CKERR_INVALIDPARAMETERTYPE;
@@ -1403,44 +1420,44 @@ CKERROR WriteParameterValue(CKParameter *target, const ScriptParamValue &value, 
             if (traits.Has(ScriptParamTypeCaps::BoolLike) ||
                 (traits.Has(ScriptParamTypeCaps::IntLike) && target->GetDataSize() == static_cast<int>(sizeof(CKBOOL)))) {
                 const CKBOOL boolValue = value.Data.BoolValue ? TRUE : FALSE;
-                return WriteFixedValue(target, boolValue);
+                return ScriptParamCodecInternal::WriteFixedValue(target, boolValue);
             }
-            if (WriteStringFallback(target, value, error)) {
+            if (ScriptParamCodecInternal::WriteStringFallback(target, value, error)) {
                 return CK_OK;
             }
             return CKERR_INVALIDPARAMETERTYPE;
         }
         case ScriptParamValueKind::Vector:
-            if (IsTypeCompatible(target, CKPGUID_VECTOR) && target->GetDataSize() == static_cast<int>(sizeof(VxVector))) {
-                return WriteFixedValue(target, value.Data.VectorValue);
+            if (ScriptParamCodecInternal::IsTypeCompatible(target, CKPGUID_VECTOR) && target->GetDataSize() == static_cast<int>(sizeof(VxVector))) {
+                return ScriptParamCodecInternal::WriteFixedValue(target, value.Data.VectorValue);
             }
             break;
         case ScriptParamValueKind::Vector2:
-            if (IsTypeCompatible(target, CKPGUID_2DVECTOR) && target->GetDataSize() == static_cast<int>(sizeof(Vx2DVector))) {
-                return WriteFixedValue(target, value.Data.Vector2Value);
+            if (ScriptParamCodecInternal::IsTypeCompatible(target, CKPGUID_2DVECTOR) && target->GetDataSize() == static_cast<int>(sizeof(Vx2DVector))) {
+                return ScriptParamCodecInternal::WriteFixedValue(target, value.Data.Vector2Value);
             }
             break;
         case ScriptParamValueKind::Color:
-            if (IsTypeCompatible(target, CKPGUID_COLOR) && target->GetDataSize() == static_cast<int>(sizeof(VxColor))) {
-                return WriteFixedValue(target, value.Data.ColorValue);
+            if (ScriptParamCodecInternal::IsTypeCompatible(target, CKPGUID_COLOR) && target->GetDataSize() == static_cast<int>(sizeof(VxColor))) {
+                return ScriptParamCodecInternal::WriteFixedValue(target, value.Data.ColorValue);
             }
             break;
         case ScriptParamValueKind::Quaternion:
-            if (IsTypeCompatible(target, CKPGUID_QUATERNION) && target->GetDataSize() == static_cast<int>(sizeof(VxQuaternion))) {
-                return WriteFixedValue(target, value.Data.QuaternionValue);
+            if (ScriptParamCodecInternal::IsTypeCompatible(target, CKPGUID_QUATERNION) && target->GetDataSize() == static_cast<int>(sizeof(VxQuaternion))) {
+                return ScriptParamCodecInternal::WriteFixedValue(target, value.Data.QuaternionValue);
             }
             break;
         case ScriptParamValueKind::Matrix:
-            if (IsTypeCompatible(target, CKPGUID_MATRIX) && target->GetDataSize() == static_cast<int>(sizeof(VxMatrix))) {
-                return WriteFixedValue(target, value.Data.MatrixValue);
+            if (ScriptParamCodecInternal::IsTypeCompatible(target, CKPGUID_MATRIX) && target->GetDataSize() == static_cast<int>(sizeof(VxMatrix))) {
+                return ScriptParamCodecInternal::WriteFixedValue(target, value.Data.MatrixValue);
             }
             break;
         default:
-            error = ConversionError(target, value, "value is empty");
+            error = ScriptParamCodecInternal::ConversionError(target, value, "value is empty");
             return CKERR_INVALIDPARAMETER;
     }
 
-    if (WriteStringFallback(target, value, error)) {
+    if (ScriptParamCodecInternal::WriteStringFallback(target, value, error)) {
         return CK_OK;
     }
     return CKERR_INVALIDPARAMETERTYPE;
@@ -1455,7 +1472,7 @@ CKERROR CopyParameterValue(CKParameter *target, CKParameter *source, std::string
     CKERROR err = target->CopyValue(source);
     if (err != CK_OK) {
         std::ostringstream out;
-        out << "Failed to copy parameter value to '" << ParameterName(target) << "' expected "
+        out << "Failed to copy parameter value to '" << ScriptParamCodecInternal::ParameterName(target) << "' expected "
             << DescribeScriptParamType(target->GetCKContext(), target->GetGUID())
             << ", got " << DescribeScriptParamType(source->GetCKContext(), source->GetGUID())
             << ", CKERROR " << err << ".";
@@ -1478,7 +1495,7 @@ ScriptParamValue ReadParameterValue(CKParameter *param, std::string *error) {
     value.Type = param->GetType();
 
     if (traits.Has(ScriptParamTypeCaps::StructLike)) {
-        if (ReadStructParameterValue(param, value, error)) {
+        if (ScriptParamCodecInternal::ReadStructParameterValue(param, value, error)) {
             return value;
         }
         return ScriptParamValue();
@@ -1492,18 +1509,18 @@ ScriptParamValue ReadParameterValue(CKParameter *param, std::string *error) {
     }
 
     if (traits.Has(ScriptParamTypeCaps::CollectionLike)) {
-        if (ReadObjectArrayParameterValue(param, value)) {
+        if (ScriptParamCodecInternal::ReadObjectArrayParameterValue(param, value)) {
             return value;
         }
         if (error) {
-            *error = "Failed to read object array parameter '" + ParameterName(param) + "'.";
+            *error = "Failed to read object array parameter '" + ScriptParamCodecInternal::ParameterName(param) + "'.";
         }
         return ScriptParamValue();
     }
 
     if (traits.Has(ScriptParamTypeCaps::BoolLike)) {
         CKBOOL v = FALSE;
-        if (ReadFixedValue(param, v)) {
+        if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
             value.Kind = ScriptParamValueKind::Bool;
             value.Data.BoolValue = v != FALSE;
             return value;
@@ -1512,7 +1529,7 @@ ScriptParamValue ReadParameterValue(CKParameter *param, std::string *error) {
 
     if (traits.Has(ScriptParamTypeCaps::FloatLike)) {
         float v = 0.0f;
-        if (ReadFixedValue(param, v)) {
+        if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
             value.Kind = ScriptParamValueKind::Float;
             value.Data.FloatValue = v;
             return value;
@@ -1523,7 +1540,7 @@ ScriptParamValue ReadParameterValue(CKParameter *param, std::string *error) {
         traits.Has(ScriptParamTypeCaps::EnumLike) ||
         traits.Has(ScriptParamTypeCaps::FlagsLike)) {
         CKDWORD v = 0;
-        if (ReadFixedValue(param, v)) {
+        if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
             if (traits.Has(ScriptParamTypeCaps::EnumLike)) {
                 value = MakeScriptParamEnum(param->GetGUID(), DescribeScriptParamType(param->GetCKContext(), param->GetGUID()), v);
             } else if (traits.Has(ScriptParamTypeCaps::FlagsLike)) {
@@ -1536,45 +1553,45 @@ ScriptParamValue ReadParameterValue(CKParameter *param, std::string *error) {
         }
     }
 
-    if (IsTypeCompatible(param, CKPGUID_VECTOR)) {
+    if (ScriptParamCodecInternal::IsTypeCompatible(param, CKPGUID_VECTOR)) {
         VxVector v;
-        if (ReadFixedValue(param, v)) {
+        if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
             value.Kind = ScriptParamValueKind::Vector;
             value.Data.VectorValue = v;
             return value;
         }
     }
 
-    if (IsTypeCompatible(param, CKPGUID_2DVECTOR)) {
+    if (ScriptParamCodecInternal::IsTypeCompatible(param, CKPGUID_2DVECTOR)) {
         Vx2DVector v;
-        if (ReadFixedValue(param, v)) {
+        if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
             value.Kind = ScriptParamValueKind::Vector2;
             value.Data.Vector2Value = v;
             return value;
         }
     }
 
-    if (IsTypeCompatible(param, CKPGUID_COLOR)) {
+    if (ScriptParamCodecInternal::IsTypeCompatible(param, CKPGUID_COLOR)) {
         VxColor v;
-        if (ReadFixedValue(param, v)) {
+        if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
             value.Kind = ScriptParamValueKind::Color;
             value.Data.ColorValue = v;
             return value;
         }
     }
 
-    if (IsTypeCompatible(param, CKPGUID_QUATERNION)) {
+    if (ScriptParamCodecInternal::IsTypeCompatible(param, CKPGUID_QUATERNION)) {
         VxQuaternion v;
-        if (ReadFixedValue(param, v)) {
+        if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
             value.Kind = ScriptParamValueKind::Quaternion;
             value.Data.QuaternionValue = v;
             return value;
         }
     }
 
-    if (IsTypeCompatible(param, CKPGUID_MATRIX)) {
+    if (ScriptParamCodecInternal::IsTypeCompatible(param, CKPGUID_MATRIX)) {
         VxMatrix v;
-        if (ReadFixedValue(param, v)) {
+        if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
             value.Kind = ScriptParamValueKind::Matrix;
             value.Data.MatrixValue = v;
             return value;
@@ -1588,7 +1605,7 @@ ScriptParamValue ReadParameterValue(CKParameter *param, std::string *error) {
         return value;
     }
 
-    if (CanRawAccess(traits)) {
+    if (ScriptParamCodecInternal::CanRawAccess(traits)) {
         void *data = param->GetReadDataPtr(TRUE);
         if (data && param->GetDataSize() > 0) {
             value.Kind = ScriptParamValueKind::Raw;
@@ -1599,7 +1616,7 @@ ScriptParamValue ReadParameterValue(CKParameter *param, std::string *error) {
     }
 
     if (error) {
-        *error = "Cannot read parameter '" + ParameterName(param) + "' as a supported value, text, or fixed-size raw buffer.";
+        *error = "Cannot read parameter '" + ScriptParamCodecInternal::ParameterName(param) + "' as a supported value, text, or fixed-size raw buffer.";
     }
     return ScriptParamValue();
 }
@@ -1617,14 +1634,14 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
     switch (kind) {
         case ScriptParamValueKind::Int: {
             CKDWORD v = 0;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value.Kind = ScriptParamValueKind::Int;
                 value.Data.IntValue = static_cast<int>(v);
                 return true;
             }
             std::string text;
             int parsed = 0;
-            if (ReadParameterText(param, text, nullptr) && ParseIntegerText(text, parsed)) {
+            if (ReadParameterText(param, text, nullptr) && ScriptParamCodecInternal::ParseIntegerText(text, parsed)) {
                 value = MakeScriptParamInt(parsed);
                 return true;
             }
@@ -1636,7 +1653,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
                 break;
             }
             CKDWORD v = 0;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value = MakeScriptParamEnum(param->GetGUID(), DescribeScriptParamType(param->GetCKContext(), param->GetGUID()), v);
                 return true;
             }
@@ -1648,7 +1665,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
                 break;
             }
             CKDWORD v = 0;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value = MakeScriptParamFlags(param->GetGUID(), DescribeScriptParamType(param->GetCKContext(), param->GetGUID()), v);
                 return true;
             }
@@ -1656,7 +1673,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
         }
         case ScriptParamValueKind::Float: {
             float v = 0.0f;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value.Kind = ScriptParamValueKind::Float;
                 value.Data.FloatValue = v;
                 return true;
@@ -1664,7 +1681,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
             std::string text;
             if (ReadParameterText(param, text, nullptr)) {
                 char *end = nullptr;
-                const double parsed = std::strtod(StripQuotes(text).c_str(), &end);
+                const double parsed = std::strtod(ScriptParamCodecInternal::StripQuotes(text).c_str(), &end);
                 if (end && *end == '\0') {
                     value = MakeScriptParamFloat(static_cast<float>(parsed));
                     return true;
@@ -1674,14 +1691,14 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
         }
         case ScriptParamValueKind::Bool: {
             CKBOOL v = FALSE;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value.Kind = ScriptParamValueKind::Bool;
                 value.Data.BoolValue = v != FALSE;
                 return true;
             }
             std::string text;
             if (ReadParameterText(param, text, nullptr)) {
-                value = MakeScriptParamBool(ParseBoolText(text));
+                value = MakeScriptParamBool(ScriptParamCodecInternal::ParseBoolText(text));
                 return true;
             }
             break;
@@ -1706,8 +1723,8 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
             }
             if (param->GetGUID() == CKPGUID_PARAMETERTYPE) {
                 CKParameterType type = -1;
-                if (ReadFixedValue(param, type)) {
-                    CKParameterManager *pm = ParameterManagerFromParameter(param);
+                if (ScriptParamCodecInternal::ReadFixedValue(param, type)) {
+                    CKParameterManager *pm = ScriptParamCodecInternal::ParameterManagerFromParameter(param);
                     value = MakeScriptParamGuid(pm ? pm->ParameterTypeToGuid(type) : CKGUID());
                     return true;
                 }
@@ -1716,7 +1733,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
         }
         case ScriptParamValueKind::Vector: {
             VxVector v;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value = MakeScriptParamVector(v);
                 return true;
             }
@@ -1729,7 +1746,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
         }
         case ScriptParamValueKind::Vector2: {
             Vx2DVector v;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value = MakeScriptParamVector2(v);
                 return true;
             }
@@ -1742,7 +1759,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
         }
         case ScriptParamValueKind::Color: {
             VxColor v;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value = MakeScriptParamColor(v);
                 return true;
             }
@@ -1755,7 +1772,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
         }
         case ScriptParamValueKind::Quaternion: {
             VxQuaternion v;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value = MakeScriptParamQuaternion(v);
                 return true;
             }
@@ -1768,7 +1785,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
         }
         case ScriptParamValueKind::Matrix: {
             VxMatrix v;
-            if (ReadFixedValue(param, v)) {
+            if (ScriptParamCodecInternal::ReadFixedValue(param, v)) {
                 value = MakeScriptParamMatrix(v);
                 return true;
             }
@@ -1783,24 +1800,24 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
             value = MakeScriptParamObject(param->GetValueObject(TRUE));
             return true;
         case ScriptParamValueKind::ObjectArray: {
-            if (ReadObjectArrayParameterValue(param, value)) {
+            if (ScriptParamCodecInternal::ReadObjectArrayParameterValue(param, value)) {
                 return true;
             }
             std::string text;
-            if (ReadParameterText(param, text, nullptr) && ParseObjectArrayText(text, value)) {
+            if (ReadParameterText(param, text, nullptr) && ScriptParamCodecInternal::ParseObjectArrayText(text, value)) {
                 return true;
             }
             break;
         }
         case ScriptParamValueKind::Struct: {
-            if (ReadStructParameterValue(param, value, &error)) {
+            if (ScriptParamCodecInternal::ReadStructParameterValue(param, value, &error)) {
                 return true;
             }
             return false;
         }
         case ScriptParamValueKind::Raw: {
             const ScriptParamTypeTraits traits = GetScriptParamTypeTraits(param);
-            if (CanRawAccess(traits)) {
+            if (ScriptParamCodecInternal::CanRawAccess(traits)) {
                 void *data = param->GetReadDataPtr(TRUE);
                 if (data && param->GetDataSize() > 0) {
                     value = MakeScriptParamRaw(param->GetGUID(), DescribeScriptParamType(param->GetCKContext(), param->GetGUID()), data, param->GetDataSize());
@@ -1813,7 +1830,7 @@ bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptP
             break;
     }
 
-    error = "Failed to read parameter '" + ParameterName(param) + "' expected " +
+    error = "Failed to read parameter '" + ScriptParamCodecInternal::ParameterName(param) + "' expected " +
             ScriptParamValueKindName(kind) + ", actual " +
             DescribeScriptParamType(param->GetCKContext(), param->GetGUID()) + ".";
     return false;
@@ -1826,11 +1843,11 @@ bool SetParameterDefaultText(CKParameterLocal *local, const std::string &default
     }
 
     ScriptParamValue objectArray;
-    if (IsTypeCompatible(local, CKPGUID_OBJECTARRAY) && ParseObjectArrayText(defaultValue, objectArray)) {
+    if (ScriptParamCodecInternal::IsTypeCompatible(local, CKPGUID_OBJECTARRAY) && ScriptParamCodecInternal::ParseObjectArrayText(defaultValue, objectArray)) {
         return WriteParameterValue(local, objectArray, error) == CK_OK;
     }
 
-    return WriteParameterValue(local, MakeScriptParamString(StripQuotes(defaultValue)), error) == CK_OK;
+    return WriteParameterValue(local, MakeScriptParamString(ScriptParamCodecInternal::StripQuotes(defaultValue)), error) == CK_OK;
 }
 
 bool RunScriptParameterConversionSelfTest(std::string &error) {

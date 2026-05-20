@@ -9,8 +9,6 @@
 #include "CKAll.h"
 #include "ScriptManager.h"
 
-#include <fmt/format.h>
-
 #undef GetObject
 
 std::string SafeString(CKSTRING value);

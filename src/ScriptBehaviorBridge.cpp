@@ -1,5 +1,7 @@
 #include "ScriptBridgeHandles.h"
 
+#include <fmt/format.h>
+
 namespace ScriptBehaviorBridgeInternal {
 
 std::string LayoutGuidKey(CKGUID guid) {

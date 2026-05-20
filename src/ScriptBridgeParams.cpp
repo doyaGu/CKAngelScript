@@ -39,6 +39,9 @@ CKGUID ParamValue::TypeGuid() const {
 }
 
 std::string ParamValue::TypeName() const {
+    if (!m_Value.TypeNameText().empty()) {
+        return m_Value.TypeNameText();
+    }
     return TypeGuid().IsValid() ? GuidToString(TypeGuid()) : std::string();
 }
 
@@ -146,6 +149,9 @@ bool ParamStructValue::IsValid() const {
 CKGUID ParamStructValue::TypeGuid() const { return m_Value.TypeGuid; }
 
 std::string ParamStructValue::TypeName() const {
+    if (!m_Value.TypeNameText().empty()) {
+        return m_Value.TypeNameText();
+    }
     return m_Value.TypeGuid.IsValid() ? GuidToString(m_Value.TypeGuid) : std::string();
 }
 
@@ -566,6 +572,10 @@ ParamValue *ParamRef::GetValue() const {
     ScriptParamValue value = ReadParameterValue(source, &error);
     value.TypeGuid = source->GetGUID();
     value.Type = source->GetType();
+    const std::string typeName = DescribeScriptParamType(source->GetCKContext(), source->GetGUID());
+    if (!typeName.empty()) {
+        value.MutableTypeNameText() = typeName;
+    }
     return new ParamValue(value);
 }
 

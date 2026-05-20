@@ -90,6 +90,7 @@ struct ScriptParamStructMemberValue {
 
 struct ScriptParamValuePayload {
     std::string Text;
+    std::string TypeName;
     std::vector<CK_ID> ObjectIds;
     std::vector<char> Raw;
     std::vector<ScriptParamStructMemberValue> StructMembers;
@@ -114,6 +115,8 @@ struct ScriptParamValue {
     ScriptParamValuePayload &EnsurePayload();
     const std::string &Text() const;
     std::string &MutableText();
+    const std::string &TypeNameText() const;
+    std::string &MutableTypeNameText();
     const std::vector<CK_ID> &ObjectIds() const;
     std::vector<CK_ID> &MutableObjectIds();
     const std::vector<char> &RawBytes() const;

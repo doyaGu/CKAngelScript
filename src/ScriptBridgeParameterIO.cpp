@@ -1,5 +1,7 @@
 #include "ScriptBridgeHandles.h"
 
+#include <fmt/format.h>
+
 namespace ScriptBridgeParameterIOInternal {
 
 CKGUID ResolveOperationInputGuid(CKContext *context,

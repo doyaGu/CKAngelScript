@@ -1,4 +1,6 @@
 #include "ScriptBridgeHandles.h"
+
+#include <fmt/format.h>
 #include "ScriptRunner.h"
 
 #include <fstream>

@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include <fmt/format.h>
+
 namespace ScriptBridgeRegistrationInternal {
 
 ScriptBehaviorBridge *BridgeFromContext(const CKBehaviorContext &ctx) {
