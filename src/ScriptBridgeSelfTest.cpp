@@ -671,7 +671,7 @@ static bool ProbeRuntimeRunnerInputBinding(CKContext *context,
     }
     createCallbackSent = true;
 
-    std::unordered_map<int, CK_ID> inputSources;
+    ScriptBridgeInputSourceBindings inputSources;
     if (!ApplyIndexedInputParameters(behavior, request.IndexedParameters, error, &inputSources)) {
         error = "Runtime Runner input probe failed to apply inputs: " + error;
         cleanup();
@@ -717,6 +717,94 @@ static bool ProbeRuntimeRunnerInputBinding(CKContext *context,
     }
 
     cleanup();
+    return true;
+}
+
+static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
+                                                       std::string &error) {
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
+    if (!context || !bridge) {
+        error = "Layout cache native self-test requires CKContext and ScriptBehaviorBridge.";
+        return false;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_LayoutCacheSelfTest"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!behavior) {
+        error = "Failed to create behavior for layout cache self-test.";
+        return false;
+    }
+
+    behavior->CreateInput(const_cast<CKSTRING>("In"));
+    behavior->CreateOutput(const_cast<CKSTRING>("Out"));
+    behavior->CreateInputParameter(const_cast<CKSTRING>("Value"), CKPGUID_INT);
+    behavior->CreateOutputParameter(const_cast<CKSTRING>("Result"), CKPGUID_FLOAT);
+    behavior->CreateLocalParameter(const_cast<CKSTRING>("State"), CKPGUID_BOOL);
+
+    const ScriptBridgeObjectStamp stamp = CaptureBridgeObjectStamp(behavior);
+    const ScriptBridgeLayoutRecord *layout = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
+    if (!layout ||
+        layout->Inputs.size() != 1 ||
+        layout->Outputs.size() != 1 ||
+        layout->Pins.size() != 1 ||
+        layout->Pouts.size() != 1 ||
+        layout->Locals.size() != 1 ||
+        layout->Pins[0].Name != "Value" ||
+        layout->Pouts[0].TypeGuid != CKPGUID_FLOAT) {
+        DestroySelfTestObject(context, behavior);
+        error = "Layout cache initial record self-test failed.";
+        return false;
+    }
+
+    const std::string firstSignature = layout->Signature;
+    behavior->CreateInputParameter(const_cast<CKSTRING>("Second"), CKPGUID_STRING);
+    const ScriptBridgeLayoutRecord *refreshed = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
+    if (!refreshed ||
+        refreshed->Pins.size() != 2 ||
+        refreshed->Pins[1].Name != "Second" ||
+        refreshed->Signature == firstSignature) {
+        DestroySelfTestObject(context, behavior);
+        error = "Layout cache refresh self-test failed.";
+        return false;
+    }
+
+    DestroySelfTestObject(context, behavior);
+    return true;
+}
+
+static bool RunBehaviorBridgeNativeInternalShapeSelfTest(std::string &error) {
+    ScriptBridgeInputSourceBindings bindings;
+    bindings.Set(4, 44);
+    bindings.Set(1, 11);
+    bindings.Set(4, 45);
+    if (bindings.Items.size() != 2 ||
+        bindings.Items[0].PinIndex != 1 ||
+        bindings.Items[1].PinIndex != 4 ||
+        bindings.Find(4) != 45) {
+        error = "Sorted input source bindings self-test failed.";
+        return false;
+    }
+    bindings.Remove(1);
+    if (bindings.Find(1) != 0 || bindings.Items.size() != 1) {
+        error = "Sorted input source binding removal self-test failed.";
+        return false;
+    }
+
+    ParamValue textValue(MakeScriptParamString("not an int"));
+    if (textValue.AsInt() != 0) {
+        error = "ParamValue wrong-kind AsInt fallback self-test failed.";
+        return false;
+    }
+
+    ParamValue intValue(MakeScriptParamInt(3));
+    if (intValue.AsFloat() != 3.0f) {
+        error = "ParamValue int-to-float safe conversion self-test failed.";
+        return false;
+    }
+
     return true;
 }
 
@@ -954,6 +1042,16 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
 
     if (!RunBehaviorBridgeNativeGraphTaskSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-graphtask", error);
+        return false;
+    }
+
+    if (!RunBehaviorBridgeNativeLayoutCacheSelfTest(context, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-layout-cache", error);
+        return false;
+    }
+
+    if (!RunBehaviorBridgeNativeInternalShapeSelfTest(error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-internal-shape", error);
         return false;
     }
 
