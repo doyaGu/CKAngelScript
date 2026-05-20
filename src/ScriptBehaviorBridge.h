@@ -1,7 +1,6 @@
 #ifndef CK_SCRIPTBEHAVIORBRIDGE_H
 #define CK_SCRIPTBEHAVIORBRIDGE_H
 
-#include <algorithm>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -133,19 +132,9 @@ struct ScriptBridgeIndexedValue {
     ScriptParamValue Value;
 };
 
-inline void ScriptBridgeSetIndexedValue(std::vector<ScriptBridgeIndexedValue> &values,
-                                        int pinIndex,
-                                        const ScriptParamValue &value) {
-    const auto it = std::lower_bound(values.begin(), values.end(), pinIndex,
-        [](const ScriptBridgeIndexedValue &entry, int index) {
-            return entry.PinIndex < index;
-        });
-    if (it != values.end() && it->PinIndex == pinIndex) {
-        it->Value = value;
-    } else {
-        values.insert(it, ScriptBridgeIndexedValue{pinIndex, value});
-    }
-}
+void ScriptBridgeSetIndexedValue(std::vector<ScriptBridgeIndexedValue> &values,
+                                 int pinIndex,
+                                 const ScriptParamValue &value);
 
 struct ScriptBridgeInputSource {
     int PinIndex = -1;
@@ -161,35 +150,9 @@ struct ScriptBridgeInputSourceBinding {
 struct ScriptBridgeInputSourceBindings {
     std::vector<ScriptBridgeInputSourceBinding> Items;
 
-    CK_ID Find(int pinIndex) const {
-        const auto it = std::lower_bound(Items.begin(), Items.end(), pinIndex,
-            [](const ScriptBridgeInputSourceBinding &entry, int index) {
-                return entry.PinIndex < index;
-            });
-        return it != Items.end() && it->PinIndex == pinIndex ? it->SourceId : 0;
-    }
-
-    void Set(int pinIndex, CK_ID sourceId) {
-        const auto it = std::lower_bound(Items.begin(), Items.end(), pinIndex,
-            [](const ScriptBridgeInputSourceBinding &entry, int index) {
-                return entry.PinIndex < index;
-            });
-        if (it != Items.end() && it->PinIndex == pinIndex) {
-            it->SourceId = sourceId;
-            return;
-        }
-        Items.insert(it, ScriptBridgeInputSourceBinding{pinIndex, sourceId});
-    }
-
-    void Remove(int pinIndex) {
-        const auto it = std::lower_bound(Items.begin(), Items.end(), pinIndex,
-            [](const ScriptBridgeInputSourceBinding &entry, int index) {
-                return entry.PinIndex < index;
-            });
-        if (it != Items.end() && it->PinIndex == pinIndex) {
-            Items.erase(it);
-        }
-    }
+    CK_ID Find(int pinIndex) const;
+    void Set(int pinIndex, CK_ID sourceId);
+    void Remove(int pinIndex);
 };
 
 struct ScriptBridgeOperationInput {
