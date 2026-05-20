@@ -76,6 +76,24 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     }
 
     std::string source;
+    source += "void ProbeParamHandleApi(ParamRef@ param, ParamValue@ value, ParamStructValue@ structValue) {\n";
+    source += "    if (param is null) return;\n";
+    source += "    param.IsValid(); bool valid = param.valid; CK_ID id = param.id; int index = param.index; ParamKind kind = param.kind; string name = param.name;\n";
+    source += "    param.TypeGuid(); param.TypeName(); param.DataSize(); param.RealSource(); param.DirectSource();\n";
+    source += "    ParamSourceLinkRef@ link = param.SetSourceScoped(param); if (link !is null) { link.IsValid(); link.IsCommitted(); link.IsRestored(); link.Commit(); link.Restore(); link.Describe(); }\n";
+    source += "    param.SetSource(param); param.Set(value); param.SetInt(1); param.SetFloat(1.0f); param.SetBool(true); param.SetString(\"x\"); param.SetObject(null);\n";
+    source += "    param.SetEnum(\"0\"); param.SetEnum(0); param.SetFlags(\"0\"); param.SetFlags(0); param.SetStruct(structValue); param.Get(); param.CopyFrom(param);\n";
+    source += "    param.GetText(); param.GetEnumText(); param.GetFlagsText(); param.SetText(\"0\"); NativeBuffer@ raw = param.GetRaw(); param.SetRaw(raw); ParamStructRef@ s = param.Struct(); param.Describe();\n";
+    source += "    if (s !is null) { s.IsValid(); s.Count(); s.Info(); s.Member(0); s.FindMember(\"x\"); s.Describe(); }\n";
+    source += "}\n";
+    source += "void ProbeBBApi(const CKBehaviorContext &in ctx, ParamValue@ value, ParamRef@ source, ParamOp@ operation) {\n";
+    source += "    BBBridge@ bridge = BB::From(ctx); BBPrototype@ missing = BB::Prototype(ctx, \"__missing__\"); CKGUID emptyGuid; BBPrototype@ missingGuid = BB::Prototype(ctx, emptyGuid);\n";
+    source += "    BBCallBuilder@ call = BB::Call(ctx, \"__missing__\"); BBTaskBuilder@ spawn = BB::Spawn(ctx, \"__missing__\");\n";
+    source += "    if (bridge !is null) { bridge.Prototype(\"__missing__\"); bridge.Prototype(emptyGuid); }\n";
+    source += "    if (missing !is null) { missing.IsValid(); missing.GetGuid(); missing.GetName(); missing.GetQualifiedName(); missing.Layout(); missing.Call(); missing.Spawn(); missing.Describe(); }\n";
+    source += "    if (call !is null) { call.Owner(null); call.Target(null); call.Set(0, value); call.SetSource(0, source); call.SetOperation(0, operation); BBResult@ result = call.Run(); if (result !is null) { result.Ok(); bool ok = result.ok; result.ReturnCode(); result.Error(); result.OutputActive(0); result.Pout(0); result.Raise(ctx); } }\n";
+    source += "    if (spawn !is null) { spawn.Owner(null); spawn.Target(null); spawn.Set(0, value); spawn.SetSource(0, source); spawn.SetOperation(0, operation); BBTask@ task = spawn.Start(); if (task !is null) { task.IsValid(); task.IsAlive(); task.IsPaused(); task.ReturnCode(); task.Error(); task.OutputActive(0); task.Step(ctx); task.Reset(); task.Behavior(); task.Pout(0); task.Raise(ctx); task.Destroy(); } }\n";
+    source += "}\n";
     source += "void ProbeGraphTaskApi(const CKBehaviorContext &in ctx, BehaviorRef@ ref, GraphTask@ task) {\n";
     source += "    if (ref !is null) { BehaviorLayout@ l = ref.Layout(); int p = l.FindPin(\"Value\"); ParamRef@ pin = p >= 0 ? ref.Pin(p) : null; ParamSourceLinkRef@ link = pin !is null ? pin.SetSourceScoped(pin) : null; if (link !is null) { link.IsValid(); link.Commit(); link.Restore(); link.Describe(); } ParamOperationRef@ opRef = null; if (opRef !is null) opRef.Restore(); GraphTask@ s = ref.Start(0); GraphTask@ w = ref.Watch(); }\n";
     source += "    GraphTask@ ns = Behavior::Start(ctx, \"__missing__\", 0);\n";
@@ -805,13 +823,31 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(std::string &error) {
     if (bindings.Items.size() != 2 ||
         bindings.Items[0].PinIndex != 1 ||
         bindings.Items[1].PinIndex != 4 ||
+        bindings.Find(1) != 11 ||
         bindings.Find(4) != 45) {
         error = "Sorted input source bindings self-test failed.";
         return false;
     }
     bindings.Remove(1);
-    if (bindings.Find(1) != 0 || bindings.Items.size() != 1) {
+    bindings.Remove(99);
+    if (bindings.Find(1) != 0 ||
+        bindings.Find(4) != 45 ||
+        bindings.Items.size() != 1 ||
+        bindings.Items[0].PinIndex != 4) {
         error = "Sorted input source binding removal self-test failed.";
+        return false;
+    }
+
+    std::vector<ScriptBridgeIndexedValue> indexedValues;
+    ScriptBridgeSetIndexedValue(indexedValues, 3, MakeScriptParamInt(30));
+    ScriptBridgeSetIndexedValue(indexedValues, 0, MakeScriptParamInt(10));
+    ScriptBridgeSetIndexedValue(indexedValues, 3, MakeScriptParamInt(31));
+    if (indexedValues.size() != 2 ||
+        indexedValues[0].PinIndex != 0 ||
+        indexedValues[0].Value.Data.IntValue != 10 ||
+        indexedValues[1].PinIndex != 3 ||
+        indexedValues[1].Value.Data.IntValue != 31) {
+        error = "Sorted indexed value overwrite self-test failed.";
         return false;
     }
 
