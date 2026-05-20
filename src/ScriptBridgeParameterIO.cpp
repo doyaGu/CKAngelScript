@@ -1,8 +1,10 @@
 #include "ScriptBridgeHandles.h"
 
-static CKGUID ResolveOperationInputGuid(CKContext *context,
-                                        const ScriptBridgeOperationInput &input,
-                                        std::string &error) {
+namespace ScriptBridgeParameterIOInternal {
+
+CKGUID ResolveOperationInputGuid(CKContext *context,
+                                 const ScriptBridgeOperationInput &input,
+                                 std::string &error) {
     if (input.SourceId) {
         CKParameter *source = ResolveStampedParameterSource(context, input.SourceId, input.SourceStamp, error);
         if (!source) {
@@ -21,13 +23,13 @@ static CKGUID ResolveOperationInputGuid(CKContext *context,
     return CKPGUID_NONE;
 }
 
-static CKParameterLocal *CreateOperationLiteralSource(CKBehavior *behavior,
-                                                     int operationIndex,
-                                                     int inputSlot,
-                                                     CKGUID guid,
-                                                     const ScriptParamValue &value,
-                                                     std::vector<CK_ID> &createdLocalIds,
-                                                     std::string &error) {
+CKParameterLocal *CreateOperationLiteralSource(CKBehavior *behavior,
+                                               int operationIndex,
+                                               int inputSlot,
+                                               CKGUID guid,
+                                               const ScriptParamValue &value,
+                                               std::vector<CK_ID> &createdLocalIds,
+                                               std::string &error) {
     if (!behavior) {
         error = "Behavior is null.";
         return nullptr;
@@ -54,13 +56,13 @@ static CKParameterLocal *CreateOperationLiteralSource(CKBehavior *behavior,
     return local;
 }
 
-static bool BindOperationInput(CKBehavior *behavior,
-                               CKParameterOperation *operation,
-                               int operationIndex,
-                               int inputSlot,
-                               const ScriptBridgeOperationInput &request,
-                               std::vector<CK_ID> &createdLocalIds,
-                               std::string &error) {
+bool BindOperationInput(CKBehavior *behavior,
+                        CKParameterOperation *operation,
+                        int operationIndex,
+                        int inputSlot,
+                        const ScriptBridgeOperationInput &request,
+                        std::vector<CK_ID> &createdLocalIds,
+                        std::string &error) {
     CKParameterIn *input = inputSlot == 1 ? operation->GetInParameter1() : operation->GetInParameter2();
     if (!input || input->GetGUID() == CKPGUID_NONE) {
         return true;
@@ -103,10 +105,10 @@ static bool BindOperationInput(CKBehavior *behavior,
     return true;
 }
 
-static void DestroyCreatedOperationPieces(CKContext *context,
-                                          CKBehavior *behavior,
-                                          CKParameterOperation *operation,
-                                          const std::vector<CK_ID> &createdLocalIds) {
+void DestroyCreatedOperationPieces(CKContext *context,
+                                   CKBehavior *behavior,
+                                   CKParameterOperation *operation,
+                                   const std::vector<CK_ID> &createdLocalIds) {
     if (!context) {
         return;
     }
@@ -136,6 +138,8 @@ static void DestroyCreatedOperationPieces(CKContext *context,
         }
     }
 }
+
+} // namespace ScriptBridgeParameterIOInternal
 
 ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
                                                   CKBehavior *behavior,
@@ -181,11 +185,11 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
         resultGuid = targetParam->GetGUID();
     }
 
-    const CKGUID in1Guid = ResolveOperationInputGuid(context, request.In1, error);
+    const CKGUID in1Guid = ScriptBridgeParameterIOInternal::ResolveOperationInputGuid(context, request.In1, error);
     if (!error.empty()) {
         return nullptr;
     }
-    const CKGUID in2Guid = ResolveOperationInputGuid(context, request.In2, error);
+    const CKGUID in2Guid = ScriptBridgeParameterIOInternal::ResolveOperationInputGuid(context, request.In2, error);
     if (!error.empty()) {
         return nullptr;
     }
@@ -204,7 +208,7 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
         error = fmt::format("Failed to add CKParameterOperation to behavior '{}' (CKERROR {}).",
             SafeString(behavior->GetName()),
             addErr);
-        DestroyCreatedOperationPieces(context, behavior, operation, {});
+        ScriptBridgeParameterIOInternal::DestroyCreatedOperationPieces(context, behavior, operation, {});
         return nullptr;
     }
 
@@ -219,7 +223,7 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
                 error += fmt::format(" Failed to restore previous input source (CKERROR {}).", restoreErr);
             }
         }
-        DestroyCreatedOperationPieces(context, behavior, operation, createdLocalIds);
+        ScriptBridgeParameterIOInternal::DestroyCreatedOperationPieces(context, behavior, operation, createdLocalIds);
         return nullptr;
     };
 
@@ -236,10 +240,10 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
             ParameterTypeLabel(context, in2Guid)));
     }
 
-    if (!BindOperationInput(behavior, operation, behavior->GetParameterOperationCount(), 1, request.In1, createdLocalIds, error)) {
+    if (!ScriptBridgeParameterIOInternal::BindOperationInput(behavior, operation, behavior->GetParameterOperationCount(), 1, request.In1, createdLocalIds, error)) {
         return fail(error);
     }
-    if (!BindOperationInput(behavior, operation, behavior->GetParameterOperationCount(), 2, request.In2, createdLocalIds, error)) {
+    if (!ScriptBridgeParameterIOInternal::BindOperationInput(behavior, operation, behavior->GetParameterOperationCount(), 2, request.In2, createdLocalIds, error)) {
         return fail(error);
     }
 

@@ -2,12 +2,14 @@
 
 #include <cassert>
 
-static ScriptBehaviorBridge *BridgeFromContext(const CKBehaviorContext &ctx) {
+namespace ScriptBridgeRegistrationInternal {
+
+ScriptBehaviorBridge *BridgeFromContext(const CKBehaviorContext &ctx) {
     ScriptManager *manager = ManagerFromContext(ctx);
     return manager ? manager->GetBehaviorBridge() : nullptr;
 }
 
-static BehaviorBridge *BehaviorFromContext(const CKBehaviorContext &ctx) {
+BehaviorBridge *BehaviorFromContext(const CKBehaviorContext &ctx) {
     if (ScriptBehaviorBridge *bridge = BridgeFromContext(ctx)) {
         return bridge->CreateBehaviorBridge(ctx);
     }
@@ -15,7 +17,7 @@ static BehaviorBridge *BehaviorFromContext(const CKBehaviorContext &ctx) {
     return nullptr;
 }
 
-static BBBridge *BBFromContext(const CKBehaviorContext &ctx) {
+BBBridge *BBFromContext(const CKBehaviorContext &ctx) {
     if (ScriptBehaviorBridge *bridge = BridgeFromContext(ctx)) {
         return new BBBridge(bridge, ctx);
     }
@@ -23,7 +25,7 @@ static BBBridge *BBFromContext(const CKBehaviorContext &ctx) {
     return nullptr;
 }
 
-static BehaviorRef *BehaviorFindByName(const CKBehaviorContext &ctx, const std::string &name) {
+BehaviorRef *BehaviorFindByName(const CKBehaviorContext &ctx, const std::string &name) {
     BehaviorBridge *bridge = BehaviorFromContext(ctx);
     if (!bridge) {
         return nullptr;
@@ -33,7 +35,7 @@ static BehaviorRef *BehaviorFindByName(const CKBehaviorContext &ctx, const std::
     return ref;
 }
 
-static BehaviorRef *BehaviorFindOnOwner(const CKBehaviorContext &ctx, CKBeObject *owner, const std::string &name) {
+BehaviorRef *BehaviorFindOnOwner(const CKBehaviorContext &ctx, CKBeObject *owner, const std::string &name) {
     BehaviorBridge *bridge = BehaviorFromContext(ctx);
     if (!bridge) {
         return nullptr;
@@ -43,7 +45,7 @@ static BehaviorRef *BehaviorFindOnOwner(const CKBehaviorContext &ctx, CKBeObject
     return ref;
 }
 
-static BehaviorRef *BehaviorFindById(const CKBehaviorContext &ctx, CK_ID id) {
+BehaviorRef *BehaviorFindById(const CKBehaviorContext &ctx, CK_ID id) {
     BehaviorBridge *bridge = BehaviorFromContext(ctx);
     if (!bridge) {
         return nullptr;
@@ -53,7 +55,7 @@ static BehaviorRef *BehaviorFindById(const CKBehaviorContext &ctx, CK_ID id) {
     return ref;
 }
 
-static GraphTask *BehaviorStartByName(const CKBehaviorContext &ctx,
+GraphTask *BehaviorStartByName(const CKBehaviorContext &ctx,
                                       const std::string &name,
                                       int inputIndex,
                                       bool reset,
@@ -68,7 +70,7 @@ static GraphTask *BehaviorStartByName(const CKBehaviorContext &ctx,
     return task;
 }
 
-static GraphTask *BehaviorWatchByName(const CKBehaviorContext &ctx,
+GraphTask *BehaviorWatchByName(const CKBehaviorContext &ctx,
                                       const std::string &name,
                                       float timeoutSeconds) {
     BehaviorRef *ref = BehaviorFindByName(ctx, name);
@@ -81,7 +83,7 @@ static GraphTask *BehaviorWatchByName(const CKBehaviorContext &ctx,
     return task;
 }
 
-static BBPrototype *BBPrototypeByName(const CKBehaviorContext &ctx, const std::string &name) {
+BBPrototype *BBPrototypeByName(const CKBehaviorContext &ctx, const std::string &name) {
     BBBridge *bridge = BBFromContext(ctx);
     if (!bridge) {
         return nullptr;
@@ -91,7 +93,7 @@ static BBPrototype *BBPrototypeByName(const CKBehaviorContext &ctx, const std::s
     return prototype;
 }
 
-static BBPrototype *BBPrototypeByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
+BBPrototype *BBPrototypeByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
     BBBridge *bridge = BBFromContext(ctx);
     if (!bridge) {
         return nullptr;
@@ -101,7 +103,7 @@ static BBPrototype *BBPrototypeByGuid(const CKBehaviorContext &ctx, CKGUID guid)
     return prototype;
 }
 
-static BBCallBuilder *BBCallByName(const CKBehaviorContext &ctx, const std::string &name) {
+BBCallBuilder *BBCallByName(const CKBehaviorContext &ctx, const std::string &name) {
     BBPrototype *prototype = BBPrototypeByName(ctx, name);
     if (!prototype) {
         return nullptr;
@@ -111,7 +113,7 @@ static BBCallBuilder *BBCallByName(const CKBehaviorContext &ctx, const std::stri
     return builder;
 }
 
-static BBTaskBuilder *BBSpawnByName(const CKBehaviorContext &ctx, const std::string &name) {
+BBTaskBuilder *BBSpawnByName(const CKBehaviorContext &ctx, const std::string &name) {
     BBPrototype *prototype = BBPrototypeByName(ctx, name);
     if (!prototype) {
         return nullptr;
@@ -121,39 +123,39 @@ static BBTaskBuilder *BBSpawnByName(const CKBehaviorContext &ctx, const std::str
     return builder;
 }
 
-static ParamValue *ParamInt(int value) { return new ParamValue(MakeScriptParamInt(value)); }
-static ParamValue *ParamFloat(float value) { return new ParamValue(MakeScriptParamFloat(value)); }
-static ParamValue *ParamBool(bool value) { return new ParamValue(MakeScriptParamBool(value)); }
-static ParamValue *ParamString(const std::string &value) { return new ParamValue(MakeScriptParamString(value)); }
-static ParamValue *ParamGuid(CKGUID value) { return new ParamValue(MakeScriptParamGuid(value)); }
-static ParamValue *ParamVector(const VxVector &value) { return new ParamValue(MakeScriptParamVector(value)); }
-static ParamValue *ParamVector2(const Vx2DVector &value) { return new ParamValue(MakeScriptParamVector2(value)); }
-static ParamValue *ParamColor(const VxColor &value) { return new ParamValue(MakeScriptParamColor(value)); }
-static ParamValue *ParamQuaternion(const VxQuaternion &value) { return new ParamValue(MakeScriptParamQuaternion(value)); }
-static ParamValue *ParamMatrix(const VxMatrix &value) { return new ParamValue(MakeScriptParamMatrix(value)); }
-static ParamValue *ParamObject(CKObject *value) { return new ParamValue(MakeScriptParamObject(value)); }
-static ParamValue *ParamObjectArray(const XObjectArray &value) { return new ParamValue(MakeScriptParamObjectArray(value)); }
+ParamValue *ParamInt(int value) { return new ParamValue(MakeScriptParamInt(value)); }
+ParamValue *ParamFloat(float value) { return new ParamValue(MakeScriptParamFloat(value)); }
+ParamValue *ParamBool(bool value) { return new ParamValue(MakeScriptParamBool(value)); }
+ParamValue *ParamString(const std::string &value) { return new ParamValue(MakeScriptParamString(value)); }
+ParamValue *ParamGuid(CKGUID value) { return new ParamValue(MakeScriptParamGuid(value)); }
+ParamValue *ParamVector(const VxVector &value) { return new ParamValue(MakeScriptParamVector(value)); }
+ParamValue *ParamVector2(const Vx2DVector &value) { return new ParamValue(MakeScriptParamVector2(value)); }
+ParamValue *ParamColor(const VxColor &value) { return new ParamValue(MakeScriptParamColor(value)); }
+ParamValue *ParamQuaternion(const VxQuaternion &value) { return new ParamValue(MakeScriptParamQuaternion(value)); }
+ParamValue *ParamMatrix(const VxMatrix &value) { return new ParamValue(MakeScriptParamMatrix(value)); }
+ParamValue *ParamObject(CKObject *value) { return new ParamValue(MakeScriptParamObject(value)); }
+ParamValue *ParamObjectArray(const XObjectArray &value) { return new ParamValue(MakeScriptParamObjectArray(value)); }
 
-static ParamValue *ParamTextByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &text) {
+ParamValue *ParamTextByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &text) {
     CKContext *context = ctx.Context;
     return new ParamValue(MakeScriptParamText(text, ScriptResolveParameterGuid(context, typeName, CKPGUID_STRING), typeName));
 }
 
-static ParamValue *ParamTextByGuid(const CKBehaviorContext &, CKGUID guid, const std::string &text) {
+ParamValue *ParamTextByGuid(const CKBehaviorContext &, CKGUID guid, const std::string &text) {
     return new ParamValue(MakeScriptParamText(text, guid, std::string()));
 }
 
-static ParamValue *ParamRawByName(const CKBehaviorContext &ctx, const std::string &typeName, NativeBuffer *buffer) {
+ParamValue *ParamRawByName(const CKBehaviorContext &ctx, const std::string &typeName, NativeBuffer *buffer) {
     CKContext *context = ctx.Context;
     CKGUID guid = ScriptResolveParameterGuid(context, typeName);
     return new ParamValue(MakeScriptParamRaw(guid, typeName, buffer ? buffer->Data() : nullptr, buffer ? static_cast<int>(buffer->Size()) : 0));
 }
 
-static ParamValue *ParamRawByGuid(const CKBehaviorContext &, CKGUID guid, NativeBuffer *buffer) {
+ParamValue *ParamRawByGuid(const CKBehaviorContext &, CKGUID guid, NativeBuffer *buffer) {
     return new ParamValue(MakeScriptParamRaw(guid, std::string(), buffer ? buffer->Data() : nullptr, buffer ? static_cast<int>(buffer->Size()) : 0));
 }
 
-static ParamValue *ParamEnumByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &nameOrValue) {
+ParamValue *ParamEnumByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &nameOrValue) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     int value = 0;
@@ -165,7 +167,7 @@ static ParamValue *ParamEnumByName(const CKBehaviorContext &ctx, const std::stri
     return new ParamValue(MakeScriptParamEnum(record->Guid, record->Name, static_cast<CKDWORD>(value)));
 }
 
-static ParamValue *ParamEnumByGuid(const CKBehaviorContext &ctx, CKGUID guid, const std::string &nameOrValue) {
+ParamValue *ParamEnumByGuid(const CKBehaviorContext &ctx, CKGUID guid, const std::string &nameOrValue) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     int value = 0;
@@ -177,7 +179,7 @@ static ParamValue *ParamEnumByGuid(const CKBehaviorContext &ctx, CKGUID guid, co
     return new ParamValue(MakeScriptParamEnum(record->Guid, record->Name, static_cast<CKDWORD>(value)));
 }
 
-static ParamValue *ParamEnumIntByName(const CKBehaviorContext &ctx, const std::string &typeName, int value) {
+ParamValue *ParamEnumIntByName(const CKBehaviorContext &ctx, const std::string &typeName, int value) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::EnumLike)) {
@@ -187,7 +189,7 @@ static ParamValue *ParamEnumIntByName(const CKBehaviorContext &ctx, const std::s
     return new ParamValue(MakeScriptParamEnum(record->Guid, record->Name, static_cast<CKDWORD>(value)));
 }
 
-static ParamValue *ParamEnumIntByGuid(const CKBehaviorContext &ctx, CKGUID guid, int value) {
+ParamValue *ParamEnumIntByGuid(const CKBehaviorContext &ctx, CKGUID guid, int value) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::EnumLike)) {
@@ -197,7 +199,7 @@ static ParamValue *ParamEnumIntByGuid(const CKBehaviorContext &ctx, CKGUID guid,
     return new ParamValue(MakeScriptParamEnum(record->Guid, record->Name, static_cast<CKDWORD>(value)));
 }
 
-static ParamValue *ParamFlagsByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &namesOrMask) {
+ParamValue *ParamFlagsByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &namesOrMask) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     CKDWORD value = 0;
@@ -209,7 +211,7 @@ static ParamValue *ParamFlagsByName(const CKBehaviorContext &ctx, const std::str
     return new ParamValue(MakeScriptParamFlags(record->Guid, record->Name, value));
 }
 
-static ParamValue *ParamFlagsByGuid(const CKBehaviorContext &ctx, CKGUID guid, const std::string &namesOrMask) {
+ParamValue *ParamFlagsByGuid(const CKBehaviorContext &ctx, CKGUID guid, const std::string &namesOrMask) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     CKDWORD value = 0;
@@ -221,7 +223,7 @@ static ParamValue *ParamFlagsByGuid(const CKBehaviorContext &ctx, CKGUID guid, c
     return new ParamValue(MakeScriptParamFlags(record->Guid, record->Name, value));
 }
 
-static ParamValue *ParamFlagsMaskByName(const CKBehaviorContext &ctx, const std::string &typeName, CKDWORD value) {
+ParamValue *ParamFlagsMaskByName(const CKBehaviorContext &ctx, const std::string &typeName, CKDWORD value) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::FlagsLike)) {
@@ -231,7 +233,7 @@ static ParamValue *ParamFlagsMaskByName(const CKBehaviorContext &ctx, const std:
     return new ParamValue(MakeScriptParamFlags(record->Guid, record->Name, value));
 }
 
-static ParamValue *ParamFlagsMaskByGuid(const CKBehaviorContext &ctx, CKGUID guid, CKDWORD value) {
+ParamValue *ParamFlagsMaskByGuid(const CKBehaviorContext &ctx, CKGUID guid, CKDWORD value) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::FlagsLike)) {
@@ -241,7 +243,7 @@ static ParamValue *ParamFlagsMaskByGuid(const CKBehaviorContext &ctx, CKGUID gui
     return new ParamValue(MakeScriptParamFlags(record->Guid, record->Name, value));
 }
 
-static ParamStructValue *ParamStructByName(const CKBehaviorContext &ctx, const std::string &typeName) {
+ParamStructValue *ParamStructByName(const CKBehaviorContext &ctx, const std::string &typeName) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::StructLike)) {
@@ -251,7 +253,7 @@ static ParamStructValue *ParamStructByName(const CKBehaviorContext &ctx, const s
     return new ParamStructValue(MakeScriptParamStruct(record->Guid, record->Name));
 }
 
-static ParamStructValue *ParamStructByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
+ParamStructValue *ParamStructByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::StructLike)) {
@@ -261,7 +263,7 @@ static ParamStructValue *ParamStructByGuid(const CKBehaviorContext &ctx, CKGUID 
     return new ParamStructValue(MakeScriptParamStruct(record->Guid, record->Name));
 }
 
-static ParamOp *ParamOperationByName(const CKBehaviorContext &ctx, const std::string &name) {
+ParamOp *ParamOperationByName(const CKBehaviorContext &ctx, const std::string &name) {
     ScriptBehaviorBridge *bridge = BridgeFromContext(ctx);
     if (!bridge) {
         SetScriptException("AngelScript behavior bridge is not available.");
@@ -277,7 +279,7 @@ static ParamOp *ParamOperationByName(const CKBehaviorContext &ctx, const std::st
     return new ParamOp(bridge, ctx, name);
 }
 
-static ParamOp *ParamOperationByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
+ParamOp *ParamOperationByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
     ScriptBehaviorBridge *bridge = BridgeFromContext(ctx);
     if (!bridge) {
         SetScriptException("AngelScript behavior bridge is not available.");
@@ -294,14 +296,52 @@ static ParamOp *ParamOperationByGuid(const CKBehaviorContext &ctx, CKGUID guid) 
 }
 
 template <typename T>
-static void RegisterRefCountedHandle(asIScriptEngine *engine, const char *typeName) {
+void RegisterRefCountedHandle(asIScriptEngine *engine, const char *typeName) {
     int r = engine->RegisterObjectBehaviour(typeName, asBEHAVE_ADDREF, "void f()", asMETHOD(T, AddRef), asCALL_THISCALL);
     assert(r >= 0);
     r = engine->RegisterObjectBehaviour(typeName, asBEHAVE_RELEASE, "void f()", asMETHOD(T, Release), asCALL_THISCALL);
     assert(r >= 0);
 }
 
-void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
+template <typename T>
+void RegisterObjectTypeAndRefCount(asIScriptEngine *engine, const char *typeName) {
+    int r = engine->RegisterObjectType(typeName, 0, asOBJ_REF);
+    assert(r >= 0);
+    RegisterRefCountedHandle<T>(engine, typeName);
+}
+
+void RegisterParamValueFactories(asIScriptEngine *engine, int &r) {
+    r = engine->RegisterGlobalFunction("ParamValue@ Int(int value)", asFUNCTION(ParamInt), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Float(float value)", asFUNCTION(ParamFloat), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Bool(bool value)", asFUNCTION(ParamBool), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ String(const string &in value)", asFUNCTION(ParamString), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Guid(CKGUID value)", asFUNCTION(ParamGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Vector(const VxVector &in value)", asFUNCTION(ParamVector), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Vector2(const Vx2DVector &in value)", asFUNCTION(ParamVector2), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Color(const VxColor &in value)", asFUNCTION(ParamColor), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Quaternion(const VxQuaternion &in value)", asFUNCTION(ParamQuaternion), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Matrix(const VxMatrix &in value)", asFUNCTION(ParamMatrix), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Object(CKObject@ value)", asFUNCTION(ParamObject), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ ObjectArray(const XObjectArray &in value)", asFUNCTION(ParamObjectArray), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Text(const CKBehaviorContext &in ctx, const string &in typeName, const string &in text)", asFUNCTION(ParamTextByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Text(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in text)", asFUNCTION(ParamTextByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, const string &in typeName, NativeBuffer@ data)", asFUNCTION(ParamRawByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, CKGUID typeGuid, NativeBuffer@ data)", asFUNCTION(ParamRawByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, const string &in typeName, const string &in nameOrValue)", asFUNCTION(ParamEnumByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in nameOrValue)", asFUNCTION(ParamEnumByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, const string &in typeName, int value)", asFUNCTION(ParamEnumIntByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, CKGUID typeGuid, int value)", asFUNCTION(ParamEnumIntByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, const string &in typeName, const string &in namesOrMask)", asFUNCTION(ParamFlagsByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in namesOrMask)", asFUNCTION(ParamFlagsByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, const string &in typeName, uint mask)", asFUNCTION(ParamFlagsMaskByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, CKGUID typeGuid, uint mask)", asFUNCTION(ParamFlagsMaskByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamStructValue@ Struct(const CKBehaviorContext &in ctx, const string &in typeName)", asFUNCTION(ParamStructByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamStructValue@ Struct(const CKBehaviorContext &in ctx, CKGUID typeGuid)", asFUNCTION(ParamStructByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamOp@ Operation(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(ParamOperationByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamOp@ Operation(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(ParamOperationByGuid), asCALL_CDECL); assert(r >= 0);
+}
+
+void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     assert(engine != nullptr);
     int r = 0;
 
@@ -315,26 +355,25 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("ParamKind", "OperationOut", static_cast<int>(ScriptBridgeSlotKind::OperationOut)); assert(r >= 0);
     r = engine->RegisterEnumValue("ParamKind", "Standalone", static_cast<int>(ScriptBridgeSlotKind::Standalone)); assert(r >= 0);
 
-    r = engine->RegisterObjectType("ParamInfo", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("ParamValue", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("ParamStructValue", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("ParamRef", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("ParamSourceLinkRef", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("ParamStructRef", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("ParamOp", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("ParamOperationRef", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("BehaviorLayout", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("BehaviorRef", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("BehaviorBridge", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("BBPrototype", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("BBBridge", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("BBCallBuilder", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("BBTaskBuilder", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("BBResult", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("BBTask", 0, asOBJ_REF); assert(r >= 0);
-    r = engine->RegisterObjectType("GraphTask", 0, asOBJ_REF); assert(r >= 0);
+    RegisterObjectTypeAndRefCount<ParamInfo>(engine, "ParamInfo");
+    RegisterObjectTypeAndRefCount<ParamValue>(engine, "ParamValue");
+    RegisterObjectTypeAndRefCount<ParamStructValue>(engine, "ParamStructValue");
+    RegisterObjectTypeAndRefCount<ParamRef>(engine, "ParamRef");
+    RegisterObjectTypeAndRefCount<ParamSourceLinkRef>(engine, "ParamSourceLinkRef");
+    RegisterObjectTypeAndRefCount<ParamStructRef>(engine, "ParamStructRef");
+    RegisterObjectTypeAndRefCount<ParamOp>(engine, "ParamOp");
+    RegisterObjectTypeAndRefCount<ParamOperationRef>(engine, "ParamOperationRef");
+    RegisterObjectTypeAndRefCount<BehaviorLayout>(engine, "BehaviorLayout");
+    RegisterObjectTypeAndRefCount<BehaviorRef>(engine, "BehaviorRef");
+    RegisterObjectTypeAndRefCount<BehaviorBridge>(engine, "BehaviorBridge");
+    RegisterObjectTypeAndRefCount<BBPrototype>(engine, "BBPrototype");
+    RegisterObjectTypeAndRefCount<BBBridge>(engine, "BBBridge");
+    RegisterObjectTypeAndRefCount<BBCallBuilder>(engine, "BBCallBuilder");
+    RegisterObjectTypeAndRefCount<BBTaskBuilder>(engine, "BBTaskBuilder");
+    RegisterObjectTypeAndRefCount<BBResult>(engine, "BBResult");
+    RegisterObjectTypeAndRefCount<BBTask>(engine, "BBTask");
+    RegisterObjectTypeAndRefCount<GraphTask>(engine, "GraphTask");
 
-    RegisterRefCountedHandle<ParamInfo>(engine, "ParamInfo");
     r = engine->RegisterObjectMethod("ParamInfo", "ParamKind get_kind() const", asMETHOD(ParamInfo, GetKind), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamInfo", "int get_index() const", asMETHOD(ParamInfo, GetIndex), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamInfo", "string get_name() const", asMETHOD(ParamInfo, GetName), asCALL_THISCALL); assert(r >= 0);
@@ -343,7 +382,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamInfo", "int DataSize() const", asMETHOD(ParamInfo, GetDataSize), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamInfo", "string Describe() const", asMETHOD(ParamInfo, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<ParamValue>(engine, "ParamValue");
     r = engine->RegisterObjectMethod("ParamValue", "bool IsValid() const", asMETHOD(ParamValue, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamValue", "int AsInt() const", asMETHOD(ParamValue, AsInt), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamValue", "float AsFloat() const", asMETHOD(ParamValue, AsFloat), asCALL_THISCALL); assert(r >= 0);
@@ -359,7 +397,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamValue", "NativeBuffer@ AsRaw() const", asMETHOD(ParamValue, AsRaw), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamValue", "ParamStructValue@ AsStruct() const", asMETHOD(ParamValue, AsStruct), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<ParamStructValue>(engine, "ParamStructValue");
     r = engine->RegisterObjectMethod("ParamStructValue", "bool IsValid() const", asMETHOD(ParamStructValue, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructValue", "CKGUID TypeGuid() const", asMETHOD(ParamStructValue, TypeGuid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructValue", "string TypeName() const", asMETHOD(ParamStructValue, TypeName), asCALL_THISCALL); assert(r >= 0);
@@ -368,7 +405,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamStructValue", "ParamValue@ AsValue() const", asMETHOD(ParamStructValue, AsValue), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructValue", "string Describe() const", asMETHOD(ParamStructValue, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<ParamRef>(engine, "ParamRef");
     r = engine->RegisterObjectMethod("ParamRef", "bool IsValid() const", asMETHOD(ParamRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamRef", "bool get_valid() const", asMETHOD(ParamRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamRef", "CK_ID get_id() const", asMETHOD(ParamRef, GetID), asCALL_THISCALL); assert(r >= 0);
@@ -404,7 +440,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamRef", "ParamStructRef@ Struct()", asMETHOD(ParamRef, Struct), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamRef", "string Describe() const", asMETHOD(ParamRef, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<ParamSourceLinkRef>(engine, "ParamSourceLinkRef");
     r = engine->RegisterObjectMethod("ParamSourceLinkRef", "bool IsValid() const", asMETHOD(ParamSourceLinkRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamSourceLinkRef", "bool IsCommitted() const", asMETHOD(ParamSourceLinkRef, IsCommitted), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamSourceLinkRef", "bool IsRestored() const", asMETHOD(ParamSourceLinkRef, IsRestored), asCALL_THISCALL); assert(r >= 0);
@@ -412,7 +447,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamSourceLinkRef", "bool Restore()", asMETHOD(ParamSourceLinkRef, Restore), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamSourceLinkRef", "string Describe() const", asMETHOD(ParamSourceLinkRef, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<ParamStructRef>(engine, "ParamStructRef");
     r = engine->RegisterObjectMethod("ParamStructRef", "bool IsValid() const", asMETHOD(ParamStructRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructRef", "int Count() const", asMETHOD(ParamStructRef, Count), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructRef", "ParamStructInfo@ Info() const", asMETHOD(ParamStructRef, Info), asCALL_THISCALL); assert(r >= 0);
@@ -420,14 +454,12 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamStructRef", "int FindMember(const string &in name, int occurrence = 0) const", asMETHOD(ParamStructRef, FindMember), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructRef", "string Describe() const", asMETHOD(ParamStructRef, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<ParamOp>(engine, "ParamOp");
     r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ Result(CKGUID guid)", asMETHODPR(ParamOp, Result, (CKGUID), ParamOp *), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ Result(const string &in typeName)", asMETHOD(ParamOp, ResultName), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ In(int slot, ParamRef@ source)", asMETHOD(ParamOp, InRef), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ In(int slot, ParamValue@ value)", asMETHOD(ParamOp, InValue), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamOp", "string Describe() const", asMETHOD(ParamOp, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<ParamOperationRef>(engine, "ParamOperationRef");
     r = engine->RegisterObjectMethod("ParamOperationRef", "bool IsValid() const", asMETHOD(ParamOperationRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamOperationRef", "ParamRef@ Out() const", asMETHOD(ParamOperationRef, Out), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamOperationRef", "ParamRef@ In1() const", asMETHOD(ParamOperationRef, In1), asCALL_THISCALL); assert(r >= 0);
@@ -437,7 +469,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamOperationRef", "bool Destroy()", asMETHOD(ParamOperationRef, Destroy), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamOperationRef", "string Describe() const", asMETHOD(ParamOperationRef, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<BehaviorLayout>(engine, "BehaviorLayout");
     r = engine->RegisterObjectMethod("BehaviorLayout", "int InputCount() const", asMETHOD(BehaviorLayout, InputCount), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorLayout", "int OutputCount() const", asMETHOD(BehaviorLayout, OutputCount), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorLayout", "int PinCount() const", asMETHOD(BehaviorLayout, PinCount), asCALL_THISCALL); assert(r >= 0);
@@ -455,7 +486,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BehaviorLayout", "int FindLocal(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorLayout, FindLocal), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorLayout", "string Describe() const", asMETHOD(BehaviorLayout, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<BehaviorRef>(engine, "BehaviorRef");
     r = engine->RegisterObjectMethod("BehaviorRef", "bool IsValid() const", asMETHOD(BehaviorRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool get_valid() const", asMETHOD(BehaviorRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "CK_ID get_id() const", asMETHOD(BehaviorRef, GetID), asCALL_THISCALL); assert(r >= 0);
@@ -472,14 +502,12 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamOperationRef@ ConnectOperation(int pinIndex, ParamOp@ op)", asMETHOD(BehaviorRef, ConnectOperation), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "string Describe() const", asMETHOD(BehaviorRef, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<BehaviorBridge>(engine, "BehaviorBridge");
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ Self() const", asMETHOD(BehaviorBridge, Self), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ OwnerScript() const", asMETHOD(BehaviorBridge, OwnerScript), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ Find(const string &in name) const", asMETHOD(BehaviorBridge, Find), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ FindOn(CKBeObject@ owner, const string &in name) const", asMETHOD(BehaviorBridge, FindOn), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ FindByID(CK_ID id) const", asMETHOD(BehaviorBridge, FindByID), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<BBPrototype>(engine, "BBPrototype");
     r = engine->RegisterObjectMethod("BBPrototype", "bool IsValid() const", asMETHOD(BBPrototype, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "CKGUID GetGuid() const", asMETHOD(BBPrototype, GetGuid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "string GetName() const", asMETHOD(BBPrototype, GetName), asCALL_THISCALL); assert(r >= 0);
@@ -489,11 +517,9 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BBPrototype", "BBTaskBuilder@ Spawn()", asMETHOD(BBPrototype, Spawn), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "string Describe() const", asMETHOD(BBPrototype, Describe), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<BBBridge>(engine, "BBBridge");
     r = engine->RegisterObjectMethod("BBBridge", "BBPrototype@ Prototype(const string &in name) const", asMETHOD(BBBridge, PrototypeByName), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBBridge", "BBPrototype@ Prototype(CKGUID guid) const", asMETHOD(BBBridge, PrototypeByGuid), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<BBCallBuilder>(engine, "BBCallBuilder");
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Owner(CKBeObject@ owner)", asMETHOD(BBCallBuilder, Owner), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Target(CKBeObject@ target)", asMETHOD(BBCallBuilder, Target), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(int pinIndex, ParamValue@ value)", asMETHOD(BBCallBuilder, Set), asCALL_THISCALL); assert(r >= 0);
@@ -501,7 +527,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ SetOperation(int pinIndex, ParamOp@ operation)", asMETHOD(BBCallBuilder, SetOperation), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBResult@ Run(int inputIndex = 0)", asMETHOD(BBCallBuilder, Run), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<BBTaskBuilder>(engine, "BBTaskBuilder");
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTaskBuilder@ Owner(CKBeObject@ owner)", asMETHOD(BBTaskBuilder, Owner), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTaskBuilder@ Target(CKBeObject@ target)", asMETHOD(BBTaskBuilder, Target), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTaskBuilder@ Set(int pinIndex, ParamValue@ value)", asMETHOD(BBTaskBuilder, Set), asCALL_THISCALL); assert(r >= 0);
@@ -509,7 +534,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTaskBuilder@ SetOperation(int pinIndex, ParamOp@ operation)", asMETHOD(BBTaskBuilder, SetOperation), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTask@ Start(int inputIndex = 0)", asMETHOD(BBTaskBuilder, Start), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<BBResult>(engine, "BBResult");
     r = engine->RegisterObjectMethod("BBResult", "bool Ok() const", asMETHOD(BBResult, Ok), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBResult", "bool get_ok() const", asMETHOD(BBResult, Ok), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBResult", "int ReturnCode() const", asMETHOD(BBResult, ReturnCode), asCALL_THISCALL); assert(r >= 0);
@@ -518,7 +542,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BBResult", "ParamRef@ Pout(int index) const", asMETHOD(BBResult, Pout), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBResult", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(BBResult, Raise), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<BBTask>(engine, "BBTask");
     r = engine->RegisterObjectMethod("BBTask", "bool IsValid() const", asMETHOD(BBTask, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBTask", "bool IsAlive() const", asMETHOD(BBTask, IsAlive), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBTask", "bool IsPaused() const", asMETHOD(BBTask, IsPaused), asCALL_THISCALL); assert(r >= 0);
@@ -532,7 +555,6 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BBTask", "ParamRef@ Pout(int index) const", asMETHOD(BBTask, Pout), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBTask", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(BBTask, Raise), asCALL_THISCALL); assert(r >= 0);
 
-    RegisterRefCountedHandle<GraphTask>(engine, "GraphTask");
     r = engine->RegisterObjectMethod("GraphTask", "bool IsValid() const", asMETHOD(GraphTask, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("GraphTask", "bool get_valid() const", asMETHOD(GraphTask, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("GraphTask", "bool IsAlive() const", asMETHOD(GraphTask, IsAlive), asCALL_THISCALL); assert(r >= 0);
@@ -569,34 +591,13 @@ void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBSpawnByName), asCALL_CDECL); assert(r >= 0);
 
     r = engine->SetDefaultNamespace("Param"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Int(int value)", asFUNCTION(ParamInt), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Float(float value)", asFUNCTION(ParamFloat), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Bool(bool value)", asFUNCTION(ParamBool), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ String(const string &in value)", asFUNCTION(ParamString), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Guid(CKGUID value)", asFUNCTION(ParamGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Vector(const VxVector &in value)", asFUNCTION(ParamVector), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Vector2(const Vx2DVector &in value)", asFUNCTION(ParamVector2), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Color(const VxColor &in value)", asFUNCTION(ParamColor), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Quaternion(const VxQuaternion &in value)", asFUNCTION(ParamQuaternion), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Matrix(const VxMatrix &in value)", asFUNCTION(ParamMatrix), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Object(CKObject@ value)", asFUNCTION(ParamObject), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ ObjectArray(const XObjectArray &in value)", asFUNCTION(ParamObjectArray), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Text(const CKBehaviorContext &in ctx, const string &in typeName, const string &in text)", asFUNCTION(ParamTextByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Text(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in text)", asFUNCTION(ParamTextByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, const string &in typeName, NativeBuffer@ data)", asFUNCTION(ParamRawByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, CKGUID typeGuid, NativeBuffer@ data)", asFUNCTION(ParamRawByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, const string &in typeName, const string &in nameOrValue)", asFUNCTION(ParamEnumByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in nameOrValue)", asFUNCTION(ParamEnumByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, const string &in typeName, int value)", asFUNCTION(ParamEnumIntByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, CKGUID typeGuid, int value)", asFUNCTION(ParamEnumIntByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, const string &in typeName, const string &in namesOrMask)", asFUNCTION(ParamFlagsByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in namesOrMask)", asFUNCTION(ParamFlagsByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, const string &in typeName, uint mask)", asFUNCTION(ParamFlagsMaskByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, CKGUID typeGuid, uint mask)", asFUNCTION(ParamFlagsMaskByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamStructValue@ Struct(const CKBehaviorContext &in ctx, const string &in typeName)", asFUNCTION(ParamStructByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamStructValue@ Struct(const CKBehaviorContext &in ctx, CKGUID typeGuid)", asFUNCTION(ParamStructByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamOp@ Operation(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(ParamOperationByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamOp@ Operation(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(ParamOperationByGuid), asCALL_CDECL); assert(r >= 0);
+    RegisterParamValueFactories(engine, r);
 
     r = engine->SetDefaultNamespace(previous.c_str()); assert(r >= 0);
+}
+
+} // namespace ScriptBridgeRegistrationInternal
+
+void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
+    ScriptBridgeRegistrationInternal::RegisterScriptBehaviorBridgeInternal(engine);
 }
