@@ -1,4 +1,5 @@
 #include "ScriptBridgeHandles.h"
+#include "ScriptRunner.h"
 
 #include <fstream>
 
@@ -40,6 +41,25 @@ static void WriteBehaviorBridgeSelfTestMarker(const std::string &status,
     }
 }
 
+struct BridgeSelfTestMessageCollector {
+    std::string Text;
+};
+
+static void BridgeSelfTestMessageCallback(const asSMessageInfo *msg, void *param) {
+    auto *collector = static_cast<BridgeSelfTestMessageCollector *>(param);
+    if (!collector || !msg) {
+        return;
+    }
+    if (!collector->Text.empty()) {
+        collector->Text += "\n";
+    }
+    collector->Text += fmt::format("{}({},{}) : {}",
+                                   msg->section ? msg->section : "<script>",
+                                   msg->row,
+                                   msg->col,
+                                   msg->message ? msg->message : "<empty>");
+}
+
 static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
                                             CKParameterManager *parameterManager,
                                             asIScriptEngine *engine,
@@ -55,7 +75,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
 
     std::string source;
     source += "void ProbeGraphTaskApi(const CKBehaviorContext &in ctx, BehaviorRef@ ref, GraphTask@ task) {\n";
-    source += "    if (ref !is null) { BehaviorLayout@ l = ref.Layout(); int p = l.FindPin(\"Value\"); ParamRef@ pin = p >= 0 ? ref.Pin(p) : null; GraphTask@ s = ref.Start(0); GraphTask@ w = ref.Watch(); }\n";
+    source += "    if (ref !is null) { BehaviorLayout@ l = ref.Layout(); int p = l.FindPin(\"Value\"); ParamRef@ pin = p >= 0 ? ref.Pin(p) : null; ParamSourceLinkRef@ link = pin !is null ? pin.SetSourceScoped(pin) : null; if (link !is null) { link.IsValid(); link.Commit(); link.Restore(); link.Describe(); } ParamOperationRef@ opRef = null; if (opRef !is null) opRef.Restore(); GraphTask@ s = ref.Start(0); GraphTask@ w = ref.Watch(); }\n";
     source += "    GraphTask@ ns = Behavior::Start(ctx, \"__missing__\", 0);\n";
     source += "    GraphTask@ nw = Behavior::Watch(ctx, \"__missing__\");\n";
     source += "    if (task is null) return;\n";
@@ -73,9 +93,31 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    ids.PushBack(first);\n";
     source += "    ids.PushBack(second);\n";
     source += "    if (ids.Size() != 2 || ids[0] != first || ids[1] != second) return 10;\n";
-    source += "    if (Param::Describe(ctx, typeName) == \"\") return 20;\n";
-    source += "    CKGUID typeGuid = Param::Guid(ctx, typeName);\n";
+    source += "    ParamTypeInfo@ info = Param::Type(ctx, typeName);\n";
+    source += "    if (info is null || !info.IsValid() || info.Describe() == \"\") return 20;\n";
+    source += "    CKGUID typeGuid = info.Guid();\n";
     source += "    if (!typeGuid.IsValid()) return 30;\n";
+    source += "    CKGUID enumGuid(0x6a33ce52, 0x22705502);\n";
+    source += "    CKGUID flagsGuid(0x6a33ce53, 0x22705503);\n";
+    source += "    CKGUID structGuid(0x6a33ce54, 0x22705504);\n";
+    source += "    XGUIDArray memberGuids;\n";
+    source += "    memberGuids.PushBack(CKPGUID_INT);\n";
+    source += "    memberGuids.PushBack(CKPGUID_STRING);\n";
+    source += "    Param::RegisterEnum(ctx, enumGuid, \"__CKAS_ScriptEnum\", \"Alpha=1,Beta=2\");\n";
+    source += "    Param::RegisterFlags(ctx, flagsGuid, \"__CKAS_ScriptFlags\", \"A=1,B=2\");\n";
+    source += "    Param::RegisterStruct(ctx, structGuid, \"__CKAS_ScriptStruct\", \"Count,Name\", memberGuids);\n";
+    source += "    ParamTypeInfo@ enumInfo = Param::Type(ctx, enumGuid);\n";
+    source += "    ParamTypeInfo@ flagsInfo = Param::Type(ctx, flagsGuid);\n";
+    source += "    ParamTypeInfo@ structInfo = Param::Type(ctx, structGuid);\n";
+    source += "    if (enumInfo is null || !enumInfo.IsEnum() || enumInfo.Enum().Find(\"Beta\") != 2) return 31;\n";
+    source += "    if (flagsInfo is null || !flagsInfo.IsFlags() || flagsInfo.Flags().Parse(\"A|B\") != 3) return 32;\n";
+    source += "    if (structInfo is null || !structInfo.IsStruct() || structInfo.Struct().FindMember(\"Name\") != 1) return 33;\n";
+    source += "    ParamValue@ enumValue = Param::Enum(ctx, enumGuid, \"Alpha\");\n";
+    source += "    ParamValue@ flagsValue = Param::Flags(ctx, flagsGuid, \"A,B\");\n";
+    source += "    ParamStructValue@ structValue = Param::Struct(ctx, structGuid);\n";
+    source += "    if (enumValue is null || enumValue.AsInt() != 1) return 34;\n";
+    source += "    if (flagsValue is null || flagsValue.AsInt() != 3) return 35;\n";
+    source += "    if (structValue is null || !structValue.Set(0, Param::Int(5)).IsValid() || structValue.Value().AsStruct() is null) return 36;\n";
     source += "    ParamOp@ byName = Param::Operation(ctx, operationName);\n";
     source += "    if (byName is null) return 40;\n";
     source += "    ParamValue@ objectArrayValue = Param::ObjectArray(ids);\n";
@@ -101,9 +143,18 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
         return false;
     }
 
+    BridgeSelfTestMessageCollector messageCollector;
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    engine->SetMessageCallback(asFUNCTION(BridgeSelfTestMessageCallback), &messageCollector, asCALL_CDECL);
     r = module->Build();
+    if (manager) {
+        engine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), manager, asCALL_THISCALL);
+    }
     if (r < 0) {
-        error = fmt::format("Failed to build AngelScript self-test module ({}).", r);
+        error = fmt::format("Failed to build AngelScript self-test module ({}).{}{}",
+                            r,
+                            messageCollector.Text.empty() ? "" : "\n",
+                            messageCollector.Text);
         engine->DiscardModule(moduleName);
         return false;
     }
@@ -166,6 +217,665 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     return ok;
 }
 
+static void DestroySelfTestObject(CKContext *context, CKObject *object) {
+    if (context && object && !object->IsToBeDeleted()) {
+        context->DestroyObject(object);
+    }
+}
+
+static CKGUID FindSelfTestOperationGuid(CKContext *context,
+                                        CKParameterManager *parameterManager) {
+    if (!context || !parameterManager) {
+        return CKGUID();
+    }
+
+    for (int i = 0; i < parameterManager->GetParameterOperationCount(); ++i) {
+        const CKGUID guid = parameterManager->OperationCodeToGuid(i);
+        if (!guid.IsValid()) {
+            continue;
+        }
+
+        CKParameterOperation *operation = context->CreateCKParameterOperation(
+            const_cast<CKSTRING>("__CKAS_OperationProbe"),
+            guid,
+            CKPGUID_INT,
+            CKPGUID_INT,
+            CKPGUID_INT);
+        if (!operation) {
+            continue;
+        }
+
+        const bool usable = operation->GetOutParameter() != nullptr && operation->GetOperationFunction() != nullptr;
+        DestroySelfTestObject(context, operation);
+        if (usable) {
+            return guid;
+        }
+    }
+
+    return CKGUID();
+}
+
+static bool RunBehaviorBridgeNativeMutationSelfTest(CKContext *context,
+                                                    CKParameterManager *parameterManager,
+                                                    std::string &error) {
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
+    if (!context || !parameterManager || !bridge) {
+        error = "Bridge native mutation self-test requires CKContext, CKParameterManager, and ScriptBehaviorBridge.";
+        return false;
+    }
+
+    CKParameterIn *input = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_LinkInput"), CKPGUID_INT, TRUE);
+    CKParameterOut *sourceA = context->CreateCKParameterOut(const_cast<CKSTRING>("__CKAS_LinkSourceA"), CKPGUID_INT, TRUE);
+    CKParameterOut *sourceB = context->CreateCKParameterOut(const_cast<CKSTRING>("__CKAS_LinkSourceB"), CKPGUID_INT, TRUE);
+    if (!input || !sourceA || !sourceB) {
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "Failed to create parameters for scoped source self-test.";
+        return false;
+    }
+
+    if (input->SetDirectSource(sourceA) != CK_OK || input->GetDirectSource() != sourceA) {
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "Scoped source self-test failed to initialize direct source.";
+        return false;
+    }
+
+    ParamRef *inputRef = new ParamRef(bridge, input->GetID(), ScriptBridgeSlotKind::Pin, 0);
+    ParamRef *sourceRef = new ParamRef(bridge, sourceB->GetID(), ScriptBridgeSlotKind::Standalone, -1);
+    ParamSourceLinkRef *link = inputRef->SetSourceScoped(sourceRef);
+    sourceRef->Release();
+    inputRef->Release();
+    if (!link || input->GetDirectSource() != sourceB) {
+        if (link) {
+            link->Release();
+        }
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "SetSourceScoped did not install the new source.";
+        return false;
+    }
+
+    if (!link->Restore() || input->GetDirectSource() != sourceA) {
+        link->Release();
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "SetSourceScoped did not restore the previous source.";
+        return false;
+    }
+    link->Release();
+
+    const CKGUID operationGuid = FindSelfTestOperationGuid(context, parameterManager);
+    if (!operationGuid.IsValid()) {
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "No operation GUID was usable for operation rollback self-test.";
+        return false;
+    }
+
+    CKParameterOperation *operation = context->CreateCKParameterOperation(
+        const_cast<CKSTRING>("__CKAS_RollbackOperation"),
+        operationGuid,
+        CKPGUID_INT,
+        CKPGUID_INT,
+        CKPGUID_INT);
+    if (!operation || !operation->GetOutParameter()) {
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "Failed to create operation for rollback self-test.";
+        return false;
+    }
+
+    if (input->SetDirectSource(operation->GetOutParameter()) != CK_OK ||
+        input->GetDirectSource() != operation->GetOutParameter()) {
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "Operation rollback self-test failed to install operation output.";
+        return false;
+    }
+
+    ParamOperationRef *operationRef = new ParamOperationRef(bridge, operation->GetID(), input, sourceA);
+    if (!operationRef->Restore() || input->GetDirectSource() != sourceA) {
+        operationRef->Release();
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "ParamOperationRef.Restore did not restore the previous source.";
+        return false;
+    }
+
+    if (!operationRef->Destroy() || operationRef->IsValid()) {
+        operationRef->Release();
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "ParamOperationRef.Destroy did not destroy the operation.";
+        return false;
+    }
+    operationRef->Release();
+
+    CKBehavior *graphBehavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_OperationFailureRollback"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!graphBehavior) {
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "Failed to create graph behavior for operation failure rollback self-test.";
+        return false;
+    }
+    graphBehavior->UseGraph();
+    CKParameterIn *targetPin = graphBehavior->CreateInputParameter(const_cast<CKSTRING>("Target"), CKPGUID_INT);
+    if (!targetPin || targetPin->SetDirectSource(sourceA) != CK_OK) {
+        DestroySelfTestObject(context, graphBehavior);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "Failed to initialize graph behavior input for operation failure rollback self-test.";
+        return false;
+    }
+
+    const int localCountBeforeFailure = graphBehavior->GetLocalParameterCount();
+    const int operationCountBeforeFailure = graphBehavior->GetParameterOperationCount();
+    ScriptBridgeOperationSpec failingRequest;
+    failingRequest.TargetPinIndex = 0;
+    failingRequest.OperationGuid = operationGuid;
+    failingRequest.ResultTypeGuid = CKPGUID_INT;
+    int rawValue = 7;
+    failingRequest.In1.Kind = ScriptBridgeInputBindingKind::Value;
+    failingRequest.In1.Value = MakeScriptParamRaw(CKPGUID_INT, "Integer", &rawValue, 1);
+    failingRequest.In2.Kind = ScriptBridgeInputBindingKind::Value;
+    failingRequest.In2.Value = MakeScriptParamInt(1);
+
+    std::string failureMessage;
+    std::vector<CK_ID> operationIds;
+    ParamOperationRef *failedOperation = ConnectOperationToInput(
+        bridge,
+        graphBehavior,
+        0,
+        failingRequest,
+        failureMessage,
+        false,
+        &operationIds);
+    if (failedOperation ||
+        targetPin->GetDirectSource() != sourceA ||
+        graphBehavior->GetLocalParameterCount() != localCountBeforeFailure ||
+        graphBehavior->GetParameterOperationCount() != operationCountBeforeFailure ||
+        !operationIds.empty()) {
+        if (failedOperation) {
+            failedOperation->Release();
+        }
+        DestroySelfTestObject(context, graphBehavior);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = fmt::format("Operation failure rollback self-test left graph mutations behind: sourceRestored={} locals {}->{}, ops {}->{}, ids={}.",
+                            targetPin->GetDirectSource() == sourceA ? "true" : "false",
+                            localCountBeforeFailure,
+                            graphBehavior->GetLocalParameterCount(),
+                            operationCountBeforeFailure,
+                            graphBehavior->GetParameterOperationCount(),
+                            operationIds.size());
+        return false;
+    }
+
+    ScriptBridgeOperationSpec successfulRequest;
+    successfulRequest.TargetPinIndex = 0;
+    successfulRequest.OperationGuid = operationGuid;
+    successfulRequest.ResultTypeGuid = CKPGUID_INT;
+    successfulRequest.In1.Kind = ScriptBridgeInputBindingKind::Value;
+    successfulRequest.In1.Value = MakeScriptParamInt(1);
+    successfulRequest.In2.Kind = ScriptBridgeInputBindingKind::Value;
+    successfulRequest.In2.Value = MakeScriptParamInt(2);
+
+    std::string successMessage;
+    ParamOperationRef *successfulOperation = ConnectOperationToInput(
+        bridge,
+        graphBehavior,
+        0,
+        successfulRequest,
+        successMessage,
+        false,
+        nullptr);
+    if (!successfulOperation ||
+        targetPin->GetDirectSource() == sourceA ||
+        graphBehavior->GetLocalParameterCount() != localCountBeforeFailure + 2 ||
+        graphBehavior->GetParameterOperationCount() != operationCountBeforeFailure + 1) {
+        if (successfulOperation) {
+            successfulOperation->Destroy();
+            successfulOperation->Release();
+        }
+        DestroySelfTestObject(context, graphBehavior);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = fmt::format("Operation success setup self-test failed: message='{}', locals {}->{}, ops {}->{}.",
+                            successMessage,
+                            localCountBeforeFailure,
+                            graphBehavior->GetLocalParameterCount(),
+                            operationCountBeforeFailure,
+                            graphBehavior->GetParameterOperationCount());
+        return false;
+    }
+
+    if (!successfulOperation->Destroy() ||
+        targetPin->GetDirectSource() != sourceA ||
+        graphBehavior->GetLocalParameterCount() != localCountBeforeFailure ||
+        graphBehavior->GetParameterOperationCount() != operationCountBeforeFailure) {
+        successfulOperation->Release();
+        DestroySelfTestObject(context, graphBehavior);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = fmt::format("Operation destroy cleanup self-test failed: sourceRestored={} locals {}->{}, ops {}->{}.",
+                            targetPin->GetDirectSource() == sourceA ? "true" : "false",
+                            localCountBeforeFailure,
+                            graphBehavior->GetLocalParameterCount(),
+                            operationCountBeforeFailure,
+                            graphBehavior->GetParameterOperationCount());
+        return false;
+    }
+    successfulOperation->Release();
+
+    DestroySelfTestObject(context, graphBehavior);
+    DestroySelfTestObject(context, input);
+    DestroySelfTestObject(context, sourceA);
+    DestroySelfTestObject(context, sourceB);
+    return true;
+}
+
+static bool RunBehaviorBridgeNativeGraphTaskSelfTest(CKContext *context,
+                                                     std::string &error) {
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
+    if (!context || !bridge) {
+        error = "GraphTask native self-test requires CKContext and ScriptBehaviorBridge.";
+        return false;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_GraphTaskSelfTest"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!behavior) {
+        error = "Failed to create behavior for GraphTask self-test.";
+        return false;
+    }
+
+    if (!behavior->CreateOutput(const_cast<CKSTRING>("Done"))) {
+        DestroySelfTestObject(context, behavior);
+        error = "Failed to create output for GraphTask self-test.";
+        return false;
+    }
+
+    GraphTask *task = bridge->CreateGraphWatch(behavior, 0, 0.0f);
+    if (!task || !task->IsValid() || !task->IsAlive() || task->Done(-1) || task->OutputActive(-1)) {
+        if (task) {
+            task->Release();
+        }
+        DestroySelfTestObject(context, behavior);
+        error = "GraphTask initial state self-test failed.";
+        return false;
+    }
+
+    CKBehaviorContext behaviorContext;
+    behaviorContext.Behavior = behavior;
+    behaviorContext.DeltaTime = 0.0f;
+    behaviorContext.Context = context;
+    behaviorContext.CurrentLevel = nullptr;
+    behaviorContext.CurrentScene = nullptr;
+    behaviorContext.PreviousScene = nullptr;
+    behaviorContext.CurrentRenderContext = nullptr;
+    behaviorContext.ParameterManager = context->GetParameterManager();
+    behaviorContext.MessageManager = nullptr;
+    behaviorContext.AttributeManager = nullptr;
+    behaviorContext.TimeManager = nullptr;
+    behaviorContext.CallbackMessage = 0;
+    behaviorContext.CallbackArg = nullptr;
+
+    behavior->ActivateOutput(0, TRUE);
+    if (!task->Step(behaviorContext) || !task->OutputActive(0) || !task->Done(0)) {
+        task->Release();
+        DestroySelfTestObject(context, behavior);
+        error = "GraphTask active output self-test failed.";
+        return false;
+    }
+
+    behavior->ActivateOutput(0, FALSE);
+    if (!task->Step(behaviorContext) || task->OutputActive(0) || !task->Done(0)) {
+        task->Release();
+        DestroySelfTestObject(context, behavior);
+        error = "GraphTask sticky output self-test failed.";
+        return false;
+    }
+
+    if (!task->Reset() || task->Done(0) || task->TimedOut() || !task->IsAlive()) {
+        task->Release();
+        DestroySelfTestObject(context, behavior);
+        error = "GraphTask reset self-test failed.";
+        return false;
+    }
+
+    task->Timeout(0.1f);
+    behaviorContext.DeltaTime = 0.2f;
+    if (task->Step(behaviorContext) || !task->TimedOut() || task->IsAlive() || task->Error().empty()) {
+        task->Release();
+        DestroySelfTestObject(context, behavior);
+        error = "GraphTask timeout self-test failed.";
+        return false;
+    }
+
+    if (!task->Reset() || task->TimedOut() || !task->IsAlive()) {
+        task->Release();
+        DestroySelfTestObject(context, behavior);
+        error = "GraphTask timeout reset self-test failed.";
+        return false;
+    }
+
+    if (!task->Cancel() || task->IsValid()) {
+        task->Release();
+        DestroySelfTestObject(context, behavior);
+        error = "GraphTask cancel self-test failed.";
+        return false;
+    }
+
+    task->Release();
+    DestroySelfTestObject(context, behavior);
+    return true;
+}
+
+static int ReadSelfTestGlobalInt(asIScriptModule *module,
+                                 const char *name,
+                                 std::string &error) {
+    if (!module || !name || name[0] == '\0') {
+        error = "Invalid module or global name.";
+        return 0;
+    }
+
+    const int index = module->GetGlobalVarIndexByName(name);
+    if (index < 0) {
+        error = fmt::format("Global variable '{}' was not found.", name);
+        return 0;
+    }
+
+    void *address = module->GetAddressOfGlobalVar(static_cast<asUINT>(index));
+    if (!address) {
+        error = fmt::format("Global variable '{}' has no address.", name);
+        return 0;
+    }
+
+    return *static_cast<int *>(address);
+}
+
+static bool ProbeRuntimeRunnerInputBinding(CKContext *context,
+                                           const ScriptBridgeBBInvocationSpec &request,
+                                           const char *expectedScript,
+                                           const char *expectedFunction,
+                                           std::string &error) {
+    if (!context) {
+        error = "Runtime Runner input probe requires CKContext.";
+        return false;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, "__CKAS_RuntimeBBInputProbe", CK_OBJECTCREATION_DYNAMIC));
+    if (!behavior) {
+        error = "Runtime Runner input probe failed to create behavior.";
+        return false;
+    }
+
+    bool createCallbackSent = false;
+    auto cleanup = [&]() {
+        if (!behavior) {
+            return;
+        }
+        if (createCallbackSent) {
+            CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE);
+        }
+        context->DestroyObject(behavior);
+        behavior = nullptr;
+    };
+
+    behavior->UseFunction();
+    CKERROR err = behavior->InitFromGuid(CKGUID(0x53295cee, 0x1a795bb8));
+    if (err != CK_OK) {
+        error = fmt::format("Runtime Runner input probe InitFromGuid failed with CKERROR {}.", err);
+        cleanup();
+        return false;
+    }
+
+    err = behavior->SetOwner(nullptr, FALSE);
+    if (err != CK_OK) {
+        error = fmt::format("Runtime Runner input probe SetOwner failed with CKERROR {}.", err);
+        cleanup();
+        return false;
+    }
+
+    err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE);
+    if (err != CK_OK) {
+        error = fmt::format("Runtime Runner input probe CREATE failed with CKERROR {}.", err);
+        cleanup();
+        return false;
+    }
+    createCallbackSent = true;
+
+    std::unordered_map<int, CK_ID> inputSources;
+    if (!ApplyIndexedInputParameters(behavior, request.IndexedParameters, error, &inputSources)) {
+        error = "Runtime Runner input probe failed to apply inputs: " + error;
+        cleanup();
+        return false;
+    }
+
+    const char *script = static_cast<const char *>(behavior->GetInputParameterReadDataPtr(0));
+    const char *function = static_cast<const char *>(behavior->GetInputParameterReadDataPtr(1));
+    const std::string scriptText = script ? std::string(script) : std::string();
+    const std::string functionText = function ? std::string(function) : std::string();
+    if (scriptText != expectedScript || functionText != expectedFunction) {
+        error = fmt::format("Runtime Runner input probe read mismatch: script='{}' function='{}'.",
+                            scriptText,
+                            functionText);
+        cleanup();
+        return false;
+    }
+
+    ScriptRunner *runner = nullptr;
+    behavior->GetLocalParameterValue(0, &runner);
+    if (!runner) {
+        CKBehaviorPrototype *prototype = behavior->GetPrototype();
+        error = fmt::format("Runtime Runner input probe CREATE did not install ScriptRunner local state (locals={}, prototype='{}', callback={}).",
+                            behavior->GetLocalParameterCount(),
+                            SafeString(prototype ? prototype->GetName() : nullptr),
+                            prototype && prototype->GetBehaviorCallbackFct() ? "present" : "missing");
+        cleanup();
+        return false;
+    }
+
+    if (!runner->Attach(behavior, true)) {
+        error = "Runtime Runner input probe Attach failed: " + runner->GetErrorMessage();
+        cleanup();
+        return false;
+    }
+
+    asIScriptFunction *func = nullptr;
+    behavior->GetLocalParameterValue(1, &func);
+    if (!func) {
+        error = "Runtime Runner input probe Attach did not cache the function.";
+        cleanup();
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
+
+static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
+                                                     std::string &error) {
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
+    if (!context || !manager || !bridge) {
+        error = "Runtime BB self-test requires CKContext, ScriptManager, and ScriptBehaviorBridge.";
+        return false;
+    }
+
+    constexpr const char *scriptName = "__CKAS_RuntimeBBSelfTest";
+    manager->UnloadScript(scriptName);
+
+    const char *source =
+        "int g_BridgeRunnerCount = 0;\n"
+        "int BridgeRunnerEntry(const CKBehaviorContext &in ctx) {\n"
+        "    g_BridgeRunnerCount += 1;\n"
+        "    return 0;\n"
+        "}\n";
+
+    if (manager->CompileScript(scriptName, source) < 0) {
+        error = "Failed to compile runtime BB self-test script.";
+        return false;
+    }
+
+    asIScriptModule *module = manager->GetScript(scriptName);
+    if (!module) {
+        manager->UnloadScript(scriptName);
+        error = "Runtime BB self-test script module was not found after compilation.";
+        return false;
+    }
+
+    CKBehaviorContext behaviorContext;
+    behaviorContext.Behavior = nullptr;
+    behaviorContext.DeltaTime = 0.016f;
+    behaviorContext.Context = context;
+    behaviorContext.CurrentLevel = nullptr;
+    behaviorContext.CurrentScene = nullptr;
+    behaviorContext.PreviousScene = nullptr;
+    behaviorContext.CurrentRenderContext = nullptr;
+    behaviorContext.ParameterManager = context->GetParameterManager();
+    behaviorContext.MessageManager = nullptr;
+    behaviorContext.AttributeManager = nullptr;
+    behaviorContext.TimeManager = nullptr;
+    behaviorContext.CallbackMessage = 0;
+    behaviorContext.CallbackArg = nullptr;
+
+    ScriptBridgeBBInvocationSpec request = MakeDefaultRequest(behaviorContext);
+    request.PrototypeName = "AngelScript Runner";
+    ScriptBridgeSetIndexedValue(request.IndexedParameters, 0, MakeScriptParamString(scriptName));
+    ScriptBridgeSetIndexedValue(request.IndexedParameters, 1, MakeScriptParamString("BridgeRunnerEntry"));
+
+    if (!ProbeRuntimeRunnerInputBinding(context, request, scriptName, "BridgeRunnerEntry", error)) {
+        manager->UnloadScript(scriptName);
+        return false;
+    }
+
+    BBResult *result = bridge->RunCall(request, behaviorContext, 0);
+    if (!result) {
+        manager->UnloadScript(scriptName);
+        error = "BB.Call runtime self-test did not return a result.";
+        return false;
+    }
+
+    const bool callStateOk = result->Ok();
+    const int callReturnCode = result->ReturnCode();
+    const bool callOutActive = result->OutputActive(0);
+    const bool callErrorActive = result->OutputActive(1);
+    const bool callOk = callStateOk && callReturnCode == CKBR_OK && callOutActive;
+    std::string callError = result->Error();
+    result->Release();
+    if (!callOk) {
+        manager->UnloadScript(scriptName);
+        error = fmt::format("BB.Call runtime self-test failed: ok={} rc={} out={} errorOut={} error={}",
+                            callStateOk ? "true" : "false",
+                            callReturnCode,
+                            callOutActive ? "true" : "false",
+                            callErrorActive ? "true" : "false",
+                            callError.empty() ? "<empty>" : callError);
+        return false;
+    }
+
+    int count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
+    if (!error.empty() || count != 1) {
+        manager->UnloadScript(scriptName);
+        if (error.empty()) {
+            error = fmt::format("BB.Call runtime self-test expected count 1, got {}.", count);
+        }
+        return false;
+    }
+
+    BBTask *task = bridge->StartTask(request, behaviorContext, 0);
+    if (!task) {
+        manager->UnloadScript(scriptName);
+        error = "BB.Spawn runtime self-test did not return a task.";
+        return false;
+    }
+
+    const bool taskValid = task->IsValid();
+    const bool taskAlive = task->IsAlive();
+    const int taskReturnCode = task->ReturnCode();
+    const bool taskOutActive = task->OutputActive(0);
+    const bool taskErrorActive = task->OutputActive(1);
+    const bool taskOk = taskValid && taskAlive && taskReturnCode == CKBR_OK && taskOutActive;
+    std::string taskError = task->Error();
+    const bool taskStepOk = task->Step(behaviorContext, 0);
+    const int taskStepReturnCode = task->ReturnCode();
+    const bool taskStepOutActive = task->OutputActive(0);
+    const bool taskStepErrorActive = task->OutputActive(1);
+    if (!taskStepOk || taskStepReturnCode != CKBR_OK || !taskStepOutActive) {
+        taskError = task->Error();
+        task->Destroy();
+        task->Release();
+        manager->UnloadScript(scriptName);
+        error = fmt::format("BB.Spawn runtime self-test Step failed: ok={} rc={} out={} errorOut={} error={}",
+                            taskStepOk ? "true" : "false",
+                            taskStepReturnCode,
+                            taskStepOutActive ? "true" : "false",
+                            taskStepErrorActive ? "true" : "false",
+                            taskError.empty() ? "<empty>" : taskError);
+        return false;
+    }
+    if (!task->Destroy() || task->IsValid()) {
+        task->Release();
+        manager->UnloadScript(scriptName);
+        error = "BB.Spawn runtime self-test task did not destroy cleanly.";
+        return false;
+    }
+    task->Release();
+
+    if (!taskOk) {
+        manager->UnloadScript(scriptName);
+        error = fmt::format("BB.Spawn runtime self-test failed: valid={} alive={} rc={} out={} errorOut={} error={}",
+                            taskValid ? "true" : "false",
+                            taskAlive ? "true" : "false",
+                            taskReturnCode,
+                            taskOutActive ? "true" : "false",
+                            taskErrorActive ? "true" : "false",
+                            taskError.empty() ? "<empty>" : taskError);
+        return false;
+    }
+
+    error.clear();
+    count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
+    if (!error.empty() || count != 3) {
+        manager->UnloadScript(scriptName);
+        if (error.empty()) {
+            error = fmt::format("BB.Spawn runtime self-test expected count 3, got {}.", count);
+        }
+        return false;
+    }
+
+    manager->UnloadScript(scriptName);
+    error.clear();
+    return true;
+}
+
 bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context) {
         error = "CKContext is not available.";
@@ -207,13 +917,48 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     XObjectArray objects;
     objects.PushBack(0);
     objects.PushBack(42);
-    const ScriptBridgeValue value = MakeObjectArrayValue(objects);
-    if (value.Kind != ScriptBridgeValueKind::ObjectArray ||
-        value.ObjectIds.size() != 2 ||
-        value.ObjectIds[0] != 0 ||
-        value.ObjectIds[1] != 42 ||
-        ScriptParameterGuidForValueKind(ScriptBridgeValueKind::ObjectArray) != CKPGUID_OBJECTARRAY) {
+    const ScriptParamValue value = MakeScriptParamObjectArray(objects);
+    if (value.Kind != ScriptParamValueKind::ObjectArray ||
+        value.ObjectIds().size() != 2 ||
+        value.ObjectIds()[0] != 0 ||
+        value.ObjectIds()[1] != 42 ||
+        ScriptParameterGuidForValueKind(ScriptParamValueKind::ObjectArray) != CKPGUID_OBJECTARRAY) {
         error = "XObjectArray conversion self-test failed.";
+        return false;
+    }
+
+    CKParameterLocal *stampParam = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_StampSelfTest"), CKPGUID_INT, TRUE);
+    if (!stampParam) {
+        error = "Failed to create parameter stamp self-test parameter.";
+        return false;
+    }
+    const CK_ID stampParamId = stampParam->GetID();
+    ScriptBridgeObjectStamp stamp = CaptureBridgeObjectStamp(stampParam);
+    if (GetStampedCKObjectById(context, stampParamId, stamp) != stampParam) {
+        context->DestroyObject(stampParam);
+        error = "Parameter stamp self-test failed to resolve the original object.";
+        return false;
+    }
+    stamp.TypeGuid = CKPGUID_FLOAT;
+    if (GetStampedCKObjectById(context, stampParamId, stamp) != nullptr) {
+        context->DestroyObject(stampParam);
+        error = "Parameter stamp self-test failed to reject a mismatched type.";
+        return false;
+    }
+    context->DestroyObject(stampParam);
+
+    if (!RunBehaviorBridgeNativeMutationSelfTest(context, parameterManager, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-mutation", error);
+        return false;
+    }
+
+    if (!RunBehaviorBridgeNativeGraphTaskSelfTest(context, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-graphtask", error);
+        return false;
+    }
+
+    if (!RunBehaviorBridgeNativeRuntimeBBSelfTest(context, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-runtime-bb", error);
         return false;
     }
 
