@@ -97,17 +97,22 @@ BB prototype discovery is SDK-driven and uses `CKGetPrototypeDeclaration*` order
 int count = BB::Count(ctx);
 BBPrototype@ first = BB::At(ctx, 0);
 BBPrototype@ text = BB::Find(ctx, "Interface/Text/2D Text");
+array<BBPrototype@>@ textCandidates = BB::FindAll(ctx, "2D Text");
 
 string category = text.GetCategory();
 string qualified = text.GetQualifiedName();
 CKGUID guid = text.GetGuid();
+string layout = text.Describe();
 ```
 
-`BB::Find` accepts a name, `Category/Name`, or `guid:0x...,0x...` text. Use `occurrence` only when a plain name is intentionally duplicated.
+`BB::Find` accepts a name, `Category/Name`, or `guid:0x...,0x...` text. Use `occurrence` only when a plain name is intentionally duplicated. `BB::FindAll` returns every matching SDK prototype declaration, so setup code can diagnose duplicate names and then cache the selected `GetGuid()` / layout indices.
 
 `Param` helpers expose enum/flags/type metadata without hard-coded integer tables:
 
 ```angelscript
+int typeCount = Param::Count(ctx);
+ParamTypeInfo@ firstType = Param::At(ctx, 0);
+ParamTypeInfo@ renderInfo = Param::Find(ctx, "Render Options");
 CKGUID renderOptions = Param::Guid(ctx, "Render Options");
 uint clear = Param::Flag(ctx, renderOptions, "Clear ZBuffer");
 uint clearAndSwap = Param::FlagsMask(ctx, renderOptions, "Clear ZBuffer,Buffer Swapping");
@@ -120,6 +125,20 @@ For IDE hints or script constants, generate a catalog from validation exports:
 ```text
 python tools/generate_angelscript_catalog.py --validation-dir build/validation/ballance
 ```
+
+The generated hints keep the flat GUID functions and add ergonomic helper namespaces:
+
+```angelscript
+CKGUID textGuid = CKASCatalog::BBHints::Interface_Text_2D_Text::Guid();
+BBPrototype@ text = CKASCatalog::BBHints::Interface_Text_2D_Text::Find(ctx);
+
+uint flags = CKASCatalog::Flags::Render_Options::Mask(ctx, "Clear ZBuffer,Buffer Swapping");
+string flagsText = CKASCatalog::Flags::Render_Options::Text(ctx, flags);
+
+ParamOp@ add = CKASCatalog::OperationHints::Addition::Create(ctx);
+```
+
+Generated names are sanitized deterministically; duplicate source names get numeric suffixes.
 
 ## GraphTask
 

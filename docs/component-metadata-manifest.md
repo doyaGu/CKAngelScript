@@ -37,6 +37,9 @@ class DoorComponent {
     [bb param="Existing Delay" type="behavior"]
     BBPrototype@ ExistingDelayPrototype;
 
+    [param type="Render Options"]
+    ParamTypeInfo@ RenderOptionsType;
+
     [param type="color" default="#ffcc00ff"]
     VxColor Tint;
 
@@ -108,6 +111,7 @@ Current v1 supports:
 - `CKObject@` and common subclasses such as `CKBeObject@`, `CK3dEntity@`, `CKBehavior@`
 - `XObjectArray`
 - `BehaviorRef@`
+- `ParamTypeInfo@`
 - `BBPrototype@`
 
 Value type aliases include `guid`, `vector`, `vector2`, `2dvector`, `color`, `quat`, `quaternion`, and `matrix`. Their default Virtools parameter GUIDs are `CKPGUID_STRING` for `CKGUID`, `CKPGUID_VECTOR`, `CKPGUID_2DVECTOR`, `CKPGUID_COLOR`, `CKPGUID_QUATERNION`, and `CKPGUID_MATRIX`.
@@ -128,6 +132,8 @@ Object metadata can use editor type aliases such as `object`, `behavior`, `3dent
 
 `BBPrototype@` defaults to a string input containing a prototype name, `Category/Name`, or `guid:0x...,0x...`. If the declaration uses `type="behavior"` / `type=behavior`, the input parameter uses `CKPGUID_BEHAVIOR` instead; the injected `BBPrototype@` is built from the referenced behavior's prototype GUID.
 
+`ParamTypeInfo@` injects the runtime CK parameter type metadata for the connected input source. It is useful when a component accepts plugin-defined or enum/flags parameters and wants to expose `Name()`, `Guid()`, `Describe()`, `Enum()`, `Flags()`, or `Struct()` without guessing the data layout.
+
 ## Enum And Flags Helpers
 
 Scripts can resolve enum and flags values through the runtime `CKParameterManager` instead of hard-coding integers:
@@ -138,22 +144,24 @@ class RenderComponent {
     uint RenderOptions;
 
     void Update(const CKBehaviorContext &in ctx) {
-        uint clearAndSwap = Param.FlagsMask(ctx, "Render Options", "Clear ZBuffer,Buffer Swapping");
-        int modulate = Param.Value(ctx, "Texture Blend Mode", "Modulate");
-        string text = Param.Text(ctx, "Render Options", int(clearAndSwap));
+        ParamTypeInfo@ info = Param::Find(ctx, "Render Options");
+        uint clearAndSwap = Param::FlagsMask(ctx, "Render Options", "Clear ZBuffer,Buffer Swapping");
+        int modulate = Param::Value(ctx, "Texture Blend Mode", "Modulate");
+        string text = Param::Text(ctx, "Render Options", clearAndSwap);
     }
 }
 ```
 
 Available helpers:
 
-- `Param.Guid(ctx, typeName)` and `Param.Type(ctx, typeName)`
-- `Param.IsEnum(ctx, typeName)` and `Param.IsFlags(ctx, typeName)`
-- `Param.Value(ctx, typeName, valueName, fallback = 0)`
-- `Param.Flag(ctx, typeName, flagName, fallback = 0)`
-- `Param.FlagsMask(ctx, typeName, "Flag A,Flag B", fallback = 0)`
-- `Param.Text(ctx, typeName, value)`
-- `Param.Describe(ctx, typeName)`
+- `Param::Count(ctx)`, `Param::At(ctx, index)`, and `Param::Find(ctx, query, occurrence = 0)`
+- `Param::Guid(ctx, typeName)` and `Param::Type(ctx, typeName)`
+- `Param::IsEnum(ctx, typeName)` and `Param::IsFlags(ctx, typeName)`
+- `Param::Value(ctx, typeName, valueName, fallback = 0)`
+- `Param::Flag(ctx, typeName, flagName, fallback = 0)`
+- `Param::FlagsMask(ctx, typeName, "Flag A,Flag B", fallback = 0)`
+- `Param::Text(ctx, typeName, value)`
+- `Param::Describe(ctx, typeName)`
 
 All helpers also accept `CKContext@` in place of `CKBehaviorContext`. The type argument can be a type name or a parameter type `CKGUID`.
 
@@ -163,7 +171,7 @@ All helpers also accept `CKContext@` in place of `CKBehaviorContext`. The type a
 - The Component creates missing input parameters and default local sources on first script object creation.
 - On script identity or manifest change, the old script object is released, managed input parameters no longer declared are removed, and the object is rebuilt.
 - Field injection runs before `OnLoad` and `Awake`.
-- Scalar, string, math value, CK object, `BehaviorRef@`, and `BBPrototype@` fields are refreshed before later lifecycle/update calls unless `update=false` / `sync=false` is declared.
+- Scalar, string, math value, CK object, `BehaviorRef@`, `ParamTypeInfo@`, and `BBPrototype@` fields are refreshed before later lifecycle/update calls unless `update=false` / `sync=false` is declared.
 - Ref-counted handle fields are replaced through bridge-managed release helpers, so changing a behavior or BB prototype parameter no longer requires a full script object rebuild.
 - CK object injection validates the actual object against the script field type before writing the handle, so a `CKMaterial@` parameter cannot silently be written into a `CK3dEntity@` field.
 
@@ -181,12 +189,14 @@ Configuration errors activate the Component `Error` output:
 - failure to read or inject parameter values
 - object value incompatible with the declared script field type
 
+Diagnostics include the script field name, declared manifest/metadata type, generated CK parameter type, actual AngelScript field type, and relevant source value when available. Missing-field errors also list writable public field candidates. `BBPrototype@` failures report the unresolved BB name/GUID/behavior source, and `ParamTypeInfo@` failures report the source parameter's real CK type.
+
 When `Output Error Message` is enabled, the error text is written to the Component error output parameters.
 
 ## Remaining Gaps
 
-- Enum/flags values are represented as `int` / `uint` in scripts. Runtime lookup is available through `Param.*`; generated compile-time hints can be produced with `tools/generate_angelscript_catalog.py`.
-- No dedicated BB prototype picker; `BBPrototype@` currently uses string, `Category/Name`, GUID text, or SDK-driven `BB::Find/At`.
+- Enum/flags values are represented as `int` / `uint` in scripts. Runtime lookup is available through `Param::*`; generated compile-time hints can be produced with `tools/generate_angelscript_catalog.py`.
+- No dedicated BB prototype picker; `BBPrototype@` currently uses string, `Category/Name`, GUID text, or SDK-driven `BB::Find/FindAll/At`.
 - A dedicated BB prototype picker is still preferable long term. `type=behavior` is a practical editor-facing fallback because Virtools already has a behavior picker.
 - Managed parameter pruning is intentionally tied to manifest/metadata rebuilds, not to arbitrary runtime graph edits.
 - Generic plugin-defined struct parameters are not decoded field-by-field. Use `ParamRef@` source connections or SDK string-backed defaults for unknown types.
