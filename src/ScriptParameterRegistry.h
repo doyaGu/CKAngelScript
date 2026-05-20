@@ -139,6 +139,8 @@ private:
     CKContext *m_Context = nullptr;
     CKDWORD m_Generation = 1;
     std::unordered_map<int, ScriptParamTypeRecord> m_TypeCache;
+    std::unordered_map<std::string, CKParameterType> m_NameToTypeCache;
+    std::unordered_map<std::string, CKParameterType> m_GuidToTypeCache;
 };
 
 class ParamEnumInfo;

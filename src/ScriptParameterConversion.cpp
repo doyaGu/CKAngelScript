@@ -150,26 +150,15 @@ std::vector<ScriptParamStructMemberValue> &ScriptParamValue::MutableStructMember
 namespace ScriptParamCodecInternal {
 
 std::string TrimString(const std::string &value) {
-    const auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char c) { return std::isspace(c) != 0; });
-    if (first == value.end()) {
-        return {};
-    }
-
-    const auto last = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char c) { return std::isspace(c) != 0; }).base();
-    return std::string(first, last);
+    return ScriptParameterText::Trim(value);
 }
 
 std::string ToLower(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return value;
+    return ScriptParameterText::ToLower(value);
 }
 
 std::string StripQuotes(const std::string &value) {
-    std::string text = TrimString(value);
-    if (text.size() >= 2 && ((text.front() == '"' && text.back() == '"') || (text.front() == '\'' && text.back() == '\''))) {
-        text = text.substr(1, text.size() - 2);
-    }
-    return text;
+    return ScriptParameterText::StripQuotes(value);
 }
 
 bool ParseBoolText(const std::string &value, bool fallback = false) {
@@ -184,27 +173,7 @@ bool ParseBoolText(const std::string &value, bool fallback = false) {
 }
 
 bool ParseIntegerText(const std::string &value, int &out) {
-    const std::string text = StripQuotes(value);
-    if (text.empty()) {
-        return false;
-    }
-
-    char *end = nullptr;
-    if (text.front() == '-') {
-        const long parsed = std::strtol(text.c_str(), &end, 0);
-        if (!end || *end != '\0') {
-            return false;
-        }
-        out = static_cast<int>(parsed);
-        return true;
-    }
-
-    const unsigned long parsed = std::strtoul(text.c_str(), &end, 0);
-    if (!end || *end != '\0') {
-        return false;
-    }
-    out = static_cast<int>(parsed);
-    return true;
+    return ScriptParameterText::ParseInteger(value, out);
 }
 
 bool ParseGuidToken(const std::string &token, CKDWORD &value) {

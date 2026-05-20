@@ -214,6 +214,8 @@ CKParameterManager *ScriptParameterRegistry::GetParameterManager() const {
 
 void ScriptParameterRegistry::Invalidate() {
     m_TypeCache.clear();
+    m_NameToTypeCache.clear();
+    m_GuidToTypeCache.clear();
     ++m_Generation;
     if (m_Generation == 0) {
         m_Generation = 1;
@@ -231,32 +233,54 @@ CKParameterType ScriptParameterRegistry::ResolveType(const std::string &typeName
         return -1;
     }
 
+    const std::string lower = ScriptParameterText::ToLower(text);
+    auto cached = m_NameToTypeCache.find(lower);
+    if (cached != m_NameToTypeCache.end()) {
+        return cached->second;
+    }
+
     CKGUID guid;
     if (ParseScriptGuidString(text, guid)) {
-        return ResolveType(guid);
+        const CKParameterType type = ResolveType(guid);
+        m_NameToTypeCache[lower] = type;
+        return type;
     }
 
     CKParameterType type = pm->ParameterNameToType(const_cast<CKSTRING>(text.c_str()));
     if (type >= 0) {
+        m_NameToTypeCache[lower] = type;
         return type;
     }
 
-    const std::string lower = ScriptParameterText::ToLower(text);
     const int count = pm->GetParameterTypesCount();
     for (int i = 0; i < count; ++i) {
         CKParameterTypeDesc *desc = pm->GetParameterTypeDescription(i);
         const char *name = desc ? desc->TypeName.CStr() : nullptr;
         if (name && ScriptParameterText::ToLower(name) == lower) {
+            m_NameToTypeCache[lower] = i;
             return i;
         }
     }
 
+    m_NameToTypeCache[lower] = -1;
     return -1;
 }
 
 CKParameterType ScriptParameterRegistry::ResolveType(CKGUID guid) {
     CKParameterManager *pm = GetParameterManager();
-    return pm && GuidIsValid(guid) ? pm->ParameterGuidToType(guid) : -1;
+    if (!pm || !GuidIsValid(guid)) {
+        return -1;
+    }
+
+    const std::string key = GuidText(guid);
+    auto cached = m_GuidToTypeCache.find(key);
+    if (cached != m_GuidToTypeCache.end()) {
+        return cached->second;
+    }
+
+    const CKParameterType type = pm->ParameterGuidToType(guid);
+    m_GuidToTypeCache[key] = type;
+    return type;
 }
 
 CKGUID ScriptParameterRegistry::ResolveGuid(const std::string &typeName, CKGUID fallbackGuid) {
@@ -455,6 +479,8 @@ bool ScriptParameterRegistry::PopulateFromTypeDesc(ScriptParamTypeRecord &record
     record.CkFlags = desc->dwFlags;
     record.Generation = m_Generation;
     record.ClassId = static_cast<CK_CLASSID>(desc->Cid);
+    m_NameToTypeCache[ScriptParameterText::ToLower(record.Name)] = type;
+    m_GuidToTypeCache[GuidText(record.Guid)] = type;
     SetRecordCap(record, ScriptParamTypeCaps::Valid, desc->Valid != 0);
     SetRecordCap(record, ScriptParamTypeCaps::Stringable, desc->StringFunction != nullptr);
     SetRecordCap(record, ScriptParamTypeCaps::VariableSize, (desc->dwFlags & CKPARAMETERTYPE_VARIABLESIZE) != 0);
