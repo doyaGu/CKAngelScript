@@ -735,17 +735,23 @@ std::string ParamStructInfo::Describe() const {
     return out.str();
 }
 
-void RegisterScriptParameterRegistry(asIScriptEngine *engine) {
-    assert(engine != nullptr);
-    int r = 0;
+namespace ScriptParameterRegistryRegistrationInternal {
 
+template <typename T>
+void RegisterRefCountedBehaviors(asIScriptEngine *engine, const char *typeName, int &r) {
+    r = engine->RegisterObjectBehaviour(typeName, asBEHAVE_ADDREF, "void f()", asMETHOD(T, AddRef), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectBehaviour(typeName, asBEHAVE_RELEASE, "void f()", asMETHOD(T, Release), asCALL_THISCALL); assert(r >= 0);
+}
+
+void RegisterParamInfoTypes(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectType("ParamTypeInfo", 0, asOBJ_REF); assert(r >= 0);
     r = engine->RegisterObjectType("ParamEnumInfo", 0, asOBJ_REF); assert(r >= 0);
     r = engine->RegisterObjectType("ParamFlagsInfo", 0, asOBJ_REF); assert(r >= 0);
     r = engine->RegisterObjectType("ParamStructInfo", 0, asOBJ_REF); assert(r >= 0);
+}
 
-    r = engine->RegisterObjectBehaviour("ParamTypeInfo", asBEHAVE_ADDREF, "void f()", asMETHOD(ParamTypeInfo, AddRef), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("ParamTypeInfo", asBEHAVE_RELEASE, "void f()", asMETHOD(ParamTypeInfo, Release), asCALL_THISCALL); assert(r >= 0);
+void RegisterParamTypeInfoMethods(asIScriptEngine *engine, int &r) {
+    RegisterRefCountedBehaviors<ParamTypeInfo>(engine, "ParamTypeInfo", r);
     r = engine->RegisterObjectMethod("ParamTypeInfo", "bool IsValid() const", asMETHOD(ParamTypeInfo, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamTypeInfo", "CKParameterType Type() const", asMETHOD(ParamTypeInfo, Type), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamTypeInfo", "CKGUID Guid() const", asMETHOD(ParamTypeInfo, Guid), asCALL_THISCALL); assert(r >= 0);
@@ -765,9 +771,10 @@ void RegisterScriptParameterRegistry(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamTypeInfo", "ParamFlagsInfo@ FlagsDesc() const", asMETHOD(ParamTypeInfo, FlagsInfo), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamTypeInfo", "ParamStructInfo@ Struct() const", asMETHOD(ParamTypeInfo, Struct), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamTypeInfo", "string Describe() const", asMETHOD(ParamTypeInfo, Describe), asCALL_THISCALL); assert(r >= 0);
+}
 
-    r = engine->RegisterObjectBehaviour("ParamEnumInfo", asBEHAVE_ADDREF, "void f()", asMETHOD(ParamEnumInfo, AddRef), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("ParamEnumInfo", asBEHAVE_RELEASE, "void f()", asMETHOD(ParamEnumInfo, Release), asCALL_THISCALL); assert(r >= 0);
+void RegisterParamEnumInfoMethods(asIScriptEngine *engine, int &r) {
+    RegisterRefCountedBehaviors<ParamEnumInfo>(engine, "ParamEnumInfo", r);
     r = engine->RegisterObjectMethod("ParamEnumInfo", "bool IsValid() const", asMETHOD(ParamEnumInfo, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamEnumInfo", "int Count() const", asMETHOD(ParamEnumInfo, Count), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamEnumInfo", "string Name(int index) const", asMETHOD(ParamEnumInfo, Name), asCALL_THISCALL); assert(r >= 0);
@@ -775,9 +782,10 @@ void RegisterScriptParameterRegistry(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamEnumInfo", "int Find(const string &in nameOrValue) const", asMETHOD(ParamEnumInfo, Find), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamEnumInfo", "string NameOf(int value) const", asMETHOD(ParamEnumInfo, NameOf), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamEnumInfo", "string Describe() const", asMETHOD(ParamEnumInfo, Describe), asCALL_THISCALL); assert(r >= 0);
+}
 
-    r = engine->RegisterObjectBehaviour("ParamFlagsInfo", asBEHAVE_ADDREF, "void f()", asMETHOD(ParamFlagsInfo, AddRef), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("ParamFlagsInfo", asBEHAVE_RELEASE, "void f()", asMETHOD(ParamFlagsInfo, Release), asCALL_THISCALL); assert(r >= 0);
+void RegisterParamFlagsInfoMethods(asIScriptEngine *engine, int &r) {
+    RegisterRefCountedBehaviors<ParamFlagsInfo>(engine, "ParamFlagsInfo", r);
     r = engine->RegisterObjectMethod("ParamFlagsInfo", "bool IsValid() const", asMETHOD(ParamFlagsInfo, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamFlagsInfo", "int Count() const", asMETHOD(ParamFlagsInfo, Count), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamFlagsInfo", "string Name(int index) const", asMETHOD(ParamFlagsInfo, Name), asCALL_THISCALL); assert(r >= 0);
@@ -786,9 +794,10 @@ void RegisterScriptParameterRegistry(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamFlagsInfo", "string Text(uint value) const", asMETHOD(ParamFlagsInfo, Text), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamFlagsInfo", "bool Has(uint mask, const string &in flagName) const", asMETHOD(ParamFlagsInfo, Has), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamFlagsInfo", "string Describe() const", asMETHOD(ParamFlagsInfo, Describe), asCALL_THISCALL); assert(r >= 0);
+}
 
-    r = engine->RegisterObjectBehaviour("ParamStructInfo", asBEHAVE_ADDREF, "void f()", asMETHOD(ParamStructInfo, AddRef), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("ParamStructInfo", asBEHAVE_RELEASE, "void f()", asMETHOD(ParamStructInfo, Release), asCALL_THISCALL); assert(r >= 0);
+void RegisterParamStructInfoMethods(asIScriptEngine *engine, int &r) {
+    RegisterRefCountedBehaviors<ParamStructInfo>(engine, "ParamStructInfo", r);
     r = engine->RegisterObjectMethod("ParamStructInfo", "bool IsValid() const", asMETHOD(ParamStructInfo, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructInfo", "int Count() const", asMETHOD(ParamStructInfo, Count), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructInfo", "string MemberName(int index) const", asMETHOD(ParamStructInfo, MemberName), asCALL_THISCALL); assert(r >= 0);
@@ -796,7 +805,9 @@ void RegisterScriptParameterRegistry(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamStructInfo", "ParamTypeInfo@ MemberType(int index) const", asMETHOD(ParamStructInfo, MemberType), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructInfo", "int FindMember(const string &in name, int occurrence = 0) const", asMETHOD(ParamStructInfo, FindMember), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamStructInfo", "string Describe() const", asMETHOD(ParamStructInfo, Describe), asCALL_THISCALL); assert(r >= 0);
+}
 
+void RegisterParamRegistryGlobals(asIScriptEngine *engine, int &r) {
     const char *previousNamespace = engine->GetDefaultNamespace();
     std::string previous = previousNamespace ? previousNamespace : "";
     r = engine->SetDefaultNamespace("Param"); assert(r >= 0);
@@ -811,6 +822,20 @@ void RegisterScriptParameterRegistry(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("CKERROR RegisterStruct(CKContext@ context, CKGUID guid, const string &in name, const string &in members, XGUIDArray &in memberGuids)", asFUNCTION(ScriptParameterRegistryInternal::RegisterStructByContext), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKERROR RegisterStruct(const CKBehaviorContext &in ctx, CKGUID guid, const string &in name, const string &in members, XGUIDArray &in memberGuids)", asFUNCTION(ScriptParameterRegistryInternal::RegisterStructByBehaviorContext), asCALL_CDECL); assert(r >= 0);
     r = engine->SetDefaultNamespace(previous.c_str()); assert(r >= 0);
+}
+
+} // namespace ScriptParameterRegistryRegistrationInternal
+
+void RegisterScriptParameterRegistry(asIScriptEngine *engine) {
+    assert(engine != nullptr);
+    int r = 0;
+
+    ScriptParameterRegistryRegistrationInternal::RegisterParamInfoTypes(engine, r);
+    ScriptParameterRegistryRegistrationInternal::RegisterParamTypeInfoMethods(engine, r);
+    ScriptParameterRegistryRegistrationInternal::RegisterParamEnumInfoMethods(engine, r);
+    ScriptParameterRegistryRegistrationInternal::RegisterParamFlagsInfoMethods(engine, r);
+    ScriptParameterRegistryRegistrationInternal::RegisterParamStructInfoMethods(engine, r);
+    ScriptParameterRegistryRegistrationInternal::RegisterParamRegistryGlobals(engine, r);
 }
 
 bool RunScriptParameterRegistrySelfTest(CKContext *context, std::string &error) {
