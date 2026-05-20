@@ -23,6 +23,8 @@ class BehaviorRef;
 class BehaviorBridge;
 class BehaviorLayout;
 class BBPrototype;
+class BBSpec;
+class BBSlot;
 class BBResult;
 class BBTask;
 class GraphTask;

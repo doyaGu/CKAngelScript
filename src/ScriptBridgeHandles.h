@@ -7,6 +7,8 @@
 #include "ScriptParameterRegistry.h"
 
 class CScriptArray;
+class BBCallBuilder;
+class BBTaskBuilder;
 
 class ParamInfo final : public RefCounted {
 public:
@@ -310,14 +312,22 @@ public:
     std::string GetPrototypeName() const;
     BehaviorLayout *Layout() const;
     bool Trigger(int inputIndex, bool reset);
+    bool TriggerSlot(BBSlot *input, bool reset);
     GraphTask *Start(int inputIndex, bool reset, float timeoutSeconds);
+    GraphTask *StartSlot(BBSlot *input, bool reset, float timeoutSeconds);
     GraphTask *Watch(float timeoutSeconds);
     bool InputActive(int inputIndex) const;
+    bool InputActiveSlot(BBSlot *input) const;
     bool OutputActive(int outputIndex) const;
+    bool OutputActiveSlot(BBSlot *output) const;
     ParamRef *Pin(int index) const;
+    ParamRef *PinSlot(BBSlot *slot) const;
     ParamRef *Pout(int index) const;
+    ParamRef *PoutSlot(BBSlot *slot) const;
     ParamRef *Local(int index) const;
+    ParamRef *LocalSlot(BBSlot *slot) const;
     ParamOperationRef *ConnectOperation(int pinIndex, ParamOp *operation);
+    ParamOperationRef *ConnectOperationSlot(BBSlot *slot, ParamOp *operation);
     std::string Describe() const;
 
 private:
@@ -346,6 +356,83 @@ private:
     CKBehaviorContext m_Context;
 };
 
+class BBSlot final : public RefCounted {
+public:
+    BBSlot(ScriptBehaviorBridge *bridge,
+           const CKBehaviorContext &ctx,
+           const ScriptBridgeBBInvocationSpec &request,
+           ScriptBridgeSlotKind kind,
+           int index,
+           const std::string &name,
+           CKGUID typeGuid,
+           const std::string &typeName,
+           int dataSize,
+           const std::string &layoutSignature,
+           const std::string &error = std::string());
+
+    bool IsValid() const;
+    std::string Error() const;
+    int Kind() const;
+    int Index() const;
+    std::string Name() const;
+    CKGUID TypeGuid() const;
+    std::string TypeName() const;
+    int DataSize() const;
+    std::string Describe() const;
+
+    bool ResolveIndex(ScriptBridgeSlotKind expected, int &index, std::string &error) const;
+
+private:
+    const ScriptBridgeLayoutRecord *LayoutRecord() const;
+    std::string KindName() const;
+
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CKBehaviorContext m_Context;
+    ScriptBridgeBBInvocationSpec m_Request;
+    ScriptBridgeSlotKind m_Kind = ScriptBridgeSlotKind::Standalone;
+    int m_Index = -1;
+    std::string m_Name;
+    CKGUID m_TypeGuid;
+    std::string m_TypeName;
+    int m_DataSize = 0;
+    std::string m_LayoutSignature;
+    std::string m_Error;
+};
+
+class BBSpec final : public RefCounted {
+public:
+    BBSpec(ScriptBehaviorBridge *bridge,
+           const CKBehaviorContext &ctx,
+           const ScriptBridgeBBInvocationSpec &request,
+           const std::string &error = std::string());
+
+    bool IsValid() const;
+    std::string Error() const;
+    CKGUID GetGuid() const;
+    std::string GetName() const;
+    std::string GetCategory() const;
+    std::string GetQualifiedName() const;
+    BBPrototype *Prototype() const;
+    BehaviorLayout *Layout() const;
+    BBCallBuilder *Call();
+    BBTaskBuilder *Spawn();
+    BBSlot *In(const std::string &name, int occurrence = 0) const;
+    BBSlot *Out(const std::string &name, int occurrence = 0) const;
+    BBSlot *Pin(const std::string &name, int occurrence = 0) const;
+    BBSlot *Pout(const std::string &name, int occurrence = 0) const;
+    BBSlot *Local(const std::string &name, int occurrence = 0) const;
+    std::string Describe() const;
+
+private:
+    CKBehaviorPrototype *PrototypeObject(std::string &error) const;
+    BBSlot *ResolveSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const;
+
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CKBehaviorContext m_Context;
+    ScriptBridgeBBInvocationSpec m_Request;
+    std::string m_Error;
+};
+
 class BBCallBuilder final : public RefCounted {
 public:
     BBCallBuilder(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request);
@@ -353,11 +440,23 @@ public:
     BBCallBuilder *Owner(CKBeObject *owner);
     BBCallBuilder *Target(CKBeObject *target);
     BBCallBuilder *Set(int pinIndex, ParamValue *value);
+    BBCallBuilder *SetSlot(BBSlot *slot, ParamValue *value);
+    BBCallBuilder *SetSlotInt(BBSlot *slot, int value);
+    BBCallBuilder *SetSlotFloat(BBSlot *slot, float value);
+    BBCallBuilder *SetSlotBool(BBSlot *slot, bool value);
+    BBCallBuilder *SetSlotString(BBSlot *slot, const std::string &value);
+    BBCallBuilder *SetSlotObject(BBSlot *slot, CKObject *value);
     BBCallBuilder *SetSource(int pinIndex, ParamRef *source);
+    BBCallBuilder *Source(BBSlot *slot, ParamRef *source);
     BBCallBuilder *SetOperation(int pinIndex, ParamOp *operation);
+    BBCallBuilder *Operation(BBSlot *slot, ParamOp *operation);
     BBResult *Run(int inputIndex);
+    BBResult *RunSlot(BBSlot *input);
 
 private:
+    BBCallBuilder *SetValueForPin(int pinIndex, const ScriptParamValue &value);
+    bool ResolvePinSlot(BBSlot *slot, int &pinIndex, const char *method);
+
     ScriptBehaviorBridge *m_Bridge = nullptr;
     CKBehaviorContext m_Context;
     ScriptBridgeBBInvocationSpec m_Request;
@@ -370,11 +469,23 @@ public:
     BBTaskBuilder *Owner(CKBeObject *owner);
     BBTaskBuilder *Target(CKBeObject *target);
     BBTaskBuilder *Set(int pinIndex, ParamValue *value);
+    BBTaskBuilder *SetSlot(BBSlot *slot, ParamValue *value);
+    BBTaskBuilder *SetSlotInt(BBSlot *slot, int value);
+    BBTaskBuilder *SetSlotFloat(BBSlot *slot, float value);
+    BBTaskBuilder *SetSlotBool(BBSlot *slot, bool value);
+    BBTaskBuilder *SetSlotString(BBSlot *slot, const std::string &value);
+    BBTaskBuilder *SetSlotObject(BBSlot *slot, CKObject *value);
     BBTaskBuilder *SetSource(int pinIndex, ParamRef *source);
+    BBTaskBuilder *Source(BBSlot *slot, ParamRef *source);
     BBTaskBuilder *SetOperation(int pinIndex, ParamOp *operation);
+    BBTaskBuilder *Operation(BBSlot *slot, ParamOp *operation);
     BBTask *Start(int inputIndex);
+    BBTask *StartSlot(BBSlot *input);
 
 private:
+    BBTaskBuilder *SetValueForPin(int pinIndex, const ScriptParamValue &value);
+    bool ResolvePinSlot(BBSlot *slot, int &pinIndex, const char *method);
+
     ScriptBehaviorBridge *m_Bridge = nullptr;
     CKBehaviorContext m_Context;
     ScriptBridgeBBInvocationSpec m_Request;
@@ -412,6 +523,8 @@ public:
     BBPrototype *At(int index) const;
     BBPrototype *Find(const std::string &query, int occurrence = 0) const;
     CScriptArray *FindAll(const std::string &query) const;
+    BBSpec *Require(const std::string &query) const;
+    BBSpec *RequireGuid(CKGUID guid) const;
 
 private:
     ScriptBehaviorBridge *m_Bridge = nullptr;
@@ -427,7 +540,9 @@ public:
     int ReturnCode() const;
     std::string Error() const;
     bool OutputActive(int outputIndex) const;
+    bool OutputActiveSlot(BBSlot *output) const;
     ParamRef *Pout(int index) const;
+    ParamRef *PoutSlot(BBSlot *slot) const;
     bool Raise(const CKBehaviorContext &ctx) const;
 
 private:
@@ -449,11 +564,14 @@ public:
     int ReturnCode() const;
     std::string Error() const;
     bool OutputActive(int outputIndex) const;
+    bool OutputActiveSlot(BBSlot *output) const;
     bool Step(const CKBehaviorContext &ctx, int inputIndex);
+    bool StepSlot(const CKBehaviorContext &ctx, BBSlot *input);
     bool Reset();
     bool Destroy();
     BehaviorRef *Behavior() const;
     ParamRef *Pout(int index) const;
+    ParamRef *PoutSlot(BBSlot *slot) const;
     bool Raise(const CKBehaviorContext &ctx) const;
 
 private:
@@ -478,11 +596,14 @@ public:
     GraphTask *Timeout(float seconds);
     bool Step(const CKBehaviorContext &ctx);
     bool Done(int outputIndex) const;
+    bool DoneSlot(BBSlot *output) const;
     bool OutputActive(int outputIndex) const;
+    bool OutputActiveSlot(BBSlot *output) const;
     bool Cancel();
     bool Reset();
     BehaviorRef *Behavior() const;
     ParamRef *Pout(int index) const;
+    ParamRef *PoutSlot(BBSlot *slot) const;
     bool Raise(const CKBehaviorContext &ctx) const;
 
 private:

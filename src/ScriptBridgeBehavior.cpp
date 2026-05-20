@@ -184,6 +184,16 @@ bool BehaviorRef::Trigger(int inputIndex, bool reset) {
     return true;
 }
 
+bool BehaviorRef::TriggerSlot(BBSlot *input, bool reset) {
+    int inputIndex = -1;
+    std::string error;
+    if (!input || !input->ResolveIndex(ScriptBridgeSlotKind::Input, inputIndex, error)) {
+        SetScriptException(error.empty() ? "BehaviorRef.Trigger requires an input BBSlot." : error);
+        return false;
+    }
+    return Trigger(inputIndex, reset);
+}
+
 GraphTask *BehaviorRef::Start(int inputIndex, bool reset, float timeoutSeconds) {
     CKBehavior *behavior = Get();
     if (!behavior || !Trigger(inputIndex, reset)) {
@@ -191,6 +201,16 @@ GraphTask *BehaviorRef::Start(int inputIndex, bool reset, float timeoutSeconds) 
         return nullptr;
     }
     return m_Bridge ? m_Bridge->CreateGraphWatch(behavior, m_ComponentId, timeoutSeconds) : nullptr;
+}
+
+GraphTask *BehaviorRef::StartSlot(BBSlot *input, bool reset, float timeoutSeconds) {
+    int inputIndex = -1;
+    std::string error;
+    if (!input || !input->ResolveIndex(ScriptBridgeSlotKind::Input, inputIndex, error)) {
+        SetScriptException(error.empty() ? "BehaviorRef.Start requires an input BBSlot." : error);
+        return nullptr;
+    }
+    return Start(inputIndex, reset, timeoutSeconds);
 }
 
 GraphTask *BehaviorRef::Watch(float timeoutSeconds) {
@@ -207,9 +227,21 @@ bool BehaviorRef::InputActive(int inputIndex) const {
     return behavior && inputIndex >= 0 && inputIndex < behavior->GetInputCount() && behavior->IsInputActive(inputIndex);
 }
 
+bool BehaviorRef::InputActiveSlot(BBSlot *input) const {
+    int inputIndex = -1;
+    std::string error;
+    return input && input->ResolveIndex(ScriptBridgeSlotKind::Input, inputIndex, error) && InputActive(inputIndex);
+}
+
 bool BehaviorRef::OutputActive(int outputIndex) const {
     CKBehavior *behavior = Get();
     return behavior && outputIndex >= 0 && outputIndex < behavior->GetOutputCount() && behavior->IsOutputActive(outputIndex);
+}
+
+bool BehaviorRef::OutputActiveSlot(BBSlot *output) const {
+    int outputIndex = -1;
+    std::string error;
+    return output && output->ResolveIndex(ScriptBridgeSlotKind::Output, outputIndex, error) && OutputActive(outputIndex);
 }
 
 ParamRef *BehaviorRef::Pin(int index) const {
@@ -218,16 +250,46 @@ ParamRef *BehaviorRef::Pin(int index) const {
     return m_Bridge && pin ? new ParamRef(m_Bridge, pin->GetID(), ScriptBridgeSlotKind::Pin, index, m_BehaviorId) : nullptr;
 }
 
+ParamRef *BehaviorRef::PinSlot(BBSlot *slot) const {
+    int index = -1;
+    std::string error;
+    if (!slot || !slot->ResolveIndex(ScriptBridgeSlotKind::Pin, index, error)) {
+        SetScriptException(error.empty() ? "BehaviorRef.Pin requires a pin BBSlot." : error);
+        return nullptr;
+    }
+    return Pin(index);
+}
+
 ParamRef *BehaviorRef::Pout(int index) const {
     CKBehavior *behavior = Get();
     CKParameterOut *pout = behavior && index >= 0 && index < behavior->GetOutputParameterCount() ? behavior->GetOutputParameter(index) : nullptr;
     return m_Bridge && pout ? new ParamRef(m_Bridge, pout->GetID(), ScriptBridgeSlotKind::Pout, index, m_BehaviorId) : nullptr;
 }
 
+ParamRef *BehaviorRef::PoutSlot(BBSlot *slot) const {
+    int index = -1;
+    std::string error;
+    if (!slot || !slot->ResolveIndex(ScriptBridgeSlotKind::Pout, index, error)) {
+        SetScriptException(error.empty() ? "BehaviorRef.Pout requires a pout BBSlot." : error);
+        return nullptr;
+    }
+    return Pout(index);
+}
+
 ParamRef *BehaviorRef::Local(int index) const {
     CKBehavior *behavior = Get();
     CKParameterLocal *local = behavior && index >= 0 && index < behavior->GetLocalParameterCount() ? behavior->GetLocalParameter(index) : nullptr;
     return m_Bridge && local ? new ParamRef(m_Bridge, local->GetID(), ScriptBridgeSlotKind::Local, index, m_BehaviorId) : nullptr;
+}
+
+ParamRef *BehaviorRef::LocalSlot(BBSlot *slot) const {
+    int index = -1;
+    std::string error;
+    if (!slot || !slot->ResolveIndex(ScriptBridgeSlotKind::Local, index, error)) {
+        SetScriptException(error.empty() ? "BehaviorRef.Local requires a local BBSlot." : error);
+        return nullptr;
+    }
+    return Local(index);
 }
 
 ParamOperationRef *BehaviorRef::ConnectOperation(int pinIndex, ParamOp *operation) {
@@ -242,6 +304,16 @@ ParamOperationRef *BehaviorRef::ConnectOperation(int pinIndex, ParamOp *operatio
         SetScriptException(error);
     }
     return result;
+}
+
+ParamOperationRef *BehaviorRef::ConnectOperationSlot(BBSlot *slot, ParamOp *operation) {
+    int pinIndex = -1;
+    std::string error;
+    if (!slot || !slot->ResolveIndex(ScriptBridgeSlotKind::Pin, pinIndex, error)) {
+        SetScriptException(error.empty() ? "BehaviorRef.ConnectOperation requires a pin BBSlot." : error);
+        return nullptr;
+    }
+    return ConnectOperation(pinIndex, operation);
 }
 
 std::string BehaviorRef::Describe() const {
