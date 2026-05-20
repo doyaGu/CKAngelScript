@@ -90,7 +90,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBBridge@ bridge = BB::From(ctx); BBPrototype@ missing = BB::Prototype(ctx, \"__missing__\"); CKGUID emptyGuid; BBPrototype@ missingGuid = BB::Prototype(ctx, emptyGuid);\n";
     source += "    BBCallBuilder@ call = BB::Call(ctx, \"__missing__\"); BBTaskBuilder@ spawn = BB::Spawn(ctx, \"__missing__\");\n";
     source += "    int globalCount = BB::Count(ctx); BBPrototype@ globalFirst = BB::At(ctx, 0); BBPrototype@ globalFind = BB::Find(ctx, \"__missing__\");\n";
-    source += "    if (bridge !is null) { bridge.Prototype(\"__missing__\"); bridge.Prototype(emptyGuid); bridge.Count(); bridge.At(0); bridge.Find(\"__missing__\"); }\n";
+    source += "    array<BBPrototype@>@ globalAll = BB::FindAll(ctx, \"__missing__\");\n";
+    source += "    if (bridge !is null) { bridge.Prototype(\"__missing__\"); bridge.Prototype(emptyGuid); bridge.Count(); bridge.At(0); bridge.Find(\"__missing__\"); array<BBPrototype@>@ bridgeAll = bridge.FindAll(\"__missing__\"); }\n";
     source += "    if (missing !is null) { missing.IsValid(); missing.GetGuid(); missing.GetName(); missing.GetCategory(); missing.GetQualifiedName(); missing.Layout(); missing.Call(); missing.Spawn(); missing.Describe(); }\n";
     source += "    if (call !is null) { call.Owner(null); call.Target(null); call.Set(0, value); call.SetSource(0, source); call.SetOperation(0, operation); BBResult@ result = call.Run(); if (result !is null) { result.Ok(); bool ok = result.ok; result.ReturnCode(); result.Error(); result.OutputActive(0); result.Pout(0); result.Raise(ctx); } }\n";
     source += "    if (spawn !is null) { spawn.Owner(null); spawn.Target(null); spawn.Set(0, value); spawn.SetSource(0, source); spawn.SetOperation(0, operation); BBTask@ task = spawn.Start(); if (task !is null) { task.IsValid(); task.IsAlive(); task.IsPaused(); task.ReturnCode(); task.Error(); task.OutputActive(0); task.Step(ctx); task.Reset(); task.Behavior(); task.Pout(0); task.Raise(ctx); task.Destroy(); } }\n";
@@ -116,6 +117,10 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (ids.Size() != 2 || ids[0] != first || ids[1] != second) return 10;\n";
     source += "    ParamTypeInfo@ info = Param::Type(ctx, typeName);\n";
     source += "    if (info is null || !info.IsValid() || info.Describe() == \"\") return 20;\n";
+    source += "    int paramCount = Param::Count(ctx);\n";
+    source += "    ParamTypeInfo@ firstParamType = Param::At(ctx, 0);\n";
+    source += "    ParamTypeInfo@ foundParamType = Param::Find(ctx, typeName);\n";
+    source += "    if (paramCount <= 0 || foundParamType is null || foundParamType.Name() != info.Name()) return 21;\n";
     source += "    CKGUID typeGuid = info.Guid();\n";
     source += "    if (!typeGuid.IsValid()) return 30;\n";
     source += "    CKGUID enumGuid(0x6a33ce52, 0x22705502);\n";

@@ -133,9 +133,59 @@ std::string TypeRecordHeader(const ScriptParamTypeRecord &record) {
     return out.str();
 }
 
+bool TypeRecordMatchesExact(const ScriptParamTypeRecord &record, const std::string &queryLower) {
+    return ScriptParameterText::ToLower(record.Name) == queryLower ||
+           ScriptParameterText::ToLower(GuidText(record.Guid)) == queryLower ||
+           std::to_string(record.Type) == queryLower;
+}
+
+bool TypeRecordMatchesSearch(const ScriptParamTypeRecord &record, const std::string &queryLower) {
+    if (TypeRecordMatchesExact(record, queryLower)) {
+        return true;
+    }
+    const std::string nameLower = ScriptParameterText::ToLower(record.Name);
+    const std::string guidLower = ScriptParameterText::ToLower(GuidText(record.Guid));
+    return nameLower.find(queryLower) != std::string::npos ||
+           guidLower.find(queryLower) != std::string::npos;
+}
+
 ParamTypeInfo *ParamTypeFromName(CKContext *context, const std::string &typeName) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = RequireType(registry, typeName);
+    return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
+}
+
+int ParamCount(CKContext *context) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return registry ? registry->Count() : 0;
+}
+
+int ParamCountCtx(const CKBehaviorContext &ctx) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return registry ? registry->Count() : 0;
+}
+
+ParamTypeInfo *ParamAt(CKContext *context, int index) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    const ScriptParamTypeRecord *record = registry ? registry->At(index) : nullptr;
+    return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
+}
+
+ParamTypeInfo *ParamAtCtx(const CKBehaviorContext &ctx, int index) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    const ScriptParamTypeRecord *record = registry ? registry->At(index) : nullptr;
+    return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
+}
+
+ParamTypeInfo *ParamFind(CKContext *context, const std::string &query, int occurrence) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    const ScriptParamTypeRecord *record = registry ? registry->Find(query, occurrence) : nullptr;
+    return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
+}
+
+ParamTypeInfo *ParamFindCtx(const CKBehaviorContext &ctx, const std::string &query, int occurrence) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    const ScriptParamTypeRecord *record = registry ? registry->Find(query, occurrence) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
@@ -528,6 +578,61 @@ CKGUID ScriptParameterRegistry::ResolveGuid(const std::string &typeName, CKGUID 
         return pm->ParameterTypeToGuid(type);
     }
     return ScriptParameterRegistryInternal::GuidIsValid(fallbackGuid) ? fallbackGuid : CKGUID();
+}
+
+int ScriptParameterRegistry::Count() const {
+    CKParameterManager *pm = GetParameterManager();
+    return pm ? pm->GetParameterTypesCount() : 0;
+}
+
+const ScriptParamTypeRecord *ScriptParameterRegistry::At(int index) {
+    return (index >= 0 && index < Count()) ? GetType(index) : nullptr;
+}
+
+const ScriptParamTypeRecord *ScriptParameterRegistry::Find(const std::string &query, int occurrence) {
+    if (occurrence < 0) {
+        return nullptr;
+    }
+
+    const std::string text = ScriptParameterText::StripQuotes(query);
+    if (text.empty()) {
+        return nullptr;
+    }
+
+    CKGUID guid;
+    if (ParseScriptGuidString(text, guid)) {
+        return occurrence == 0 ? GetType(guid) : nullptr;
+    }
+
+    const std::string lower = ScriptParameterText::ToLower(text);
+    const int count = Count();
+    int seen = 0;
+    for (int i = 0; i < count; ++i) {
+        const ScriptParamTypeRecord *record = At(i);
+        if (!record || !ScriptParameterRegistryInternal::TypeRecordMatchesExact(*record, lower)) {
+            continue;
+        }
+        if (seen == occurrence) {
+            return record;
+        }
+        ++seen;
+    }
+
+    seen = 0;
+    for (int i = 0; i < count; ++i) {
+        const ScriptParamTypeRecord *record = At(i);
+        if (!record ||
+            ScriptParameterRegistryInternal::TypeRecordMatchesExact(*record, lower) ||
+            !ScriptParameterRegistryInternal::TypeRecordMatchesSearch(*record, lower)) {
+            continue;
+        }
+        if (seen == occurrence) {
+            return record;
+        }
+        ++seen;
+    }
+
+    return nullptr;
 }
 
 const ScriptParamTypeRecord *ScriptParameterRegistry::GetType(CKParameterType type) {
@@ -1051,6 +1156,12 @@ void RegisterParamRegistryGlobals(asIScriptEngine *engine, int &r) {
     const char *previousNamespace = engine->GetDefaultNamespace();
     std::string previous = previousNamespace ? previousNamespace : "";
     r = engine->SetDefaultNamespace("Param"); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int Count(CKContext@ context)", asFUNCTION(ScriptParameterRegistryInternal::ParamCount), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int Count(const CKBehaviorContext &in ctx)", asFUNCTION(ScriptParameterRegistryInternal::ParamCountCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ At(CKContext@ context, int index)", asFUNCTION(ScriptParameterRegistryInternal::ParamAt), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ At(const CKBehaviorContext &in ctx, int index)", asFUNCTION(ScriptParameterRegistryInternal::ParamAtCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Find(CKContext@ context, const string &in query, int occurrence = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFind), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Find(const CKBehaviorContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFindCtx), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(CKContext@ context, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamTypeFromName), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const CKBehaviorContext &in ctx, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamTypeFromNameCtx), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(CKContext@ context, CKGUID guid)", asFUNCTION(ScriptParameterRegistryInternal::ParamTypeFromGuid), asCALL_CDECL); assert(r >= 0);

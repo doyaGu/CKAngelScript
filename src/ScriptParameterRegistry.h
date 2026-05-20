@@ -111,6 +111,10 @@ public:
     CKParameterType ResolveType(CKGUID guid);
     CKGUID ResolveGuid(const std::string &typeName, CKGUID fallbackGuid = CKGUID());
 
+    int Count() const;
+    const ScriptParamTypeRecord *At(int index);
+    const ScriptParamTypeRecord *Find(const std::string &query, int occurrence = 0);
+
     const ScriptParamTypeRecord *GetType(CKParameterType type);
     const ScriptParamTypeRecord *GetType(CKGUID guid);
     const ScriptParamTypeRecord *GetType(const std::string &typeName);

@@ -135,6 +135,16 @@ BBPrototype *BBFind(const CKBehaviorContext &ctx, const std::string &query, int 
     return prototype;
 }
 
+CScriptArray *BBFindAll(const CKBehaviorContext &ctx, const std::string &query) {
+    BBBridge *bridge = BBFromContext(ctx);
+    if (!bridge) {
+        return nullptr;
+    }
+    CScriptArray *prototypes = bridge->FindAll(query);
+    bridge->Release();
+    return prototypes;
+}
+
 BBCallBuilder *BBCallByName(const CKBehaviorContext &ctx, const std::string &name) {
     BBPrototype *prototype = BBPrototypeByName(ctx, name);
     if (!prototype) {
@@ -562,6 +572,7 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBBridge", "int Count() const", asMETHOD(BBBridge, Count), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBBridge", "BBPrototype@ At(int index) const", asMETHOD(BBBridge, At), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBBridge", "BBPrototype@ Find(const string &in query, int occurrence = 0) const", asMETHOD(BBBridge, Find), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBridge", "array<BBPrototype@>@ FindAll(const string &in query = \"\") const", asMETHOD(BBBridge, FindAll), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Owner(CKBeObject@ owner)", asMETHOD(BBCallBuilder, Owner), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Target(CKBeObject@ target)", asMETHOD(BBCallBuilder, Target), asCALL_THISCALL); assert(r >= 0);
@@ -637,6 +648,7 @@ void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("int Count(const CKBehaviorContext &in ctx)", asFUNCTION(BBCount), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBPrototype@ At(const CKBehaviorContext &in ctx, int index)", asFUNCTION(BBAt), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBPrototype@ Find(const CKBehaviorContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(BBFind), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("array<BBPrototype@>@ FindAll(const CKBehaviorContext &in ctx, const string &in query = \"\")", asFUNCTION(BBFindAll), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBCallByName), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBSpawnByName), asCALL_CDECL); assert(r >= 0);
 

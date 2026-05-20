@@ -2,6 +2,7 @@
 
 #include <fmt/format.h>
 
+#include "add_on/scriptarray/scriptarray.h"
 #include "ScriptParameterConversion.h"
 
 namespace ScriptBridgeBBInternal {
@@ -20,6 +21,31 @@ bool PrototypeMatches(CKObjectDeclaration *decl, const std::string &query) {
         return false;
     }
     return SafeString(decl->GetName()) == query || PrototypeQualifiedName(decl) == query || GuidToString(decl->GetGuid()) == query;
+}
+
+asITypeInfo *PrototypeArrayType(ScriptBehaviorBridge *bridge) {
+    ScriptManager *manager = bridge ? bridge->GetManager() : nullptr;
+    asIScriptEngine *engine = manager ? manager->GetScriptEngine() : nullptr;
+    return engine ? engine->GetTypeInfoByDecl("array<BBPrototype@>") : nullptr;
+}
+
+CScriptArray *CreatePrototypeArray(ScriptBehaviorBridge *bridge) {
+    asITypeInfo *arrayType = PrototypeArrayType(bridge);
+    if (!arrayType) {
+        SetScriptException("array<BBPrototype@> is not registered.");
+        return nullptr;
+    }
+    return CScriptArray::Create(arrayType, asUINT(0));
+}
+
+void AppendPrototype(CScriptArray *array, BBPrototype *prototype) {
+    if (!array || !prototype) {
+        return;
+    }
+    const asUINT index = array->GetSize();
+    array->Resize(index + 1);
+    array->SetValue(index, &prototype);
+    prototype->Release();
 }
 
 } // namespace ScriptBridgeBBInternal
@@ -227,4 +253,36 @@ BBPrototype *BBBridge::Find(const std::string &query, int occurrence) const {
     }
 
     return nullptr;
+}
+
+CScriptArray *BBBridge::FindAll(const std::string &query) const {
+    if (!m_Bridge) {
+        return nullptr;
+    }
+
+    CScriptArray *results = ScriptBridgeBBInternal::CreatePrototypeArray(m_Bridge);
+    if (!results) {
+        return nullptr;
+    }
+
+    CKGUID parsed;
+    if (!query.empty() && ParseScriptGuidString(query, parsed)) {
+        if (CKGetPrototypeFromGuid(parsed)) {
+            ScriptBridgeBBInternal::AppendPrototype(results, m_Bridge->CreatePrototype(m_Context, parsed));
+        }
+        return results;
+    }
+
+    const int count = CKGetPrototypeDeclarationCount();
+    for (int i = 0; i < count; ++i) {
+        CKObjectDeclaration *decl = CKGetPrototypeDeclaration(i);
+        if (!query.empty() && !ScriptBridgeBBInternal::PrototypeMatches(decl, query)) {
+            continue;
+        }
+        if (decl) {
+            ScriptBridgeBBInternal::AppendPrototype(results, m_Bridge->CreatePrototype(m_Context, decl->GetGuid()));
+        }
+    }
+
+    return results;
 }

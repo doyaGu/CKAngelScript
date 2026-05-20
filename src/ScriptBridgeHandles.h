@@ -6,6 +6,8 @@
 #include "ScriptNativeBuffer.h"
 #include "ScriptParameterRegistry.h"
 
+class CScriptArray;
+
 class ParamInfo final : public RefCounted {
 public:
     ParamInfo(ScriptBridgeSlotKind kind,
@@ -409,6 +411,7 @@ public:
     int Count() const;
     BBPrototype *At(int index) const;
     BBPrototype *Find(const std::string &query, int occurrence = 0) const;
+    CScriptArray *FindAll(const std::string &query) const;
 
 private:
     ScriptBehaviorBridge *m_Bridge = nullptr;
