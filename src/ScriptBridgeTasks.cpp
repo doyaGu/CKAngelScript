@@ -10,8 +10,14 @@ BBResult::~BBResult() {
 }
 
 ScriptBridgeExecutionState BBResult::State() const {
-    return m_Bridge ? m_Bridge->GetResultState(m_ResultId, m_Generation)
-                    : ScriptBridgeExecutionState{false, CKBR_BEHAVIORERROR, "BBResult is not valid.", {}, {}};
+    if (m_Bridge) {
+        return m_Bridge->GetResultState(m_ResultId, m_Generation);
+    }
+    ScriptBridgeExecutionState state;
+    state.Ok = false;
+    state.ReturnCode = CKBR_BEHAVIORERROR;
+    state.Error = "BBResult is not valid.";
+    return state;
 }
 
 bool BBResult::Ok() const { return State().Ok; }
@@ -32,11 +38,17 @@ BBTask::BBTask(ScriptBehaviorBridge *bridge, CK_ID taskId, int generation)
 BBTask::~BBTask() { Destroy(); }
 
 ScriptBridgeExecutionState BBTask::State() const {
-    return m_Bridge ? m_Bridge->GetTaskState(m_TaskId, m_Generation)
-                    : ScriptBridgeExecutionState{false, CKBR_BEHAVIORERROR, "BBTask is not valid.", {}, {}};
+    if (m_Bridge) {
+        return m_Bridge->GetTaskState(m_TaskId, m_Generation);
+    }
+    ScriptBridgeExecutionState state;
+    state.Ok = false;
+    state.ReturnCode = CKBR_BEHAVIORERROR;
+    state.Error = "BBTask is not valid.";
+    return state;
 }
 
-bool BBTask::IsValid() const { return m_Bridge && m_TaskId != 0; }
+bool BBTask::IsValid() const { return m_Bridge && m_TaskId != 0 && m_Bridge->IsTaskValid(m_TaskId, m_Generation); }
 bool BBTask::IsAlive() const { return m_Bridge && m_Bridge->IsTaskAlive(m_TaskId, m_Generation); }
 bool BBTask::IsPaused() const { return m_Bridge && m_Bridge->IsTaskPaused(m_TaskId, m_Generation); }
 int BBTask::ReturnCode() const { return State().ReturnCode; }
@@ -74,11 +86,17 @@ GraphTask::GraphTask(ScriptBehaviorBridge *bridge, CK_ID watchId, int generation
 GraphTask::~GraphTask() { Cancel(); }
 
 ScriptBridgeExecutionState GraphTask::State() const {
-    return m_Bridge ? m_Bridge->GetGraphWatchState(m_WatchId, m_Generation)
-                    : ScriptBridgeExecutionState{false, CKBR_BEHAVIORERROR, "GraphTask is not valid.", {}, {}};
+    if (m_Bridge) {
+        return m_Bridge->GetGraphWatchState(m_WatchId, m_Generation);
+    }
+    ScriptBridgeExecutionState state;
+    state.Ok = false;
+    state.ReturnCode = CKBR_BEHAVIORERROR;
+    state.Error = "GraphTask is not valid.";
+    return state;
 }
 
-bool GraphTask::IsValid() const { return m_Bridge && m_WatchId != 0; }
+bool GraphTask::IsValid() const { return m_Bridge && m_WatchId != 0 && m_Bridge->IsGraphWatchValid(m_WatchId, m_Generation); }
 bool GraphTask::IsAlive() const { return m_Bridge && m_Bridge->IsGraphWatchAlive(m_WatchId, m_Generation); }
 bool GraphTask::IsPaused() const { return m_Bridge && m_Bridge->IsGraphWatchPaused(m_WatchId, m_Generation); }
 bool GraphTask::TimedOut() const { return m_Bridge && m_Bridge->IsGraphWatchTimedOut(m_WatchId, m_Generation); }

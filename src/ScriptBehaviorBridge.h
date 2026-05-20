@@ -1,6 +1,7 @@
 #ifndef CK_SCRIPTBEHAVIORBRIDGE_H
 #define CK_SCRIPTBEHAVIORBRIDGE_H
 
+#include <algorithm>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -31,6 +32,7 @@ class ParamRef;
 class ParamValue;
 class ParamOp;
 class ParamOperationRef;
+class ParamSourceLinkRef;
 class NativeBuffer;
 
 enum class ScriptBridgeSlotKind {
@@ -44,33 +46,118 @@ enum class ScriptBridgeSlotKind {
     Standalone
 };
 
-struct ScriptBridgeParamValue {
-    enum class Mode {
-        Empty,
-        Value,
-        Text,
-        Raw
-    };
-
-    Mode ModeKind = Mode::Empty;
-    ScriptBridgeValue Value;
-    std::string TextValue;
-    CKGUID TypeGuid;
-    std::string TypeName;
-    std::vector<char> RawData;
+enum class ScriptBridgeInputBindingKind : CKBYTE {
+    Empty,
+    Value,
+    Source
 };
+
+enum class ScriptBridgeTaskFlags : CKDWORD {
+    None = 0,
+    Alive = 1u << 0,
+    Paused = 1u << 1,
+    DeleteCallbackSent = 1u << 2,
+    TimedOut = 1u << 3,
+};
+
+enum class ScriptBridgePrototypeKind : CKBYTE {
+    Name,
+    Guid
+};
+
+enum class ScriptBridgeObjectStampFlags : CKDWORD {
+    None = 0,
+    ClassId = 1u << 0,
+    TypeGuid = 1u << 1,
+    PrototypeGuid = 1u << 2,
+    OperationGuid = 1u << 3,
+    OwnerId = 1u << 4,
+};
+
+inline CKDWORD ScriptBridgeObjectStampFlagMask(ScriptBridgeObjectStampFlags flag) {
+    return static_cast<CKDWORD>(flag);
+}
+
+inline bool HasScriptBridgeObjectStampFlag(CKDWORD flags, ScriptBridgeObjectStampFlags flag) {
+    return (flags & ScriptBridgeObjectStampFlagMask(flag)) != 0;
+}
+
+inline void SetScriptBridgeObjectStampFlag(CKDWORD &flags, ScriptBridgeObjectStampFlags flag, bool enabled) {
+    if (enabled) {
+        flags |= ScriptBridgeObjectStampFlagMask(flag);
+    } else {
+        flags &= ~ScriptBridgeObjectStampFlagMask(flag);
+    }
+}
+
+struct ScriptBridgeObjectStamp {
+    CKDWORD Flags = 0;
+    CK_CLASSID ClassId = 0;
+    CK_ID OwnerId = 0;
+    CKGUID TypeGuid;
+    CKGUID PrototypeGuid;
+    CKGUID OperationGuid;
+
+    bool Has(ScriptBridgeObjectStampFlags flag) const {
+        return HasScriptBridgeObjectStampFlag(Flags, flag);
+    }
+
+    void Set(ScriptBridgeObjectStampFlags flag, bool enabled) {
+        SetScriptBridgeObjectStampFlag(Flags, flag, enabled);
+    }
+};
+
+struct ScriptBridgeStampedObjectId {
+    CK_ID Id = 0;
+    ScriptBridgeObjectStamp Stamp;
+};
+
+inline CKDWORD ScriptBridgeTaskFlagMask(ScriptBridgeTaskFlags flag) {
+    return static_cast<CKDWORD>(flag);
+}
+
+inline bool HasScriptBridgeTaskFlag(CKDWORD flags, ScriptBridgeTaskFlags flag) {
+    return (flags & ScriptBridgeTaskFlagMask(flag)) != 0;
+}
+
+inline void SetScriptBridgeTaskFlag(CKDWORD &flags, ScriptBridgeTaskFlags flag, bool enabled) {
+    if (enabled) {
+        flags |= ScriptBridgeTaskFlagMask(flag);
+    } else {
+        flags &= ~ScriptBridgeTaskFlagMask(flag);
+    }
+}
+
+struct ScriptBridgeIndexedValue {
+    int PinIndex = -1;
+    ScriptParamValue Value;
+};
+
+inline void ScriptBridgeSetIndexedValue(std::vector<ScriptBridgeIndexedValue> &values,
+                                        int pinIndex,
+                                        const ScriptParamValue &value) {
+    const auto it = std::lower_bound(values.begin(), values.end(), pinIndex,
+        [](const ScriptBridgeIndexedValue &entry, int index) {
+            return entry.PinIndex < index;
+        });
+    if (it != values.end() && it->PinIndex == pinIndex) {
+        it->Value = value;
+    } else {
+        values.insert(it, ScriptBridgeIndexedValue{pinIndex, value});
+    }
+}
 
 struct ScriptBridgeInputSource {
     int PinIndex = -1;
     CK_ID SourceId = 0;
+    ScriptBridgeObjectStamp SourceStamp;
 };
 
 struct ScriptBridgeOperationInput {
-    bool HasValue = false;
-    ScriptBridgeParamValue Value;
+    ScriptBridgeInputBindingKind Kind = ScriptBridgeInputBindingKind::Empty;
+    ScriptParamValue Value;
     CK_ID SourceId = 0;
-    CKGUID TypeGuid;
-    std::string TypeName;
+    ScriptBridgeObjectStamp SourceStamp;
 };
 
 struct ScriptBridgeOperationSpec {
@@ -84,24 +171,40 @@ struct ScriptBridgeOperationSpec {
 };
 
 struct ScriptBridgeExecutionState {
+    struct IndexSet {
+        CKDWORD InlineMask = 0;
+        std::vector<int> Overflow;
+
+        bool Empty() const;
+        void Clear();
+        bool Contains(int index) const;
+        bool Insert(int index);
+        void MergeFrom(const IndexSet &other);
+        std::vector<int> ToVector() const;
+    };
+
     bool Ok = true;
     int ReturnCode = 0;
     std::string Error;
-    std::vector<int> ActiveOutputs;
-    std::vector<int> SeenOutputs;
+    IndexSet ActiveOutputs;
+    IndexSet SeenOutputs;
 };
 
 struct ScriptBridgeBBInvocationSpec {
-    bool HasGuid = false;
+    ScriptBridgePrototypeKind PrototypeKind = ScriptBridgePrototypeKind::Name;
     CKGUID Guid;
     std::string PrototypeName;
     CK_ID ComponentId = 0;
     CK_ID OwnerId = 0;
     CK_ID TargetId = 0;
-    std::unordered_map<int, ScriptBridgeParamValue> IndexedParameters;
+    std::vector<ScriptBridgeIndexedValue> IndexedParameters;
     std::vector<ScriptBridgeInputSource> SourceParameters;
     std::vector<ScriptBridgeOperationSpec> OperationParameters;
 };
+
+static_assert(sizeof(ScriptBridgeOperationInput) <= 160, "ScriptBridgeOperationInput must stay a thin binding record.");
+static_assert(sizeof(ScriptBridgeIndexedValue) <= 160, "ScriptBridgeIndexedValue must stay compact.");
+static_assert(sizeof(ScriptBridgeExecutionState) <= 160, "ScriptBridgeExecutionState must not become an output snapshot.");
 
 class ScriptBehaviorBridge {
 public:
@@ -126,11 +229,15 @@ public:
     BBTask *StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     CKBehaviorPrototype *ResolvePrototypeObject(const ScriptBridgeBBInvocationSpec &request, std::string &error) const;
     ParamRef *WrapParameter(CKObject *parameter, ScriptBridgeSlotKind kind = ScriptBridgeSlotKind::Standalone, int index = -1);
-    ParamOperationRef *WrapParameterOperation(CKParameterOperation *operation);
+    ParamOperationRef *WrapParameterOperation(CKParameterOperation *operation,
+                                              CKParameterIn *targetInput = nullptr,
+                                              CKParameter *previousSource = nullptr,
+                                              const std::vector<CK_ID> &ownedLocalSourceIds = {});
 
     bool StepTask(CK_ID taskId, int generation, const CKBehaviorContext &ctx, int inputIndex);
     bool DestroyTask(CK_ID taskId, int generation);
     bool ResetTask(CK_ID taskId, int generation);
+    bool IsTaskValid(CK_ID taskId, int generation) const;
     bool IsTaskAlive(CK_ID taskId, int generation) const;
     bool IsTaskPaused(CK_ID taskId, int generation) const;
     ScriptBridgeExecutionState GetTaskState(CK_ID taskId, int generation) const;
@@ -145,6 +252,7 @@ public:
     bool CancelGraphWatch(CK_ID watchId, int generation);
     bool ResetGraphWatch(CK_ID watchId, int generation);
     bool SetGraphWatchTimeout(CK_ID watchId, int generation, float timeoutSeconds);
+    bool IsGraphWatchValid(CK_ID watchId, int generation) const;
     bool IsGraphWatchAlive(CK_ID watchId, int generation) const;
     bool IsGraphWatchPaused(CK_ID watchId, int generation) const;
     bool IsGraphWatchTimedOut(CK_ID watchId, int generation) const;
@@ -167,12 +275,14 @@ private:
         int Generation = 0;
         CK_ID ComponentId = 0;
         CK_ID BehaviorId = 0;
-        bool Alive = false;
-        bool Paused = false;
-        bool DeleteCallbackSent = false;
+        ScriptBridgeObjectStamp BehaviorStamp;
+        CKDWORD Flags = 0;
         ScriptBridgeExecutionState LastState;
         std::unordered_map<int, CK_ID> InputSources;
         std::vector<CK_ID> OperationIds;
+
+        bool HasFlag(ScriptBridgeTaskFlags flag) const { return HasScriptBridgeTaskFlag(Flags, flag); }
+        void SetFlag(ScriptBridgeTaskFlags flag, bool enabled) { SetScriptBridgeTaskFlag(Flags, flag, enabled); }
     };
 
     struct ResultRecord {
@@ -180,9 +290,13 @@ private:
         int Generation = 0;
         CK_ID ComponentId = 0;
         CK_ID BehaviorId = 0;
-        bool DeleteCallbackSent = false;
+        ScriptBridgeObjectStamp BehaviorStamp;
+        CKDWORD Flags = 0;
         ScriptBridgeExecutionState State;
         std::vector<CK_ID> OperationIds;
+
+        bool HasFlag(ScriptBridgeTaskFlags flag) const { return HasScriptBridgeTaskFlag(Flags, flag); }
+        void SetFlag(ScriptBridgeTaskFlags flag, bool enabled) { SetScriptBridgeTaskFlag(Flags, flag, enabled); }
     };
 
     struct ScriptBridgeGraphWatch {
@@ -190,14 +304,16 @@ private:
         int Generation = 0;
         CK_ID ComponentId = 0;
         CK_ID BehaviorId = 0;
-        bool Alive = false;
-        bool Paused = false;
-        bool TimedOut = false;
+        ScriptBridgeObjectStamp BehaviorStamp;
+        CKDWORD Flags = 0;
         float Elapsed = 0.0f;
         float TimeoutSeconds = 0.0f;
         std::string Error;
         ScriptBridgeExecutionState LastState;
-        std::vector<int> SeenOutputs;
+        ScriptBridgeExecutionState::IndexSet SeenOutputs;
+
+        bool HasFlag(ScriptBridgeTaskFlags flag) const { return HasScriptBridgeTaskFlag(Flags, flag); }
+        void SetFlag(ScriptBridgeTaskFlags flag, bool enabled) { SetScriptBridgeTaskFlag(Flags, flag, enabled); }
     };
 
     CKBehavior *CreateRuntimeBehavior(const ScriptBridgeBBInvocationSpec &request,

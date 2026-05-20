@@ -1,5 +1,59 @@
 #include "ScriptBridgeHandles.h"
 
+bool ScriptBridgeExecutionState::IndexSet::Empty() const {
+    return InlineMask == 0 && Overflow.empty();
+}
+
+void ScriptBridgeExecutionState::IndexSet::Clear() {
+    InlineMask = 0;
+    Overflow.clear();
+}
+
+bool ScriptBridgeExecutionState::IndexSet::Contains(int index) const {
+    if (index < 0) {
+        return !Empty();
+    }
+    if (index < 32) {
+        return (InlineMask & (1u << index)) != 0;
+    }
+    return std::find(Overflow.begin(), Overflow.end(), index) != Overflow.end();
+}
+
+bool ScriptBridgeExecutionState::IndexSet::Insert(int index) {
+    if (index < 0) {
+        return false;
+    }
+    if (index < 32) {
+        const CKDWORD bit = 1u << index;
+        const bool inserted = (InlineMask & bit) == 0;
+        InlineMask |= bit;
+        return inserted;
+    }
+    if (std::find(Overflow.begin(), Overflow.end(), index) != Overflow.end()) {
+        return false;
+    }
+    Overflow.push_back(index);
+    return true;
+}
+
+void ScriptBridgeExecutionState::IndexSet::MergeFrom(const IndexSet &other) {
+    InlineMask |= other.InlineMask;
+    for (int index : other.Overflow) {
+        Insert(index);
+    }
+}
+
+std::vector<int> ScriptBridgeExecutionState::IndexSet::ToVector() const {
+    std::vector<int> result;
+    for (int i = 0; i < 32; ++i) {
+        if ((InlineMask & (1u << i)) != 0) {
+            result.push_back(i);
+        }
+    }
+    result.insert(result.end(), Overflow.begin(), Overflow.end());
+    return result;
+}
+
 ScriptBehaviorBridge::ScriptBehaviorBridge(ScriptManager *manager)
     : m_Manager(manager) {}
 
@@ -105,13 +159,13 @@ void ScriptBehaviorBridge::ResetComponentTasks(CK_ID componentId) {
 void ScriptBehaviorBridge::PauseComponentTasks(CK_ID componentId, bool paused) {
     for (auto &entry : m_Tasks) {
         if (entry.second.ComponentId == componentId) {
-            entry.second.Paused = paused;
+            entry.second.SetFlag(ScriptBridgeTaskFlags::Paused, paused);
         }
     }
 
     for (auto &entry : m_GraphWatches) {
         if (entry.second.ComponentId == componentId) {
-            entry.second.Paused = paused;
+            entry.second.SetFlag(ScriptBridgeTaskFlags::Paused, paused);
         }
     }
 }
@@ -130,8 +184,11 @@ ParamRef *ScriptBehaviorBridge::WrapParameter(CKObject *parameter, ScriptBridgeS
     return parameter ? new ParamRef(this, parameter->GetID(), kind, index) : nullptr;
 }
 
-ParamOperationRef *ScriptBehaviorBridge::WrapParameterOperation(CKParameterOperation *operation) {
-    return operation ? new ParamOperationRef(this, operation->GetID()) : nullptr;
+ParamOperationRef *ScriptBehaviorBridge::WrapParameterOperation(CKParameterOperation *operation,
+                                                                CKParameterIn *targetInput,
+                                                                CKParameter *previousSource,
+                                                                const std::vector<CK_ID> &ownedLocalSourceIds) {
+    return operation ? new ParamOperationRef(this, operation->GetID(), targetInput, previousSource, ownedLocalSourceIds) : nullptr;
 }
 
 BehaviorBridge *ScriptBehaviorBridge::CreateBehaviorBridge(const CKBehaviorContext &ctx) {
@@ -146,7 +203,7 @@ BBPrototype *ScriptBehaviorBridge::CreatePrototype(const CKBehaviorContext &ctx,
 
 BBPrototype *ScriptBehaviorBridge::CreatePrototype(const CKBehaviorContext &ctx, CKGUID guid) {
     ScriptBridgeBBInvocationSpec request = MakeDefaultRequest(ctx);
-    request.HasGuid = true;
+    request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
     request.Guid = guid;
     return new BBPrototype(this, ctx, request);
 }
@@ -178,6 +235,7 @@ BBResult *ScriptBehaviorBridge::RunCall(const ScriptBridgeBBInvocationSpec &requ
     record.Generation = m_NextGeneration++;
     record.ComponentId = request.ComponentId;
     record.BehaviorId = behavior ? behavior->GetID() : 0;
+    record.BehaviorStamp = CaptureBridgeObjectStamp(behavior);
     record.State = state;
     record.OperationIds = std::move(operationIds);
 
@@ -201,7 +259,8 @@ BBTask *ScriptBehaviorBridge::StartTask(const ScriptBridgeBBInvocationSpec &requ
     record.Generation = m_NextGeneration++;
     record.ComponentId = request.ComponentId;
     record.BehaviorId = behavior->GetID();
-    record.Alive = true;
+    record.BehaviorStamp = CaptureBridgeObjectStamp(behavior);
+    record.SetFlag(ScriptBridgeTaskFlags::Alive, true);
     record.InputSources = std::move(sources);
     record.OperationIds = std::move(operations);
 
@@ -215,12 +274,12 @@ BBTask *ScriptBehaviorBridge::StartTask(const ScriptBridgeBBInvocationSpec &requ
 
 bool ScriptBehaviorBridge::StepTask(CK_ID taskId, int generation, const CKBehaviorContext &ctx, int inputIndex) {
     TaskRecord *record = FindTask(taskId, generation);
-    if (!record || !record->Alive) {
+    if (!record || !record->HasFlag(ScriptBridgeTaskFlags::Alive)) {
         SetScriptException("BBTask is not alive.");
         return false;
     }
 
-    if (record->Paused) {
+    if (record->HasFlag(ScriptBridgeTaskFlags::Paused)) {
         record->LastState.Ok = false;
         record->LastState.Error = "BBTask is paused.";
         return false;
@@ -257,7 +316,7 @@ bool ScriptBehaviorBridge::DestroyTask(CK_ID taskId, int generation) {
         }
     }
     if (behavior) {
-        QueueDestroy(behavior, true, it->second.DeleteCallbackSent);
+        QueueDestroy(behavior, true, it->second.HasFlag(ScriptBridgeTaskFlags::DeleteCallbackSent));
     }
     m_Tasks.erase(it);
     return true;
@@ -279,24 +338,35 @@ bool ScriptBehaviorBridge::ResetTask(CK_ID taskId, int generation) {
     ClearInputs(behavior);
     ClearOutputs(behavior);
     behavior->Activate(FALSE, TRUE);
-    behavior->CallCallbackFunction(CKM_BEHAVIORRESET);
+    CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORRESET);
     record->LastState = ScriptBridgeExecutionState();
     return true;
 }
 
 bool ScriptBehaviorBridge::IsTaskAlive(CK_ID taskId, int generation) const {
     const TaskRecord *record = FindTask(taskId, generation);
-    return record && record->Alive;
+    return record && record->HasFlag(ScriptBridgeTaskFlags::Alive);
+}
+
+bool ScriptBehaviorBridge::IsTaskValid(CK_ID taskId, int generation) const {
+    return FindTask(taskId, generation) != nullptr;
 }
 
 bool ScriptBehaviorBridge::IsTaskPaused(CK_ID taskId, int generation) const {
     const TaskRecord *record = FindTask(taskId, generation);
-    return record && record->Paused;
+    return record && record->HasFlag(ScriptBridgeTaskFlags::Paused);
 }
 
 ScriptBridgeExecutionState ScriptBehaviorBridge::GetTaskState(CK_ID taskId, int generation) const {
     const TaskRecord *record = FindTask(taskId, generation);
-    return record ? record->LastState : ScriptBridgeExecutionState{false, CKBR_BEHAVIORERROR, "BBTask is not valid.", {}, {}};
+    if (record) {
+        return record->LastState;
+    }
+    ScriptBridgeExecutionState state;
+    state.Ok = false;
+    state.ReturnCode = CKBR_BEHAVIORERROR;
+    state.Error = "BBTask is not valid.";
+    return state;
 }
 
 CKBehavior *ScriptBehaviorBridge::GetTaskBehavior(CK_ID taskId, int generation) const {
@@ -304,12 +374,19 @@ CKBehavior *ScriptBehaviorBridge::GetTaskBehavior(CK_ID taskId, int generation) 
     if (!record || !m_Manager || !m_Manager->GetCKContext()) {
         return nullptr;
     }
-    return CKBehavior::Cast(GetCKObjectById(m_Manager->GetCKContext(), record->BehaviorId));
+    return CKBehavior::Cast(GetStampedCKObjectById(m_Manager->GetCKContext(), record->BehaviorId, record->BehaviorStamp));
 }
 
 ScriptBridgeExecutionState ScriptBehaviorBridge::GetResultState(CK_ID resultId, int generation) const {
     const ResultRecord *record = FindResult(resultId, generation);
-    return record ? record->State : ScriptBridgeExecutionState{false, CKBR_BEHAVIORERROR, "BBResult is not valid.", {}, {}};
+    if (record) {
+        return record->State;
+    }
+    ScriptBridgeExecutionState state;
+    state.Ok = false;
+    state.ReturnCode = CKBR_BEHAVIORERROR;
+    state.Error = "BBResult is not valid.";
+    return state;
 }
 
 CKBehavior *ScriptBehaviorBridge::GetResultBehavior(CK_ID resultId, int generation) const {
@@ -317,7 +394,7 @@ CKBehavior *ScriptBehaviorBridge::GetResultBehavior(CK_ID resultId, int generati
     if (!record || !m_Manager || !m_Manager->GetCKContext()) {
         return nullptr;
     }
-    return CKBehavior::Cast(GetCKObjectById(m_Manager->GetCKContext(), record->BehaviorId));
+    return CKBehavior::Cast(GetStampedCKObjectById(m_Manager->GetCKContext(), record->BehaviorId, record->BehaviorStamp));
 }
 
 bool ScriptBehaviorBridge::DestroyResult(CK_ID resultId, int generation) {
@@ -336,7 +413,7 @@ bool ScriptBehaviorBridge::DestroyResult(CK_ID resultId, int generation) {
         }
     }
     if (behavior) {
-        QueueDestroy(behavior, true, it->second.DeleteCallbackSent);
+        QueueDestroy(behavior, true, it->second.HasFlag(ScriptBridgeTaskFlags::DeleteCallbackSent));
     }
     m_Results.erase(it);
     return true;
@@ -353,7 +430,8 @@ GraphTask *ScriptBehaviorBridge::CreateGraphWatch(CKBehavior *behavior, CK_ID co
     record.Generation = m_NextGeneration++;
     record.ComponentId = componentId;
     record.BehaviorId = behavior->GetID();
-    record.Alive = true;
+    record.BehaviorStamp = CaptureBridgeObjectStamp(behavior);
+    record.SetFlag(ScriptBridgeTaskFlags::Alive, true);
     record.TimeoutSeconds = timeoutSeconds > 0.0f ? timeoutSeconds : 0.0f;
     record.LastState = CaptureExecutionState(behavior, CKBR_OK);
     record.SeenOutputs = record.LastState.SeenOutputs;
@@ -365,12 +443,12 @@ GraphTask *ScriptBehaviorBridge::CreateGraphWatch(CKBehavior *behavior, CK_ID co
 
 bool ScriptBehaviorBridge::StepGraphWatch(CK_ID watchId, int generation, const CKBehaviorContext &ctx) {
     ScriptBridgeGraphWatch *record = FindGraphWatch(watchId, generation);
-    if (!record || !record->Alive) {
+    if (!record || !record->HasFlag(ScriptBridgeTaskFlags::Alive)) {
         SetScriptException("GraphTask is not alive.");
         return false;
     }
 
-    if (record->Paused) {
+    if (record->HasFlag(ScriptBridgeTaskFlags::Paused)) {
         record->LastState.Ok = false;
         record->LastState.Error = "GraphTask is paused.";
         record->Error = record->LastState.Error;
@@ -379,7 +457,7 @@ bool ScriptBehaviorBridge::StepGraphWatch(CK_ID watchId, int generation, const C
 
     CKBehavior *behavior = GetGraphWatchBehavior(watchId, generation);
     if (!behavior) {
-        record->Alive = false;
+        record->SetFlag(ScriptBridgeTaskFlags::Alive, false);
         record->LastState.Ok = false;
         record->LastState.ReturnCode = CKBR_BEHAVIORERROR;
         record->LastState.Error = fmt::format("GraphTask target behavior id={} no longer exists.", record->BehaviorId);
@@ -389,16 +467,12 @@ bool ScriptBehaviorBridge::StepGraphWatch(CK_ID watchId, int generation, const C
 
     record->Elapsed += ctx.DeltaTime > 0.0f ? ctx.DeltaTime : 0.0f;
     record->LastState = CaptureExecutionState(behavior, CKBR_OK);
-    for (int output : record->LastState.ActiveOutputs) {
-        if (std::find(record->SeenOutputs.begin(), record->SeenOutputs.end(), output) == record->SeenOutputs.end()) {
-            record->SeenOutputs.push_back(output);
-        }
-    }
+    record->SeenOutputs.MergeFrom(record->LastState.ActiveOutputs);
     record->LastState.SeenOutputs = record->SeenOutputs;
 
     if (record->TimeoutSeconds > 0.0f && record->Elapsed >= record->TimeoutSeconds) {
-        record->Alive = false;
-        record->TimedOut = true;
+        record->SetFlag(ScriptBridgeTaskFlags::Alive, false);
+        record->SetFlag(ScriptBridgeTaskFlags::TimedOut, true);
         record->Error = fmt::format("GraphTask timed out after {:.3f}s while watching behavior '{}' id={}.",
             record->TimeoutSeconds,
             SafeString(behavior->GetName()),
@@ -428,13 +502,13 @@ bool ScriptBehaviorBridge::ResetGraphWatch(CK_ID watchId, int generation) {
         return false;
     }
 
-    record->Alive = true;
-    record->Paused = false;
-    record->TimedOut = false;
+    record->SetFlag(ScriptBridgeTaskFlags::Alive, true);
+    record->SetFlag(ScriptBridgeTaskFlags::Paused, false);
+    record->SetFlag(ScriptBridgeTaskFlags::TimedOut, false);
     record->Elapsed = 0.0f;
     record->Error.clear();
     record->LastState = ScriptBridgeExecutionState();
-    record->SeenOutputs.clear();
+    record->SeenOutputs.Clear();
     if (CKBehavior *behavior = GetGraphWatchBehavior(watchId, generation)) {
         record->LastState = CaptureExecutionState(behavior, CKBR_OK);
         record->SeenOutputs = record->LastState.SeenOutputs;
@@ -453,17 +527,21 @@ bool ScriptBehaviorBridge::SetGraphWatchTimeout(CK_ID watchId, int generation, f
 
 bool ScriptBehaviorBridge::IsGraphWatchAlive(CK_ID watchId, int generation) const {
     const ScriptBridgeGraphWatch *record = FindGraphWatch(watchId, generation);
-    return record && record->Alive;
+    return record && record->HasFlag(ScriptBridgeTaskFlags::Alive);
+}
+
+bool ScriptBehaviorBridge::IsGraphWatchValid(CK_ID watchId, int generation) const {
+    return FindGraphWatch(watchId, generation) != nullptr;
 }
 
 bool ScriptBehaviorBridge::IsGraphWatchPaused(CK_ID watchId, int generation) const {
     const ScriptBridgeGraphWatch *record = FindGraphWatch(watchId, generation);
-    return record && record->Paused;
+    return record && record->HasFlag(ScriptBridgeTaskFlags::Paused);
 }
 
 bool ScriptBehaviorBridge::IsGraphWatchTimedOut(CK_ID watchId, int generation) const {
     const ScriptBridgeGraphWatch *record = FindGraphWatch(watchId, generation);
-    return record && record->TimedOut;
+    return record && record->HasFlag(ScriptBridgeTaskFlags::TimedOut);
 }
 
 float ScriptBehaviorBridge::GetGraphWatchElapsed(CK_ID watchId, int generation) const {
@@ -481,7 +559,14 @@ std::string ScriptBehaviorBridge::GetGraphWatchError(CK_ID watchId, int generati
 
 ScriptBridgeExecutionState ScriptBehaviorBridge::GetGraphWatchState(CK_ID watchId, int generation) const {
     const ScriptBridgeGraphWatch *record = FindGraphWatch(watchId, generation);
-    return record ? record->LastState : ScriptBridgeExecutionState{false, CKBR_BEHAVIORERROR, "GraphTask is not valid.", {}, {}};
+    if (record) {
+        return record->LastState;
+    }
+    ScriptBridgeExecutionState state;
+    state.Ok = false;
+    state.ReturnCode = CKBR_BEHAVIORERROR;
+    state.Error = "GraphTask is not valid.";
+    return state;
 }
 
 bool ScriptBehaviorBridge::IsGraphWatchDone(CK_ID watchId, int generation, int outputIndex) const {
@@ -490,9 +575,9 @@ bool ScriptBehaviorBridge::IsGraphWatchDone(CK_ID watchId, int generation, int o
         return false;
     }
     if (outputIndex < 0) {
-        return !record->SeenOutputs.empty();
+        return !record->SeenOutputs.Empty();
     }
-    return std::find(record->SeenOutputs.begin(), record->SeenOutputs.end(), outputIndex) != record->SeenOutputs.end();
+    return record->SeenOutputs.Contains(outputIndex);
 }
 
 CKBehavior *ScriptBehaviorBridge::GetGraphWatchBehavior(CK_ID watchId, int generation) const {
@@ -500,7 +585,7 @@ CKBehavior *ScriptBehaviorBridge::GetGraphWatchBehavior(CK_ID watchId, int gener
     if (!record || !m_Manager || !m_Manager->GetCKContext()) {
         return nullptr;
     }
-    return CKBehavior::Cast(GetCKObjectById(m_Manager->GetCKContext(), record->BehaviorId));
+    return CKBehavior::Cast(GetStampedCKObjectById(m_Manager->GetCKContext(), record->BehaviorId, record->BehaviorStamp));
 }
 
 CKBehaviorPrototype *ScriptBehaviorBridge::ResolvePrototypeObject(const ScriptBridgeBBInvocationSpec &request, std::string &error) const {
@@ -530,9 +615,14 @@ bool ScriptBehaviorBridge::ApplyInputGraphRequests(CKBehavior *behavior,
 
     CKContext *context = behavior->GetCKContext();
     for (const ScriptBridgeInputSource &sourceRequest : request.SourceParameters) {
-        CKParameter *source = ResolveParameterSource(context, sourceRequest.SourceId);
+        CKParameter *source = ResolveStampedParameterSource(context,
+                                                            sourceRequest.SourceId,
+                                                            sourceRequest.SourceStamp,
+                                                            error);
         if (!source) {
-            error = "Input source parameter is not valid.";
+            if (error.empty()) {
+                error = "Input source parameter is not valid.";
+            }
             return false;
         }
         if (sourceRequest.PinIndex < 0 || sourceRequest.PinIndex >= behavior->GetInputParameterCount()) {
@@ -661,14 +751,14 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         return fail(fmt::format("Failed to set Building Block owner (CKERROR {}).", err));
     }
 
-    err = behavior->CallCallbackFunction(CKM_BEHAVIORCREATE);
+    err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &ctx);
     if (err != CK_OK) {
         return fail(fmt::format("Building Block CREATE callback failed (CKERROR {}).", err));
     }
     createCallbackSent = true;
 
     if (owner) {
-        err = behavior->CallCallbackFunction(CKM_BEHAVIORATTACH);
+        err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORATTACH, &ctx);
         if (err != CK_OK) {
             return fail(fmt::format("Building Block ATTACH callback failed (CKERROR {}).", err));
         }
@@ -686,7 +776,7 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
 }
 
 bool ScriptBehaviorBridge::ResolvePrototype(const ScriptBridgeBBInvocationSpec &request, CKGUID &guid, std::string &error) const {
-    if (request.HasGuid) {
+    if (request.PrototypeKind == ScriptBridgePrototypeKind::Guid) {
         if (!request.Guid.IsValid()) {
             error = "Building Block GUID is invalid.";
             return false;
@@ -790,9 +880,9 @@ void ScriptBehaviorBridge::QueueDestroy(CKBehavior *behavior, bool sendCallbacks
 
     if (sendCallbacks && !deleteCallbackAlreadySent) {
         if (behavior->GetOwner()) {
-            behavior->CallCallbackFunction(CKM_BEHAVIORDETACH);
+            CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDETACH);
         }
-        behavior->CallCallbackFunction(CKM_BEHAVIORDELETE);
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE);
     }
 
     behavior->SetOwner(nullptr, FALSE);

@@ -11,29 +11,11 @@
 #include <fmt/format.h>
 
 #include "CKAll.h"
+#include "ScriptRefCounted.h"
 #include "ScriptManager.h"
 #include "XObjectArray.h"
 
 #undef GetObject
-
-class RefCounted {
-public:
-    void AddRef() const {
-        ++m_RefCount;
-    }
-
-    void Release() const {
-        if (--m_RefCount == 0) {
-            delete this;
-        }
-    }
-
-protected:
-    virtual ~RefCounted() = default;
-
-private:
-    mutable int m_RefCount = 1;
-};
 
 static std::string SafeString(CKSTRING value) {
     return value ? std::string(value) : std::string();
@@ -41,6 +23,140 @@ static std::string SafeString(CKSTRING value) {
 
 static CKObject *GetCKObjectById(CKContext *context, CK_ID id) {
     return context && id ? CKGetObject(context, id) : nullptr;
+}
+
+static ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object) {
+    ScriptBridgeObjectStamp stamp;
+    if (!object) {
+        return stamp;
+    }
+
+    stamp.ClassId = object->GetClassID();
+    stamp.Set(ScriptBridgeObjectStampFlags::ClassId, true);
+
+    if (CKBehavior *behavior = CKBehavior::Cast(object)) {
+        stamp.PrototypeGuid = behavior->GetPrototypeGuid();
+        stamp.Set(ScriptBridgeObjectStampFlags::PrototypeGuid, stamp.PrototypeGuid.IsValid());
+        CKObject *owner = behavior->GetOwner();
+        stamp.OwnerId = owner ? owner->GetID() : 0;
+        stamp.Set(ScriptBridgeObjectStampFlags::OwnerId, stamp.OwnerId != 0);
+        return stamp;
+    }
+
+    if (CKParameterIn *input = CKParameterIn::Cast(object)) {
+        stamp.TypeGuid = input->GetGUID();
+        stamp.Set(ScriptBridgeObjectStampFlags::TypeGuid, stamp.TypeGuid.IsValid());
+        CKObject *owner = input->GetOwner();
+        stamp.OwnerId = owner ? owner->GetID() : 0;
+        stamp.Set(ScriptBridgeObjectStampFlags::OwnerId, stamp.OwnerId != 0);
+        return stamp;
+    }
+
+    if (CKParameterOperation *operation = CKParameterOperation::Cast(object)) {
+        stamp.OperationGuid = operation->GetOperationGuid();
+        stamp.Set(ScriptBridgeObjectStampFlags::OperationGuid, stamp.OperationGuid.IsValid());
+        CKBehavior *owner = operation->GetOwner();
+        stamp.OwnerId = owner ? owner->GetID() : 0;
+        stamp.Set(ScriptBridgeObjectStampFlags::OwnerId, stamp.OwnerId != 0);
+        return stamp;
+    }
+
+    if (CKParameter *parameter = CKParameter::Cast(object)) {
+        stamp.TypeGuid = parameter->GetGUID();
+        stamp.Set(ScriptBridgeObjectStampFlags::TypeGuid, stamp.TypeGuid.IsValid());
+        CKObject *owner = parameter->GetOwner();
+        stamp.OwnerId = owner ? owner->GetID() : 0;
+        stamp.Set(ScriptBridgeObjectStampFlags::OwnerId, stamp.OwnerId != 0);
+        return stamp;
+    }
+
+    return stamp;
+}
+
+static bool BridgeObjectStampMatches(CKObject *object, const ScriptBridgeObjectStamp &stamp) {
+    if (!object || object->IsToBeDeleted()) {
+        return false;
+    }
+
+    if (stamp.Has(ScriptBridgeObjectStampFlags::ClassId) && object->GetClassID() != stamp.ClassId) {
+        return false;
+    }
+
+    if (stamp.Has(ScriptBridgeObjectStampFlags::PrototypeGuid)) {
+        CKBehavior *behavior = CKBehavior::Cast(object);
+        if (!behavior || behavior->GetPrototypeGuid() != stamp.PrototypeGuid) {
+            return false;
+        }
+    }
+
+    if (stamp.Has(ScriptBridgeObjectStampFlags::TypeGuid)) {
+        if (CKParameterIn *input = CKParameterIn::Cast(object)) {
+            if (input->GetGUID() != stamp.TypeGuid) {
+                return false;
+            }
+        } else if (CKParameter *parameter = CKParameter::Cast(object)) {
+            if (parameter->GetGUID() != stamp.TypeGuid) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    if (stamp.Has(ScriptBridgeObjectStampFlags::OperationGuid)) {
+        CKParameterOperation *operation = CKParameterOperation::Cast(object);
+        if (!operation || operation->GetOperationGuid() != stamp.OperationGuid) {
+            return false;
+        }
+    }
+
+    if (stamp.Has(ScriptBridgeObjectStampFlags::OwnerId)) {
+        CK_ID ownerId = 0;
+        if (CKBehavior *behavior = CKBehavior::Cast(object)) {
+            ownerId = behavior->GetOwner() ? behavior->GetOwner()->GetID() : 0;
+        } else if (CKParameterIn *input = CKParameterIn::Cast(object)) {
+            ownerId = input->GetOwner() ? input->GetOwner()->GetID() : 0;
+        } else if (CKParameterOperation *operation = CKParameterOperation::Cast(object)) {
+            ownerId = operation->GetOwner() ? operation->GetOwner()->GetID() : 0;
+        } else if (CKParameter *parameter = CKParameter::Cast(object)) {
+            ownerId = parameter->GetOwner() ? parameter->GetOwner()->GetID() : 0;
+        }
+        if (ownerId != stamp.OwnerId) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static CKObject *GetStampedCKObjectById(CKContext *context, CK_ID id, const ScriptBridgeObjectStamp &stamp) {
+    CKObject *object = GetCKObjectById(context, id);
+    return BridgeObjectStampMatches(object, stamp) ? object : nullptr;
+}
+
+static CKERROR CallBridgeBehaviorCallback(CKBehavior *behavior,
+                                          CKDWORD message,
+                                          const CKBehaviorContext *sourceContext = nullptr) {
+    if (!behavior) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    CKBehaviorPrototype *prototype = behavior->GetPrototype();
+    CKBEHAVIORCALLBACKFCT callback = prototype ? prototype->GetBehaviorCallbackFct() : nullptr;
+    if (!callback) {
+        return behavior->CallCallbackFunction(message);
+    }
+
+    CKContext *context = sourceContext && sourceContext->Context ? sourceContext->Context : behavior->GetCKContext();
+    CKBehaviorContext callbackContext = sourceContext ? *sourceContext : (context ? context->m_BehaviorContext : CKBehaviorContext());
+    callbackContext.Context = context;
+    callbackContext.Behavior = behavior;
+    callbackContext.CallbackMessage = message;
+    callbackContext.CallbackArg = nullptr;
+    if (context && !callbackContext.ParameterManager) {
+        callbackContext.ParameterManager = context->GetParameterManager();
+    }
+    return callback(callbackContext);
 }
 
 static std::string IndexedName(const char *prefix, int index) {
@@ -326,122 +442,29 @@ static std::string OutputParamName(CKBehavior *behavior, int index) {
     return IndexedName("#", index);
 }
 
-static XObjectArray ObjectArrayFromValue(const ScriptBridgeValue *value) {
-    XObjectArray result;
-    if (!value || value->Kind != ScriptBridgeValueKind::ObjectArray) {
-        return result;
-    }
-
-    for (CK_ID id : value->ObjectIds) {
-        result.PushBack(id);
-    }
-    return result;
-}
-
-static ScriptBridgeParamValue MakeBridgeParamValue(const ScriptBridgeValue &value) {
-    ScriptBridgeParamValue result;
-    result.ModeKind = ScriptBridgeParamValue::Mode::Value;
-    result.Value = value;
-    return result;
-}
-
-static ScriptBridgeParamValue MakeBridgeTextValue(const std::string &text, CKGUID typeGuid = CKGUID(), const std::string &typeName = std::string()) {
-    ScriptBridgeParamValue result;
-    result.ModeKind = ScriptBridgeParamValue::Mode::Text;
-    result.TextValue = text;
-    result.TypeGuid = typeGuid;
-    result.TypeName = typeName;
-    return result;
-}
-
-static ScriptBridgeParamValue MakeBridgeRawValue(CKGUID typeGuid, const std::string &typeName, const void *data, int size) {
-    ScriptBridgeParamValue result;
-    result.ModeKind = ScriptBridgeParamValue::Mode::Raw;
-    result.TypeGuid = typeGuid;
-    result.TypeName = typeName;
-    if (data && size > 0) {
-        const auto *bytes = static_cast<const char *>(data);
-        result.RawData.assign(bytes, bytes + size);
-    }
-    return result;
-}
-
-static CKGUID ResolveBridgeValueType(CKContext *context, const ScriptBridgeParamValue &value, ScriptBridgeValueKind fallbackKind) {
+static CKGUID ResolveBridgeValueType(CKContext *context, const ScriptParamValue &value, CKGUID fallbackGuid = CKGUID()) {
     if (value.TypeGuid.IsValid()) {
         return value.TypeGuid;
     }
-    if (!value.TypeName.empty()) {
-        return ScriptResolveParameterGuid(context, value.TypeName, fallbackKind);
+    if (fallbackGuid.IsValid()) {
+        return fallbackGuid;
     }
-    return ScriptParameterGuidForValueKind(fallbackKind);
+    (void) context;
+    return ScriptParameterGuidForValue(value);
 }
 
-static bool IsBridgeRawTypeCompatible(CKParameter *param, const ScriptBridgeParamValue &value, std::string &error) {
-    if (!param || !value.TypeGuid.IsValid()) {
-        return true;
-    }
-
-    CKContext *context = param->GetCKContext();
-    CKParameterManager *pm = context ? context->GetParameterManager() : nullptr;
-    if (!pm) {
-        return value.TypeGuid == param->GetGUID();
-    }
-
-    if (pm->IsTypeCompatible(value.TypeGuid, param->GetGUID()) || pm->IsTypeCompatible(param->GetGUID(), value.TypeGuid)) {
-        return true;
-    }
-
-    error = fmt::format("Raw parameter type mismatch (expected {}, got {}).",
-        ParameterTypeLabel(context, param->GetGUID()),
-        ParameterTypeLabel(context, value.TypeGuid));
-    return false;
-}
-
-static CKERROR SetBridgeParamValue(CKParameter *param, const ScriptBridgeParamValue &value, std::string &error) {
+static CKERROR SetBridgeParamValue(CKParameter *param, const ScriptParamValue &value, std::string &error) {
     if (!param) {
         error = "Parameter is not valid.";
         return CKERR_INVALIDPARAMETER;
     }
 
-    switch (value.ModeKind) {
-        case ScriptBridgeParamValue::Mode::Value:
-            return SetParameterValue(param, value.Value);
-        case ScriptBridgeParamValue::Mode::Text: {
-            CKGUID requested = ResolveBridgeValueType(param->GetCKContext(), value, ScriptBridgeValueKind::String);
-            if (requested.IsValid()) {
-                CKParameterManager *pm = param->GetCKContext() ? param->GetCKContext()->GetParameterManager() : nullptr;
-                if (pm && !pm->IsTypeCompatible(requested, param->GetGUID()) && !pm->IsTypeCompatible(param->GetGUID(), requested)) {
-                    error = fmt::format("Text parameter type mismatch (expected {}, got {}).",
-                        ParameterTypeLabel(param->GetCKContext(), param->GetGUID()),
-                        ParameterTypeLabel(param->GetCKContext(), requested));
-                    return CKERR_INVALIDPARAMETER;
-                }
-            }
-            return param->SetStringValue(const_cast<CKSTRING>(value.TextValue.c_str()));
-        }
-        case ScriptBridgeParamValue::Mode::Raw: {
-            if (!IsBridgeRawTypeCompatible(param, value, error)) {
-                return CKERR_INVALIDPARAMETER;
-            }
-            const int expectedSize = param->GetDataSize();
-            if (expectedSize <= 0) {
-                error = fmt::format("Parameter '{}' has no fixed-size storage for raw access.", SafeString(param->GetName()));
-                return CKERR_INVALIDPARAMETER;
-            }
-            if (static_cast<int>(value.RawData.size()) != expectedSize) {
-                error = fmt::format("Raw parameter size mismatch for '{}' (expected {} bytes, got {}).",
-                    SafeString(param->GetName()),
-                    expectedSize,
-                    value.RawData.size());
-                return CKERR_INVALIDPARAMETER;
-            }
-            return param->SetValue(value.RawData.empty() ? nullptr : value.RawData.data(), expectedSize);
-        }
-        case ScriptBridgeParamValue::Mode::Empty:
-        default:
-            error = "Parameter value is empty.";
-            return CKERR_INVALIDPARAMETER;
+    if (value.Kind == ScriptParamValueKind::Empty) {
+        error = "Parameter value is empty.";
+        return CKERR_INVALIDPARAMETER;
     }
+
+    return WriteParameterValue(param, value, error);
 }
 
 static CKParameterLocal *EnsureInputSource(CKBehavior *behavior, int index, std::unordered_map<int, CK_ID> *inputSources) {
@@ -552,7 +575,7 @@ static void EnsureOutputSinks(CKBehavior *behavior) {
 
 static bool SetInputParameterValueByIndex(CKBehavior *behavior,
                                           int index,
-                                          const ScriptBridgeParamValue &value,
+                                          const ScriptParamValue &value,
                                           std::string &error,
                                           std::unordered_map<int, CK_ID> *inputSources) {
     if (!behavior) {
@@ -578,9 +601,7 @@ static bool SetInputParameterValueByIndex(CKBehavior *behavior,
     CKERROR err = SetBridgeParamValue(local, value, error);
     if (err != CK_OK) {
         if (error.empty()) {
-            error = fmt::format("got {}", value.ModeKind == ScriptBridgeParamValue::Mode::Value
-                ? ScriptBridgeValueKindName(value.Value.Kind)
-                : (value.ModeKind == ScriptBridgeParamValue::Mode::Text ? "text" : "raw"));
+            error = fmt::format("got {}", ScriptParamValueKindName(value.Kind));
         }
         error = fmt::format("Failed to set input parameter #{} '{}' on Building Block '{}' (expected {}, got {}, CKERROR {}).",
             index,
@@ -596,11 +617,11 @@ static bool SetInputParameterValueByIndex(CKBehavior *behavior,
 }
 
 static bool ApplyInputParameters(CKBehavior *behavior,
-                                 const std::unordered_map<int, ScriptBridgeParamValue> &parameters,
+                                 const std::vector<ScriptBridgeIndexedValue> &parameters,
                                  std::string &error,
                                  std::unordered_map<int, CK_ID> *inputSources) {
     for (const auto &entry : parameters) {
-        if (!SetInputParameterValueByIndex(behavior, entry.first, entry.second, error, inputSources)) {
+        if (!SetInputParameterValueByIndex(behavior, entry.PinIndex, entry.Value, error, inputSources)) {
             return false;
         }
     }
@@ -608,11 +629,11 @@ static bool ApplyInputParameters(CKBehavior *behavior,
 }
 
 static bool ApplyIndexedInputParameters(CKBehavior *behavior,
-                                        const std::unordered_map<int, ScriptBridgeParamValue> &parameters,
+                                        const std::vector<ScriptBridgeIndexedValue> &parameters,
                                         std::string &error,
                                         std::unordered_map<int, CK_ID> *inputSources) {
     for (const auto &entry : parameters) {
-        if (!SetInputParameterValueByIndex(behavior, entry.first, entry.second, error, inputSources)) {
+        if (!SetInputParameterValueByIndex(behavior, entry.PinIndex, entry.Value, error, inputSources)) {
             return false;
         }
     }
@@ -698,25 +719,15 @@ static void ClearOutputs(CKBehavior *behavior) {
 }
 
 static bool ExecutionOutputActive(const ScriptBridgeExecutionState &state, int index) {
-    if (index < 0) {
-        return !state.ActiveOutputs.empty();
-    }
-    return std::find(state.ActiveOutputs.begin(), state.ActiveOutputs.end(), index) != state.ActiveOutputs.end();
+    return index < 0 ? !state.ActiveOutputs.Empty() : state.ActiveOutputs.Contains(index);
 }
 
 static bool ExecutionOutputSeen(const ScriptBridgeExecutionState &state, int index) {
-    if (index < 0) {
-        return !state.SeenOutputs.empty();
-    }
-    return std::find(state.SeenOutputs.begin(), state.SeenOutputs.end(), index) != state.SeenOutputs.end();
+    return index < 0 ? !state.SeenOutputs.Empty() : state.SeenOutputs.Contains(index);
 }
 
 static void MergeSeenOutputs(ScriptBridgeExecutionState &state) {
-    for (int output : state.ActiveOutputs) {
-        if (std::find(state.SeenOutputs.begin(), state.SeenOutputs.end(), output) == state.SeenOutputs.end()) {
-            state.SeenOutputs.push_back(output);
-        }
-    }
+    state.SeenOutputs.MergeFrom(state.ActiveOutputs);
 }
 
 static ScriptBridgeExecutionState CaptureExecutionState(CKBehavior *behavior, int returnCode) {
@@ -736,7 +747,7 @@ static ScriptBridgeExecutionState CaptureExecutionState(CKBehavior *behavior, in
 
     for (int i = 0; i < behavior->GetOutputCount(); ++i) {
         if (behavior->IsOutputActive(i)) {
-            state.ActiveOutputs.push_back(i);
+            state.ActiveOutputs.Insert(i);
         }
     }
 
@@ -861,6 +872,25 @@ static CKParameter *ParameterSourceForConnection(CKObject *parameter) {
 
 static CKParameter *ResolveParameterSource(CKContext *context, CK_ID id) {
     return ParameterSourceForConnection(GetCKObjectById(context, id));
+}
+
+static CKParameter *ResolveStampedParameterSource(CKContext *context,
+                                                 CK_ID id,
+                                                 const ScriptBridgeObjectStamp &stamp,
+                                                 std::string &error) {
+    CKObject *object = GetStampedCKObjectById(context, id, stamp);
+    if (!object) {
+        error = fmt::format("Parameter source id={} is no longer valid or no longer matches the captured handle.", id);
+        return nullptr;
+    }
+
+    CKParameter *source = ParameterSourceForConnection(object);
+    if (!source) {
+        error = fmt::format("Object id={} is not a readable parameter source.", id);
+        return nullptr;
+    }
+
+    return source;
 }
 
 static CKGUID ResolveOperationGuid(CKContext *context, CKGUID guid, const std::string &name, std::string &error) {

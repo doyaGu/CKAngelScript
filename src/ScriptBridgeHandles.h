@@ -3,6 +3,7 @@
 
 #include "ScriptBridgeCommon.h"
 #include "ScriptNativeBuffer.h"
+#include "ScriptParameterRegistry.h"
 
 class ParamInfo final : public RefCounted {
 public:
@@ -39,68 +40,323 @@ private:
     int m_DataSize = 0;
 };
 
+class ParamStructValue;
+
 class ParamValue final : public RefCounted {
 public:
-    explicit ParamValue(const ScriptBridgeParamValue &value)
+    explicit ParamValue(const ScriptParamValue &value)
         : m_Value(value) {}
 
-    const ScriptBridgeParamValue &Value() const { return m_Value; }
+    const ScriptParamValue &Value() const { return m_Value; }
 
-    bool IsValid() const { return m_Value.ModeKind != ScriptBridgeParamValue::Mode::Empty; }
-    CKGUID TypeGuid() const { return m_Value.TypeGuid; }
-    std::string TypeName() const { return m_Value.TypeName; }
+    bool IsValid() const { return m_Value.Kind != ScriptParamValueKind::Empty; }
+    CKGUID TypeGuid() const {
+        return m_Value.TypeGuid.IsValid() ? m_Value.TypeGuid : ScriptParameterGuidForValue(m_Value);
+    }
+    std::string TypeName() const { return TypeGuid().IsValid() ? GuidToString(TypeGuid()) : std::string(); }
 
-    int AsInt() const { return m_Value.Value.IntValue; }
-    float AsFloat() const { return m_Value.Value.FloatValue; }
-    bool AsBool() const { return m_Value.Value.BoolValue; }
-    std::string AsString() const { return m_Value.Value.StringValue; }
-    CKGUID AsGuid() const { return m_Value.Value.GuidValue; }
-    VxVector AsVector() const { return m_Value.Value.VectorValue; }
-    Vx2DVector AsVector2() const { return m_Value.Value.Vector2Value; }
-    VxColor AsColor() const { return m_Value.Value.ColorValue; }
-    VxQuaternion AsQuaternion() const { return m_Value.Value.QuaternionValue; }
-    VxMatrix AsMatrix() const { return m_Value.Value.MatrixValue; }
+    int AsInt() const { return m_Value.Data.IntValue; }
+    float AsFloat() const { return m_Value.Data.FloatValue; }
+    bool AsBool() const { return m_Value.Data.BoolValue; }
+    std::string AsString() const { return m_Value.Text(); }
+    CKGUID AsGuid() const { return m_Value.Data.GuidValue; }
+    VxVector AsVector() const { return m_Value.Data.VectorValue; }
+    Vx2DVector AsVector2() const { return m_Value.Data.Vector2Value; }
+    VxColor AsColor() const { return m_Value.Data.ColorValue; }
+    VxQuaternion AsQuaternion() const { return m_Value.Data.QuaternionValue; }
+    VxMatrix AsMatrix() const { return m_Value.Data.MatrixValue; }
+    ParamStructValue *AsStruct() const;
 
     std::string AsText() const {
-        if (m_Value.ModeKind == ScriptBridgeParamValue::Mode::Text) {
-            return m_Value.TextValue;
-        }
-        if (m_Value.Value.Kind == ScriptBridgeValueKind::String || !m_Value.Value.StringValue.empty()) {
-            return m_Value.Value.StringValue;
-        }
-        if (m_Value.Value.Kind == ScriptBridgeValueKind::Guid) {
-            return ScriptGuidToString(m_Value.Value.GuidValue);
-        }
-        if (m_Value.Value.Kind == ScriptBridgeValueKind::Int) {
-            return std::to_string(m_Value.Value.IntValue);
-        }
-        if (m_Value.Value.Kind == ScriptBridgeValueKind::Float) {
-            return fmt::format("{}", m_Value.Value.FloatValue);
-        }
-        if (m_Value.Value.Kind == ScriptBridgeValueKind::Bool) {
-            return m_Value.Value.BoolValue ? "true" : "false";
-        }
-        return std::string();
+        return ScriptParamValueToText(m_Value);
     }
 
     NativeBuffer *AsRaw() const {
-        if (m_Value.ModeKind != ScriptBridgeParamValue::Mode::Raw || m_Value.RawData.empty()) {
+        if (m_Value.Kind != ScriptParamValueKind::Raw || m_Value.RawBytes().empty()) {
             return NativeBuffer::Create(0);
         }
-        NativeBuffer *buffer = NativeBuffer::Create(m_Value.RawData.size());
-        buffer->Write(const_cast<char *>(m_Value.RawData.data()), m_Value.RawData.size());
+        NativeBuffer *buffer = NativeBuffer::Create(m_Value.RawBytes().size());
+        buffer->Write(const_cast<char *>(m_Value.RawBytes().data()), m_Value.RawBytes().size());
         buffer->Reset();
         return buffer;
     }
 
 private:
-    ScriptBridgeParamValue m_Value;
+    ScriptParamValue m_Value;
+};
+
+class ParamStructValue final : public RefCounted {
+public:
+    explicit ParamStructValue(const ScriptParamValue &value)
+        : m_Value(value) {}
+
+    bool IsValid() const { return m_Value.Kind == ScriptParamValueKind::Struct && m_Value.TypeGuid.IsValid(); }
+    CKGUID TypeGuid() const { return m_Value.TypeGuid; }
+    std::string TypeName() const { return m_Value.TypeGuid.IsValid() ? GuidToString(m_Value.TypeGuid) : std::string(); }
+
+    ParamStructValue *Set(int index, ParamValue *value) {
+        if (index < 0 || !value || !value->IsValid()) {
+            SetScriptException("ParamStructValue.Set requires a valid member index and ParamValue.");
+            return nullptr;
+        }
+        std::vector<ScriptParamStructMemberValue> &members = m_Value.MutableStructMembers();
+        auto it = std::lower_bound(members.begin(), members.end(), index,
+            [](const ScriptParamStructMemberValue &member, int memberIndex) {
+                return member.Index < memberIndex;
+            });
+        if (it != members.end() && it->Index == index) {
+            delete it->Value;
+            it->Value = new ScriptParamValue(value->Value());
+            AddRef();
+            return this;
+        }
+        ScriptParamStructMemberValue member;
+        member.Index = index;
+        member.Value = new ScriptParamValue(value->Value());
+        members.insert(it, std::move(member));
+        AddRef();
+        return this;
+    }
+
+    ParamValue *Value() const {
+        return new ParamValue(m_Value);
+    }
+
+    ParamValue *AsValue() const {
+        return Value();
+    }
+
+    std::string Describe() const {
+        return fmt::format("ParamStructValue type={} members={}",
+                           m_Value.TypeGuid.IsValid() ? GuidToString(m_Value.TypeGuid) : std::string("<unknown>"),
+                           m_Value.StructMembers().size());
+    }
+
+private:
+    ScriptParamValue m_Value;
+};
+
+inline ParamStructValue *ParamValue::AsStruct() const {
+    if (m_Value.Kind != ScriptParamValueKind::Struct) {
+        return nullptr;
+    }
+    return new ParamStructValue(m_Value);
+}
+
+class ParamStructRef final : public RefCounted {
+public:
+    ParamStructRef(ScriptBehaviorBridge *bridge, CK_ID parameterId)
+        : m_Bridge(bridge), m_ParameterId(parameterId) {
+        m_Stamp = CaptureBridgeObjectStamp(RawGet());
+    }
+
+    CKParameter *Get() const {
+        return CKParameter::Cast(RawGetStamped());
+    }
+
+private:
+    CKObject *RawGet() const {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return GetCKObjectById(context, m_ParameterId);
+    }
+
+    CKObject *RawGetStamped() const {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return GetStampedCKObjectById(context, m_ParameterId, m_Stamp);
+    }
+
+public:
+
+    bool IsValid() const {
+        CKParameter *param = Get();
+        ScriptParameterRegistry *registry = param ? ScriptParameterRegistry::FromContext(param->GetCKContext()) : nullptr;
+        const ScriptParamTypeRecord *record = registry ? registry->GetType(param) : nullptr;
+        return record && record->Has(ScriptParamTypeCaps::StructLike);
+    }
+
+    int Count() const {
+        CKParameter *param = Get();
+        ScriptParameterRegistry *registry = param ? ScriptParameterRegistry::FromContext(param->GetCKContext()) : nullptr;
+        const ScriptParamTypeRecord *record = registry ? registry->GetType(param) : nullptr;
+        return record && record->Has(ScriptParamTypeCaps::StructLike) ? static_cast<int>(record->StructMembers.size()) : 0;
+    }
+
+    ParamStructInfo *Info() const {
+        CKParameter *param = Get();
+        ScriptParameterRegistry *registry = param ? ScriptParameterRegistry::FromContext(param->GetCKContext()) : nullptr;
+        const ScriptParamTypeRecord *record = registry ? registry->GetType(param) : nullptr;
+        return record && record->Has(ScriptParamTypeCaps::StructLike) ? new ParamStructInfo(registry, record->Type) : nullptr;
+    }
+
+    ParamRef *Member(int index) const;
+
+    int FindMember(const std::string &name, int occurrence = 0) const {
+        ParamStructInfo *info = Info();
+        if (!info) {
+            return -1;
+        }
+        const int result = info->FindMember(name, occurrence);
+        info->Release();
+        return result;
+    }
+
+    std::string Describe() const {
+        ParamStructInfo *info = Info();
+        if (!info) {
+            return "ParamStructRef is not valid.";
+        }
+        std::string result = info->Describe();
+        info->Release();
+        return result;
+    }
+
+private:
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CK_ID m_ParameterId = 0;
+    ScriptBridgeObjectStamp m_Stamp;
+};
+
+class ParamSourceLinkRef final : public RefCounted {
+public:
+    ParamSourceLinkRef(ScriptBehaviorBridge *bridge,
+                       CKParameterIn *target,
+                       CKParameter *previousSource,
+                       CKParameter *installedSource)
+        : m_Bridge(bridge),
+          m_TargetId(target ? target->GetID() : 0),
+          m_PreviousSourceId(previousSource ? previousSource->GetID() : 0),
+          m_InstalledSourceId(installedSource ? installedSource->GetID() : 0),
+          m_TargetStamp(CaptureBridgeObjectStamp(target)),
+          m_PreviousSourceStamp(CaptureBridgeObjectStamp(previousSource)),
+          m_InstalledSourceStamp(CaptureBridgeObjectStamp(installedSource)) {}
+
+    ~ParamSourceLinkRef() override {
+        std::string error;
+        (void) RestoreInternal(error, false);
+    }
+
+    bool IsValid() const {
+        return Target() != nullptr && (m_InstalledSourceId == 0 || InstalledSource() != nullptr);
+    }
+
+    bool IsCommitted() const { return m_Committed; }
+    bool IsRestored() const { return m_Restored; }
+
+    bool Commit() {
+        m_Committed = true;
+        return true;
+    }
+
+    bool Restore() {
+        std::string error;
+        if (!RestoreInternal(error, true)) {
+            SetScriptException(error.empty() ? "Failed to restore parameter source." : error);
+            return false;
+        }
+        return true;
+    }
+
+    std::string Describe() const {
+        CKParameterIn *target = Target();
+        return fmt::format("ParamSourceLink target={} previous={} installed={} committed={} restored={}",
+                           target ? SafeString(target->GetName()) : std::string("<invalid>"),
+                           m_PreviousSourceId,
+                           m_InstalledSourceId,
+                           m_Committed ? "true" : "false",
+                           m_Restored ? "true" : "false");
+    }
+
+private:
+    CKContext *Context() const {
+        return m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    }
+
+    CKParameterIn *Target() const {
+        return CKParameterIn::Cast(GetStampedCKObjectById(Context(), m_TargetId, m_TargetStamp));
+    }
+
+    CKParameter *PreviousSource() const {
+        if (!m_PreviousSourceId) {
+            return nullptr;
+        }
+        return ParameterSourceForConnection(GetStampedCKObjectById(Context(), m_PreviousSourceId, m_PreviousSourceStamp));
+    }
+
+    CKParameter *InstalledSource() const {
+        if (!m_InstalledSourceId) {
+            return nullptr;
+        }
+        return ParameterSourceForConnection(GetStampedCKObjectById(Context(), m_InstalledSourceId, m_InstalledSourceStamp));
+    }
+
+    bool RestoreInternal(std::string &error, bool explicitCall) {
+        if (m_Committed || m_Restored) {
+            return true;
+        }
+
+        CKParameterIn *target = Target();
+        if (!target) {
+            if (explicitCall) {
+                error = fmt::format("Parameter source link target id={} is no longer valid.", m_TargetId);
+                return false;
+            }
+            m_Restored = true;
+            return true;
+        }
+
+        CKParameter *installed = InstalledSource();
+        CKParameter *current = target->GetDirectSource();
+        if (m_InstalledSourceId && current && installed && current->GetID() != installed->GetID()) {
+            if (explicitCall) {
+                error = fmt::format("Parameter source link for '{}' was already changed by another graph edit.",
+                                    SafeString(target->GetName()));
+                return false;
+            }
+            m_Restored = true;
+            return true;
+        }
+
+        CKParameter *previous = PreviousSource();
+        if (m_PreviousSourceId && !previous) {
+            if (explicitCall) {
+                error = fmt::format("Previous source id={} for '{}' is no longer valid.",
+                                    m_PreviousSourceId,
+                                    SafeString(target->GetName()));
+                return false;
+            }
+            m_Restored = true;
+            return true;
+        }
+
+        const CKERROR err = target->SetDirectSource(previous);
+        if (err != CK_OK) {
+            error = fmt::format("Failed to restore source for '{}' (CKERROR {}).",
+                                SafeString(target->GetName()),
+                                err);
+            return false;
+        }
+
+        m_Restored = true;
+        return true;
+    }
+
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CK_ID m_TargetId = 0;
+    CK_ID m_PreviousSourceId = 0;
+    CK_ID m_InstalledSourceId = 0;
+    ScriptBridgeObjectStamp m_TargetStamp;
+    ScriptBridgeObjectStamp m_PreviousSourceStamp;
+    ScriptBridgeObjectStamp m_InstalledSourceStamp;
+    bool m_Committed = false;
+    bool m_Restored = false;
 };
 
 class BehaviorLayout final : public RefCounted {
 public:
     BehaviorLayout(ScriptBehaviorBridge *bridge, CK_ID behaviorId)
-        : m_Bridge(bridge), m_BehaviorId(behaviorId), m_IsPrototype(false) {}
+        : m_Bridge(bridge), m_BehaviorId(behaviorId), m_IsPrototype(false) {
+        m_BehaviorStamp = CaptureBridgeObjectStamp(RawBehavior());
+    }
 
     BehaviorLayout(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request)
         : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_IsPrototype(true) {}
@@ -198,7 +454,12 @@ private:
 
     CKBehavior *Behavior() const {
         if (m_IsPrototype || !m_Bridge || !m_Bridge->GetManager()) return nullptr;
-        return CKBehavior::Cast(GetCKObjectById(m_Bridge->GetManager()->GetCKContext(), m_BehaviorId));
+        return CKBehavior::Cast(GetStampedCKObjectById(m_Bridge->GetManager()->GetCKContext(), m_BehaviorId, m_BehaviorStamp));
+    }
+
+    CKObject *RawBehavior() const {
+        if (m_IsPrototype || !m_Bridge || !m_Bridge->GetManager()) return nullptr;
+        return GetCKObjectById(m_Bridge->GetManager()->GetCKContext(), m_BehaviorId);
     }
 
     CKBehaviorPrototype *Prototype() const {
@@ -277,6 +538,7 @@ private:
     CK_ID m_BehaviorId = 0;
     CKBehaviorContext m_Context;
     ScriptBridgeBBInvocationSpec m_Request;
+    ScriptBridgeObjectStamp m_BehaviorStamp;
     bool m_IsPrototype = false;
 };
 
@@ -291,12 +553,15 @@ public:
           m_ParameterId(parameterId),
           m_Kind(kind),
           m_Index(index),
-          m_OwnerBehaviorId(ownerBehaviorId) {}
+          m_OwnerBehaviorId(ownerBehaviorId) {
+        m_Stamp = CaptureBridgeObjectStamp(RawGet());
+    }
 
     CKObject *Get() const {
-        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-        return GetCKObjectById(context, m_ParameterId);
+        return RawGetStamped();
     }
+
+    const ScriptBridgeObjectStamp &Stamp() const { return m_Stamp; }
 
     CKParameter *Source() const { return ParameterSourceForConnection(Get()); }
 
@@ -347,6 +612,28 @@ public:
         return m_Bridge && source ? m_Bridge->WrapParameter(source, ScriptBridgeSlotKind::Standalone, -1) : nullptr;
     }
 
+    ParamSourceLinkRef *SetSourceScoped(ParamRef *sourceRef) {
+        CKParameterIn *input = CKParameterIn::Cast(Get());
+        CKParameter *source = sourceRef ? sourceRef->Source() : nullptr;
+        if (!input || !source) {
+            SetScriptException("SetSourceScoped requires an input parameter and a valid source parameter.");
+            return nullptr;
+        }
+
+        CKParameter *previous = input->GetDirectSource();
+        CKERROR err = input->SetDirectSource(source);
+        if (err != CK_OK) {
+            SetScriptException(fmt::format("Failed to set scoped source for '{}' (expected {}, got {}, CKERROR {}).",
+                SafeString(input->GetName()),
+                ParameterTypeLabel(input->GetCKContext(), input->GetGUID()),
+                ParameterTypeLabel(input->GetCKContext(), source->GetGUID()),
+                err));
+            return nullptr;
+        }
+
+        return new ParamSourceLinkRef(m_Bridge, input, previous, source);
+    }
+
     bool SetSource(ParamRef *sourceRef) {
         CKParameterIn *input = CKParameterIn::Cast(Get());
         CKParameter *source = sourceRef ? sourceRef->Source() : nullptr;
@@ -385,14 +672,67 @@ public:
         return true;
     }
 
+    bool SetInt(int value) { return SetDirectValue(MakeScriptParamInt(value)); }
+    bool SetFloat(float value) { return SetDirectValue(MakeScriptParamFloat(value)); }
+    bool SetBool(bool value) { return SetDirectValue(MakeScriptParamBool(value)); }
+    bool SetString(const std::string &value) { return SetDirectValue(MakeScriptParamString(value)); }
+    bool SetObject(CKObject *value) { return SetDirectValue(MakeScriptParamObject(value)); }
+    bool SetEnum(const std::string &nameOrValue) {
+        std::string error;
+        CKParameter *target = WritableParameter(error);
+        if (!target) {
+            SetScriptException(error);
+            return false;
+        }
+        ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(target->GetCKContext());
+        int value = 0;
+        if (!registry || !registry->ParseEnumValue(target->GetGUID(), nameOrValue, value, error)) {
+            SetScriptException(error.empty() ? "Failed to resolve enum value." : error);
+            return false;
+        }
+        return SetDirectValue(MakeScriptParamEnum(target->GetGUID(), TypeName(), static_cast<CKDWORD>(value)));
+    }
+    bool SetEnumInt(int value) {
+        return SetDirectValue(MakeScriptParamEnum(TypeGuid(), TypeName(), static_cast<CKDWORD>(value)));
+    }
+    bool SetFlags(const std::string &namesOrMask) {
+        std::string error;
+        CKParameter *target = WritableParameter(error);
+        if (!target) {
+            SetScriptException(error);
+            return false;
+        }
+        ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(target->GetCKContext());
+        CKDWORD value = 0;
+        if (!registry || !registry->ParseFlagsValue(target->GetGUID(), namesOrMask, value, error)) {
+            SetScriptException(error.empty() ? "Failed to resolve flags value." : error);
+            return false;
+        }
+        return SetDirectValue(MakeScriptParamFlags(target->GetGUID(), TypeName(), value));
+    }
+    bool SetFlagsMask(CKDWORD value) {
+        return SetDirectValue(MakeScriptParamFlags(TypeGuid(), TypeName(), value));
+    }
+    bool SetStruct(ParamStructValue *value) {
+        if (!value) {
+            SetScriptException("ParamStructValue is null.");
+            return false;
+        }
+        ParamValue *asValue = value->Value();
+        const bool result = Set(asValue);
+        asValue->Release();
+        return result;
+    }
+
     ParamValue *GetValue() const {
         CKParameter *source = Source();
         if (!source) {
-            return new ParamValue(ScriptBridgeParamValue());
+            return new ParamValue(ScriptParamValue());
         }
-        ScriptBridgeParamValue value = MakeBridgeParamValue(ReadParameterValue(source));
+        std::string error;
+        ScriptParamValue value = ReadParameterValue(source, &error);
         value.TypeGuid = source->GetGUID();
-        value.TypeName = ParameterTypeLabel(source->GetCKContext(), source->GetGUID());
+        value.Type = source->GetType();
         return new ParamValue(value);
     }
 
@@ -404,12 +744,9 @@ public:
             SetScriptException(!error.empty() ? error : "CopyFrom requires a valid source parameter.");
             return false;
         }
-        CKERROR err = target->CopyValue(source);
+        CKERROR err = CopyParameterValue(target, source, error);
         if (err != CK_OK) {
-            SetScriptException(fmt::format("Failed to copy parameter value (expected {}, got {}, CKERROR {}).",
-                ParameterTypeLabel(target->GetCKContext(), target->GetGUID()),
-                ParameterTypeLabel(source->GetCKContext(), source->GetGUID()),
-                err));
+            SetScriptException(error.empty() ? fmt::format("Failed to copy parameter value (CKERROR {}).", err) : error);
             return false;
         }
         return true;
@@ -417,10 +754,51 @@ public:
 
     std::string GetText() const {
         std::string text;
-        if (ReadParameterString(Source(), text)) {
+        if (ReadParameterText(Source(), text)) {
             return text;
         }
         return std::string();
+    }
+
+    std::string GetEnumText() const {
+        CKParameter *source = Source();
+        ScriptParameterRegistry *registry = source ? ScriptParameterRegistry::FromContext(source->GetCKContext()) : nullptr;
+        CKDWORD value = 0;
+        if (!source || !registry || source->GetValue(&value, TRUE) != CK_OK) {
+            return std::string();
+        }
+        std::string text;
+        return registry->EnumNameOf(source->GetGUID(), static_cast<int>(value), text) ? text : std::to_string(value);
+    }
+
+    std::string GetFlagsText() const {
+        CKParameter *source = Source();
+        ScriptParameterRegistry *registry = source ? ScriptParameterRegistry::FromContext(source->GetCKContext()) : nullptr;
+        CKDWORD value = 0;
+        if (!source || !registry || source->GetValue(&value, TRUE) != CK_OK) {
+            return std::string();
+        }
+        return registry->FlagsText(source->GetGUID(), value);
+    }
+
+    ParamStructRef *Struct() {
+        std::string error;
+        CKParameter *target = WritableParameter(error);
+        if (!target) {
+            CKParameter *source = Source();
+            target = source;
+        }
+        if (!target) {
+            SetScriptException(error.empty() ? "Struct requires a valid parameter." : error);
+            return nullptr;
+        }
+        ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(target->GetCKContext());
+        const ScriptParamTypeRecord *record = registry ? registry->GetType(target) : nullptr;
+        if (!record || !record->Has(ScriptParamTypeCaps::StructLike)) {
+            SetScriptException(fmt::format("Parameter '{}' is not a CK struct.", SafeString(target->GetName())));
+            return nullptr;
+        }
+        return new ParamStructRef(m_Bridge, target->GetID());
     }
 
     bool SetText(const std::string &text) {
@@ -430,9 +808,9 @@ public:
             SetScriptException(error);
             return false;
         }
-        CKERROR err = target->SetStringValue(const_cast<CKSTRING>(text.c_str()));
+        CKERROR err = WriteParameterText(target, text, error);
         if (err != CK_OK) {
-            SetScriptException(fmt::format("Failed to set parameter text for '{}' (CKERROR {}).", SafeString(target->GetName()), err));
+            SetScriptException(error.empty() ? fmt::format("Failed to set parameter text for '{}' (CKERROR {}).", SafeString(target->GetName()), err) : error);
             return false;
         }
         return true;
@@ -440,16 +818,20 @@ public:
 
     NativeBuffer *GetRaw() const {
         CKParameter *source = Source();
-        const int size = source ? source->GetDataSize() : 0;
-        NativeBuffer *buffer = NativeBuffer::Create(size > 0 ? static_cast<size_t>(size) : 0);
-        if (!source || size <= 0) {
+        ScriptParamValue value;
+        std::string error;
+        if (!ReadParameterValueAs(source, ScriptParamValueKind::Raw, value, error) || value.RawBytes().empty()) {
+            if (!error.empty()) {
+                SetScriptException(error);
+            }
+            return NativeBuffer::Create(0);
+        }
+        NativeBuffer *buffer = NativeBuffer::Create(value.RawBytes().size());
+        if (!buffer) {
             return buffer;
         }
-        void *data = source->GetReadDataPtr(TRUE);
-        if (data) {
-            buffer->Write(data, static_cast<size_t>(size));
-            buffer->Reset();
-        }
+        buffer->Write(const_cast<char *>(value.RawBytes().data()), value.RawBytes().size());
+        buffer->Reset();
         return buffer;
     }
 
@@ -464,7 +846,7 @@ public:
             SetScriptException("NativeBuffer is null.");
             return false;
         }
-        ScriptBridgeParamValue value = MakeBridgeRawValue(target->GetGUID(), TypeName(), buffer->Data(), static_cast<int>(buffer->Size()));
+        ScriptParamValue value = MakeScriptParamRaw(target->GetGUID(), TypeName(), buffer->Data(), static_cast<int>(buffer->Size()));
         CKERROR err = SetBridgeParamValue(target, value, error);
         if (err != CK_OK) {
             SetScriptException(error.empty() ? fmt::format("Failed to set raw parameter (CKERROR {}).", err) : error);
@@ -487,6 +869,16 @@ public:
     }
 
 private:
+    CKObject *RawGet() const {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return GetCKObjectById(context, m_ParameterId);
+    }
+
+    CKObject *RawGetStamped() const {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return GetStampedCKObjectById(context, m_ParameterId, m_Stamp);
+    }
+
     CKBehavior *OwnerBehavior() const {
         CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
         return CKBehavior::Cast(GetCKObjectById(context, m_OwnerBehaviorId));
@@ -515,6 +907,21 @@ private:
         return nullptr;
     }
 
+    bool SetDirectValue(const ScriptParamValue &value) {
+        std::string error;
+        CKParameter *target = WritableParameter(error);
+        if (!target) {
+            SetScriptException(error);
+            return false;
+        }
+        CKERROR err = WriteParameterValue(target, value, error);
+        if (err != CK_OK) {
+            SetScriptException(error.empty() ? fmt::format("Failed to set parameter (CKERROR {}).", err) : error);
+            return false;
+        }
+        return true;
+    }
+
     const char *KindName() const {
         switch (m_Kind) {
             case ScriptBridgeSlotKind::Input: return "input";
@@ -533,16 +940,44 @@ private:
     ScriptBridgeSlotKind m_Kind = ScriptBridgeSlotKind::Standalone;
     int m_Index = -1;
     CK_ID m_OwnerBehaviorId = 0;
+    ScriptBridgeObjectStamp m_Stamp;
 };
+
+inline ParamRef *ParamStructRef::Member(int index) const {
+    CKParameter *member = GetStructMemberParameter(Get(), index);
+    return m_Bridge && member ? m_Bridge->WrapParameter(member, ScriptBridgeSlotKind::Standalone, index) : nullptr;
+}
 
 class ParamOperationRef final : public RefCounted {
 public:
-    ParamOperationRef(ScriptBehaviorBridge *bridge, CK_ID operationId)
-        : m_Bridge(bridge), m_OperationId(operationId) {}
+    ParamOperationRef(ScriptBehaviorBridge *bridge,
+                      CK_ID operationId,
+                      CKParameterIn *targetInput = nullptr,
+                      CKParameter *previousSource = nullptr,
+                      const std::vector<CK_ID> &ownedLocalSourceIds = {})
+        : m_Bridge(bridge),
+          m_OperationId(operationId),
+          m_TargetInputId(targetInput ? targetInput->GetID() : 0),
+          m_PreviousSourceId(previousSource ? previousSource->GetID() : 0),
+          m_TargetInputStamp(CaptureBridgeObjectStamp(targetInput)),
+          m_PreviousSourceStamp(CaptureBridgeObjectStamp(previousSource)) {
+        m_Stamp = CaptureBridgeObjectStamp(RawGet());
+        CKParameterOperation *operation = Get();
+        CKParameterOut *out = operation ? operation->GetOutParameter() : nullptr;
+        m_InstalledSourceId = out ? out->GetID() : 0;
+        m_InstalledSourceStamp = CaptureBridgeObjectStamp(out);
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        m_OwnedLocalSources.reserve(ownedLocalSourceIds.size());
+        for (CK_ID id : ownedLocalSourceIds) {
+            CKObject *object = GetCKObjectById(context, id);
+            if (CKParameterLocal::Cast(object)) {
+                m_OwnedLocalSources.push_back(ScriptBridgeStampedObjectId{id, CaptureBridgeObjectStamp(object)});
+            }
+        }
+    }
 
     CKParameterOperation *Get() const {
-        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-        return CKParameterOperation::Cast(GetCKObjectById(context, m_OperationId));
+        return CKParameterOperation::Cast(RawGetStamped());
     }
 
     bool IsValid() const { return Get() != nullptr; }
@@ -568,16 +1003,33 @@ public:
         return op ? op->DoOperation() : CKERR_INVALIDPARAMETER;
     }
 
+    bool Restore() {
+        std::string error;
+        if (!RestoreTargetSource(error)) {
+            SetScriptException(error.empty() ? "Failed to restore operation target source." : error);
+            return false;
+        }
+        return true;
+    }
+
     bool Destroy() {
         CKParameterOperation *op = Get();
         if (!op || !m_Bridge || !m_Bridge->GetManager() || !m_Bridge->GetManager()->GetCKContext()) {
             return false;
         }
-        if (CKBehavior *owner = op->GetOwner()) {
+        std::string error;
+        if (!RestoreTargetSource(error)) {
+            SetScriptException(error);
+            return false;
+        }
+        CKBehavior *owner = op->GetOwner();
+        if (owner) {
             owner->RemoveParameterOperation(op);
         }
         m_Bridge->GetManager()->GetCKContext()->DestroyObject(op);
+        DestroyOwnedLocalSources(owner);
         m_OperationId = 0;
+        m_Stamp = ScriptBridgeObjectStamp();
         return true;
     }
 
@@ -593,8 +1045,114 @@ public:
     }
 
 private:
+    CKObject *RawGet() const {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return GetCKObjectById(context, m_OperationId);
+    }
+
+    CKObject *RawGetStamped() const {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return GetStampedCKObjectById(context, m_OperationId, m_Stamp);
+    }
+
+    CKParameterIn *TargetInput() const {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return CKParameterIn::Cast(GetStampedCKObjectById(context, m_TargetInputId, m_TargetInputStamp));
+    }
+
+    CKParameter *PreviousSource() const {
+        if (!m_PreviousSourceId) {
+            return nullptr;
+        }
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return ParameterSourceForConnection(GetStampedCKObjectById(context, m_PreviousSourceId, m_PreviousSourceStamp));
+    }
+
+    CKParameter *InstalledSource() const {
+        if (!m_InstalledSourceId) {
+            return nullptr;
+        }
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return ParameterSourceForConnection(GetStampedCKObjectById(context, m_InstalledSourceId, m_InstalledSourceStamp));
+    }
+
+    void DestroyOwnedLocalSources(CKBehavior *owner) {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        if (!context) {
+            m_OwnedLocalSources.clear();
+            return;
+        }
+
+        for (const ScriptBridgeStampedObjectId &source : m_OwnedLocalSources) {
+            CKObject *object = GetStampedCKObjectById(context, source.Id, source.Stamp);
+            CKParameterLocal *local = CKParameterLocal::Cast(object);
+            if (!local) {
+                continue;
+            }
+            CKBehavior *localOwner = owner ? owner : CKBehavior::Cast(local->GetOwner());
+            if (localOwner) {
+                const int position = localOwner->GetLocalParameterPosition(local);
+                if (position >= 0) {
+                    localOwner->RemoveLocalParameter(position);
+                }
+            }
+            if (!local->IsToBeDeleted()) {
+                context->DestroyObject(local);
+            }
+        }
+        m_OwnedLocalSources.clear();
+    }
+
+    bool RestoreTargetSource(std::string &error) {
+        if (m_TargetRestored || !m_TargetInputId) {
+            return true;
+        }
+
+        CKParameterIn *target = TargetInput();
+        if (!target) {
+            error = fmt::format("Operation target input id={} is no longer valid.", m_TargetInputId);
+            return false;
+        }
+
+        CKParameter *installed = InstalledSource();
+        CKParameter *current = target->GetDirectSource();
+        if (m_InstalledSourceId && current && installed && current->GetID() != installed->GetID()) {
+            error = fmt::format("Operation target '{}' was already changed by another graph edit.",
+                                SafeString(target->GetName()));
+            return false;
+        }
+
+        CKParameter *previous = PreviousSource();
+        if (m_PreviousSourceId && !previous) {
+            error = fmt::format("Previous source id={} for operation target '{}' is no longer valid.",
+                                m_PreviousSourceId,
+                                SafeString(target->GetName()));
+            return false;
+        }
+
+        CKERROR err = target->SetDirectSource(previous);
+        if (err != CK_OK) {
+            error = fmt::format("Failed to restore operation target '{}' (CKERROR {}).",
+                                SafeString(target->GetName()),
+                                err);
+            return false;
+        }
+
+        m_TargetRestored = true;
+        return true;
+    }
+
     ScriptBehaviorBridge *m_Bridge = nullptr;
     CK_ID m_OperationId = 0;
+    CK_ID m_TargetInputId = 0;
+    CK_ID m_PreviousSourceId = 0;
+    CK_ID m_InstalledSourceId = 0;
+    ScriptBridgeObjectStamp m_Stamp;
+    ScriptBridgeObjectStamp m_TargetInputStamp;
+    ScriptBridgeObjectStamp m_PreviousSourceStamp;
+    ScriptBridgeObjectStamp m_InstalledSourceStamp;
+    std::vector<ScriptBridgeStampedObjectId> m_OwnedLocalSources;
+    bool m_TargetRestored = false;
 };
 
 class ParamOp final : public RefCounted {
@@ -627,8 +1185,14 @@ public:
             SetScriptException("Parameter operation input slot must be 0 or 1.");
             return nullptr;
         }
+        if (!source || !source->IsValid()) {
+            SetScriptException("Parameter operation input source is not valid.");
+            return nullptr;
+        }
         *input = ScriptBridgeOperationInput();
-        input->SourceId = source ? source->GetID() : 0;
+        input->Kind = ScriptBridgeInputBindingKind::Source;
+        input->SourceId = source->GetID();
+        input->SourceStamp = source->Stamp();
         AddRef();
         return this;
     }
@@ -641,7 +1205,7 @@ public:
         }
         *input = ScriptBridgeOperationInput();
         if (value) {
-            input->HasValue = true;
+            input->Kind = ScriptBridgeInputBindingKind::Value;
             input->Value = value->Value();
         }
         AddRef();
@@ -689,11 +1253,12 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
 class BehaviorRef final : public RefCounted {
 public:
     BehaviorRef(ScriptBehaviorBridge *bridge, CK_ID behaviorId, CK_ID componentId)
-        : m_Bridge(bridge), m_BehaviorId(behaviorId), m_ComponentId(componentId) {}
+        : m_Bridge(bridge), m_BehaviorId(behaviorId), m_ComponentId(componentId) {
+        m_Stamp = CaptureBridgeObjectStamp(RawGet());
+    }
 
     CKBehavior *Get() const {
-        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-        return CKBehavior::Cast(GetCKObjectById(context, m_BehaviorId));
+        return CKBehavior::Cast(RawGetStamped());
     }
 
     bool IsValid() const { return Get() != nullptr; }
@@ -795,9 +1360,20 @@ public:
     }
 
 private:
+    CKObject *RawGet() const {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return GetCKObjectById(context, m_BehaviorId);
+    }
+
+    CKObject *RawGetStamped() const {
+        CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+        return GetStampedCKObjectById(context, m_BehaviorId, m_Stamp);
+    }
+
     ScriptBehaviorBridge *m_Bridge = nullptr;
     CK_ID m_BehaviorId = 0;
     CK_ID m_ComponentId = 0;
+    ScriptBridgeObjectStamp m_Stamp;
 };
 
 class BehaviorBridge final : public RefCounted {
@@ -860,13 +1436,21 @@ public:
     BBCallBuilder *Target(CKBeObject *target) { m_Request.TargetId = target ? target->GetID() : 0; AddRef(); return this; }
 
     BBCallBuilder *Set(int pinIndex, ParamValue *value) {
-        if (value) m_Request.IndexedParameters[pinIndex] = value->Value();
+        if (value) ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value->Value());
         AddRef();
         return this;
     }
 
     BBCallBuilder *SetSource(int pinIndex, ParamRef *source) {
-        m_Request.SourceParameters.push_back(ScriptBridgeInputSource{pinIndex, source ? source->GetID() : 0});
+        if (!source || !source->IsValid()) {
+            SetScriptException("BBCallBuilder.SetSource requires a valid ParamRef source.");
+            return nullptr;
+        }
+        ScriptBridgeInputSource request;
+        request.PinIndex = pinIndex;
+        request.SourceId = source->GetID();
+        request.SourceStamp = source->Stamp();
+        m_Request.SourceParameters.push_back(request);
         AddRef();
         return this;
     }
@@ -892,8 +1476,20 @@ public:
 
     BBTaskBuilder *Owner(CKBeObject *owner) { m_Request.OwnerId = owner ? owner->GetID() : 0; AddRef(); return this; }
     BBTaskBuilder *Target(CKBeObject *target) { m_Request.TargetId = target ? target->GetID() : 0; AddRef(); return this; }
-    BBTaskBuilder *Set(int pinIndex, ParamValue *value) { if (value) m_Request.IndexedParameters[pinIndex] = value->Value(); AddRef(); return this; }
-    BBTaskBuilder *SetSource(int pinIndex, ParamRef *source) { m_Request.SourceParameters.push_back(ScriptBridgeInputSource{pinIndex, source ? source->GetID() : 0}); AddRef(); return this; }
+    BBTaskBuilder *Set(int pinIndex, ParamValue *value) { if (value) ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value->Value()); AddRef(); return this; }
+    BBTaskBuilder *SetSource(int pinIndex, ParamRef *source) {
+        if (!source || !source->IsValid()) {
+            SetScriptException("BBTaskBuilder.SetSource requires a valid ParamRef source.");
+            return nullptr;
+        }
+        ScriptBridgeInputSource request;
+        request.PinIndex = pinIndex;
+        request.SourceId = source->GetID();
+        request.SourceStamp = source->Stamp();
+        m_Request.SourceParameters.push_back(request);
+        AddRef();
+        return this;
+    }
     BBTaskBuilder *SetOperation(int pinIndex, ParamOp *operation) { if (operation) m_Request.OperationParameters.push_back(operation->RequestForPin(pinIndex)); AddRef(); return this; }
     BBTask *Start(int inputIndex) { return m_Bridge ? m_Bridge->StartTask(m_Request, m_Context, inputIndex) : nullptr; }
 

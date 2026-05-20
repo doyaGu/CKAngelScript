@@ -1,43 +1,21 @@
 #include "ScriptBridgeHandles.h"
 
-static CKGUID ResolveRequestTypeGuid(CKContext *context,
-                                     const ScriptBridgeOperationInput &input,
-                                     ScriptBridgeValueKind fallbackKind) {
-    if (input.TypeGuid.IsValid()) {
-        return input.TypeGuid;
-    }
-    if (!input.TypeName.empty()) {
-        return ScriptResolveParameterGuid(context, input.TypeName, fallbackKind);
-    }
-    return ScriptParameterGuidForValueKind(fallbackKind);
-}
-
 static CKGUID ResolveOperationInputGuid(CKContext *context,
                                         const ScriptBridgeOperationInput &input,
                                         std::string &error) {
     if (input.SourceId) {
-        CKParameter *source = ResolveParameterSource(context, input.SourceId);
+        CKParameter *source = ResolveStampedParameterSource(context, input.SourceId, input.SourceStamp, error);
         if (!source) {
-            error = "Operation input source parameter is not valid.";
+            if (error.empty()) {
+                error = "Operation input source parameter is not valid.";
+            }
             return CKGUID();
-        }
-        if (input.TypeGuid.IsValid()) {
-            return input.TypeGuid;
-        }
-        if (!input.TypeName.empty()) {
-            return ScriptResolveParameterGuid(context, input.TypeName, ScriptBridgeValueKind::None);
         }
         return source->GetGUID();
     }
 
-    if (input.HasValue) {
-        ScriptBridgeValueKind fallback = ScriptBridgeValueKind::None;
-        if (input.Value.ModeKind == ScriptBridgeParamValue::Mode::Value) {
-            fallback = input.Value.Value.Kind;
-        } else if (input.Value.ModeKind == ScriptBridgeParamValue::Mode::Text) {
-            fallback = ScriptBridgeValueKind::String;
-        }
-        return ResolveBridgeValueType(context, input.Value, fallback);
+    if (input.Kind == ScriptBridgeInputBindingKind::Value) {
+        return ResolveBridgeValueType(context, input.Value, ScriptParameterGuidForValue(input.Value));
     }
 
     return CKPGUID_NONE;
@@ -47,7 +25,7 @@ static CKParameterLocal *CreateOperationLiteralSource(CKBehavior *behavior,
                                                      int operationIndex,
                                                      int inputSlot,
                                                      CKGUID guid,
-                                                     const ScriptBridgeParamValue &value,
+                                                     const ScriptParamValue &value,
                                                      std::vector<CK_ID> &createdLocalIds,
                                                      std::string &error) {
     if (!behavior) {
@@ -90,12 +68,19 @@ static bool BindOperationInput(CKBehavior *behavior,
 
     CKParameter *source = nullptr;
     if (request.SourceId) {
-        source = ResolveParameterSource(behavior ? behavior->GetCKContext() : nullptr, request.SourceId);
+        source = ResolveStampedParameterSource(behavior ? behavior->GetCKContext() : nullptr,
+                                               request.SourceId,
+                                               request.SourceStamp,
+                                               error);
         if (!source) {
-            error = fmt::format("Parameter operation input {} source is not valid.", inputSlot);
+            if (error.empty()) {
+                error = fmt::format("Parameter operation input {} source is not valid.", inputSlot);
+            } else {
+                error = fmt::format("Parameter operation input {} source is not valid: {}", inputSlot, error);
+            }
             return false;
         }
-    } else if (request.HasValue) {
+    } else if (request.Kind == ScriptBridgeInputBindingKind::Value) {
         source = CreateOperationLiteralSource(behavior, operationIndex, inputSlot, input->GetGUID(), request.Value, createdLocalIds, error);
         if (!source) {
             return false;
@@ -137,6 +122,14 @@ static void DestroyCreatedOperationPieces(CKContext *context,
 
     for (CK_ID localId : createdLocalIds) {
         if (CKObject *local = GetCKObjectById(context, localId)) {
+            if (behavior) {
+                if (CKParameterLocal *localParam = CKParameterLocal::Cast(local)) {
+                    const int position = behavior->GetLocalParameterPosition(localParam);
+                    if (position >= 0) {
+                        behavior->RemoveLocalParameter(position);
+                    }
+                }
+            }
             if (!local->IsToBeDeleted()) {
                 context->DestroyObject(local);
             }
@@ -182,7 +175,7 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
     CKGUID resultGuid = request.ResultTypeGuid.IsValid()
         ? request.ResultTypeGuid
         : (!request.ResultTypeName.empty()
-            ? ScriptResolveParameterGuid(context, request.ResultTypeName, ScriptBridgeValueKind::None)
+            ? ScriptResolveParameterGuid(context, request.ResultTypeName)
             : targetParam->GetGUID());
     if (!resultGuid.IsValid() || resultGuid == CKPGUID_NONE) {
         resultGuid = targetParam->GetGUID();
@@ -204,13 +197,10 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
         return nullptr;
     }
 
-    bool operationListed = false;
     CKERROR addErr = behavior->AddParameterOperation(operation);
-    if (addErr == CK_OK) {
-        operationListed = true;
-    } else if (allowOwnerOnly) {
+    if (addErr != CK_OK && allowOwnerOnly) {
         operation->SetOwner(behavior);
-    } else {
+    } else if (addErr != CK_OK) {
         error = fmt::format("Failed to add CKParameterOperation to behavior '{}' (CKERROR {}).",
             SafeString(behavior->GetName()),
             addErr);
@@ -219,12 +209,17 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
     }
 
     std::vector<CK_ID> createdLocalIds;
+    CKParameter *previousSource = targetParam->GetDirectSource();
+    bool targetConnected = false;
     auto fail = [&](const std::string &message) -> ParamOperationRef * {
         error = message;
-        if (operationListed) {
-            behavior->RemoveParameterOperation(operation);
+        if (targetConnected && targetParam->GetDirectSource() == operation->GetOutParameter()) {
+            CKERROR restoreErr = targetParam->SetDirectSource(previousSource);
+            if (restoreErr != CK_OK) {
+                error += fmt::format(" Failed to restore previous input source (CKERROR {}).", restoreErr);
+            }
         }
-        DestroyCreatedOperationPieces(context, nullptr, operation, createdLocalIds);
+        DestroyCreatedOperationPieces(context, behavior, operation, createdLocalIds);
         return nullptr;
     };
 
@@ -248,6 +243,11 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
         return fail(error);
     }
 
+    CKERROR opErr = operation->DoOperation();
+    if (opErr != CK_OK) {
+        return fail(fmt::format("Parameter operation initialization failed (CKERROR {}).", opErr));
+    }
+
     CKERROR setErr = targetParam->SetDirectSource(operation->GetOutParameter());
     if (setErr != CK_OK) {
         return fail(fmt::format("Failed to connect operation output to input parameter #{} '{}' (CKERROR {}).",
@@ -255,14 +255,10 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
             SafeString(targetParam->GetName()),
             setErr));
     }
-
-    CKERROR opErr = operation->DoOperation();
-    if (opErr != CK_OK) {
-        return fail(fmt::format("Parameter operation initialization failed (CKERROR {}).", opErr));
-    }
+    targetConnected = true;
 
     if (operationIds) {
         operationIds->push_back(operation->GetID());
     }
-    return bridge->WrapParameterOperation(operation);
+    return bridge->WrapParameterOperation(operation, targetParam, previousSource, createdLocalIds);
 }
