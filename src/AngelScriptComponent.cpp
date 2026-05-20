@@ -1,0 +1,1924 @@
+//////////////////////////////////
+//////////////////////////////////
+//
+//     Angel Script Component
+//
+//////////////////////////////////
+//////////////////////////////////
+#include "CKAll.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <cstring>
+#include <sstream>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include "ScriptManager.h"
+#include "ScriptBehaviorBridge.h"
+#include "ScriptParameterConversion.h"
+#include "ScriptRunner.h"
+
+CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl();
+CKERROR CreateAngelScriptComponentProto(CKBehaviorPrototype **pproto);
+int AngelScriptComponent(const CKBehaviorContext &behcontext);
+CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext);
+
+namespace {
+
+constexpr int COMPONENT_STATE = 0;
+constexpr int OUTPUT_ERROR_MESSAGE = 1;
+constexpr int SCRIPT_PARAM = 0;
+constexpr int CLASS_PARAM = 1;
+constexpr int SOURCE_PARAM = 2;
+constexpr int FILE_PARAM = 3;
+constexpr int MANIFEST_PARAM = 4;
+constexpr int FIXED_INPUT_PARAMETER_COUNT = 5;
+
+std::string ReadStringParameter(CKBehavior *beh, int index) {
+    if (!beh) {
+        return {};
+    }
+
+    CKSTRING value = (CKSTRING) beh->GetInputParameterReadDataPtr(index);
+    return value ? std::string(value) : std::string();
+}
+
+std::string TrimString(const std::string &value) {
+    const auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char c) { return std::isspace(c) != 0; });
+    if (first == value.end()) {
+        return {};
+    }
+
+    const auto last = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char c) { return std::isspace(c) != 0; }).base();
+    return std::string(first, last);
+}
+
+std::string ToLower(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+bool NameEquals(CKSTRING actual, const std::string &expected) {
+    return actual && actual[0] != '\0' && actual == expected;
+}
+
+std::string StripQuotes(const std::string &value) {
+    std::string text = TrimString(value);
+    if (text.size() >= 2 && ((text.front() == '"' && text.back() == '"') || (text.front() == '\'' && text.back() == '\''))) {
+        text = text.substr(1, text.size() - 2);
+    }
+    return text;
+}
+
+bool ParseBoolText(const std::string &value, bool fallback = false) {
+    const std::string text = ToLower(StripQuotes(value));
+    if (text == "true" || text == "yes" || text == "on" || text == "1") {
+        return true;
+    }
+    if (text == "false" || text == "no" || text == "off" || text == "0") {
+        return false;
+    }
+    return fallback;
+}
+
+std::vector<std::string> TokenizeArguments(const std::string &args) {
+    std::vector<std::string> tokens;
+    std::string current;
+    char quote = '\0';
+
+    auto pushCurrent = [&]() {
+        std::string token = TrimString(current);
+        if (!token.empty()) {
+            tokens.push_back(token);
+        }
+        current.clear();
+    };
+
+    for (char c : args) {
+        if (quote != '\0') {
+            current.push_back(c);
+            if (c == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+
+        if (c == '"' || c == '\'') {
+            quote = c;
+            current.push_back(c);
+            continue;
+        }
+
+        if (c == '=' || c == ',' || c == ';' || std::isspace(static_cast<unsigned char>(c))) {
+            pushCurrent();
+            if (c == '=') {
+                tokens.emplace_back("=");
+            }
+            continue;
+        }
+
+        current.push_back(c);
+    }
+
+    pushCurrent();
+    return tokens;
+}
+
+bool IsComponentBindingKeyword(const std::string &keyword) {
+    const std::string key = ToLower(keyword);
+    return key == "ckinput" ||
+           key == "ckparam" ||
+           key == "ckcomponentinput" ||
+           key == "input" ||
+           key == "param" ||
+           key == "property" ||
+           key == "field" ||
+           key == "behavior" ||
+           key == "bb";
+}
+
+ScriptBridgeValueKind ValueKindFromComponentKind(ScriptComponentBindingKind kind) {
+    switch (kind) {
+        case ScriptComponentBindingKind::Int: return ScriptBridgeValueKind::Int;
+        case ScriptComponentBindingKind::Float: return ScriptBridgeValueKind::Float;
+        case ScriptComponentBindingKind::Bool: return ScriptBridgeValueKind::Bool;
+        case ScriptComponentBindingKind::String: return ScriptBridgeValueKind::String;
+        case ScriptComponentBindingKind::Guid: return ScriptBridgeValueKind::Guid;
+        case ScriptComponentBindingKind::Vector: return ScriptBridgeValueKind::Vector;
+        case ScriptComponentBindingKind::Vector2: return ScriptBridgeValueKind::Vector2;
+        case ScriptComponentBindingKind::Color: return ScriptBridgeValueKind::Color;
+        case ScriptComponentBindingKind::Quaternion: return ScriptBridgeValueKind::Quaternion;
+        case ScriptComponentBindingKind::Matrix: return ScriptBridgeValueKind::Matrix;
+        case ScriptComponentBindingKind::ObjectArray: return ScriptBridgeValueKind::ObjectArray;
+        default: return ScriptBridgeValueKind::None;
+    }
+}
+
+ScriptComponentBindingKind ComponentKindFromValueKind(ScriptBridgeValueKind kind) {
+    switch (kind) {
+        case ScriptBridgeValueKind::Int: return ScriptComponentBindingKind::Int;
+        case ScriptBridgeValueKind::Float: return ScriptComponentBindingKind::Float;
+        case ScriptBridgeValueKind::Bool: return ScriptComponentBindingKind::Bool;
+        case ScriptBridgeValueKind::String: return ScriptComponentBindingKind::String;
+        case ScriptBridgeValueKind::Guid: return ScriptComponentBindingKind::Guid;
+        case ScriptBridgeValueKind::Vector: return ScriptComponentBindingKind::Vector;
+        case ScriptBridgeValueKind::Vector2: return ScriptComponentBindingKind::Vector2;
+        case ScriptBridgeValueKind::Color: return ScriptComponentBindingKind::Color;
+        case ScriptBridgeValueKind::Quaternion: return ScriptComponentBindingKind::Quaternion;
+        case ScriptBridgeValueKind::Matrix: return ScriptComponentBindingKind::Matrix;
+        case ScriptBridgeValueKind::ObjectArray: return ScriptComponentBindingKind::ObjectArray;
+        default: return ScriptComponentBindingKind::Auto;
+    }
+}
+
+ScriptComponentBindingKind KindFromTypeName(const std::string &typeName) {
+    const std::string type = ToLower(StripQuotes(typeName));
+    if (type.empty() || type == "auto") {
+        return ScriptComponentBindingKind::Auto;
+    }
+    const ScriptBridgeValueKind valueKind = ScriptValueKindFromTypeName(type);
+    if (valueKind != ScriptBridgeValueKind::None) {
+        return ComponentKindFromValueKind(valueKind);
+    }
+    if (type == "behaviorref") {
+        return ScriptComponentBindingKind::BehaviorRef;
+    }
+    if (type == "bb" || type == "bbprototype" || type == "buildingblock") {
+        return ScriptComponentBindingKind::BBPrototype;
+    }
+    if (type == "object" || type == "ckobject" || type == "ckbeobject" || type == "behavior" ||
+        type == "ckbehavior" || type == "3dentity" || type == "ck3dentity" || type == "2dentity" ||
+        type == "ck2dentity" || type == "camera" || type == "ckcamera" || type == "light" ||
+        type == "cklight" || type == "material" || type == "ckmaterial" || type == "texture" ||
+        type == "cktexture" || type == "mesh" || type == "ckmesh" || type == "group" ||
+        type == "ckgroup" || type == "dataarray" || type == "ckdataarray") {
+        return ScriptComponentBindingKind::Object;
+    }
+    return ScriptComponentBindingKind::Auto;
+}
+
+CKGUID GuidFromClassId(CKContext *context, CK_CLASSID cid, CKGUID fallback = CKPGUID_OBJECT) {
+    CKParameterManager *parameterManager = context ? context->GetParameterManager() : nullptr;
+    if (parameterManager && cid != 0) {
+        CKGUID guid = parameterManager->ClassIDToGuid(cid);
+        if (guid != CKGUID() && parameterManager->GetParameterTypeDescription(guid)) {
+            return guid;
+        }
+    }
+    return fallback;
+}
+
+CKGUID GuidFromTypeName(CKContext *context, const std::string &typeName, ScriptComponentBindingKind kind) {
+    const std::string type = ToLower(StripQuotes(typeName));
+    CKGUID registered = ScriptResolveParameterGuid(context, typeName, ScriptBridgeValueKind::None);
+    if (registered != CKGUID()) {
+        return registered;
+    }
+    if (kind == ScriptComponentBindingKind::BBPrototype && (type == "behavior" || type == "ckbehavior")) {
+        return GuidFromClassId(context, CKCID_BEHAVIOR, CKPGUID_BEHAVIOR);
+    }
+    const ScriptBridgeValueKind valueKind = ValueKindFromComponentKind(kind);
+    if (valueKind != ScriptBridgeValueKind::None) {
+        return ScriptResolveParameterGuid(context, "", valueKind);
+    }
+    if (kind == ScriptComponentBindingKind::BBPrototype) {
+        return CKPGUID_STRING;
+    }
+    if (kind == ScriptComponentBindingKind::BehaviorRef || type == "behavior" || type == "ckbehavior") {
+        return GuidFromClassId(context, CKCID_BEHAVIOR, CKPGUID_BEHAVIOR);
+    }
+
+    const std::string rawType = StripQuotes(typeName);
+    CK_CLASSID classId = CKStringToClassID(const_cast<CKSTRING>(rawType.c_str()));
+    if (classId != 0) {
+        return GuidFromClassId(context, classId);
+    }
+
+    if (type == "3dentity" || type == "ck3dentity") {
+        return GuidFromClassId(context, CKCID_3DENTITY, CKPGUID_3DENTITY);
+    }
+    if (type == "2dentity" || type == "ck2dentity") {
+        return GuidFromClassId(context, CKCID_2DENTITY, CKPGUID_2DENTITY);
+    }
+    if (type == "camera" || type == "ckcamera") {
+        return GuidFromClassId(context, CKCID_CAMERA, CKPGUID_CAMERA);
+    }
+    if (type == "light" || type == "cklight") {
+        return GuidFromClassId(context, CKCID_LIGHT, CKPGUID_LIGHT);
+    }
+    if (type == "material" || type == "ckmaterial") {
+        return GuidFromClassId(context, CKCID_MATERIAL, CKPGUID_MATERIAL);
+    }
+    if (type == "texture" || type == "cktexture") {
+        return GuidFromClassId(context, CKCID_TEXTURE, CKPGUID_TEXTURE);
+    }
+    if (type == "mesh" || type == "ckmesh") {
+        return GuidFromClassId(context, CKCID_MESH, CKPGUID_MESH);
+    }
+    if (type == "group" || type == "ckgroup") {
+        return GuidFromClassId(context, CKCID_GROUP, CKPGUID_GROUP);
+    }
+    if (type == "dataarray" || type == "ckdataarray") {
+        return GuidFromClassId(context, CKCID_DATAARRAY, CKPGUID_DATAARRAY);
+    }
+    return GuidFromClassId(context, CKCID_OBJECT, CKPGUID_OBJECT);
+}
+
+CKGUID GuidFromPropertyType(CKContext *context, asIScriptEngine *engine, int typeId) {
+    asITypeInfo *type = engine ? engine->GetTypeInfoById(typeId) : nullptr;
+    if (!type) {
+        return GuidFromClassId(context, CKCID_OBJECT, CKPGUID_OBJECT);
+    }
+
+    const std::string name = type->GetName() ? type->GetName() : "";
+    CKGUID registered = ScriptResolveParameterGuid(context, name, ScriptBridgeValueKind::None);
+    if (registered != CKGUID()) {
+        return registered;
+    }
+
+    CK_CLASSID classId = CKStringToClassID(const_cast<CKSTRING>(name.c_str()));
+    if (classId != 0) {
+        return GuidFromClassId(context, classId);
+    }
+
+    if (name == "CKBehavior") {
+        return GuidFromClassId(context, CKCID_BEHAVIOR, CKPGUID_BEHAVIOR);
+    }
+    if (name == "CK3dEntity" || name == "CK3dObject") {
+        return GuidFromClassId(context, CKCID_3DENTITY, CKPGUID_3DENTITY);
+    }
+    if (name == "CK2dEntity") {
+        return GuidFromClassId(context, CKCID_2DENTITY, CKPGUID_2DENTITY);
+    }
+    if (name == "CKCamera" || name == "CKTargetCamera") {
+        return GuidFromClassId(context, CKCID_CAMERA, CKPGUID_CAMERA);
+    }
+    if (name == "CKLight" || name == "CKTargetLight") {
+        return GuidFromClassId(context, CKCID_LIGHT, CKPGUID_LIGHT);
+    }
+    if (name == "CKMaterial") {
+        return GuidFromClassId(context, CKCID_MATERIAL, CKPGUID_MATERIAL);
+    }
+    if (name == "CKTexture") {
+        return GuidFromClassId(context, CKCID_TEXTURE, CKPGUID_TEXTURE);
+    }
+    if (name == "CKMesh" || name == "CKPatchMesh" || name == "CKProgressiveMesh") {
+        return GuidFromClassId(context, CKCID_MESH, CKPGUID_MESH);
+    }
+    if (name == "CKGroup") {
+        return GuidFromClassId(context, CKCID_GROUP, CKPGUID_GROUP);
+    }
+    if (name == "CKDataArray") {
+        return GuidFromClassId(context, CKCID_DATAARRAY, CKPGUID_DATAARRAY);
+    }
+    return GuidFromClassId(context, CKCID_OBJECT, CKPGUID_OBJECT);
+}
+
+CK_CLASSID ClassIdFromPropertyType(asIScriptEngine *engine, int typeId) {
+    asITypeInfo *type = engine ? engine->GetTypeInfoById(typeId) : nullptr;
+    if (!type || !type->GetName()) {
+        return CKCID_OBJECT;
+    }
+
+    const std::string name = type->GetName();
+    CK_CLASSID sdkClassId = CKStringToClassID(const_cast<CKSTRING>(name.c_str()));
+    if (sdkClassId != 0) {
+        return sdkClassId;
+    }
+
+    if (name == "CKBehavior") {
+        return CKCID_BEHAVIOR;
+    }
+    if (name == "CKBeObject") {
+        return CKCID_BEOBJECT;
+    }
+    if (name == "CK3dObject") {
+        return CKCID_3DOBJECT;
+    }
+    if (name == "CK3dEntity") {
+        return CKCID_3DENTITY;
+    }
+    if (name == "CK2dEntity") {
+        return CKCID_2DENTITY;
+    }
+    if (name == "CKCamera" || name == "CKTargetCamera") {
+        return CKCID_CAMERA;
+    }
+    if (name == "CKLight" || name == "CKTargetLight") {
+        return CKCID_LIGHT;
+    }
+    if (name == "CKMaterial") {
+        return CKCID_MATERIAL;
+    }
+    if (name == "CKTexture") {
+        return CKCID_TEXTURE;
+    }
+    if (name == "CKMesh" || name == "CKPatchMesh" || name == "CKProgressiveMesh") {
+        return CKCID_MESH;
+    }
+    if (name == "CKGroup") {
+        return CKCID_GROUP;
+    }
+    if (name == "CKDataArray") {
+        return CKCID_DATAARRAY;
+    }
+    return CKCID_OBJECT;
+}
+
+std::string ClassNameFromPropertyType(asIScriptEngine *engine, int typeId) {
+    const char *decl = engine ? engine->GetTypeDeclaration(typeId, true) : nullptr;
+    return decl ? std::string(decl) : std::string("CKObject@");
+}
+
+ScriptComponentBindingKind InferKindFromProperty(asIScriptEngine *engine, int typeId) {
+    if (!engine) {
+        return ScriptComponentBindingKind::Auto;
+    }
+
+    if (typeId == asTYPEID_INT32 || typeId == asTYPEID_UINT32) {
+        return ScriptComponentBindingKind::Int;
+    }
+    if (typeId == asTYPEID_FLOAT) {
+        return ScriptComponentBindingKind::Float;
+    }
+    if (typeId == asTYPEID_BOOL) {
+        return ScriptComponentBindingKind::Bool;
+    }
+    const ScriptBridgeValueKind valueKind = ScriptValueKindFromAngelScriptType(engine, typeId);
+    if (valueKind != ScriptBridgeValueKind::None) {
+        return ComponentKindFromValueKind(valueKind);
+    }
+    if (typeId == engine->GetTypeIdByDecl("BehaviorRef@")) {
+        return ScriptComponentBindingKind::BehaviorRef;
+    }
+    if (typeId == engine->GetTypeIdByDecl("BBPrototype@")) {
+        return ScriptComponentBindingKind::BBPrototype;
+    }
+
+    asITypeInfo *type = engine->GetTypeInfoById(typeId);
+    asITypeInfo *objectType = engine->GetTypeInfoByName("CKObject");
+    if (type && objectType && (type == objectType || type->DerivesFrom(objectType))) {
+        return ScriptComponentBindingKind::Object;
+    }
+
+    return ScriptComponentBindingKind::Auto;
+}
+
+bool IsCompatiblePropertyType(asIScriptEngine *engine,
+                              int typeId,
+                              ScriptComponentBindingKind kind,
+                              std::string &expected) {
+    if (!engine) {
+        expected = "AngelScript engine";
+        return false;
+    }
+
+    switch (kind) {
+        case ScriptComponentBindingKind::Int:
+            expected = "int or uint";
+            return typeId == asTYPEID_INT32 || typeId == asTYPEID_UINT32;
+        case ScriptComponentBindingKind::Float:
+            expected = "float";
+            return typeId == asTYPEID_FLOAT;
+        case ScriptComponentBindingKind::Bool:
+            expected = "bool";
+            return typeId == asTYPEID_BOOL;
+        case ScriptComponentBindingKind::String:
+            expected = "string";
+            return typeId == engine->GetTypeIdByDecl("string");
+        case ScriptComponentBindingKind::Guid:
+        case ScriptComponentBindingKind::Vector:
+        case ScriptComponentBindingKind::Vector2:
+        case ScriptComponentBindingKind::Color:
+        case ScriptComponentBindingKind::Quaternion:
+        case ScriptComponentBindingKind::Matrix:
+        case ScriptComponentBindingKind::ObjectArray:
+            return IsScriptValueKindCompatibleWithAngelScriptType(engine, typeId, ValueKindFromComponentKind(kind), expected);
+        case ScriptComponentBindingKind::BehaviorRef:
+            expected = "BehaviorRef@";
+            return typeId == engine->GetTypeIdByDecl("BehaviorRef@");
+        case ScriptComponentBindingKind::BBPrototype:
+            expected = "BBPrototype@";
+            return typeId == engine->GetTypeIdByDecl("BBPrototype@");
+        case ScriptComponentBindingKind::Object: {
+            expected = "CKObject@ or subclass";
+            asITypeInfo *type = engine->GetTypeInfoById(typeId);
+            asITypeInfo *objectType = engine->GetTypeInfoByName("CKObject");
+            return type && objectType && (type == objectType || type->DerivesFrom(objectType));
+        }
+        default:
+            expected = "supported component field type";
+            return false;
+    }
+}
+
+bool ParseBindingMetadata(const std::string &metadata,
+                          const std::string &defaultFieldName,
+                          ScriptComponentBinding &binding) {
+    std::string text = TrimString(metadata);
+    if (text.empty()) {
+        return false;
+    }
+    if (text.size() >= 2 && text.front() == '[' && text.back() == ']') {
+        text = TrimString(text.substr(1, text.size() - 2));
+    }
+
+    std::string keyword;
+    std::string args;
+    const std::size_t open = text.find('(');
+    if (open != std::string::npos) {
+        keyword = TrimString(text.substr(0, open));
+        const std::size_t close = text.rfind(')');
+        args = close != std::string::npos && close > open
+            ? text.substr(open + 1, close - open - 1)
+            : text.substr(open + 1);
+    } else {
+        std::istringstream stream(text);
+        stream >> keyword;
+        std::getline(stream, args);
+        args = TrimString(args);
+    }
+
+    if (!IsComponentBindingKeyword(keyword)) {
+        return false;
+    }
+
+    binding.FieldName = defaultFieldName;
+    binding.ParameterName = defaultFieldName;
+    binding.TypeName.clear();
+    binding.DefaultValue.clear();
+    binding.HasDefault = false;
+    binding.InjectEveryFrame = true;
+    binding.HandleInjected = false;
+    binding.Kind = ScriptComponentBindingKind::Auto;
+
+    const std::string lowerKeyword = ToLower(keyword);
+    if (lowerKeyword == "behavior") {
+        binding.TypeName = "behaviorref";
+    } else if (lowerKeyword == "bb") {
+        binding.TypeName = "bb";
+    }
+
+    std::vector<std::string> positional;
+    const std::vector<std::string> tokens = TokenizeArguments(args);
+    for (std::size_t i = 0; i < tokens.size();) {
+        if (i + 2 < tokens.size() && tokens[i + 1] == "=") {
+            const std::string key = ToLower(StripQuotes(tokens[i]));
+            const std::string value = StripQuotes(tokens[i + 2]);
+            if (key == "name" || key == "param" || key == "parameter") {
+                binding.ParameterName = value;
+            } else if (key == "field" || key == "member" || key == "property") {
+                binding.FieldName = value;
+            } else if (key == "type" || key == "kind") {
+                binding.TypeName = value;
+            } else if (key == "default" || key == "value") {
+                binding.DefaultValue = value;
+                binding.HasDefault = true;
+            } else if (key == "update" || key == "sync") {
+                binding.InjectEveryFrame = ParseBoolText(value, true);
+            }
+            i += 3;
+            continue;
+        }
+
+        positional.push_back(StripQuotes(tokens[i]));
+        ++i;
+    }
+
+    if (!positional.empty()) {
+        if (binding.ParameterName.empty() || binding.ParameterName == defaultFieldName) {
+            binding.ParameterName = positional[0];
+        }
+    }
+    if (positional.size() > 1 && binding.TypeName.empty()) {
+        binding.TypeName = positional[1];
+    }
+    if (positional.size() > 2 && !binding.HasDefault) {
+        binding.DefaultValue = positional[2];
+        binding.HasDefault = true;
+    }
+
+    if (binding.FieldName.empty()) {
+        binding.FieldName = defaultFieldName;
+    }
+    if (binding.ParameterName.empty()) {
+        binding.ParameterName = binding.FieldName;
+    }
+    if (binding.FieldName.empty()) {
+        return false;
+    }
+
+    binding.Kind = KindFromTypeName(binding.TypeName);
+    return true;
+}
+
+bool ParseManifestLine(const std::string &line, ScriptComponentBinding &binding) {
+    std::string text = TrimString(line);
+    if (text.empty() || text.rfind("//", 0) == 0 || text.rfind("#", 0) == 0) {
+        return false;
+    }
+    if (text.size() >= 2 && text.front() == '[' && text.back() == ']') {
+        text = text.substr(1, text.size() - 2);
+    }
+
+    if (ParseBindingMetadata(text, std::string(), binding)) {
+        return true;
+    }
+
+    std::string defaultValue;
+    bool hasDefault = false;
+    const std::size_t equal = text.find('=');
+    if (equal != std::string::npos) {
+        defaultValue = StripQuotes(text.substr(equal + 1));
+        text = TrimString(text.substr(0, equal));
+        hasDefault = true;
+    }
+
+    for (char &c : text) {
+        if (c == ':') {
+            c = ' ';
+        }
+    }
+
+    const std::vector<std::string> tokens = TokenizeArguments(text);
+    if (tokens.size() < 2) {
+        return false;
+    }
+
+    binding = ScriptComponentBinding();
+    binding.FieldName = StripQuotes(tokens[0]);
+    binding.TypeName = StripQuotes(tokens[1]);
+    binding.ParameterName = binding.FieldName;
+    if (tokens.size() >= 3) {
+        binding.ParameterName = StripQuotes(tokens[2]);
+    }
+    binding.DefaultValue = defaultValue;
+    binding.HasDefault = hasDefault;
+    binding.InjectEveryFrame = true;
+    binding.Kind = KindFromTypeName(binding.TypeName);
+    return !binding.FieldName.empty();
+}
+
+void ReplaceOrAppendBinding(std::vector<ScriptComponentBinding> &bindings, const ScriptComponentBinding &binding) {
+    for (ScriptComponentBinding &existing : bindings) {
+        if (existing.FieldName == binding.FieldName) {
+            existing = binding;
+            return;
+        }
+    }
+    bindings.push_back(binding);
+}
+
+std::vector<ScriptComponentBinding> BuildComponentBindingSpecs(ScriptComponentState *state, asITypeInfo *type) {
+    std::vector<ScriptComponentBinding> bindings;
+    if (!state || !state->Runner || !type) {
+        return bindings;
+    }
+
+    std::shared_ptr<CachedScript> cached = state->Runner->GetCachedScript();
+    if (cached) {
+        const int typeId = type->GetTypeId();
+        for (asUINT i = 0; i < type->GetPropertyCount(); ++i) {
+            const char *propertyName = nullptr;
+            int propertyTypeId = 0;
+            bool isPrivate = false;
+            bool isProtected = false;
+            bool isConst = false;
+            type->GetProperty(i, &propertyName, &propertyTypeId, &isPrivate, &isProtected, nullptr, nullptr, nullptr, nullptr, nullptr, &isConst);
+            if (!propertyName || isPrivate || isProtected || isConst) {
+                continue;
+            }
+
+            const int metaCount = cached->GetClassVarMetadataCount(typeId, static_cast<int>(i));
+            for (int metaIndex = 0; metaIndex < metaCount; ++metaIndex) {
+                const char *metadata = cached->GetClassVarMetadata(typeId, static_cast<int>(i), metaIndex);
+                ScriptComponentBinding binding;
+                if (metadata && ParseBindingMetadata(metadata, propertyName, binding)) {
+                    ReplaceOrAppendBinding(bindings, binding);
+                }
+            }
+        }
+    }
+
+    std::istringstream manifest(state->Manifest);
+    std::string line;
+    while (std::getline(manifest, line)) {
+        ScriptComponentBinding binding;
+        if (ParseManifestLine(line, binding)) {
+            ReplaceOrAppendBinding(bindings, binding);
+        }
+    }
+
+    return bindings;
+}
+
+bool ResolveComponentBinding(asIScriptEngine *engine,
+                             asITypeInfo *type,
+                             CKContext *context,
+                             ScriptComponentBinding &binding,
+                             std::string &error) {
+    if (!engine || !type) {
+        error = "AngelScript type information is not available.";
+        return false;
+    }
+
+    for (asUINT i = 0; i < type->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        int propertyTypeId = 0;
+        bool isPrivate = false;
+        bool isProtected = false;
+        bool isConst = false;
+        type->GetProperty(i, &propertyName, &propertyTypeId, &isPrivate, &isProtected, nullptr, nullptr, nullptr, nullptr, nullptr, &isConst);
+        if (!propertyName || binding.FieldName != propertyName) {
+            continue;
+        }
+
+        if (isPrivate || isProtected || isConst) {
+            error = "Component field '" + binding.FieldName + "' must be a writable public class property.";
+            return false;
+        }
+
+        const ScriptComponentBindingKind inferred = InferKindFromProperty(engine, propertyTypeId);
+        const std::string declaredType = ToLower(StripQuotes(binding.TypeName));
+        if ((declaredType == "behavior" || declaredType == "ckbehavior") && inferred == ScriptComponentBindingKind::BehaviorRef) {
+            binding.Kind = ScriptComponentBindingKind::BehaviorRef;
+        } else if ((declaredType == "behavior" || declaredType == "ckbehavior") && inferred == ScriptComponentBindingKind::BBPrototype) {
+            binding.Kind = ScriptComponentBindingKind::BBPrototype;
+        }
+        if (binding.Kind == ScriptComponentBindingKind::Auto) {
+            binding.Kind = inferred;
+        }
+
+        std::string expected;
+        if (!IsCompatiblePropertyType(engine, propertyTypeId, binding.Kind, expected)) {
+            const char *actual = engine->GetTypeDeclaration(propertyTypeId, true);
+            error = "Component field '" + binding.FieldName + "' has unsupported or incompatible type. Expected " +
+                    expected + ", got " + (actual ? actual : "unknown") + ".";
+            return false;
+        }
+
+        binding.PropertyIndex = static_cast<int>(i);
+        binding.PropertyTypeId = propertyTypeId;
+        binding.ParameterGuid = binding.TypeName.empty()
+            ? (binding.Kind == ScriptComponentBindingKind::Object ? GuidFromPropertyType(context, engine, propertyTypeId) : GuidFromTypeName(context, "", binding.Kind))
+            : GuidFromTypeName(context, binding.TypeName, binding.Kind);
+        if (binding.ParameterName.empty()) {
+            binding.ParameterName = binding.FieldName;
+        }
+        return true;
+    }
+
+    error = "Component manifest references missing field: " + binding.FieldName;
+    return false;
+}
+
+bool SetParameterDefaultValue(CKParameterLocal *local, const ScriptComponentBinding &binding, CKContext *context) {
+    if (!local || !binding.HasDefault) {
+        return true;
+    }
+
+    const ScriptBridgeValueKind valueKind = ValueKindFromComponentKind(binding.Kind);
+    if (valueKind != ScriptBridgeValueKind::None) {
+        return SetParameterDefaultText(local, valueKind, binding.DefaultValue);
+    }
+
+    switch (binding.Kind) {
+        case ScriptComponentBindingKind::BBPrototype:
+            return local->SetStringValue(const_cast<CKSTRING>(binding.DefaultValue.c_str())) == CK_OK;
+        case ScriptComponentBindingKind::Object:
+        case ScriptComponentBindingKind::BehaviorRef: {
+            CK_ID id = 0;
+            char *end = nullptr;
+            const unsigned long parsed = std::strtoul(StripQuotes(binding.DefaultValue).c_str(), &end, 0);
+            if (end && *end == '\0') {
+                id = static_cast<CK_ID>(parsed);
+            } else if (context) {
+                CKObject *object = context->GetObjectByName(const_cast<CKSTRING>(binding.DefaultValue.c_str()));
+                id = object ? object->GetID() : 0;
+            }
+            return local->SetValue(&id, sizeof(id)) == CK_OK;
+        }
+        default:
+            return true;
+    }
+}
+
+int FindInputParameterIndex(CKBehavior *beh, const std::string &name) {
+    if (!beh) {
+        return -1;
+    }
+    for (int i = 0; i < beh->GetInputParameterCount(); ++i) {
+        CKParameterIn *param = beh->GetInputParameter(i);
+        if (param && NameEquals(param->GetName(), name)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+CKParameter *EnsureInputSource(CKBehavior *beh, CKParameterIn *input, const ScriptComponentBinding &binding) {
+    if (!beh || !input) {
+        return nullptr;
+    }
+
+    CKParameter *source = input->GetRealSource();
+    const std::string sourceName = "__CKAS_ComponentInput_" + binding.FieldName;
+    if (source) {
+        CKParameterLocal *localSource = CKParameterLocal::Cast(source);
+        if (localSource && NameEquals(localSource->GetName(), sourceName)) {
+            SetParameterDefaultValue(localSource, binding, beh->GetCKContext());
+        }
+        return source;
+    }
+
+    CKParameterLocal *local = nullptr;
+    for (int i = 0; i < beh->GetLocalParameterCount(); ++i) {
+        CKParameterLocal *candidate = beh->GetLocalParameter(i);
+        if (candidate && NameEquals(candidate->GetName(), sourceName)) {
+            local = candidate;
+            break;
+        }
+    }
+
+    if (!local) {
+        local = beh->CreateLocalParameter(const_cast<CKSTRING>(sourceName.c_str()), input->GetGUID());
+    }
+    if (!local) {
+        return nullptr;
+    }
+
+    SetParameterDefaultValue(local, binding, beh->GetCKContext());
+    beh->SetInputParameterDefaultValue(input, local);
+    if (input->SetDirectSource(local) != CK_OK) {
+        return nullptr;
+    }
+    return local;
+}
+
+bool SyncDeclaredInputParameters(CKBehavior *beh, ScriptComponentState *state, std::vector<ScriptComponentBinding> &bindings, std::string &error) {
+    if (!beh || !state) {
+        error = "Component behavior is not available.";
+        return false;
+    }
+
+    std::unordered_set<std::string> currentNames;
+    for (const ScriptComponentBinding &binding : bindings) {
+        if (currentNames.find(binding.ParameterName) != currentNames.end()) {
+            error = "Duplicate Component input parameter declaration: " + binding.ParameterName;
+            return false;
+        }
+        currentNames.insert(binding.ParameterName);
+    }
+
+    for (const std::string &oldName : state->ManagedInputParameterNames) {
+        if (currentNames.find(oldName) != currentNames.end()) {
+            continue;
+        }
+
+        for (int i = beh->GetInputParameterCount() - 1; i >= FIXED_INPUT_PARAMETER_COUNT; --i) {
+            CKParameterIn *param = beh->GetInputParameter(i);
+            if (param && NameEquals(param->GetName(), oldName)) {
+                CKParameterIn *removed = beh->RemoveInputParameter(i);
+                if (removed) {
+                    CKDestroyObject(removed);
+                }
+            }
+        }
+    }
+
+    state->ManagedInputParameterNames.clear();
+    for (ScriptComponentBinding &binding : bindings) {
+        int index = FindInputParameterIndex(beh, binding.ParameterName);
+        if (index >= 0 && index < FIXED_INPUT_PARAMETER_COUNT) {
+            error = "Component input parameter name is reserved: " + binding.ParameterName;
+            return false;
+        }
+        if (index < 0) {
+            CKParameterIn *created = beh->CreateInputParameter(const_cast<CKSTRING>(binding.ParameterName.c_str()), binding.ParameterGuid);
+            if (!created) {
+                error = "Failed to create Component input parameter: " + binding.ParameterName;
+                return false;
+            }
+            index = beh->GetInputParameterPosition(created);
+        }
+
+        CKParameterIn *input = beh->GetInputParameter(index);
+        if (!input) {
+            error = "Component input parameter is not available: " + binding.ParameterName;
+            return false;
+        }
+        if (input->GetGUID() != binding.ParameterGuid) {
+            input->SetGUID(binding.ParameterGuid, TRUE, const_cast<CKSTRING>(binding.ParameterName.c_str()));
+        }
+        if (!EnsureInputSource(beh, input, binding)) {
+            error = "Failed to create default source for Component input parameter: " + binding.ParameterName;
+            return false;
+        }
+
+        binding.InputParameterIndex = index;
+        state->ManagedInputParameterNames.push_back(binding.ParameterName);
+    }
+
+    return true;
+}
+
+bool ReadStringValue(CKParameter *source, std::string &value) {
+    return ReadParameterString(source, value);
+}
+
+CKObject *ReadObjectValue(CKParameter *source, CKContext *context) {
+    if (!source) {
+        return nullptr;
+    }
+
+    if (CKObject *object = source->GetValueObject(TRUE)) {
+        return object;
+    }
+
+    std::string text;
+    if (ReadStringValue(source, text)) {
+        text = TrimString(text);
+        if (!text.empty()) {
+            char *end = nullptr;
+            const unsigned long parsed = std::strtoul(text.c_str(), &end, 0);
+            if (end && *end == '\0') {
+                return context ? CKGetObject(context, static_cast<CK_ID>(parsed)) : nullptr;
+            }
+            return context ? context->GetObjectByName(const_cast<CKSTRING>(text.c_str())) : nullptr;
+        }
+    }
+
+    CK_ID id = 0;
+    if (source->GetValue(&id) == CK_OK && id != 0) {
+        return context ? CKGetObject(context, id) : nullptr;
+    }
+
+    return nullptr;
+}
+
+bool AssignObjectHandle(asIScriptObject *object, int propertyIndex, void *value) {
+    if (!object || propertyIndex < 0) {
+        return false;
+    }
+
+    void *address = object->GetAddressOfProperty(static_cast<asUINT>(propertyIndex));
+    if (!address) {
+        return false;
+    }
+
+    *static_cast<void **>(address) = value;
+    return true;
+}
+
+void **GetHandleSlot(asIScriptObject *object, int propertyIndex) {
+    if (!object || propertyIndex < 0) {
+        return nullptr;
+    }
+
+    void *address = object->GetAddressOfProperty(static_cast<asUINT>(propertyIndex));
+    return address ? static_cast<void **>(address) : nullptr;
+}
+
+bool AssignBehaviorRefHandle(ScriptBehaviorBridge *bridge, asIScriptObject *object, int propertyIndex, BehaviorRef *value) {
+    void **slot = GetHandleSlot(object, propertyIndex);
+    if (!slot) {
+        if (bridge && value) {
+            bridge->ReleaseBehaviorRef(value);
+        }
+        return false;
+    }
+
+    if (*slot == value) {
+        return true;
+    }
+
+    if (bridge && *slot) {
+        bridge->ReleaseBehaviorRef(static_cast<BehaviorRef *>(*slot));
+    }
+    *slot = value;
+    return true;
+}
+
+bool AssignBBPrototypeHandle(ScriptBehaviorBridge *bridge, asIScriptObject *object, int propertyIndex, BBPrototype *value) {
+    void **slot = GetHandleSlot(object, propertyIndex);
+    if (!slot) {
+        if (bridge && value) {
+            bridge->ReleasePrototype(value);
+        }
+        return false;
+    }
+
+    if (*slot == value) {
+        return true;
+    }
+
+    if (bridge && *slot) {
+        bridge->ReleasePrototype(static_cast<BBPrototype *>(*slot));
+    }
+    *slot = value;
+    return true;
+}
+
+bool ValidateObjectFieldValue(asIScriptEngine *engine, const ScriptComponentBinding &binding, CKObject *value, std::string &error) {
+    if (!value) {
+        return true;
+    }
+
+    const CK_CLASSID expected = ClassIdFromPropertyType(engine, binding.PropertyTypeId);
+    if (expected == CKCID_OBJECT || CKIsChildClassOf(value, expected)) {
+        return true;
+    }
+
+    error = "Component parameter '" + binding.ParameterName + "' value '" +
+            (value->GetName() ? value->GetName() : "<unnamed>") +
+            "' is not compatible with field '" + binding.FieldName + "' (" +
+            ClassNameFromPropertyType(engine, binding.PropertyTypeId) + ").";
+    return false;
+}
+
+BBPrototype *CreatePrototypeFromParameter(ScriptBehaviorBridge *bridge,
+                                          const CKBehaviorContext &behcontext,
+                                          CKParameter *source,
+                                          std::string &error) {
+    if (!source) {
+        return nullptr;
+    }
+
+    if (CKBehavior *behavior = CKBehavior::Cast(ReadObjectValue(source, behcontext.Context))) {
+        const CKGUID guid = behavior->GetPrototypeGuid();
+        if (guid != CKGUID()) {
+            return bridge ? bridge->CreatePrototype(behcontext, guid) : nullptr;
+        }
+        error = "BBPrototype Component parameter references a behavior without a prototype GUID.";
+        return nullptr;
+    }
+
+    std::string prototypeName;
+    if (!ReadStringValue(source, prototypeName)) {
+        error = "Failed to read BBPrototype Component parameter.";
+        return nullptr;
+    }
+
+    prototypeName = TrimString(prototypeName);
+    if (prototypeName.empty() || !bridge) {
+        return nullptr;
+    }
+
+    CKGUID guid;
+    return ParseScriptGuidString(prototypeName, guid)
+        ? bridge->CreatePrototype(behcontext, guid)
+        : bridge->CreatePrototype(behcontext, prototypeName);
+}
+
+bool AssignComponentValueField(const ScriptBridgeValue &value,
+                               void *propertyAddress,
+                               const ScriptComponentBinding &binding,
+                               std::string &error) {
+    if (!propertyAddress) {
+        error = "Component field address is not available: " + binding.FieldName;
+        return false;
+    }
+
+    switch (value.Kind) {
+        case ScriptBridgeValueKind::Int:
+            if (binding.PropertyTypeId == asTYPEID_UINT32) {
+                *static_cast<asUINT *>(propertyAddress) = static_cast<asUINT>(value.IntValue);
+            } else {
+                *static_cast<int *>(propertyAddress) = value.IntValue;
+            }
+            return true;
+        case ScriptBridgeValueKind::Float:
+            *static_cast<float *>(propertyAddress) = value.FloatValue;
+            return true;
+        case ScriptBridgeValueKind::Bool:
+            *static_cast<bool *>(propertyAddress) = value.BoolValue;
+            return true;
+        case ScriptBridgeValueKind::String:
+            *static_cast<std::string *>(propertyAddress) = value.StringValue;
+            return true;
+        case ScriptBridgeValueKind::Guid:
+            *static_cast<CKGUID *>(propertyAddress) = value.GuidValue;
+            return true;
+        case ScriptBridgeValueKind::Vector:
+            *static_cast<VxVector *>(propertyAddress) = value.VectorValue;
+            return true;
+        case ScriptBridgeValueKind::Vector2:
+            *static_cast<Vx2DVector *>(propertyAddress) = value.Vector2Value;
+            return true;
+        case ScriptBridgeValueKind::Color:
+            *static_cast<VxColor *>(propertyAddress) = value.ColorValue;
+            return true;
+        case ScriptBridgeValueKind::Quaternion:
+            *static_cast<VxQuaternion *>(propertyAddress) = value.QuaternionValue;
+            return true;
+        case ScriptBridgeValueKind::Matrix:
+            *static_cast<VxMatrix *>(propertyAddress) = value.MatrixValue;
+            return true;
+        case ScriptBridgeValueKind::ObjectArray: {
+            XObjectArray *array = static_cast<XObjectArray *>(propertyAddress);
+            array->Clear();
+            for (CK_ID id : value.ObjectIds) {
+                array->PushBack(id);
+            }
+            return true;
+        }
+        default:
+            error = "Unsupported Component binding kind for field: " + binding.FieldName;
+            return false;
+    }
+}
+
+bool InjectComponentParameters(const CKBehaviorContext &behcontext,
+                               ScriptComponentState *state,
+                               bool initial,
+                               std::string &error) {
+    CKBehavior *beh = behcontext.Behavior;
+    if (!beh || !state || !state->Object) {
+        error = "Component object is not ready for parameter injection.";
+        return false;
+    }
+
+    ScriptBehaviorBridge *bridge = nullptr;
+    ScriptManager *man = ScriptManager::GetManager(behcontext.Context);
+    if (man) {
+        bridge = man->GetBehaviorBridge();
+    }
+    asIScriptEngine *engine = state->Runner && state->Runner->GetModule() ? state->Runner->GetModule()->GetEngine() : nullptr;
+
+    for (ScriptComponentBinding &binding : state->Bindings) {
+        if (!initial && !binding.InjectEveryFrame) {
+            continue;
+        }
+
+        CKParameterIn *input = binding.InputParameterIndex >= 0 && binding.InputParameterIndex < beh->GetInputParameterCount()
+            ? beh->GetInputParameter(binding.InputParameterIndex)
+            : nullptr;
+        if (!input) {
+            error = "Component input parameter is not available: " + binding.ParameterName;
+            return false;
+        }
+
+        CKParameter *source = input->GetRealSource();
+        if (!source) {
+            error = "Component input parameter has no source: " + binding.ParameterName;
+            return false;
+        }
+
+        void *propertyAddress = state->Object->GetAddressOfProperty(static_cast<asUINT>(binding.PropertyIndex));
+        if (!propertyAddress) {
+            error = "Component field address is not available: " + binding.FieldName;
+            return false;
+        }
+
+        const ScriptBridgeValueKind valueKind = ValueKindFromComponentKind(binding.Kind);
+        if (valueKind != ScriptBridgeValueKind::None) {
+            ScriptBridgeValue value;
+            std::string readError;
+            if (!ReadParameterValueAs(source, valueKind, value, readError)) {
+                error = readError + " (" + binding.ParameterName + ")";
+                return false;
+            }
+            if (!AssignComponentValueField(value, propertyAddress, binding, error)) {
+                return false;
+            }
+            continue;
+        }
+
+        switch (binding.Kind) {
+            case ScriptComponentBindingKind::Int: {
+                int value = 0;
+                if (source->GetValue(&value) != CK_OK) {
+                    error = "Failed to read int Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                if (binding.PropertyTypeId == asTYPEID_UINT32) {
+                    *static_cast<asUINT *>(propertyAddress) = static_cast<asUINT>(value);
+                } else {
+                    *static_cast<int *>(propertyAddress) = value;
+                }
+                break;
+            }
+            case ScriptComponentBindingKind::Float: {
+                float value = 0.0f;
+                if (source->GetValue(&value) != CK_OK) {
+                    error = "Failed to read float Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                *static_cast<float *>(propertyAddress) = value;
+                break;
+            }
+            case ScriptComponentBindingKind::Bool: {
+                CKBOOL value = FALSE;
+                if (source->GetValue(&value) != CK_OK) {
+                    error = "Failed to read bool Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                *static_cast<bool *>(propertyAddress) = value != FALSE;
+                break;
+            }
+            case ScriptComponentBindingKind::String: {
+                std::string value;
+                if (!ReadStringValue(source, value)) {
+                    error = "Failed to read string Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                *static_cast<std::string *>(propertyAddress) = value;
+                break;
+            }
+            case ScriptComponentBindingKind::Guid: {
+                std::string text;
+                if (!ReadStringValue(source, text)) {
+                    error = "Failed to read CKGUID Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                CKGUID value;
+                if (!TrimString(text).empty() && !ParseScriptGuidString(text, value)) {
+                    error = "Failed to parse CKGUID Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                *static_cast<CKGUID *>(propertyAddress) = value;
+                break;
+            }
+            case ScriptComponentBindingKind::Vector: {
+                VxVector value;
+                if (source->GetValue(&value) != CK_OK) {
+                    error = "Failed to read VxVector Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                *static_cast<VxVector *>(propertyAddress) = value;
+                break;
+            }
+            case ScriptComponentBindingKind::Vector2: {
+                Vx2DVector value;
+                if (source->GetValue(&value) != CK_OK) {
+                    error = "Failed to read Vx2DVector Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                *static_cast<Vx2DVector *>(propertyAddress) = value;
+                break;
+            }
+            case ScriptComponentBindingKind::Color: {
+                VxColor value;
+                if (source->GetValue(&value) != CK_OK) {
+                    error = "Failed to read VxColor Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                *static_cast<VxColor *>(propertyAddress) = value;
+                break;
+            }
+            case ScriptComponentBindingKind::Quaternion: {
+                VxQuaternion value;
+                if (source->GetValue(&value) != CK_OK) {
+                    error = "Failed to read VxQuaternion Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                *static_cast<VxQuaternion *>(propertyAddress) = value;
+                break;
+            }
+            case ScriptComponentBindingKind::Matrix: {
+                VxMatrix value;
+                if (source->GetValue(&value) != CK_OK) {
+                    error = "Failed to read VxMatrix Component parameter: " + binding.ParameterName;
+                    return false;
+                }
+                *static_cast<VxMatrix *>(propertyAddress) = value;
+                break;
+            }
+            case ScriptComponentBindingKind::Object: {
+                CKObject *objectValue = ReadObjectValue(source, behcontext.Context);
+                if (!ValidateObjectFieldValue(engine, binding, objectValue, error)) {
+                    return false;
+                }
+                if (!AssignObjectHandle(state->Object, binding.PropertyIndex, objectValue)) {
+                    error = "Failed to assign object Component field: " + binding.FieldName;
+                    return false;
+                }
+                break;
+            }
+            case ScriptComponentBindingKind::BehaviorRef: {
+                CKBehavior *target = CKBehavior::Cast(ReadObjectValue(source, behcontext.Context));
+                const CK_ID targetId = target ? target->GetID() : 0;
+                if (!initial && binding.HandleInjected && binding.LastObjectId == targetId) {
+                    break;
+                }
+                if (!bridge && target) {
+                    error = "BehaviorRef Component injection requires ScriptBehaviorBridge.";
+                    return false;
+                }
+                BehaviorRef *ref = bridge && target ? bridge->WrapBehavior(target, state->BehaviorId) : nullptr;
+                if (!AssignBehaviorRefHandle(bridge, state->Object, binding.PropertyIndex, ref)) {
+                    error = "Failed to assign BehaviorRef Component field: " + binding.FieldName;
+                    return false;
+                }
+                binding.HandleInjected = true;
+                binding.LastObjectId = targetId;
+                break;
+            }
+            case ScriptComponentBindingKind::BBPrototype: {
+                CKBehavior *behaviorSource = CKBehavior::Cast(ReadObjectValue(source, behcontext.Context));
+                std::string sourceText;
+                if (!behaviorSource) {
+                    ReadStringValue(source, sourceText);
+                    sourceText = TrimString(sourceText);
+                }
+                const CK_ID sourceId = behaviorSource ? behaviorSource->GetID() : 0;
+                if (!initial && binding.HandleInjected && binding.LastObjectId == sourceId && binding.LastTextValue == sourceText) {
+                    break;
+                }
+
+                if (!bridge && (behaviorSource || !sourceText.empty())) {
+                    error = "BBPrototype Component injection requires ScriptBehaviorBridge.";
+                    return false;
+                }
+                std::string prototypeError;
+                BBPrototype *prototype = CreatePrototypeFromParameter(bridge, behcontext, source, prototypeError);
+                if (!prototypeError.empty()) {
+                    error = prototypeError + " (" + binding.ParameterName + ")";
+                    return false;
+                }
+                if (!AssignBBPrototypeHandle(bridge, state->Object, binding.PropertyIndex, prototype)) {
+                    error = "Failed to assign BBPrototype Component field: " + binding.FieldName;
+                    return false;
+                }
+                binding.HandleInjected = true;
+                binding.LastObjectId = sourceId;
+                binding.LastTextValue = sourceText;
+                break;
+            }
+            default:
+                error = "Unsupported Component binding kind for field: " + binding.FieldName;
+                return false;
+        }
+    }
+
+    return true;
+}
+
+std::string BuildRuntimeModuleName(CKBehavior *beh, const std::string &scriptName) {
+    return "__CKASComponent_" + std::to_string(beh ? beh->GetID() : 0) + "_" + scriptName;
+}
+
+bool IsOutputErrorEnabled(CKBehavior *beh) {
+    if (!beh) {
+        return false;
+    }
+
+    CKBOOL outputError = FALSE;
+    beh->GetLocalParameterValue(OUTPUT_ERROR_MESSAGE, &outputError);
+    return outputError != FALSE;
+}
+
+void SetErrorOutput(CKBehavior *beh, ScriptComponentState *state, const std::string &message, const std::string &stackTrace = std::string()) {
+    if (state) {
+        state->Failed = true;
+    }
+
+    if (!beh) {
+        return;
+    }
+
+    if (!message.empty()) {
+        if (CKContext *context = beh->GetCKContext()) {
+            context->OutputToConsoleEx(const_cast<char *>("[AngelScript Component] %s(%d): %s"),
+                beh->GetName() ? beh->GetName() : "<unnamed>",
+                beh->GetID(),
+                message.c_str());
+            if (!stackTrace.empty()) {
+                context->OutputToConsoleEx(const_cast<char *>("[AngelScript Component] stack: %s"), stackTrace.c_str());
+            }
+        }
+    }
+
+    if (IsOutputErrorEnabled(beh) && beh->GetOutputParameterCount() >= 2) {
+        beh->SetOutputParameterValue(0, message.c_str());
+        beh->SetOutputParameterValue(1, stackTrace.c_str());
+    }
+
+    beh->ActivateOutput(2);
+}
+
+void SetRunnerErrorOutput(CKBehavior *beh, ScriptComponentState *state, const char *context) {
+    std::string message = context ? context : "AngelScript Component failed.";
+    std::string stackTrace;
+
+    if (state && state->Runner) {
+        const std::string &runnerError = state->Runner->GetErrorMessage();
+        if (!runnerError.empty()) {
+            message += ": ";
+            message += runnerError;
+        }
+        stackTrace = state->Runner->GetStackTrace();
+    }
+
+    SetErrorOutput(beh, state, message, stackTrace);
+}
+
+ScriptComponentState *GetState(const CKBehaviorContext &behcontext) {
+    CKBehavior *beh = behcontext.Behavior;
+    if (!beh) {
+        return nullptr;
+    }
+
+    ScriptComponentState *state = nullptr;
+    beh->GetLocalParameterValue(COMPONENT_STATE, &state);
+    if (state) {
+        return state;
+    }
+
+    ScriptManager *man = ScriptManager::GetManager(behcontext.Context);
+    if (!man) {
+        return nullptr;
+    }
+
+    state = man->GetOrCreateComponentState(beh);
+    beh->SetLocalParameterValue(COMPONENT_STATE, &state);
+    return state;
+}
+
+bool IsContextLifecycleMethod(asIScriptFunction *func) {
+    if (!func || func->GetReturnTypeId() != asTYPEID_VOID || func->GetParamCount() != 1) {
+        return false;
+    }
+
+    int typeId = 0;
+    asDWORD flags = 0;
+    if (func->GetParam(0, &typeId, &flags) < 0) {
+        return false;
+    }
+
+    int contextTypeId = func->GetEngine()->GetTypeIdByDecl("CKBehaviorContext");
+    asDWORD refFlags = flags & asTM_INOUTREF;
+    return typeId == contextTypeId && refFlags == asTM_INREF && (flags & asTM_CONST) != 0;
+}
+
+bool CacheLifecycleMethod(asITypeInfo *type, const char *name, bool required, asIScriptFunction *&out, ScriptRunner *runner) {
+    out = nullptr;
+    bool sawName = false;
+    std::string invalidDecl;
+
+    for (asUINT i = 0; i < type->GetMethodCount(); ++i) {
+        asIScriptFunction *method = type->GetMethodByIndex(i);
+        if (!method || std::strcmp(method->GetName(), name) != 0) {
+            continue;
+        }
+
+        sawName = true;
+        if (invalidDecl.empty()) {
+            invalidDecl = method->GetDeclaration(false, false, true);
+        }
+
+        if (IsContextLifecycleMethod(method)) {
+            method->AddRef();
+            out = method;
+            return true;
+        }
+    }
+
+    if (sawName || required) {
+        std::string message = "Invalid or missing lifecycle method: void ";
+        message += name;
+        message += "(const CKBehaviorContext &in ctx)";
+        if (!invalidDecl.empty()) {
+            message += " (found ";
+            message += invalidDecl;
+            message += ")";
+        }
+        if (runner) {
+            runner->SetErrorMessage(message);
+        }
+        return false;
+    }
+
+    return true;
+}
+
+bool CacheComponentMethods(ScriptComponentState *state, asITypeInfo *type) {
+    if (!state || !state->Runner || !type) {
+        return false;
+    }
+
+    return CacheLifecycleMethod(type, "OnLoad", false, state->OnLoad, state->Runner) &&
+           CacheLifecycleMethod(type, "Awake", false, state->Awake, state->Runner) &&
+           CacheLifecycleMethod(type, "OnEnable", false, state->OnEnable, state->Runner) &&
+           CacheLifecycleMethod(type, "Start", false, state->Start, state->Runner) &&
+           CacheLifecycleMethod(type, "Update", true, state->Update, state->Runner) &&
+           CacheLifecycleMethod(type, "OnDisable", false, state->OnDisable, state->Runner) &&
+           CacheLifecycleMethod(type, "OnDestroy", false, state->OnDestroy, state->Runner) &&
+           CacheLifecycleMethod(type, "OnReset", false, state->OnReset, state->Runner);
+}
+
+bool InvokeLifecycle(CKBehavior *beh, ScriptComponentState *state, asIScriptFunction *method, const CKBehaviorContext &behcontext, const char *name) {
+    if (!method) {
+        return true;
+    }
+
+    if (!state || !state->Runner || !state->Object) {
+        SetErrorOutput(beh, state, std::string("Cannot execute lifecycle method: ") + name);
+        return false;
+    }
+
+    if (!state->Runner->ExecuteObjectMethod(state->Object, method, behcontext)) {
+        SetRunnerErrorOutput(beh, state, name);
+        return false;
+    }
+
+    return true;
+}
+
+bool ComponentIdentityChanged(ScriptComponentState *state,
+                              const std::string &scriptName,
+                              const std::string &className,
+                              const std::string &source,
+                              const std::string &file,
+                              const std::string &manifest,
+                              const std::string &runtimeModuleName,
+                              bool privateModule) {
+    return !state->Loaded ||
+           state->ScriptName != scriptName ||
+           state->ClassName != className ||
+           state->Source != source ||
+           state->File != file ||
+           state->Manifest != manifest ||
+           state->RuntimeModuleName != runtimeModuleName ||
+           state->PrivateModule != privateModule;
+}
+
+bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
+    CKBehavior *beh = behcontext.Behavior;
+    CKContext *context = behcontext.Context;
+
+    if (!beh || !context || !state) {
+        return false;
+    }
+
+    ScriptManager *man = ScriptManager::GetManager(context);
+    if (!man) {
+        SetErrorOutput(beh, state, "Can not get script manager.");
+        return false;
+    }
+
+    const std::string scriptName = ReadStringParameter(beh, SCRIPT_PARAM);
+    const std::string className = ReadStringParameter(beh, CLASS_PARAM);
+    const std::string source = ReadStringParameter(beh, SOURCE_PARAM);
+    const std::string file = ReadStringParameter(beh, FILE_PARAM);
+    const std::string manifest = ReadStringParameter(beh, MANIFEST_PARAM);
+
+    if (scriptName.empty()) {
+        SetErrorOutput(beh, state, "No script module specified.");
+        return false;
+    }
+
+    if (className.empty()) {
+        SetErrorOutput(beh, state, "No component class specified.");
+        return false;
+    }
+
+    const bool privateModule = !source.empty() || !file.empty();
+    const std::string runtimeModuleName = privateModule ? BuildRuntimeModuleName(beh, scriptName) : scriptName;
+
+    if (ComponentIdentityChanged(state, scriptName, className, source, file, manifest, runtimeModuleName, privateModule)) {
+        if (man->GetBehaviorBridge()) {
+            man->GetBehaviorBridge()->DestroyComponentTasks(state->BehaviorId);
+        }
+        man->ResetComponentStateRuntime(state, true);
+        state->ScriptName = scriptName;
+        state->ClassName = className;
+        state->Source = source;
+        state->File = file;
+        state->Manifest = manifest;
+        state->RuntimeModuleName = runtimeModuleName;
+        state->PrivateModule = privateModule;
+        state->Failed = false;
+    }
+
+    if (state->Failed) {
+        return false;
+    }
+
+    if (state->Loaded && state->Object && state->Update) {
+        std::string injectError;
+        if (!InjectComponentParameters(behcontext, state, false, injectError)) {
+            SetErrorOutput(beh, state, injectError);
+            return false;
+        }
+        return true;
+    }
+
+    if (privateModule) {
+        man->UnloadScript(runtimeModuleName.c_str());
+        int r = source.empty()
+            ? man->LoadScript(runtimeModuleName.c_str(), file.c_str())
+            : man->CompileScript(runtimeModuleName.c_str(), source.c_str());
+        if (r < 0) {
+            SetErrorOutput(beh, state, "Failed to load component script module.");
+            return false;
+        }
+    }
+
+    if (!state->Runner) {
+        state->Runner = new ScriptRunner(man);
+    }
+
+    if (!state->Runner->SetScript(runtimeModuleName.c_str())) {
+        SetRunnerErrorOutput(beh, state, "Failed to attach component script");
+        return false;
+    }
+
+    asITypeInfo *type = state->Runner->GetTypeInfoByName(className.c_str());
+    if (!type) {
+        SetErrorOutput(beh, state, "Component class not found: " + className);
+        return false;
+    }
+
+    std::vector<ScriptComponentBinding> bindings = BuildComponentBindingSpecs(state, type);
+    for (ScriptComponentBinding &binding : bindings) {
+        std::string bindingError;
+        if (!ResolveComponentBinding(state->Runner->GetModule()->GetEngine(), type, behcontext.Context, binding, bindingError)) {
+            SetErrorOutput(beh, state, bindingError);
+            return false;
+        }
+    }
+
+    std::string syncError;
+    if (!SyncDeclaredInputParameters(beh, state, bindings, syncError)) {
+        SetErrorOutput(beh, state, syncError);
+        return false;
+    }
+    state->Bindings = std::move(bindings);
+
+    state->Object = state->Runner->CreateScriptObject(type);
+    if (!state->Object) {
+        SetRunnerErrorOutput(beh, state, "Failed to instantiate component class");
+        return false;
+    }
+
+    std::string injectError;
+    if (!InjectComponentParameters(behcontext, state, true, injectError)) {
+        SetErrorOutput(beh, state, injectError);
+        return false;
+    }
+
+    if (!CacheComponentMethods(state, type)) {
+        SetRunnerErrorOutput(beh, state, "Failed to cache component lifecycle methods");
+        return false;
+    }
+
+    state->Loaded = true;
+
+    if (!state->OnLoadCalled) {
+        if (!InvokeLifecycle(beh, state, state->OnLoad, behcontext, "OnLoad")) {
+            return false;
+        }
+        state->OnLoadCalled = true;
+    }
+
+    if (!state->AwakeCalled) {
+        if (!InvokeLifecycle(beh, state, state->Awake, behcontext, "Awake")) {
+            return false;
+        }
+        state->AwakeCalled = true;
+    }
+
+    return true;
+}
+
+bool EnableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
+    CKBehavior *beh = behcontext.Behavior;
+    if (!state || state->InstanceEnabled || state->Paused || !state->ScriptActive) {
+        return true;
+    }
+
+    if (!EnsureComponentReady(behcontext, state)) {
+        return false;
+    }
+
+    if (!InvokeLifecycle(beh, state, state->OnEnable, behcontext, "OnEnable")) {
+        return false;
+    }
+
+    state->InstanceEnabled = true;
+    return true;
+}
+
+bool DisableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
+    CKBehavior *beh = behcontext.Behavior;
+    if (!state || !state->InstanceEnabled) {
+        return true;
+    }
+
+    if (!InvokeLifecycle(beh, state, state->OnDisable, behcontext, "OnDisable")) {
+        state->InstanceEnabled = false;
+        return false;
+    }
+
+    state->InstanceEnabled = false;
+    return true;
+}
+
+void DestroyInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
+    if (!state || !state->Object) {
+        return;
+    }
+
+    DisableInstance(behcontext, state);
+    InvokeLifecycle(behcontext.Behavior, state, state->OnDestroy, behcontext, "OnDestroy");
+}
+
+void SyncErrorOutputParameters(CKBehavior *beh) {
+    if (!beh) {
+        return;
+    }
+
+    if (IsOutputErrorEnabled(beh)) {
+        while (beh->GetOutputParameterCount() > 0) {
+            CKParameterOut *removed = beh->RemoveOutputParameter(0);
+            if (removed) {
+                CKDestroyObject(removed);
+            }
+        }
+        beh->CreateOutputParameter("Error", CKPGUID_STRING);
+        beh->CreateOutputParameter("StackTrace", CKPGUID_STRING);
+    } else {
+        while (beh->GetOutputParameterCount() > 0) {
+            CKParameterOut *removed = beh->RemoveOutputParameter(0);
+            if (removed) {
+                CKDestroyObject(removed);
+            }
+        }
+    }
+}
+
+} // namespace
+
+CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl() {
+    CKObjectDeclaration *od = CreateCKObjectDeclaration("AngelScript Component");
+    od->SetDescription("Run an AngelScript class as a component");
+    od->SetCategory("AngelScript");
+    od->SetType(CKDLL_BEHAVIORPROTOTYPE);
+    od->SetGuid(CKGUID(0x5f5d4a84, 0x3dfd4d19));
+    od->SetAuthorGuid(CKGUID(0x3a086b4d, 0x2f4a4f01));
+    od->SetAuthorName("Kakuty");
+    od->SetVersion(0x00010000);
+    od->SetCreationFunction(CreateAngelScriptComponentProto);
+    od->SetCompatibleClassId(CKCID_BEOBJECT);
+    return od;
+}
+
+CKERROR CreateAngelScriptComponentProto(CKBehaviorPrototype **pproto) {
+    CKBehaviorPrototype *proto = CreateCKBehaviorPrototype("AngelScript Component");
+    if (!proto) return CKERR_OUTOFMEMORY;
+
+    proto->DeclareInput("Enable");
+    proto->DeclareInput("Disable");
+
+    proto->DeclareOutput("Enabled");
+    proto->DeclareOutput("Disabled");
+    proto->DeclareOutput("Error");
+
+    proto->DeclareInParameter("Script", CKPGUID_STRING);
+    proto->DeclareInParameter("Class", CKPGUID_STRING);
+    proto->DeclareInParameter("Source", CKPGUID_STRING);
+    proto->DeclareInParameter("File", CKPGUID_STRING);
+    proto->DeclareInParameter("Manifest", CKPGUID_STRING);
+
+    proto->DeclareLocalParameter(nullptr, CKPGUID_POINTER);
+    proto->DeclareSetting("Output Error Message", CKPGUID_BOOL, "FALSE");
+
+    proto->SetFlags(CK_BEHAVIORPROTOTYPE_NORMAL);
+    proto->SetFunction(AngelScriptComponent);
+
+    proto->SetBehaviorFlags((CK_BEHAVIOR_FLAGS) (CKBEHAVIOR_INTERNALLYCREATEDINPUTS |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDOUTPUTS |
+                                                 CKBEHAVIOR_MESSAGESENDER |
+                                                 CKBEHAVIOR_MESSAGERECEIVER |
+                                                 CKBEHAVIOR_TARGETABLE |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS |
+                                                 CKBEHAVIOR_INTERNALLYCREATEDLOCALPARAMS));
+    proto->SetBehaviorCallbackFct(AngelScriptComponentCallBack);
+
+    *pproto = proto;
+    return CK_OK;
+}
+
+int AngelScriptComponent(const CKBehaviorContext &behcontext) {
+    CKBehavior *beh = behcontext.Behavior;
+    if (!beh) {
+        return CKBR_PARAMETERERROR;
+    }
+
+    ScriptComponentState *state = GetState(behcontext);
+    if (!state) {
+        beh->ActivateOutput(2);
+        return CKBR_OWNERERROR;
+    }
+
+    if (beh->IsInputActive(1)) {
+        beh->ActivateInput(1, FALSE);
+        state->DesiredEnabled = false;
+        DisableInstance(behcontext, state);
+        beh->ActivateOutput(1);
+        return CKBR_OK;
+    }
+
+    if (beh->IsInputActive(0)) {
+        beh->ActivateInput(0, FALSE);
+        state->DesiredEnabled = true;
+        state->ScriptActive = true;
+        state->Paused = false;
+        state->Failed = false;
+
+        if (!EnsureComponentReady(behcontext, state) || !EnableInstance(behcontext, state)) {
+            return CKBR_OK;
+        }
+
+        beh->ActivateOutput(0);
+    }
+
+    if (!state->DesiredEnabled || !state->ScriptActive || state->Paused || state->Failed) {
+        return CKBR_OK;
+    }
+
+    if (!EnsureComponentReady(behcontext, state) || !EnableInstance(behcontext, state)) {
+        return CKBR_OK;
+    }
+
+    if (!state->StartCalled) {
+        if (!InvokeLifecycle(beh, state, state->Start, behcontext, "Start")) {
+            return CKBR_OK;
+        }
+        state->StartCalled = true;
+    }
+
+    if (!InvokeLifecycle(beh, state, state->Update, behcontext, "Update")) {
+        return CKBR_OK;
+    }
+
+    return CKBR_ACTIVATENEXTFRAME;
+}
+
+CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
+    CKBehavior *beh = behcontext.Behavior;
+    CKContext *context = behcontext.Context;
+
+    if (!beh) {
+        return CKBR_PARAMETERERROR;
+    }
+
+    ScriptManager *man = ScriptManager::GetManager(context);
+    if (!man) {
+        return CKBR_OWNERERROR;
+    }
+
+    ScriptComponentState *state = nullptr;
+
+    switch (behcontext.CallbackMessage) {
+        case CKM_BEHAVIORCREATE:
+        case CKM_BEHAVIORLOAD: {
+            state = man->GetOrCreateComponentState(beh);
+            beh->SetLocalParameterValue(COMPONENT_STATE, &state);
+        }
+        break;
+
+        case CKM_BEHAVIORACTIVATESCRIPT: {
+            state = GetState(behcontext);
+            if (state) {
+                state->ScriptActive = true;
+                if (state->DesiredEnabled) {
+                    beh->Activate(TRUE);
+                }
+            }
+        }
+        break;
+
+        case CKM_BEHAVIORDEACTIVATESCRIPT: {
+            state = GetState(behcontext);
+            if (state) {
+                state->ScriptActive = false;
+                DisableInstance(behcontext, state);
+            }
+        }
+        break;
+
+        case CKM_BEHAVIORPAUSE: {
+            state = GetState(behcontext);
+            if (state) {
+                if (man->GetBehaviorBridge()) {
+                    man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), true);
+                }
+                state->Paused = true;
+                DisableInstance(behcontext, state);
+            }
+        }
+        break;
+
+        case CKM_BEHAVIORRESUME: {
+            state = GetState(behcontext);
+            if (state) {
+                if (man->GetBehaviorBridge()) {
+                    man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), false);
+                }
+                state->Paused = false;
+                if (state->DesiredEnabled && state->ScriptActive) {
+                    EnableInstance(behcontext, state);
+                    beh->Activate(TRUE);
+                }
+            }
+        }
+        break;
+
+        case CKM_BEHAVIORRESET: {
+            state = GetState(behcontext);
+            if (state) {
+                if (man->GetBehaviorBridge()) {
+                    man->GetBehaviorBridge()->ResetComponentTasks(beh->GetID());
+                }
+                state->Failed = false;
+                state->StartCalled = false;
+                if (state->Object && !InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset")) {
+                    return CKBR_OK;
+                }
+                if (state->DesiredEnabled && state->ScriptActive && !state->Paused) {
+                    beh->Activate(TRUE);
+                }
+            }
+        }
+        break;
+
+        case CKM_BEHAVIOREDITED: {
+            state = GetState(behcontext);
+            if (state) {
+                if (man->GetBehaviorBridge()) {
+                    man->GetBehaviorBridge()->DestroyComponentTasks(beh->GetID());
+                }
+                man->ResetComponentStateRuntime(state, true);
+            }
+        }
+        break;
+
+        case CKM_BEHAVIORSETTINGSEDITED: {
+            SyncErrorOutputParameters(beh);
+        }
+        break;
+
+        case CKM_BEHAVIORDELETE: {
+            state = GetState(behcontext);
+            if (state) {
+                state->DesiredEnabled = false;
+                state->ScriptActive = false;
+                DestroyInstance(behcontext, state);
+            }
+            man->ReleaseComponentState(beh);
+        }
+        break;
+
+        default:
+            break;
+    }
+
+    return CKBR_OK;
+}
