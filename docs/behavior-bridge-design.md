@@ -89,6 +89,23 @@ task.Step(ctx, on);      // explicit pulse
 
 `BBResult.Pout(index)`, `BBTask.Pout(index)`, and `GraphTask.Pout(index)` return live/lazy parameter handles. `BBResult` owns the temporary runtime behavior until the result handle is released; `BBTask.Destroy()` invalidates task-owned parameter handles.
 
+For script-facing ergonomics, bind `BBSpec` and `BBSlot` during setup. Slots still resolve to the same stable CK indices, but scripts no longer need to carry raw `int` fields for every IO and parameter:
+
+```angelscript
+BBSpec@ text = BB::Require(ctx, "Interface/Text/2D Text");
+BBSlot@ on = text.In("On");
+BBSlot@ textPin = text.Pin("Text");
+
+BBTask@ task = text.Spawn()
+    .Target(target)
+    .Set(textPin, "FPS: ...")
+    .Start(on);
+
+task.Step(ctx, on);
+```
+
+`BBSlot` records the slot kind, index, name, parameter type, and layout signature. Passing a `pout` slot to `Set()`, or using a stale slot after a prototype layout change, fails with a targeted diagnostic. The lower-level `int` API remains available for generated code and performance-sensitive scripts.
+
 ## Catalog Discovery
 
 BB prototype discovery is SDK-driven and uses `CKGetPrototypeDeclaration*` order:
@@ -131,6 +148,8 @@ The generated hints keep the flat GUID functions and add ergonomic helper namesp
 ```angelscript
 CKGUID textGuid = CKASCatalog::BBHints::Interface_Text_2D_Text::Guid();
 BBPrototype@ text = CKASCatalog::BBHints::Interface_Text_2D_Text::Find(ctx);
+BBSpec@ textSpec = CKASCatalog::BBHints::Interface_Text_2D_Text::Spec(ctx);
+BBSlot@ textPin = CKASCatalog::BBHints::Interface_Text_2D_Text::Pin_Text(ctx);
 
 uint flags = CKASCatalog::Flags::Render_Options::Mask(ctx, "Clear ZBuffer,Buffer Swapping");
 string flagsText = CKASCatalog::Flags::Render_Options::Text(ctx, flags);

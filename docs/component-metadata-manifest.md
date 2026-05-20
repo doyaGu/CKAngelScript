@@ -34,6 +34,12 @@ class DoorComponent {
     [bb param="Delay BB" default="Logics/Time/Timer"]
     BBPrototype@ DelayBB;
 
+    [param param="Text BB" type="bbspec" default="Interface/Text/2D Text"]
+    BBSpec@ TextBB;
+
+    [bbslot prototype="Interface/Text/2D Text" slot="pin" slotName="Text"]
+    BBSlot@ TextPin;
+
     [bb param="Existing Delay" type="behavior"]
     BBPrototype@ ExistingDelayPrototype;
 
@@ -62,6 +68,7 @@ Recognized metadata keywords:
 - `param`, `input`, `field`, `property`, `CKInput`, `CKParam`, `CKComponentInput`
 - `behavior` for `BehaviorRef@`
 - `bb` for `BBPrototype@`
+- `bbslot` for `BBSlot@`
 
 Recognized keys:
 
@@ -70,6 +77,10 @@ Recognized keys:
 - `type`, `kind`: parameter/editor type
 - `default`, `value`: default local source value
 - `update`, `sync`: whether scalar/object values are refreshed before each lifecycle/update call
+- `prototype`, `proto`, `bbname`, `bbquery`: prototype query for `BBSlot@`
+- `slot`, `slotKind`: one of `input`, `output`, `pin`, `pout`, or `local`
+- `slotName`: slot name for `BBSlot@`
+- `occurrence`: duplicate-name occurrence for `BBSlot@`
 
 ## Manifest Syntax
 
@@ -80,6 +91,8 @@ param field=Speed type=float name="Speed" default=1.0
 param field=Target type=3dentity name="Target"
 behavior field=OpenGraph param="Open Graph"
 bb field=DelayBB param="Delay BB" default="Logics/Time/Timer"
+param field=TextBB type=bbspec param="Text BB" default="Interface/Text/2D Text"
+bbslot field=TextPin prototype="Interface/Text/2D Text" slot=pin slotName=Text
 bb field=ExistingDelayPrototype type=behavior param="Existing Delay"
 ```
 
@@ -113,6 +126,8 @@ Current v1 supports:
 - `BehaviorRef@`
 - `ParamTypeInfo@`
 - `BBPrototype@`
+- `BBSpec@`
+- `BBSlot@`
 
 Value type aliases include `guid`, `vector`, `vector2`, `2dvector`, `color`, `quat`, `quaternion`, and `matrix`. Their default Virtools parameter GUIDs are `CKPGUID_STRING` for `CKGUID`, `CKPGUID_VECTOR`, `CKPGUID_2DVECTOR`, `CKPGUID_COLOR`, `CKPGUID_QUATERNION`, and `CKPGUID_MATRIX`.
 
@@ -131,6 +146,8 @@ Object metadata can use editor type aliases such as `object`, `behavior`, `3dent
 `BehaviorRef@` input parameters use `CKPGUID_BEHAVIOR`.
 
 `BBPrototype@` defaults to a string input containing a prototype name, `Category/Name`, or `guid:0x...,0x...`. If the declaration uses `type="behavior"` / `type=behavior`, the input parameter uses `CKPGUID_BEHAVIOR` instead; the injected `BBPrototype@` is built from the referenced behavior's prototype GUID.
+
+`BBSpec@` uses the same string/GUID/behavior source rules as `BBPrototype@`, but exposes the ergonomic slot-binding API. `BBSlot@` binds a setup-time slot from a `BBSpec`; declare `prototype`, `slot`, and `slotName` in metadata/manifest so native injection can resolve the slot once and report candidates on failure.
 
 `ParamTypeInfo@` injects the runtime CK parameter type metadata for the connected input source. It is useful when a component accepts plugin-defined or enum/flags parameters and wants to expose `Name()`, `Guid()`, `Describe()`, `Enum()`, `Flags()`, or `Struct()` without guessing the data layout.
 
@@ -171,7 +188,7 @@ All helpers also accept `CKContext@` in place of `CKBehaviorContext`. The type a
 - The Component creates missing input parameters and default local sources on first script object creation.
 - On script identity or manifest change, the old script object is released, managed input parameters no longer declared are removed, and the object is rebuilt.
 - Field injection runs before `OnLoad` and `Awake`.
-- Scalar, string, math value, CK object, `BehaviorRef@`, `ParamTypeInfo@`, and `BBPrototype@` fields are refreshed before later lifecycle/update calls unless `update=false` / `sync=false` is declared.
+- Scalar, string, math value, CK object, `BehaviorRef@`, `ParamTypeInfo@`, `BBPrototype@`, `BBSpec@`, and `BBSlot@` fields are refreshed before later lifecycle/update calls unless `update=false` / `sync=false` is declared.
 - Ref-counted handle fields are replaced through bridge-managed release helpers, so changing a behavior or BB prototype parameter no longer requires a full script object rebuild.
 - CK object injection validates the actual object against the script field type before writing the handle, so a `CKMaterial@` parameter cannot silently be written into a `CK3dEntity@` field.
 
@@ -189,14 +206,14 @@ Configuration errors activate the Component `Error` output:
 - failure to read or inject parameter values
 - object value incompatible with the declared script field type
 
-Diagnostics include the script field name, declared manifest/metadata type, generated CK parameter type, actual AngelScript field type, and relevant source value when available. Missing-field errors also list writable public field candidates. `BBPrototype@` failures report the unresolved BB name/GUID/behavior source, and `ParamTypeInfo@` failures report the source parameter's real CK type.
+Diagnostics include the script field name, declared manifest/metadata type, generated CK parameter type, actual AngelScript field type, and relevant source value when available. Missing-field errors also list writable public field candidates. `BBPrototype@` / `BBSpec@` failures report the unresolved BB name/GUID/behavior source, `BBSlot@` failures report prototype, slot kind, slot name, occurrence, and candidates, and `ParamTypeInfo@` failures report the source parameter's real CK type.
 
 When `Output Error Message` is enabled, the error text is written to the Component error output parameters.
 
 ## Remaining Gaps
 
 - Enum/flags values are represented as `int` / `uint` in scripts. Runtime lookup is available through `Param::*`; generated compile-time hints can be produced with `tools/generate_angelscript_catalog.py`.
-- No dedicated BB prototype picker; `BBPrototype@` currently uses string, `Category/Name`, GUID text, or SDK-driven `BB::Find/FindAll/At`.
+- No dedicated BB prototype picker; `BBPrototype@` / `BBSpec@` currently use string, `Category/Name`, GUID text, or SDK-driven `BB::Find/FindAll/At`. `BBSlot@` adds setup-time slot binding on top of the resolved prototype.
 - A dedicated BB prototype picker is still preferable long term. `type=behavior` is a practical editor-facing fallback because Virtools already has a behavior picker.
 - Managed parameter pruning is intentionally tied to manifest/metadata rebuilds, not to arbitrary runtime graph edits.
 - Generic plugin-defined struct parameters are not decoded field-by-field. Use `ParamRef@` source connections or SDK string-backed defaults for unknown types.
