@@ -1,5 +1,23 @@
 #include "ScriptBridgeHandles.h"
 
+namespace ScriptBehaviorBridgeInternal {
+
+std::string LayoutGuidKey(CKGUID guid) {
+    return fmt::format("{:08x}:{:08x}", guid.d[0], guid.d[1]);
+}
+
+void AppendLayoutSignature(std::string &signature, const std::string &text) {
+    signature += text;
+    signature += '\n';
+}
+
+void AppendLayoutSignature(std::string &signature, const CKGUID &guid) {
+    signature += LayoutGuidKey(guid);
+    signature += '\n';
+}
+
+} // namespace ScriptBehaviorBridgeInternal
+
 bool ScriptBridgeExecutionState::IndexSet::Empty() const {
     return InlineMask == 0 && Overflow.empty();
 }
@@ -103,6 +121,8 @@ void ScriptBehaviorBridge::Clear() {
     }
 
     m_GraphWatches.clear();
+    m_BehaviorLayouts.clear();
+    m_PrototypeLayouts.clear();
     ForceDestroyQueued();
 }
 
@@ -216,7 +236,7 @@ void ScriptBehaviorBridge::ReleasePrototype(BBPrototype *prototype) {
 
 BBResult *ScriptBehaviorBridge::RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex) {
     ScriptBridgeExecutionState state;
-    std::unordered_map<int, CK_ID> inputSources;
+    ScriptBridgeInputSourceBindings inputSources;
     std::vector<CK_ID> operationIds;
     CKBehavior *behavior = CreateRuntimeBehavior(request, ctx, state, &inputSources, &operationIds);
 
@@ -246,7 +266,7 @@ BBResult *ScriptBehaviorBridge::RunCall(const ScriptBridgeBBInvocationSpec &requ
 
 BBTask *ScriptBehaviorBridge::StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex) {
     ScriptBridgeExecutionState state;
-    auto sources = std::unordered_map<int, CK_ID>();
+    ScriptBridgeInputSourceBindings sources;
     std::vector<CK_ID> operations;
     CKBehavior *behavior = CreateRuntimeBehavior(request, ctx, state, &sources, &operations);
     if (!behavior) {
@@ -601,11 +621,53 @@ CKBehaviorPrototype *ScriptBehaviorBridge::ResolvePrototypeObject(const ScriptBr
     return prototype;
 }
 
+const ScriptBridgeLayoutRecord *ScriptBehaviorBridge::GetBehaviorLayout(CK_ID behaviorId, const ScriptBridgeObjectStamp &stamp) const {
+    if (!m_Manager || !m_Manager->GetCKContext()) {
+        return nullptr;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(m_Manager->GetCKContext(), behaviorId, stamp));
+    if (!behavior) {
+        m_BehaviorLayouts.erase(behaviorId);
+        return nullptr;
+    }
+
+    ScriptBridgeLayoutRecord fresh = BuildBehaviorLayout(behavior);
+    auto it = m_BehaviorLayouts.find(behaviorId);
+    if (it != m_BehaviorLayouts.end() && it->second.Signature == fresh.Signature) {
+        return &it->second;
+    }
+
+    auto [inserted, unused] = m_BehaviorLayouts.insert_or_assign(behaviorId, std::move(fresh));
+    (void) unused;
+    return &inserted->second;
+}
+
+const ScriptBridgeLayoutRecord *ScriptBehaviorBridge::GetPrototypeLayout(const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request) const {
+    (void) ctx;
+    std::string error;
+    CKBehaviorPrototype *prototype = ResolvePrototypeObject(request, error);
+    if (!prototype) {
+        return nullptr;
+    }
+
+    const std::string key = ScriptBehaviorBridgeInternal::LayoutGuidKey(prototype->GetGuid());
+    ScriptBridgeLayoutRecord fresh = BuildPrototypeLayout(prototype);
+    auto it = m_PrototypeLayouts.find(key);
+    if (it != m_PrototypeLayouts.end() && it->second.Signature == fresh.Signature) {
+        return &it->second;
+    }
+
+    auto [inserted, unused] = m_PrototypeLayouts.insert_or_assign(key, std::move(fresh));
+    (void) unused;
+    return &inserted->second;
+}
+
 
 bool ScriptBehaviorBridge::ApplyInputGraphRequests(CKBehavior *behavior,
                                                    const ScriptBridgeBBInvocationSpec &request,
                                                    std::string &error,
-                                                   std::unordered_map<int, CK_ID> *inputSources,
+                                                   ScriptBridgeInputSourceBindings *inputSources,
                                                    std::vector<CK_ID> *operationIds) {
     (void) inputSources;
     if (!behavior) {
@@ -659,7 +721,7 @@ bool ScriptBehaviorBridge::ApplyInputGraphRequests(CKBehavior *behavior,
 CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvocationSpec &request,
                                                         const CKBehaviorContext &ctx,
                                                         ScriptBridgeExecutionState &state,
-                                                        std::unordered_map<int, CK_ID> *inputSources,
+                                                        ScriptBridgeInputSourceBindings *inputSources,
                                                         std::vector<CK_ID> *operationIds) {
     if (!m_Manager || !m_Manager->GetCKContext()) {
         state.Ok = false;
@@ -851,7 +913,7 @@ int ScriptBehaviorBridge::ExecuteRuntimeBehavior(CKBehavior *behavior, const CKB
 ScriptBridgeExecutionState ScriptBehaviorBridge::ExecuteOnce(CKBehavior *behavior,
                                                        const CKBehaviorContext &ctx,
                                                        int inputIndex,
-                                                       std::unordered_map<int, CK_ID> *inputSources,
+                                                       ScriptBridgeInputSourceBindings *inputSources,
                                                        bool pulseDefaultInput) {
     ScriptBridgeExecutionState state;
     std::string error;
@@ -918,6 +980,169 @@ void ScriptBehaviorBridge::ForceDestroyQueued() {
         entry.FramesToWait = 0;
     }
     DestroyQueuedReady();
+}
+
+ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *behavior) const {
+    ScriptBridgeLayoutRecord layout;
+    layout.Prototype = false;
+    layout.BehaviorId = behavior ? behavior->GetID() : 0;
+    layout.BehaviorStamp = CaptureBridgeObjectStamp(behavior);
+
+    if (!behavior) {
+        return layout;
+    }
+
+    CKContext *context = behavior->GetCKContext();
+    layout.PrototypeGuid = behavior->GetPrototypeGuid();
+
+    layout.Inputs.reserve(behavior->GetInputCount());
+    for (int i = 0; i < behavior->GetInputCount(); ++i) {
+        CKBehaviorIO *io = behavior->GetInput(i);
+        layout.Inputs.push_back(ScriptBridgeLayoutIoSlot{SafeString(io ? io->GetName() : nullptr)});
+    }
+
+    layout.Outputs.reserve(behavior->GetOutputCount());
+    for (int i = 0; i < behavior->GetOutputCount(); ++i) {
+        CKBehaviorIO *io = behavior->GetOutput(i);
+        layout.Outputs.push_back(ScriptBridgeLayoutIoSlot{SafeString(io ? io->GetName() : nullptr)});
+    }
+
+    layout.Pins.reserve(behavior->GetInputParameterCount());
+    for (int i = 0; i < behavior->GetInputParameterCount(); ++i) {
+        CKParameterIn *pin = behavior->GetInputParameter(i);
+        CKParameter *source = pin ? pin->GetRealSource() : nullptr;
+        ScriptBridgeLayoutParamSlot slot;
+        slot.Kind = ScriptBridgeSlotKind::Pin;
+        slot.Index = i;
+        slot.ParameterId = pin ? pin->GetID() : 0;
+        slot.Name = SafeString(pin ? pin->GetName() : nullptr);
+        slot.TypeGuid = pin ? pin->GetGUID() : CKGUID();
+        slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
+        slot.DataSize = source ? source->GetDataSize() : ParameterDefaultSize(context, slot.TypeGuid);
+        layout.Pins.push_back(slot);
+    }
+
+    layout.Pouts.reserve(behavior->GetOutputParameterCount());
+    for (int i = 0; i < behavior->GetOutputParameterCount(); ++i) {
+        CKParameterOut *param = behavior->GetOutputParameter(i);
+        ScriptBridgeLayoutParamSlot slot;
+        slot.Kind = ScriptBridgeSlotKind::Pout;
+        slot.Index = i;
+        slot.ParameterId = param ? param->GetID() : 0;
+        slot.Name = SafeString(param ? param->GetName() : nullptr);
+        slot.TypeGuid = param ? param->GetGUID() : CKGUID();
+        slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
+        slot.DataSize = param ? param->GetDataSize() : ParameterDefaultSize(context, slot.TypeGuid);
+        layout.Pouts.push_back(slot);
+    }
+
+    layout.Locals.reserve(behavior->GetLocalParameterCount());
+    for (int i = 0; i < behavior->GetLocalParameterCount(); ++i) {
+        CKParameterLocal *param = behavior->GetLocalParameter(i);
+        ScriptBridgeLayoutParamSlot slot;
+        slot.Kind = ScriptBridgeSlotKind::Local;
+        slot.Index = i;
+        slot.ParameterId = param ? param->GetID() : 0;
+        slot.Name = SafeString(param ? param->GetName() : nullptr);
+        slot.TypeGuid = param ? param->GetGUID() : CKGUID();
+        slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
+        slot.DataSize = param ? param->GetDataSize() : ParameterDefaultSize(context, slot.TypeGuid);
+        layout.Locals.push_back(slot);
+    }
+
+    layout.Signature = LayoutSignature(layout);
+    return layout;
+}
+
+ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPrototype *prototype) const {
+    ScriptBridgeLayoutRecord layout;
+    layout.Prototype = true;
+    layout.PrototypeGuid = prototype ? prototype->GetGuid() : CKGUID();
+
+    CKContext *context = m_Manager ? m_Manager->GetCKContext() : nullptr;
+    if (!prototype) {
+        return layout;
+    }
+
+    layout.Inputs.reserve(prototype->GetInputCount());
+    for (int i = 0; i < prototype->GetInputCount(); ++i) {
+        CKBEHAVIORIO_DESC *io = GetPrototypeInput(prototype, i);
+        layout.Inputs.push_back(ScriptBridgeLayoutIoSlot{SafeString(io ? io->Name : nullptr)});
+    }
+
+    layout.Outputs.reserve(prototype->GetOutputCount());
+    for (int i = 0; i < prototype->GetOutputCount(); ++i) {
+        CKBEHAVIORIO_DESC *io = GetPrototypeOutput(prototype, i);
+        layout.Outputs.push_back(ScriptBridgeLayoutIoSlot{SafeString(io ? io->Name : nullptr)});
+    }
+
+    layout.Pins.reserve(prototype->GetInParameterCount());
+    for (int i = 0; i < prototype->GetInParameterCount(); ++i) {
+        CKPARAMETER_DESC *param = GetPrototypeInputParameter(prototype, i);
+        ScriptBridgeLayoutParamSlot slot;
+        slot.Kind = ScriptBridgeSlotKind::Pin;
+        slot.Index = i;
+        slot.Name = SafeString(param ? param->Name : nullptr);
+        slot.TypeGuid = param ? param->Guid : CKGUID();
+        slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
+        slot.DataSize = ParameterDefaultSize(context, slot.TypeGuid);
+        layout.Pins.push_back(slot);
+    }
+
+    layout.Pouts.reserve(prototype->GetOutParameterCount());
+    for (int i = 0; i < prototype->GetOutParameterCount(); ++i) {
+        CKPARAMETER_DESC *param = GetPrototypeOutputParameter(prototype, i);
+        ScriptBridgeLayoutParamSlot slot;
+        slot.Kind = ScriptBridgeSlotKind::Pout;
+        slot.Index = i;
+        slot.Name = SafeString(param ? param->Name : nullptr);
+        slot.TypeGuid = param ? param->Guid : CKGUID();
+        slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
+        slot.DataSize = ParameterDefaultSize(context, slot.TypeGuid);
+        layout.Pouts.push_back(slot);
+    }
+
+    layout.Locals.reserve(prototype->GetLocalParameterCount());
+    for (int i = 0; i < prototype->GetLocalParameterCount(); ++i) {
+        CKPARAMETER_DESC *param = GetPrototypeLocalParameter(prototype, i);
+        ScriptBridgeLayoutParamSlot slot;
+        slot.Kind = ScriptBridgeSlotKind::Local;
+        slot.Index = i;
+        slot.Name = SafeString(param ? param->Name : nullptr);
+        slot.TypeGuid = param ? param->Guid : CKGUID();
+        slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
+        slot.DataSize = ParameterDefaultSize(context, slot.TypeGuid);
+        layout.Locals.push_back(slot);
+    }
+
+    layout.Signature = LayoutSignature(layout);
+    return layout;
+}
+
+std::string ScriptBehaviorBridge::LayoutSignature(const ScriptBridgeLayoutRecord &layout) const {
+    std::string signature;
+    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, layout.Prototype ? "prototype" : "behavior");
+    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, layout.PrototypeGuid);
+    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("in:{}", layout.Inputs.size()));
+    for (const auto &slot : layout.Inputs) {
+        ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, slot.Name);
+    }
+    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("out:{}", layout.Outputs.size()));
+    for (const auto &slot : layout.Outputs) {
+        ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, slot.Name);
+    }
+
+    auto appendParams = [&](const char *label, const std::vector<ScriptBridgeLayoutParamSlot> &slots) {
+        ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("{}:{}", label, slots.size()));
+        for (const auto &slot : slots) {
+            ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("{}:{}:{}", slot.Index, slot.ParameterId, slot.Name));
+            ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, slot.TypeGuid);
+        }
+    };
+    appendParams("pin", layout.Pins);
+    appendParams("pout", layout.Pouts);
+    appendParams("local", layout.Locals);
+    return signature;
 }
 
 ScriptBehaviorBridge::TaskRecord *ScriptBehaviorBridge::FindTask(CK_ID taskId, int generation) {

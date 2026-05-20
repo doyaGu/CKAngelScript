@@ -4,7 +4,15 @@
 #include "ScriptBridgeCommon.h"
 
 // Parameter IO is intentionally index-first in bridge v2. The implementation
-// lives in ScriptBridgeCommon.h for lightweight setters and
+// lives in ScriptBridgeCommon.cpp for value/source binding and
 // ScriptBridgeParameterIO.cpp for CKParameterOperation wiring.
+
+ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
+                                           CKBehavior *behavior,
+                                           int pinIndex,
+                                           const ScriptBridgeOperationSpec &request,
+                                           std::string &error,
+                                           bool allowOwnerOnly,
+                                           std::vector<CK_ID> *operationIds);
 
 #endif // CK_SCRIPTBRIDGEPARAMETERIO_H

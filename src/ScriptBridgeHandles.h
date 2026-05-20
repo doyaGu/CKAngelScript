@@ -2,6 +2,7 @@
 #define CK_SCRIPTBRIDGEHANDLES_H
 
 #include "ScriptBridgeCommon.h"
+#include "ScriptBridgeParameterIO.h"
 #include "ScriptNativeBuffer.h"
 #include "ScriptParameterRegistry.h"
 
@@ -55,16 +56,67 @@ public:
     }
     std::string TypeName() const { return TypeGuid().IsValid() ? GuidToString(TypeGuid()) : std::string(); }
 
-    int AsInt() const { return m_Value.Data.IntValue; }
-    float AsFloat() const { return m_Value.Data.FloatValue; }
-    bool AsBool() const { return m_Value.Data.BoolValue; }
-    std::string AsString() const { return m_Value.Text(); }
-    CKGUID AsGuid() const { return m_Value.Data.GuidValue; }
-    VxVector AsVector() const { return m_Value.Data.VectorValue; }
-    Vx2DVector AsVector2() const { return m_Value.Data.Vector2Value; }
-    VxColor AsColor() const { return m_Value.Data.ColorValue; }
-    VxQuaternion AsQuaternion() const { return m_Value.Data.QuaternionValue; }
-    VxMatrix AsMatrix() const { return m_Value.Data.MatrixValue; }
+    int AsInt() const {
+        if (m_Value.Kind == ScriptParamValueKind::Int) return m_Value.Data.IntValue;
+        if (m_Value.Kind == ScriptParamValueKind::Enum || m_Value.Kind == ScriptParamValueKind::Flags) return static_cast<int>(m_Value.Data.DwordValue);
+        ReportWrongKind("AsInt", "int/enum/flags");
+        return 0;
+    }
+
+    float AsFloat() const {
+        if (m_Value.Kind == ScriptParamValueKind::Float) return m_Value.Data.FloatValue;
+        if (m_Value.Kind == ScriptParamValueKind::Int) return static_cast<float>(m_Value.Data.IntValue);
+        ReportWrongKind("AsFloat", "float/int");
+        return 0.0f;
+    }
+
+    bool AsBool() const {
+        if (m_Value.Kind == ScriptParamValueKind::Bool) return m_Value.Data.BoolValue;
+        ReportWrongKind("AsBool", "bool");
+        return false;
+    }
+
+    std::string AsString() const {
+        if (m_Value.Kind == ScriptParamValueKind::String || m_Value.Kind == ScriptParamValueKind::Text) return m_Value.Text();
+        ReportWrongKind("AsString", "string/text");
+        return std::string();
+    }
+
+    CKGUID AsGuid() const {
+        if (m_Value.Kind == ScriptParamValueKind::Guid) return m_Value.Data.GuidValue;
+        ReportWrongKind("AsGuid", "CKGUID");
+        return CKGUID();
+    }
+
+    VxVector AsVector() const {
+        if (m_Value.Kind == ScriptParamValueKind::Vector) return m_Value.Data.VectorValue;
+        ReportWrongKind("AsVector", "VxVector");
+        return VxVector();
+    }
+
+    Vx2DVector AsVector2() const {
+        if (m_Value.Kind == ScriptParamValueKind::Vector2) return m_Value.Data.Vector2Value;
+        ReportWrongKind("AsVector2", "Vx2DVector");
+        return Vx2DVector();
+    }
+
+    VxColor AsColor() const {
+        if (m_Value.Kind == ScriptParamValueKind::Color) return m_Value.Data.ColorValue;
+        ReportWrongKind("AsColor", "VxColor");
+        return VxColor();
+    }
+
+    VxQuaternion AsQuaternion() const {
+        if (m_Value.Kind == ScriptParamValueKind::Quaternion) return m_Value.Data.QuaternionValue;
+        ReportWrongKind("AsQuaternion", "VxQuaternion");
+        return VxQuaternion();
+    }
+
+    VxMatrix AsMatrix() const {
+        if (m_Value.Kind == ScriptParamValueKind::Matrix) return m_Value.Data.MatrixValue;
+        ReportWrongKind("AsMatrix", "VxMatrix");
+        return VxMatrix();
+    }
     ParamStructValue *AsStruct() const;
 
     std::string AsText() const {
@@ -73,6 +125,9 @@ public:
 
     NativeBuffer *AsRaw() const {
         if (m_Value.Kind != ScriptParamValueKind::Raw || m_Value.RawBytes().empty()) {
+            if (m_Value.Kind != ScriptParamValueKind::Raw) {
+                ReportWrongKind("AsRaw", "raw");
+            }
             return NativeBuffer::Create(0);
         }
         NativeBuffer *buffer = NativeBuffer::Create(m_Value.RawBytes().size());
@@ -82,6 +137,13 @@ public:
     }
 
 private:
+    void ReportWrongKind(const char *method, const char *expected) const {
+        SetScriptException(fmt::format("ParamValue.{} expected {}, got {}.",
+                                       method,
+                                       expected,
+                                       ScriptParamValueKindName(m_Value.Kind)));
+    }
+
     ScriptParamValue m_Value;
 };
 
@@ -138,6 +200,7 @@ private:
 
 inline ParamStructValue *ParamValue::AsStruct() const {
     if (m_Value.Kind != ScriptParamValueKind::Struct) {
+        ReportWrongKind("AsStruct", "struct");
         return nullptr;
     }
     return new ParamStructValue(m_Value);
@@ -362,51 +425,38 @@ public:
         : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_IsPrototype(true) {}
 
     int InputCount() const {
-        if (CKBehavior *behavior = Behavior()) return behavior->GetInputCount();
-        if (CKBehaviorPrototype *prototype = Prototype()) return prototype->GetInputCount();
-        return 0;
+        const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+        return layout ? static_cast<int>(layout->Inputs.size()) : 0;
     }
 
     int OutputCount() const {
-        if (CKBehavior *behavior = Behavior()) return behavior->GetOutputCount();
-        if (CKBehaviorPrototype *prototype = Prototype()) return prototype->GetOutputCount();
-        return 0;
+        const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+        return layout ? static_cast<int>(layout->Outputs.size()) : 0;
     }
 
     int PinCount() const {
-        if (CKBehavior *behavior = Behavior()) return behavior->GetInputParameterCount();
-        if (CKBehaviorPrototype *prototype = Prototype()) return prototype->GetInParameterCount();
-        return 0;
+        const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+        return layout ? static_cast<int>(layout->Pins.size()) : 0;
     }
 
     int PoutCount() const {
-        if (CKBehavior *behavior = Behavior()) return behavior->GetOutputParameterCount();
-        if (CKBehaviorPrototype *prototype = Prototype()) return prototype->GetOutParameterCount();
-        return 0;
+        const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+        return layout ? static_cast<int>(layout->Pouts.size()) : 0;
     }
 
     int LocalCount() const {
-        if (CKBehavior *behavior = Behavior()) return behavior->GetLocalParameterCount();
-        if (CKBehaviorPrototype *prototype = Prototype()) return prototype->GetLocalParameterCount();
-        return 0;
+        const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+        return layout ? static_cast<int>(layout->Locals.size()) : 0;
     }
 
     std::string InputName(int index) const {
-        if (CKBehavior *behavior = Behavior()) {
-            CKBehaviorIO *io = index >= 0 && index < behavior->GetInputCount() ? behavior->GetInput(index) : nullptr;
-            return io ? SafeString(io->GetName()) : std::string();
-        }
-        CKBEHAVIORIO_DESC *io = GetPrototypeInput(Prototype(), index);
-        return io ? SafeString(io->Name) : std::string();
+        const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+        return layout && index >= 0 && index < static_cast<int>(layout->Inputs.size()) ? layout->Inputs[index].Name : std::string();
     }
 
     std::string OutputNameAt(int index) const {
-        if (CKBehavior *behavior = Behavior()) {
-            CKBehaviorIO *io = index >= 0 && index < behavior->GetOutputCount() ? behavior->GetOutput(index) : nullptr;
-            return io ? SafeString(io->GetName()) : std::string();
-        }
-        CKBEHAVIORIO_DESC *io = GetPrototypeOutput(Prototype(), index);
-        return io ? SafeString(io->Name) : std::string();
+        const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+        return layout && index >= 0 && index < static_cast<int>(layout->Outputs.size()) ? layout->Outputs[index].Name : std::string();
     }
 
     ParamInfo *Pin(int index) const { return ParameterInfo(ScriptBridgeSlotKind::Pin, index); }
@@ -452,56 +502,32 @@ private:
         return m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
     }
 
-    CKBehavior *Behavior() const {
-        if (m_IsPrototype || !m_Bridge || !m_Bridge->GetManager()) return nullptr;
-        return CKBehavior::Cast(GetStampedCKObjectById(m_Bridge->GetManager()->GetCKContext(), m_BehaviorId, m_BehaviorStamp));
-    }
-
     CKObject *RawBehavior() const {
         if (m_IsPrototype || !m_Bridge || !m_Bridge->GetManager()) return nullptr;
         return GetCKObjectById(m_Bridge->GetManager()->GetCKContext(), m_BehaviorId);
     }
 
-    CKBehaviorPrototype *Prototype() const {
-        if (!m_IsPrototype || !m_Bridge) return nullptr;
-        std::string error;
-        return m_Bridge->ResolvePrototypeObject(m_Request, error);
+    const ScriptBridgeLayoutRecord *LayoutRecord() const {
+        if (!m_Bridge) return nullptr;
+        return m_IsPrototype
+            ? m_Bridge->GetPrototypeLayout(m_Context, m_Request)
+            : m_Bridge->GetBehaviorLayout(m_BehaviorId, m_BehaviorStamp);
     }
 
     ParamInfo *ParameterInfo(ScriptBridgeSlotKind kind, int index) const {
-        CKContext *context = Context();
-        if (CKBehavior *behavior = Behavior()) {
-            CKParameter *param = nullptr;
-            if (kind == ScriptBridgeSlotKind::Pin) {
-                if (index < 0 || index >= behavior->GetInputParameterCount()) return nullptr;
-                CKParameterIn *pin = behavior->GetInputParameter(index);
-                CKParameter *source = pin ? pin->GetRealSource() : nullptr;
-                const int dataSize = source ? source->GetDataSize() : ParameterDefaultSize(context, pin ? pin->GetGUID() : CKGUID());
-                return pin ? new ParamInfo(kind, index, SafeString(pin->GetName()), pin->GetGUID(), ParameterTypeLabel(context, pin->GetGUID()), dataSize) : nullptr;
-            }
-            if (kind == ScriptBridgeSlotKind::Pout) {
-                param = index >= 0 && index < behavior->GetOutputParameterCount() ? behavior->GetOutputParameter(index) : nullptr;
-            } else if (kind == ScriptBridgeSlotKind::Local) {
-                param = index >= 0 && index < behavior->GetLocalParameterCount() ? behavior->GetLocalParameter(index) : nullptr;
-            }
-            return param ? new ParamInfo(kind, index, SafeString(param->GetName()), param->GetGUID(), ParameterTypeLabel(context, param->GetGUID()), param->GetDataSize()) : nullptr;
-        }
-
-        CKBehaviorPrototype *prototype = Prototype();
-        CKPARAMETER_DESC *desc = nullptr;
+        const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+        if (!layout) return nullptr;
+        const std::vector<ScriptBridgeLayoutParamSlot> *slots = nullptr;
         if (kind == ScriptBridgeSlotKind::Pin) {
-            desc = GetPrototypeInputParameter(prototype, index);
+            slots = &layout->Pins;
         } else if (kind == ScriptBridgeSlotKind::Pout) {
-            desc = GetPrototypeOutputParameter(prototype, index);
+            slots = &layout->Pouts;
         } else if (kind == ScriptBridgeSlotKind::Local) {
-            desc = GetPrototypeLocalParameter(prototype, index);
+            slots = &layout->Locals;
         }
-        if (!desc) return nullptr;
-        int dataSize = 0;
-        CKParameterManager *pm = context ? context->GetParameterManager() : nullptr;
-        CKParameterTypeDesc *typeDesc = pm ? pm->GetParameterTypeDescription(desc->Guid) : nullptr;
-        if (typeDesc) dataSize = typeDesc->DefaultSize;
-        return new ParamInfo(kind, index, SafeString(desc->Name), desc->Guid, ParameterTypeLabel(context, desc->Guid), dataSize);
+        if (!slots || index < 0 || index >= static_cast<int>(slots->size())) return nullptr;
+        const ScriptBridgeLayoutParamSlot &slot = (*slots)[index];
+        return new ParamInfo(kind, index, slot.Name, slot.TypeGuid, slot.TypeName, slot.DataSize);
     }
 
     int FindIo(bool input, const std::string &name, int occurrence) const {
@@ -1241,14 +1267,6 @@ private:
     CKBehaviorContext m_Context;
     ScriptBridgeOperationSpec m_Request;
 };
-
-ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
-                                           CKBehavior *behavior,
-                                           int pinIndex,
-                                           const ScriptBridgeOperationSpec &request,
-                                           std::string &error,
-                                           bool allowOwnerOnly,
-                                           std::vector<CK_ID> *operationIds);
 
 class BehaviorRef final : public RefCounted {
 public:

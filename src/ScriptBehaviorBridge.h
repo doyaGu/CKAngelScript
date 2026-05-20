@@ -153,6 +153,45 @@ struct ScriptBridgeInputSource {
     ScriptBridgeObjectStamp SourceStamp;
 };
 
+struct ScriptBridgeInputSourceBinding {
+    int PinIndex = -1;
+    CK_ID SourceId = 0;
+};
+
+struct ScriptBridgeInputSourceBindings {
+    std::vector<ScriptBridgeInputSourceBinding> Items;
+
+    CK_ID Find(int pinIndex) const {
+        const auto it = std::lower_bound(Items.begin(), Items.end(), pinIndex,
+            [](const ScriptBridgeInputSourceBinding &entry, int index) {
+                return entry.PinIndex < index;
+            });
+        return it != Items.end() && it->PinIndex == pinIndex ? it->SourceId : 0;
+    }
+
+    void Set(int pinIndex, CK_ID sourceId) {
+        const auto it = std::lower_bound(Items.begin(), Items.end(), pinIndex,
+            [](const ScriptBridgeInputSourceBinding &entry, int index) {
+                return entry.PinIndex < index;
+            });
+        if (it != Items.end() && it->PinIndex == pinIndex) {
+            it->SourceId = sourceId;
+            return;
+        }
+        Items.insert(it, ScriptBridgeInputSourceBinding{pinIndex, sourceId});
+    }
+
+    void Remove(int pinIndex) {
+        const auto it = std::lower_bound(Items.begin(), Items.end(), pinIndex,
+            [](const ScriptBridgeInputSourceBinding &entry, int index) {
+                return entry.PinIndex < index;
+            });
+        if (it != Items.end() && it->PinIndex == pinIndex) {
+            Items.erase(it);
+        }
+    }
+};
+
 struct ScriptBridgeOperationInput {
     ScriptBridgeInputBindingKind Kind = ScriptBridgeInputBindingKind::Empty;
     ScriptParamValue Value;
@@ -188,6 +227,33 @@ struct ScriptBridgeExecutionState {
     std::string Error;
     IndexSet ActiveOutputs;
     IndexSet SeenOutputs;
+};
+
+struct ScriptBridgeLayoutIoSlot {
+    std::string Name;
+};
+
+struct ScriptBridgeLayoutParamSlot {
+    ScriptBridgeSlotKind Kind = ScriptBridgeSlotKind::Standalone;
+    int Index = -1;
+    CK_ID ParameterId = 0;
+    std::string Name;
+    CKGUID TypeGuid;
+    std::string TypeName;
+    int DataSize = 0;
+};
+
+struct ScriptBridgeLayoutRecord {
+    bool Prototype = false;
+    CK_ID BehaviorId = 0;
+    CKGUID PrototypeGuid;
+    ScriptBridgeObjectStamp BehaviorStamp;
+    std::string Signature;
+    std::vector<ScriptBridgeLayoutIoSlot> Inputs;
+    std::vector<ScriptBridgeLayoutIoSlot> Outputs;
+    std::vector<ScriptBridgeLayoutParamSlot> Pins;
+    std::vector<ScriptBridgeLayoutParamSlot> Pouts;
+    std::vector<ScriptBridgeLayoutParamSlot> Locals;
 };
 
 struct ScriptBridgeBBInvocationSpec {
@@ -228,6 +294,8 @@ public:
     BBResult *RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     BBTask *StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     CKBehaviorPrototype *ResolvePrototypeObject(const ScriptBridgeBBInvocationSpec &request, std::string &error) const;
+    const ScriptBridgeLayoutRecord *GetBehaviorLayout(CK_ID behaviorId, const ScriptBridgeObjectStamp &stamp) const;
+    const ScriptBridgeLayoutRecord *GetPrototypeLayout(const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request) const;
     ParamRef *WrapParameter(CKObject *parameter, ScriptBridgeSlotKind kind = ScriptBridgeSlotKind::Standalone, int index = -1);
     ParamOperationRef *WrapParameterOperation(CKParameterOperation *operation,
                                               CKParameterIn *targetInput = nullptr,
@@ -278,7 +346,7 @@ private:
         ScriptBridgeObjectStamp BehaviorStamp;
         CKDWORD Flags = 0;
         ScriptBridgeExecutionState LastState;
-        std::unordered_map<int, CK_ID> InputSources;
+        ScriptBridgeInputSourceBindings InputSources;
         std::vector<CK_ID> OperationIds;
 
         bool HasFlag(ScriptBridgeTaskFlags flag) const { return HasScriptBridgeTaskFlag(Flags, flag); }
@@ -319,19 +387,19 @@ private:
     CKBehavior *CreateRuntimeBehavior(const ScriptBridgeBBInvocationSpec &request,
                                       const CKBehaviorContext &ctx,
                                       ScriptBridgeExecutionState &state,
-                                      std::unordered_map<int, CK_ID> *inputSources,
+                                      ScriptBridgeInputSourceBindings *inputSources,
                                       std::vector<CK_ID> *operationIds);
     bool ApplyInputGraphRequests(CKBehavior *behavior,
                                  const ScriptBridgeBBInvocationSpec &request,
                                  std::string &error,
-                                 std::unordered_map<int, CK_ID> *inputSources,
+                                 ScriptBridgeInputSourceBindings *inputSources,
                                  std::vector<CK_ID> *operationIds);
     bool ResolvePrototype(const ScriptBridgeBBInvocationSpec &request, CKGUID &guid, std::string &error) const;
     int ExecuteRuntimeBehavior(CKBehavior *behavior, const CKBehaviorContext &ctx);
     ScriptBridgeExecutionState ExecuteOnce(CKBehavior *behavior,
                                      const CKBehaviorContext &ctx,
                                      int inputIndex,
-                                     std::unordered_map<int, CK_ID> *inputSources,
+                                     ScriptBridgeInputSourceBindings *inputSources,
                                      bool pulseDefaultInput);
     void QueueDestroy(CKBehavior *behavior, bool sendCallbacks, bool deleteCallbackAlreadySent = false);
     void DestroyQueuedReady();
@@ -342,6 +410,9 @@ private:
     const ResultRecord *FindResult(CK_ID resultId, int generation) const;
     ScriptBridgeGraphWatch *FindGraphWatch(CK_ID watchId, int generation);
     const ScriptBridgeGraphWatch *FindGraphWatch(CK_ID watchId, int generation) const;
+    ScriptBridgeLayoutRecord BuildBehaviorLayout(CKBehavior *behavior) const;
+    ScriptBridgeLayoutRecord BuildPrototypeLayout(CKBehaviorPrototype *prototype) const;
+    std::string LayoutSignature(const ScriptBridgeLayoutRecord &layout) const;
 
     ScriptManager *m_Manager = nullptr;
     CK_ID m_NextRuntimeId = 1;
@@ -352,6 +423,8 @@ private:
     std::unordered_map<CK_ID, ResultRecord> m_Results;
     std::unordered_map<CK_ID, TaskRecord> m_Tasks;
     std::unordered_map<CK_ID, ScriptBridgeGraphWatch> m_GraphWatches;
+    mutable std::unordered_map<CK_ID, ScriptBridgeLayoutRecord> m_BehaviorLayouts;
+    mutable std::unordered_map<std::string, ScriptBridgeLayoutRecord> m_PrototypeLayouts;
     std::vector<PendingDestroy> m_PendingDestroy;
 };
 
