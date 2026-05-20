@@ -3,6 +3,7 @@
 #include <fmt/format.h>
 
 #include "CKPathManager.h"
+#include "ScriptRunner.h"
 
 #include "ScriptInfo.h"
 #include "ScriptFormat.h"
@@ -12,6 +13,9 @@
 #include "ScriptUtils.h"
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
+#include "ScriptBehaviorBridge.h"
+#include "ScriptParameterConversion.h"
+#include "ScriptParameterRegistry.h"
 
 // Application modules
 #include "add_on/scripthelper/scripthelper.h"
@@ -52,19 +56,60 @@ CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
 }
 
 CKERROR ScriptManager::PostClearAll() {
+    if (m_BehaviorBridge) {
+        m_BehaviorBridge->Clear();
+    }
+    ClearComponentStates();
     ClearCKObjectData();
     return CK_OK;
 }
 
+CKERROR ScriptManager::PreProcess() {
+    return m_BehaviorBridge ? m_BehaviorBridge->PreProcess() : CK_OK;
+}
+
+CKERROR ScriptManager::PostProcess() {
+    return m_BehaviorBridge ? m_BehaviorBridge->PostProcess() : CK_OK;
+}
+
 CKERROR ScriptManager::OnCKInit() {
+    std::string conversionError;
+    if (!RunScriptParameterConversionSelfTest(conversionError)) {
+        if (m_Context) {
+            m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] Parameter conversion self-test failed: %s"),
+                                         conversionError.c_str());
+        }
+        return CKERR_INVALIDOPERATION;
+    }
+    if (!RunScriptParameterRegistrySelfTest(m_Context, conversionError)) {
+        if (m_Context) {
+            m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] Parameter registry self-test failed: %s"),
+                                         conversionError.c_str());
+        }
+        return CKERR_INVALIDOPERATION;
+    }
+    if (!RunScriptBehaviorBridgeSelfTest(m_Context, m_ScriptEngine, conversionError)) {
+        if (m_Context) {
+            m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] Behavior bridge self-test failed: %s"),
+                                         conversionError.c_str());
+        }
+        return CKERR_INVALIDOPERATION;
+    }
     return CK_OK;
 }
 
 CKERROR ScriptManager::OnCKEnd() {
+    if (m_BehaviorBridge) {
+        m_BehaviorBridge->Clear();
+    }
+    ClearComponentStates();
     return CK_OK;
 }
 
 CKERROR ScriptManager::OnCKReset() {
+    if (m_BehaviorBridge) {
+        m_BehaviorBridge->Clear();
+    }
     return CK_OK;
 }
 
@@ -96,6 +141,11 @@ int ScriptManager::Shutdown() {
     if (!IsInited())
         return -2;
 
+    if (m_BehaviorBridge) {
+        m_BehaviorBridge->Clear();
+    }
+    ClearComponentStates();
+
     for (auto *context : m_ScriptContexts) {
         context->Release();
     }
@@ -103,6 +153,8 @@ int ScriptManager::Shutdown() {
 
     ClearCKObjectData();
     m_ScriptCache.Clear();
+
+    m_BehaviorBridge.reset();
 
     if (m_ScriptEngine) {
         m_ScriptEngine->ShutDownAndRelease();
@@ -372,6 +424,133 @@ void ScriptManager::ReleaseCKObjectCallbacks(CK_ID id) {
     }
 }
 
+static void ReleaseScriptFunction(asIScriptFunction *&func) {
+    if (!func) {
+        return;
+    }
+
+    func->Release();
+    func = nullptr;
+}
+
+ScriptComponentState *ScriptManager::GetOrCreateComponentState(CKBehavior *behavior) {
+    if (!behavior) {
+        return nullptr;
+    }
+
+    const CK_ID id = behavior->GetID();
+    auto it = m_ComponentStates.find(id);
+    if (it != m_ComponentStates.end()) {
+        it->second->Behavior = behavior;
+        return it->second.get();
+    }
+
+    auto state = std::make_unique<ScriptComponentState>();
+    state->BehaviorId = id;
+    state->Behavior = behavior;
+
+    ScriptComponentState *raw = state.get();
+    m_ComponentStates[id] = std::move(state);
+    return raw;
+}
+
+ScriptComponentState *ScriptManager::GetComponentState(CK_ID id) const {
+    auto it = m_ComponentStates.find(id);
+    if (it == m_ComponentStates.end()) {
+        return nullptr;
+    }
+
+    return it->second.get();
+}
+
+void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool unloadPrivateModule) {
+    if (!state) {
+        return;
+    }
+
+    if (m_BehaviorBridge && state->BehaviorId) {
+        m_BehaviorBridge->DestroyComponentTasks(state->BehaviorId);
+    }
+
+    ReleaseScriptFunction(state->OnLoad);
+    ReleaseScriptFunction(state->Awake);
+    ReleaseScriptFunction(state->OnEnable);
+    ReleaseScriptFunction(state->Start);
+    ReleaseScriptFunction(state->Update);
+    ReleaseScriptFunction(state->OnDisable);
+    ReleaseScriptFunction(state->OnDestroy);
+    ReleaseScriptFunction(state->OnReset);
+
+    if (state->Object) {
+        state->Object->Release();
+        state->Object = nullptr;
+    }
+
+    if (state->Runner) {
+        state->Runner->Reset();
+        delete state->Runner;
+        state->Runner = nullptr;
+    }
+
+    if (unloadPrivateModule && state->PrivateModule && !state->RuntimeModuleName.empty()) {
+        UnloadScript(state->RuntimeModuleName.c_str());
+    }
+
+    state->RuntimeModuleName.clear();
+    state->Bindings.clear();
+    state->PrivateModule = false;
+    state->Loaded = false;
+    state->OnLoadCalled = false;
+    state->AwakeCalled = false;
+    state->StartCalled = false;
+    state->InstanceEnabled = false;
+    state->Failed = false;
+}
+
+void ScriptManager::ReleaseComponentState(CKBehavior *behavior) {
+    if (!behavior) {
+        return;
+    }
+
+    ScriptComponentState *state = GetComponentState(behavior->GetID());
+    if (state && state->Behavior) {
+        ScriptComponentState *nullState = nullptr;
+        state->Behavior->SetLocalParameterValue(0, &nullState);
+    }
+
+    ReleaseComponentState(behavior->GetID());
+}
+
+void ScriptManager::ReleaseComponentState(CK_ID id) {
+    auto it = m_ComponentStates.find(id);
+    if (it == m_ComponentStates.end()) {
+        return;
+    }
+
+    if (m_BehaviorBridge) {
+        m_BehaviorBridge->DestroyComponentTasks(id);
+    }
+    ResetComponentStateRuntime(it->second.get(), true);
+    m_ComponentStates.erase(it);
+}
+
+void ScriptManager::ClearComponentStates() {
+    for (auto &entry : m_ComponentStates) {
+        if (m_BehaviorBridge) {
+            m_BehaviorBridge->DestroyComponentTasks(entry.first);
+        }
+        ResetComponentStateRuntime(entry.second.get(), true);
+    }
+    m_ComponentStates.clear();
+}
+
+ScriptBehaviorBridge *ScriptManager::GetBehaviorBridge() {
+    if (!m_BehaviorBridge) {
+        m_BehaviorBridge = std::make_unique<ScriptBehaviorBridge>(this);
+    }
+    return m_BehaviorBridge.get();
+}
+
 void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
     const char *type = "NULL";
     switch (msg.type) {
@@ -581,4 +760,6 @@ void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
 
     RegisterVxMath(m_ScriptEngine);
     RegisterCK2(m_ScriptEngine);
+    RegisterScriptParameterRegistry(m_ScriptEngine);
+    RegisterScriptBehaviorBridge(m_ScriptEngine);
 }

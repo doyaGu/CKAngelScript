@@ -4,6 +4,7 @@
 #include <string>
 #include <chrono>
 #include <functional>
+#include <memory>
 
 #include <angelscript.h>
 
@@ -32,10 +33,16 @@ public:
     bool SetScript(const char *scriptName);
     void ResetScript();
 
+    std::shared_ptr<CachedScript> GetCachedScript() const { return m_CachedScript; }
+    asIScriptModule *GetModule() const;
+    asITypeInfo *GetTypeInfoByName(const char *name) const;
+    asIScriptObject *CreateScriptObject(asITypeInfo *type);
+
     asIScriptFunction *GetFunctionByName(const char *name) const;
     asIScriptFunction *GetFunctionByDecl(const char *decl) const;
 
     bool ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
+    bool ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
 
     // Timing / metrics
     bool IsProfiling() const { return m_Profiling; }

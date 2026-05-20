@@ -1,6 +1,11 @@
 #ifndef CK_SCRIPTMANAGER_H
 #define CK_SCRIPTMANAGER_H
 
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include <angelscript.h>
 
 #include "CKBaseManager.h"
@@ -11,6 +16,82 @@
 #define SCRIPT_MANAGER_GUID CKGUID(0x70955bd2,0x30684456)
 
 #define SCRIPT_MANAGER_TYPE 3000
+
+class CKBehavior;
+class ScriptBehaviorBridge;
+class ScriptRunner;
+
+enum class ScriptComponentBindingKind {
+    Auto,
+    Int,
+    Float,
+    Bool,
+    String,
+    Guid,
+    Vector,
+    Vector2,
+    Color,
+    Quaternion,
+    Matrix,
+    ObjectArray,
+    Object,
+    BehaviorRef,
+    BBPrototype
+};
+
+struct ScriptComponentBinding {
+    std::string FieldName;
+    std::string ParameterName;
+    std::string TypeName;
+    std::string DefaultValue;
+    bool HasDefault = false;
+    bool InjectEveryFrame = true;
+    bool HandleInjected = false;
+    CK_ID LastObjectId = 0;
+    std::string LastTextValue;
+
+    ScriptComponentBindingKind Kind = ScriptComponentBindingKind::Auto;
+    CKGUID ParameterGuid;
+    int PropertyIndex = -1;
+    int PropertyTypeId = 0;
+    int InputParameterIndex = -1;
+};
+
+struct ScriptComponentState {
+    CK_ID BehaviorId = 0;
+    CKBehavior *Behavior = nullptr;
+    ScriptRunner *Runner = nullptr;
+    asIScriptObject *Object = nullptr;
+
+    asIScriptFunction *OnLoad = nullptr;
+    asIScriptFunction *Awake = nullptr;
+    asIScriptFunction *OnEnable = nullptr;
+    asIScriptFunction *Start = nullptr;
+    asIScriptFunction *Update = nullptr;
+    asIScriptFunction *OnDisable = nullptr;
+    asIScriptFunction *OnDestroy = nullptr;
+    asIScriptFunction *OnReset = nullptr;
+
+    std::string ScriptName;
+    std::string ClassName;
+    std::string Source;
+    std::string File;
+    std::string Manifest;
+    std::string RuntimeModuleName;
+    std::vector<ScriptComponentBinding> Bindings;
+    std::vector<std::string> ManagedInputParameterNames;
+
+    bool PrivateModule = false;
+    bool Loaded = false;
+    bool OnLoadCalled = false;
+    bool AwakeCalled = false;
+    bool StartCalled = false;
+    bool DesiredEnabled = false;
+    bool InstanceEnabled = false;
+    bool ScriptActive = false;
+    bool Paused = false;
+    bool Failed = false;
+};
 
 class ScriptManager : public CKBaseManager {
 public:
@@ -26,6 +107,8 @@ public:
     CKERROR LoadData(CKStateChunk *chunk, CKFile *LoadedFile) override;
 
     CKERROR PostClearAll() override;
+    CKERROR PreProcess() override;
+    CKERROR PostProcess() override;
 
     CKERROR OnCKInit() override;
     CKERROR OnCKEnd() override;
@@ -39,6 +122,8 @@ public:
 
     CKDWORD GetValidFunctionsMask() override {
         return CKMANAGER_FUNC_PostClearAll |
+               CKMANAGER_FUNC_PreProcess |
+               CKMANAGER_FUNC_PostProcess |
                CKMANAGER_FUNC_OnCKInit |
                CKMANAGER_FUNC_OnCKEnd |
                CKMANAGER_FUNC_OnCKReset |
@@ -53,6 +138,10 @@ public:
     virtual const char *GetOptions();
 
     // Context
+    CKContext *GetCKContext() const {
+        return m_Context;
+    }
+
     virtual asIScriptContext *GetActiveContext();
 
     // Thread support
@@ -98,6 +187,15 @@ public:
     void UntrackCKObjectCallback(CK_ID id, asIScriptFunction *func);
     void ReleaseCKObjectCallbacks(CK_ID id);
 
+    ScriptComponentState *GetOrCreateComponentState(CKBehavior *behavior);
+    ScriptComponentState *GetComponentState(CK_ID id) const;
+    void ResetComponentStateRuntime(ScriptComponentState *state, bool unloadPrivateModule = true);
+    void ReleaseComponentState(CKBehavior *behavior);
+    void ReleaseComponentState(CK_ID id);
+    void ClearComponentStates();
+
+    ScriptBehaviorBridge *GetBehaviorBridge();
+
     bool IsInited() const {
         return (m_Flags & AS_INITED) != 0;
     }
@@ -135,6 +233,8 @@ protected:
     std::vector<asIScriptContext *> m_ScriptContexts;
     std::unordered_map<CK_ID, void *> m_CKObjectDataMap;
     std::unordered_map<CK_ID, std::vector<asIScriptFunction *> > m_CKObjectCallbackMap;
+    std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > m_ComponentStates;
+    std::unique_ptr<ScriptBehaviorBridge> m_BehaviorBridge;
 };
 
 #endif // CK_SCRIPTMANAGER_H

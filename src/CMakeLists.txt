@@ -22,6 +22,13 @@ set(CKAS_HEADERS
         ScriptCKManagers.h
         ScriptCKObjects.h
         ScriptCK2.h
+        ScriptParameterConversion.h
+        ScriptParameterRegistry.h
+        ScriptBehaviorBridge.h
+        ScriptBridgeCommon.h
+        ScriptBridgeHandles.h
+        ScriptBridgeParameterIO.h
+        ScriptBridgeSnapshot.h
 )
 
 set(CKAS_SOURCES
@@ -31,6 +38,7 @@ set(CKAS_SOURCES
         ScriptRunner.cpp
         AngelScriptLoader.cpp
         AngelScriptRunner.cpp
+        AngelScriptComponent.cpp
         ScriptInfo.cpp
         ScriptFormat.cpp
         ScriptNativePointer.cpp
@@ -47,6 +55,16 @@ set(CKAS_SOURCES
         ScriptCKManagers.cpp
         ScriptCKObjects.cpp
         ScriptCK2.cpp
+        ScriptParameterConversion.cpp
+        ScriptParameterRegistry.cpp
+        ScriptBehaviorBridge.cpp
+        ScriptBridgeParameterIO.cpp
+        ScriptBridgeRegistration.cpp
+        ScriptBridgeSelfTest.cpp
+        ScriptBridgeParams.cpp
+        ScriptBridgeBehavior.cpp
+        ScriptBridgeBB.cpp
+        ScriptBridgeTasks.cpp
 
         AngelScript.rc
 )

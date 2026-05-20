@@ -124,6 +124,44 @@ void ScriptRunner::ResetScript() {
     }
 }
 
+asIScriptModule *ScriptRunner::GetModule() const {
+    if (!m_CachedScript) {
+        return nullptr;
+    }
+
+    return m_CachedScript->module;
+}
+
+asITypeInfo *ScriptRunner::GetTypeInfoByName(const char *name) const {
+    asIScriptModule *module = GetModule();
+    if (!module || !name || name[0] == '\0') {
+        return nullptr;
+    }
+
+    return module->GetTypeInfoByName(name);
+}
+
+asIScriptObject *ScriptRunner::CreateScriptObject(asITypeInfo *type) {
+    if (!type) {
+        SetErrorMessage("No script type to instantiate.");
+        return nullptr;
+    }
+
+    asIScriptEngine *engine = type->GetEngine();
+    if (!engine) {
+        SetErrorMessage("Script type has no engine.");
+        return nullptr;
+    }
+
+    void *object = engine->CreateScriptObject(type);
+    if (!object) {
+        SetErrorMessage("Failed to create script object.");
+        return nullptr;
+    }
+
+    return static_cast<asIScriptObject *>(object);
+}
+
 asIScriptFunction *ScriptRunner::GetFunctionByName(const char *name) const {
     if (!m_CachedScript) {
         return nullptr;
@@ -244,6 +282,102 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
 
     if (retHandler) {
         retHandler(ctx);
+    }
+
+    if (IsProfiling())
+        EndTiming();
+
+    return true;
+}
+
+bool ScriptRunner::ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext) {
+    if (!m_CachedScript) {
+        SetErrorMessage("No script to execute.");
+        return false;
+    }
+
+    if (!object) {
+        SetErrorMessage("No script object to execute.");
+        return false;
+    }
+
+    if (!func) {
+        SetErrorMessage("No object method to execute.");
+        return false;
+    }
+
+    auto *engine = func->GetEngine();
+    if (!engine) {
+        SetErrorMessage("Script engine is null.");
+        return false;
+    }
+
+    asIScriptContext *ctx = GetContext();
+    if (!ctx) {
+        ctx = engine->RequestContext();
+        if (!ctx) {
+            SetErrorMessage("Failed to create AngelScript context.");
+            return false;
+        }
+        SetContext(ctx);
+    }
+
+    int r = ctx->Prepare(func);
+    if (r < 0) {
+        SetErrorMessage("Failed to prepare script method.");
+        return false;
+    }
+
+    r = ctx->SetObject(object);
+    if (r < 0) {
+        SetErrorMessage("Failed to bind script method object.");
+        return false;
+    }
+
+    if (func->GetParamCount() > 0) {
+        ctx->SetArgObject(0, (void *) &behcontext);
+    }
+
+    if (IsProfiling())
+        StartTiming();
+
+    r = ctx->Execute();
+    if (r != asEXECUTION_FINISHED) {
+        if (r == asEXECUTION_EXCEPTION) {
+            const char *section;
+            int col;
+            int row = ctx->GetExceptionLineNumber(&col, &section);
+
+            asIScriptFunction *exFunc = ctx->GetExceptionFunction();
+            const char *exFuncDecl = exFunc ? exFunc->GetDeclaration() : nullptr;
+            const char *exStr = ctx->GetExceptionString();
+
+            std::string stackTrace = fmt::format("Exception in '{}' at {}({},{}): '{}'\n",
+                exFuncDecl ? exFuncDecl : "<unknown function>",
+                section ? section : "<unknown section>",
+                row,
+                col,
+                exStr ? exStr : "");
+
+            for (asUINT i = 0; i < ctx->GetCallstackSize(); i++) {
+                asIScriptFunction *f = ctx->GetFunction(i);
+                row = ctx->GetLineNumber(i, &col, &section);
+                const char *funcDecl = f ? f->GetDeclaration() : nullptr;
+                stackTrace.append(fmt::format("\t{} at {}({},{})\n",
+                    funcDecl ? funcDecl : "<unknown function>",
+                    section ? section : "<unknown section>",
+                    row,
+                    col));
+            }
+
+            SetStackTrace(stackTrace);
+            SetErrorMessage("Script Method Threw Exception.");
+        } else if (r == asEXECUTION_SUSPENDED) {
+            SetErrorMessage("Script Method Suspended.");
+        } else {
+            SetErrorMessage("Script method failed with result code: " + std::to_string(r));
+        }
+        return false;
     }
 
     if (IsProfiling())
