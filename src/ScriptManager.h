@@ -38,6 +38,7 @@ enum class ScriptComponentBindingKind {
     Object,
     ParamRef,
     ParamValue,
+    ParamTypeInfo,
     BehaviorRef,
     BBPrototype
 };

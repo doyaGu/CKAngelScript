@@ -194,6 +194,9 @@ ScriptComponentBindingKind KindFromTypeName(const std::string &typeName) {
     if (type == "paramvalue" || type == "value") {
         return ScriptComponentBindingKind::ParamValue;
     }
+    if (type == "paramtype" || type == "paramtypeinfo" || type == "typeinfo") {
+        return ScriptComponentBindingKind::ParamTypeInfo;
+    }
     if (type == "bb" || type == "bbprototype" || type == "buildingblock") {
         return ScriptComponentBindingKind::BBPrototype;
     }
@@ -235,7 +238,9 @@ CKGUID GuidFromTypeName(CKContext *context, const std::string &typeName, ScriptC
     if (kind == ScriptComponentBindingKind::BBPrototype) {
         return CKPGUID_STRING;
     }
-    if (kind == ScriptComponentBindingKind::ParamRef || kind == ScriptComponentBindingKind::ParamValue) {
+    if (kind == ScriptComponentBindingKind::ParamRef ||
+        kind == ScriptComponentBindingKind::ParamValue ||
+        kind == ScriptComponentBindingKind::ParamTypeInfo) {
         return CKPGUID_STRING;
     }
     if (kind == ScriptComponentBindingKind::BehaviorRef || type == "behavior" || type == "ckbehavior") {
@@ -411,6 +416,9 @@ ScriptComponentBindingKind InferKindFromProperty(asIScriptEngine *engine, int ty
     if (typeId == engine->GetTypeIdByDecl("ParamValue@")) {
         return ScriptComponentBindingKind::ParamValue;
     }
+    if (typeId == engine->GetTypeIdByDecl("ParamTypeInfo@")) {
+        return ScriptComponentBindingKind::ParamTypeInfo;
+    }
     if (typeId == engine->GetTypeIdByDecl("BBPrototype@")) {
         return ScriptComponentBindingKind::BBPrototype;
     }
@@ -463,6 +471,9 @@ bool IsCompatiblePropertyType(asIScriptEngine *engine,
         case ScriptComponentBindingKind::ParamValue:
             expected = "ParamValue@";
             return typeId == engine->GetTypeIdByDecl("ParamValue@");
+        case ScriptComponentBindingKind::ParamTypeInfo:
+            expected = "ParamTypeInfo@";
+            return typeId == engine->GetTypeIdByDecl("ParamTypeInfo@");
         case ScriptComponentBindingKind::BBPrototype:
             expected = "BBPrototype@";
             return typeId == engine->GetTypeIdByDecl("BBPrototype@");
@@ -476,6 +487,77 @@ bool IsCompatiblePropertyType(asIScriptEngine *engine,
             expected = "supported component field type";
             return false;
     }
+}
+
+std::string BindingKindName(ScriptComponentBindingKind kind) {
+    switch (kind) {
+        case ScriptComponentBindingKind::Auto: return "auto";
+        case ScriptComponentBindingKind::Int: return "int";
+        case ScriptComponentBindingKind::Float: return "float";
+        case ScriptComponentBindingKind::Bool: return "bool";
+        case ScriptComponentBindingKind::String: return "string";
+        case ScriptComponentBindingKind::Guid: return "CKGUID";
+        case ScriptComponentBindingKind::Vector: return "VxVector";
+        case ScriptComponentBindingKind::Vector2: return "Vx2DVector";
+        case ScriptComponentBindingKind::Color: return "VxColor";
+        case ScriptComponentBindingKind::Quaternion: return "VxQuaternion";
+        case ScriptComponentBindingKind::Matrix: return "VxMatrix";
+        case ScriptComponentBindingKind::ObjectArray: return "XObjectArray";
+        case ScriptComponentBindingKind::Object: return "CKObject@";
+        case ScriptComponentBindingKind::ParamRef: return "ParamRef@";
+        case ScriptComponentBindingKind::ParamValue: return "ParamValue@";
+        case ScriptComponentBindingKind::ParamTypeInfo: return "ParamTypeInfo@";
+        case ScriptComponentBindingKind::BehaviorRef: return "BehaviorRef@";
+        case ScriptComponentBindingKind::BBPrototype: return "BBPrototype@";
+        default: return "unknown";
+    }
+}
+
+std::string BindingSummary(const ScriptComponentBinding &binding, CKContext *context = nullptr) {
+    std::ostringstream out;
+    out << "field='" << binding.FieldName << "'"
+        << ", parameter='" << binding.ParameterName << "'"
+        << ", declaredType='" << (binding.TypeName.empty() ? "<auto>" : binding.TypeName) << "'"
+        << ", bindingKind=" << BindingKindName(binding.Kind);
+    if (binding.ParameterGuid != CKGUID()) {
+        out << ", ckParameterType=" << ParameterTypeLabel(context, binding.ParameterGuid)
+            << " " << GuidToString(binding.ParameterGuid);
+    }
+    return out.str();
+}
+
+std::string PublicFieldCandidates(asIScriptEngine *engine, asITypeInfo *type) {
+    if (!engine || !type) {
+        return std::string();
+    }
+
+    std::vector<std::string> fields;
+    for (asUINT i = 0; i < type->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        int propertyTypeId = 0;
+        bool isPrivate = false;
+        bool isProtected = false;
+        bool isConst = false;
+        type->GetProperty(i, &propertyName, &propertyTypeId, &isPrivate, &isProtected, nullptr, nullptr, nullptr, nullptr, nullptr, &isConst);
+        if (!propertyName || isPrivate || isProtected || isConst) {
+            continue;
+        }
+        const char *typeDecl = engine->GetTypeDeclaration(propertyTypeId, true);
+        fields.push_back(std::string(propertyName) + ":" + (typeDecl ? typeDecl : "unknown"));
+        if (fields.size() >= 16) {
+            fields.push_back("...");
+            break;
+        }
+    }
+
+    std::ostringstream out;
+    for (std::size_t i = 0; i < fields.size(); ++i) {
+        if (i) {
+            out << ", ";
+        }
+        out << fields[i];
+    }
+    return out.str();
 }
 
 bool ParseBindingMetadata(const std::string &metadata,
@@ -718,8 +800,8 @@ bool ResolveComponentBinding(asIScriptEngine *engine,
         std::string expected;
         if (!IsCompatiblePropertyType(engine, propertyTypeId, binding.Kind, expected)) {
             const char *actual = engine->GetTypeDeclaration(propertyTypeId, true);
-            error = "Component field '" + binding.FieldName + "' has unsupported or incompatible type. Expected " +
-                    expected + ", got " + (actual ? actual : "unknown") + ".";
+            error = "Component metadata field type mismatch (" + BindingSummary(binding, context) +
+                    "). Expected script field type " + expected + ", got " + (actual ? actual : "unknown") + ".";
             return false;
         }
 
@@ -734,7 +816,11 @@ bool ResolveComponentBinding(asIScriptEngine *engine,
         return true;
     }
 
-    error = "Component manifest references missing field: " + binding.FieldName;
+    error = "Component manifest references missing field (" + BindingSummary(binding, context) + ").";
+    const std::string candidates = PublicFieldCandidates(engine, type);
+    if (!candidates.empty()) {
+        error += " Writable public fields: " + candidates + ".";
+    }
     return false;
 }
 
@@ -751,7 +837,8 @@ bool SetParameterDefaultValue(CKParameterLocal *local, const ScriptComponentBind
 
     switch (binding.Kind) {
         case ScriptComponentBindingKind::ParamRef:
-        case ScriptComponentBindingKind::ParamValue: {
+        case ScriptComponentBindingKind::ParamValue:
+        case ScriptComponentBindingKind::ParamTypeInfo: {
             std::string error;
             return SetParameterDefaultText(local, binding.DefaultValue, error);
         }
@@ -1034,6 +1121,7 @@ BBPrototype *CreatePrototypeFromParameter(ScriptBehaviorBridge *bridge,
                                           CKParameter *source,
                                           std::string &error) {
     if (!source) {
+        error = "BBPrototype Component parameter source is not available.";
         return nullptr;
     }
 
@@ -1042,25 +1130,39 @@ BBPrototype *CreatePrototypeFromParameter(ScriptBehaviorBridge *bridge,
         if (guid != CKGUID()) {
             return bridge ? bridge->CreatePrototype(behcontext, guid) : nullptr;
         }
-        error = "BBPrototype Component parameter references a behavior without a prototype GUID.";
+        error = "BBPrototype Component parameter '" + SafeString(source->GetName()) +
+                "' references behavior '" + SafeString(behavior->GetName()) +
+                "' without a prototype GUID.";
         return nullptr;
     }
 
     std::string prototypeName;
     if (!ReadStringValue(source, prototypeName)) {
-        error = "Failed to read BBPrototype Component parameter.";
+        error = "Failed to read BBPrototype Component parameter '" + SafeString(source->GetName()) +
+                "' as text. CK type=" + ParameterTypeLabel(behcontext.Context, source) + ".";
         return nullptr;
     }
 
     prototypeName = TrimString(prototypeName);
     if (prototypeName.empty() || !bridge) {
+        if (prototypeName.empty()) {
+            error = "BBPrototype Component parameter '" + SafeString(source->GetName()) +
+                    "' is empty. Expected BB name, Category/Name, GUID, or CKBehavior object.";
+        } else {
+            error = "BBPrototype Component injection requires ScriptBehaviorBridge.";
+        }
         return nullptr;
     }
 
     CKGUID guid;
-    return ParseScriptGuidString(prototypeName, guid)
+    BBPrototype *prototype = ParseScriptGuidString(prototypeName, guid)
         ? bridge->CreatePrototype(behcontext, guid)
         : bridge->CreatePrototype(behcontext, prototypeName);
+    if (!prototype) {
+        error = "BBPrototype Component parameter '" + SafeString(source->GetName()) +
+                "' did not resolve to a BB prototype: '" + prototypeName + "'.";
+    }
+    return prototype;
 }
 
 bool AssignComponentValueField(const ScriptParamValue &value,
@@ -1323,6 +1425,32 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 binding.HandleInjected = true;
                 break;
             }
+            case ScriptComponentBindingKind::ParamTypeInfo: {
+                const CKGUID sourceGuid = source->GetGUID();
+                const std::string sourceGuidText = GuidToString(sourceGuid);
+                if (!initial && binding.HandleInjected && binding.LastTextValue == sourceGuidText) {
+                    break;
+                }
+
+                ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(behcontext.Context);
+                const ScriptParamTypeRecord *record = registry ? registry->GetType(sourceGuid) : nullptr;
+                if (!registry || !record) {
+                    error = "Failed to resolve ParamTypeInfo Component field (" + BindingSummary(binding, behcontext.Context) +
+                            "). Source parameter='" + SafeString(source->GetName()) +
+                            "', source CK type=" + ParameterTypeLabel(behcontext.Context, source) +
+                            " " + sourceGuidText + ".";
+                    return false;
+                }
+
+                ParamTypeInfo *info = new ParamTypeInfo(registry, record->Type);
+                if (!AssignRefCountedHandle<ParamTypeInfo>(state->Object, binding.PropertyIndex, info)) {
+                    error = "Failed to assign ParamTypeInfo Component field (" + BindingSummary(binding, behcontext.Context) + ").";
+                    return false;
+                }
+                binding.HandleInjected = true;
+                binding.LastTextValue = sourceGuidText;
+                break;
+            }
             case ScriptComponentBindingKind::BehaviorRef: {
                 CKBehavior *target = CKBehavior::Cast(ReadObjectValue(source, behcontext.Context));
                 const CK_ID targetId = target ? target->GetID() : 0;
@@ -1355,17 +1483,17 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 }
 
                 if (!bridge && (behaviorSource || !sourceText.empty())) {
-                    error = "BBPrototype Component injection requires ScriptBehaviorBridge.";
+                    error = "BBPrototype Component injection requires ScriptBehaviorBridge (" + BindingSummary(binding, behcontext.Context) + ").";
                     return false;
                 }
                 std::string prototypeError;
                 BBPrototype *prototype = CreatePrototypeFromParameter(bridge, behcontext, source, prototypeError);
                 if (!prototypeError.empty()) {
-                    error = prototypeError + " (" + binding.ParameterName + ")";
+                    error = prototypeError + " (" + BindingSummary(binding, behcontext.Context) + ")";
                     return false;
                 }
                 if (!AssignBBPrototypeHandle(bridge, state->Object, binding.PropertyIndex, prototype)) {
-                    error = "Failed to assign BBPrototype Component field: " + binding.FieldName;
+                    error = "Failed to assign BBPrototype Component field (" + BindingSummary(binding, behcontext.Context) + ").";
                     return false;
                 }
                 binding.HandleInjected = true;
