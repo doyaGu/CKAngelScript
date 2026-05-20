@@ -1778,8 +1778,6 @@ void SyncErrorOutputParameters(CKBehavior *beh) {
 
 } // namespace AngelScriptComponentInternal
 
-using namespace AngelScriptComponentInternal;
-
 CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl() {
     CKObjectDeclaration *od = CreateCKObjectDeclaration("AngelScript Component");
     od->SetDescription("Run an AngelScript class as a component");
@@ -1837,7 +1835,7 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         return CKBR_PARAMETERERROR;
     }
 
-    ScriptComponentState *state = GetState(behcontext);
+    ScriptComponentState *state = AngelScriptComponentInternal::GetState(behcontext);
     if (!state) {
         beh->ActivateOutput(2);
         return CKBR_OWNERERROR;
@@ -1846,7 +1844,7 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
     if (beh->IsInputActive(1)) {
         beh->ActivateInput(1, FALSE);
         state->DesiredEnabled = false;
-        DisableInstance(behcontext, state);
+        AngelScriptComponentInternal::DisableInstance(behcontext, state);
         beh->ActivateOutput(1);
         return CKBR_OK;
     }
@@ -1858,7 +1856,8 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         state->Paused = false;
         state->Failed = false;
 
-        if (!EnsureComponentReady(behcontext, state) || !EnableInstance(behcontext, state)) {
+        if (!AngelScriptComponentInternal::EnsureComponentReady(behcontext, state) ||
+            !AngelScriptComponentInternal::EnableInstance(behcontext, state)) {
             return CKBR_OK;
         }
 
@@ -1869,18 +1868,19 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         return CKBR_OK;
     }
 
-    if (!EnsureComponentReady(behcontext, state) || !EnableInstance(behcontext, state)) {
+    if (!AngelScriptComponentInternal::EnsureComponentReady(behcontext, state) ||
+        !AngelScriptComponentInternal::EnableInstance(behcontext, state)) {
         return CKBR_OK;
     }
 
     if (!state->StartCalled) {
-        if (!InvokeLifecycle(beh, state, state->Start, behcontext, "Start")) {
+        if (!AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->Start, behcontext, "Start")) {
             return CKBR_OK;
         }
         state->StartCalled = true;
     }
 
-    if (!InvokeLifecycle(beh, state, state->Update, behcontext, "Update")) {
+    if (!AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->Update, behcontext, "Update")) {
         return CKBR_OK;
     }
 
@@ -1906,12 +1906,12 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         case CKM_BEHAVIORCREATE:
         case CKM_BEHAVIORLOAD: {
             state = man->GetOrCreateComponentState(beh);
-            beh->SetLocalParameterValue(COMPONENT_STATE, &state);
+            beh->SetLocalParameterValue(AngelScriptComponentInternal::COMPONENT_STATE, &state);
         }
         break;
 
         case CKM_BEHAVIORACTIVATESCRIPT: {
-            state = GetState(behcontext);
+            state = AngelScriptComponentInternal::GetState(behcontext);
             if (state) {
                 state->ScriptActive = true;
                 if (state->DesiredEnabled) {
@@ -1922,35 +1922,35 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         break;
 
         case CKM_BEHAVIORDEACTIVATESCRIPT: {
-            state = GetState(behcontext);
+            state = AngelScriptComponentInternal::GetState(behcontext);
             if (state) {
                 state->ScriptActive = false;
-                DisableInstance(behcontext, state);
+                AngelScriptComponentInternal::DisableInstance(behcontext, state);
             }
         }
         break;
 
         case CKM_BEHAVIORPAUSE: {
-            state = GetState(behcontext);
+            state = AngelScriptComponentInternal::GetState(behcontext);
             if (state) {
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), true);
                 }
                 state->Paused = true;
-                DisableInstance(behcontext, state);
+                AngelScriptComponentInternal::DisableInstance(behcontext, state);
             }
         }
         break;
 
         case CKM_BEHAVIORRESUME: {
-            state = GetState(behcontext);
+            state = AngelScriptComponentInternal::GetState(behcontext);
             if (state) {
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), false);
                 }
                 state->Paused = false;
                 if (state->DesiredEnabled && state->ScriptActive) {
-                    EnableInstance(behcontext, state);
+                    AngelScriptComponentInternal::EnableInstance(behcontext, state);
                     beh->Activate(TRUE);
                 }
             }
@@ -1958,14 +1958,15 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         break;
 
         case CKM_BEHAVIORRESET: {
-            state = GetState(behcontext);
+            state = AngelScriptComponentInternal::GetState(behcontext);
             if (state) {
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->ResetComponentTasks(beh->GetID());
                 }
                 state->Failed = false;
                 state->StartCalled = false;
-                if (state->Object && !InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset")) {
+                if (state->Object &&
+                    !AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset")) {
                     return CKBR_OK;
                 }
                 if (state->DesiredEnabled && state->ScriptActive && !state->Paused) {
@@ -1976,7 +1977,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         break;
 
         case CKM_BEHAVIOREDITED: {
-            state = GetState(behcontext);
+            state = AngelScriptComponentInternal::GetState(behcontext);
             if (state) {
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->DestroyComponentTasks(beh->GetID());
@@ -1987,16 +1988,16 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         break;
 
         case CKM_BEHAVIORSETTINGSEDITED: {
-            SyncErrorOutputParameters(beh);
+            AngelScriptComponentInternal::SyncErrorOutputParameters(beh);
         }
         break;
 
         case CKM_BEHAVIORDELETE: {
-            state = GetState(behcontext);
+            state = AngelScriptComponentInternal::GetState(behcontext);
             if (state) {
                 state->DesiredEnabled = false;
                 state->ScriptActive = false;
-                DestroyInstance(behcontext, state);
+                AngelScriptComponentInternal::DestroyInstance(behcontext, state);
             }
             man->ReleaseComponentState(beh);
         }
