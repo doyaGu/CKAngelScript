@@ -129,6 +129,34 @@ def bb_qualified_name(item: dict[str, Any]) -> str:
     return name if not category else f"{category}/{name}"
 
 
+def bb_slot_items(item: dict[str, Any], key: str) -> list[str]:
+    values = item.get(key)
+    if isinstance(values, list):
+        result: list[str] = []
+        for value in values:
+            if isinstance(value, str):
+                result.append(value)
+            elif isinstance(value, dict):
+                result.append(str(value.get("name") or ""))
+        return result
+    return []
+
+
+def add_bb_slot_helpers(lines: list[str], bb: dict[str, Any]) -> None:
+    slot_specs = [
+        ("In", "inputs"),
+        ("Out", "outputs"),
+        ("Pin", "input_params"),
+        ("Pout", "output_params"),
+        ("Local", "local_params"),
+    ]
+    for method, key in slot_specs:
+        used_names: set[str] = set()
+        for name in bb_slot_items(bb, key):
+            function_name = identifier(name or f"{method}Slot", used_names)
+            lines.append(f"    BBSlot@ {method}_{function_name}(const CKBehaviorContext &in ctx) {{ BBSpec@ spec = Spec(ctx); return spec is null ? null : spec.{method}({as_string(name)}); }}")
+
+
 def value_items(params: Iterable[dict[str, Any]], category: str) -> Iterable[dict[str, Any]]:
     for param in params:
         if param.get("category") == category and isinstance(param.get("values"), list):
@@ -222,6 +250,8 @@ def generate(params: list[dict[str, Any]], ops: list[dict[str, Any]], bbs: list[
         lines.append(f"    const string Category = {as_string(category)};")
         lines.append(f"    const string QualifiedName = {as_string(qualified)};")
         lines.append("    BBPrototype@ Find(const CKBehaviorContext &in ctx) { return BB::Prototype(ctx, Guid()); }")
+        lines.append("    BBSpec@ Spec(const CKBehaviorContext &in ctx) { return BB::Require(ctx, Guid()); }")
+        add_bb_slot_helpers(lines, bb)
         lines.append("}")
     lines.append("}")
     lines.append("}")
