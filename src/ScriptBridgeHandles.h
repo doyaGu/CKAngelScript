@@ -406,6 +406,9 @@ public:
 
     BBPrototype *PrototypeByName(const std::string &name) const;
     BBPrototype *PrototypeByGuid(CKGUID guid) const;
+    int Count() const;
+    BBPrototype *At(int index) const;
+    BBPrototype *Find(const std::string &query, int occurrence = 0) const;
 
 private:
     ScriptBehaviorBridge *m_Bridge = nullptr;

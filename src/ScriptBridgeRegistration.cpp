@@ -105,6 +105,36 @@ BBPrototype *BBPrototypeByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
     return prototype;
 }
 
+int BBCount(const CKBehaviorContext &ctx) {
+    BBBridge *bridge = BBFromContext(ctx);
+    if (!bridge) {
+        return 0;
+    }
+    const int count = bridge->Count();
+    bridge->Release();
+    return count;
+}
+
+BBPrototype *BBAt(const CKBehaviorContext &ctx, int index) {
+    BBBridge *bridge = BBFromContext(ctx);
+    if (!bridge) {
+        return nullptr;
+    }
+    BBPrototype *prototype = bridge->At(index);
+    bridge->Release();
+    return prototype;
+}
+
+BBPrototype *BBFind(const CKBehaviorContext &ctx, const std::string &query, int occurrence) {
+    BBBridge *bridge = BBFromContext(ctx);
+    if (!bridge) {
+        return nullptr;
+    }
+    BBPrototype *prototype = bridge->Find(query, occurrence);
+    bridge->Release();
+    return prototype;
+}
+
 BBCallBuilder *BBCallByName(const CKBehaviorContext &ctx, const std::string &name) {
     BBPrototype *prototype = BBPrototypeByName(ctx, name);
     if (!prototype) {
@@ -520,6 +550,7 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBPrototype", "bool IsValid() const", asMETHOD(BBPrototype, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "CKGUID GetGuid() const", asMETHOD(BBPrototype, GetGuid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "string GetName() const", asMETHOD(BBPrototype, GetName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBPrototype", "string GetCategory() const", asMETHOD(BBPrototype, GetCategory), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "string GetQualifiedName() const", asMETHOD(BBPrototype, GetQualifiedName), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "BehaviorLayout@ Layout() const", asMETHOD(BBPrototype, Layout), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "BBCallBuilder@ Call()", asMETHOD(BBPrototype, Call), asCALL_THISCALL); assert(r >= 0);
@@ -528,6 +559,9 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
 
     r = engine->RegisterObjectMethod("BBBridge", "BBPrototype@ Prototype(const string &in name) const", asMETHOD(BBBridge, PrototypeByName), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBBridge", "BBPrototype@ Prototype(CKGUID guid) const", asMETHOD(BBBridge, PrototypeByGuid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBridge", "int Count() const", asMETHOD(BBBridge, Count), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBridge", "BBPrototype@ At(int index) const", asMETHOD(BBBridge, At), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBridge", "BBPrototype@ Find(const string &in query, int occurrence = 0) const", asMETHOD(BBBridge, Find), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Owner(CKBeObject@ owner)", asMETHOD(BBCallBuilder, Owner), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Target(CKBeObject@ target)", asMETHOD(BBCallBuilder, Target), asCALL_THISCALL); assert(r >= 0);
@@ -600,6 +634,9 @@ void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("BBBridge@ From(const CKBehaviorContext &in ctx)", asFUNCTION(BBFromContext), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBPrototype@ Prototype(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBPrototypeByName), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBPrototype@ Prototype(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBPrototypeByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int Count(const CKBehaviorContext &in ctx)", asFUNCTION(BBCount), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BBPrototype@ At(const CKBehaviorContext &in ctx, int index)", asFUNCTION(BBAt), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BBPrototype@ Find(const CKBehaviorContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(BBFind), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBCallByName), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBSpawnByName), asCALL_CDECL); assert(r >= 0);
 

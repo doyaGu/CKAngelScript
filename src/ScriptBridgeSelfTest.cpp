@@ -89,8 +89,9 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "void ProbeBBApi(const CKBehaviorContext &in ctx, ParamValue@ value, ParamRef@ source, ParamOp@ operation) {\n";
     source += "    BBBridge@ bridge = BB::From(ctx); BBPrototype@ missing = BB::Prototype(ctx, \"__missing__\"); CKGUID emptyGuid; BBPrototype@ missingGuid = BB::Prototype(ctx, emptyGuid);\n";
     source += "    BBCallBuilder@ call = BB::Call(ctx, \"__missing__\"); BBTaskBuilder@ spawn = BB::Spawn(ctx, \"__missing__\");\n";
-    source += "    if (bridge !is null) { bridge.Prototype(\"__missing__\"); bridge.Prototype(emptyGuid); }\n";
-    source += "    if (missing !is null) { missing.IsValid(); missing.GetGuid(); missing.GetName(); missing.GetQualifiedName(); missing.Layout(); missing.Call(); missing.Spawn(); missing.Describe(); }\n";
+    source += "    int globalCount = BB::Count(ctx); BBPrototype@ globalFirst = BB::At(ctx, 0); BBPrototype@ globalFind = BB::Find(ctx, \"__missing__\");\n";
+    source += "    if (bridge !is null) { bridge.Prototype(\"__missing__\"); bridge.Prototype(emptyGuid); bridge.Count(); bridge.At(0); bridge.Find(\"__missing__\"); }\n";
+    source += "    if (missing !is null) { missing.IsValid(); missing.GetGuid(); missing.GetName(); missing.GetCategory(); missing.GetQualifiedName(); missing.Layout(); missing.Call(); missing.Spawn(); missing.Describe(); }\n";
     source += "    if (call !is null) { call.Owner(null); call.Target(null); call.Set(0, value); call.SetSource(0, source); call.SetOperation(0, operation); BBResult@ result = call.Run(); if (result !is null) { result.Ok(); bool ok = result.ok; result.ReturnCode(); result.Error(); result.OutputActive(0); result.Pout(0); result.Raise(ctx); } }\n";
     source += "    if (spawn !is null) { spawn.Owner(null); spawn.Target(null); spawn.Set(0, value); spawn.SetSource(0, source); spawn.SetOperation(0, operation); BBTask@ task = spawn.Start(); if (task !is null) { task.IsValid(); task.IsAlive(); task.IsPaused(); task.ReturnCode(); task.Error(); task.OutputActive(0); task.Step(ctx); task.Reset(); task.Behavior(); task.Pout(0); task.Raise(ctx); task.Destroy(); } }\n";
     source += "}\n";
@@ -819,6 +820,64 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     return true;
 }
 
+static bool RunBehaviorBridgeNativePrototypeDiscoverySelfTest(CKContext *context,
+                                                              std::string &error) {
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
+    if (!context || !bridge) {
+        error = "Prototype discovery native self-test requires CKContext and ScriptBehaviorBridge.";
+        return false;
+    }
+
+    CKBehaviorContext ctx;
+    ctx.Context = context;
+    ctx.ParameterManager = context->GetParameterManager();
+
+    BBBridge catalog(bridge, ctx);
+    const int count = catalog.Count();
+    if (count <= 0 || count != CKGetPrototypeDeclarationCount()) {
+        error = "Prototype discovery count self-test failed.";
+        return false;
+    }
+
+    BBPrototype *first = catalog.At(0);
+    if (!first || !first->IsValid()) {
+        if (first) {
+            first->Release();
+        }
+        error = "Prototype discovery At(0) self-test failed.";
+        return false;
+    }
+
+    const CKGUID guid = first->GetGuid();
+    const std::string qualifiedName = first->GetQualifiedName();
+    const std::string name = first->GetName();
+    first->Release();
+
+    BBPrototype *byQualifiedName = catalog.Find(qualifiedName, 0);
+    BBPrototype *byName = catalog.Find(name, 0);
+    BBPrototype *byGuidText = catalog.Find(GuidToString(guid), 0);
+    const bool ok = byQualifiedName && byQualifiedName->GetGuid() == guid &&
+                    byName && byName->IsValid() &&
+                    byGuidText && byGuidText->GetGuid() == guid;
+    if (byQualifiedName) {
+        byQualifiedName->Release();
+    }
+    if (byName) {
+        byName->Release();
+    }
+    if (byGuidText) {
+        byGuidText->Release();
+    }
+
+    if (!ok) {
+        error = "Prototype discovery Find self-test failed.";
+        return false;
+    }
+
+    return true;
+}
+
 static bool RunBehaviorBridgeNativeInternalShapeSelfTest(std::string &error) {
     ScriptBridgeInputSourceBindings bindings;
     bindings.Set(4, 44);
@@ -1128,6 +1187,11 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
 
     if (!RunBehaviorBridgeNativeLayoutCacheSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-layout-cache", error);
+        return false;
+    }
+
+    if (!RunBehaviorBridgeNativePrototypeDiscoverySelfTest(context, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-prototype-discovery", error);
         return false;
     }
 

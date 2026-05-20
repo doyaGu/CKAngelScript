@@ -2,6 +2,28 @@
 
 #include <fmt/format.h>
 
+#include "ScriptParameterConversion.h"
+
+namespace ScriptBridgeBBInternal {
+
+std::string PrototypeQualifiedName(CKObjectDeclaration *decl) {
+    if (!decl) {
+        return std::string();
+    }
+    const std::string name = SafeString(decl->GetName());
+    const std::string category = SafeString(decl->GetCategory());
+    return category.empty() ? name : category + "/" + name;
+}
+
+bool PrototypeMatches(CKObjectDeclaration *decl, const std::string &query) {
+    if (!decl) {
+        return false;
+    }
+    return SafeString(decl->GetName()) == query || PrototypeQualifiedName(decl) == query || GuidToString(decl->GetGuid()) == query;
+}
+
+} // namespace ScriptBridgeBBInternal
+
 BBCallBuilder::BBCallBuilder(ScriptBehaviorBridge *bridge,
                              const CKBehaviorContext &ctx,
                              const ScriptBridgeBBInvocationSpec &request)
@@ -166,4 +188,43 @@ BBPrototype *BBBridge::PrototypeByName(const std::string &name) const {
 
 BBPrototype *BBBridge::PrototypeByGuid(CKGUID guid) const {
     return m_Bridge ? m_Bridge->CreatePrototype(m_Context, guid) : nullptr;
+}
+
+int BBBridge::Count() const {
+    return CKGetPrototypeDeclarationCount();
+}
+
+BBPrototype *BBBridge::At(int index) const {
+    if (!m_Bridge || index < 0 || index >= Count()) {
+        return nullptr;
+    }
+
+    CKObjectDeclaration *decl = CKGetPrototypeDeclaration(index);
+    return decl ? m_Bridge->CreatePrototype(m_Context, decl->GetGuid()) : nullptr;
+}
+
+BBPrototype *BBBridge::Find(const std::string &query, int occurrence) const {
+    if (!m_Bridge || query.empty() || occurrence < 0) {
+        return nullptr;
+    }
+
+    CKGUID parsed;
+    if (ParseScriptGuidString(query, parsed)) {
+        return occurrence == 0 && CKGetPrototypeFromGuid(parsed) ? m_Bridge->CreatePrototype(m_Context, parsed) : nullptr;
+    }
+
+    int seen = 0;
+    const int count = CKGetPrototypeDeclarationCount();
+    for (int i = 0; i < count; ++i) {
+        CKObjectDeclaration *decl = CKGetPrototypeDeclaration(i);
+        if (!ScriptBridgeBBInternal::PrototypeMatches(decl, query)) {
+            continue;
+        }
+        if (seen == occurrence) {
+            return m_Bridge->CreatePrototype(m_Context, decl->GetGuid());
+        }
+        ++seen;
+    }
+
+    return nullptr;
 }
