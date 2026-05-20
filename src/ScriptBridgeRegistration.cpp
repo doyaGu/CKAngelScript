@@ -343,10 +343,7 @@ void RegisterParamValueFactories(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("ParamOp@ Operation(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(ParamOperationByGuid), asCALL_CDECL); assert(r >= 0);
 }
 
-void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
-    assert(engine != nullptr);
-    int r = 0;
-
+void RegisterParamKindEnum(asIScriptEngine *engine, int &r) {
     r = engine->RegisterEnum("ParamKind"); assert(r >= 0);
     r = engine->RegisterEnumValue("ParamKind", "Input", static_cast<int>(ScriptBridgeSlotKind::Input)); assert(r >= 0);
     r = engine->RegisterEnumValue("ParamKind", "Output", static_cast<int>(ScriptBridgeSlotKind::Output)); assert(r >= 0);
@@ -356,7 +353,9 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     r = engine->RegisterEnumValue("ParamKind", "OperationIn", static_cast<int>(ScriptBridgeSlotKind::OperationIn)); assert(r >= 0);
     r = engine->RegisterEnumValue("ParamKind", "OperationOut", static_cast<int>(ScriptBridgeSlotKind::OperationOut)); assert(r >= 0);
     r = engine->RegisterEnumValue("ParamKind", "Standalone", static_cast<int>(ScriptBridgeSlotKind::Standalone)); assert(r >= 0);
+}
 
+void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
     RegisterObjectTypeAndRefCount<ParamInfo>(engine, "ParamInfo");
     RegisterObjectTypeAndRefCount<ParamValue>(engine, "ParamValue");
     RegisterObjectTypeAndRefCount<ParamStructValue>(engine, "ParamStructValue");
@@ -375,7 +374,9 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     RegisterObjectTypeAndRefCount<BBResult>(engine, "BBResult");
     RegisterObjectTypeAndRefCount<BBTask>(engine, "BBTask");
     RegisterObjectTypeAndRefCount<GraphTask>(engine, "GraphTask");
+}
 
+void RegisterParamHandleMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("ParamInfo", "ParamKind get_kind() const", asMETHOD(ParamInfo, GetKind), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamInfo", "int get_index() const", asMETHOD(ParamInfo, GetIndex), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamInfo", "string get_name() const", asMETHOD(ParamInfo, GetName), asCALL_THISCALL); assert(r >= 0);
@@ -470,7 +471,9 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ParamOperationRef", "bool Restore()", asMETHOD(ParamOperationRef, Restore), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamOperationRef", "bool Destroy()", asMETHOD(ParamOperationRef, Destroy), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamOperationRef", "string Describe() const", asMETHOD(ParamOperationRef, Describe), asCALL_THISCALL); assert(r >= 0);
+}
 
+void RegisterLayoutMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorLayout", "int InputCount() const", asMETHOD(BehaviorLayout, InputCount), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorLayout", "int OutputCount() const", asMETHOD(BehaviorLayout, OutputCount), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorLayout", "int PinCount() const", asMETHOD(BehaviorLayout, PinCount), asCALL_THISCALL); assert(r >= 0);
@@ -487,7 +490,9 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BehaviorLayout", "int FindPout(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorLayout, FindPout), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorLayout", "int FindLocal(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorLayout, FindLocal), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorLayout", "string Describe() const", asMETHOD(BehaviorLayout, Describe), asCALL_THISCALL); assert(r >= 0);
+}
 
+void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorRef", "bool IsValid() const", asMETHOD(BehaviorRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool get_valid() const", asMETHOD(BehaviorRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "CK_ID get_id() const", asMETHOD(BehaviorRef, GetID), asCALL_THISCALL); assert(r >= 0);
@@ -509,7 +514,9 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ Find(const string &in name) const", asMETHOD(BehaviorBridge, Find), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ FindOn(CKBeObject@ owner, const string &in name) const", asMETHOD(BehaviorBridge, FindOn), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ FindByID(CK_ID id) const", asMETHOD(BehaviorBridge, FindByID), asCALL_THISCALL); assert(r >= 0);
+}
 
+void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBPrototype", "bool IsValid() const", asMETHOD(BBPrototype, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "CKGUID GetGuid() const", asMETHOD(BBPrototype, GetGuid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "string GetName() const", asMETHOD(BBPrototype, GetName), asCALL_THISCALL); assert(r >= 0);
@@ -535,7 +542,9 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTaskBuilder@ SetSource(int pinIndex, ParamRef@ source)", asMETHOD(BBTaskBuilder, SetSource), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTaskBuilder@ SetOperation(int pinIndex, ParamOp@ operation)", asMETHOD(BBTaskBuilder, SetOperation), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTask@ Start(int inputIndex = 0)", asMETHOD(BBTaskBuilder, Start), asCALL_THISCALL); assert(r >= 0);
+}
 
+void RegisterTaskMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBResult", "bool Ok() const", asMETHOD(BBResult, Ok), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBResult", "bool get_ok() const", asMETHOD(BBResult, Ok), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBResult", "int ReturnCode() const", asMETHOD(BBResult, ReturnCode), asCALL_THISCALL); assert(r >= 0);
@@ -573,7 +582,9 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("GraphTask", "BehaviorRef@ Behavior() const", asMETHOD(GraphTask, Behavior), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("GraphTask", "ParamRef@ Pout(int index) const", asMETHOD(GraphTask, Pout), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("GraphTask", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(GraphTask, Raise), asCALL_THISCALL); assert(r >= 0);
+}
 
+void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
     const char *previousNamespace = engine->GetDefaultNamespace();
     std::string previous = previousNamespace ? previousNamespace : "";
 
@@ -596,6 +607,20 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     RegisterParamValueFactories(engine, r);
 
     r = engine->SetDefaultNamespace(previous.c_str()); assert(r >= 0);
+}
+
+void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
+    assert(engine != nullptr);
+    int r = 0;
+
+    RegisterParamKindEnum(engine, r);
+    RegisterBridgeObjectTypes(engine);
+    RegisterParamHandleMethods(engine, r);
+    RegisterLayoutMethods(engine, r);
+    RegisterBehaviorMethods(engine, r);
+    RegisterBBMethods(engine, r);
+    RegisterTaskMethods(engine, r);
+    RegisterBridgeNamespaces(engine, r);
 }
 
 } // namespace ScriptBridgeRegistrationInternal
