@@ -52,6 +52,11 @@ def guid_expr(item: dict[str, Any]) -> str:
     return f"CKGUID({first}, {second})"
 
 
+def as_string(value: Any) -> str:
+    text = str(value or "")
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n") + '"'
+
+
 AS_RESERVED = {
     "and",
     "auto",
@@ -118,6 +123,12 @@ def add_guid_function(lines: list[str], name: str, item: dict[str, Any]) -> None
     lines.append(f"    CKGUID {name}() {{ return {guid_expr(item)}; }}")
 
 
+def bb_qualified_name(item: dict[str, Any]) -> str:
+    category = str(item.get("category") or "")
+    name = str(item.get("name") or "")
+    return name if not category else f"{category}/{name}"
+
+
 def value_items(params: Iterable[dict[str, Any]], category: str) -> Iterable[dict[str, Any]]:
     for param in params:
         if param.get("category") == category and isinstance(param.get("values"), list):
@@ -145,6 +156,9 @@ def generate(params: list[dict[str, Any]], ops: list[dict[str, Any]], bbs: list[
         type_name = identifier(param.get("name"), used_enum_type_names)
         used_value_names: set[str] = set()
         lines.append(f"namespace {type_name} {{")
+        lines.append(f"    CKGUID Type() {{ return {guid_expr(param)}; }}")
+        lines.append("    ParamTypeInfo@ Info(const CKBehaviorContext &in ctx) { return Param::Type(ctx, Type()); }")
+        lines.append("    string Text(const CKBehaviorContext &in ctx, int value) { return Param::Text(ctx, Type(), value); }")
         for value in param["values"]:
             lines.append(f"    const int {identifier(value.get('name'), used_value_names)} = {int(value.get('value', 0))};")
         lines.append("}")
@@ -157,6 +171,10 @@ def generate(params: list[dict[str, Any]], ops: list[dict[str, Any]], bbs: list[
         type_name = identifier(param.get("name"), used_flags_type_names)
         used_value_names: set[str] = set()
         lines.append(f"namespace {type_name} {{")
+        lines.append(f"    CKGUID Type() {{ return {guid_expr(param)}; }}")
+        lines.append("    ParamTypeInfo@ Info(const CKBehaviorContext &in ctx) { return Param::Type(ctx, Type()); }")
+        lines.append("    string Text(const CKBehaviorContext &in ctx, uint value) { return Param::Text(ctx, Type(), value); }")
+        lines.append("    uint Mask(const CKBehaviorContext &in ctx, const string &in namesOrMask) { return Param::FlagsMask(ctx, Type(), namesOrMask); }")
         for value in param["values"]:
             lines.append(f"    const uint {identifier(value.get('name'), used_value_names)} = {hex_u32(value.get('value', 0))};")
         lines.append("}")
@@ -170,6 +188,17 @@ def generate(params: list[dict[str, Any]], ops: list[dict[str, Any]], bbs: list[
     lines.append("}")
     lines.append("")
 
+    lines.append("namespace OperationHints {")
+    used_op_hint_names: set[str] = set()
+    for op in ops:
+        op_name = identifier(op.get("name"), used_op_hint_names)
+        lines.append(f"namespace {op_name} {{")
+        lines.append(f"    CKGUID Guid() {{ return {guid_expr(op)}; }}")
+        lines.append("    ParamOp@ Create(const CKBehaviorContext &in ctx) { return Param::Operation(ctx, Guid()); }")
+        lines.append("}")
+    lines.append("}")
+    lines.append("")
+
     lines.append("namespace BBs {")
     used_bb_names: set[str] = set()
     for bb in bbs:
@@ -177,6 +206,23 @@ def generate(params: list[dict[str, Any]], ops: list[dict[str, Any]], bbs: list[
         name = str(bb.get("name") or "")
         qualified = name if not category else f"{category}_{name}"
         add_guid_function(lines, identifier(qualified, used_bb_names), bb)
+    lines.append("}")
+    lines.append("")
+
+    lines.append("namespace BBHints {")
+    used_bb_hint_names: set[str] = set()
+    for bb in bbs:
+        category = str(bb.get("category") or "")
+        name = str(bb.get("name") or "")
+        qualified = bb_qualified_name(bb)
+        hint_name = identifier(qualified.replace("/", "_"), used_bb_hint_names)
+        lines.append(f"namespace {hint_name} {{")
+        lines.append(f"    CKGUID Guid() {{ return {guid_expr(bb)}; }}")
+        lines.append(f"    const string Name = {as_string(name)};")
+        lines.append(f"    const string Category = {as_string(category)};")
+        lines.append(f"    const string QualifiedName = {as_string(qualified)};")
+        lines.append("    BBPrototype@ Find(const CKBehaviorContext &in ctx) { return BB::Prototype(ctx, Guid()); }")
+        lines.append("}")
     lines.append("}")
     lines.append("}")
     lines.append("")
