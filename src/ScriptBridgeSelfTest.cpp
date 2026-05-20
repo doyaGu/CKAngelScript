@@ -132,6 +132,10 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (enumInfo is null || !enumInfo.IsEnum() || enumInfo.Enum().Find(\"Beta\") != 2) return 31;\n";
     source += "    if (flagsInfo is null || !flagsInfo.IsFlags() || flagsInfo.Flags().Parse(\"A|B\") != 3) return 32;\n";
     source += "    if (structInfo is null || !structInfo.IsStruct() || structInfo.Struct().FindMember(\"Name\") != 1) return 33;\n";
+    source += "    if (!Param::Guid(ctx, \"__CKAS_ScriptEnum\").IsValid() || !Param::IsEnum(ctx, enumGuid) || Param::IsEnum(ctx, flagsGuid)) return 37;\n";
+    source += "    if (!Param::IsFlags(ctx, flagsGuid) || Param::Value(ctx, enumGuid, \"Beta\", -1) != 2) return 38;\n";
+    source += "    if (Param::Flag(ctx, flagsGuid, \"B\", 0) != 2 || Param::FlagsMask(ctx, flagsGuid, \"A|B\", 0) != 3) return 39;\n";
+    source += "    if (Param::Text(ctx, enumGuid, 2) != \"Beta\" || Param::Text(ctx, flagsGuid, uint(3)) == \"\" || Param::Describe(ctx, enumGuid) == \"\") return 41;\n";
     source += "    ParamValue@ enumValue = Param::Enum(ctx, enumGuid, \"Alpha\");\n";
     source += "    ParamValue@ flagsValue = Param::Flags(ctx, flagsGuid, \"A,B\");\n";
     source += "    ParamStructValue@ structValue = Param::Struct(ctx, structGuid);\n";

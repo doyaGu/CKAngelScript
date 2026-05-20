@@ -157,6 +157,246 @@ ParamTypeInfo *ParamTypeFromGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) {
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
+CKGUID ParamGuidFromName(CKContext *context, const std::string &typeName) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    const ScriptParamTypeRecord *record = RequireType(registry, typeName);
+    return record ? record->Guid : CKGUID();
+}
+
+CKGUID ParamGuidFromNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    const ScriptParamTypeRecord *record = RequireType(registry, typeName);
+    return record ? record->Guid : CKGUID();
+}
+
+bool ParamIsEnum(ScriptParameterRegistry *registry, const ScriptParamTypeRecord *record) {
+    return registry && record && record->Has(ScriptParamTypeCaps::EnumLike);
+}
+
+bool ParamIsFlags(ScriptParameterRegistry *registry, const ScriptParamTypeRecord *record) {
+    return registry && record && record->Has(ScriptParamTypeCaps::FlagsLike);
+}
+
+bool ParamIsEnumByName(CKContext *context, const std::string &typeName) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamIsEnum(registry, RequireType(registry, typeName));
+}
+
+bool ParamIsEnumByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamIsEnum(registry, RequireType(registry, typeName));
+}
+
+bool ParamIsEnumByGuid(CKContext *context, CKGUID guid) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamIsEnum(registry, RequireType(registry, guid));
+}
+
+bool ParamIsEnumByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamIsEnum(registry, RequireType(registry, guid));
+}
+
+bool ParamIsFlagsByName(CKContext *context, const std::string &typeName) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamIsFlags(registry, RequireType(registry, typeName));
+}
+
+bool ParamIsFlagsByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamIsFlags(registry, RequireType(registry, typeName));
+}
+
+bool ParamIsFlagsByGuid(CKContext *context, CKGUID guid) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamIsFlags(registry, RequireType(registry, guid));
+}
+
+bool ParamIsFlagsByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamIsFlags(registry, RequireType(registry, guid));
+}
+
+int ParamValueFromRecord(ScriptParameterRegistry *registry,
+                         const ScriptParamTypeRecord *record,
+                         const std::string &nameOrValue,
+                         int fallback) {
+    int value = fallback;
+    std::string error;
+    return record && registry && registry->ParseEnumValue(record->Guid, nameOrValue, value, error) ? value : fallback;
+}
+
+int ParamValueByName(CKContext *context, const std::string &typeName, const std::string &nameOrValue, int fallback) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamValueFromRecord(registry, RequireType(registry, typeName), nameOrValue, fallback);
+}
+
+int ParamValueByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &nameOrValue, int fallback) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamValueFromRecord(registry, RequireType(registry, typeName), nameOrValue, fallback);
+}
+
+int ParamValueByGuid(CKContext *context, CKGUID guid, const std::string &nameOrValue, int fallback) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamValueFromRecord(registry, RequireType(registry, guid), nameOrValue, fallback);
+}
+
+int ParamValueByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid, const std::string &nameOrValue, int fallback) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamValueFromRecord(registry, RequireType(registry, guid), nameOrValue, fallback);
+}
+
+CKDWORD ParamFlagsMaskFromRecord(ScriptParameterRegistry *registry,
+                                 const ScriptParamTypeRecord *record,
+                                 const std::string &namesOrMask,
+                                 CKDWORD fallback) {
+    CKDWORD value = fallback;
+    std::string error;
+    return record && registry && registry->ParseFlagsValue(record->Guid, namesOrMask, value, error) ? value : fallback;
+}
+
+CKDWORD ParamFlagByName(CKContext *context, const std::string &typeName, const std::string &flagName, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamFlagsMaskFromRecord(registry, RequireType(registry, typeName), flagName, fallback);
+}
+
+CKDWORD ParamFlagByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &flagName, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamFlagsMaskFromRecord(registry, RequireType(registry, typeName), flagName, fallback);
+}
+
+CKDWORD ParamFlagByGuid(CKContext *context, CKGUID guid, const std::string &flagName, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamFlagsMaskFromRecord(registry, RequireType(registry, guid), flagName, fallback);
+}
+
+CKDWORD ParamFlagByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid, const std::string &flagName, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamFlagsMaskFromRecord(registry, RequireType(registry, guid), flagName, fallback);
+}
+
+CKDWORD ParamFlagsMaskByNameValue(CKContext *context, const std::string &typeName, const std::string &namesOrMask, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamFlagsMaskFromRecord(registry, RequireType(registry, typeName), namesOrMask, fallback);
+}
+
+CKDWORD ParamFlagsMaskByNameValueCtx(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &namesOrMask, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamFlagsMaskFromRecord(registry, RequireType(registry, typeName), namesOrMask, fallback);
+}
+
+CKDWORD ParamFlagsMaskByGuidValue(CKContext *context, CKGUID guid, const std::string &namesOrMask, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamFlagsMaskFromRecord(registry, RequireType(registry, guid), namesOrMask, fallback);
+}
+
+CKDWORD ParamFlagsMaskByGuidValueCtx(const CKBehaviorContext &ctx, CKGUID guid, const std::string &namesOrMask, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamFlagsMaskFromRecord(registry, RequireType(registry, guid), namesOrMask, fallback);
+}
+
+std::string ParamNumericText(CKContext *context, const ScriptParamTypeRecord *record, CKDWORD value) {
+    if (!record) {
+        return std::to_string(value);
+    }
+
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    if (record->Has(ScriptParamTypeCaps::FlagsLike) && registry) {
+        return registry->FlagsText(record->Guid, value);
+    }
+
+    if (record->Has(ScriptParamTypeCaps::EnumLike) && registry) {
+        std::string text;
+        if (registry->EnumNameOf(record->Guid, static_cast<int>(value), text)) {
+            return text;
+        }
+    }
+
+    CKParameterLocal *param = context ? context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ParamText"), record->Guid, TRUE) : nullptr;
+    if (!param) {
+        return std::to_string(value);
+    }
+
+    std::string text;
+    std::string error;
+    const CKERROR err = WriteParameterValue(param, MakeScriptParamInt(static_cast<int>(value)), error);
+    if (err == CK_OK && ReadParameterText(param, text, nullptr) && !text.empty()) {
+        context->DestroyObject(param);
+        return text;
+    }
+
+    context->DestroyObject(param);
+    return std::to_string(value);
+}
+
+std::string ParamTextByNameInt(CKContext *context, const std::string &typeName, int value) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamNumericText(context, RequireType(registry, typeName), static_cast<CKDWORD>(value));
+}
+
+std::string ParamTextByNameIntCtx(const CKBehaviorContext &ctx, const std::string &typeName, int value) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamNumericText(ctx.Context, RequireType(registry, typeName), static_cast<CKDWORD>(value));
+}
+
+std::string ParamTextByGuidInt(CKContext *context, CKGUID guid, int value) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamNumericText(context, RequireType(registry, guid), static_cast<CKDWORD>(value));
+}
+
+std::string ParamTextByGuidIntCtx(const CKBehaviorContext &ctx, CKGUID guid, int value) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamNumericText(ctx.Context, RequireType(registry, guid), static_cast<CKDWORD>(value));
+}
+
+std::string ParamTextByNameDword(CKContext *context, const std::string &typeName, CKDWORD value) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamNumericText(context, RequireType(registry, typeName), value);
+}
+
+std::string ParamTextByNameDwordCtx(const CKBehaviorContext &ctx, const std::string &typeName, CKDWORD value) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamNumericText(ctx.Context, RequireType(registry, typeName), value);
+}
+
+std::string ParamTextByGuidDword(CKContext *context, CKGUID guid, CKDWORD value) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamNumericText(context, RequireType(registry, guid), value);
+}
+
+std::string ParamTextByGuidDwordCtx(const CKBehaviorContext &ctx, CKGUID guid, CKDWORD value) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamNumericText(ctx.Context, RequireType(registry, guid), value);
+}
+
+std::string ParamDescribeRecord(const ScriptParamTypeRecord *record, ScriptParameterRegistry *registry) {
+    if (!record || !registry) {
+        return std::string();
+    }
+    ParamTypeInfo info(registry, record->Type);
+    return info.Describe();
+}
+
+std::string ParamDescribeByName(CKContext *context, const std::string &typeName) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamDescribeRecord(RequireType(registry, typeName), registry);
+}
+
+std::string ParamDescribeByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamDescribeRecord(RequireType(registry, typeName), registry);
+}
+
+std::string ParamDescribeByGuid(CKContext *context, CKGUID guid) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    return ParamDescribeRecord(RequireType(registry, guid), registry);
+}
+
+std::string ParamDescribeByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) {
+    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
+    return ParamDescribeRecord(RequireType(registry, guid), registry);
+}
+
 ParamValue *ParamEnumByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &nameOrValue);
 ParamValue *ParamEnumByGuid(const CKBehaviorContext &ctx, CKGUID guid, const std::string &nameOrValue);
 ParamValue *ParamEnumIntByName(const CKBehaviorContext &ctx, const std::string &typeName, int value);
@@ -815,6 +1055,40 @@ void RegisterParamRegistryGlobals(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const CKBehaviorContext &in ctx, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamTypeFromNameCtx), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(CKContext@ context, CKGUID guid)", asFUNCTION(ScriptParameterRegistryInternal::ParamTypeFromGuid), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(ScriptParameterRegistryInternal::ParamTypeFromGuidCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("CKGUID Guid(CKContext@ context, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamGuidFromName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("CKGUID Guid(const CKBehaviorContext &in ctx, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamGuidFromNameCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool IsEnum(CKContext@ context, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamIsEnumByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool IsEnum(const CKBehaviorContext &in ctx, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamIsEnumByNameCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool IsEnum(CKContext@ context, CKGUID guid)", asFUNCTION(ScriptParameterRegistryInternal::ParamIsEnumByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool IsEnum(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(ScriptParameterRegistryInternal::ParamIsEnumByGuidCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool IsFlags(CKContext@ context, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamIsFlagsByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool IsFlags(const CKBehaviorContext &in ctx, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamIsFlagsByNameCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool IsFlags(CKContext@ context, CKGUID guid)", asFUNCTION(ScriptParameterRegistryInternal::ParamIsFlagsByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool IsFlags(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(ScriptParameterRegistryInternal::ParamIsFlagsByGuidCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int Value(CKContext@ context, const string &in typeName, const string &in nameOrValue, int fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamValueByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int Value(const CKBehaviorContext &in ctx, const string &in typeName, const string &in nameOrValue, int fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamValueByNameCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int Value(CKContext@ context, CKGUID guid, const string &in nameOrValue, int fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamValueByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int Value(const CKBehaviorContext &in ctx, CKGUID guid, const string &in nameOrValue, int fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamValueByGuidCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint Flag(CKContext@ context, const string &in typeName, const string &in flagName, uint fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFlagByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint Flag(const CKBehaviorContext &in ctx, const string &in typeName, const string &in flagName, uint fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFlagByNameCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint Flag(CKContext@ context, CKGUID guid, const string &in flagName, uint fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFlagByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint Flag(const CKBehaviorContext &in ctx, CKGUID guid, const string &in flagName, uint fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFlagByGuidCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint FlagsMask(CKContext@ context, const string &in typeName, const string &in namesOrMask, uint fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFlagsMaskByNameValue), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint FlagsMask(const CKBehaviorContext &in ctx, const string &in typeName, const string &in namesOrMask, uint fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFlagsMaskByNameValueCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint FlagsMask(CKContext@ context, CKGUID guid, const string &in namesOrMask, uint fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFlagsMaskByGuidValue), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("uint FlagsMask(const CKBehaviorContext &in ctx, CKGUID guid, const string &in namesOrMask, uint fallback = 0)", asFUNCTION(ScriptParameterRegistryInternal::ParamFlagsMaskByGuidValueCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Text(CKContext@ context, const string &in typeName, int value)", asFUNCTION(ScriptParameterRegistryInternal::ParamTextByNameInt), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Text(const CKBehaviorContext &in ctx, const string &in typeName, int value)", asFUNCTION(ScriptParameterRegistryInternal::ParamTextByNameIntCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Text(CKContext@ context, CKGUID guid, int value)", asFUNCTION(ScriptParameterRegistryInternal::ParamTextByGuidInt), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Text(const CKBehaviorContext &in ctx, CKGUID guid, int value)", asFUNCTION(ScriptParameterRegistryInternal::ParamTextByGuidIntCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Text(CKContext@ context, const string &in typeName, uint value)", asFUNCTION(ScriptParameterRegistryInternal::ParamTextByNameDword), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Text(const CKBehaviorContext &in ctx, const string &in typeName, uint value)", asFUNCTION(ScriptParameterRegistryInternal::ParamTextByNameDwordCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Text(CKContext@ context, CKGUID guid, uint value)", asFUNCTION(ScriptParameterRegistryInternal::ParamTextByGuidDword), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Text(const CKBehaviorContext &in ctx, CKGUID guid, uint value)", asFUNCTION(ScriptParameterRegistryInternal::ParamTextByGuidDwordCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Describe(CKContext@ context, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamDescribeByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Describe(const CKBehaviorContext &in ctx, const string &in typeName)", asFUNCTION(ScriptParameterRegistryInternal::ParamDescribeByNameCtx), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Describe(CKContext@ context, CKGUID guid)", asFUNCTION(ScriptParameterRegistryInternal::ParamDescribeByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Describe(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(ScriptParameterRegistryInternal::ParamDescribeByGuidCtx), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKERROR RegisterEnum(CKContext@ context, CKGUID guid, const string &in name, const string &in data)", asFUNCTION(ScriptParameterRegistryInternal::RegisterEnumByContext), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKERROR RegisterEnum(const CKBehaviorContext &in ctx, CKGUID guid, const string &in name, const string &in data)", asFUNCTION(ScriptParameterRegistryInternal::RegisterEnumByBehaviorContext), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("CKERROR RegisterFlags(CKContext@ context, CKGUID guid, const string &in name, const string &in data)", asFUNCTION(ScriptParameterRegistryInternal::RegisterFlagsByContext), asCALL_CDECL); assert(r >= 0);
