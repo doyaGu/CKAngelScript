@@ -374,7 +374,9 @@ public:
            CKDWORD caps,
            int layoutGeneration,
            const std::string &layoutSignature,
-           const std::string &error = std::string());
+           const std::string &error = std::string(),
+           CK_ID runtimeBehaviorId = 0,
+           const ScriptBridgeObjectStamp &runtimeBehaviorStamp = ScriptBridgeObjectStamp());
 
     bool IsValid() const;
     std::string Error() const;
@@ -406,6 +408,8 @@ private:
     ScriptBehaviorBridge *m_Bridge = nullptr;
     CKBehaviorContext m_Context;
     ScriptBridgeBBInvocationSpec m_Request;
+    CK_ID m_RuntimeBehaviorId = 0;
+    ScriptBridgeObjectStamp m_RuntimeBehaviorStamp;
     ScriptBridgeSlotKind m_Kind = ScriptBridgeSlotKind::Standalone;
     int m_Index = -1;
     std::string m_Name;
@@ -571,10 +575,20 @@ public:
     std::string Error() const;
     BBDecl *Decl() const;
     BehaviorRef *Behavior() const;
+    BehaviorLayout *Layout() const;
+    BBSlot *Input(const std::string &name, int occurrence = 0) const;
+    BBSlot *Output(const std::string &name, int occurrence = 0) const;
+    BBSlot *PinSlot(const std::string &name, int occurrence = 0) const;
+    BBSlot *PoutSlot(const std::string &name, int occurrence = 0) const;
+    BBSlot *Setting(const std::string &name, int occurrence = 0) const;
+    BBSlot *Local(const std::string &name, int occurrence = 0) const;
     bool Start();
     bool Start(BBSlot *input);
+    bool StartWithContext(const CKBehaviorContext &ctx);
+    bool StartSlotWithContext(const CKBehaviorContext &ctx, BBSlot *input);
     bool Step(const CKBehaviorContext &ctx);
     bool Stop();
+    bool StopWithContext(const CKBehaviorContext &ctx);
     bool OutputActive(BBSlot *output) const;
     ParamRef *Pin(BBSlot *pin) const;
     ParamRef *Pout(BBSlot *pout) const;
@@ -586,6 +600,7 @@ public:
     int BridgeGeneration() const;
 
 private:
+    BBSlot *RuntimeSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const;
     void SetError(const std::string &error) const;
 
     ScriptBehaviorBridge *m_Bridge = nullptr;

@@ -337,10 +337,14 @@ BBSlot::BBSlot(ScriptBehaviorBridge *bridge,
                CKDWORD caps,
                int layoutGeneration,
                const std::string &layoutSignature,
-               const std::string &error)
+               const std::string &error,
+               CK_ID runtimeBehaviorId,
+               const ScriptBridgeObjectStamp &runtimeBehaviorStamp)
     : m_Bridge(bridge),
       m_Context(ctx),
       m_Request(request),
+      m_RuntimeBehaviorId(runtimeBehaviorId),
+      m_RuntimeBehaviorStamp(runtimeBehaviorStamp),
       m_Kind(kind),
       m_Index(index),
       m_Name(name),
@@ -435,7 +439,12 @@ void BBSlot::SetMetadata(CKDWORD flags, const std::string &defaultText, const st
 }
 
 const ScriptBridgeLayoutRecord *BBSlot::LayoutRecord() const {
-    return m_Bridge ? m_Bridge->GetPrototypeLayout(m_Context, m_Request) : nullptr;
+    if (!m_Bridge) {
+        return nullptr;
+    }
+    return m_RuntimeBehaviorId
+        ? m_Bridge->GetBehaviorLayout(m_RuntimeBehaviorId, m_RuntimeBehaviorStamp)
+        : m_Bridge->GetPrototypeLayout(m_Context, m_Request);
 }
 
 std::string BBSlot::KindName() const {
@@ -982,7 +991,7 @@ BBInstance *BBConfig::SpawnStarted(const CKBehaviorContext &ctx) {
     if (!instance) {
         return nullptr;
     }
-    if (!instance->Start()) {
+    if (!instance->StartWithContext(ctx)) {
         SetError(instance->Error());
         SetScriptException(m_Error);
         instance->Destroy();
@@ -997,11 +1006,10 @@ BBInstance *BBConfig::SpawnStarted(const CKBehaviorContext &ctx) {
 }
 
 bool BBConfig::Stop(const CKBehaviorContext &ctx) {
-    (void) ctx;
     if (!m_Instance) {
         return true;
     }
-    const bool result = m_Instance->Stop();
+    const bool result = m_Instance->StopWithContext(ctx);
     if (!result) {
         SetError(m_Instance->Error());
         SetScriptException(m_Error);
@@ -1403,17 +1411,55 @@ BehaviorRef *BBInstance::Behavior() const {
     return m_Bridge ? m_Bridge->WrapBehavior(m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation)) : nullptr;
 }
 
+BehaviorLayout *BBInstance::Layout() const {
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation) : nullptr;
+    return behavior ? new BehaviorLayout(m_Bridge, behavior->GetID()) : nullptr;
+}
+
+BBSlot *BBInstance::Input(const std::string &name, int occurrence) const {
+    return RuntimeSlot(ScriptBridgeSlotKind::Input, name, occurrence);
+}
+
+BBSlot *BBInstance::Output(const std::string &name, int occurrence) const {
+    return RuntimeSlot(ScriptBridgeSlotKind::Output, name, occurrence);
+}
+
+BBSlot *BBInstance::PinSlot(const std::string &name, int occurrence) const {
+    return RuntimeSlot(ScriptBridgeSlotKind::Pin, name, occurrence);
+}
+
+BBSlot *BBInstance::PoutSlot(const std::string &name, int occurrence) const {
+    return RuntimeSlot(ScriptBridgeSlotKind::Pout, name, occurrence);
+}
+
+BBSlot *BBInstance::Setting(const std::string &name, int occurrence) const {
+    return RuntimeSlot(ScriptBridgeSlotKind::Setting, name, occurrence);
+}
+
+BBSlot *BBInstance::Local(const std::string &name, int occurrence) const {
+    return RuntimeSlot(ScriptBridgeSlotKind::Local, name, occurrence);
+}
+
 bool BBInstance::Start() {
     if (m_DefaultStartInput.empty()) {
         return Start(nullptr);
     }
-    BBDecl decl(m_Bridge, m_Context, m_Request);
-    BBSlot *slot = decl.Input(m_DefaultStartInput);
+    BBSlot *slot = Input(m_DefaultStartInput);
     const bool result = Start(slot);
     if (slot) {
         slot->Release();
     }
     return result;
+}
+
+bool BBInstance::StartWithContext(const CKBehaviorContext &ctx) {
+    m_Context = ctx;
+    return Start();
+}
+
+bool BBInstance::StartSlotWithContext(const CKBehaviorContext &ctx, BBSlot *input) {
+    m_Context = ctx;
+    return Start(input);
 }
 
 bool BBInstance::Start(BBSlot *input) {
@@ -1460,8 +1506,7 @@ bool BBInstance::Stop() {
 
     int inputIndex = -1;
     if (!m_DefaultStopInput.empty()) {
-        BBDecl decl(m_Bridge, m_Context, m_Request);
-        BBSlot *slot = decl.Input(m_DefaultStopInput);
+        BBSlot *slot = Input(m_DefaultStopInput);
         if (slot) {
             std::string error;
             CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation);
@@ -1481,6 +1526,11 @@ bool BBInstance::Stop() {
         return false;
     }
     return true;
+}
+
+bool BBInstance::StopWithContext(const CKBehaviorContext &ctx) {
+    m_Context = ctx;
+    return Stop();
 }
 
 bool BBInstance::OutputActive(BBSlot *output) const {
@@ -1578,6 +1628,81 @@ bool BBInstance::Raise(const CKBehaviorContext &ctx) const {
     state.ReturnCode = CKBR_BEHAVIORERROR;
     state.Error = Error();
     return RaiseExecutionState(state, ctx);
+}
+
+BBSlot *BBInstance::RuntimeSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const {
+    if (!m_Bridge) {
+        return new BBSlot(nullptr, m_Context, m_Request, kind, -1, name, CKGUID(), std::string(), 0, 0, 0, std::string(), "BBInstance bridge is not available.");
+    }
+
+    CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation);
+    if (!behavior) {
+        return new BBSlot(m_Bridge, m_Context, m_Request, kind, -1, name, CKGUID(), std::string(), 0, 0, 0, std::string(), "BBInstance behavior is not available.");
+    }
+
+    const ScriptBridgeObjectStamp stamp = CaptureBridgeObjectStamp(behavior);
+    const ScriptBridgeLayoutRecord *layout = m_Bridge->GetBehaviorLayout(behavior->GetID(), stamp);
+    if (!layout) {
+        return new BBSlot(m_Bridge, m_Context, m_Request, kind, -1, name, CKGUID(), std::string(), 0, 0, 0, std::string(), "BBInstance runtime layout is not available.", behavior->GetID(), stamp);
+    }
+
+    if (kind == ScriptBridgeSlotKind::Input || kind == ScriptBridgeSlotKind::Output) {
+        int index = -1;
+        if (ScriptBridgeBBInternal::FindIoSlot(*layout, kind, name, occurrence, index)) {
+            return new BBSlot(m_Bridge,
+                              m_Context,
+                              m_Request,
+                              kind,
+                              index,
+                              name,
+                              CKGUID(),
+                              std::string(),
+                              0,
+                              0,
+                              layout->LayoutGeneration,
+                              layout->Signature,
+                              std::string(),
+                              behavior->GetID(),
+                              stamp);
+        }
+    } else if (const ScriptBridgeLayoutParamSlot *slot = ScriptBridgeBBInternal::FindParamSlot(*layout, kind, name, occurrence)) {
+        return new BBSlot(m_Bridge,
+                          m_Context,
+                          m_Request,
+                          kind,
+                          slot->Index,
+                          slot->Name,
+                          slot->TypeGuid,
+                          slot->TypeName,
+                          slot->DataSize,
+                          slot->Caps,
+                          layout->LayoutGeneration,
+                          layout->Signature,
+                          std::string(),
+                          behavior->GetID(),
+                          stamp);
+    }
+
+    return new BBSlot(m_Bridge,
+                      m_Context,
+                      m_Request,
+                      kind,
+                      -1,
+                      name,
+                      CKGUID(),
+                      std::string(),
+                      0,
+                      0,
+                      layout->LayoutGeneration,
+                      layout->Signature,
+                      fmt::format("Runtime Building Block '{}' has no {} named '{}' (occurrence {}). Candidates: {}.",
+                                  SafeString(behavior->GetPrototypeName()),
+                                  ScriptBridgeBBInternal::SlotKindName(kind),
+                                  name,
+                                  occurrence,
+                                  ScriptBridgeBBInternal::CandidateList(*layout, kind)),
+                      behavior->GetID(),
+                      stamp);
 }
 
 void BBInstance::SetError(const std::string &error) const {
