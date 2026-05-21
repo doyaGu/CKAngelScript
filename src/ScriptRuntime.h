@@ -75,11 +75,15 @@ public:
 private:
     struct Module;
 
+    friend bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
+
     void EnsureScanned();
     std::vector<ScriptRuntimeManifest> Discover(std::string &error) const;
-    bool LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scripts);
+    bool LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scripts, bool reconcileModules);
     bool LoadModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> &module, std::string &error);
     bool ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module);
+    bool RemoveModuleById(const std::string &id);
+    void RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts);
     void DestroyModule(Module &module);
     void DisableModule(Module &module);
     void UpdateModule(Module &module, float deltaTime, float timeSeconds);

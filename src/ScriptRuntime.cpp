@@ -480,7 +480,7 @@ bool ScriptRuntime::ReloadAll(std::string *error) {
         OutputDiagnostic(discoveryError);
     }
     m_Scanned = true;
-    return LoadDiscovered(scripts);
+    return LoadDiscovered(scripts, true);
 }
 
 bool ScriptRuntime::Reload(const std::string &id, std::string *error) {
@@ -583,7 +583,7 @@ void ScriptRuntime::EnsureScanned() {
     if (!error.empty()) {
         OutputDiagnostic(error);
     }
-    LoadDiscovered(scripts);
+    LoadDiscovered(scripts, true);
     m_Scanned = true;
 }
 
@@ -709,7 +709,11 @@ std::vector<ScriptRuntimeManifest> ScriptRuntime::Discover(std::string &error) c
     return plan.Scripts;
 }
 
-bool ScriptRuntime::LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scripts) {
+bool ScriptRuntime::LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scripts, bool reconcileModules) {
+    if (reconcileModules) {
+        RemoveModulesNotIn(scripts);
+    }
+
     bool ok = true;
     std::vector<std::string> failedIds;
     for (const ScriptRuntimeManifest &metadata : scripts) {
@@ -717,6 +721,7 @@ bool ScriptRuntime::LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scr
         if (ScriptRuntimeDependencyResolver::HasDependencyFailure(metadata, failedIds, dependencyError)) {
             ok = false;
             failedIds.push_back(metadata.Id);
+            RemoveModuleById(metadata.Id);
             OutputDiagnostic(dependencyError);
             continue;
         }
@@ -725,12 +730,44 @@ bool ScriptRuntime::LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scr
         if (!LoadModule(metadata, module, error)) {
             ok = false;
             failedIds.push_back(metadata.Id);
+            RemoveModuleById(metadata.Id);
             OutputDiagnostic(error);
             continue;
         }
         ReplaceModule(metadata, std::move(module));
     }
     return ok;
+}
+
+bool ScriptRuntime::RemoveModuleById(const std::string &id) {
+    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
+    for (auto it = m_Modules.begin(); it != m_Modules.end(); ++it) {
+        Module *module = it->get();
+        if (!module || (module->Meta.Id != canonical && module->Meta.Id != id)) {
+            continue;
+        }
+        DestroyModule(*module);
+        m_Modules.erase(it);
+        return true;
+    }
+    return false;
+}
+
+void ScriptRuntime::RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts) {
+    std::set<std::string> allowedIds;
+    for (const ScriptRuntimeManifest &script : scripts) {
+        allowedIds.insert(script.Id);
+    }
+
+    for (auto it = m_Modules.begin(); it != m_Modules.end();) {
+        Module *module = it->get();
+        if (module && allowedIds.find(module->Meta.Id) == allowedIds.end()) {
+            DestroyModule(*module);
+            it = m_Modules.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> &module, std::string &error) {
@@ -1022,6 +1059,46 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     }
     if (!ScriptRuntimeDependencyResolver::RunScriptRuntimeDependencySelfTest(error)) {
         return false;
+    }
+    {
+        ScriptRuntime runtime(nullptr);
+        std::unique_ptr<ScriptRuntime::Module> oldDependency = std::make_unique<ScriptRuntime::Module>();
+        oldDependency->Meta.Id = "dep";
+        oldDependency->Meta.Name = "dep";
+        runtime.m_Modules.push_back(std::move(oldDependency));
+
+        std::unique_ptr<ScriptRuntime::Module> oldDependent = std::make_unique<ScriptRuntime::Module>();
+        oldDependent->Meta.Id = "app";
+        oldDependent->Meta.Name = "app";
+        runtime.m_Modules.push_back(std::move(oldDependent));
+
+        ScriptRuntimeManifest dep;
+        dep.Id = "dep";
+        dep.Name = "dep";
+        dep.Version = ScriptRuntimeMetadata::ParseVersion("1.0.0");
+        dep.VersionText = dep.Version.Text;
+
+        ScriptRuntimeManifest app;
+        app.Id = "app";
+        app.Name = "app";
+        app.Version = ScriptRuntimeMetadata::ParseVersion("1.0.0");
+        app.VersionText = app.Version.Text;
+        ScriptRuntimeDependency dependency;
+        std::string parseError;
+        if (!ScriptRuntimeMetadata::ParseDependencySpec("dep", dependency, parseError)) {
+            error = parseError;
+            return false;
+        }
+        app.RequiredDependencies.push_back(dependency);
+
+        if (runtime.LoadDiscovered({dep, app}, true)) {
+            error = "Runtime reconciliation self-test expected load failure without a script manager.";
+            return false;
+        }
+        if (!runtime.m_Modules.empty()) {
+            error = "Runtime reconciliation self-test left stale modules after dependency load failure.";
+            return false;
+        }
     }
     const char *source =
         "void __ckas_runtime_compile_probe(const ScriptRuntimeContext &in ctx) {\n"
