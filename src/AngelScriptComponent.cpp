@@ -142,7 +142,16 @@ bool IsComponentBindingKeyword(const std::string &keyword) {
            key == "bb" ||
            key == "bbslot" ||
            key == "bbdecl" ||
-           key == "bbconfig";
+           key == "bbconfig" ||
+           key == "bbinput" ||
+           key == "bbin" ||
+           key == "bboutput" ||
+           key == "bbout" ||
+           key == "bbpin" ||
+           key == "bbpout" ||
+           key == "bbsetting" ||
+           key == "bblocal" ||
+           key == "bbsource";
 }
 
 ScriptParamValueKind ValueKindFromComponentKind(ScriptComponentBindingKind kind) {
@@ -630,6 +639,8 @@ void AddRequiredSlotDeclaration(ScriptComponentBinding &binding,
             slot.KindName = TrimString(token.substr(0, colon));
             slot.Name = TrimString(token.substr(colon + 1));
         }
+        slot.KindName = StripQuotes(slot.KindName);
+        slot.Name = StripQuotes(slot.Name);
         if (!slot.KindName.empty() && !slot.Name.empty()) {
             binding.RequiredSlots.push_back(slot);
         }
@@ -761,6 +772,19 @@ void AddConfigSourceSlots(ScriptComponentBinding &binding, const std::string &va
     }
 }
 
+void AddConfigSourceSlot(ScriptComponentBinding &binding, const std::string &pinName, const std::string &sourceExpression) {
+    ScriptComponentSourceSlot source;
+    source.PinName = StripQuotes(pinName);
+    std::string rhs = TrimString(StripQuotes(sourceExpression));
+    const std::size_t dot = FindUnquoted(rhs, ".");
+    source.SourceFieldName = StripQuotes(dot == std::string::npos ? rhs : rhs.substr(0, dot));
+    source.SourceSlotName = StripQuotes(dot == std::string::npos ? std::string() : rhs.substr(dot + 1));
+    if (!source.PinName.empty() && !source.SourceFieldName.empty()) {
+        AddRequiredSlot(binding, "pin", source.PinName);
+        binding.ConfigSources.push_back(source);
+    }
+}
+
 ScriptComponentBBStepPolicy ParseBBStepPolicy(const std::string &value) {
     const std::string text = ToLower(StripQuotes(value));
     if (text == "eachupdate" || text == "each_update" || text == "update" || text == "always") {
@@ -770,6 +794,83 @@ ScriptComponentBBStepPolicy ParseBBStepPolicy(const std::string &value) {
         return ScriptComponentBBStepPolicy::OnChange;
     }
     return ScriptComponentBBStepPolicy::Manual;
+}
+
+bool IsBBConfigFragmentKeyword(const std::string &keyword) {
+    const std::string key = ToLower(keyword);
+    return key == "bbinput" ||
+           key == "bbin" ||
+           key == "bboutput" ||
+           key == "bbout" ||
+           key == "bbpin" ||
+           key == "bbpout" ||
+           key == "bbsetting" ||
+           key == "bblocal" ||
+           key == "bbsource";
+}
+
+std::string BBConfigFragmentSlotKind(const std::string &keyword) {
+    const std::string key = ToLower(keyword);
+    if (key == "bbinput" || key == "bbin") {
+        return "input";
+    }
+    if (key == "bboutput" || key == "bbout") {
+        return "output";
+    }
+    if (key == "bbpin") {
+        return "pin";
+    }
+    if (key == "bbpout") {
+        return "pout";
+    }
+    if (key == "bbsetting") {
+        return "setting";
+    }
+    if (key == "bblocal") {
+        return "local";
+    }
+    return std::string();
+}
+
+bool ApplyBBConfigFragmentMetadata(const std::string &keyword,
+                                   const std::string &args,
+                                   ScriptComponentBinding &binding) {
+    const std::string lowerKeyword = ToLower(keyword);
+    if (lowerKeyword == "bbsource") {
+        if (FindUnquoted(args, "<-") != std::string::npos) {
+            AddConfigSourceSlots(binding, args);
+            return true;
+        }
+        const std::vector<std::string> tokens = TokenizeArguments(args);
+        bool added = false;
+        for (std::size_t i = 0; i + 2 < tokens.size();) {
+            if (tokens[i + 1] == "=") {
+                AddConfigSourceSlot(binding, tokens[i], tokens[i + 2]);
+                added = true;
+                i += 3;
+            } else {
+                ++i;
+            }
+        }
+        return added;
+    }
+
+    const std::string slotKind = BBConfigFragmentSlotKind(lowerKeyword);
+    if (slotKind.empty()) {
+        return false;
+    }
+
+    if (slotKind == "pin") {
+        AddNamedSlotValues(binding, binding.ConfigPinValues, "pin", args);
+        return true;
+    }
+    if (slotKind == "setting") {
+        AddNamedSlotValues(binding, binding.ConfigSettingValues, "setting", args);
+        return true;
+    }
+
+    AddRequiredSlotDeclaration(binding, slotKind, args);
+    return true;
 }
 
 bool ParseBindingMetadata(const std::string &metadata,
@@ -831,6 +932,7 @@ bool ParseBindingMetadata(const std::string &metadata,
     binding.BBStepPolicy = ScriptComponentBBStepPolicy::Manual;
     binding.AutoStartBBConfig = false;
     binding.HasAutoStartBBConfig = false;
+    binding.HasBBStepPolicy = false;
     binding.BBConfigChanged = false;
 
     const std::string lowerKeyword = ToLower(keyword);
@@ -844,6 +946,9 @@ bool ParseBindingMetadata(const std::string &metadata,
         binding.TypeName = "bbdecl";
     } else if (lowerKeyword == "bbconfig") {
         binding.TypeName = "bbconfig";
+    } else if (IsBBConfigFragmentKeyword(lowerKeyword)) {
+        binding.TypeName = "bbconfig";
+        ApplyBBConfigFragmentMetadata(lowerKeyword, args, binding);
     }
 
     std::vector<std::string> positional;
@@ -890,6 +995,7 @@ bool ParseBindingMetadata(const std::string &metadata,
                 binding.HasAutoStartBBConfig = true;
             } else if (key == "step") {
                 binding.BBStepPolicy = ParseBBStepPolicy(value);
+                binding.HasBBStepPolicy = true;
             } else if (key == "start") {
                 if (lowerKeyword == "bbslot") {
                     SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::Start, ParseBoolText(value, true));
@@ -1074,6 +1180,88 @@ void ReplaceOrAppendBinding(std::vector<ScriptComponentBinding> &bindings, const
     bindings.push_back(binding);
 }
 
+bool IsBBConfigBindingSpec(const ScriptComponentBinding &binding) {
+    return binding.Kind == ScriptComponentBindingKind::BBConfig || ToLower(binding.TypeName) == "bbconfig";
+}
+
+void AddMergedRequiredSlot(ScriptComponentBinding &binding, const ScriptComponentRequiredSlot &slot) {
+    if (slot.KindName.empty() || slot.Name.empty()) {
+        return;
+    }
+    for (const ScriptComponentRequiredSlot &existing : binding.RequiredSlots) {
+        if (ToLower(existing.KindName) == ToLower(slot.KindName) &&
+            existing.Name == slot.Name &&
+            existing.Occurrence == slot.Occurrence) {
+            return;
+        }
+    }
+    binding.RequiredSlots.push_back(slot);
+}
+
+void MergeBBConfigBinding(ScriptComponentBinding &target, const ScriptComponentBinding &source) {
+    if (!source.TypeName.empty()) {
+        target.TypeName = source.TypeName;
+    }
+    if (target.Kind == ScriptComponentBindingKind::Auto || source.Kind == ScriptComponentBindingKind::BBConfig) {
+        target.Kind = source.Kind;
+    }
+    if (!source.ParameterName.empty() && source.ParameterName != source.FieldName) {
+        target.ParameterName = source.ParameterName;
+    }
+    if (!source.DefaultValue.empty() || source.HasDefault) {
+        target.DefaultValue = source.DefaultValue;
+        target.HasDefault = source.HasDefault;
+    }
+    if (!source.SlotPrototypeName.empty()) {
+        target.SlotPrototypeName = source.SlotPrototypeName;
+    }
+    if (!source.BBConfigOwnerExpression.empty()) {
+        target.BBConfigOwnerExpression = source.BBConfigOwnerExpression;
+    }
+    if (!source.BBConfigTargetExpression.empty()) {
+        target.BBConfigTargetExpression = source.BBConfigTargetExpression;
+    }
+    if (source.HasManagedBBConfig) {
+        target.ManagedBBConfig = source.ManagedBBConfig;
+        target.HasManagedBBConfig = true;
+    }
+    if (source.HasAutoStartBBConfig) {
+        target.AutoStartBBConfig = source.AutoStartBBConfig;
+        target.HasAutoStartBBConfig = true;
+    }
+    if (source.HasBBStepPolicy) {
+        target.BBStepPolicy = source.BBStepPolicy;
+        target.HasBBStepPolicy = true;
+    }
+    if (!source.BindingStartInput.empty()) {
+        target.BindingStartInput = source.BindingStartInput;
+    }
+    if (!source.BindingStopInput.empty()) {
+        target.BindingStopInput = source.BindingStopInput;
+    }
+    for (const ScriptComponentRequiredSlot &slot : source.RequiredSlots) {
+        AddMergedRequiredSlot(target, slot);
+    }
+    target.ConfigPinValues.insert(target.ConfigPinValues.end(), source.ConfigPinValues.begin(), source.ConfigPinValues.end());
+    target.ConfigSettingValues.insert(target.ConfigSettingValues.end(), source.ConfigSettingValues.begin(), source.ConfigSettingValues.end());
+    target.ConfigSources.insert(target.ConfigSources.end(), source.ConfigSources.begin(), source.ConfigSources.end());
+}
+
+void MergeOrAppendMetadataBinding(std::vector<ScriptComponentBinding> &bindings, const ScriptComponentBinding &binding) {
+    for (ScriptComponentBinding &existing : bindings) {
+        if (existing.FieldName != binding.FieldName) {
+            continue;
+        }
+        if (IsBBConfigBindingSpec(existing) || IsBBConfigBindingSpec(binding)) {
+            MergeBBConfigBinding(existing, binding);
+        } else {
+            existing = binding;
+        }
+        return;
+    }
+    bindings.push_back(binding);
+}
+
 std::vector<ScriptComponentBinding> BuildComponentBindingSpecs(ScriptComponentState *state, asITypeInfo *type) {
     std::vector<ScriptComponentBinding> bindings;
     if (!state || !state->Runner || !type) {
@@ -1099,7 +1287,7 @@ std::vector<ScriptComponentBinding> BuildComponentBindingSpecs(ScriptComponentSt
                 const char *metadata = cached->GetClassVarMetadata(typeId, static_cast<int>(i), metaIndex);
                 ScriptComponentBinding binding;
                 if (metadata && ParseBindingMetadata(metadata, propertyName, binding)) {
-                    ReplaceOrAppendBinding(bindings, binding);
+                    MergeOrAppendMetadataBinding(bindings, binding);
                 }
             }
         }
@@ -2994,6 +3182,68 @@ void SyncErrorOutputParameters(CKBehavior *beh) {
 }
 
 } // namespace AngelScriptComponentInternal
+
+bool RunScriptComponentMetadataSelfTest(std::string &error) {
+    std::vector<ScriptComponentBinding> bindings;
+    auto addMetadata = [&](const std::string &metadata) -> bool {
+        ScriptComponentBinding binding;
+        if (!AngelScriptComponentInternal::ParseBindingMetadata(metadata, "TextConfig", binding)) {
+            error = "Component metadata self-test failed to parse '" + metadata + "'.";
+            return false;
+        }
+        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(bindings, binding);
+        return true;
+    };
+
+    if (!addMetadata("bbconfig prototype=\"Interface/Text/2D Text\" lifetime=\"component\"") ||
+        !addMetadata("bbsetting \"Text Properties\"=\"Screen Proportionnal,WordWrap\"") ||
+        !addMetadata("bbpin \"Text\"=\"FPS: ...\"") ||
+        !addMetadata("bbsource \"Font\"=\"FontConfig.Font Created\"") ||
+        !addMetadata("bboutput \"Out\"") ||
+        !addMetadata("bbpout \"Rendered\"")) {
+        return false;
+    }
+
+    if (bindings.size() != 1) {
+        error = "Component metadata self-test did not merge stacked metadata.";
+        return false;
+    }
+    const ScriptComponentBinding &binding = bindings.front();
+    if (binding.Kind != ScriptComponentBindingKind::BBConfig ||
+        binding.FieldName != "TextConfig" ||
+        binding.SlotPrototypeName != "Interface/Text/2D Text" ||
+        !binding.ManagedBBConfig ||
+        binding.ConfigPinValues.size() != 1 ||
+        binding.ConfigPinValues[0].Name != "Text" ||
+        binding.ConfigPinValues[0].Value != "FPS: ..." ||
+        binding.ConfigSettingValues.size() != 1 ||
+        binding.ConfigSettingValues[0].Name != "Text Properties" ||
+        binding.ConfigSettingValues[0].Value != "Screen Proportionnal,WordWrap" ||
+        binding.ConfigSources.size() != 1 ||
+        binding.ConfigSources[0].PinName != "Font" ||
+        binding.ConfigSources[0].SourceFieldName != "FontConfig" ||
+        binding.ConfigSources[0].SourceSlotName != "Font Created") {
+        error = "Component metadata self-test merged BBConfig fields incorrectly.";
+        return false;
+    }
+
+    bool sawOutput = false;
+    bool sawPout = false;
+    bool sawFontPin = false;
+    bool sawSetting = false;
+    for (const ScriptComponentRequiredSlot &slot : binding.RequiredSlots) {
+        sawOutput = sawOutput || (slot.KindName == "output" && slot.Name == "Out");
+        sawPout = sawPout || (slot.KindName == "pout" && slot.Name == "Rendered");
+        sawFontPin = sawFontPin || (slot.KindName == "pin" && slot.Name == "Font");
+        sawSetting = sawSetting || (slot.KindName == "setting" && slot.Name == "Text Properties");
+    }
+    if (!sawOutput || !sawPout || !sawFontPin || !sawSetting) {
+        error = "Component metadata self-test missed required slot fragments.";
+        return false;
+    }
+
+    return true;
+}
 
 CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl() {
     CKObjectDeclaration *od = CreateCKObjectDeclaration("AngelScript Component");

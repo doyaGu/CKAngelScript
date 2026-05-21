@@ -143,6 +143,15 @@ CKERROR ScriptManager::RunStartupSelfTests() {
         ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "parameter-registry", conversionError);
         return CKERR_INVALIDOPERATION;
     }
+    ScriptManagerInternal::WriteStartupSelfTestMarker("running", "component-metadata", std::string());
+    if (!RunScriptComponentMetadataSelfTest(conversionError)) {
+        if (m_Context) {
+            m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] Component metadata self-test failed: %s"),
+                                         conversionError.c_str());
+        }
+        ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "component-metadata", conversionError);
+        return CKERR_INVALIDOPERATION;
+    }
     ScriptManagerInternal::WriteStartupSelfTestMarker("running", "behavior-bridge", std::string());
     if (!RunScriptBehaviorBridgeSelfTest(m_Context, m_ScriptEngine, conversionError)) {
         if (m_Context) {

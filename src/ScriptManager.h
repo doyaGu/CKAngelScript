@@ -103,6 +103,7 @@ struct ScriptComponentBinding {
     ScriptComponentBBStepPolicy BBStepPolicy = ScriptComponentBBStepPolicy::Manual;
     bool AutoStartBBConfig = false;
     bool HasAutoStartBBConfig = false;
+    bool HasBBStepPolicy = false;
     bool BBConfigChanged = false;
 
     ScriptComponentBindingKind Kind = ScriptComponentBindingKind::Auto;
@@ -297,5 +298,7 @@ protected:
     std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
     bool m_StartupSelfTestsAttempted = false;
 };
+
+bool RunScriptComponentMetadataSelfTest(std::string &error);
 
 #endif // CK_SCRIPTMANAGER_H
