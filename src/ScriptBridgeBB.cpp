@@ -677,6 +677,23 @@ std::string BBConfig::Describe() const {
     return text;
 }
 
+std::string BBConfig::Explain() const {
+    std::string text = Describe();
+    text += fmt::format("\nValid: {}", IsValid() ? "true" : "false");
+    text += fmt::format("\nLifetime: {}", m_Managed ? "component" : "manual");
+    text += fmt::format("\nPending pins: {}", m_Request.IndexedParameters.size());
+    text += fmt::format("\nPending settings: {}", m_Request.IndexedSettings.size());
+    text += fmt::format("\nPending sources: {}", m_Request.SourceParameters.size());
+    text += fmt::format("\nPending operations: {}", m_Request.OperationParameters.size());
+    text += fmt::format("\nCached slots: {}", m_Slots.size());
+    text += fmt::format("\nCurrent instance: {}", (m_Instance && m_Instance->IsValid()) ? "alive" : "none");
+    const std::string error = Error();
+    if (!error.empty()) {
+        text += "\nError: " + error;
+    }
+    return text;
+}
+
 BBDecl *BBConfig::Spec() const {
     return new BBDecl(m_Bridge, m_Context, m_Request, m_Error);
 }
@@ -956,6 +973,40 @@ bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
 
 BBDecl *BBConfig::Decl() const {
     return new BBDecl(m_Bridge, m_Context, m_Request, m_Error);
+}
+
+BBInstance *BBConfig::Instance() const {
+    if (m_Instance && m_Instance->IsValid()) {
+        m_Instance->AddRef();
+        return m_Instance;
+    }
+    SetError("BBConfig.Instance requires a live BBInstance. Call Spawn(), SpawnStarted(), EnsureSpawned(), or EnsureStarted() first.");
+    return nullptr;
+}
+
+BBInstance *BBConfig::EnsureSpawned(const CKBehaviorContext &ctx) {
+    if (m_Instance && m_Instance->IsValid()) {
+        m_Instance->AddRef();
+        return m_Instance;
+    }
+    return SpawnInstance(ctx);
+}
+
+BBInstance *BBConfig::EnsureStarted(const CKBehaviorContext &ctx) {
+    BBInstance *instance = EnsureSpawned(ctx);
+    if (!instance) {
+        return nullptr;
+    }
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(instance->BridgeInstanceId(), instance->BridgeGeneration()) : nullptr;
+    if (!behavior || !behavior->IsActive()) {
+        if (!instance->StartWithContext(ctx)) {
+            SetError(instance->Error());
+            SetScriptException(m_Error);
+            instance->Release();
+            return nullptr;
+        }
+    }
+    return instance;
 }
 
 BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
@@ -1442,6 +1493,10 @@ bool BBInstance::IsValid() const {
     return m_Error.empty() && m_Bridge && m_InstanceId != 0 && m_Bridge->IsInstanceValid(m_InstanceId, m_Generation);
 }
 
+bool BBInstance::IsAlive() const {
+    return m_Error.empty() && m_Bridge && m_InstanceId != 0 && m_Bridge->IsInstanceAlive(m_InstanceId, m_Generation);
+}
+
 std::string BBInstance::Error() const {
     if (!m_Error.empty()) {
         return m_Error;
@@ -1451,6 +1506,27 @@ std::string BBInstance::Error() const {
     }
     ScriptBridgeExecutionState state = m_Bridge->GetInstanceState(m_InstanceId, m_Generation);
     return state.Error;
+}
+
+std::string BBInstance::Explain() const {
+    std::string text = fmt::format("BBInstance id={} generation={}", m_InstanceId, m_Generation);
+    text += fmt::format("\nValid: {}", IsValid() ? "true" : "false");
+    text += fmt::format("\nAlive: {}", IsAlive() ? "true" : "false");
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation) : nullptr;
+    text += fmt::format("\nBehavior: {}", behavior ? SafeString(behavior->GetName()) : std::string("<none>"));
+    if (!m_DefaultStartInput.empty()) {
+        text += fmt::format("\nDefault start input: '{}'", m_DefaultStartInput);
+    }
+    if (!m_DefaultStopInput.empty()) {
+        text += fmt::format("\nDefault stop input: '{}'", m_DefaultStopInput);
+    }
+    const ScriptBridgeExecutionState state = m_Bridge ? m_Bridge->GetInstanceState(m_InstanceId, m_Generation) : ScriptBridgeExecutionState();
+    text += fmt::format("\nLast return: {}", state.ReturnCode);
+    const std::string error = Error();
+    if (!error.empty()) {
+        text += "\nError: " + error;
+    }
+    return text;
 }
 
 BBDecl *BBInstance::Decl() const {
@@ -1618,6 +1694,67 @@ ParamRef *BBInstance::Pout(BBSlot *pout) const {
     return m_Bridge && param ? new ParamRef(m_Bridge, param->GetID(), ScriptBridgeSlotKind::Pout, index, behavior->GetID()) : nullptr;
 }
 
+bool BBInstance::SetSlot(BBSlot *pin, ParamValue *value) {
+    if (!value) {
+        SetError("BBInstance.Set requires a valid ParamValue.");
+        SetScriptException(m_Error);
+        return false;
+    }
+    return SetValueForPin(pin, value->Value(), "BBInstance.Set");
+}
+
+bool BBInstance::SetSlotInt(BBSlot *pin, int value) {
+    return SetValueForPin(pin, MakeScriptParamInt(value), "BBInstance.Set");
+}
+
+bool BBInstance::SetSlotFloat(BBSlot *pin, float value) {
+    return SetValueForPin(pin, MakeScriptParamFloat(value), "BBInstance.Set");
+}
+
+bool BBInstance::SetSlotBool(BBSlot *pin, bool value) {
+    return SetValueForPin(pin, MakeScriptParamBool(value), "BBInstance.Set");
+}
+
+bool BBInstance::SetSlotString(BBSlot *pin, const std::string &value) {
+    return SetValueForPin(pin, MakeScriptParamString(value), "BBInstance.Set");
+}
+
+bool BBInstance::SetSlotObject(BBSlot *pin, CKObject *value) {
+    return SetValueForPin(pin, MakeScriptParamObject(value), "BBInstance.Set");
+}
+
+bool BBInstance::SourceSlot(BBSlot *pin, ParamRef *source) {
+    return SourceForPin(pin, source, "BBInstance.Source");
+}
+
+bool BBInstance::OperationSlot(BBSlot *pin, ParamOp *operation) {
+    return OperationForPin(pin, operation, "BBInstance.Operation");
+}
+
+bool BBInstance::StepSetSlot(const CKBehaviorContext &ctx, BBSlot *pin, ParamValue *value) {
+    return SetSlot(pin, value) && Step(ctx);
+}
+
+bool BBInstance::StepSetSlotInt(const CKBehaviorContext &ctx, BBSlot *pin, int value) {
+    return SetSlotInt(pin, value) && Step(ctx);
+}
+
+bool BBInstance::StepSetSlotFloat(const CKBehaviorContext &ctx, BBSlot *pin, float value) {
+    return SetSlotFloat(pin, value) && Step(ctx);
+}
+
+bool BBInstance::StepSetSlotBool(const CKBehaviorContext &ctx, BBSlot *pin, bool value) {
+    return SetSlotBool(pin, value) && Step(ctx);
+}
+
+bool BBInstance::StepSetSlotString(const CKBehaviorContext &ctx, BBSlot *pin, const std::string &value) {
+    return SetSlotString(pin, value) && Step(ctx);
+}
+
+bool BBInstance::StepSetSlotObject(const CKBehaviorContext &ctx, BBSlot *pin, CKObject *value) {
+    return SetSlotObject(pin, value) && Step(ctx);
+}
+
 bool BBInstance::SetSettingValue(BBSlot *setting, ParamValue *value) {
     if (!value) {
         SetError("BBInstance.SetSetting requires a valid ParamValue.");
@@ -1753,6 +1890,117 @@ BBSlot *BBInstance::RuntimeSlot(ScriptBridgeSlotKind kind, const std::string &na
                                   ScriptBridgeBBInternal::CandidateList(*layout, kind)),
                       behavior->GetID(),
                       stamp);
+}
+
+bool BBInstance::SetValueForPin(BBSlot *pin, const ScriptParamValue &value, const char *method) {
+    int pinIndex = -1;
+    std::string error;
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation) : nullptr;
+    if (!ScriptBridgeBBInternal::ResolveRuntimeSlot(m_Bridge, behavior, pin, ScriptBridgeSlotKind::Pin, method, pinIndex, error)) {
+        SetError(error);
+        SetScriptException(m_Error);
+        return false;
+    }
+
+    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
+    m_Bridge->RemoveInstanceOperation(m_InstanceId, m_Generation, pinIndex);
+    ParamRef *ref = Pin(pin);
+    if (!ref) {
+        SetError(fmt::format("{} could not resolve live pin '{}'.", method, pin ? pin->Name() : std::string("<null>")));
+        SetScriptException(m_Error);
+        return false;
+    }
+
+    ParamValue paramValue(value);
+    const bool ok = ref->Set(&paramValue);
+    ref->Release();
+    if (!ok) {
+        SetError(fmt::format("{} failed to write live pin '{}'.", method, pin ? pin->Name() : std::string("<null>")));
+        SetScriptException(m_Error);
+        return false;
+    }
+    ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value);
+    return true;
+}
+
+bool BBInstance::SourceForPin(BBSlot *pin, ParamRef *source, const char *method) {
+    int pinIndex = -1;
+    std::string error;
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation) : nullptr;
+    if (!ScriptBridgeBBInternal::ResolveRuntimeSlot(m_Bridge, behavior, pin, ScriptBridgeSlotKind::Pin, method, pinIndex, error)) {
+        SetError(error);
+        SetScriptException(m_Error);
+        return false;
+    }
+    if (!source || !source->IsValid()) {
+        SetError(fmt::format("{} requires a valid ParamRef source.", method));
+        SetScriptException(m_Error);
+        return false;
+    }
+
+    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
+    m_Bridge->RemoveInstanceOperation(m_InstanceId, m_Generation, pinIndex);
+    ParamRef *target = Pin(pin);
+    ParamSourceLinkRef *link = target ? target->SetSourceScoped(source) : nullptr;
+    if (target) {
+        target->Release();
+    }
+    if (!link || !link->IsValid()) {
+        SetError(fmt::format("{} failed to connect live source.", method));
+        if (link) {
+            link->Release();
+        }
+        SetScriptException(m_Error);
+        return false;
+    }
+    if (!m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, pinIndex, link)) {
+        link->Restore();
+        link->Release();
+        SetError(fmt::format("{} failed to store live source link.", method));
+        SetScriptException(m_Error);
+        return false;
+    }
+    return true;
+}
+
+bool BBInstance::OperationForPin(BBSlot *pin, ParamOp *operation, const char *method) {
+    int pinIndex = -1;
+    std::string error;
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation) : nullptr;
+    if (!ScriptBridgeBBInternal::ResolveRuntimeSlot(m_Bridge, behavior, pin, ScriptBridgeSlotKind::Pin, method, pinIndex, error)) {
+        SetError(error);
+        SetScriptException(m_Error);
+        return false;
+    }
+    if (!operation) {
+        SetError(fmt::format("{} requires a valid ParamOp.", method));
+        SetScriptException(m_Error);
+        return false;
+    }
+
+    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
+    m_Bridge->RemoveInstanceOperation(m_InstanceId, m_Generation, pinIndex);
+    BehaviorRef *behaviorRef = Behavior();
+    ParamOperationRef *op = behaviorRef ? behaviorRef->ConnectOperationSlot(pin, operation) : nullptr;
+    if (behaviorRef) {
+        behaviorRef->Release();
+    }
+    if (!op || !op->IsValid()) {
+        SetError(fmt::format("{} failed to connect live operation.", method));
+        if (op) {
+            op->Release();
+        }
+        SetScriptException(m_Error);
+        return false;
+    }
+    if (!m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, pinIndex, op)) {
+        op->Destroy();
+        op->Release();
+        SetError(fmt::format("{} failed to store live operation.", method));
+        SetScriptException(m_Error);
+        return false;
+    }
+    return true;
 }
 
 void BBInstance::SetError(const std::string &error) const {
