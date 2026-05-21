@@ -804,6 +804,12 @@ bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
     CKObject *ownerObject = m_Request.OwnerId ? GetCKObjectById(context, m_Request.OwnerId) : nullptr;
     CKObject *targetObject = m_Request.TargetId ? GetCKObjectById(context, m_Request.TargetId) : nullptr;
     if (targetObject) {
+        if ((layout->BehaviorFlags & CKBEHAVIOR_TARGETABLE) == 0) {
+            SetError(fmt::format("Building Block '{}' is not targetable.",
+                                 layout->QualifiedName));
+            SetScriptException(m_Error);
+            return false;
+        }
         if (!CKIsChildClassOf(targetObject, layout->CompatibleClassId)) {
             SetError(fmt::format("Target '{}' is not compatible with Building Block '{}' expected class {}.",
                                  SafeString(targetObject->GetName()),
