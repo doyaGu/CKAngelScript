@@ -1194,6 +1194,16 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         return fail(fmt::format("Failed to initialize Building Block from GUID ({}, {}) with CKERROR {}.", guid.d[0], guid.d[1], err));
     }
 
+    if (!ScriptBehaviorBridgeInternal::ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
+        return fail(error);
+    }
+
+    err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &ctx);
+    if (err != CK_OK) {
+        return fail(fmt::format("Building Block CREATE callback failed (CKERROR {}).", err));
+    }
+    createCallbackSent = true;
+
     CKBeObject *owner = request.OwnerId ? CKBeObject::Cast(GetCKObjectById(context, request.OwnerId)) : nullptr;
     CKBeObject *target = request.TargetId ? CKBeObject::Cast(GetCKObjectById(context, request.TargetId)) : nullptr;
     const CK_CLASSID compatibleClassId = behavior->GetCompatibleClassID();
@@ -1246,16 +1256,6 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
     if (err != CK_OK) {
         return fail(fmt::format("Failed to set Building Block owner (CKERROR {}).", err));
     }
-
-    if (!ScriptBehaviorBridgeInternal::ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
-        return fail(error);
-    }
-
-    err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &ctx);
-    if (err != CK_OK) {
-        return fail(fmt::format("Building Block CREATE callback failed (CKERROR {}).", err));
-    }
-    createCallbackSent = true;
 
     if (owner) {
         err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORATTACH, &ctx);
