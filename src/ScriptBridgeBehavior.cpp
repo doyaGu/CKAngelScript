@@ -1,6 +1,94 @@
 #include "ScriptBridgeHandles.h"
 
+#include <algorithm>
+#include <set>
+
 #include <fmt/format.h>
+
+namespace ScriptBridgeBehaviorInternal {
+
+int SubBehaviorDepth(CKBehavior *root, CKBehavior *target, std::set<CK_ID> &visited) {
+    if (!root || !target) {
+        return -1;
+    }
+    if (root == target) {
+        return 0;
+    }
+    if (!visited.insert(root->GetID()).second) {
+        return -1;
+    }
+    for (int i = 0; i < root->GetSubBehaviorCount(); ++i) {
+        const int childDepth = SubBehaviorDepth(root->GetSubBehavior(i), target, visited);
+        if (childDepth >= 0) {
+            return childDepth + 1;
+        }
+    }
+    return -1;
+}
+
+int SubBehaviorDepth(CKBehavior *root, CKBehavior *target) {
+    std::set<CK_ID> visited;
+    return SubBehaviorDepth(root, target, visited);
+}
+
+CKBehavior *FindContainingOwnerScript(CKBehavior *behavior) {
+    CKBeObject *owner = behavior ? behavior->GetOwner() : nullptr;
+    if (!owner) {
+        return nullptr;
+    }
+
+    CKBehavior *selfScript = nullptr;
+    for (int i = 0; i < owner->GetScriptCount(); ++i) {
+        CKBehavior *script = owner->GetScript(i);
+        if (!script) {
+            continue;
+        }
+        if (script == behavior) {
+            selfScript = script;
+            continue;
+        }
+        if (SubBehaviorDepth(script, behavior) > 0) {
+            return script;
+        }
+    }
+    return selfScript;
+}
+
+CKBehavior *FindContainingBehaviorInContext(CKBehavior *behavior) {
+    CKContext *context = behavior ? behavior->GetCKContext() : nullptr;
+    if (!context) {
+        return nullptr;
+    }
+
+    CKBehavior *best = nullptr;
+    int bestDepth = 0;
+    const XObjectPointerArray &behaviors = context->GetObjectListByType(CKCID_BEHAVIOR, TRUE);
+    for (int i = 0; i < behaviors.Size(); ++i) {
+        CKBehavior *candidate = CKBehavior::Cast(behaviors[i]);
+        const int depth = SubBehaviorDepth(candidate, behavior);
+        if (depth > bestDepth) {
+            best = candidate;
+            bestDepth = depth;
+        }
+    }
+    return best;
+}
+
+CKBehavior *FindBehaviorByNameInContext(CKContext *context, const std::string &name) {
+    if (!context || name.empty()) {
+        return nullptr;
+    }
+    const XObjectPointerArray &behaviors = context->GetObjectListByType(CKCID_BEHAVIOR, TRUE);
+    for (int i = 0; i < behaviors.Size(); ++i) {
+        CKBehavior *behavior = CKBehavior::Cast(behaviors[i]);
+        if (behavior && NameEquals(behavior->GetName(), name)) {
+            return behavior;
+        }
+    }
+    return nullptr;
+}
+
+} // namespace ScriptBridgeBehaviorInternal
 
 BehaviorLayout::BehaviorLayout(ScriptBehaviorBridge *bridge, CK_ID behaviorId)
     : m_Bridge(bridge), m_BehaviorId(behaviorId), m_IsPrototype(false) {
@@ -65,34 +153,43 @@ int BehaviorLayout::FindSetting(const std::string &name, int occurrence) const {
 int BehaviorLayout::FindLocal(const std::string &name, int occurrence) const { return FindParameter(ScriptBridgeSlotKind::Local, name, occurrence); }
 
 std::string BehaviorLayout::Describe() const {
+    const ScriptBridgeLayoutRecord *layout = LayoutRecord();
     std::string text;
     text += "Inputs:";
     for (int i = 0; i < InputCount(); ++i) text += fmt::format("\n  #{} {}", i, InputName(i));
     text += "\nOutputs:";
     for (int i = 0; i < OutputCount(); ++i) text += fmt::format("\n  #{} {}", i, OutputNameAt(i));
     text += "\nPins:";
-    for (int i = 0; i < PinCount(); ++i) {
-        ParamInfo *info = Pin(i);
-        text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", i));
-        if (info) info->Release();
+    if (layout) {
+        for (const ScriptBridgeLayoutParamSlot &slot : layout->Pins) {
+            ParamInfo *info = Pin(slot.Index);
+            text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", slot.Index));
+            if (info) info->Release();
+        }
     }
     text += "\nPouts:";
-    for (int i = 0; i < PoutCount(); ++i) {
-        ParamInfo *info = Pout(i);
-        text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", i));
-        if (info) info->Release();
+    if (layout) {
+        for (const ScriptBridgeLayoutParamSlot &slot : layout->Pouts) {
+            ParamInfo *info = Pout(slot.Index);
+            text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", slot.Index));
+            if (info) info->Release();
+        }
     }
     text += "\nSettings:";
-    for (int i = 0; i < SettingCount(); ++i) {
-        ParamInfo *info = Setting(i);
-        text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", i));
-        if (info) info->Release();
+    if (layout) {
+        for (const ScriptBridgeLayoutParamSlot &slot : layout->Settings) {
+            ParamInfo *info = Setting(slot.Index);
+            text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", slot.Index));
+            if (info) info->Release();
+        }
     }
     text += "\nLocals:";
-    for (int i = 0; i < LocalCount(); ++i) {
-        ParamInfo *info = Local(i);
-        text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", i));
-        if (info) info->Release();
+    if (layout) {
+        for (const ScriptBridgeLayoutParamSlot &slot : layout->Locals) {
+            ParamInfo *info = Local(slot.Index);
+            text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", slot.Index));
+            if (info) info->Release();
+        }
     }
     return text;
 }
@@ -127,9 +224,12 @@ ParamInfo *BehaviorLayout::ParameterInfo(ScriptBridgeSlotKind kind, int index) c
     } else if (kind == ScriptBridgeSlotKind::Local) {
         slots = &layout->Locals;
     }
-    if (!slots || index < 0 || index >= static_cast<int>(slots->size())) return nullptr;
-    const ScriptBridgeLayoutParamSlot &slot = (*slots)[index];
-    return new ParamInfo(kind, index, slot.Name, slot.TypeGuid, slot.TypeName, slot.DataSize);
+    if (!slots || index < 0) return nullptr;
+    const auto it = std::find_if(slots->begin(), slots->end(), [index](const ScriptBridgeLayoutParamSlot &slot) {
+        return slot.Index == index;
+    });
+    if (it == slots->end()) return nullptr;
+    return new ParamInfo(kind, it->Index, it->Name, it->TypeGuid, it->TypeName, it->DataSize);
 }
 
 int BehaviorLayout::FindIo(bool input, const std::string &name, int occurrence) const {
@@ -148,18 +248,17 @@ int BehaviorLayout::FindIo(bool input, const std::string &name, int occurrence) 
 
 int BehaviorLayout::FindParameter(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const {
     if (occurrence < 0) return -1;
-    const int count = kind == ScriptBridgeSlotKind::Pin
-        ? PinCount()
-        : (kind == ScriptBridgeSlotKind::Pout
-            ? PoutCount()
-            : (kind == ScriptBridgeSlotKind::Setting ? SettingCount() : LocalCount()));
     int seen = 0;
-    for (int i = 0; i < count; ++i) {
-        ParamInfo *info = ParameterInfo(kind, i);
-        const bool match = info && info->GetName() == name;
-        if (info) info->Release();
-        if (match) {
-            if (seen == occurrence) return i;
+    const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+    if (!layout) return -1;
+    const std::vector<ScriptBridgeLayoutParamSlot> *slots = kind == ScriptBridgeSlotKind::Pin
+        ? &layout->Pins
+        : (kind == ScriptBridgeSlotKind::Pout
+            ? &layout->Pouts
+            : (kind == ScriptBridgeSlotKind::Setting ? &layout->Settings : &layout->Locals));
+    for (const ScriptBridgeLayoutParamSlot &slot : *slots) {
+        if (slot.Name == name) {
+            if (seen == occurrence) return slot.Index;
             ++seen;
         }
     }
@@ -186,7 +285,17 @@ BehaviorLayout *BehaviorRef::Layout() const { return m_Bridge ? new BehaviorLayo
 
 BehaviorGraph *BehaviorRef::AsGraph() const {
     CKBehavior *behavior = Get();
-    return behavior ? new BehaviorGraph(m_Bridge, CKBehaviorContext(), behavior->GetID()) : nullptr;
+    if (!behavior) {
+        return nullptr;
+    }
+
+    CKBehaviorContext context = {};
+    context.Context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    context.Behavior = CKBehavior::Cast(GetCKObjectById(context.Context, m_ComponentId));
+    if (!context.Behavior) {
+        context.Behavior = behavior;
+    }
+    return new BehaviorGraph(m_Bridge, context, behavior->GetID());
 }
 
 bool BehaviorRef::Trigger(int inputIndex, bool reset) {
@@ -365,12 +474,18 @@ BehaviorBridge::BehaviorBridge(ScriptBehaviorBridge *bridge, const CKBehaviorCon
 
 BehaviorGraph *BehaviorBridge::Graph() const {
     CKBehavior *root = nullptr;
-    CKBeObject *owner = m_Context.Behavior ? m_Context.Behavior->GetOwner() : nullptr;
-    if (owner && owner->GetScriptCount() > 0) {
-        root = owner->GetScript(0);
+    if (m_Context.Behavior) {
+        root = ScriptBridgeBehaviorInternal::FindContainingOwnerScript(m_Context.Behavior);
+    }
+    if (!root && m_Context.Behavior) {
+        root = ScriptBridgeBehaviorInternal::FindContainingBehaviorInContext(m_Context.Behavior);
     }
     if (!root && m_Context.Behavior) {
         root = m_Context.Behavior->GetOwnerScript();
+    }
+    CKBeObject *owner = m_Context.Behavior ? m_Context.Behavior->GetOwner() : nullptr;
+    if (!root && owner && owner->GetScriptCount() > 0) {
+        root = owner->GetScript(0);
     }
     if (!root && m_Context.Behavior) {
         root = m_Context.Behavior;
@@ -402,6 +517,10 @@ BehaviorRef *BehaviorBridge::Find(const std::string &name) const {
     }
     CKBeObject *owner = m_Context.Behavior ? m_Context.Behavior->GetOwner() : nullptr;
     if (CKBehavior *found = FindBehaviorOnOwner(owner, name)) {
+        return m_Bridge->WrapBehavior(found, ComponentIdFromContext(m_Context));
+    }
+    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    if (CKBehavior *found = ScriptBridgeBehaviorInternal::FindBehaviorByNameInContext(context, name)) {
         return m_Bridge->WrapBehavior(found, ComponentIdFromContext(m_Context));
     }
     return nullptr;

@@ -73,6 +73,14 @@ bool BehaviorFlagSet(CKDWORD flags, CKDWORD flag) {
     return (flags & flag) != 0;
 }
 
+bool IsBridgeInternalLocalName(const std::string &name) {
+    return name.find("__CKAS_BridgeInput_") == 0 ||
+           name.find("__CKAS_BridgeOutput_") == 0 ||
+           name.find("__CKAS_GraphEditInput_") == 0 ||
+           name.find("__CKAS_Op") == 0 ||
+           name == "__CKAS_Target";
+}
+
 } // namespace ScriptBehaviorBridgeInternal
 
 void ScriptBridgeSetIndexedValue(std::vector<ScriptBridgeIndexedValue> &values,
@@ -1685,13 +1693,17 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
         CKParameterLocal *param = behavior->GetLocalParameter(i);
         ScriptBridgeLayoutParamSlot slot;
         const bool isSetting = behavior->IsLocalParameterSetting(i);
+        const std::string name = SafeString(param ? param->GetName() : nullptr);
+        if (!isSetting && ScriptBehaviorBridgeInternal::IsBridgeInternalLocalName(name)) {
+            continue;
+        }
         slot.Kind = isSetting ? ScriptBridgeSlotKind::Setting : ScriptBridgeSlotKind::Local;
         slot.Index = i;
         slot.ParameterId = param ? param->GetID() : 0;
         slot.Caps = 0;
         SetScriptBridgeSlotCap(slot.Caps, ScriptBridgeSlotCaps::Setting, isSetting);
         SetScriptBridgeSlotCap(slot.Caps, ScriptBridgeSlotCaps::Dynamic, true);
-        slot.Name = SafeString(param ? param->GetName() : nullptr);
+        slot.Name = name;
         slot.TypeGuid = param ? param->GetGUID() : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
         slot.DataSize = param ? param->GetDataSize() : ParameterDefaultSize(context, slot.TypeGuid);

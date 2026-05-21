@@ -708,7 +708,7 @@ static bool RunBehaviorBridgeNativeGraphSearchSelfTest(CKContext *context,
     link->SetActivationDelay(2);
     root->AddSubBehaviorLink(link);
 
-    CKBehaviorContext ctx;
+    CKBehaviorContext ctx = {};
     ctx.Context = context;
     ctx.Behavior = root;
     ctx.ParameterManager = context->GetParameterManager();
@@ -730,6 +730,24 @@ static bool RunBehaviorBridgeNativeGraphSearchSelfTest(CKContext *context,
     };
 
     BehaviorGraph *graph = new BehaviorGraph(bridge, ctx, root->GetID());
+    BehaviorRef *rootRef = bridge->WrapBehavior(root, root->GetID());
+    BehaviorGraph *graphFromRef = rootRef ? rootRef->AsGraph() : nullptr;
+    BehaviorNode *rootFromRef = graphFromRef ? graphFromRef->Root() : nullptr;
+    if (!graphFromRef || !graphFromRef->IsValid() ||
+        !rootFromRef || !rootFromRef->IsValid() ||
+        rootFromRef->BehaviorId() != root->GetID()) {
+        error = "Graph search self-test failed BehaviorRef.AsGraph root lookup.";
+        if (rootFromRef) rootFromRef->Release();
+        if (graphFromRef) graphFromRef->Release();
+        if (rootRef) rootRef->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+    rootFromRef->Release();
+    graphFromRef->Release();
+    rootRef->Release();
+
     BehaviorQuery *sourceQuery = (new BehaviorQuery())->Name("__CKAS_GraphSearchSource")->Recursive(true)->PinCount(1);
     BehaviorNode *sourceNode = graph->Require(sourceQuery);
     if (!graph->IsValid() || !sourceNode || !sourceNode->IsValid()) {
@@ -790,6 +808,17 @@ static bool RunBehaviorBridgeNativeGraphSearchSelfTest(CKContext *context,
     return true;
 }
 
+static int CountGraphEditInputSources(CKBehavior *behavior) {
+    int count = 0;
+    for (int i = 0; behavior && i < behavior->GetLocalParameterCount(); ++i) {
+        CKParameterLocal *local = behavior->GetLocalParameter(i);
+        if (local && SafeString(local->GetName()).find("__CKAS_GraphEditInput_") == 0) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
                                                      std::string &error) {
     ScriptManager *manager = ScriptManager::GetManager(context);
@@ -813,6 +842,7 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     root->UseGraph();
     source->CreateOutput("Out");
     target->CreateInput("In");
+    CKParameterIn *targetValue = target->CreateInputParameter(const_cast<CKSTRING>("Value"), CKPGUID_INT);
     root->AddSubBehavior(source);
     root->AddSubBehavior(target);
 
@@ -926,6 +956,72 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
         return false;
     }
     secondApply->Release();
+
+    const ScriptBridgeLayoutRecord *targetLayout = bridge->GetBehaviorLayout(target->GetID(), CaptureBridgeObjectStamp(target));
+    BBSlot *valueSlot = targetLayout
+        ? new BBSlot(bridge,
+                     ctx,
+                     MakeDefaultRequest(ctx),
+                     ScriptBridgeSlotKind::Pin,
+                     0,
+                     "Value",
+                     CKPGUID_INT,
+                     "Integer",
+                     sizeof(int),
+                     0,
+                     targetLayout->LayoutGeneration,
+                     targetLayout->Signature,
+                     std::string(),
+                     target->GetID(),
+                     CaptureBridgeObjectStamp(target))
+        : nullptr;
+    BehaviorGraphEdit *setEdit = graph->Edit();
+    GraphEditNode *setTarget = setEdit->Import(targetNode);
+    setEdit->SetSlotInt(setTarget, valueSlot, 11)->Release();
+    GraphEditResult *setResult = setEdit->Apply(ctx);
+    BehaviorGraphEdit *replaceSetEdit = graph->Edit();
+    GraphEditNode *replaceSetTarget = replaceSetEdit->Import(targetNode);
+    replaceSetEdit->SetSlotInt(replaceSetTarget, valueSlot, 12)->Release();
+    GraphEditResult *replaceSetResult = replaceSetEdit->Apply(ctx);
+    CKParameter *directSource = targetValue ? targetValue->GetDirectSource() : nullptr;
+    if (!targetValue || !valueSlot || !setResult || !setResult->Ok() ||
+        !replaceSetResult || !replaceSetResult->Ok() ||
+        !directSource ||
+        CountGraphEditInputSources(target) != 1) {
+        error = fmt::format("Graph edit self-test failed Set replacement cleanup: first={} second={} direct={} bridgeSources={}.",
+                            setResult && setResult->Ok() ? "ok" : (setResult ? setResult->Error() : "<null>"),
+                            replaceSetResult && replaceSetResult->Ok() ? "ok" : (replaceSetResult ? replaceSetResult->Error() : "<null>"),
+                            directSource ? SafeString(directSource->GetName()) : std::string("<null>"),
+                            CountGraphEditInputSources(target));
+        if (replaceSetResult) replaceSetResult->Release();
+        replaceSetTarget->Release();
+        replaceSetEdit->Release();
+        if (setResult) setResult->Release();
+        setTarget->Release();
+        setEdit->Release();
+        if (valueSlot) valueSlot->Release();
+        unlinkResult->Release();
+        unlinkEdit->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+    replaceSetResult->Release();
+    replaceSetTarget->Release();
+    replaceSetEdit->Release();
+    setResult->Release();
+    setTarget->Release();
+    setEdit->Release();
+    valueSlot->Release();
 
     BehaviorGraphEdit *removeEdit = graph->Edit();
     removeEdit->Remove(targetNode, true)->Release();

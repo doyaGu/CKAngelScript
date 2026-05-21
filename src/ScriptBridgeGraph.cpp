@@ -222,6 +222,11 @@ CKParameterLocal *CreateGraphEditInputSource(CKBehavior *behavior,
     return local;
 }
 
+bool IsGraphEditInputSource(CKParameter *parameter) {
+    CKParameterLocal *local = CKParameterLocal::Cast(parameter);
+    return local && SafeString(local->GetName()).find("__CKAS_GraphEditInput_") == 0;
+}
+
 void DestroyGraphEditLocalSource(CKContext *context, CK_ID localId) {
     CKParameterLocal *local = CKParameterLocal::Cast(GetCKObjectById(context, localId));
     if (!local) {
@@ -258,27 +263,57 @@ bool ContainsText(const std::string &haystack, const std::string &needle) {
     return needle.empty() || haystack.find(needle) != std::string::npos;
 }
 
+bool BehaviorPrototypeNameMatches(CKBehavior *behavior, const std::string &name) {
+    if (name.empty()) {
+        return true;
+    }
+    if (!behavior) {
+        return false;
+    }
+    if (SafeString(behavior->GetPrototypeName()) == name) {
+        return true;
+    }
+    CKBehaviorPrototype *prototype = CKGetPrototypeFromGuid(behavior->GetPrototypeGuid());
+    if (prototype && SafeString(prototype->GetName()) == name) {
+        return true;
+    }
+    CKObjectDeclaration *decl = nullptr;
+    const int count = CKGetPrototypeDeclarationCount();
+    for (int i = 0; i < count; ++i) {
+        CKObjectDeclaration *candidate = CKGetPrototypeDeclaration(i);
+        if (candidate && candidate->GetGuid() == behavior->GetPrototypeGuid()) {
+            decl = candidate;
+            break;
+        }
+    }
+    return decl && (SafeString(decl->GetName()) == name || PrototypeQualifiedName(decl) == name);
+}
+
 } // namespace ScriptBridgeGraphInternal
 
 BehaviorQuery::BehaviorQuery() = default;
 
 BehaviorQuery *BehaviorQuery::Name(const std::string &name) {
     m_Name = name;
+    AddRef();
     return this;
 }
 
 BehaviorQuery *BehaviorQuery::NameContains(const std::string &text) {
     m_NameContains = text;
+    AddRef();
     return this;
 }
 
 BehaviorQuery *BehaviorQuery::PrototypeGuid(CKGUID guid) {
     m_PrototypeGuid = guid;
+    AddRef();
     return this;
 }
 
 BehaviorQuery *BehaviorQuery::PrototypeName(const std::string &name) {
     m_PrototypeName = name;
+    AddRef();
     return this;
 }
 
@@ -290,32 +325,36 @@ BehaviorQuery *BehaviorQuery::PrototypeQuery(const std::string &query) {
     } else {
         m_PrototypeName = query;
     }
+    AddRef();
     return this;
 }
 
 BehaviorQuery *BehaviorQuery::Target(CKBeObject *target) {
     m_TargetId = target ? target->GetID() : 0;
+    AddRef();
     return this;
 }
 
 BehaviorQuery *BehaviorQuery::TargetName(const std::string &name) {
     m_TargetName = name;
+    AddRef();
     return this;
 }
 
 BehaviorQuery *BehaviorQuery::TargetId(CK_ID id) {
     m_TargetId = id;
+    AddRef();
     return this;
 }
 
-BehaviorQuery *BehaviorQuery::InputCount(int count) { m_InputCount = count; return this; }
-BehaviorQuery *BehaviorQuery::OutputCount(int count) { m_OutputCount = count; return this; }
-BehaviorQuery *BehaviorQuery::PinCount(int count) { m_PinCount = count; return this; }
-BehaviorQuery *BehaviorQuery::PoutCount(int count) { m_PoutCount = count; return this; }
-BehaviorQuery *BehaviorQuery::MaxDepth(int depth) { m_MaxDepth = depth; return this; }
-BehaviorQuery *BehaviorQuery::IncludeRoot(bool includeRoot) { m_IncludeRoot = includeRoot; return this; }
-BehaviorQuery *BehaviorQuery::Recursive(bool recursive) { m_Recursive = recursive; return this; }
-BehaviorQuery *BehaviorQuery::Occurrence(int occurrence) { m_Occurrence = occurrence < 0 ? 0 : occurrence; return this; }
+BehaviorQuery *BehaviorQuery::InputCount(int count) { m_InputCount = count; AddRef(); return this; }
+BehaviorQuery *BehaviorQuery::OutputCount(int count) { m_OutputCount = count; AddRef(); return this; }
+BehaviorQuery *BehaviorQuery::PinCount(int count) { m_PinCount = count; AddRef(); return this; }
+BehaviorQuery *BehaviorQuery::PoutCount(int count) { m_PoutCount = count; AddRef(); return this; }
+BehaviorQuery *BehaviorQuery::MaxDepth(int depth) { m_MaxDepth = depth; AddRef(); return this; }
+BehaviorQuery *BehaviorQuery::IncludeRoot(bool includeRoot) { m_IncludeRoot = includeRoot; AddRef(); return this; }
+BehaviorQuery *BehaviorQuery::Recursive(bool recursive) { m_Recursive = recursive; AddRef(); return this; }
+BehaviorQuery *BehaviorQuery::Occurrence(int occurrence) { m_Occurrence = occurrence < 0 ? 0 : occurrence; AddRef(); return this; }
 
 std::string BehaviorQuery::Describe() const {
     return fmt::format("BehaviorQuery(name='{}', contains='{}', prototypeGuid={}, prototypeName='{}', targetId={}, targetName='{}', counts={}/{}/{}/{}, recursive={}, includeRoot={}, maxDepth={}, occurrence={})",
@@ -351,7 +390,7 @@ bool BehaviorQuery::Matches(CKBehavior *behavior, int depth) const {
     if (m_PrototypeGuid.IsValid() && behavior->GetPrototypeGuid() != m_PrototypeGuid) {
         return false;
     }
-    if (!m_PrototypeName.empty() && SafeString(behavior->GetPrototypeName()) != m_PrototypeName) {
+    if (!ScriptBridgeGraphInternal::BehaviorPrototypeNameMatches(behavior, m_PrototypeName)) {
         return false;
     }
     CKBeObject *target = behavior->GetTarget();
@@ -965,6 +1004,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
     std::vector<ParamSourceLinkRef *> appliedSourceLinks;
     std::vector<ParamOperationRef *> appliedOperations;
     std::vector<CK_ID> createdValueLocalSources;
+    std::vector<CK_ID> replacedValueLocalSources;
 
     auto rollbackCreated = [&]() {
         for (ParamOperationRef *operation : appliedOperations) {
@@ -1084,14 +1124,14 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             continue;
         }
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
-        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources)) {
+        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources, replacedValueLocalSources)) {
             return failApply(error);
         }
     }
 
     for (const SourceSpec &spec : m_Sources) {
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
-        if (!ApplyExistingSource(behavior, spec, error, appliedSourceLinks)) {
+        if (!ApplyExistingSource(behavior, spec, error, appliedSourceLinks, replacedValueLocalSources)) {
             return failApply(error);
         }
     }
@@ -1108,7 +1148,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             continue;
         }
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
-        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources)) {
+        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources, replacedValueLocalSources)) {
             return failApply(error);
         }
     }
@@ -1179,6 +1219,10 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         }
     }
     appliedSourceLinks.clear();
+    for (CK_ID localId : replacedValueLocalSources) {
+        ScriptBridgeGraphInternal::DestroyGraphEditLocalSource(context, localId);
+    }
+    replacedValueLocalSources.clear();
     for (ParamOperationRef *operation : appliedOperations) {
         if (operation) {
             operation->Release();
@@ -1595,7 +1639,8 @@ bool BehaviorGraphEdit::ApplyExistingValue(CKBehavior *behavior,
                                            const ValueSpec &spec,
                                            std::string &error,
                                            std::vector<ParamSourceLinkRef *> &sourceLinks,
-                                           std::vector<CK_ID> &localSourceIds) {
+                                           std::vector<CK_ID> &localSourceIds,
+                                           std::vector<CK_ID> &replacedLocalSourceIds) {
     if (!behavior) {
         error = "BehaviorGraphEdit value target behavior is not valid.";
         return false;
@@ -1637,13 +1682,17 @@ bool BehaviorGraphEdit::ApplyExistingValue(CKBehavior *behavior,
 
     sourceLinks.push_back(new ParamSourceLinkRef(m_Bridge, pin, previous, local));
     localSourceIds.push_back(local->GetID());
+    if (ScriptBridgeGraphInternal::IsGraphEditInputSource(previous)) {
+        replacedLocalSourceIds.push_back(previous->GetID());
+    }
     return true;
 }
 
 bool BehaviorGraphEdit::ApplyExistingSource(CKBehavior *behavior,
                                             const SourceSpec &spec,
                                             std::string &error,
-                                            std::vector<ParamSourceLinkRef *> &sourceLinks) {
+                                            std::vector<ParamSourceLinkRef *> &sourceLinks,
+                                            std::vector<CK_ID> &replacedLocalSourceIds) {
     if (!behavior) {
         error = "BehaviorGraphEdit source target behavior is not valid.";
         return false;
@@ -1679,6 +1728,9 @@ bool BehaviorGraphEdit::ApplyExistingSource(CKBehavior *behavior,
     }
 
     sourceLinks.push_back(new ParamSourceLinkRef(m_Bridge, pin, previous, source));
+    if (ScriptBridgeGraphInternal::IsGraphEditInputSource(previous)) {
+        replacedLocalSourceIds.push_back(previous->GetID());
+    }
     return true;
 }
 

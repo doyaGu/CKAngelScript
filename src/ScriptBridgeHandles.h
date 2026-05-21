@@ -604,11 +604,13 @@ private:
                             const ValueSpec &spec,
                             std::string &error,
                             std::vector<ParamSourceLinkRef *> &sourceLinks,
-                            std::vector<CK_ID> &localSourceIds);
+                            std::vector<CK_ID> &localSourceIds,
+                            std::vector<CK_ID> &replacedLocalSourceIds);
     bool ApplyExistingSource(CKBehavior *behavior,
                              const SourceSpec &spec,
                              std::string &error,
-                             std::vector<ParamSourceLinkRef *> &sourceLinks);
+                             std::vector<ParamSourceLinkRef *> &sourceLinks,
+                             std::vector<CK_ID> &replacedLocalSourceIds);
     bool ApplyExistingOperation(CKBehavior *behavior,
                                 const OperationSpec &spec,
                                 std::string &error,
