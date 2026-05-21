@@ -3014,24 +3014,49 @@ bool EnsureAutoStartedBBConfigs(const CKBehaviorContext &behcontext, ScriptCompo
     if (!state || !state->Object) {
         return true;
     }
-    for (ScriptComponentBinding &binding : state->Bindings) {
-        if (binding.Kind != ScriptComponentBindingKind::BBConfig || !binding.AutoStartBBConfig) {
-            continue;
+
+    std::vector<std::size_t> pending;
+    for (std::size_t i = 0; i < state->Bindings.size(); ++i) {
+        const ScriptComponentBinding &binding = state->Bindings[i];
+        if (binding.Kind == ScriptComponentBindingKind::BBConfig && binding.AutoStartBBConfig) {
+            pending.push_back(i);
         }
-        BBConfig *bbinding = GetBBConfigField(state, binding);
-        if (!bbinding) {
-            error = "Autostart BBConfig field is not available (" + BindingSummary(binding, behcontext.Context) + ").";
+    }
+
+    std::string lastError;
+    while (!pending.empty()) {
+        bool madeProgress = false;
+        for (std::size_t i = 0; i < pending.size();) {
+            ScriptComponentBinding &binding = state->Bindings[pending[i]];
+            BBConfig *bbinding = GetBBConfigField(state, binding);
+            if (!bbinding) {
+                error = "Autostart BBConfig field is not available (" + BindingSummary(binding, behcontext.Context) + ").";
+                return false;
+            }
+
+            std::string attemptError;
+            if (!ApplyBBConfigSourceBindings(behcontext, state, binding, bbinding, true, attemptError)) {
+                lastError = attemptError;
+                ++i;
+                continue;
+            }
+            BBInstance *instance = bbinding->EnsureStarted(behcontext);
+            if (!instance) {
+                lastError = "Autostart BBConfig failed: " + bbinding->Error() + " (" + BindingSummary(binding, behcontext.Context) + ").";
+                ++i;
+                continue;
+            }
+            instance->Release();
+            pending.erase(pending.begin() + static_cast<std::vector<std::size_t>::difference_type>(i));
+            madeProgress = true;
+        }
+
+        if (!madeProgress) {
+            error = lastError.empty()
+                ? "Autostart BBConfig dependencies could not be resolved."
+                : lastError;
             return false;
         }
-        if (!ApplyBBConfigSourceBindings(behcontext, state, binding, bbinding, true, error)) {
-            return false;
-        }
-        BBInstance *instance = bbinding->EnsureStarted(behcontext);
-        if (!instance) {
-            error = "Autostart BBConfig failed: " + bbinding->Error() + " (" + BindingSummary(binding, behcontext.Context) + ").";
-            return false;
-        }
-        instance->Release();
     }
     return true;
 }
