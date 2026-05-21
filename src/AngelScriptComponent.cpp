@@ -2267,7 +2267,12 @@ ParamRef *ResolveBBConfigSourceRef(ScriptComponentState *state,
     if (BBConfig *config = GetBBConfigFieldByName(state, source.SourceFieldName)) {
         BBInstance *instance = config->Instance();
         if (!instance) {
-            error = "BBConfig source config '" + source.SourceFieldName + "' has no live instance: " + config->Error();
+            const std::string configError = config->Error();
+            error = "BBConfig source config '" + source.SourceFieldName +
+                    "' has no live instance. Ensure the source config autostarts or call EnsureStarted() before binding sources.";
+            if (!configError.empty()) {
+                error += " Current config error: " + configError;
+            }
             return nullptr;
         }
         BBSlot *slot = instance->PoutSlot(source.SourceSlotName, source.SourceOccurrence);

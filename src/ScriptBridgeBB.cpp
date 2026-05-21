@@ -802,8 +802,17 @@ BBConfig *BBConfig::SetSettingString(BBSlot *setting, const std::string &value) 
 }
 
 bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
-    if (!IsValid()) {
-        SetScriptException(Error());
+    m_Error.clear();
+    if (!m_Bridge) {
+        SetError("BBConfig bridge is not available.");
+        SetScriptException(m_Error);
+        return false;
+    }
+
+    BBDecl spec(m_Bridge, m_Context, m_Request);
+    if (!spec.IsValid()) {
+        SetError(spec.Error());
+        SetScriptException(m_Error);
         return false;
     }
 
@@ -984,7 +993,6 @@ BBInstance *BBConfig::Instance() const {
         m_Instance->AddRef();
         return m_Instance;
     }
-    SetError("BBConfig.Instance requires a live BBInstance. Call Spawn(), SpawnStarted(), EnsureSpawned(), or EnsureStarted() first.");
     return nullptr;
 }
 
@@ -1085,8 +1093,7 @@ bool BBConfig::OutputActiveSlot(BBSlot *output) {
     if (m_Instance && m_Instance->IsValid()) {
         return m_Instance->OutputActive(output);
     }
-    SetError("BBConfig.OutputActive requires a live BBInstance. Call Spawn() or SpawnStarted() first.");
-    SetScriptException(m_Error);
+    SetScriptException("BBConfig.OutputActive requires a live BBInstance. Call SpawnStarted(), EnsureSpawned(), or EnsureStarted() first.");
     return false;
 }
 
@@ -1094,8 +1101,7 @@ ParamRef *BBConfig::PinRefSlot(BBSlot *pin) {
     if (m_Instance && m_Instance->IsValid()) {
         return m_Instance->Pin(pin);
     }
-    SetError("BBConfig.PinRef requires a live BBInstance. Call Spawn() or SpawnStarted() first.");
-    SetScriptException(m_Error);
+    SetScriptException("BBConfig.PinRef requires a live BBInstance. Call SpawnStarted(), EnsureSpawned(), or EnsureStarted() first.");
     return nullptr;
 }
 
@@ -1103,8 +1109,7 @@ ParamRef *BBConfig::PoutRefSlot(BBSlot *pout) {
     if (m_Instance && m_Instance->IsValid()) {
         return m_Instance->Pout(pout);
     }
-    SetError("BBConfig.PoutRef requires a live BBInstance. Call Spawn() or SpawnStarted() first.");
-    SetScriptException(m_Error);
+    SetScriptException("BBConfig.PoutRef requires a live BBInstance. Call SpawnStarted(), EnsureSpawned(), or EnsureStarted() first.");
     return nullptr;
 }
 
