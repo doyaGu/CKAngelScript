@@ -75,6 +75,22 @@ std::string StripQuotes(const std::string &value) {
     return text;
 }
 
+CKBehavior *FindBehaviorByNameInContext(CKContext *context, const std::string &name) {
+    const std::string text = StripQuotes(name);
+    if (!context || text.empty()) {
+        return nullptr;
+    }
+
+    const XObjectPointerArray &behaviors = context->GetObjectListByType(CKCID_BEHAVIOR, TRUE);
+    for (int i = 0; i < behaviors.Size(); ++i) {
+        CKBehavior *behavior = CKBehavior::Cast(behaviors[i]);
+        if (behavior && NameEquals(behavior->GetName(), text)) {
+            return behavior;
+        }
+    }
+    return nullptr;
+}
+
 bool ParseBoolText(const std::string &value, bool fallback = false) {
     const std::string text = ToLower(StripQuotes(value));
     if (text == "true" || text == "yes" || text == "on" || text == "1") {
@@ -1447,7 +1463,19 @@ bool SetParameterDefaultValue(CKParameterLocal *local, const ScriptComponentBind
         case ScriptComponentBindingKind::BBSlot:
         case ScriptComponentBindingKind::BBConfig:
             return local->SetStringValue(const_cast<CKSTRING>(binding.DefaultValue.c_str())) == CK_OK;
-        case ScriptComponentBindingKind::Object:
+        case ScriptComponentBindingKind::Object: {
+            CK_ID id = 0;
+            char *end = nullptr;
+            const unsigned long parsed = std::strtoul(StripQuotes(binding.DefaultValue).c_str(), &end, 0);
+            if (end && *end == '\0') {
+                id = static_cast<CK_ID>(parsed);
+            } else if (context) {
+                const std::string name = StripQuotes(binding.DefaultValue);
+                CKObject *object = context->GetObjectByName(const_cast<CKSTRING>(name.c_str()));
+                id = object ? object->GetID() : 0;
+            }
+            return local->SetValue(&id, sizeof(id)) == CK_OK;
+        }
         case ScriptComponentBindingKind::BehaviorRef: {
             CK_ID id = 0;
             char *end = nullptr;
@@ -1455,8 +1483,12 @@ bool SetParameterDefaultValue(CKParameterLocal *local, const ScriptComponentBind
             if (end && *end == '\0') {
                 id = static_cast<CK_ID>(parsed);
             } else if (context) {
-                CKObject *object = context->GetObjectByName(const_cast<CKSTRING>(binding.DefaultValue.c_str()));
-                id = object ? object->GetID() : 0;
+                const std::string name = StripQuotes(binding.DefaultValue);
+                CKBehavior *behavior = FindBehaviorByNameInContext(context, name);
+                if (!behavior) {
+                    behavior = CKBehavior::Cast(context->GetObjectByName(const_cast<CKSTRING>(name.c_str())));
+                }
+                id = behavior ? behavior->GetID() : 0;
             }
             return local->SetValue(&id, sizeof(id)) == CK_OK;
         }
@@ -1626,6 +1658,31 @@ CKObject *ReadObjectValue(CKParameter *source, CKContext *context) {
         CK_ID id = 0;
         if (source->GetValue(&id) == CK_OK && id != 0) {
             return context ? CKGetObject(context, id) : nullptr;
+        }
+    }
+
+    return nullptr;
+}
+
+CKBehavior *ReadBehaviorValue(CKParameter *source, CKContext *context) {
+    if (!source) {
+        return nullptr;
+    }
+
+    if (CKBehavior *behavior = CKBehavior::Cast(ReadObjectValue(source, context))) {
+        return behavior;
+    }
+
+    std::string text;
+    if (ReadStringValue(source, text)) {
+        text = StripQuotes(text);
+        if (!text.empty()) {
+            char *end = nullptr;
+            const unsigned long parsed = std::strtoul(text.c_str(), &end, 0);
+            if (end && *end == '\0') {
+                return context ? CKBehavior::Cast(CKGetObject(context, static_cast<CK_ID>(parsed))) : nullptr;
+            }
+            return FindBehaviorByNameInContext(context, text);
         }
     }
 
@@ -2604,7 +2661,7 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 break;
             }
             case ScriptComponentBindingKind::BehaviorRef: {
-                CKBehavior *target = CKBehavior::Cast(ReadObjectValue(source, behcontext.Context));
+                CKBehavior *target = ReadBehaviorValue(source, behcontext.Context);
                 const CK_ID targetId = target ? target->GetID() : 0;
                 if (!initial && binding.HandleInjected && binding.LastObjectId == targetId) {
                     break;
