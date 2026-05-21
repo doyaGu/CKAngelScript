@@ -52,6 +52,12 @@ struct ScriptComponentRequiredSlot {
     int Occurrence = 0;
 };
 
+struct ScriptComponentSettingValue {
+    std::string Name;
+    std::string Value;
+    int Occurrence = 0;
+};
+
 struct ScriptComponentBinding {
     std::string FieldName;
     std::string ParameterName;
@@ -70,6 +76,7 @@ struct ScriptComponentBinding {
     std::string BindingStartInput;
     std::string BindingStopInput;
     std::vector<ScriptComponentRequiredSlot> RequiredSlots;
+    std::vector<ScriptComponentSettingValue> SettingValues;
 
     ScriptComponentBindingKind Kind = ScriptComponentBindingKind::Auto;
     CKGUID ParameterGuid;

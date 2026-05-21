@@ -141,7 +141,9 @@ bool IsComponentBindingKeyword(const std::string &keyword) {
            key == "behavior" ||
            key == "bb" ||
            key == "bbslot" ||
-           key == "bbbind";
+           key == "bbbind" ||
+           key == "bbdecl" ||
+           key == "bbconfig";
 }
 
 ScriptParamValueKind ValueKindFromComponentKind(ScriptComponentBindingKind kind) {
@@ -202,13 +204,13 @@ ScriptComponentBindingKind KindFromTypeName(const std::string &typeName) {
     if (type == "bb" || type == "bbprototype" || type == "buildingblock") {
         return ScriptComponentBindingKind::BBPrototype;
     }
-    if (type == "bbspec" || type == "buildingblockspec") {
+    if (type == "bbdecl" || type == "bbspec" || type == "buildingblockspec") {
         return ScriptComponentBindingKind::BBSpec;
     }
     if (type == "bbslot" || type == "buildingblockslot") {
         return ScriptComponentBindingKind::BBSlot;
     }
-    if (type == "bbbinding" || type == "bbbind" || type == "buildingblockbinding") {
+    if (type == "bbconfig" || type == "bbbinding" || type == "bbbind" || type == "buildingblockbinding") {
         return ScriptComponentBindingKind::BBBinding;
     }
     if (type == "object" || type == "ckobject" || type == "ckbeobject" || type == "behavior" ||
@@ -436,13 +438,13 @@ ScriptComponentBindingKind InferKindFromProperty(asIScriptEngine *engine, int ty
     if (typeId == engine->GetTypeIdByDecl("BBPrototype@")) {
         return ScriptComponentBindingKind::BBPrototype;
     }
-    if (typeId == engine->GetTypeIdByDecl("BBSpec@")) {
+    if (typeId == engine->GetTypeIdByDecl("BBDecl@") || typeId == engine->GetTypeIdByDecl("BBSpec@")) {
         return ScriptComponentBindingKind::BBSpec;
     }
     if (typeId == engine->GetTypeIdByDecl("BBSlot@")) {
         return ScriptComponentBindingKind::BBSlot;
     }
-    if (typeId == engine->GetTypeIdByDecl("BBBinding@")) {
+    if (typeId == engine->GetTypeIdByDecl("BBConfig@") || typeId == engine->GetTypeIdByDecl("BBBinding@")) {
         return ScriptComponentBindingKind::BBBinding;
     }
 
@@ -501,14 +503,14 @@ bool IsCompatiblePropertyType(asIScriptEngine *engine,
             expected = "BBPrototype@";
             return typeId == engine->GetTypeIdByDecl("BBPrototype@");
         case ScriptComponentBindingKind::BBSpec:
-            expected = "BBSpec@";
-            return typeId == engine->GetTypeIdByDecl("BBSpec@");
+            expected = "BBDecl@";
+            return typeId == engine->GetTypeIdByDecl("BBDecl@") || typeId == engine->GetTypeIdByDecl("BBSpec@");
         case ScriptComponentBindingKind::BBSlot:
             expected = "BBSlot@";
             return typeId == engine->GetTypeIdByDecl("BBSlot@");
         case ScriptComponentBindingKind::BBBinding:
-            expected = "BBBinding@";
-            return typeId == engine->GetTypeIdByDecl("BBBinding@");
+            expected = "BBConfig@";
+            return typeId == engine->GetTypeIdByDecl("BBConfig@") || typeId == engine->GetTypeIdByDecl("BBBinding@");
         case ScriptComponentBindingKind::Object: {
             expected = "CKObject@ or subclass";
             asITypeInfo *type = engine->GetTypeInfoById(typeId);
@@ -541,9 +543,9 @@ std::string BindingKindName(ScriptComponentBindingKind kind) {
         case ScriptComponentBindingKind::ParamTypeInfo: return "ParamTypeInfo@";
         case ScriptComponentBindingKind::BehaviorRef: return "BehaviorRef@";
         case ScriptComponentBindingKind::BBPrototype: return "BBPrototype@";
-        case ScriptComponentBindingKind::BBSpec: return "BBSpec@";
+        case ScriptComponentBindingKind::BBSpec: return "BBDecl@";
         case ScriptComponentBindingKind::BBSlot: return "BBSlot@";
-        case ScriptComponentBindingKind::BBBinding: return "BBBinding@";
+        case ScriptComponentBindingKind::BBBinding: return "BBConfig@";
         default: return "unknown";
     }
 }
@@ -571,6 +573,9 @@ std::string BindingSummary(const ScriptComponentBinding &binding, CKContext *con
         }
         if (!binding.BindingStopInput.empty()) {
             out << ", stop='" << binding.BindingStopInput << "'";
+        }
+        if (!binding.SettingValues.empty()) {
+            out << ", settings=" << binding.SettingValues.size();
         }
     }
     return out.str();
@@ -644,6 +649,37 @@ void AddRequiredSlotDeclaration(ScriptComponentBinding &binding,
     flush();
 }
 
+void AddSettingValueDeclarations(ScriptComponentBinding &binding, const std::string &value) {
+    std::string token;
+    auto flush = [&]() {
+        token = TrimString(token);
+        if (token.empty()) {
+            return;
+        }
+        const std::size_t equal = token.find('=');
+        if (equal == std::string::npos) {
+            token.clear();
+            return;
+        }
+        ScriptComponentSettingValue setting;
+        setting.Name = TrimString(token.substr(0, equal));
+        setting.Value = TrimString(token.substr(equal + 1));
+        if (!setting.Name.empty()) {
+            binding.SettingValues.push_back(setting);
+        }
+        token.clear();
+    };
+
+    for (char c : value) {
+        if (c == ';') {
+            flush();
+        } else {
+            token.push_back(c);
+        }
+    }
+    flush();
+}
+
 bool ParseBindingMetadata(const std::string &metadata,
                           const std::string &defaultFieldName,
                           ScriptComponentBinding &binding) {
@@ -691,6 +727,7 @@ bool ParseBindingMetadata(const std::string &metadata,
     binding.BindingStartInput.clear();
     binding.BindingStopInput.clear();
     binding.RequiredSlots.clear();
+    binding.SettingValues.clear();
 
     const std::string lowerKeyword = ToLower(keyword);
     if (lowerKeyword == "behavior") {
@@ -699,8 +736,10 @@ bool ParseBindingMetadata(const std::string &metadata,
         binding.TypeName = "bb";
     } else if (lowerKeyword == "bbslot") {
         binding.TypeName = "bbslot";
-    } else if (lowerKeyword == "bbbind") {
-        binding.TypeName = "bbbinding";
+    } else if (lowerKeyword == "bbdecl") {
+        binding.TypeName = "bbdecl";
+    } else if (lowerKeyword == "bbbind" || lowerKeyword == "bbconfig") {
+        binding.TypeName = "bbconfig";
     }
 
     std::vector<std::string> positional;
@@ -741,6 +780,10 @@ bool ParseBindingMetadata(const std::string &metadata,
                 binding.SlotOccurrence = end && *end == '\0' && parsed >= 0 ? static_cast<int>(parsed) : 0;
             } else if (key == "required") {
                 AddRequiredSlotDeclaration(binding, std::string(), value);
+            } else if (key == "requiredsettings" || key == "required_settings") {
+                AddRequiredSlotDeclaration(binding, "setting", value);
+            } else if (key == "settings" || key == "settingvalues" || key == "setting_values") {
+                AddSettingValueDeclarations(binding, value);
             } else if (key == "inputs" || key == "ins") {
                 AddRequiredSlotDeclaration(binding, "input", value);
             } else if (key == "outputs" || key == "outs") {
@@ -751,6 +794,8 @@ bool ParseBindingMetadata(const std::string &metadata,
                 AddRequiredSlotDeclaration(binding, "pout", value);
             } else if (key == "locals") {
                 AddRequiredSlotDeclaration(binding, "local", value);
+            } else if (key == "setting") {
+                AddRequiredSlotDeclaration(binding, "setting", value);
             }
             i += 3;
             continue;
@@ -973,6 +1018,7 @@ bool SetParameterDefaultValue(CKParameterLocal *local, const ScriptComponentBind
         case ScriptComponentBindingKind::BBPrototype:
         case ScriptComponentBindingKind::BBSpec:
         case ScriptComponentBindingKind::BBSlot:
+        case ScriptComponentBindingKind::BBBinding:
             return local->SetStringValue(const_cast<CKSTRING>(binding.DefaultValue.c_str())) == CK_OK;
         case ScriptComponentBindingKind::Object:
         case ScriptComponentBindingKind::BehaviorRef: {
@@ -1361,6 +1407,9 @@ ScriptBridgeSlotKind SlotKindFromText(const std::string &value) {
     if (text == "pout" || text == "outputparam" || text == "outputparameter") {
         return ScriptBridgeSlotKind::Pout;
     }
+    if (text == "setting" || text == "settings") {
+        return ScriptBridgeSlotKind::Setting;
+    }
     if (text == "local" || text == "plocal" || text == "localparam" || text == "localparameter") {
         return ScriptBridgeSlotKind::Local;
     }
@@ -1459,6 +1508,7 @@ BBSlot *CreateSlotFromBinding(ScriptBehaviorBridge *bridge,
         case ScriptBridgeSlotKind::Output: slot = spec->Out(binding.SlotName, binding.SlotOccurrence); break;
         case ScriptBridgeSlotKind::Pin: slot = spec->Pin(binding.SlotName, binding.SlotOccurrence); break;
         case ScriptBridgeSlotKind::Pout: slot = spec->Pout(binding.SlotName, binding.SlotOccurrence); break;
+        case ScriptBridgeSlotKind::Setting: slot = spec->Setting(binding.SlotName, binding.SlotOccurrence); break;
         case ScriptBridgeSlotKind::Local: slot = spec->Local(binding.SlotName, binding.SlotOccurrence); break;
         default: break;
     }
@@ -1527,6 +1577,28 @@ BBBinding *CreateBBBindingFromBinding(ScriptBehaviorBridge *bridge,
             bbinding->Release();
             return nullptr;
         }
+    }
+
+    for (const ScriptComponentSettingValue &settingValue : binding.SettingValues) {
+        BBSlot *slot = spec->Setting(settingValue.Name, settingValue.Occurrence);
+        if (!slot || !slot->IsValid()) {
+            error = "BBConfig setting failed: " +
+                    (slot ? slot->Error() : "Failed to create setting slot.") +
+                    " (" + BindingSummary(binding, behcontext.Context) + ")";
+            if (slot) {
+                slot->Release();
+            }
+            bbinding->Release();
+            return nullptr;
+        }
+        BBBinding *configured = bbinding->SetSettingString(slot, settingValue.Value);
+        slot->Release();
+        if (!configured) {
+            error = "BBConfig setting failed: " + bbinding->Error() + " (" + BindingSummary(binding, behcontext.Context) + ")";
+            bbinding->Release();
+            return nullptr;
+        }
+        configured->Release();
     }
 
     return bbinding;
@@ -1930,10 +2002,14 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 for (const ScriptComponentRequiredSlot &required : binding.RequiredSlots) {
                     requiredText += "|" + required.KindName + ":" + required.Name + ":" + std::to_string(required.Occurrence);
                 }
+                std::string settingText;
+                for (const ScriptComponentSettingValue &setting : binding.SettingValues) {
+                    settingText += "|setting:" + setting.Name + "=" + setting.Value + ":" + std::to_string(setting.Occurrence);
+                }
                 const CK_ID sourceId = behaviorSource ? behaviorSource->GetID() : 0;
                 const std::string cacheText = std::to_string(sourceId) + "|" + sourceText + "|" + binding.SlotPrototypeName + "|" +
                     binding.BindingStartInput + "|" + binding.BindingStopInput + "|" +
-                    (binding.ManagedBBBinding ? "managed" : "unmanaged") + requiredText;
+                    (binding.ManagedBBBinding ? "managed" : "unmanaged") + requiredText + settingText;
                 if (!initial && binding.HandleInjected && binding.LastTextValue == cacheText) {
                     break;
                 }
