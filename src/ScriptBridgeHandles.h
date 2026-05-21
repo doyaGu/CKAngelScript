@@ -10,6 +10,10 @@ class CScriptArray;
 class BBCallBuilder;
 class BBTaskBuilder;
 class BBConfig;
+class BehaviorGraph;
+class BehaviorLinkRef;
+class BehaviorNode;
+class BehaviorQuery;
 
 class ParamInfo final : public RefCounted {
 public:
@@ -315,6 +319,7 @@ public:
     CKGUID GetPrototypeGuid() const;
     std::string GetPrototypeName() const;
     BehaviorLayout *Layout() const;
+    BehaviorGraph *AsGraph() const;
     bool Trigger(int inputIndex, bool reset);
     bool TriggerSlot(BBSlot *input, bool reset);
     GraphTask *Start(int inputIndex, bool reset, float timeoutSeconds);
@@ -344,10 +349,153 @@ private:
     ScriptBridgeObjectStamp m_Stamp;
 };
 
+class BehaviorQuery final : public RefCounted {
+public:
+    BehaviorQuery();
+
+    BehaviorQuery *Name(const std::string &name);
+    BehaviorQuery *NameContains(const std::string &text);
+    BehaviorQuery *PrototypeGuid(CKGUID guid);
+    BehaviorQuery *PrototypeName(const std::string &name);
+    BehaviorQuery *PrototypeQuery(const std::string &query);
+    BehaviorQuery *Target(CKBeObject *target);
+    BehaviorQuery *TargetName(const std::string &name);
+    BehaviorQuery *TargetId(CK_ID id);
+    BehaviorQuery *InputCount(int count);
+    BehaviorQuery *OutputCount(int count);
+    BehaviorQuery *PinCount(int count);
+    BehaviorQuery *PoutCount(int count);
+    BehaviorQuery *MaxDepth(int depth);
+    BehaviorQuery *IncludeRoot(bool includeRoot);
+    BehaviorQuery *Recursive(bool recursive);
+    BehaviorQuery *Occurrence(int occurrence);
+    std::string Describe() const;
+
+    bool Matches(CKBehavior *behavior, int depth) const;
+    int GetOccurrence() const;
+    bool IsRecursive() const;
+    bool IncludeRootNode() const;
+    int GetMaxDepth() const;
+
+private:
+    bool CountMatches(int actual, int expected) const;
+
+    std::string m_Name;
+    std::string m_NameContains;
+    CKGUID m_PrototypeGuid;
+    std::string m_PrototypeName;
+    CK_ID m_TargetId = 0;
+    std::string m_TargetName;
+    int m_InputCount = -1;
+    int m_OutputCount = -1;
+    int m_PinCount = -1;
+    int m_PoutCount = -1;
+    int m_MaxDepth = -1;
+    int m_Occurrence = 0;
+    bool m_Recursive = true;
+    bool m_IncludeRoot = false;
+};
+
+class BehaviorGraph final : public RefCounted {
+public:
+    BehaviorGraph(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx, CK_ID rootBehaviorId);
+
+    bool IsValid() const;
+    BehaviorNode *Root() const;
+    BehaviorNode *Find(BehaviorQuery *query) const;
+    BehaviorNode *Require(BehaviorQuery *query) const;
+    CScriptArray *FindAll(BehaviorQuery *query) const;
+    std::string DescribeCandidates(BehaviorQuery *query) const;
+    std::string Describe() const;
+
+    CKBehavior *RootBehavior() const;
+    ScriptBehaviorBridge *Bridge() const;
+    CK_ID ComponentId() const;
+    CK_ID RootId() const;
+    const CKBehaviorContext &Context() const;
+
+private:
+    std::vector<CKBehavior *> FindAllRaw(BehaviorQuery *query) const;
+    BehaviorNode *WrapNode(CKBehavior *behavior, const std::string &error = std::string()) const;
+
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CKBehaviorContext m_Context;
+    CK_ID m_RootBehaviorId = 0;
+    ScriptBridgeObjectStamp m_RootStamp;
+};
+
+class BehaviorNode final : public RefCounted {
+public:
+    BehaviorNode(ScriptBehaviorBridge *bridge,
+                 const CKBehaviorContext &ctx,
+                 CK_ID rootBehaviorId,
+                 CK_ID behaviorId,
+                 CK_ID componentId,
+                 const std::string &error = std::string());
+
+    bool IsValid() const;
+    std::string Error() const;
+    BehaviorRef *Behavior() const;
+    BehaviorGraph *AsGraph() const;
+    BehaviorNode *Input(int index) const;
+    BehaviorNode *Output(int index) const;
+    BehaviorNode *Next(BehaviorQuery *query = nullptr) const;
+    BehaviorNode *Prev(BehaviorQuery *query = nullptr) const;
+    CScriptArray *NextAll(BehaviorQuery *query = nullptr) const;
+    CScriptArray *PrevAll(BehaviorQuery *query = nullptr) const;
+    BehaviorLinkRef *NextLink(BehaviorQuery *query = nullptr) const;
+    BehaviorLinkRef *PrevLink(BehaviorQuery *query = nullptr) const;
+    BehaviorNode *End(int maxSteps = 256) const;
+    std::string Describe() const;
+
+    CKBehavior *Get() const;
+    CK_ID RootId() const;
+    CK_ID BehaviorId() const;
+
+private:
+    CScriptArray *AdjacentAll(bool next, int ioIndex, BehaviorQuery *query) const;
+    BehaviorNode *AdjacentFirst(bool next, int ioIndex, BehaviorQuery *query) const;
+    BehaviorLinkRef *AdjacentLinkFirst(bool next, int ioIndex, BehaviorQuery *query) const;
+
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CKBehaviorContext m_Context;
+    CK_ID m_RootBehaviorId = 0;
+    CK_ID m_BehaviorId = 0;
+    CK_ID m_ComponentId = 0;
+    ScriptBridgeObjectStamp m_BehaviorStamp;
+    std::string m_Error;
+};
+
+class BehaviorLinkRef final : public RefCounted {
+public:
+    BehaviorLinkRef(ScriptBehaviorBridge *bridge,
+                    CK_ID rootBehaviorId,
+                    CK_ID linkId,
+                    CK_ID componentId);
+
+    bool IsValid() const;
+    BehaviorRef *SourceBehavior() const;
+    int SourceOutputIndex() const;
+    BehaviorRef *TargetBehavior() const;
+    int TargetInputIndex() const;
+    int Delay() const;
+    std::string Describe() const;
+
+private:
+    CKBehaviorLink *Get() const;
+
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CK_ID m_RootBehaviorId = 0;
+    CK_ID m_LinkId = 0;
+    CK_ID m_ComponentId = 0;
+    ScriptBridgeObjectStamp m_LinkStamp;
+};
+
 class BehaviorBridge final : public RefCounted {
 public:
     BehaviorBridge(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx);
 
+    BehaviorGraph *Graph() const;
     BehaviorRef *Self() const;
     BehaviorRef *OwnerScript() const;
     BehaviorRef *Find(const std::string &name) const;

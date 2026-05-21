@@ -65,6 +65,7 @@ set(CKAS_SOURCES
         ScriptBridgeSelfTest.cpp
         ScriptBridgeParams.cpp
         ScriptBridgeBehavior.cpp
+        ScriptBridgeGraph.cpp
         ScriptBridgeBB.cpp
         ScriptBridgeTasks.cpp
 

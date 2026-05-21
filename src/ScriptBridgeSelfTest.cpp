@@ -3,6 +3,8 @@
 #include <fmt/format.h>
 #include "ScriptRunner.h"
 
+#include "add_on/scriptarray/scriptarray.h"
+
 #include <fstream>
 
 static std::string EscapeAngelScriptString(const std::string &value) {
@@ -115,6 +117,30 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    task.Timeout(1.0f); task.Step(ctx); task.Done(); task.Done(0); task.OutputActive(); task.OutputActive(0); task.Cancel(); task.Reset();\n";
     source += "    BehaviorRef@ b = task.Behavior(); task.Raise(ctx);\n";
     source += "    ParamRef@ outp = task.Pout(0); if (outp !is null) { outp.GetText(); ParamValue@ v = outp.Get(); NativeBuffer@ raw = outp.GetRaw(); }\n";
+    source += "}\n";
+    source += "void ProbeBehaviorGraphApi(const CKBehaviorContext &in ctx) {\n";
+    source += "    BehaviorGraph@ graph = Behavior::Graph(ctx);\n";
+    source += "    BehaviorBridge@ bridge = Behavior::From(ctx);\n";
+    source += "    BehaviorRef@ self = bridge !is null ? bridge.Self() : null;\n";
+    source += "    BehaviorGraph@ subGraph = self !is null ? self.AsGraph() : null;\n";
+    source += "    BehaviorQuery@ query = Behavior::Query().Name(\"Identity\").Recursive(true).InputCount(-1).OutputCount(-1).PinCount(-1).PoutCount(-1).MaxDepth(16).Occurrence(0);\n";
+    source += "    query.PrototypeName(\"Identity\").NameContains(\"Ident\").IncludeRoot(false).TargetName(\"\").TargetId(0);\n";
+    source += "    CKGUID emptyGuid; query.PrototypeGuid(emptyGuid).PrototypeQuery(\"guid:0x0,0x0\").Target(null);\n";
+    source += "    if (graph !is null) {\n";
+    source += "        BehaviorNode@ node = graph.Find(query);\n";
+    source += "        BehaviorNode@ required = graph.Require(query);\n";
+    source += "        array<BehaviorNode@>@ nodes = graph.FindAll(query);\n";
+    source += "        graph.Root(); graph.Describe(); graph.DescribeCandidates(query);\n";
+    source += "        if (node !is null) {\n";
+    source += "            node.IsValid(); bool valid = node.valid; node.Error(); node.Describe(); node.Behavior(); node.AsGraph();\n";
+    source += "            BehaviorNode@ input = node.Input(0); BehaviorNode@ output = node.Output(0); BehaviorNode@ next = node.Next(query); BehaviorNode@ prev = node.Prev(query); BehaviorNode@ end = node.End(8);\n";
+    source += "            array<BehaviorNode@>@ nextAll = node.NextAll(query); array<BehaviorNode@>@ prevAll = node.PrevAll(query);\n";
+    source += "            BehaviorLinkRef@ nl = node.NextLink(query); BehaviorLinkRef@ pl = node.PrevLink(query);\n";
+    source += "            if (nl !is null) { nl.IsValid(); nl.SourceBehavior(); nl.SourceOutputIndex(); nl.TargetBehavior(); nl.TargetInputIndex(); nl.Delay(); nl.Describe(); }\n";
+    source += "            if (pl !is null) { pl.SourceBehavior(); pl.TargetBehavior(); }\n";
+    source += "        }\n";
+    source += "    }\n";
+    source += "    if (subGraph !is null) { subGraph.FindAll(Behavior::Query().Recursive(false)); }\n";
     source += "}\n";
     source += "class ProbeErgonomicComponentFields {\n";
     source += "    BBDecl@ spec;\n";
@@ -642,6 +668,122 @@ static bool RunBehaviorBridgeNativeGraphTaskSelfTest(CKContext *context,
 
     task->Release();
     DestroySelfTestObject(context, behavior);
+    return true;
+}
+
+static bool RunBehaviorBridgeNativeGraphSearchSelfTest(CKContext *context,
+                                                       std::string &error) {
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
+    if (!context || !bridge) {
+        error = "Graph search native self-test requires CKContext and ScriptBehaviorBridge.";
+        return false;
+    }
+
+    CKBehavior *root = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, "__CKAS_GraphSearchRoot", CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *source = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, "__CKAS_GraphSearchSource", CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *target = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, "__CKAS_GraphSearchTarget", CK_OBJECTCREATION_DYNAMIC));
+    CKBehaviorLink *link = CKBehaviorLink::Cast(context->CreateObject(CKCID_BEHAVIORLINK, "__CKAS_GraphSearchLink", CK_OBJECTCREATION_DYNAMIC));
+    if (!root || !source || !target || !link) {
+        DestroySelfTestObject(context, link);
+        DestroySelfTestObject(context, target);
+        DestroySelfTestObject(context, source);
+        DestroySelfTestObject(context, root);
+        error = "Graph search self-test failed to create graph objects.";
+        return false;
+    }
+
+    root->UseGraph();
+    source->CreateOutput("Out");
+    source->CreateInputParameter("Value", CKPGUID_INT);
+    target->CreateInput("In");
+    target->CreateOutputParameter("Result", CKPGUID_INT);
+    root->AddSubBehavior(source);
+    root->AddSubBehavior(target);
+    link->SetInBehaviorIO(source->GetOutput(0));
+    link->SetOutBehaviorIO(target->GetInput(0));
+    link->SetActivationDelay(2);
+    root->AddSubBehaviorLink(link);
+
+    CKBehaviorContext ctx;
+    ctx.Context = context;
+    ctx.Behavior = root;
+    ctx.ParameterManager = context->GetParameterManager();
+
+    auto cleanup = [&]() {
+        if (root && link) {
+            root->RemoveSubBehaviorLink(link);
+        }
+        if (root && source) {
+            root->RemoveSubBehavior(source);
+        }
+        if (root && target) {
+            root->RemoveSubBehavior(target);
+        }
+        DestroySelfTestObject(context, link);
+        DestroySelfTestObject(context, target);
+        DestroySelfTestObject(context, source);
+        DestroySelfTestObject(context, root);
+    };
+
+    BehaviorGraph *graph = new BehaviorGraph(bridge, ctx, root->GetID());
+    BehaviorQuery *sourceQuery = (new BehaviorQuery())->Name("__CKAS_GraphSearchSource")->Recursive(true)->PinCount(1);
+    BehaviorNode *sourceNode = graph->Require(sourceQuery);
+    if (!graph->IsValid() || !sourceNode || !sourceNode->IsValid()) {
+        error = "Graph search self-test failed exact Require: " + (sourceNode ? sourceNode->Error() : std::string("<null>"));
+        if (sourceNode) sourceNode->Release();
+        sourceQuery->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    BehaviorNode *next = sourceNode->Next(nullptr);
+    BehaviorLinkRef *nextLink = sourceNode->NextLink(nullptr);
+    if (!next || !next->IsValid() || !nextLink || !nextLink->IsValid() ||
+        next->BehaviorId() != target->GetID() ||
+        nextLink->SourceOutputIndex() != 0 ||
+        nextLink->TargetInputIndex() != 0 ||
+        nextLink->Delay() != 2) {
+        error = "Graph search self-test failed next/link traversal.";
+        if (next) next->Release();
+        if (nextLink) nextLink->Release();
+        sourceNode->Release();
+        sourceQuery->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    BehaviorQuery *containsQuery = (new BehaviorQuery())->NameContains("GraphSearch")->Recursive(false);
+    CScriptArray *all = graph->FindAll(containsQuery);
+    BehaviorQuery *duplicateQuery = (new BehaviorQuery())->NameContains("GraphSearch")->Recursive(true);
+    BehaviorNode *requiredDuplicate = graph->Require(duplicateQuery);
+    if (!all || all->GetSize() != 2 || !requiredDuplicate || requiredDuplicate->IsValid() || requiredDuplicate->Error().find("found") == std::string::npos) {
+        error = "Graph search self-test failed FindAll or multi-candidate diagnostics.";
+        if (requiredDuplicate) requiredDuplicate->Release();
+        duplicateQuery->Release();
+        if (all) all->Release();
+        containsQuery->Release();
+        next->Release();
+        nextLink->Release();
+        sourceNode->Release();
+        sourceQuery->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    requiredDuplicate->Release();
+    duplicateQuery->Release();
+    all->Release();
+    containsQuery->Release();
+    next->Release();
+    nextLink->Release();
+    sourceNode->Release();
+    sourceQuery->Release();
+    graph->Release();
+    cleanup();
     return true;
 }
 
@@ -1279,6 +1421,12 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-graphtask", std::string());
     if (!RunBehaviorBridgeNativeGraphTaskSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-graphtask", error);
+        return false;
+    }
+
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-graph-search", std::string());
+    if (!RunBehaviorBridgeNativeGraphSearchSelfTest(context, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-graph-search", error);
         return false;
     }
 

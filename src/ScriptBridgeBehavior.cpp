@@ -184,6 +184,11 @@ std::string BehaviorRef::GetPrototypeName() const { CKBehavior *b = Get(); retur
 
 BehaviorLayout *BehaviorRef::Layout() const { return m_Bridge ? new BehaviorLayout(m_Bridge, m_BehaviorId) : nullptr; }
 
+BehaviorGraph *BehaviorRef::AsGraph() const {
+    CKBehavior *behavior = Get();
+    return behavior ? new BehaviorGraph(m_Bridge, CKBehaviorContext(), behavior->GetID()) : nullptr;
+}
+
 bool BehaviorRef::Trigger(int inputIndex, bool reset) {
     CKBehavior *behavior = Get();
     if (!behavior) {
@@ -358,6 +363,21 @@ CKObject *BehaviorRef::RawGetStamped() const {
 BehaviorBridge::BehaviorBridge(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx)
     : m_Bridge(bridge), m_Context(ctx) {}
 
+BehaviorGraph *BehaviorBridge::Graph() const {
+    CKBehavior *root = nullptr;
+    CKBeObject *owner = m_Context.Behavior ? m_Context.Behavior->GetOwner() : nullptr;
+    if (owner && owner->GetScriptCount() > 0) {
+        root = owner->GetScript(0);
+    }
+    if (!root && m_Context.Behavior) {
+        root = m_Context.Behavior->GetOwnerScript();
+    }
+    if (!root && m_Context.Behavior) {
+        root = m_Context.Behavior;
+    }
+    return root ? new BehaviorGraph(m_Bridge, m_Context, root->GetID()) : nullptr;
+}
+
 BehaviorRef *BehaviorBridge::Self() const {
     return m_Bridge && m_Context.Behavior ? m_Bridge->WrapBehavior(m_Context.Behavior, ComponentIdFromContext(m_Context)) : nullptr;
 }
@@ -368,11 +388,16 @@ BehaviorRef *BehaviorBridge::OwnerScript() const {
 
 BehaviorRef *BehaviorBridge::Find(const std::string &name) const {
     if (!m_Bridge || name.empty()) return nullptr;
-    if (m_Context.Behavior) {
-        if (CKBehavior *ownerScript = m_Context.Behavior->GetOwnerScript()) {
-            if (CKBehavior *found = FindBehaviorRecursive(ownerScript, name)) {
-                return m_Bridge->WrapBehavior(found, ComponentIdFromContext(m_Context));
-            }
+    BehaviorGraph *graph = Graph();
+    if (graph) {
+        BehaviorQuery *query = (new BehaviorQuery())->Name(name)->Recursive(true);
+        BehaviorNode *node = graph->Find(query);
+        BehaviorRef *ref = node ? node->Behavior() : nullptr;
+        if (node) node->Release();
+        query->Release();
+        graph->Release();
+        if (ref) {
+            return ref;
         }
     }
     CKBeObject *owner = m_Context.Behavior ? m_Context.Behavior->GetOwner() : nullptr;

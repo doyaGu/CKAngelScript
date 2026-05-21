@@ -19,6 +19,20 @@ BehaviorBridge *BehaviorFromContext(const CKBehaviorContext &ctx) {
     return nullptr;
 }
 
+BehaviorGraph *BehaviorGraphFromContext(const CKBehaviorContext &ctx) {
+    BehaviorBridge *bridge = BehaviorFromContext(ctx);
+    if (!bridge) {
+        return nullptr;
+    }
+    BehaviorGraph *graph = bridge->Graph();
+    bridge->Release();
+    return graph;
+}
+
+BehaviorQuery *BehaviorQueryFactory() {
+    return new BehaviorQuery();
+}
+
 BBBridge *BBFromContext(const CKBehaviorContext &ctx) {
     if (ScriptBehaviorBridge *bridge = BridgeFromContext(ctx)) {
         return new BBBridge(bridge, ctx);
@@ -428,6 +442,10 @@ void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
     RegisterObjectTypeAndRefCount<BehaviorLayout>(engine, "BehaviorLayout");
     RegisterObjectTypeAndRefCount<BehaviorLayout>(engine, "BBLayout");
     RegisterObjectTypeAndRefCount<BehaviorRef>(engine, "BehaviorRef");
+    RegisterObjectTypeAndRefCount<BehaviorQuery>(engine, "BehaviorQuery");
+    RegisterObjectTypeAndRefCount<BehaviorGraph>(engine, "BehaviorGraph");
+    RegisterObjectTypeAndRefCount<BehaviorNode>(engine, "BehaviorNode");
+    RegisterObjectTypeAndRefCount<BehaviorLinkRef>(engine, "BehaviorLinkRef");
     RegisterObjectTypeAndRefCount<BehaviorBridge>(engine, "BehaviorBridge");
     RegisterObjectTypeAndRefCount<BBSlot>(engine, "BBSlot");
     RegisterObjectTypeAndRefCount<BBDecl>(engine, "BBDecl");
@@ -587,6 +605,7 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorRef", "CK_ID get_id() const", asMETHOD(BehaviorRef, GetID), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "string get_name() const", asMETHOD(BehaviorRef, GetName), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "BehaviorLayout@ Layout() const", asMETHOD(BehaviorRef, Layout), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorRef", "BehaviorGraph@ AsGraph() const", asMETHOD(BehaviorRef, AsGraph), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool Trigger(int inputIndex = 0, bool reset = false)", asMETHOD(BehaviorRef, Trigger), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool Trigger(BBSlot@ input, bool reset = false)", asMETHOD(BehaviorRef, TriggerSlot), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool InputActive(int inputIndex) const", asMETHOD(BehaviorRef, InputActive), asCALL_THISCALL); assert(r >= 0);
@@ -606,6 +625,59 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamOperationRef@ ConnectOperation(BBSlot@ pin, ParamOp@ op)", asMETHOD(BehaviorRef, ConnectOperationSlot), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorRef", "string Describe() const", asMETHOD(BehaviorRef, Describe), asCALL_THISCALL); assert(r >= 0);
 
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ Name(const string &in name)", asMETHOD(BehaviorQuery, Name), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ NameContains(const string &in text)", asMETHOD(BehaviorQuery, NameContains), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ PrototypeGuid(CKGUID guid)", asMETHOD(BehaviorQuery, PrototypeGuid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ PrototypeName(const string &in name)", asMETHOD(BehaviorQuery, PrototypeName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ PrototypeQuery(const string &in query)", asMETHOD(BehaviorQuery, PrototypeQuery), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ Target(CKBeObject@ target)", asMETHOD(BehaviorQuery, Target), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ TargetName(const string &in name)", asMETHOD(BehaviorQuery, TargetName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ TargetId(CK_ID id)", asMETHOD(BehaviorQuery, TargetId), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ InputCount(int count)", asMETHOD(BehaviorQuery, InputCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ OutputCount(int count)", asMETHOD(BehaviorQuery, OutputCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ PinCount(int count)", asMETHOD(BehaviorQuery, PinCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ PoutCount(int count)", asMETHOD(BehaviorQuery, PoutCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ MaxDepth(int depth)", asMETHOD(BehaviorQuery, MaxDepth), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ IncludeRoot(bool includeRoot)", asMETHOD(BehaviorQuery, IncludeRoot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ Recursive(bool recursive)", asMETHOD(BehaviorQuery, Recursive), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ Occurrence(int occurrence)", asMETHOD(BehaviorQuery, Occurrence), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "string Describe() const", asMETHOD(BehaviorQuery, Describe), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("BehaviorGraph", "bool IsValid() const", asMETHOD(BehaviorGraph, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "bool get_valid() const", asMETHOD(BehaviorGraph, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Root() const", asMETHOD(BehaviorGraph, Root), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Find(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, Find), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Require(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, Require), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "array<BehaviorNode@>@ FindAll(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, FindAll), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "string DescribeCandidates(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, DescribeCandidates), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "string Describe() const", asMETHOD(BehaviorGraph, Describe), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("BehaviorNode", "bool IsValid() const", asMETHOD(BehaviorNode, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "bool get_valid() const", asMETHOD(BehaviorNode, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "string Error() const", asMETHOD(BehaviorNode, Error), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorRef@ Behavior() const", asMETHOD(BehaviorNode, Behavior), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorGraph@ AsGraph() const", asMETHOD(BehaviorNode, AsGraph), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorNode@ Input(int index) const", asMETHOD(BehaviorNode, Input), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorNode@ Output(int index) const", asMETHOD(BehaviorNode, Output), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorNode@ Next(BehaviorQuery@ query = null) const", asMETHOD(BehaviorNode, Next), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorNode@ Prev(BehaviorQuery@ query = null) const", asMETHOD(BehaviorNode, Prev), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "array<BehaviorNode@>@ NextAll(BehaviorQuery@ query = null) const", asMETHOD(BehaviorNode, NextAll), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "array<BehaviorNode@>@ PrevAll(BehaviorQuery@ query = null) const", asMETHOD(BehaviorNode, PrevAll), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorLinkRef@ NextLink(BehaviorQuery@ query = null) const", asMETHOD(BehaviorNode, NextLink), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorLinkRef@ PrevLink(BehaviorQuery@ query = null) const", asMETHOD(BehaviorNode, PrevLink), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorNode@ End(int maxSteps = 256) const", asMETHOD(BehaviorNode, End), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorNode", "string Describe() const", asMETHOD(BehaviorNode, Describe), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("BehaviorLinkRef", "bool IsValid() const", asMETHOD(BehaviorLinkRef, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorLinkRef", "bool get_valid() const", asMETHOD(BehaviorLinkRef, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorLinkRef", "BehaviorRef@ SourceBehavior() const", asMETHOD(BehaviorLinkRef, SourceBehavior), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorLinkRef", "int SourceOutputIndex() const", asMETHOD(BehaviorLinkRef, SourceOutputIndex), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorLinkRef", "BehaviorRef@ TargetBehavior() const", asMETHOD(BehaviorLinkRef, TargetBehavior), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorLinkRef", "int TargetInputIndex() const", asMETHOD(BehaviorLinkRef, TargetInputIndex), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorLinkRef", "int Delay() const", asMETHOD(BehaviorLinkRef, Delay), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorLinkRef", "string Describe() const", asMETHOD(BehaviorLinkRef, Describe), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorGraph@ Graph() const", asMETHOD(BehaviorBridge, Graph), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ Self() const", asMETHOD(BehaviorBridge, Self), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ OwnerScript() const", asMETHOD(BehaviorBridge, OwnerScript), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorBridge", "BehaviorRef@ Find(const string &in name) const", asMETHOD(BehaviorBridge, Find), asCALL_THISCALL); assert(r >= 0);
@@ -842,6 +914,8 @@ void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
 
     r = engine->SetDefaultNamespace("Behavior"); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BehaviorBridge@ From(const CKBehaviorContext &in ctx)", asFUNCTION(BehaviorFromContext), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const CKBehaviorContext &in ctx)", asFUNCTION(BehaviorGraphFromContext), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BehaviorQuery@ Query()", asFUNCTION(BehaviorQueryFactory), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BehaviorRef@ Find(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BehaviorFindByName), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BehaviorRef@ Find(const CKBehaviorContext &in ctx, CKBeObject@ owner, const string &in name)", asFUNCTION(BehaviorFindOnOwner), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BehaviorRef@ FindByID(const CKBehaviorContext &in ctx, CK_ID id)", asFUNCTION(BehaviorFindById), asCALL_CDECL); assert(r >= 0);
