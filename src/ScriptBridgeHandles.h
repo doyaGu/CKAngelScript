@@ -480,7 +480,6 @@ public:
     std::string Error() const;
     std::string Describe() const;
     BBDecl *Spec() const;
-    BBTask *Task() const;
     BehaviorRef *Behavior() const;
     bool Raise(const CKBehaviorContext &ctx) const;
 
@@ -509,13 +508,7 @@ public:
     BBInstance *SpawnInstance(const CKBehaviorContext &ctx);
     BBInstance *SpawnStarted(const CKBehaviorContext &ctx);
 
-    BBTask *Start(const CKBehaviorContext &ctx);
-    BBTask *StartSlot(const CKBehaviorContext &ctx, BBSlot *input);
-    bool Step(const CKBehaviorContext &ctx);
-    bool StepSlot(const CKBehaviorContext &ctx, BBSlot *input);
     bool Stop(const CKBehaviorContext &ctx);
-    bool StopSlot(const CKBehaviorContext &ctx, BBSlot *input);
-    BBTask *Restart(const CKBehaviorContext &ctx);
     bool Destroy();
     bool OutputActiveSlot(BBSlot *output);
     ParamRef *PinRefSlot(BBSlot *pin);
@@ -535,6 +528,16 @@ private:
         BBSlot *Slot = nullptr;
     };
 
+    struct SourceLink {
+        int PinIndex = -1;
+        ParamSourceLinkRef *Link = nullptr;
+    };
+
+    struct OperationLink {
+        int PinIndex = -1;
+        ParamOperationRef *Operation = nullptr;
+    };
+
     BBSlot *Slot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence);
     BBSlot *FindCachedSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const;
     BBSlot *DefaultInputSlot();
@@ -546,20 +549,24 @@ private:
     bool OperationForPin(BBSlot *slot, ParamOp *operation, const char *method);
     bool SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, const char *method);
     bool ApplySlotMetadata(BBSlot *slot);
+    void ReplacePendingSource(const ScriptBridgeInputSource &source);
+    void ReplacePendingOperation(const ScriptBridgeOperationSpec &operation);
+    void RemoveLiveSourceLink(int pinIndex);
+    void RemoveLiveOperation(int pinIndex);
+    void ReplaceLiveSourceLink(int pinIndex, ParamSourceLinkRef *link);
+    void ReplaceLiveOperation(int pinIndex, ParamOperationRef *operation);
     void ClearOwnedGraphLinks();
     void SetError(const std::string &error) const;
-    BBTask *ReturnTask() const;
 
     ScriptBehaviorBridge *m_Bridge = nullptr;
     CKBehaviorContext m_Context;
     ScriptBridgeBBInvocationSpec m_Request;
     mutable std::string m_Error;
     std::vector<CachedSlot> m_Slots;
-    std::vector<ParamSourceLinkRef *> m_SourceLinks;
-    std::vector<ParamOperationRef *> m_Operations;
+    std::vector<SourceLink> m_SourceLinks;
+    std::vector<OperationLink> m_Operations;
     std::vector<BBSlot *> m_RegisteredSlots;
     BBInstance *m_Instance = nullptr;
-    BBTask *m_Task = nullptr;
     std::string m_DefaultStartInput;
     std::string m_DefaultStopInput;
     bool m_Managed = false;
@@ -573,6 +580,7 @@ public:
                CK_ID instanceId,
                int generation,
                const std::string &defaultStartInput,
+               const std::string &defaultStopInput,
                const std::string &error = std::string());
     ~BBInstance() override;
 
@@ -587,6 +595,7 @@ public:
     bool OutputActive(BBSlot *output) const;
     ParamRef *Pin(BBSlot *pin) const;
     ParamRef *Pout(BBSlot *pout) const;
+    bool SetSettingValue(BBSlot *setting, ParamValue *value);
     bool SetSetting(BBSlot *setting, const std::string &value);
     bool Destroy();
     bool Raise(const CKBehaviorContext &ctx) const;
@@ -601,6 +610,7 @@ private:
     CK_ID m_InstanceId = 0;
     int m_Generation = 0;
     std::string m_DefaultStartInput;
+    std::string m_DefaultStopInput;
 };
 
 class BBCallBuilder final : public RefCounted {

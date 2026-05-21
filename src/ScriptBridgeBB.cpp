@@ -372,7 +372,10 @@ std::string BBSlot::Error() const {
         return "BBSlot layout is not available.";
     }
     if (layout->Signature != m_LayoutSignature) {
-        return fmt::format("BBSlot '{}' layout changed; bind the slot again.", m_Name);
+        return fmt::format("BBSlot '{}' layout changed; bind the slot again. Slot generation {}, current generation {}.",
+                           m_Name,
+                           m_LayoutGeneration,
+                           layout->LayoutGeneration);
     }
     return std::string();
 }
@@ -669,15 +672,11 @@ BBDecl *BBConfig::Spec() const {
     return new BBDecl(m_Bridge, m_Context, m_Request, m_Error);
 }
 
-BBTask *BBConfig::Task() const {
-    return ReturnTask();
-}
-
 BehaviorRef *BBConfig::Behavior() const {
     if (m_Instance && m_Instance->IsValid()) {
         return m_Instance->Behavior();
     }
-    return m_Task ? m_Task->Behavior() : nullptr;
+    return nullptr;
 }
 
 bool BBConfig::Raise(const CKBehaviorContext &ctx) const {
@@ -966,7 +965,7 @@ BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
         m_Instance->Release();
         m_Instance = nullptr;
     }
-    BBInstance *instance = new BBInstance(m_Bridge, ctx, m_Request, instanceId, generation, m_DefaultStartInput);
+    BBInstance *instance = new BBInstance(m_Bridge, ctx, m_Request, instanceId, generation, m_DefaultStartInput, m_DefaultStopInput);
     m_Instance = instance;
     m_Instance->AddRef();
     return instance;
@@ -986,101 +985,17 @@ BBInstance *BBConfig::SpawnStarted(const CKBehaviorContext &ctx) {
     return instance;
 }
 
-BBTask *BBConfig::Start(const CKBehaviorContext &ctx) {
-    BBSlot *input = DefaultInputSlot();
-    BBTask *task = StartSlot(ctx, input);
-    if (input) {
-        input->Release();
-    }
-    return task;
-}
-
-BBTask *BBConfig::StartSlot(const CKBehaviorContext &ctx, BBSlot *input) {
-    if (!m_Bridge) {
-        SetError("BBConfig.Start requires ScriptBehaviorBridge.");
-        SetScriptException(m_Error);
-        return nullptr;
-    }
-    if (!IsValid()) {
-        SetScriptException(Error());
-        return nullptr;
-    }
-
-    int inputIndex = 0;
-    if (input) {
-        std::string error;
-        if (!input->ResolveIndex(ScriptBridgeSlotKind::Input, inputIndex, error)) {
-            SetError(error.empty() ? "BBConfig.Start requires an input BBSlot." : error);
-            SetScriptException(m_Error);
-            return nullptr;
-        }
-    }
-
-    Destroy();
-    m_Context = ctx;
-    m_Task = m_Bridge->StartTask(m_Request, ctx, inputIndex);
-    if (!m_Task) {
-        SetError("BBConfig.Start failed to create task.");
-        SetScriptException(m_Error);
-        return nullptr;
-    }
-    if (!m_Task->IsAlive()) {
-        SetError(m_Task->Error());
-    }
-    return ReturnTask();
-}
-
-bool BBConfig::Step(const CKBehaviorContext &ctx) {
-    BBSlot *input = DefaultInputSlot();
-    const bool result = input ? StepSlot(ctx, input) : (m_Task && m_Task->Step(ctx, -1));
-    if (!input && !m_Task) {
-        SetError("BBConfig.Step called before Start.");
-        SetScriptException(m_Error);
-    }
-    if (input) {
-        input->Release();
-    }
-    return result;
-}
-
-bool BBConfig::StepSlot(const CKBehaviorContext &ctx, BBSlot *input) {
-    if (!m_Task || !m_Task->IsAlive()) {
-        SetError("BBConfig.Step called before Start or after Destroy.");
-        SetScriptException(m_Error);
-        return false;
-    }
-    if (!input) {
-        return m_Task->Step(ctx, -1);
-    }
-    if (!m_Task->StepSlot(ctx, input)) {
-        SetError(m_Task->Error());
-        return false;
-    }
-    return true;
-}
-
 bool BBConfig::Stop(const CKBehaviorContext &ctx) {
-    BBSlot *stop = DefaultStopSlot();
-    const bool result = stop ? StopSlot(ctx, stop) : Destroy();
-    if (stop) {
-        stop->Release();
+    (void) ctx;
+    if (!m_Instance) {
+        return true;
+    }
+    const bool result = m_Instance->Stop();
+    if (!result) {
+        SetError(m_Instance->Error());
+        SetScriptException(m_Error);
     }
     return result;
-}
-
-bool BBConfig::StopSlot(const CKBehaviorContext &ctx, BBSlot *input) {
-    if (m_Instance && m_Instance->IsValid() && input) {
-        m_Instance->Start(input);
-    }
-    if (m_Task && m_Task->IsAlive() && input) {
-        m_Task->StepSlot(ctx, input);
-    }
-    return Destroy();
-}
-
-BBTask *BBConfig::Restart(const CKBehaviorContext &ctx) {
-    Stop(ctx);
-    return Start(ctx);
 }
 
 bool BBConfig::Destroy() {
@@ -1090,36 +1005,34 @@ bool BBConfig::Destroy() {
         m_Instance->Release();
         m_Instance = nullptr;
     }
-    if (!m_Task) {
-        return true;
-    }
-    const bool result = m_Task->Destroy();
-    m_Task->Release();
-    m_Task = nullptr;
-    return result;
+    return true;
 }
 
 bool BBConfig::OutputActiveSlot(BBSlot *output) {
     if (m_Instance && m_Instance->IsValid()) {
         return m_Instance->OutputActive(output);
     }
-    return m_Task && m_Task->OutputActiveSlot(output);
+    SetError("BBConfig.OutputActive requires a live BBInstance. Call Spawn() or SpawnStarted() first.");
+    SetScriptException(m_Error);
+    return false;
 }
 
 ParamRef *BBConfig::PinRefSlot(BBSlot *pin) {
-    BehaviorRef *behavior = Behavior();
-    ParamRef *ref = behavior ? behavior->PinSlot(pin) : nullptr;
-    if (behavior) {
-        behavior->Release();
+    if (m_Instance && m_Instance->IsValid()) {
+        return m_Instance->Pin(pin);
     }
-    return ref;
+    SetError("BBConfig.PinRef requires a live BBInstance. Call Spawn() or SpawnStarted() first.");
+    SetScriptException(m_Error);
+    return nullptr;
 }
 
 ParamRef *BBConfig::PoutRefSlot(BBSlot *pout) {
     if (m_Instance && m_Instance->IsValid()) {
         return m_Instance->Pout(pout);
     }
-    return m_Task ? m_Task->PoutSlot(pout) : nullptr;
+    SetError("BBConfig.PoutRef requires a live BBInstance. Call Spawn() or SpawnStarted() first.");
+    SetScriptException(m_Error);
+    return nullptr;
 }
 
 void BBConfig::SetDefaultStart(const std::string &inputName) {
@@ -1247,9 +1160,6 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
         }
         return ok;
     }
-    if (m_Task && m_Task->IsAlive()) {
-        return SetLiveValue(slot, value, method);
-    }
     return true;
 }
 
@@ -1263,22 +1173,13 @@ bool BBConfig::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, c
     }
     ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, value);
     if (m_Instance && m_Instance->IsValid()) {
-        if (!m_Instance->SetSetting(slot, ScriptParamValueToText(value))) {
+        ParamValue paramValue(value);
+        if (!m_Instance->SetSettingValue(slot, &paramValue)) {
             SetError(m_Instance->Error());
             SetScriptException(m_Error);
             return false;
         }
         return true;
-    }
-    const bool hasLiveInstance = m_Instance && m_Instance->IsValid();
-    const bool hasLiveTask = m_Task && m_Task->IsAlive();
-    if (!hasLiveInstance && !hasLiveTask) {
-        return true;
-    }
-    if (!m_Bridge->SetTaskSetting(m_Task->BridgeTaskId(), m_Task->BridgeGeneration(), settingIndex, value, error)) {
-        SetError(error);
-        SetScriptException(m_Error);
-        return false;
     }
     return true;
 }
@@ -1341,14 +1242,13 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
     request.PinIndex = pinIndex;
     request.SourceId = source->GetID();
     request.SourceStamp = source->Stamp();
-    m_Request.SourceParameters.push_back(request);
+    ReplacePendingSource(request);
 
-    const bool hasLiveInstance = m_Instance && m_Instance->IsValid();
-    const bool hasLiveTask = m_Task && m_Task->IsAlive();
-    if (!hasLiveInstance && !hasLiveTask) {
+    if (!m_Instance || !m_Instance->IsValid()) {
         return true;
     }
 
+    RemoveLiveSourceLink(pinIndex);
     ParamRef *target = PinRefSlot(slot);
     ParamSourceLinkRef *link = target ? target->SetSourceScoped(source) : nullptr;
     if (target) {
@@ -1362,7 +1262,7 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         SetScriptException(m_Error);
         return false;
     }
-    m_SourceLinks.push_back(link);
+    ReplaceLiveSourceLink(pinIndex, link);
     return true;
 }
 
@@ -1377,13 +1277,12 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         return false;
     }
 
-    m_Request.OperationParameters.push_back(operation->RequestForPin(pinIndex));
-    const bool hasLiveInstance = m_Instance && m_Instance->IsValid();
-    const bool hasLiveTask = m_Task && m_Task->IsAlive();
-    if (!hasLiveInstance && !hasLiveTask) {
+    ReplacePendingOperation(operation->RequestForPin(pinIndex));
+    if (!m_Instance || !m_Instance->IsValid()) {
         return true;
     }
 
+    RemoveLiveOperation(pinIndex);
     BehaviorRef *behavior = Behavior();
     ParamOperationRef *op = behavior ? behavior->ConnectOperationSlot(slot, operation) : nullptr;
     if (behavior) {
@@ -1397,23 +1296,121 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         SetScriptException(m_Error);
         return false;
     }
-    m_Operations.push_back(op);
+    ReplaceLiveOperation(pinIndex, op);
     return true;
 }
 
+void BBConfig::ReplacePendingSource(const ScriptBridgeInputSource &source) {
+    const auto it = std::lower_bound(m_Request.SourceParameters.begin(),
+                                     m_Request.SourceParameters.end(),
+                                     source.PinIndex,
+                                     [](const ScriptBridgeInputSource &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it != m_Request.SourceParameters.end() && it->PinIndex == source.PinIndex) {
+        *it = source;
+    } else {
+        m_Request.SourceParameters.insert(it, source);
+    }
+}
+
+void BBConfig::ReplacePendingOperation(const ScriptBridgeOperationSpec &operation) {
+    const auto it = std::lower_bound(m_Request.OperationParameters.begin(),
+                                     m_Request.OperationParameters.end(),
+                                     operation.TargetPinIndex,
+                                     [](const ScriptBridgeOperationSpec &entry, int index) {
+                                         return entry.TargetPinIndex < index;
+                                     });
+    if (it != m_Request.OperationParameters.end() && it->TargetPinIndex == operation.TargetPinIndex) {
+        *it = operation;
+    } else {
+        m_Request.OperationParameters.insert(it, operation);
+    }
+}
+
+void BBConfig::RemoveLiveSourceLink(int pinIndex) {
+    const auto it = std::lower_bound(m_SourceLinks.begin(),
+                                     m_SourceLinks.end(),
+                                     pinIndex,
+                                     [](const SourceLink &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it == m_SourceLinks.end() || it->PinIndex != pinIndex) {
+        return;
+    }
+    if (it->Link) {
+        it->Link->Restore();
+        it->Link->Release();
+    }
+    m_SourceLinks.erase(it);
+}
+
+void BBConfig::RemoveLiveOperation(int pinIndex) {
+    const auto it = std::lower_bound(m_Operations.begin(),
+                                     m_Operations.end(),
+                                     pinIndex,
+                                     [](const OperationLink &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it == m_Operations.end() || it->PinIndex != pinIndex) {
+        return;
+    }
+    if (it->Operation) {
+        it->Operation->Destroy();
+        it->Operation->Release();
+    }
+    m_Operations.erase(it);
+}
+
+void BBConfig::ReplaceLiveSourceLink(int pinIndex, ParamSourceLinkRef *link) {
+    const auto it = std::lower_bound(m_SourceLinks.begin(),
+                                     m_SourceLinks.end(),
+                                     pinIndex,
+                                     [](const SourceLink &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it != m_SourceLinks.end() && it->PinIndex == pinIndex) {
+        if (it->Link) {
+            it->Link->Release();
+        }
+        it->Link = link;
+    } else {
+        m_SourceLinks.insert(it, SourceLink{pinIndex, link});
+    }
+}
+
+void BBConfig::ReplaceLiveOperation(int pinIndex, ParamOperationRef *operation) {
+    const auto it = std::lower_bound(m_Operations.begin(),
+                                     m_Operations.end(),
+                                     pinIndex,
+                                     [](const OperationLink &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it != m_Operations.end() && it->PinIndex == pinIndex) {
+        if (it->Operation) {
+            it->Operation->Release();
+        }
+        it->Operation = operation;
+    } else {
+        m_Operations.insert(it, OperationLink{pinIndex, operation});
+    }
+}
+
 void BBConfig::ClearOwnedGraphLinks() {
-    for (ParamSourceLinkRef *link : m_SourceLinks) {
-        if (link) {
-            link->Restore();
-            link->Release();
+    for (SourceLink &link : m_SourceLinks) {
+        if (link.Link) {
+            link.Link->Restore();
+            link.Link->Release();
+            link.Link = nullptr;
         }
     }
     m_SourceLinks.clear();
 
-    for (ParamOperationRef *operation : m_Operations) {
-        if (operation) {
-            operation->Destroy();
-            operation->Release();
+    for (OperationLink &operation : m_Operations) {
+        if (operation.Operation) {
+            operation.Operation->Destroy();
+            operation.Operation->Release();
+            operation.Operation = nullptr;
         }
     }
     m_Operations.clear();
@@ -1425,19 +1422,13 @@ void BBConfig::SetError(const std::string &error) const {
     }
 }
 
-BBTask *BBConfig::ReturnTask() const {
-    if (m_Task) {
-        m_Task->AddRef();
-    }
-    return m_Task;
-}
-
 BBInstance::BBInstance(ScriptBehaviorBridge *bridge,
                        const CKBehaviorContext &ctx,
                        const ScriptBridgeBBInvocationSpec &request,
                        CK_ID instanceId,
                        int generation,
                        const std::string &defaultStartInput,
+                       const std::string &defaultStopInput,
                        const std::string &error)
     : m_Bridge(bridge),
       m_Context(ctx),
@@ -1445,7 +1436,8 @@ BBInstance::BBInstance(ScriptBehaviorBridge *bridge,
       m_Error(error),
       m_InstanceId(instanceId),
       m_Generation(generation),
-      m_DefaultStartInput(defaultStartInput) {}
+      m_DefaultStartInput(defaultStartInput),
+      m_DefaultStopInput(defaultStopInput) {}
 
 BBInstance::~BBInstance() {
     Destroy();
@@ -1525,7 +1517,33 @@ bool BBInstance::Step(const CKBehaviorContext &ctx) {
 }
 
 bool BBInstance::Stop() {
-    return Destroy();
+    if (!m_Bridge || !m_InstanceId) {
+        return true;
+    }
+
+    int inputIndex = -1;
+    if (!m_DefaultStopInput.empty()) {
+        BBDecl decl(m_Bridge, m_Context, m_Request);
+        BBSlot *slot = decl.Input(m_DefaultStopInput);
+        if (slot) {
+            std::string error;
+            CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation);
+            if (!ScriptBridgeBBInternal::ResolveRuntimeSlot(m_Bridge, behavior, slot, ScriptBridgeSlotKind::Input, "BBInstance.Stop", inputIndex, error)) {
+                SetError(error);
+                SetScriptException(m_Error);
+                slot->Release();
+                return false;
+            }
+            slot->Release();
+        }
+    }
+
+    if (!m_Bridge->StopInstance(m_InstanceId, m_Generation, m_Context, inputIndex)) {
+        SetError(m_Bridge->GetInstanceState(m_InstanceId, m_Generation).Error);
+        SetScriptException(m_Error);
+        return false;
+    }
+    return true;
 }
 
 bool BBInstance::OutputActive(BBSlot *output) const {
@@ -1563,7 +1581,12 @@ ParamRef *BBInstance::Pout(BBSlot *pout) const {
     return m_Bridge && param ? new ParamRef(m_Bridge, param->GetID(), ScriptBridgeSlotKind::Pout, index, behavior->GetID()) : nullptr;
 }
 
-bool BBInstance::SetSetting(BBSlot *setting, const std::string &value) {
+bool BBInstance::SetSettingValue(BBSlot *setting, ParamValue *value) {
+    if (!value) {
+        SetError("BBInstance.SetSetting requires a valid ParamValue.");
+        SetScriptException(m_Error);
+        return false;
+    }
     int settingIndex = -1;
     std::string error;
     if (!m_Bridge || !m_Bridge->IsInstanceAlive(m_InstanceId, m_Generation)) {
@@ -1572,7 +1595,7 @@ bool BBInstance::SetSetting(BBSlot *setting, const std::string &value) {
             SetScriptException(m_Error);
             return false;
         }
-        ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, MakeScriptParamString(value));
+        ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, value->Value());
         return true;
     }
     CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation);
@@ -1581,12 +1604,18 @@ bool BBInstance::SetSetting(BBSlot *setting, const std::string &value) {
         SetScriptException(m_Error);
         return false;
     }
-    if (!m_Bridge->SetInstanceSetting(m_InstanceId, m_Generation, settingIndex, MakeScriptParamString(value), error)) {
+    ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, value->Value());
+    if (!m_Bridge->SetInstanceSetting(m_InstanceId, m_Generation, settingIndex, value->Value(), error)) {
         SetError(error);
         SetScriptException(m_Error);
         return false;
     }
     return true;
+}
+
+bool BBInstance::SetSetting(BBSlot *setting, const std::string &value) {
+    ParamValue paramValue(MakeScriptParamString(value));
+    return SetSettingValue(setting, &paramValue);
 }
 
 bool BBInstance::Destroy() {

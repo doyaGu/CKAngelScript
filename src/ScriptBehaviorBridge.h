@@ -324,6 +324,7 @@ public:
     CK_ID CreateInstance(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int &generation, std::string &error);
     bool StartInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
     bool StepInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx);
+    bool StopInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
     bool DestroyInstance(CK_ID instanceId, int generation);
     bool SetInstanceSetting(CK_ID instanceId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
     bool IsInstanceValid(CK_ID instanceId, int generation) const;

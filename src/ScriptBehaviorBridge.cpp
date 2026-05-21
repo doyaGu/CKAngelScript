@@ -529,6 +529,38 @@ bool ScriptBehaviorBridge::StepInstance(CK_ID instanceId, int generation, const 
     return record->LastState.Ok;
 }
 
+bool ScriptBehaviorBridge::StopInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex) {
+    InstanceRecord *record = FindInstance(instanceId, generation);
+    if (!record || !record->HasFlag(ScriptBridgeTaskFlags::Alive)) {
+        SetScriptException("BBInstance is not alive.");
+        return false;
+    }
+
+    CKBehavior *behavior = GetInstanceBehavior(instanceId, generation);
+    if (!behavior) {
+        record->SetFlag(ScriptBridgeTaskFlags::Alive, false);
+        record->LastState.Ok = false;
+        record->LastState.ReturnCode = CKBR_BEHAVIORERROR;
+        record->LastState.Error = "BBInstance behavior is no longer available.";
+        SetScriptException(record->LastState.Error);
+        return false;
+    }
+
+    if (inputIndex >= 0) {
+        record->LastState = ExecuteOnce(behavior, ctx, inputIndex, &record->InputSources, false);
+        if (!record->LastState.Ok) {
+            return false;
+        }
+    } else {
+        ClearInputs(behavior);
+        ClearOutputs(behavior);
+        record->LastState = CaptureExecutionState(behavior, CKBR_OK);
+    }
+
+    behavior->Activate(FALSE, FALSE);
+    return true;
+}
+
 bool ScriptBehaviorBridge::DestroyInstance(CK_ID instanceId, int generation) {
     auto it = m_Instances.find(instanceId);
     if (it == m_Instances.end() || it->second.Generation != generation) {
