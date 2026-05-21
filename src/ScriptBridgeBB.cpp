@@ -501,6 +501,10 @@ std::string BBDecl::Name() const { return GetName(); }
 std::string BBDecl::Category() const { return GetCategory(); }
 std::string BBDecl::QualifiedName() const { return GetQualifiedName(); }
 
+const ScriptBridgeBBInvocationSpec &BBDecl::Request() const {
+    return m_Request;
+}
+
 CKDWORD BBDecl::BehaviorFlags() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
@@ -1133,6 +1137,10 @@ bool BBConfig::RegisterSlot(BBSlot *slot) {
     slot->AddRef();
     m_RegisteredSlots.push_back(slot);
     return ApplySlotMetadata(slot);
+}
+
+const ScriptBridgeBBInvocationSpec &BBConfig::Request() const {
+    return m_Request;
 }
 
 BBSlot *BBConfig::Slot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) {

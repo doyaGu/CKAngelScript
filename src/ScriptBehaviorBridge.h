@@ -322,6 +322,11 @@ public:
     BBTask *StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     bool SetTaskSetting(CK_ID taskId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
     CK_ID CreateInstance(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int &generation, std::string &error);
+    CKBehavior *CreatePersistentBehavior(const ScriptBridgeBBInvocationSpec &request,
+                                         const CKBehaviorContext &ctx,
+                                         const std::string &name,
+                                         std::string &error,
+                                         std::vector<CK_ID> *operationIds = nullptr);
     bool StartInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
     bool StepInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx);
     bool StopInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
@@ -338,6 +343,7 @@ public:
     CKBehaviorPrototype *ResolvePrototypeObject(const ScriptBridgeBBInvocationSpec &request, std::string &error) const;
     const ScriptBridgeLayoutRecord *GetBehaviorLayout(CK_ID behaviorId, const ScriptBridgeObjectStamp &stamp) const;
     const ScriptBridgeLayoutRecord *GetPrototypeLayout(const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request) const;
+    void InvalidateBehaviorLayout(CK_ID behaviorId) const;
     ParamRef *WrapParameter(CKObject *parameter, ScriptBridgeSlotKind kind = ScriptBridgeSlotKind::Standalone, int index = -1);
     ParamOperationRef *WrapParameterOperation(CKParameterOperation *operation,
                                               CKParameterIn *targetInput = nullptr,

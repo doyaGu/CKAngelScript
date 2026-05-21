@@ -444,6 +444,10 @@ void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
     RegisterObjectTypeAndRefCount<BehaviorRef>(engine, "BehaviorRef");
     RegisterObjectTypeAndRefCount<BehaviorQuery>(engine, "BehaviorQuery");
     RegisterObjectTypeAndRefCount<BehaviorGraph>(engine, "BehaviorGraph");
+    RegisterObjectTypeAndRefCount<BehaviorGraphEdit>(engine, "BehaviorGraphEdit");
+    RegisterObjectTypeAndRefCount<GraphEditResult>(engine, "GraphEditResult");
+    RegisterObjectTypeAndRefCount<GraphEditNode>(engine, "GraphEditNode");
+    RegisterObjectTypeAndRefCount<GraphEditLink>(engine, "GraphEditLink");
     RegisterObjectTypeAndRefCount<BehaviorNode>(engine, "BehaviorNode");
     RegisterObjectTypeAndRefCount<BehaviorLinkRef>(engine, "BehaviorLinkRef");
     RegisterObjectTypeAndRefCount<BehaviorBridge>(engine, "BehaviorBridge");
@@ -646,11 +650,49 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorGraph", "bool IsValid() const", asMETHOD(BehaviorGraph, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraph", "bool get_valid() const", asMETHOD(BehaviorGraph, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Root() const", asMETHOD(BehaviorGraph, Root), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorGraphEdit@ Edit() const", asMETHOD(BehaviorGraph, Edit), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Find(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, Find), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Require(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, Require), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraph", "array<BehaviorNode@>@ FindAll(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, FindAll), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraph", "string DescribeCandidates(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, DescribeCandidates), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraph", "string Describe() const", asMETHOD(BehaviorGraph, Describe), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("GraphEditResult", "bool Ok() const", asMETHOD(GraphEditResult, Ok), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditResult", "bool IsOk() const", asMETHOD(GraphEditResult, IsOk), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditResult", "bool get_ok() const", asMETHOD(GraphEditResult, Ok), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditResult", "string Error() const", asMETHOD(GraphEditResult, Error), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditResult", "string Describe() const", asMETHOD(GraphEditResult, Describe), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditResult", "array<BehaviorNode@>@ CreatedNodes() const", asMETHOD(GraphEditResult, CreatedNodes), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditResult", "array<BehaviorLinkRef@>@ CreatedLinks() const", asMETHOD(GraphEditResult, CreatedLinks), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditResult", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(GraphEditResult, Raise), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("GraphEditNode", "bool IsValid() const", asMETHOD(GraphEditNode, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditNode", "bool get_valid() const", asMETHOD(GraphEditNode, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditNode", "string Error() const", asMETHOD(GraphEditNode, Error), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditNode", "BehaviorRef@ Behavior() const", asMETHOD(GraphEditNode, Behavior), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditNode", "string Describe() const", asMETHOD(GraphEditNode, Describe), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("GraphEditLink", "bool IsValid() const", asMETHOD(GraphEditLink, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditLink", "bool get_valid() const", asMETHOD(GraphEditLink, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditLink", "string Error() const", asMETHOD(GraphEditLink, Error), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditLink", "BehaviorLinkRef@ Link() const", asMETHOD(GraphEditLink, Link), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("GraphEditLink", "string Describe() const", asMETHOD(GraphEditLink, Describe), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "bool IsValid() const", asMETHOD(BehaviorGraphEdit, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "bool get_valid() const", asMETHOD(BehaviorGraphEdit, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "string Error() const", asMETHOD(BehaviorGraphEdit, Error), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "string Describe() const", asMETHOD(BehaviorGraphEdit, Describe), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditNode@ Import(BehaviorNode@ node)", asMETHOD(BehaviorGraphEdit, Import), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditNode@ Add(BBDecl@ decl, const string &in name = \"\")", asMETHODPR(BehaviorGraphEdit, AddDecl, (BBDecl *, const std::string &), GraphEditNode *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditNode@ Add(BBConfig@ config, const string &in name = \"\")", asMETHODPR(BehaviorGraphEdit, AddConfig, (BBConfig *, const std::string &), GraphEditNode *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Remove(BehaviorNode@ node, bool removeIncidentLinks = false)", asMETHOD(BehaviorGraphEdit, Remove), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Move(BehaviorNode@ node, BehaviorGraph@ targetGraph)", asMETHOD(BehaviorGraphEdit, Move), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditLink@ Link(GraphEditNode@ source, int sourceOutputIndex, GraphEditNode@ target, int targetInputIndex, int delay = 1)", asMETHODPR(BehaviorGraphEdit, Link, (GraphEditNode *, int, GraphEditNode *, int, int), GraphEditLink *), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditLink@ Link(GraphEditNode@ source, BBSlot@ sourceOutput, GraphEditNode@ target, BBSlot@ targetInput, int delay = 1)", asMETHOD(BehaviorGraphEdit, LinkSlots), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Unlink(BehaviorLinkRef@ link)", asMETHOD(BehaviorGraphEdit, Unlink), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditLink@ Relink(BehaviorLinkRef@ link, GraphEditNode@ source, int sourceOutputIndex, GraphEditNode@ target, int targetInputIndex, int delay = 1)", asMETHOD(BehaviorGraphEdit, Relink), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Validate(const CKBehaviorContext &in ctx) const", asMETHOD(BehaviorGraphEdit, Validate), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Apply(const CKBehaviorContext &in ctx)", asMETHOD(BehaviorGraphEdit, Apply), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("BehaviorNode", "bool IsValid() const", asMETHOD(BehaviorNode, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorNode", "bool get_valid() const", asMETHOD(BehaviorNode, IsValid), asCALL_THISCALL); assert(r >= 0);

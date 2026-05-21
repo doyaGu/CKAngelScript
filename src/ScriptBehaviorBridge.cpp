@@ -479,6 +479,151 @@ CK_ID ScriptBehaviorBridge::CreateInstance(const ScriptBridgeBBInvocationSpec &r
     return it->second.InstanceId;
 }
 
+CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBInvocationSpec &request,
+                                                           const CKBehaviorContext &ctx,
+                                                           const std::string &name,
+                                                           std::string &error,
+                                                           std::vector<CK_ID> *operationIds) {
+    if (!m_Manager || !m_Manager->GetCKContext()) {
+        error = "Script manager or CKContext is not available.";
+        return nullptr;
+    }
+
+    CKContext *context = m_Manager->GetCKContext();
+    CKGUID guid;
+    if (!ResolvePrototype(request, guid, error)) {
+        return nullptr;
+    }
+
+    CKBehaviorPrototype *prototype = CKGetPrototypeFromGuid(guid);
+    CKObjectDeclaration *declaration = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
+    if (declaration) {
+        for (int i = 0; i < declaration->GetManagerNeededCount(); ++i) {
+            const CKGUID managerGuid = declaration->GetManagerNeeded(i);
+            if (!context->GetManagerByGuid(managerGuid)) {
+                error = fmt::format("Building Block '{}' requires manager {} which is not available.",
+                                    SafeString(declaration->GetName()),
+                                    GuidToString(managerGuid));
+                return nullptr;
+            }
+        }
+    }
+
+    const std::string behaviorName = name.empty()
+        ? fmt::format("__CKAS_GraphEdit_{}", m_NextRuntimeId++)
+        : name;
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR,
+                                                                  const_cast<CKSTRING>(behaviorName.c_str()),
+                                                                  CK_OBJECTCREATION_NONAMECHECK));
+    if (!behavior) {
+        error = "Failed to create persistent Building Block behavior.";
+        return nullptr;
+    }
+
+    bool createCallbackSent = false;
+    auto fail = [&](const std::string &message) -> CKBehavior * {
+        error = message;
+        if (createCallbackSent) {
+            if (behavior->GetOwner()) {
+                CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDETACH, &ctx);
+            }
+            CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &ctx);
+        }
+        context->DestroyObject(behavior);
+        return nullptr;
+    };
+
+    behavior->UseFunction();
+    CKERROR err = behavior->InitFromGuid(guid);
+    if (err != CK_OK) {
+        return fail(fmt::format("Failed to initialize Building Block from GUID ({}, {}) with CKERROR {}.",
+                                guid.d[0],
+                                guid.d[1],
+                                err));
+    }
+
+    if (!ScriptBehaviorBridgeInternal::ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
+        return fail(error);
+    }
+
+    err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &ctx);
+    if (err != CK_OK) {
+        return fail(fmt::format("Building Block CREATE callback failed (CKERROR {}).", err));
+    }
+    createCallbackSent = true;
+
+    CKBeObject *owner = request.OwnerId ? CKBeObject::Cast(GetCKObjectById(context, request.OwnerId)) : nullptr;
+    CKBeObject *target = request.TargetId ? CKBeObject::Cast(GetCKObjectById(context, request.TargetId)) : nullptr;
+    const CK_CLASSID compatibleClassId = behavior->GetCompatibleClassID();
+
+    if (target) {
+        if (!behavior->IsTargetable()) {
+            return fail(fmt::format("Building Block '{}' is not targetable.", SafeString(behavior->GetPrototypeName())));
+        }
+
+        if (!CKIsChildClassOf(target, compatibleClassId)) {
+            return fail(fmt::format("Target '{}' is not compatible with Building Block '{}'.",
+                                    SafeString(target->GetName()),
+                                    SafeString(behavior->GetPrototypeName())));
+        }
+
+        err = behavior->UseTarget(TRUE);
+        if (err != CK_OK) {
+            return fail(fmt::format("Failed to enable target parameter for Building Block '{}' (CKERROR {}).",
+                                    SafeString(behavior->GetPrototypeName()),
+                                    err));
+        }
+
+        CKParameterIn *targetParam = behavior->GetTargetParameter();
+        if (!targetParam) {
+            return fail("Target parameter was not created.");
+        }
+
+        CKParameterLocal *targetSource = behavior->CreateLocalParameter(const_cast<CKSTRING>("__CKAS_Target"), targetParam->GetGUID());
+        if (!targetSource) {
+            return fail("Failed to create target source parameter.");
+        }
+
+        CK_ID targetId = target->GetID();
+        if (targetSource->SetValue(&targetId, sizeof(targetId)) != CK_OK || targetParam->SetDirectSource(targetSource) != CK_OK) {
+            return fail("Failed to set target parameter.");
+        }
+    } else {
+        if (owner && !CKIsChildClassOf(owner, compatibleClassId)) {
+            return fail(fmt::format("Owner '{}' is not compatible with Building Block '{}'.",
+                                    SafeString(owner->GetName()),
+                                    SafeString(behavior->GetPrototypeName())));
+        }
+
+        if (!owner && compatibleClassId != CKCID_OBJECT && compatibleClassId != CKCID_BEOBJECT) {
+            return fail(fmt::format("Building Block '{}' requires an owner or target.", SafeString(behavior->GetPrototypeName())));
+        }
+    }
+
+    err = behavior->SetOwner(owner, FALSE);
+    if (err != CK_OK) {
+        return fail(fmt::format("Failed to set Building Block owner (CKERROR {}).", err));
+    }
+
+    if (owner) {
+        err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORATTACH, &ctx);
+        if (err != CK_OK) {
+            return fail(fmt::format("Building Block ATTACH callback failed (CKERROR {}).", err));
+        }
+    }
+
+    if (!ApplyIndexedInputParameters(behavior, request.IndexedParameters, error, nullptr)) {
+        return fail(error);
+    }
+
+    if (!ApplyInputGraphRequests(behavior, request, error, nullptr, operationIds)) {
+        return fail(error);
+    }
+
+    error.clear();
+    return behavior;
+}
+
 bool ScriptBehaviorBridge::StartInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex) {
     InstanceRecord *record = FindInstance(instanceId, generation);
     if (!record || !record->HasFlag(ScriptBridgeTaskFlags::Alive)) {
@@ -1081,6 +1226,10 @@ const ScriptBridgeLayoutRecord *ScriptBehaviorBridge::GetPrototypeLayout(const C
     auto [inserted, unused] = m_PrototypeLayouts.insert_or_assign(key, std::move(fresh));
     (void) unused;
     return &inserted->second;
+}
+
+void ScriptBehaviorBridge::InvalidateBehaviorLayout(CK_ID behaviorId) const {
+    m_BehaviorLayouts.erase(behaviorId);
 }
 
 

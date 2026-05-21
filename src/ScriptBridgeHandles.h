@@ -11,9 +11,13 @@ class BBCallBuilder;
 class BBTaskBuilder;
 class BBConfig;
 class BehaviorGraph;
+class BehaviorGraphEdit;
 class BehaviorLinkRef;
 class BehaviorNode;
 class BehaviorQuery;
+class GraphEditLink;
+class GraphEditNode;
+class GraphEditResult;
 
 class ParamInfo final : public RefCounted {
 public:
@@ -402,6 +406,7 @@ public:
 
     bool IsValid() const;
     BehaviorNode *Root() const;
+    BehaviorGraphEdit *Edit() const;
     BehaviorNode *Find(BehaviorQuery *query) const;
     BehaviorNode *Require(BehaviorQuery *query) const;
     CScriptArray *FindAll(BehaviorQuery *query) const;
@@ -422,6 +427,160 @@ private:
     CKBehaviorContext m_Context;
     CK_ID m_RootBehaviorId = 0;
     ScriptBridgeObjectStamp m_RootStamp;
+};
+
+class GraphEditResult final : public RefCounted {
+public:
+    GraphEditResult(ScriptBehaviorBridge *bridge,
+                    const CKBehaviorContext &ctx,
+                    bool ok,
+                    const std::string &error,
+                    const std::string &description,
+                    const std::vector<CK_ID> &createdNodeIds = {},
+                    const std::vector<CK_ID> &createdLinkIds = {});
+
+    bool Ok() const;
+    bool IsOk() const;
+    std::string Error() const;
+    std::string Describe() const;
+    CScriptArray *CreatedNodes() const;
+    CScriptArray *CreatedLinks() const;
+    bool Raise(const CKBehaviorContext &ctx) const;
+
+private:
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CKBehaviorContext m_Context;
+    bool m_Ok = false;
+    std::string m_Error;
+    std::string m_Description;
+    std::vector<CK_ID> m_CreatedNodeIds;
+    std::vector<CK_ID> m_CreatedLinkIds;
+};
+
+class GraphEditNode final : public RefCounted {
+public:
+    GraphEditNode(BehaviorGraphEdit *edit, int specIndex, CK_ID behaviorId, const std::string &error = std::string());
+    ~GraphEditNode() override;
+
+    bool IsValid() const;
+    std::string Error() const;
+    BehaviorRef *Behavior() const;
+    std::string Describe() const;
+
+    BehaviorGraphEdit *EditOwner() const;
+    int SpecIndex() const;
+    CK_ID BehaviorId() const;
+
+private:
+    BehaviorGraphEdit *m_Edit = nullptr;
+    int m_SpecIndex = -1;
+    CK_ID m_BehaviorId = 0;
+    std::string m_Error;
+};
+
+class GraphEditLink final : public RefCounted {
+public:
+    GraphEditLink(BehaviorGraphEdit *edit, int specIndex, CK_ID linkId, const std::string &error = std::string());
+    ~GraphEditLink() override;
+
+    bool IsValid() const;
+    std::string Error() const;
+    BehaviorLinkRef *Link() const;
+    std::string Describe() const;
+
+    BehaviorGraphEdit *EditOwner() const;
+    int SpecIndex() const;
+    CK_ID LinkId() const;
+
+private:
+    BehaviorGraphEdit *m_Edit = nullptr;
+    int m_SpecIndex = -1;
+    CK_ID m_LinkId = 0;
+    std::string m_Error;
+};
+
+class BehaviorGraphEdit final : public RefCounted {
+public:
+    BehaviorGraphEdit(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx, CK_ID rootBehaviorId);
+    ~BehaviorGraphEdit() override;
+
+    bool IsValid() const;
+    std::string Error() const;
+    std::string Describe() const;
+    GraphEditNode *Import(BehaviorNode *node);
+    GraphEditNode *AddDecl(BBDecl *decl, const std::string &name = std::string());
+    GraphEditNode *AddConfig(BBConfig *config, const std::string &name = std::string());
+    BehaviorGraphEdit *Remove(BehaviorNode *node, bool removeIncidentLinks = false);
+    BehaviorGraphEdit *Move(BehaviorNode *node, BehaviorGraph *targetGraph);
+    GraphEditLink *Link(GraphEditNode *source, int sourceOutputIndex, GraphEditNode *target, int targetInputIndex, int delay = 1);
+    GraphEditLink *LinkSlots(GraphEditNode *source, BBSlot *sourceOutput, GraphEditNode *target, BBSlot *targetInput, int delay = 1);
+    BehaviorGraphEdit *Unlink(BehaviorLinkRef *link);
+    GraphEditLink *Relink(BehaviorLinkRef *link, GraphEditNode *source, int sourceOutputIndex, GraphEditNode *target, int targetInputIndex, int delay = 1);
+    GraphEditResult *Validate(const CKBehaviorContext &ctx) const;
+    GraphEditResult *Apply(const CKBehaviorContext &ctx);
+
+    ScriptBehaviorBridge *Bridge() const;
+    const CKBehaviorContext &Context() const;
+    CK_ID RootId() const;
+    CKBehavior *RootBehavior() const;
+    CKBehavior *ResolveNode(const GraphEditNode *node) const;
+    BehaviorLinkRef *ResolveLink(const GraphEditLink *link) const;
+
+private:
+    struct NodeSpec {
+        enum class Kind { Existing, Create };
+        Kind Type = Kind::Existing;
+        CK_ID BehaviorId = 0;
+        ScriptBridgeObjectStamp BehaviorStamp;
+        ScriptBridgeBBInvocationSpec Request;
+        std::string Name;
+        CK_ID CreatedBehaviorId = 0;
+    };
+
+    struct LinkSpec {
+        enum class Kind { Create, Unlink };
+        Kind Type = Kind::Create;
+        int SourceNodeIndex = -1;
+        int TargetNodeIndex = -1;
+        int SourceOutputIndex = -1;
+        int TargetInputIndex = -1;
+        int Delay = 1;
+        CK_ID ExistingLinkId = 0;
+        ScriptBridgeObjectStamp ExistingLinkStamp;
+        CK_ID CreatedLinkId = 0;
+    };
+
+    struct RemoveSpec {
+        int NodeIndex = -1;
+        bool RemoveIncidentLinks = false;
+    };
+
+    struct MoveSpec {
+        int NodeIndex = -1;
+        CK_ID TargetRootId = 0;
+        ScriptBridgeObjectStamp TargetRootStamp;
+    };
+
+    GraphEditResult *MakeResult(bool ok,
+                                const std::string &error,
+                                const std::string &description,
+                                const std::vector<CK_ID> &createdNodes = {},
+                                const std::vector<CK_ID> &createdLinks = {}) const;
+    bool ValidateInternal(const CKBehaviorContext &ctx, std::string &error) const;
+    bool ResolveNodeIndex(const GraphEditNode *node, int &index, std::string &error) const;
+    CKBehavior *ResolveNodeBehavior(int index) const;
+    CKBehaviorLink *ResolveExistingLink(const LinkSpec &spec) const;
+    void SetError(const std::string &error) const;
+
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CKBehaviorContext m_Context;
+    CK_ID m_RootBehaviorId = 0;
+    ScriptBridgeObjectStamp m_RootStamp;
+    mutable std::string m_Error;
+    std::vector<NodeSpec> m_Nodes;
+    std::vector<LinkSpec> m_Links;
+    std::vector<RemoveSpec> m_Removes;
+    std::vector<MoveSpec> m_Moves;
 };
 
 class BehaviorNode final : public RefCounted {
@@ -480,6 +639,8 @@ public:
     int TargetInputIndex() const;
     int Delay() const;
     std::string Describe() const;
+    CK_ID RootId() const;
+    CK_ID LinkId() const;
 
 private:
     CKBehaviorLink *Get() const;
@@ -609,6 +770,7 @@ public:
     int NeededManagerCount() const;
     CKGUID NeededManagerGuid(int index) const;
     std::string Describe() const;
+    const ScriptBridgeBBInvocationSpec &Request() const;
 
 private:
     CKBehaviorPrototype *PrototypeObject(std::string &error) const;
@@ -675,6 +837,7 @@ public:
     void SetComponentLifetime(bool componentLifetime);
     bool UsesComponentLifetime() const;
     bool RegisterSlot(BBSlot *slot);
+    const ScriptBridgeBBInvocationSpec &Request() const;
 
 private:
     struct CachedSlot {
