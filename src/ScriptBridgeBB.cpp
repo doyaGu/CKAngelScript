@@ -1147,7 +1147,6 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
     if (!ResolvePin(slot, pinIndex, method)) {
         return false;
     }
-    ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value);
     if (m_Instance && m_Instance->IsValid()) {
         ParamRef *ref = m_Instance->Pin(slot);
         if (!ref) {
@@ -1162,8 +1161,11 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
             SetError(fmt::format("{} failed to write live instance pin '{}'.", method, slot ? slot->Name() : std::string("<null>")));
             SetScriptException(m_Error);
         }
-        return ok;
+        if (!ok) {
+            return false;
+        }
     }
+    ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value);
     return true;
 }
 
@@ -1175,7 +1177,6 @@ bool BBConfig::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, c
         SetScriptException(m_Error);
         return false;
     }
-    ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, value);
     if (m_Instance && m_Instance->IsValid()) {
         ParamValue paramValue(value);
         if (!m_Instance->SetSettingValue(slot, &paramValue)) {
@@ -1183,8 +1184,8 @@ bool BBConfig::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, c
             SetScriptException(m_Error);
             return false;
         }
-        return true;
     }
+    ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, value);
     return true;
 }
 
@@ -1246,9 +1247,8 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
     request.PinIndex = pinIndex;
     request.SourceId = source->GetID();
     request.SourceStamp = source->Stamp();
-    ReplacePendingSource(request);
-
     if (!m_Instance || !m_Instance->IsValid()) {
+        ReplacePendingSource(request);
         return true;
     }
 
@@ -1273,6 +1273,7 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         SetScriptException(m_Error);
         return false;
     }
+    ReplacePendingSource(request);
     return true;
 }
 
@@ -1287,8 +1288,9 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         return false;
     }
 
-    ReplacePendingOperation(operation->RequestForPin(pinIndex));
+    const ScriptBridgeOperationSpec operationRequest = operation->RequestForPin(pinIndex);
     if (!m_Instance || !m_Instance->IsValid()) {
+        ReplacePendingOperation(operationRequest);
         return true;
     }
 
@@ -1313,6 +1315,7 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         SetScriptException(m_Error);
         return false;
     }
+    ReplacePendingOperation(operationRequest);
     return true;
 }
 
