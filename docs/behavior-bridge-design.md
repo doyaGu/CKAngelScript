@@ -22,6 +22,52 @@ b.Trigger(in);
 
 `BehaviorLayout` exposes `InputCount/OutputCount/PinCount/PoutCount/LocalCount`, name lookup with occurrence, and `ParamInfo` for parameter slots. Use `Find*()` once in `Start()` or setup code, then cache the indices.
 
+## Behavior Graph Search
+
+Large real game graphs should be searched through a container graph instead of global name lookup. `Behavior::Graph(ctx)` returns the owner script graph for the current component. `BehaviorRef.AsGraph()` treats a behavior as a subgraph container.
+
+Search is setup-time only. `BehaviorQuery` defaults to exact name matching when `Name()` is used; use `NameContains()` only for exploration or diagnostics. Recursive search is explicit, pre-order, and preserves CK subbehavior order. The root container is not returned unless `IncludeRoot(true)` is set.
+
+```angelscript
+BehaviorGraph@ graph = Behavior::Graph(ctx);
+BehaviorQuery@ query = Behavior::Query()
+    .Name("Loading_Manager")
+    .Recursive(true)
+    .InputCount(-1)
+    .OutputCount(-1);
+
+BehaviorNode@ node = graph.Require(query);
+if (node is null || !node.valid) {
+    ctx.RaiseError(graph.DescribeCandidates(query));
+    return;
+}
+
+BehaviorRef@ loadingManager = node.Behavior();
+BehaviorLayout@ layout = loadingManager.Layout();
+int input = layout.FindInput("In");
+```
+
+`Require()` is intentionally strict: zero or multiple candidates return an invalid node and diagnostics listing behavior name, id, prototype, target, and layout counts. `Find()` returns the requested occurrence. `FindAll()` returns every candidate for custom filtering.
+
+Graph traversal follows real `CKBehaviorLink` objects without mutating the graph:
+
+```angelscript
+BehaviorNode@ next = node.Next();
+array<BehaviorNode@>@ allNext = node.NextAll();
+BehaviorLinkRef@ link = node.NextLink();
+
+if (link !is null && link.valid) {
+    BehaviorRef@ source = link.SourceBehavior();
+    int outputIndex = link.SourceOutputIndex();
+    BehaviorRef@ target = link.TargetBehavior();
+    int inputIndex = link.TargetInputIndex();
+}
+```
+
+`Next/Prev` accept an optional `BehaviorQuery@` filter. `Input(index)` and `Output(index)` are link traversal helpers for a specific target input or source output. `End(maxSteps)` follows the first next link until there is no next node or a cycle/step limit is reached.
+
+`Behavior::Find(ctx, name)` remains as a small convenience wrapper over `Behavior::Graph(ctx).Find(Behavior::Query().Name(name).Recursive(true))`; new scripts should prefer explicit graph/query/node code when the graph is large or duplicate names are possible.
+
 ## Parameter Handles
 
 `ParamRef@` wraps `CKParameterIn`, `CKParameterOut`, `CKParameterLocal`, operation parameters, or standalone `CKParameter`.
