@@ -1794,6 +1794,23 @@ ParamRef *GetParamRefFieldByName(ScriptComponentState *state, const std::string 
     return nullptr;
 }
 
+BehaviorRef *GetBehaviorRefFieldByName(ScriptComponentState *state, const std::string &fieldName) {
+    if (!state || !state->Object || fieldName.empty()) {
+        return nullptr;
+    }
+    for (const ScriptComponentBinding &binding : state->Bindings) {
+        if (binding.Kind == ScriptComponentBindingKind::BehaviorRef && binding.FieldName == fieldName) {
+            void **slot = GetHandleSlot(state->Object, binding.PropertyIndex);
+            BehaviorRef *ref = slot ? static_cast<BehaviorRef *>(*slot) : nullptr;
+            if (ref) {
+                ref->AddRef();
+            }
+            return ref;
+        }
+    }
+    return nullptr;
+}
+
 BBInstance *GetBBInstanceFieldByName(ScriptComponentState *state, const std::string &fieldName) {
     if (!state || !state->Object || fieldName.empty()) {
         return nullptr;
@@ -2205,6 +2222,47 @@ ParamRef *ResolveBBConfigSourceRef(ScriptComponentState *state,
         return ref;
     }
 
+    if (BehaviorRef *behavior = GetBehaviorRefFieldByName(state, source.SourceFieldName)) {
+        std::string slotName = StripQuotes(source.SourceSlotName);
+        ScriptBridgeSlotKind kind = ScriptBridgeSlotKind::Pout;
+        const std::size_t separator = slotName.find(':');
+        if (separator != std::string::npos) {
+            kind = SlotKindFromText(slotName.substr(0, separator));
+            slotName = StripQuotes(slotName.substr(separator + 1));
+        }
+
+        ParamRef *ref = nullptr;
+        BehaviorLayout *layout = behavior->Layout();
+        int index = -1;
+        if (!layout) {
+            error = "BBConfig source behavior '" + source.SourceFieldName + "' has no layout.";
+        } else if (kind == ScriptBridgeSlotKind::Pin) {
+            index = layout->FindPin(slotName, source.SourceOccurrence);
+            ref = index >= 0 ? behavior->Pin(index) : nullptr;
+        } else if (kind == ScriptBridgeSlotKind::Pout) {
+            index = layout->FindPout(slotName, source.SourceOccurrence);
+            ref = index >= 0 ? behavior->Pout(index) : nullptr;
+        } else if (kind == ScriptBridgeSlotKind::Local) {
+            index = layout->FindLocal(slotName, source.SourceOccurrence);
+            ref = index >= 0 ? behavior->Local(index) : nullptr;
+        } else {
+            error = "BBConfig source behavior '" + source.SourceFieldName +
+                    "' source selector '" + source.SourceSlotName +
+                    "' must use pin:, pout:, or local:.";
+        }
+
+        if (!ref && error.empty()) {
+            error = "BBConfig source behavior '" + source.SourceFieldName +
+                    "' has no " + (separator == std::string::npos ? std::string("pout") : source.SourceSlotName.substr(0, separator)) +
+                    " '" + slotName + "'.";
+        }
+        if (layout) {
+            layout->Release();
+        }
+        behavior->Release();
+        return ref;
+    }
+
     if (BBConfig *config = GetBBConfigFieldByName(state, source.SourceFieldName)) {
         BBInstance *instance = config->Instance();
         if (!instance) {
@@ -2225,7 +2283,7 @@ ParamRef *ResolveBBConfigSourceRef(ScriptComponentState *state,
 
     BBInstance *instance = GetBBInstanceFieldByName(state, source.SourceFieldName);
     if (!instance) {
-        error = "BBConfig source '" + source.SourceFieldName + "' is not a BBConfig@ or BBInstance@ field.";
+        error = "BBConfig source '" + source.SourceFieldName + "' is not a BehaviorRef@, BBConfig@, or BBInstance@ field.";
         return nullptr;
     }
     BBSlot *slot = instance->PoutSlot(source.SourceSlotName, source.SourceOccurrence);
