@@ -2057,8 +2057,6 @@ bool BBInstance::SourceForPin(BBSlot *pin, ParamRef *source, const char *method)
         return false;
     }
 
-    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
-    m_Bridge->RemoveInstanceOperation(m_InstanceId, m_Generation, pinIndex);
     ParamRef *target = Pin(pin);
     ParamSourceLinkRef *link = target ? target->SetSourceScoped(source) : nullptr;
     if (target) {
@@ -2072,6 +2070,8 @@ bool BBInstance::SourceForPin(BBSlot *pin, ParamRef *source, const char *method)
         SetScriptException(m_Error);
         return false;
     }
+    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
+    m_Bridge->RemoveInstanceOperation(m_InstanceId, m_Generation, pinIndex);
     if (!m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, pinIndex, link)) {
         link->Restore();
         link->Release();
