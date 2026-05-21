@@ -899,6 +899,7 @@ BBSlot *BBBinding::Slot(ScriptBridgeSlotKind kind, const std::string &name, int 
         case ScriptBridgeSlotKind::Output: slot = spec.Out(name, occurrence); break;
         case ScriptBridgeSlotKind::Pin: slot = spec.Pin(name, occurrence); break;
         case ScriptBridgeSlotKind::Pout: slot = spec.Pout(name, occurrence); break;
+        case ScriptBridgeSlotKind::Setting: slot = spec.Setting(name, occurrence); break;
         case ScriptBridgeSlotKind::Local: slot = spec.Local(name, occurrence); break;
         default: break;
     }

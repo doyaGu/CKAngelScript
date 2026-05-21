@@ -148,13 +148,14 @@ def add_bb_slot_helpers(lines: list[str], bb: dict[str, Any]) -> None:
         ("Out", "outputs"),
         ("Pin", "input_params"),
         ("Pout", "output_params"),
+        ("Setting", "settings"),
         ("Local", "local_params"),
     ]
     for method, key in slot_specs:
         used_names: set[str] = set()
         for name in bb_slot_items(bb, key):
             function_name = identifier(name or f"{method}Slot", used_names)
-            lines.append(f"    BBSlot@ {method}_{function_name}(const CKBehaviorContext &in ctx) {{ BBSpec@ spec = Spec(ctx); return spec is null ? null : spec.{method}({as_string(name)}); }}")
+            lines.append(f"    BBSlot@ {method}_{function_name}(const CKBehaviorContext &in ctx) {{ BBDecl@ decl = Decl(ctx); return decl is null ? null : decl.{method}({as_string(name)}); }}")
 
 
 def value_items(params: Iterable[dict[str, Any]], category: str) -> Iterable[dict[str, Any]]:
@@ -250,8 +251,8 @@ def generate(params: list[dict[str, Any]], ops: list[dict[str, Any]], bbs: list[
         lines.append(f"    const string Category = {as_string(category)};")
         lines.append(f"    const string QualifiedName = {as_string(qualified)};")
         lines.append("    BBPrototype@ Find(const CKBehaviorContext &in ctx) { return BB::Prototype(ctx, Guid()); }")
-        lines.append("    BBSpec@ Spec(const CKBehaviorContext &in ctx) { return BB::Require(ctx, Guid()); }")
-        lines.append("    BBBinding@ Binding(const CKBehaviorContext &in ctx) { return BB::Bind(ctx, Guid()); }")
+        lines.append("    BBDecl@ Decl(const CKBehaviorContext &in ctx) { return BB::Require(ctx, Guid()); }")
+        lines.append("    BBConfig@ Config(const CKBehaviorContext &in ctx) { return BB::Bind(ctx, Guid()); }")
         add_bb_slot_helpers(lines, bb)
         lines.append("}")
     lines.append("}")
