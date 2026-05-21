@@ -68,6 +68,41 @@ if (link !is null && link.valid) {
 
 `Behavior::Find(ctx, name)` remains as a small convenience wrapper over `Behavior::Graph(ctx).Find(Behavior::Query().Name(name).Recursive(true))`; new scripts should prefer explicit graph/query/node code when the graph is large or duplicate names are possible.
 
+## Persistent Graph Editing
+
+Graph editing is explicit and transaction-style. The bridge mutates the live `CKBehavior` graph only when `Apply(ctx)` is called; saving the edited graph to `.cmo/.nmo` remains the host/libnmo responsibility.
+
+```angelscript
+BehaviorGraph@ graph = Behavior::Graph(ctx);
+BBDecl@ decl = BB::Require(ctx, "Logics/Calculator/Identity");
+
+BehaviorGraphEdit@ edit = graph.Edit();
+GraphEditNode@ node = edit.Add(decl, "Probe Identity");
+
+GraphEditResult@ check = edit.Validate(ctx);
+if (check is null || !check.ok) {
+    check.Raise(ctx);
+    return;
+}
+
+GraphEditResult@ applied = edit.Apply(ctx);
+if (applied is null || !applied.ok) {
+    applied.Raise(ctx);
+    return;
+}
+```
+
+Supported persistent operations are:
+
+- `Import(node)`: make an existing direct child behavior available inside the transaction.
+- `Add(BBDecl@/BBConfig@, name)`: create a persistent BB behavior from the SDK prototype/config.
+- `Link(sourceNode, outputIndex/slot, targetNode, inputIndex/slot, delay)`: create a real `CKBehaviorLink`.
+- `Unlink(link)` and `Relink(link, ...)`: remove or replace a real link.
+- `Remove(node, removeIncidentLinks)`: destroy a direct child behavior; incident links must be removed explicitly unless `removeIncidentLinks=true`.
+- `Move(node, targetGraph)`: move a direct child behavior to another graph; existing incident links must be unlinked first.
+
+Validation rejects stale handles, foreign graph handles, function behaviors used as graph roots, invalid IO indices, removing nodes with remaining incident links, missing managers, bad target/owner compatibility, and bad pending parameter/settings conversion. `Apply()` creates nodes and links before destructive edits, and rolls back objects it created if a creation step fails. After `Apply()` succeeds the edit is persistent in the live CK graph; component lifetime hooks do not roll it back.
+
 ## Parameter Handles
 
 `ParamRef@` wraps `CKParameterIn`, `CKParameterOut`, `CKParameterLocal`, operation parameters, or standalone `CKParameter`.
