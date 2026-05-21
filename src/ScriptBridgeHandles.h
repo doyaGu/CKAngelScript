@@ -607,16 +607,19 @@ private:
                             std::string &error,
                             std::vector<ParamSourceLinkRef *> &sourceLinks,
                             std::vector<CK_ID> &localSourceIds,
-                            std::vector<CK_ID> &replacedLocalSourceIds);
+                            std::vector<CK_ID> &replacedLocalSourceIds,
+                            std::vector<CK_ID> &replacedOperations);
     bool ApplyExistingSource(CKBehavior *behavior,
                              const SourceSpec &spec,
                              std::string &error,
                              std::vector<ParamSourceLinkRef *> &sourceLinks,
-                             std::vector<CK_ID> &replacedLocalSourceIds);
+                             std::vector<CK_ID> &replacedLocalSourceIds,
+                             std::vector<CK_ID> &replacedOperations);
     bool ApplyExistingOperation(CKBehavior *behavior,
                                 const OperationSpec &spec,
                                 std::string &error,
-                                std::vector<ParamOperationRef *> &operations);
+                                std::vector<ParamOperationRef *> &operations,
+                                std::vector<CK_ID> &replacedOperations);
     BehaviorGraphEdit *SetValue(GraphEditNode *node, BBSlot *slot, ScriptBridgeSlotKind kind, const ScriptParamValue &value, const char *method);
     void RemoveNodeValue(int nodeIndex, ScriptBridgeSlotKind kind, int slotIndex);
     void RemoveNodeSource(int nodeIndex, int pinIndex);

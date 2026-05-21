@@ -264,6 +264,46 @@ void DestroyGraphEditLocalSource(CKContext *context, CK_ID localId) {
     }
 }
 
+CKParameterOperation *OperationFromDirectSource(CKParameter *source, CKBehavior *expectedOwner) {
+    CKParameterOperation *operation = source ? CKParameterOperation::Cast(source->GetOwner()) : nullptr;
+    return operation && (!expectedOwner || operation->GetOwner() == expectedOwner) ? operation : nullptr;
+}
+
+void DestroyOperationLiteralLocal(CKBehavior *owner, CKParameter *source) {
+    CKParameterLocal *local = CKParameterLocal::Cast(source);
+    if (!owner || !local || CKBehavior::Cast(local->GetOwner()) != owner) {
+        return;
+    }
+    const std::string name = SafeString(local->GetName());
+    if (name.find("__CKAS_Op") != 0) {
+        return;
+    }
+    const int position = owner->GetLocalParameterPosition(local);
+    if (position >= 0) {
+        owner->RemoveLocalParameter(position);
+    }
+    CKContext *context = owner->GetCKContext();
+    if (context && !local->IsToBeDeleted()) {
+        context->DestroyObject(local);
+    }
+}
+
+void DestroyReplacedOperation(CKContext *context, CK_ID operationId) {
+    CKParameterOperation *operation = CKParameterOperation::Cast(GetCKObjectById(context, operationId));
+    if (!operation) {
+        return;
+    }
+    CKBehavior *owner = operation->GetOwner();
+    if (owner) {
+        DestroyOperationLiteralLocal(owner, operation->GetInParameter1() ? operation->GetInParameter1()->GetDirectSource() : nullptr);
+        DestroyOperationLiteralLocal(owner, operation->GetInParameter2() ? operation->GetInParameter2()->GetDirectSource() : nullptr);
+        owner->RemoveParameterOperation(operation);
+    }
+    if (context && !operation->IsToBeDeleted()) {
+        context->DestroyObject(operation);
+    }
+}
+
 std::string BehaviorLabel(CKBehavior *behavior) {
     if (!behavior) {
         return "<null>";
@@ -1026,6 +1066,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
     std::vector<ParamOperationRef *> appliedOperations;
     std::vector<CK_ID> createdValueLocalSources;
     std::vector<CK_ID> replacedValueLocalSources;
+    std::vector<CK_ID> replacedOperations;
 
     auto rollbackCreated = [&]() {
         for (ParamOperationRef *operation : appliedOperations) {
@@ -1145,21 +1186,21 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             continue;
         }
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
-        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources, replacedValueLocalSources)) {
+        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources, replacedValueLocalSources, replacedOperations)) {
             return failApply(error);
         }
     }
 
     for (const SourceSpec &spec : m_Sources) {
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
-        if (!ApplyExistingSource(behavior, spec, error, appliedSourceLinks, replacedValueLocalSources)) {
+        if (!ApplyExistingSource(behavior, spec, error, appliedSourceLinks, replacedValueLocalSources, replacedOperations)) {
             return failApply(error);
         }
     }
 
     for (const OperationSpec &spec : m_Operations) {
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
-        if (!ApplyExistingOperation(behavior, spec, error, appliedOperations)) {
+        if (!ApplyExistingOperation(behavior, spec, error, appliedOperations, replacedOperations)) {
             return failApply(error);
         }
     }
@@ -1169,7 +1210,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             continue;
         }
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
-        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources, replacedValueLocalSources)) {
+        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources, replacedValueLocalSources, replacedOperations)) {
             return failApply(error);
         }
     }
@@ -1244,6 +1285,10 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         ScriptBridgeGraphInternal::DestroyGraphEditLocalSource(context, localId);
     }
     replacedValueLocalSources.clear();
+    for (CK_ID operationId : replacedOperations) {
+        ScriptBridgeGraphInternal::DestroyReplacedOperation(context, operationId);
+    }
+    replacedOperations.clear();
     for (ParamOperationRef *operation : appliedOperations) {
         if (operation) {
             operation->Release();
@@ -1669,7 +1714,8 @@ bool BehaviorGraphEdit::ApplyExistingValue(CKBehavior *behavior,
                                            std::string &error,
                                            std::vector<ParamSourceLinkRef *> &sourceLinks,
                                            std::vector<CK_ID> &localSourceIds,
-                                           std::vector<CK_ID> &replacedLocalSourceIds) {
+                                           std::vector<CK_ID> &replacedLocalSourceIds,
+                                           std::vector<CK_ID> &replacedOperations) {
     if (!behavior) {
         error = "BehaviorGraphEdit value target behavior is not valid.";
         return false;
@@ -1713,6 +1759,8 @@ bool BehaviorGraphEdit::ApplyExistingValue(CKBehavior *behavior,
     localSourceIds.push_back(local->GetID());
     if (ScriptBridgeGraphInternal::IsGraphEditInputSource(previous)) {
         replacedLocalSourceIds.push_back(previous->GetID());
+    } else if (CKParameterOperation *operation = ScriptBridgeGraphInternal::OperationFromDirectSource(previous, behavior)) {
+        replacedOperations.push_back(operation->GetID());
     }
     return true;
 }
@@ -1721,7 +1769,8 @@ bool BehaviorGraphEdit::ApplyExistingSource(CKBehavior *behavior,
                                             const SourceSpec &spec,
                                             std::string &error,
                                             std::vector<ParamSourceLinkRef *> &sourceLinks,
-                                            std::vector<CK_ID> &replacedLocalSourceIds) {
+                                            std::vector<CK_ID> &replacedLocalSourceIds,
+                                            std::vector<CK_ID> &replacedOperations) {
     if (!behavior) {
         error = "BehaviorGraphEdit source target behavior is not valid.";
         return false;
@@ -1759,6 +1808,8 @@ bool BehaviorGraphEdit::ApplyExistingSource(CKBehavior *behavior,
     sourceLinks.push_back(new ParamSourceLinkRef(m_Bridge, pin, previous, source));
     if (ScriptBridgeGraphInternal::IsGraphEditInputSource(previous)) {
         replacedLocalSourceIds.push_back(previous->GetID());
+    } else if (CKParameterOperation *operation = ScriptBridgeGraphInternal::OperationFromDirectSource(previous, behavior)) {
+        replacedOperations.push_back(operation->GetID());
     }
     return true;
 }
@@ -1766,14 +1817,23 @@ bool BehaviorGraphEdit::ApplyExistingSource(CKBehavior *behavior,
 bool BehaviorGraphEdit::ApplyExistingOperation(CKBehavior *behavior,
                                                const OperationSpec &spec,
                                                std::string &error,
-                                               std::vector<ParamOperationRef *> &operations) {
+                                               std::vector<ParamOperationRef *> &operations,
+                                               std::vector<CK_ID> &replacedOperations) {
     if (!behavior) {
         error = "BehaviorGraphEdit operation target behavior is not valid.";
         return false;
     }
+    CKParameterIn *pin = spec.Operation.TargetPinIndex >= 0 && spec.Operation.TargetPinIndex < behavior->GetInputParameterCount()
+        ? behavior->GetInputParameter(spec.Operation.TargetPinIndex)
+        : nullptr;
+    CKParameter *previous = pin ? pin->GetDirectSource() : nullptr;
+    CKParameterOperation *previousOperation = ScriptBridgeGraphInternal::OperationFromDirectSource(previous, behavior);
     ParamOperationRef *operation = ConnectOperationToInput(m_Bridge, behavior, spec.Operation.TargetPinIndex, spec.Operation, error, true, nullptr);
     if (!operation) {
         return false;
+    }
+    if (previousOperation) {
+        replacedOperations.push_back(previousOperation->GetID());
     }
     operations.push_back(operation);
     return true;

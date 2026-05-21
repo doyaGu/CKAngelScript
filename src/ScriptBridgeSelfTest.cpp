@@ -1464,6 +1464,76 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     setResult->Release();
     setTarget->Release();
     setEdit->Release();
+
+    CKParameterLocal *graphEditReplacementSource = context->CreateCKParameterLocal(
+        const_cast<CKSTRING>("__CKAS_GraphEditReplacementSource"),
+        CKPGUID_INT,
+        TRUE);
+    ParamRef *graphEditReplacementRef = graphEditReplacementSource
+        ? new ParamRef(bridge, graphEditReplacementSource->GetID(), ScriptBridgeSlotKind::Standalone, -1)
+        : nullptr;
+    const CKGUID graphEditOperationGuid = FindSelfTestOperationGuid(context, context->GetParameterManager(), CKPGUID_INT);
+    ScriptBridgeOperationSpec graphEditOperationRequest;
+    graphEditOperationRequest.TargetPinIndex = 0;
+    graphEditOperationRequest.OperationGuid = graphEditOperationGuid;
+    graphEditOperationRequest.ResultTypeGuid = CKPGUID_INT;
+    graphEditOperationRequest.In1.Kind = ScriptBridgeInputBindingKind::Value;
+    graphEditOperationRequest.In1.Value = MakeScriptParamInt(1);
+    graphEditOperationRequest.In2.Kind = ScriptBridgeInputBindingKind::Value;
+    graphEditOperationRequest.In2.Value = MakeScriptParamInt(2);
+    std::string graphEditOperationError;
+    ParamOperationRef *graphEditOperation = graphEditOperationGuid.IsValid()
+        ? ConnectOperationToInput(bridge, target, 0, graphEditOperationRequest, graphEditOperationError, true, nullptr)
+        : nullptr;
+    CKParameterOperation *graphEditOperationObject = graphEditOperation ? graphEditOperation->Get() : nullptr;
+    BehaviorGraphEdit *replaceOperationSourceEdit = graph->Edit();
+    GraphEditNode *replaceOperationSourceTarget = replaceOperationSourceEdit->Import(targetNode);
+    if (graphEditReplacementRef) {
+        replaceOperationSourceEdit->Source(replaceOperationSourceTarget, valueSlot, graphEditReplacementRef)->Release();
+    }
+    GraphEditResult *replaceOperationSourceResult = replaceOperationSourceEdit->Apply(ctx);
+    if (!graphEditReplacementSource ||
+        !graphEditReplacementRef ||
+        !graphEditOperation ||
+        !graphEditOperationObject ||
+        !replaceOperationSourceResult ||
+        !replaceOperationSourceResult->Ok() ||
+        targetValue->GetDirectSource() != graphEditReplacementSource ||
+        !graphEditOperationObject->IsToBeDeleted()) {
+        error = fmt::format("Graph edit self-test failed operation replacement cleanup: op={} apply={} source={} deleted={}.",
+                            graphEditOperation ? (graphEditOperationObject ? "ok" : "missing") : graphEditOperationError,
+                            replaceOperationSourceResult && replaceOperationSourceResult->Ok() ? "ok" : (replaceOperationSourceResult ? replaceOperationSourceResult->Error() : "<null>"),
+                            targetValue && targetValue->GetDirectSource() == graphEditReplacementSource ? "ok" : "wrong",
+                            graphEditOperationObject && graphEditOperationObject->IsToBeDeleted() ? "true" : "false");
+        if (replaceOperationSourceResult) replaceOperationSourceResult->Release();
+        replaceOperationSourceTarget->Release();
+        replaceOperationSourceEdit->Release();
+        if (graphEditOperation) graphEditOperation->Release();
+        if (graphEditReplacementRef) graphEditReplacementRef->Release();
+        DestroySelfTestObject(context, graphEditReplacementSource);
+        if (valueSlot) valueSlot->Release();
+        unlinkResult->Release();
+        unlinkEdit->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+    replaceOperationSourceResult->Release();
+    replaceOperationSourceTarget->Release();
+    replaceOperationSourceEdit->Release();
+    graphEditOperation->Release();
+    graphEditReplacementRef->Release();
+    DestroySelfTestObject(context, graphEditReplacementSource);
+
     valueSlot->Release();
 
     BehaviorGraphEdit *removeEdit = graph->Edit();
