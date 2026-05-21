@@ -74,20 +74,6 @@ CKBehavior *FindContainingBehaviorInContext(CKBehavior *behavior) {
     return best;
 }
 
-CKBehavior *FindBehaviorByNameInContext(CKContext *context, const std::string &name) {
-    if (!context || name.empty()) {
-        return nullptr;
-    }
-    const XObjectPointerArray &behaviors = context->GetObjectListByType(CKCID_BEHAVIOR, TRUE);
-    for (int i = 0; i < behaviors.Size(); ++i) {
-        CKBehavior *behavior = CKBehavior::Cast(behaviors[i]);
-        if (behavior && NameEquals(behavior->GetName(), name)) {
-            return behavior;
-        }
-    }
-    return nullptr;
-}
-
 } // namespace ScriptBridgeBehaviorInternal
 
 BehaviorLayout::BehaviorLayout(ScriptBehaviorBridge *bridge, CK_ID behaviorId)
@@ -520,7 +506,7 @@ BehaviorRef *BehaviorBridge::Find(const std::string &name) const {
         return m_Bridge->WrapBehavior(found, ComponentIdFromContext(m_Context));
     }
     CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    if (CKBehavior *found = ScriptBridgeBehaviorInternal::FindBehaviorByNameInContext(context, name)) {
+    if (CKBehavior *found = FindBehaviorByNameInContext(context, name)) {
         return m_Bridge->WrapBehavior(found, ComponentIdFromContext(m_Context));
     }
     return nullptr;

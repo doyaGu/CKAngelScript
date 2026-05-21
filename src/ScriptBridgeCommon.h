@@ -25,6 +25,7 @@ std::string GuidToString(CKGUID guid);
 bool NameEquals(CKSTRING actual, const std::string &expected);
 std::string TrimString(const std::string &value);
 void SetScriptException(const std::string &message);
+CKBehavior *FindBehaviorByNameInContext(CKContext *context, const std::string &name);
 
 bool IsBehaviorErrorCode(int rc);
 std::string ParameterTypeLabel(CKContext *context, CKGUID guid);

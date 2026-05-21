@@ -168,6 +168,22 @@ bool NameEquals(CKSTRING actual, const std::string &expected) {
     return actual && actual[0] != '\0' && actual == expected;
 }
 
+CKBehavior *FindBehaviorByNameInContext(CKContext *context, const std::string &name) {
+    const std::string text = TrimString(name);
+    if (!context || text.empty()) {
+        return nullptr;
+    }
+
+    const XObjectPointerArray &behaviors = context->GetObjectListByType(CKCID_BEHAVIOR, TRUE);
+    for (int i = 0; i < behaviors.Size(); ++i) {
+        CKBehavior *behavior = CKBehavior::Cast(behaviors[i]);
+        if (behavior && NameEquals(behavior->GetName(), text)) {
+            return behavior;
+        }
+    }
+    return nullptr;
+}
+
 std::string TrimString(const std::string &value) {
     const auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char c) { return std::isspace(c) != 0; });
     if (first == value.end()) {

@@ -75,22 +75,6 @@ std::string StripQuotes(const std::string &value) {
     return text;
 }
 
-CKBehavior *FindBehaviorByNameInContext(CKContext *context, const std::string &name) {
-    const std::string text = StripQuotes(name);
-    if (!context || text.empty()) {
-        return nullptr;
-    }
-
-    const XObjectPointerArray &behaviors = context->GetObjectListByType(CKCID_BEHAVIOR, TRUE);
-    for (int i = 0; i < behaviors.Size(); ++i) {
-        CKBehavior *behavior = CKBehavior::Cast(behaviors[i]);
-        if (behavior && NameEquals(behavior->GetName(), text)) {
-            return behavior;
-        }
-    }
-    return nullptr;
-}
-
 bool ParseBoolText(const std::string &value, bool fallback = false) {
     const std::string text = ToLower(StripQuotes(value));
     if (text == "true" || text == "yes" || text == "on" || text == "1") {
