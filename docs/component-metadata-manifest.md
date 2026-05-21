@@ -90,7 +90,7 @@ Recognized keys:
 - `slot`, `slotKind`: one of `input`, `output`, `pin`, `pout`, `setting`, or `local`
 - `slotName`, `input`, `output`, `pin`, `pout`, `setting`, `local`: slot selector for `BBSlot@`
 - `occurrence`: duplicate-name occurrence for `BBSlot@`
-- `managed`: for `BBConfig@`; defaults to `true`. Component lifecycle destroys the latest owned `BBInstance@` and any low-level runtime task during disable/reset/delete. Use `managed=false` only when the script deliberately owns cleanup.
+- `managed`: for `BBConfig@`; defaults to `true`. Component disable/deactivate/pause stops the latest owned `BBInstance@`; component reset/delete or script rebuild destroys it. Use `managed=false` only when the script deliberately owns cleanup.
 - `start`, `stop`: for `BBSlot@` input fields, mark the config's default start/stop input; for `BBConfig@`, legacy input-name defaults are still accepted
 - `required`: comma/semicolon/pipe separated required slots for `BBConfig@`, such as `in:On,pin:Text,pout:Font Created,setting:Text Properties`
 - `inputs`, `outputs`, `pins`, `pouts`, `locals`, `requiredSettings`: shorthand required slot lists for `BBConfig@`
@@ -196,7 +196,7 @@ class HudText {
 }
 ```
 
-`BBConfig@` is managed by default. This does not autostart the BB. It means the Component destroys the latest `BBInstance@` created by that config, plus any low-level task state, during disable/pause/reset/delete so the script does not leak runtime BBs. If a `BBSlot@` marks an input with `start`, `BBInstance.Start()` uses it automatically. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
+`BBConfig@` is managed by default. This does not autostart the BB. It means the Component calls `Stop()` on the latest `BBInstance@` during disable/deactivate/pause and calls `Destroy()` during reset/delete or script object rebuild. `Stop()` leaves the runtime behavior alive so it can be restarted; `Destroy()` releases the runtime behavior and owned source/operation links. If a `BBSlot@` marks an input with `start`, `BBInstance.Start()` uses it automatically. If a `BBSlot@` marks an input with `stop`, `BBInstance.Stop()` pulses it before deactivating the behavior. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
 
 `ParamTypeInfo@` injects the runtime CK parameter type metadata for the connected input source. It is useful when a component accepts plugin-defined or enum/flags parameters and wants to expose `Name()`, `Guid()`, `Describe()`, `Enum()`, `Flags()`, or `Struct()` without guessing the data layout.
 

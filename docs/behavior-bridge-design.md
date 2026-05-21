@@ -220,7 +220,7 @@ The bridge creates a real `CKParameterOperation`, binds `In1/In2` sources or lit
 
 - Runtime `BB.Call()` behavior is held by `BBResult` and deferred-destroyed after result release.
 - Runtime `BB.Spawn()` behavior is owned by `BBTask` and is destroyed by `Destroy()`, component reset, component delete, or bridge clear.
-- Runtime `BBConfig.Spawn()` behavior is owned by `BBInstance` and is destroyed by `Destroy()`, component reset, component delete, or bridge clear.
+- Runtime `BBConfig.Spawn()` behavior is owned by `BBInstance`. `Stop()` only stops/deactivates it, optionally pulsing the configured stop input; `Destroy()` releases the runtime behavior and owned links. Managed components stop instances on disable/pause and destroy them on reset/delete.
 - `GraphTask` never owns the watched behavior; component reset/delete only cancels the watch.
 - Component pause pauses bridge-owned tasks and watches; it does not mutate external graphs.
 
