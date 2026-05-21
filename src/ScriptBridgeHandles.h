@@ -149,16 +149,19 @@ public:
     int OutputCount() const;
     int PinCount() const;
     int PoutCount() const;
+    int SettingCount() const;
     int LocalCount() const;
     std::string InputName(int index) const;
     std::string OutputNameAt(int index) const;
     ParamInfo *Pin(int index) const;
     ParamInfo *Pout(int index) const;
+    ParamInfo *Setting(int index) const;
     ParamInfo *Local(int index) const;
     int FindInput(const std::string &name, int occurrence) const;
     int FindOutput(const std::string &name, int occurrence) const;
     int FindPin(const std::string &name, int occurrence) const;
     int FindPout(const std::string &name, int occurrence) const;
+    int FindSetting(const std::string &name, int occurrence) const;
     int FindLocal(const std::string &name, int occurrence) const;
     std::string Describe() const;
 
@@ -368,6 +371,8 @@ public:
            CKGUID typeGuid,
            const std::string &typeName,
            int dataSize,
+           CKDWORD caps,
+           int layoutGeneration,
            const std::string &layoutSignature,
            const std::string &error = std::string());
 
@@ -379,6 +384,9 @@ public:
     CKGUID TypeGuid() const;
     std::string TypeName() const;
     int DataSize() const;
+    CKDWORD Caps() const;
+    int LayoutGeneration() const;
+    bool IsSetting() const;
     std::string Describe() const;
 
     bool ResolveIndex(ScriptBridgeSlotKind expected, int &index, std::string &error) const;
@@ -396,6 +404,8 @@ private:
     CKGUID m_TypeGuid;
     std::string m_TypeName;
     int m_DataSize = 0;
+    CKDWORD m_Caps = 0;
+    int m_LayoutGeneration = 0;
     std::string m_LayoutSignature;
     std::string m_Error;
 };
@@ -418,11 +428,24 @@ public:
     BBCallBuilder *Call();
     BBTaskBuilder *Spawn();
     BBBinding *Bind();
+    BBBinding *Configure();
     BBSlot *In(const std::string &name, int occurrence = 0) const;
+    BBSlot *Input(const std::string &name, int occurrence = 0) const;
     BBSlot *Out(const std::string &name, int occurrence = 0) const;
+    BBSlot *Output(const std::string &name, int occurrence = 0) const;
     BBSlot *Pin(const std::string &name, int occurrence = 0) const;
     BBSlot *Pout(const std::string &name, int occurrence = 0) const;
+    BBSlot *Setting(const std::string &name, int occurrence = 0) const;
     BBSlot *Local(const std::string &name, int occurrence = 0) const;
+    CKGUID Guid() const;
+    std::string Name() const;
+    std::string Category() const;
+    std::string QualifiedName() const;
+    CKDWORD BehaviorFlags() const;
+    CKDWORD PrototypeFlags() const;
+    CK_CLASSID CompatibleClassId() const;
+    int NeededManagerCount() const;
+    CKGUID NeededManagerGuid(int index) const;
     std::string Describe() const;
 
 private:
@@ -476,6 +499,11 @@ public:
     BBBinding *SourceSlot(BBSlot *pin, ParamRef *source);
     BBBinding *Operation(const std::string &pinName, ParamOp *operation);
     BBBinding *OperationSlot(BBSlot *pin, ParamOp *operation);
+    BBBinding *SetSetting(BBSlot *setting, ParamValue *value);
+    BBBinding *SetSettingString(BBSlot *setting, const std::string &value);
+    bool Validate(const CKBehaviorContext &ctx) const;
+    BBSpec *Decl() const;
+    BBInstance *SpawnInstance(const CKBehaviorContext &ctx);
 
     BBTask *Start(const CKBehaviorContext &ctx);
     BBTask *StartName(const CKBehaviorContext &ctx, const std::string &inputName);
@@ -517,6 +545,7 @@ private:
     bool SetLiveValue(BBSlot *slot, const ScriptParamValue &value, const char *method);
     bool SourceForPin(BBSlot *slot, ParamRef *source, const char *method);
     bool OperationForPin(BBSlot *slot, ParamOp *operation, const char *method);
+    bool SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, const char *method);
     void ClearOwnedGraphLinks();
     void SetError(const std::string &error) const;
     BBTask *ReturnTask() const;
@@ -532,6 +561,38 @@ private:
     std::string m_DefaultStartInput;
     std::string m_DefaultStopInput;
     bool m_Managed = false;
+};
+
+class BBInstance final : public RefCounted {
+public:
+    BBInstance(ScriptBehaviorBridge *bridge,
+               const CKBehaviorContext &ctx,
+               const ScriptBridgeBBInvocationSpec &request,
+               const std::string &error = std::string());
+    ~BBInstance() override;
+
+    bool IsValid() const;
+    std::string Error() const;
+    BBSpec *Decl() const;
+    BehaviorRef *Behavior() const;
+    bool Start(BBSlot *input);
+    bool Step(const CKBehaviorContext &ctx);
+    bool Stop();
+    bool OutputActive(BBSlot *output) const;
+    ParamRef *Pin(BBSlot *pin) const;
+    ParamRef *Pout(BBSlot *pout) const;
+    bool SetSetting(BBSlot *setting, const std::string &value);
+    bool Destroy();
+    bool Raise(const CKBehaviorContext &ctx) const;
+
+private:
+    void SetError(const std::string &error) const;
+
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CKBehaviorContext m_Context;
+    ScriptBridgeBBInvocationSpec m_Request;
+    mutable std::string m_Error;
+    BBTask *m_Task = nullptr;
 };
 
 class BBCallBuilder final : public RefCounted {
@@ -676,6 +737,8 @@ public:
     ParamRef *Pout(int index) const;
     ParamRef *PoutSlot(BBSlot *slot) const;
     bool Raise(const CKBehaviorContext &ctx) const;
+    CK_ID BridgeTaskId() const;
+    int BridgeGeneration() const;
 
 private:
     ScriptBridgeExecutionState State() const;

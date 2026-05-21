@@ -26,6 +26,7 @@ class BBPrototype;
 class BBSpec;
 class BBSlot;
 class BBBinding;
+class BBInstance;
 class BBResult;
 class BBTask;
 class GraphTask;
@@ -42,10 +43,18 @@ enum class ScriptBridgeSlotKind {
     Output,
     Pin,
     Pout,
+    Setting,
     Local,
     OperationIn,
     OperationOut,
     Standalone
+};
+
+enum class ScriptBridgeSlotCaps : CKDWORD {
+    None = 0,
+    Setting = 1u << 0,
+    Dynamic = 1u << 1,
+    Internal = 1u << 2,
 };
 
 enum class ScriptBridgeInputBindingKind : CKBYTE {
@@ -130,6 +139,22 @@ inline void SetScriptBridgeTaskFlag(CKDWORD &flags, ScriptBridgeTaskFlags flag, 
     }
 }
 
+inline CKDWORD ScriptBridgeSlotCapMask(ScriptBridgeSlotCaps cap) {
+    return static_cast<CKDWORD>(cap);
+}
+
+inline bool HasScriptBridgeSlotCap(CKDWORD caps, ScriptBridgeSlotCaps cap) {
+    return (caps & ScriptBridgeSlotCapMask(cap)) != 0;
+}
+
+inline void SetScriptBridgeSlotCap(CKDWORD &caps, ScriptBridgeSlotCaps cap, bool enabled) {
+    if (enabled) {
+        caps |= ScriptBridgeSlotCapMask(cap);
+    } else {
+        caps &= ~ScriptBridgeSlotCapMask(cap);
+    }
+}
+
 struct ScriptBridgeIndexedValue {
     int PinIndex = -1;
     ScriptParamValue Value;
@@ -203,6 +228,7 @@ struct ScriptBridgeLayoutParamSlot {
     ScriptBridgeSlotKind Kind = ScriptBridgeSlotKind::Standalone;
     int Index = -1;
     CK_ID ParameterId = 0;
+    CKDWORD Caps = 0;
     std::string Name;
     CKGUID TypeGuid;
     std::string TypeName;
@@ -214,11 +240,20 @@ struct ScriptBridgeLayoutRecord {
     CK_ID BehaviorId = 0;
     CKGUID PrototypeGuid;
     ScriptBridgeObjectStamp BehaviorStamp;
+    std::string Name;
+    std::string Category;
+    std::string QualifiedName;
+    CKDWORD BehaviorFlags = 0;
+    CKDWORD PrototypeFlags = 0;
+    CK_CLASSID CompatibleClassId = 0;
+    int LayoutGeneration = 0;
     std::string Signature;
+    std::vector<CKGUID> NeededManagers;
     std::vector<ScriptBridgeLayoutIoSlot> Inputs;
     std::vector<ScriptBridgeLayoutIoSlot> Outputs;
     std::vector<ScriptBridgeLayoutParamSlot> Pins;
     std::vector<ScriptBridgeLayoutParamSlot> Pouts;
+    std::vector<ScriptBridgeLayoutParamSlot> Settings;
     std::vector<ScriptBridgeLayoutParamSlot> Locals;
 };
 
@@ -230,6 +265,7 @@ struct ScriptBridgeBBInvocationSpec {
     CK_ID OwnerId = 0;
     CK_ID TargetId = 0;
     std::vector<ScriptBridgeIndexedValue> IndexedParameters;
+    std::vector<ScriptBridgeIndexedValue> IndexedSettings;
     std::vector<ScriptBridgeInputSource> SourceParameters;
     std::vector<ScriptBridgeOperationSpec> OperationParameters;
 };
@@ -259,6 +295,7 @@ public:
     void ReleasePrototype(BBPrototype *prototype);
     BBResult *RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     BBTask *StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
+    bool SetTaskSetting(CK_ID taskId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
     CKBehaviorPrototype *ResolvePrototypeObject(const ScriptBridgeBBInvocationSpec &request, std::string &error) const;
     const ScriptBridgeLayoutRecord *GetBehaviorLayout(CK_ID behaviorId, const ScriptBridgeObjectStamp &stamp) const;
     const ScriptBridgeLayoutRecord *GetPrototypeLayout(const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request) const;

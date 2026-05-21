@@ -32,6 +32,11 @@ int BehaviorLayout::PoutCount() const {
     return layout ? static_cast<int>(layout->Pouts.size()) : 0;
 }
 
+int BehaviorLayout::SettingCount() const {
+    const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+    return layout ? static_cast<int>(layout->Settings.size()) : 0;
+}
+
 int BehaviorLayout::LocalCount() const {
     const ScriptBridgeLayoutRecord *layout = LayoutRecord();
     return layout ? static_cast<int>(layout->Locals.size()) : 0;
@@ -49,12 +54,14 @@ std::string BehaviorLayout::OutputNameAt(int index) const {
 
 ParamInfo *BehaviorLayout::Pin(int index) const { return ParameterInfo(ScriptBridgeSlotKind::Pin, index); }
 ParamInfo *BehaviorLayout::Pout(int index) const { return ParameterInfo(ScriptBridgeSlotKind::Pout, index); }
+ParamInfo *BehaviorLayout::Setting(int index) const { return ParameterInfo(ScriptBridgeSlotKind::Setting, index); }
 ParamInfo *BehaviorLayout::Local(int index) const { return ParameterInfo(ScriptBridgeSlotKind::Local, index); }
 
 int BehaviorLayout::FindInput(const std::string &name, int occurrence) const { return FindIo(true, name, occurrence); }
 int BehaviorLayout::FindOutput(const std::string &name, int occurrence) const { return FindIo(false, name, occurrence); }
 int BehaviorLayout::FindPin(const std::string &name, int occurrence) const { return FindParameter(ScriptBridgeSlotKind::Pin, name, occurrence); }
 int BehaviorLayout::FindPout(const std::string &name, int occurrence) const { return FindParameter(ScriptBridgeSlotKind::Pout, name, occurrence); }
+int BehaviorLayout::FindSetting(const std::string &name, int occurrence) const { return FindParameter(ScriptBridgeSlotKind::Setting, name, occurrence); }
 int BehaviorLayout::FindLocal(const std::string &name, int occurrence) const { return FindParameter(ScriptBridgeSlotKind::Local, name, occurrence); }
 
 std::string BehaviorLayout::Describe() const {
@@ -72,6 +79,12 @@ std::string BehaviorLayout::Describe() const {
     text += "\nPouts:";
     for (int i = 0; i < PoutCount(); ++i) {
         ParamInfo *info = Pout(i);
+        text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", i));
+        if (info) info->Release();
+    }
+    text += "\nSettings:";
+    for (int i = 0; i < SettingCount(); ++i) {
+        ParamInfo *info = Setting(i);
         text += fmt::format("\n  {}", info ? info->Describe() : fmt::format("#{} <invalid>", i));
         if (info) info->Release();
     }
@@ -109,6 +122,8 @@ ParamInfo *BehaviorLayout::ParameterInfo(ScriptBridgeSlotKind kind, int index) c
         slots = &layout->Pins;
     } else if (kind == ScriptBridgeSlotKind::Pout) {
         slots = &layout->Pouts;
+    } else if (kind == ScriptBridgeSlotKind::Setting) {
+        slots = &layout->Settings;
     } else if (kind == ScriptBridgeSlotKind::Local) {
         slots = &layout->Locals;
     }
@@ -133,7 +148,11 @@ int BehaviorLayout::FindIo(bool input, const std::string &name, int occurrence) 
 
 int BehaviorLayout::FindParameter(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const {
     if (occurrence < 0) return -1;
-    const int count = kind == ScriptBridgeSlotKind::Pin ? PinCount() : (kind == ScriptBridgeSlotKind::Pout ? PoutCount() : LocalCount());
+    const int count = kind == ScriptBridgeSlotKind::Pin
+        ? PinCount()
+        : (kind == ScriptBridgeSlotKind::Pout
+            ? PoutCount()
+            : (kind == ScriptBridgeSlotKind::Setting ? SettingCount() : LocalCount()));
     int seen = 0;
     for (int i = 0; i < count; ++i) {
         ParamInfo *info = ParameterInfo(kind, i);

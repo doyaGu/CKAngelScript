@@ -1,6 +1,7 @@
 #include "ScriptBridgeHandles.h"
 
 #include <algorithm>
+#include <functional>
 
 #include <fmt/format.h>
 
@@ -18,6 +19,54 @@ void AppendLayoutSignature(std::string &signature, const std::string &text) {
 void AppendLayoutSignature(std::string &signature, const CKGUID &guid) {
     signature += LayoutGuidKey(guid);
     signature += '\n';
+}
+
+int LayoutGenerationFromSignature(const std::string &signature) {
+    return static_cast<int>(std::hash<std::string>{}(signature) & 0x7fffffff);
+}
+
+bool SetLocalParameterValueByIndex(CKBehavior *behavior,
+                                   int index,
+                                   const ScriptParamValue &value,
+                                   std::string &error) {
+    if (!behavior) {
+        error = "Behavior is not valid.";
+        return false;
+    }
+    if (index < 0 || index >= behavior->GetLocalParameterCount()) {
+        error = fmt::format("Local parameter #{} is out of range for Building Block '{}' (local count: {}).",
+            index,
+            SafeString(behavior->GetPrototypeName()),
+            behavior->GetLocalParameterCount());
+        return false;
+    }
+    CKParameterLocal *local = behavior->GetLocalParameter(index);
+    if (!local) {
+        error = fmt::format("Local parameter #{} is not available.", index);
+        return false;
+    }
+    CKERROR err = SetBridgeParamValue(local, value, error);
+    if (err != CK_OK) {
+        error = fmt::format("Failed to set local parameter #{} '{}' (expected {}, CKERROR {}): {}",
+            index,
+            SafeString(local->GetName()),
+            ParameterTypeLabel(behavior->GetCKContext(), local),
+            err,
+            error.empty() ? "conversion failed" : error);
+        return false;
+    }
+    return true;
+}
+
+bool ApplyIndexedLocalParameters(CKBehavior *behavior,
+                                 const std::vector<ScriptBridgeIndexedValue> &parameters,
+                                 std::string &error) {
+    for (const ScriptBridgeIndexedValue &entry : parameters) {
+        if (!SetLocalParameterValueByIndex(behavior, entry.PinIndex, entry.Value, error)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace ScriptBehaviorBridgeInternal
@@ -338,6 +387,26 @@ BBTask *ScriptBehaviorBridge::StartTask(const ScriptBridgeBBInvocationSpec &requ
     it->second.LastState = ExecuteOnce(behavior, ctx, inputIndex, &it->second.InputSources, true);
 
     return new BBTask(this, it->second.TaskId, it->second.Generation);
+}
+
+bool ScriptBehaviorBridge::SetTaskSetting(CK_ID taskId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error) {
+    CKBehavior *behavior = GetTaskBehavior(taskId, generation);
+    if (!behavior) {
+        error = "BBInstance behavior is not available.";
+        return false;
+    }
+    if (!ScriptBehaviorBridgeInternal::SetLocalParameterValueByIndex(behavior, settingIndex, value, error)) {
+        return false;
+    }
+    CKERROR err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED);
+    if (err != CK_OK) {
+        error = fmt::format("Building Block SETTINGSEDITED callback failed for '{}' (CKERROR {}).",
+            SafeString(behavior->GetPrototypeName()),
+            err);
+        return false;
+    }
+    m_BehaviorLayouts.erase(behavior->GetID());
+    return true;
 }
 
 bool ScriptBehaviorBridge::StepTask(CK_ID taskId, int generation, const CKBehaviorContext &ctx, int inputIndex) {
@@ -861,6 +930,10 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         return fail(fmt::format("Failed to set Building Block owner (CKERROR {}).", err));
     }
 
+    if (!ScriptBehaviorBridgeInternal::ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
+        return fail(error);
+    }
+
     err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &ctx);
     if (err != CK_OK) {
         return fail(fmt::format("Building Block CREATE callback failed (CKERROR {}).", err));
@@ -1042,6 +1115,10 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
 
     CKContext *context = behavior->GetCKContext();
     layout.PrototypeGuid = behavior->GetPrototypeGuid();
+    layout.Name = SafeString(behavior->GetPrototypeName());
+    layout.QualifiedName = layout.Name;
+    layout.BehaviorFlags = static_cast<CKDWORD>(behavior->GetFlags());
+    layout.CompatibleClassId = behavior->GetCompatibleClassID();
 
     layout.Inputs.reserve(behavior->GetInputCount());
     for (int i = 0; i < behavior->GetInputCount(); ++i) {
@@ -1085,20 +1162,29 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
     }
 
     layout.Locals.reserve(behavior->GetLocalParameterCount());
+    layout.Settings.reserve(behavior->GetLocalParameterCount());
     for (int i = 0; i < behavior->GetLocalParameterCount(); ++i) {
         CKParameterLocal *param = behavior->GetLocalParameter(i);
         ScriptBridgeLayoutParamSlot slot;
-        slot.Kind = ScriptBridgeSlotKind::Local;
+        const bool isSetting = behavior->IsLocalParameterSetting(i);
+        slot.Kind = isSetting ? ScriptBridgeSlotKind::Setting : ScriptBridgeSlotKind::Local;
         slot.Index = i;
         slot.ParameterId = param ? param->GetID() : 0;
+        slot.Caps = 0;
+        SetScriptBridgeSlotCap(slot.Caps, ScriptBridgeSlotCaps::Setting, isSetting);
         slot.Name = SafeString(param ? param->GetName() : nullptr);
         slot.TypeGuid = param ? param->GetGUID() : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
         slot.DataSize = param ? param->GetDataSize() : ParameterDefaultSize(context, slot.TypeGuid);
-        layout.Locals.push_back(slot);
+        if (isSetting) {
+            layout.Settings.push_back(slot);
+        } else {
+            layout.Locals.push_back(slot);
+        }
     }
 
     layout.Signature = LayoutSignature(layout);
+    layout.LayoutGeneration = ScriptBehaviorBridgeInternal::LayoutGenerationFromSignature(layout.Signature);
     return layout;
 }
 
@@ -1110,6 +1196,19 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
     CKContext *context = m_Manager ? m_Manager->GetCKContext() : nullptr;
     if (!prototype) {
         return layout;
+    }
+    CKObjectDeclaration *decl = prototype->GetSoureObjectDeclaration();
+    layout.Name = SafeString(prototype->GetName());
+    layout.Category = decl ? SafeString(decl->GetCategory()) : std::string();
+    layout.QualifiedName = layout.Category.empty() ? layout.Name : layout.Category + "/" + layout.Name;
+    layout.BehaviorFlags = static_cast<CKDWORD>(prototype->GetBehaviorFlags());
+    layout.PrototypeFlags = static_cast<CKDWORD>(prototype->GetFlags());
+    layout.CompatibleClassId = decl ? decl->GetCompatibleClassId() : prototype->GetApplyToClassID();
+    if (decl) {
+        layout.NeededManagers.reserve(decl->GetManagerNeededCount());
+        for (int i = 0; i < decl->GetManagerNeededCount(); ++i) {
+            layout.NeededManagers.push_back(decl->GetManagerNeeded(i));
+        }
     }
 
     layout.Inputs.reserve(prototype->GetInputCount());
@@ -1151,19 +1250,28 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
     }
 
     layout.Locals.reserve(prototype->GetLocalParameterCount());
+    layout.Settings.reserve(prototype->GetLocalParameterCount());
     for (int i = 0; i < prototype->GetLocalParameterCount(); ++i) {
         CKPARAMETER_DESC *param = GetPrototypeLocalParameter(prototype, i);
         ScriptBridgeLayoutParamSlot slot;
-        slot.Kind = ScriptBridgeSlotKind::Local;
+        const bool isSetting = param && param->Type == 3;
+        slot.Kind = isSetting ? ScriptBridgeSlotKind::Setting : ScriptBridgeSlotKind::Local;
         slot.Index = i;
+        slot.Caps = 0;
+        SetScriptBridgeSlotCap(slot.Caps, ScriptBridgeSlotCaps::Setting, isSetting);
         slot.Name = SafeString(param ? param->Name : nullptr);
         slot.TypeGuid = param ? param->Guid : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
         slot.DataSize = ParameterDefaultSize(context, slot.TypeGuid);
-        layout.Locals.push_back(slot);
+        if (isSetting) {
+            layout.Settings.push_back(slot);
+        } else {
+            layout.Locals.push_back(slot);
+        }
     }
 
     layout.Signature = LayoutSignature(layout);
+    layout.LayoutGeneration = ScriptBehaviorBridgeInternal::LayoutGenerationFromSignature(layout.Signature);
     return layout;
 }
 
@@ -1171,6 +1279,10 @@ std::string ScriptBehaviorBridge::LayoutSignature(const ScriptBridgeLayoutRecord
     std::string signature;
     ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, layout.Prototype ? "prototype" : "behavior");
     ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, layout.PrototypeGuid);
+    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("behaviorFlags:{} prototypeFlags:{} compatible:{}",
+        layout.BehaviorFlags,
+        layout.PrototypeFlags,
+        layout.CompatibleClassId));
     ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("in:{}", layout.Inputs.size()));
     for (const auto &slot : layout.Inputs) {
         ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, slot.Name);
@@ -1183,12 +1295,13 @@ std::string ScriptBehaviorBridge::LayoutSignature(const ScriptBridgeLayoutRecord
     auto appendParams = [&](const char *label, const std::vector<ScriptBridgeLayoutParamSlot> &slots) {
         ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("{}:{}", label, slots.size()));
         for (const auto &slot : slots) {
-            ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("{}:{}:{}", slot.Index, slot.ParameterId, slot.Name));
+            ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("{}:{}:{}:{}", slot.Index, slot.ParameterId, slot.Caps, slot.Name));
             ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, slot.TypeGuid);
         }
     };
     appendParams("pin", layout.Pins);
     appendParams("pout", layout.Pouts);
+    appendParams("setting", layout.Settings);
     appendParams("local", layout.Locals);
     return signature;
 }

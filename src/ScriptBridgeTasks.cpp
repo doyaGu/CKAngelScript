@@ -122,6 +122,9 @@ bool BBTask::Raise(const CKBehaviorContext &ctx) const {
     return RaiseExecutionState(State(), ctx);
 }
 
+CK_ID BBTask::BridgeTaskId() const { return m_TaskId; }
+int BBTask::BridgeGeneration() const { return m_Generation; }
+
 GraphTask::GraphTask(ScriptBehaviorBridge *bridge, CK_ID watchId, int generation)
     : m_Bridge(bridge), m_WatchId(watchId), m_Generation(generation) {}
 
