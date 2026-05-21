@@ -34,15 +34,16 @@ class DoorComponent {
     [bb param="Delay BB" default="Logics/Time/Timer"]
     BBPrototype@ DelayBB;
 
-    [param param="Text BB" type="bbspec" default="Interface/Text/2D Text"]
-    BBSpec@ TextBB;
+    [param param="Text BB" type="bbdecl" default="Interface/Text/2D Text"]
+    BBDecl@ TextBB;
 
     [bbslot prototype="Interface/Text/2D Text" slot="pin" slotName="Text"]
     BBSlot@ TextPin;
 
-    [bbbind prototype="Interface/Text/2D Text" managed=true start="On" stop="Off"
-            required="in:On,in:Off,pin:Font,pin:Text"]
-    BBBinding@ TextBinding;
+    [bbconfig prototype="Interface/Text/2D Text" managed=true
+              settings="Text Properties=Screen Proportionnal,WordWrap"
+              required="in:On,in:Off,pin:Font,pin:Text,setting:Text Properties"]
+    BBConfig@ TextConfig;
 
     [bb param="Existing Delay" type="behavior"]
     BBPrototype@ ExistingDelayPrototype;
@@ -72,8 +73,9 @@ Recognized metadata keywords:
 - `param`, `input`, `field`, `property`, `CKInput`, `CKParam`, `CKComponentInput`
 - `behavior` for `BehaviorRef@`
 - `bb` for `BBPrototype@`
+- `bbdecl` for `BBDecl@`
 - `bbslot` for `BBSlot@`
-- `bbbind` for `BBBinding@`
+- `bbconfig` for `BBConfig@`
 
 Recognized keys:
 
@@ -82,14 +84,15 @@ Recognized keys:
 - `type`, `kind`: parameter/editor type
 - `default`, `value`: default local source value
 - `update`, `sync`: whether scalar/object values are refreshed before each lifecycle/update call
-- `prototype`, `proto`, `bbname`, `bbquery`: prototype query for `BBSlot@`
-- `slot`, `slotKind`: one of `input`, `output`, `pin`, `pout`, or `local`
+- `prototype`, `proto`, `bbname`, `bbquery`: prototype query for `BBDecl@`, `BBConfig@`, or `BBSlot@`
+- `slot`, `slotKind`: one of `input`, `output`, `pin`, `pout`, `setting`, or `local`
 - `slotName`: slot name for `BBSlot@`
 - `occurrence`: duplicate-name occurrence for `BBSlot@`
-- `managed`: for `BBBinding@`; when true, Component lifecycle stops/destroys the owned runtime task
-- `start`, `stop`: default input names for `BBBinding.Start(ctx)` / `Stop(ctx)`
-- `required`: comma/semicolon/pipe separated required slots for `BBBinding@`, such as `in:On,pin:Text,pout:Font Created`
-- `inputs`, `outputs`, `pins`, `pouts`, `locals`: shorthand required slot lists for `BBBinding@`
+- `managed`: for `BBConfig@`; when true, Component lifecycle destroys the owned runtime task/config state during disable/reset/delete
+- `start`, `stop`: accepted for compatibility; v3 scripts should use explicit `BBInstance.Start(slot)` and `Destroy()`
+- `required`: comma/semicolon/pipe separated required slots for `BBConfig@`, such as `in:On,pin:Text,pout:Font Created,setting:Text Properties`
+- `settings`: semicolon-separated `Name=Value` pre-create setting values for `BBConfig@`
+- `inputs`, `outputs`, `pins`, `pouts`, `locals`, `requiredSettings`: shorthand required slot lists for `BBConfig@`
 
 ## Manifest Syntax
 
@@ -100,9 +103,9 @@ param field=Speed type=float name="Speed" default=1.0
 param field=Target type=3dentity name="Target"
 behavior field=OpenGraph param="Open Graph"
 bb field=DelayBB param="Delay BB" default="Logics/Time/Timer"
-param field=TextBB type=bbspec param="Text BB" default="Interface/Text/2D Text"
+param field=TextBB type=bbdecl param="Text BB" default="Interface/Text/2D Text"
 bbslot field=TextPin prototype="Interface/Text/2D Text" slot=pin slotName=Text
-bbbind field=TextBinding prototype="Interface/Text/2D Text" managed=true start=On stop=Off required="in:On,in:Off,pin:Font,pin:Text"
+bbconfig field=TextConfig prototype="Interface/Text/2D Text" managed=true settings="Text Properties=Screen Proportionnal,WordWrap" required="in:On,in:Off,pin:Font,pin:Text,setting:Text Properties"
 bb field=ExistingDelayPrototype type=behavior param="Existing Delay"
 ```
 
@@ -119,7 +122,7 @@ Manifest declarations override metadata declarations by field name.
 
 ## Supported Field Types
 
-Current v1 supports:
+Current supported field types:
 
 - `int`, `uint`, `CK_ID`
 - `float`
@@ -136,17 +139,17 @@ Current v1 supports:
 - `BehaviorRef@`
 - `ParamTypeInfo@`
 - `BBPrototype@`
-- `BBSpec@`
+- `BBDecl@`
 - `BBSlot@`
-- `BBBinding@`
+- `BBConfig@`
 
 Value type aliases include `guid`, `vector`, `vector2`, `2dvector`, `color`, `quat`, `quaternion`, and `matrix`. Their default Virtools parameter GUIDs are `CKPGUID_STRING` for `CKGUID`, `CKPGUID_VECTOR`, `CKPGUID_2DVECTOR`, `CKPGUID_COLOR`, `CKPGUID_QUATERNION`, and `CKPGUID_MATRIX`.
 
 Numeric defaults accept comma, semicolon, pipe, or whitespace separators. `VxColor` accepts float channels (`1,0,0,1`), byte-style channels (`255,0,0,255`), and `#RRGGBB` / `#RRGGBBAA`. `VxMatrix` accepts `identity` or 16 numeric values in row-major order.
 
-These value conversions are implemented in the shared `ScriptParameterConversion` layer, so Component injection and `BehaviorRef` / `BB.Call` / `BB.Spawn` parameter IO use the same parsing and CK parameter read/write rules.
+These value conversions are implemented in the shared registry/codec layer, so Component injection, `BehaviorRef`, `BBConfig`, `BBInstance`, and low-level `BB.Call` / `BB.Spawn` parameter IO use the same CK parameter read/write rules.
 
-When a declaration uses a real Virtools parameter type name, the Component resolves it through `CKParameterManager` before falling back to built-in aliases. This supports SDK/game/plugin registered enum and flags types without maintaining hard-coded GUID lists. Script fields still use `int` / `uint`; numeric defaults are accepted, enum/flags text defaults are passed to the SDK string parser for that parameter type, and bridge v2 exposes the SDK display text lazily through `ParamRef.GetText()`.
+When a declaration uses a real Virtools parameter type name, the Component resolves it through `CKParameterManager` before falling back to built-in aliases. This supports SDK/game/plugin registered enum and flags types without maintaining hard-coded GUID lists. Script fields still use `int` / `uint`; numeric defaults are accepted, enum/flags text defaults are passed to the SDK string parser for that parameter type, and the bridge exposes the SDK display text lazily through `ParamRef.GetText()`.
 
 `message` / `attribute` and other SDK string-backed DWORD parameter types use the current `CKParameterTypeDesc` conversion path. If a type exposes a `StringFunction`, enum table, or flags table, defaults and string overrides are delegated to the SDK instead of a CKAngelScript hard-coded list.
 
@@ -158,33 +161,45 @@ Object metadata can use editor type aliases such as `object`, `behavior`, `3dent
 
 `BBPrototype@` defaults to a string input containing a prototype name, `Category/Name`, or `guid:0x...,0x...`. If the declaration uses `type="behavior"` / `type=behavior`, the input parameter uses `CKPGUID_BEHAVIOR` instead; the injected `BBPrototype@` is built from the referenced behavior's prototype GUID.
 
-`BBSpec@` uses the same string/GUID/behavior source rules as `BBPrototype@`, but exposes the ergonomic slot-binding API. `BBSlot@` binds a setup-time slot from a `BBSpec`; declare `prototype`, `slot`, and `slotName` in metadata/manifest so native injection can resolve the slot once and report candidates on failure.
+`BBDecl@` uses the same string/GUID/behavior source rules as `BBPrototype@`, but exposes real prototype metadata and the v3 layout API. `BBSlot@` binds a setup-time slot from a `BBDecl`; declare `prototype`, `slot`, and `slotName` in metadata/manifest so native injection can resolve the slot once and report candidates on failure.
 
-`BBBinding@` is the zero-boilerplate Component facade for a reusable runtime Building Block. It resolves the prototype during injection, validates `required` slots immediately, caches slots by name, stores pending `Set` / `Source` / `Operation` bindings before startup, and owns an optional runtime `BBTask@` after `Start(ctx)`.
+`BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, validates `required` slots immediately, applies `settings` before `CKM_BEHAVIORCREATE`, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(ctx)`.
 
 ```angelscript
 class HudText {
     CK2dEntity@ Target;
 
-    [bbbind prototype="Interface/Text/2D Text" managed=true start="On" stop="Off"
-            required="in:On,in:Off,pin:Font,pin:Text,pin:Offset"]
-    BBBinding@ Text;
+    [bbconfig prototype="Interface/Text/2D Text" managed=true
+              settings="Text Properties=Screen Proportionnal,WordWrap"
+              required="in:On,in:Off,pin:Font,pin:Text,pin:Offset,setting:Text Properties"]
+    BBConfig@ Text;
+
+    BBInstance@ TextInstance;
+    BBSlot@ TextOn;
+    BBSlot@ TextText;
+    BBSlot@ TextOffset;
 
     void Start(const CKBehaviorContext &in ctx) {
-        Text.Target(Target)
-            .Set("Text", "Ready")
-            .Set("Offset", Param::Vector2(Vx2DVector(0, 0)))
-            .Start(ctx);
+        BBDecl@ decl = Text.Decl();
+        @TextOn = decl.Input("On");
+        @TextText = decl.Pin("Text");
+        @TextOffset = decl.Pin("Offset");
+
+        @TextInstance = Text.Target(Target)
+            .Set(TextText, "Ready")
+            .Set(TextOffset, Param::Vector2(Vx2DVector(0, 0)))
+            .Spawn(ctx);
+        TextInstance.Start(TextOn);
     }
 
     void Update(const CKBehaviorContext &in ctx) {
-        Text.Set("Text", "Running");
-        Text.Step(ctx);
+        TextInstance.Pin(TextText).SetString("Running");
+        TextInstance.Step(ctx);
     }
 }
 ```
 
-`managed=true` does not autostart the BB. It means the Component calls `Stop()` during disable/pause and `Destroy()` during reset/delete so the script does not leak runtime BB tasks. If `prototype` is omitted, the binding uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBSpec@`.
+`managed=true` does not autostart the BB. It means the Component destroys managed runtime state during disable/pause/reset/delete so the script does not leak runtime BB tasks. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
 
 `ParamTypeInfo@` injects the runtime CK parameter type metadata for the connected input source. It is useful when a component accepts plugin-defined or enum/flags parameters and wants to expose `Name()`, `Guid()`, `Describe()`, `Enum()`, `Flags()`, or `Struct()` without guessing the data layout.
 
@@ -225,7 +240,7 @@ All helpers also accept `CKContext@` in place of `CKBehaviorContext`. The type a
 - The Component creates missing input parameters and default local sources on first script object creation.
 - On script identity or manifest change, the old script object is released, managed input parameters no longer declared are removed, and the object is rebuilt.
 - Field injection runs before `OnLoad` and `Awake`.
-- Scalar, string, math value, CK object, `BehaviorRef@`, `ParamTypeInfo@`, `BBPrototype@`, `BBSpec@`, `BBSlot@`, and `BBBinding@` fields are refreshed before later lifecycle/update calls unless `update=false` / `sync=false` is declared.
+- Scalar, string, math value, CK object, `BehaviorRef@`, `ParamTypeInfo@`, `BBPrototype@`, `BBDecl@`, `BBSlot@`, and `BBConfig@` fields are refreshed before later lifecycle/update calls unless `update=false` / `sync=false` is declared.
 - Ref-counted handle fields are replaced through bridge-managed release helpers, so changing a behavior or BB prototype parameter no longer requires a full script object rebuild.
 - CK object injection validates the actual object against the script field type before writing the handle, so a `CKMaterial@` parameter cannot silently be written into a `CK3dEntity@` field.
 
@@ -243,14 +258,14 @@ Configuration errors activate the Component `Error` output:
 - failure to read or inject parameter values
 - object value incompatible with the declared script field type
 
-Diagnostics include the script field name, declared manifest/metadata type, generated CK parameter type, actual AngelScript field type, and relevant source value when available. Missing-field errors also list writable public field candidates. `BBPrototype@` / `BBSpec@` failures report the unresolved BB name/GUID/behavior source, `BBSlot@` failures report prototype, slot kind, slot name, occurrence, and candidates, `BBBinding@` failures report prototype, lifecycle/default input metadata, required slots, and slot candidates, and `ParamTypeInfo@` failures report the source parameter's real CK type.
+Diagnostics include the script field name, declared manifest/metadata type, generated CK parameter type, actual AngelScript field type, and relevant source value when available. Missing-field errors also list writable public field candidates. `BBPrototype@` / `BBDecl@` failures report the unresolved BB name/GUID/behavior source, `BBSlot@` failures report prototype, slot kind, slot name, occurrence, and candidates, `BBConfig@` failures report prototype, setting values, required slots, and slot candidates, and `ParamTypeInfo@` failures report the source parameter's real CK type.
 
 When `Output Error Message` is enabled, the error text is written to the Component error output parameters.
 
 ## Remaining Gaps
 
 - Enum/flags values are represented as `int` / `uint` in scripts. Runtime lookup is available through `Param::*`; generated compile-time hints can be produced with `tools/generate_angelscript_catalog.py`.
-- No dedicated BB prototype picker; `BBPrototype@` / `BBSpec@` / `BBBinding@` currently use string, `Category/Name`, GUID text, or SDK-driven `BB::Find/FindAll/At`. `BBSlot@` and `BBBinding@` add setup-time slot binding on top of the resolved prototype.
+- No dedicated BB prototype picker; `BBPrototype@` / `BBDecl@` / `BBConfig@` currently use string, `Category/Name`, GUID text, or SDK-driven `BB::Find/FindAll/At`. `BBSlot@` and `BBConfig@` add setup-time slot binding on top of the resolved prototype.
 - A dedicated BB prototype picker is still preferable long term. `type=behavior` is a practical editor-facing fallback because Virtools already has a behavior picker.
 - Managed parameter pruning is intentionally tied to manifest/metadata rebuilds, not to arbitrary runtime graph edits.
 - Generic plugin-defined struct parameters are not decoded field-by-field. Use `ParamRef@` source connections or SDK string-backed defaults for unknown types.

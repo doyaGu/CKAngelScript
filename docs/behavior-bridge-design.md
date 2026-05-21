@@ -1,8 +1,8 @@
-# AngelScript Behavior Bridge v2
+# AngelScript Behavior Bridge v3
 
 ## Core Model
 
-Bridge v2 follows the CK2 behavior model directly. `CKBehavior` input/output IO and `pIn/pOut/pLocal` arrays have stable order, so script code uses index as the canonical identity. Names are only for initialization-time lookup and diagnostics.
+Bridge v3 follows the CK2 behavior model directly. `CKBehavior` input/output IO and `pIn/pOut/pLocal` arrays have stable order, so script code uses index as the canonical identity. Names are only for initialization-time lookup and diagnostics.
 
 The bridge no longer creates a full output snapshot map. `BBResult`, `BBTask`, and `GraphTask` only keep lightweight execution state: return code, error text, current active output indices, and sticky seen output indices. Output parameter values are read lazily through `ParamRef`.
 
@@ -56,81 +56,69 @@ Param::Raw(ctx, "SomeFixedStruct", buffer);
 
 The bridge delegates type names, enum/flags text, object compatibility, and operations to `CKParameterManager`. It does not maintain a hard-coded operation or custom struct table.
 
-## Runtime BB Calls
+## Runtime Building Blocks
 
-Runtime BB creation is index-first:
+The v3 high-level BB model has three phases:
 
-```angelscript
-BBPrototype@ proto = BB::Find(ctx, "Interface/Text/2D Text");
-BehaviorLayout@ layout = proto.Layout();
+1. `BBDecl@` discovers the real SDK prototype declaration and exposes metadata.
+2. `BBConfig@` stores pre-create settings, pin values, sources, operations, owner, and target.
+3. `BBInstance@` owns the runtime `CKBehavior` and steps or destroys it.
 
-int on = layout.FindInput("On");
-int text = layout.FindPin("Text");
-
-BBResult@ result = proto.Call()
-    .Set(text, Param::String("Hello"))
-    .Run(on);
-
-if (!result.ok) {
-    result.Raise(ctx);
-}
-```
-
-For multi-frame BBs, use `Spawn()`:
+Settings are separate from pins. `SetSetting()` is applied before `CKM_BEHAVIORCREATE`, which is required for real BBs such as `2D Text`, `Text Display`, and `Move To` where settings create or retag runtime parameters.
 
 ```angelscript
-BBTask@ task = proto.Spawn()
-    .Set(text, Param::String("FPS: ..."))
-    .Start(on);
+BBDecl@ textDecl = BB::Require(ctx, "Interface/Text/2D Text");
+BBSlot@ on = textDecl.Input("On");
+BBSlot@ textPin = textDecl.Pin("Text");
+BBSlot@ offsetPin = textDecl.Pin("Offset");
+BBSlot@ textProperties = textDecl.Setting("Text Properties");
 
-task.Step(ctx);          // no re-pulse
-task.Step(ctx, on);      // explicit pulse
-```
-
-`BBResult.Pout(index)`, `BBTask.Pout(index)`, and `GraphTask.Pout(index)` return live/lazy parameter handles. `BBResult` owns the temporary runtime behavior until the result handle is released; `BBTask.Destroy()` invalidates task-owned parameter handles.
-
-For script-facing ergonomics, bind `BBSpec` and `BBSlot` during setup. Slots still resolve to the same stable CK indices, but scripts no longer need to carry raw `int` fields for every IO and parameter:
-
-```angelscript
-BBSpec@ text = BB::Require(ctx, "Interface/Text/2D Text");
-BBSlot@ on = text.In("On");
-BBSlot@ textPin = text.Pin("Text");
-
-BBTask@ task = text.Spawn()
+BBConfig@ cfg = textDecl.Configure()
     .Target(target)
+    .SetSetting(textProperties, "Screen Proportionnal,WordWrap")
     .Set(textPin, "FPS: ...")
-    .Start(on);
+    .Set(offsetPin, Param::Vector2(Vx2DVector(0, 0)));
 
-task.Step(ctx, on);
+BBInstance@ inst = cfg.Spawn(ctx);
+inst.Start(on);
 ```
 
-`BBSlot` records the slot kind, index, name, parameter type, and layout signature. Passing a `pout` slot to `Set()`, or using a stale slot after a prototype layout change, fails with a targeted diagnostic. The lower-level `int` API remains available for generated code and performance-sensitive scripts.
+Live parameter updates are explicit and lazy:
 
-For Component scripts that repeatedly drive the same Building Block, `BBBinding@` removes the remaining setup boilerplate. A binding owns the prototype spec, caches slots by name, stores pending parameter/source/operation bindings before startup, and can keep the runtime `BBTask@` alive across frames:
+```angelscript
+ParamRef@ liveText = inst.Pin(textPin);
+liveText.SetString("FPS: 120");
+inst.Step(ctx);
+```
+
+`BBSlot` records the slot kind, index, name, parameter type, layout caps, and layout generation. Passing a `pout` slot to `Set()`, passing a pin slot to `SetSetting()`, or using a stale slot after a dynamic layout change fails with a targeted diagnostic. The lower-level `BBPrototype.Call()` / `Spawn()` and raw index API remain available for generated code and performance-sensitive scripts.
+
+Component metadata can inject the same v3 objects:
 
 ```angelscript
 class FpsOverlay {
     CK2dEntity@ target;
 
-    [bbbind prototype="Interface/Text/2D Text" managed=true start="On" stop="Off"
-            required="in:On,in:Off,pin:Font,pin:Text,pin:Offset"]
-    BBBinding@ text;
+    [bbconfig prototype="Interface/Text/2D Text" managed=true
+              settings="Text Properties=Screen Proportionnal,WordWrap"
+              required="in:On,pin:Text,pin:Offset,setting:Text Properties"]
+    BBConfig@ text;
+
+    BBInstance@ instance;
+    BBSlot@ on;
+    BBSlot@ textPin;
 
     void Start(const CKBehaviorContext &in ctx) {
-        text.Target(target)
-            .Set("Text", "FPS: ...")
-            .Set("Offset", Param::Vector2(Vx2DVector(0, 0)))
-            .Start(ctx);
-    }
-
-    void Update(const CKBehaviorContext &in ctx) {
-        text.Set("Text", "FPS: " + 60);
-        text.Step(ctx);
+        BBDecl@ decl = text.Decl();
+        @on = decl.Input("On");
+        @textPin = decl.Pin("Text");
+        @instance = text.Target(target).Set(textPin, "Ready").Spawn(ctx);
+        instance.Start(on);
     }
 }
 ```
 
-`BBBinding` keeps the same index-first core: string lookup happens once through the binding slot cache, then live updates use the resolved slot index. `managed=true` lets the Component stop/destroy the owned task during disable, pause, reset, and delete. Use lower-level `BBSpec`/`BBSlot` when a script needs multiple independent invocations from the same prototype, and use raw indices for generated or very hot code.
+`BBResult.Pout(index)`, `BBTask.Pout(index)`, `BBInstance.Pout(slot)`, and `GraphTask.Pout(index)` return live/lazy parameter handles. Runtime-owned handles become invalid after `Destroy()`.
 
 ## Catalog Discovery
 
@@ -140,6 +128,7 @@ BB prototype discovery is SDK-driven and uses `CKGetPrototypeDeclaration*` order
 int count = BB::Count(ctx);
 BBPrototype@ first = BB::At(ctx, 0);
 BBPrototype@ text = BB::Find(ctx, "Interface/Text/2D Text");
+BBDecl@ requiredText = BB::Require(ctx, "Interface/Text/2D Text");
 array<BBPrototype@>@ textCandidates = BB::FindAll(ctx, "2D Text");
 
 string category = text.GetCategory();
@@ -148,7 +137,7 @@ CKGUID guid = text.GetGuid();
 string layout = text.Describe();
 ```
 
-`BB::Find` accepts a name, `Category/Name`, or `guid:0x...,0x...` text. Use `occurrence` only when a plain name is intentionally duplicated. `BB::FindAll` returns every matching SDK prototype declaration, so setup code can diagnose duplicate names and then cache the selected `GetGuid()` / layout indices.
+`BB::Require` accepts a name, `Category/Name`, or `guid:0x...,0x...` text and must resolve to exactly one prototype. Zero or multiple candidates produce an invalid `BBDecl@` with candidate diagnostics. `BB::FindAll` returns every matching SDK prototype declaration, so setup code can diagnose duplicate names and then cache the selected GUID and slot handles.
 
 `Param` helpers expose enum/flags/type metadata without hard-coded integer tables:
 
@@ -174,9 +163,10 @@ The generated hints keep the flat GUID functions and add ergonomic helper namesp
 ```angelscript
 CKGUID textGuid = CKASCatalog::BBHints::Interface_Text_2D_Text::Guid();
 BBPrototype@ text = CKASCatalog::BBHints::Interface_Text_2D_Text::Find(ctx);
-BBSpec@ textSpec = CKASCatalog::BBHints::Interface_Text_2D_Text::Spec(ctx);
-BBBinding@ textBinding = CKASCatalog::BBHints::Interface_Text_2D_Text::Binding(ctx);
+BBDecl@ textDecl = CKASCatalog::BBHints::Interface_Text_2D_Text::Decl(ctx);
+BBConfig@ textConfig = CKASCatalog::BBHints::Interface_Text_2D_Text::Config(ctx);
 BBSlot@ textPin = CKASCatalog::BBHints::Interface_Text_2D_Text::Pin_Text(ctx);
+BBSlot@ textProperties = CKASCatalog::BBHints::Interface_Text_2D_Text::Setting_Text_Properties(ctx);
 
 uint flags = CKASCatalog::Flags::Render_Options::Mask(ctx, "Clear ZBuffer,Buffer Swapping");
 string flagsText = CKASCatalog::Flags::Render_Options::Text(ctx, flags);
@@ -239,11 +229,12 @@ The bridge creates a real `CKParameterOperation`, binds `In1/In2` sources or lit
 
 - Runtime `BB.Call()` behavior is held by `BBResult` and deferred-destroyed after result release.
 - Runtime `BB.Spawn()` behavior is owned by `BBTask` and is destroyed by `Destroy()`, component reset, component delete, or bridge clear.
+- Runtime `BBConfig.Spawn()` behavior is owned by `BBInstance` and is destroyed by `Destroy()`, component reset, component delete, or bridge clear.
 - `GraphTask` never owns the watched behavior; component reset/delete only cancels the watch.
 - Component pause pauses bridge-owned tasks and watches; it does not mutate external graphs.
 
 ## Current Limitations
 
-- The internal layout cache is signature-backed, but scripts should still resolve names during setup and cache indices themselves.
+- The internal layout cache is signature-backed, but scripts should still resolve names during setup and cache `BBSlot@` handles themselves.
 - Unknown variable-size plugin structs are not decoded. Use source/copy/text conversion or fixed-size raw buffers.
 - Name lookup is intentionally not available on hot-path setters/getters. Resolve names through `Layout()` first.
