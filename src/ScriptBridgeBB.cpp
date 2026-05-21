@@ -278,18 +278,18 @@ std::string BBSlot::KindName() const {
     return ScriptBridgeBBInternal::SlotKindName(m_Kind);
 }
 
-BBSpec::BBSpec(ScriptBehaviorBridge *bridge,
+BBDecl::BBDecl(ScriptBehaviorBridge *bridge,
                const CKBehaviorContext &ctx,
                const ScriptBridgeBBInvocationSpec &request,
                const std::string &error)
     : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_Error(error) {}
 
-bool BBSpec::IsValid() const {
+bool BBDecl::IsValid() const {
     std::string error;
     return m_Error.empty() && PrototypeObject(error) != nullptr;
 }
 
-std::string BBSpec::Error() const {
+std::string BBDecl::Error() const {
     if (!m_Error.empty()) {
         return m_Error;
     }
@@ -298,49 +298,49 @@ std::string BBSpec::Error() const {
     return error;
 }
 
-CKGUID BBSpec::GetGuid() const {
+CKGUID BBDecl::GetGuid() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
     return prototype ? prototype->GetGuid() : CKGUID();
 }
 
-std::string BBSpec::GetName() const {
+std::string BBDecl::GetName() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
     return prototype ? SafeString(prototype->GetName()) : std::string();
 }
 
-std::string BBSpec::GetCategory() const {
+std::string BBDecl::GetCategory() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
     CKObjectDeclaration *decl = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
     return decl ? SafeString(decl->GetCategory()) : std::string();
 }
 
-std::string BBSpec::GetQualifiedName() const {
+std::string BBDecl::GetQualifiedName() const {
     const std::string category = GetCategory();
     const std::string name = GetName();
     return category.empty() ? name : category + "/" + name;
 }
 
-CKGUID BBSpec::Guid() const { return GetGuid(); }
-std::string BBSpec::Name() const { return GetName(); }
-std::string BBSpec::Category() const { return GetCategory(); }
-std::string BBSpec::QualifiedName() const { return GetQualifiedName(); }
+CKGUID BBDecl::Guid() const { return GetGuid(); }
+std::string BBDecl::Name() const { return GetName(); }
+std::string BBDecl::Category() const { return GetCategory(); }
+std::string BBDecl::QualifiedName() const { return GetQualifiedName(); }
 
-CKDWORD BBSpec::BehaviorFlags() const {
+CKDWORD BBDecl::BehaviorFlags() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
     return prototype ? static_cast<CKDWORD>(prototype->GetBehaviorFlags()) : 0;
 }
 
-CKDWORD BBSpec::PrototypeFlags() const {
+CKDWORD BBDecl::PrototypeFlags() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
     return prototype ? static_cast<CKDWORD>(prototype->GetFlags()) : 0;
 }
 
-CK_CLASSID BBSpec::CompatibleClassId() const {
+CK_CLASSID BBDecl::CompatibleClassId() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
     if (!prototype) {
@@ -350,59 +350,59 @@ CK_CLASSID BBSpec::CompatibleClassId() const {
     return decl ? decl->GetCompatibleClassId() : prototype->GetApplyToClassID();
 }
 
-int BBSpec::NeededManagerCount() const {
+int BBDecl::NeededManagerCount() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
     CKObjectDeclaration *decl = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
     return decl ? decl->GetManagerNeededCount() : 0;
 }
 
-CKGUID BBSpec::NeededManagerGuid(int index) const {
+CKGUID BBDecl::NeededManagerGuid(int index) const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
     CKObjectDeclaration *decl = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
     return decl && index >= 0 && index < decl->GetManagerNeededCount() ? decl->GetManagerNeeded(index) : CKGUID();
 }
 
-BBPrototype *BBSpec::Prototype() const {
+BBPrototype *BBDecl::Prototype() const {
     return IsValid() ? new BBPrototype(m_Bridge, m_Context, m_Request) : nullptr;
 }
 
-BehaviorLayout *BBSpec::Layout() const {
+BehaviorLayout *BBDecl::Layout() const {
     return IsValid() ? new BehaviorLayout(m_Bridge, m_Context, m_Request) : nullptr;
 }
 
-BBCallBuilder *BBSpec::Call() {
+BBCallBuilder *BBDecl::Call() {
     return IsValid() ? new BBCallBuilder(m_Bridge, m_Context, m_Request) : nullptr;
 }
 
-BBTaskBuilder *BBSpec::Spawn() {
+BBTaskBuilder *BBDecl::Spawn() {
     return IsValid() ? new BBTaskBuilder(m_Bridge, m_Context, m_Request) : nullptr;
 }
 
-BBBinding *BBSpec::Bind() {
-    return new BBBinding(m_Bridge, m_Context, m_Request, Error());
+BBConfig *BBDecl::Bind() {
+    return new BBConfig(m_Bridge, m_Context, m_Request, Error());
 }
 
-BBBinding *BBSpec::Configure() {
+BBConfig *BBDecl::Configure() {
     return Bind();
 }
 
-BBSlot *BBSpec::In(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Input, name, occurrence); }
-BBSlot *BBSpec::Input(const std::string &name, int occurrence) const { return In(name, occurrence); }
-BBSlot *BBSpec::Out(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Output, name, occurrence); }
-BBSlot *BBSpec::Output(const std::string &name, int occurrence) const { return Out(name, occurrence); }
-BBSlot *BBSpec::Pin(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Pin, name, occurrence); }
-BBSlot *BBSpec::Pout(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Pout, name, occurrence); }
-BBSlot *BBSpec::Setting(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Setting, name, occurrence); }
-BBSlot *BBSpec::Local(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Local, name, occurrence); }
+BBSlot *BBDecl::In(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Input, name, occurrence); }
+BBSlot *BBDecl::Input(const std::string &name, int occurrence) const { return In(name, occurrence); }
+BBSlot *BBDecl::Out(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Output, name, occurrence); }
+BBSlot *BBDecl::Output(const std::string &name, int occurrence) const { return Out(name, occurrence); }
+BBSlot *BBDecl::Pin(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Pin, name, occurrence); }
+BBSlot *BBDecl::Pout(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Pout, name, occurrence); }
+BBSlot *BBDecl::Setting(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Setting, name, occurrence); }
+BBSlot *BBDecl::Local(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Local, name, occurrence); }
 
-std::string BBSpec::Describe() const {
+std::string BBDecl::Describe() const {
     if (!IsValid()) {
-        return "Invalid BBSpec: " + Error();
+        return "Invalid BBDecl: " + Error();
     }
     BehaviorLayout *layout = Layout();
-    std::string result = fmt::format("BBSpec '{}' guid={}", GetQualifiedName(), GuidToString(GetGuid()));
+    std::string result = fmt::format("BBDecl '{}' guid={}", GetQualifiedName(), GuidToString(GetGuid()));
     if (layout) {
         result += "\n" + layout->Describe();
         layout->Release();
@@ -410,11 +410,11 @@ std::string BBSpec::Describe() const {
     return result;
 }
 
-CKBehaviorPrototype *BBSpec::PrototypeObject(std::string &error) const {
+CKBehaviorPrototype *BBDecl::PrototypeObject(std::string &error) const {
     return m_Bridge ? m_Bridge->ResolvePrototypeObject(m_Request, error) : nullptr;
 }
 
-BBSlot *BBSpec::ResolveSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const {
+BBSlot *BBDecl::ResolveSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const {
     if (!m_Bridge) {
         return new BBSlot(nullptr, m_Context, m_Request, kind, -1, name, CKGUID(), std::string(), 0, 0, 0, std::string(), "BB bridge is not available.");
     }
@@ -455,13 +455,13 @@ BBSlot *BBSpec::ResolveSlot(ScriptBridgeSlotKind kind, const std::string &name, 
                                   ScriptBridgeBBInternal::CandidateList(*layout, kind)));
 }
 
-BBBinding::BBBinding(ScriptBehaviorBridge *bridge,
+BBConfig::BBConfig(ScriptBehaviorBridge *bridge,
                      const CKBehaviorContext &ctx,
                      const ScriptBridgeBBInvocationSpec &request,
                      const std::string &error)
     : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_Error(error) {}
 
-BBBinding::~BBBinding() {
+BBConfig::~BBConfig() {
     Destroy();
     for (CachedSlot &slot : m_Slots) {
         if (slot.Slot) {
@@ -471,27 +471,27 @@ BBBinding::~BBBinding() {
     }
 }
 
-bool BBBinding::IsValid() const {
+bool BBConfig::IsValid() const {
     if (!m_Error.empty() || !m_Bridge) {
         return false;
     }
-    BBSpec spec(m_Bridge, m_Context, m_Request);
+    BBDecl spec(m_Bridge, m_Context, m_Request);
     return spec.IsValid();
 }
 
-std::string BBBinding::Error() const {
+std::string BBConfig::Error() const {
     if (!m_Error.empty()) {
         return m_Error;
     }
     if (!m_Bridge) {
-        return "BBBinding bridge is not available.";
+        return "BBConfig bridge is not available.";
     }
-    BBSpec spec(m_Bridge, m_Context, m_Request);
+    BBDecl spec(m_Bridge, m_Context, m_Request);
     return spec.Error();
 }
 
-std::string BBBinding::Describe() const {
-    BBSpec spec(m_Bridge, m_Context, m_Request, m_Error);
+std::string BBConfig::Describe() const {
+    BBDecl spec(m_Bridge, m_Context, m_Request, m_Error);
     std::string text = spec.Describe();
     if (!m_DefaultStartInput.empty()) {
         text += fmt::format("\nDefault start input: '{}'", m_DefaultStartInput);
@@ -502,19 +502,19 @@ std::string BBBinding::Describe() const {
     return text;
 }
 
-BBSpec *BBBinding::Spec() const {
-    return new BBSpec(m_Bridge, m_Context, m_Request, m_Error);
+BBDecl *BBConfig::Spec() const {
+    return new BBDecl(m_Bridge, m_Context, m_Request, m_Error);
 }
 
-BBTask *BBBinding::Task() const {
+BBTask *BBConfig::Task() const {
     return ReturnTask();
 }
 
-BehaviorRef *BBBinding::Behavior() const {
+BehaviorRef *BBConfig::Behavior() const {
     return m_Task ? m_Task->Behavior() : nullptr;
 }
 
-bool BBBinding::Raise(const CKBehaviorContext &ctx) const {
+bool BBConfig::Raise(const CKBehaviorContext &ctx) const {
     if (IsValid()) {
         return true;
     }
@@ -525,13 +525,13 @@ bool BBBinding::Raise(const CKBehaviorContext &ctx) const {
     return RaiseExecutionState(state, ctx);
 }
 
-BBSlot *BBBinding::In(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Input, name, occurrence); }
-BBSlot *BBBinding::Out(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Output, name, occurrence); }
-BBSlot *BBBinding::Pin(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Pin, name, occurrence); }
-BBSlot *BBBinding::Pout(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Pout, name, occurrence); }
-BBSlot *BBBinding::Local(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Local, name, occurrence); }
+BBSlot *BBConfig::In(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Input, name, occurrence); }
+BBSlot *BBConfig::Out(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Output, name, occurrence); }
+BBSlot *BBConfig::Pin(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Pin, name, occurrence); }
+BBSlot *BBConfig::Pout(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Pout, name, occurrence); }
+BBSlot *BBConfig::Local(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Local, name, occurrence); }
 
-bool BBBinding::RequireSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) {
+bool BBConfig::RequireSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) {
     BBSlot *slot = Slot(kind, name, occurrence);
     const bool ok = slot && slot->IsValid();
     if (!ok) {
@@ -543,128 +543,128 @@ bool BBBinding::RequireSlot(ScriptBridgeSlotKind kind, const std::string &name, 
     return ok;
 }
 
-BBBinding *BBBinding::Owner(CKBeObject *owner) {
+BBConfig *BBConfig::Owner(CKBeObject *owner) {
     m_Request.OwnerId = owner ? owner->GetID() : 0;
     AddRef();
     return this;
 }
 
-BBBinding *BBBinding::Target(CKBeObject *target) {
+BBConfig *BBConfig::Target(CKBeObject *target) {
     m_Request.TargetId = target ? target->GetID() : 0;
     AddRef();
     return this;
 }
 
-BBBinding *BBBinding::Set(const std::string &pinName, ParamValue *value) {
+BBConfig *BBConfig::Set(const std::string &pinName, ParamValue *value) {
     BBSlot *slot = Pin(pinName);
-    BBBinding *result = SetSlot(slot, value);
+    BBConfig *result = SetSlot(slot, value);
     if (slot) {
         slot->Release();
     }
     return result;
 }
 
-BBBinding *BBBinding::SetInt(const std::string &pinName, int value) {
+BBConfig *BBConfig::SetInt(const std::string &pinName, int value) {
     BBSlot *slot = Pin(pinName);
-    BBBinding *result = SetSlotInt(slot, value);
+    BBConfig *result = SetSlotInt(slot, value);
     if (slot) {
         slot->Release();
     }
     return result;
 }
 
-BBBinding *BBBinding::SetFloat(const std::string &pinName, float value) {
+BBConfig *BBConfig::SetFloat(const std::string &pinName, float value) {
     BBSlot *slot = Pin(pinName);
-    BBBinding *result = SetSlotFloat(slot, value);
+    BBConfig *result = SetSlotFloat(slot, value);
     if (slot) {
         slot->Release();
     }
     return result;
 }
 
-BBBinding *BBBinding::SetBool(const std::string &pinName, bool value) {
+BBConfig *BBConfig::SetBool(const std::string &pinName, bool value) {
     BBSlot *slot = Pin(pinName);
-    BBBinding *result = SetSlotBool(slot, value);
+    BBConfig *result = SetSlotBool(slot, value);
     if (slot) {
         slot->Release();
     }
     return result;
 }
 
-BBBinding *BBBinding::SetString(const std::string &pinName, const std::string &value) {
+BBConfig *BBConfig::SetString(const std::string &pinName, const std::string &value) {
     BBSlot *slot = Pin(pinName);
-    BBBinding *result = SetSlotString(slot, value);
+    BBConfig *result = SetSlotString(slot, value);
     if (slot) {
         slot->Release();
     }
     return result;
 }
 
-BBBinding *BBBinding::SetObject(const std::string &pinName, CKObject *value) {
+BBConfig *BBConfig::SetObject(const std::string &pinName, CKObject *value) {
     BBSlot *slot = Pin(pinName);
-    BBBinding *result = SetSlotObject(slot, value);
+    BBConfig *result = SetSlotObject(slot, value);
     if (slot) {
         slot->Release();
     }
     return result;
 }
 
-BBBinding *BBBinding::SetSlot(BBSlot *pin, ParamValue *value) {
+BBConfig *BBConfig::SetSlot(BBSlot *pin, ParamValue *value) {
     if (!value) {
-        SetError("BBBinding.Set requires a valid ParamValue.");
+        SetError("BBConfig.Set requires a valid ParamValue.");
         SetScriptException(m_Error);
         return nullptr;
     }
-    return SetValueForPin(pin, value->Value(), "BBBinding.Set") ? (AddRef(), this) : nullptr;
+    return SetValueForPin(pin, value->Value(), "BBConfig.Set") ? (AddRef(), this) : nullptr;
 }
 
-BBBinding *BBBinding::SetSlotInt(BBSlot *pin, int value) {
-    return SetValueForPin(pin, MakeScriptParamInt(value), "BBBinding.Set") ? (AddRef(), this) : nullptr;
+BBConfig *BBConfig::SetSlotInt(BBSlot *pin, int value) {
+    return SetValueForPin(pin, MakeScriptParamInt(value), "BBConfig.Set") ? (AddRef(), this) : nullptr;
 }
 
-BBBinding *BBBinding::SetSlotFloat(BBSlot *pin, float value) {
-    return SetValueForPin(pin, MakeScriptParamFloat(value), "BBBinding.Set") ? (AddRef(), this) : nullptr;
+BBConfig *BBConfig::SetSlotFloat(BBSlot *pin, float value) {
+    return SetValueForPin(pin, MakeScriptParamFloat(value), "BBConfig.Set") ? (AddRef(), this) : nullptr;
 }
 
-BBBinding *BBBinding::SetSlotBool(BBSlot *pin, bool value) {
-    return SetValueForPin(pin, MakeScriptParamBool(value), "BBBinding.Set") ? (AddRef(), this) : nullptr;
+BBConfig *BBConfig::SetSlotBool(BBSlot *pin, bool value) {
+    return SetValueForPin(pin, MakeScriptParamBool(value), "BBConfig.Set") ? (AddRef(), this) : nullptr;
 }
 
-BBBinding *BBBinding::SetSlotString(BBSlot *pin, const std::string &value) {
-    return SetValueForPin(pin, MakeScriptParamString(value), "BBBinding.Set") ? (AddRef(), this) : nullptr;
+BBConfig *BBConfig::SetSlotString(BBSlot *pin, const std::string &value) {
+    return SetValueForPin(pin, MakeScriptParamString(value), "BBConfig.Set") ? (AddRef(), this) : nullptr;
 }
 
-BBBinding *BBBinding::SetSlotObject(BBSlot *pin, CKObject *value) {
-    return SetValueForPin(pin, MakeScriptParamObject(value), "BBBinding.Set") ? (AddRef(), this) : nullptr;
+BBConfig *BBConfig::SetSlotObject(BBSlot *pin, CKObject *value) {
+    return SetValueForPin(pin, MakeScriptParamObject(value), "BBConfig.Set") ? (AddRef(), this) : nullptr;
 }
 
-BBBinding *BBBinding::Source(const std::string &pinName, ParamRef *source) {
+BBConfig *BBConfig::Source(const std::string &pinName, ParamRef *source) {
     BBSlot *slot = Pin(pinName);
-    BBBinding *result = SourceSlot(slot, source);
+    BBConfig *result = SourceSlot(slot, source);
     if (slot) {
         slot->Release();
     }
     return result;
 }
 
-BBBinding *BBBinding::SourceSlot(BBSlot *pin, ParamRef *source) {
-    return SourceForPin(pin, source, "BBBinding.Source") ? (AddRef(), this) : nullptr;
+BBConfig *BBConfig::SourceSlot(BBSlot *pin, ParamRef *source) {
+    return SourceForPin(pin, source, "BBConfig.Source") ? (AddRef(), this) : nullptr;
 }
 
-BBBinding *BBBinding::Operation(const std::string &pinName, ParamOp *operation) {
+BBConfig *BBConfig::Operation(const std::string &pinName, ParamOp *operation) {
     BBSlot *slot = Pin(pinName);
-    BBBinding *result = OperationSlot(slot, operation);
+    BBConfig *result = OperationSlot(slot, operation);
     if (slot) {
         slot->Release();
     }
     return result;
 }
 
-BBBinding *BBBinding::OperationSlot(BBSlot *pin, ParamOp *operation) {
-    return OperationForPin(pin, operation, "BBBinding.Operation") ? (AddRef(), this) : nullptr;
+BBConfig *BBConfig::OperationSlot(BBSlot *pin, ParamOp *operation) {
+    return OperationForPin(pin, operation, "BBConfig.Operation") ? (AddRef(), this) : nullptr;
 }
 
-BBBinding *BBBinding::SetSetting(BBSlot *setting, ParamValue *value) {
+BBConfig *BBConfig::SetSetting(BBSlot *setting, ParamValue *value) {
     if (!value) {
         SetError("BBConfig.SetSetting requires a valid ParamValue.");
         SetScriptException(m_Error);
@@ -673,11 +673,11 @@ BBBinding *BBBinding::SetSetting(BBSlot *setting, ParamValue *value) {
     return SetValueForSetting(setting, value->Value(), "BBConfig.SetSetting") ? (AddRef(), this) : nullptr;
 }
 
-BBBinding *BBBinding::SetSettingString(BBSlot *setting, const std::string &value) {
+BBConfig *BBConfig::SetSettingString(BBSlot *setting, const std::string &value) {
     return SetValueForSetting(setting, MakeScriptParamString(value), "BBConfig.SetSetting") ? (AddRef(), this) : nullptr;
 }
 
-bool BBBinding::Validate(const CKBehaviorContext &ctx) const {
+bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
     (void) ctx;
     if (!IsValid()) {
         SetScriptException(Error());
@@ -686,15 +686,15 @@ bool BBBinding::Validate(const CKBehaviorContext &ctx) const {
     return true;
 }
 
-BBSpec *BBBinding::Decl() const {
-    return new BBSpec(m_Bridge, m_Context, m_Request, m_Error);
+BBDecl *BBConfig::Decl() const {
+    return new BBDecl(m_Bridge, m_Context, m_Request, m_Error);
 }
 
-BBInstance *BBBinding::SpawnInstance(const CKBehaviorContext &ctx) {
+BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
     return new BBInstance(m_Bridge, ctx, m_Request, Error());
 }
 
-BBTask *BBBinding::Start(const CKBehaviorContext &ctx) {
+BBTask *BBConfig::Start(const CKBehaviorContext &ctx) {
     BBSlot *input = DefaultInputSlot();
     BBTask *task = StartSlot(ctx, input);
     if (input) {
@@ -703,7 +703,7 @@ BBTask *BBBinding::Start(const CKBehaviorContext &ctx) {
     return task;
 }
 
-BBTask *BBBinding::StartName(const CKBehaviorContext &ctx, const std::string &inputName) {
+BBTask *BBConfig::StartName(const CKBehaviorContext &ctx, const std::string &inputName) {
     BBSlot *input = inputName.empty() ? nullptr : In(inputName);
     BBTask *task = input ? StartSlot(ctx, input) : Start(ctx);
     if (input) {
@@ -712,9 +712,9 @@ BBTask *BBBinding::StartName(const CKBehaviorContext &ctx, const std::string &in
     return task;
 }
 
-BBTask *BBBinding::StartSlot(const CKBehaviorContext &ctx, BBSlot *input) {
+BBTask *BBConfig::StartSlot(const CKBehaviorContext &ctx, BBSlot *input) {
     if (!m_Bridge) {
-        SetError("BBBinding.Start requires ScriptBehaviorBridge.");
+        SetError("BBConfig.Start requires ScriptBehaviorBridge.");
         SetScriptException(m_Error);
         return nullptr;
     }
@@ -727,7 +727,7 @@ BBTask *BBBinding::StartSlot(const CKBehaviorContext &ctx, BBSlot *input) {
     if (input) {
         std::string error;
         if (!input->ResolveIndex(ScriptBridgeSlotKind::Input, inputIndex, error)) {
-            SetError(error.empty() ? "BBBinding.Start requires an input BBSlot." : error);
+            SetError(error.empty() ? "BBConfig.Start requires an input BBSlot." : error);
             SetScriptException(m_Error);
             return nullptr;
         }
@@ -737,7 +737,7 @@ BBTask *BBBinding::StartSlot(const CKBehaviorContext &ctx, BBSlot *input) {
     m_Context = ctx;
     m_Task = m_Bridge->StartTask(m_Request, ctx, inputIndex);
     if (!m_Task) {
-        SetError("BBBinding.Start failed to create task.");
+        SetError("BBConfig.Start failed to create task.");
         SetScriptException(m_Error);
         return nullptr;
     }
@@ -747,11 +747,11 @@ BBTask *BBBinding::StartSlot(const CKBehaviorContext &ctx, BBSlot *input) {
     return ReturnTask();
 }
 
-bool BBBinding::Step(const CKBehaviorContext &ctx) {
+bool BBConfig::Step(const CKBehaviorContext &ctx) {
     BBSlot *input = DefaultInputSlot();
     const bool result = input ? StepSlot(ctx, input) : (m_Task && m_Task->Step(ctx, -1));
     if (!input && !m_Task) {
-        SetError("BBBinding.Step called before Start.");
+        SetError("BBConfig.Step called before Start.");
         SetScriptException(m_Error);
     }
     if (input) {
@@ -760,7 +760,7 @@ bool BBBinding::Step(const CKBehaviorContext &ctx) {
     return result;
 }
 
-bool BBBinding::StepName(const CKBehaviorContext &ctx, const std::string &inputName) {
+bool BBConfig::StepName(const CKBehaviorContext &ctx, const std::string &inputName) {
     BBSlot *input = inputName.empty() ? nullptr : In(inputName);
     const bool result = input ? StepSlot(ctx, input) : Step(ctx);
     if (input) {
@@ -769,9 +769,9 @@ bool BBBinding::StepName(const CKBehaviorContext &ctx, const std::string &inputN
     return result;
 }
 
-bool BBBinding::StepSlot(const CKBehaviorContext &ctx, BBSlot *input) {
+bool BBConfig::StepSlot(const CKBehaviorContext &ctx, BBSlot *input) {
     if (!m_Task || !m_Task->IsAlive()) {
-        SetError("BBBinding.Step called before Start or after Destroy.");
+        SetError("BBConfig.Step called before Start or after Destroy.");
         SetScriptException(m_Error);
         return false;
     }
@@ -785,7 +785,7 @@ bool BBBinding::StepSlot(const CKBehaviorContext &ctx, BBSlot *input) {
     return true;
 }
 
-bool BBBinding::Stop(const CKBehaviorContext &ctx) {
+bool BBConfig::Stop(const CKBehaviorContext &ctx) {
     BBSlot *stop = DefaultStopSlot();
     const bool result = stop ? StopSlot(ctx, stop) : Destroy();
     if (stop) {
@@ -794,7 +794,7 @@ bool BBBinding::Stop(const CKBehaviorContext &ctx) {
     return result;
 }
 
-bool BBBinding::StopName(const CKBehaviorContext &ctx, const std::string &inputName) {
+bool BBConfig::StopName(const CKBehaviorContext &ctx, const std::string &inputName) {
     BBSlot *input = inputName.empty() ? nullptr : In(inputName);
     const bool result = input ? StopSlot(ctx, input) : Stop(ctx);
     if (input) {
@@ -803,19 +803,19 @@ bool BBBinding::StopName(const CKBehaviorContext &ctx, const std::string &inputN
     return result;
 }
 
-bool BBBinding::StopSlot(const CKBehaviorContext &ctx, BBSlot *input) {
+bool BBConfig::StopSlot(const CKBehaviorContext &ctx, BBSlot *input) {
     if (m_Task && m_Task->IsAlive() && input) {
         m_Task->StepSlot(ctx, input);
     }
     return Destroy();
 }
 
-BBTask *BBBinding::Restart(const CKBehaviorContext &ctx) {
+BBTask *BBConfig::Restart(const CKBehaviorContext &ctx) {
     Stop(ctx);
     return Start(ctx);
 }
 
-bool BBBinding::Destroy() {
+bool BBConfig::Destroy() {
     ClearOwnedGraphLinks();
     if (!m_Task) {
         return true;
@@ -826,7 +826,7 @@ bool BBBinding::Destroy() {
     return result;
 }
 
-bool BBBinding::OutputActive(const std::string &outputName) {
+bool BBConfig::OutputActive(const std::string &outputName) {
     BBSlot *output = Out(outputName);
     const bool result = OutputActiveSlot(output);
     if (output) {
@@ -835,11 +835,11 @@ bool BBBinding::OutputActive(const std::string &outputName) {
     return result;
 }
 
-bool BBBinding::OutputActiveSlot(BBSlot *output) {
+bool BBConfig::OutputActiveSlot(BBSlot *output) {
     return m_Task && m_Task->OutputActiveSlot(output);
 }
 
-ParamRef *BBBinding::PinRef(const std::string &pinName) {
+ParamRef *BBConfig::PinRef(const std::string &pinName) {
     BBSlot *slot = Pin(pinName);
     ParamRef *ref = PinRefSlot(slot);
     if (slot) {
@@ -848,7 +848,7 @@ ParamRef *BBBinding::PinRef(const std::string &pinName) {
     return ref;
 }
 
-ParamRef *BBBinding::PinRefSlot(BBSlot *pin) {
+ParamRef *BBConfig::PinRefSlot(BBSlot *pin) {
     BehaviorRef *behavior = Behavior();
     ParamRef *ref = behavior ? behavior->PinSlot(pin) : nullptr;
     if (behavior) {
@@ -857,7 +857,7 @@ ParamRef *BBBinding::PinRefSlot(BBSlot *pin) {
     return ref;
 }
 
-ParamRef *BBBinding::PoutRef(const std::string &poutName) {
+ParamRef *BBConfig::PoutRef(const std::string &poutName) {
     BBSlot *slot = Pout(poutName);
     ParamRef *ref = PoutRefSlot(slot);
     if (slot) {
@@ -866,33 +866,33 @@ ParamRef *BBBinding::PoutRef(const std::string &poutName) {
     return ref;
 }
 
-ParamRef *BBBinding::PoutRefSlot(BBSlot *pout) {
+ParamRef *BBConfig::PoutRefSlot(BBSlot *pout) {
     return m_Task ? m_Task->PoutSlot(pout) : nullptr;
 }
 
-void BBBinding::SetDefaultStart(const std::string &inputName) {
+void BBConfig::SetDefaultStart(const std::string &inputName) {
     m_DefaultStartInput = inputName;
 }
 
-void BBBinding::SetDefaultStop(const std::string &inputName) {
+void BBConfig::SetDefaultStop(const std::string &inputName) {
     m_DefaultStopInput = inputName;
 }
 
-void BBBinding::SetManaged(bool managed) {
+void BBConfig::SetManaged(bool managed) {
     m_Managed = managed;
 }
 
-bool BBBinding::IsManaged() const {
+bool BBConfig::IsManaged() const {
     return m_Managed;
 }
 
-BBSlot *BBBinding::Slot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) {
+BBSlot *BBConfig::Slot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) {
     if (BBSlot *cached = FindCachedSlot(kind, name, occurrence)) {
         cached->AddRef();
         return cached;
     }
 
-    BBSpec spec(m_Bridge, m_Context, m_Request, m_Error);
+    BBDecl spec(m_Bridge, m_Context, m_Request, m_Error);
     BBSlot *slot = nullptr;
     switch (kind) {
         case ScriptBridgeSlotKind::Input: slot = spec.In(name, occurrence); break;
@@ -921,7 +921,7 @@ BBSlot *BBBinding::Slot(ScriptBridgeSlotKind kind, const std::string &name, int 
     return slot;
 }
 
-BBSlot *BBBinding::FindCachedSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const {
+BBSlot *BBConfig::FindCachedSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const {
     for (const CachedSlot &slot : m_Slots) {
         if (slot.Kind == kind && slot.Name == name && slot.Occurrence == occurrence) {
             return slot.Slot;
@@ -930,15 +930,15 @@ BBSlot *BBBinding::FindCachedSlot(ScriptBridgeSlotKind kind, const std::string &
     return nullptr;
 }
 
-BBSlot *BBBinding::DefaultInputSlot() {
+BBSlot *BBConfig::DefaultInputSlot() {
     return m_DefaultStartInput.empty() ? nullptr : In(m_DefaultStartInput);
 }
 
-BBSlot *BBBinding::DefaultStopSlot() {
+BBSlot *BBConfig::DefaultStopSlot() {
     return m_DefaultStopInput.empty() ? nullptr : In(m_DefaultStopInput);
 }
 
-bool BBBinding::ResolvePin(BBSlot *slot, int &pinIndex, const char *method) {
+bool BBConfig::ResolvePin(BBSlot *slot, int &pinIndex, const char *method) {
     std::string error;
     if (!slot || !slot->ResolveIndex(ScriptBridgeSlotKind::Pin, pinIndex, error)) {
         SetError(fmt::format("{} requires a pin BBSlot.{}", method, error.empty() ? "" : " " + error));
@@ -948,7 +948,7 @@ bool BBBinding::ResolvePin(BBSlot *slot, int &pinIndex, const char *method) {
     return true;
 }
 
-bool BBBinding::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const char *method) {
+bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const char *method) {
     int pinIndex = -1;
     if (!ResolvePin(slot, pinIndex, method)) {
         return false;
@@ -960,7 +960,7 @@ bool BBBinding::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, cons
     return true;
 }
 
-bool BBBinding::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, const char *method) {
+bool BBConfig::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, const char *method) {
     int settingIndex = -1;
     std::string error;
     if (!slot || !slot->ResolveIndex(ScriptBridgeSlotKind::Setting, settingIndex, error)) {
@@ -980,7 +980,7 @@ bool BBBinding::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, 
     return true;
 }
 
-bool BBBinding::SetLiveValue(BBSlot *slot, const ScriptParamValue &value, const char *method) {
+bool BBConfig::SetLiveValue(BBSlot *slot, const ScriptParamValue &value, const char *method) {
     ParamRef *ref = PinRefSlot(slot);
     if (!ref) {
         SetError(fmt::format("{} could not resolve live pin.", method));
@@ -996,7 +996,7 @@ bool BBBinding::SetLiveValue(BBSlot *slot, const ScriptParamValue &value, const 
     return ok;
 }
 
-bool BBBinding::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) {
+bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) {
     int pinIndex = -1;
     if (!ResolvePin(slot, pinIndex, method)) {
         return false;
@@ -1034,7 +1034,7 @@ bool BBBinding::SourceForPin(BBSlot *slot, ParamRef *source, const char *method)
     return true;
 }
 
-bool BBBinding::OperationForPin(BBSlot *slot, ParamOp *operation, const char *method) {
+bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *method) {
     int pinIndex = -1;
     if (!ResolvePin(slot, pinIndex, method)) {
         return false;
@@ -1067,7 +1067,7 @@ bool BBBinding::OperationForPin(BBSlot *slot, ParamOp *operation, const char *me
     return true;
 }
 
-void BBBinding::ClearOwnedGraphLinks() {
+void BBConfig::ClearOwnedGraphLinks() {
     for (ParamSourceLinkRef *link : m_SourceLinks) {
         if (link) {
             link->Restore();
@@ -1085,13 +1085,13 @@ void BBBinding::ClearOwnedGraphLinks() {
     m_Operations.clear();
 }
 
-void BBBinding::SetError(const std::string &error) const {
+void BBConfig::SetError(const std::string &error) const {
     if (!error.empty()) {
         m_Error = error;
     }
 }
 
-BBTask *BBBinding::ReturnTask() const {
+BBTask *BBConfig::ReturnTask() const {
     if (m_Task) {
         m_Task->AddRef();
     }
@@ -1122,8 +1122,8 @@ std::string BBInstance::Error() const {
     return m_Task ? m_Task->Error() : std::string();
 }
 
-BBSpec *BBInstance::Decl() const {
-    return new BBSpec(m_Bridge, m_Context, m_Request, m_Error);
+BBDecl *BBInstance::Decl() const {
+    return new BBDecl(m_Bridge, m_Context, m_Request, m_Error);
 }
 
 BehaviorRef *BBInstance::Behavior() const {
@@ -1604,16 +1604,16 @@ CScriptArray *BBBridge::FindAll(const std::string &query) const {
     return results;
 }
 
-BBSpec *BBBridge::Require(const std::string &query) const {
+BBDecl *BBBridge::Require(const std::string &query) const {
     ScriptBridgeBBInvocationSpec request;
     request.ComponentId = ComponentIdFromContext(m_Context);
     request.PrototypeName = query;
 
     if (!m_Bridge) {
-        return new BBSpec(nullptr, m_Context, request, "AngelScript BB bridge is not available.");
+        return new BBDecl(nullptr, m_Context, request, "AngelScript BB bridge is not available.");
     }
     if (query.empty()) {
-        return new BBSpec(m_Bridge, m_Context, request, "BB::Require needs a non-empty prototype name, Category/Name, or GUID.");
+        return new BBDecl(m_Bridge, m_Context, request, "BB::Require needs a non-empty prototype name, Category/Name, or GUID.");
     }
 
     CKGUID parsed;
@@ -1621,19 +1621,19 @@ BBSpec *BBBridge::Require(const std::string &query) const {
         request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
         request.Guid = parsed;
         if (CKGetPrototypeFromGuid(parsed)) {
-            return new BBSpec(m_Bridge, m_Context, request);
+            return new BBDecl(m_Bridge, m_Context, request);
         }
-        return new BBSpec(m_Bridge, m_Context, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(parsed)));
+        return new BBDecl(m_Bridge, m_Context, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(parsed)));
     }
 
     const std::vector<CKObjectDeclaration *> matches = ScriptBridgeBBInternal::FindPrototypeDeclarations(query);
     if (matches.size() == 1 && matches[0]) {
         request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
         request.Guid = matches[0]->GetGuid();
-        return new BBSpec(m_Bridge, m_Context, request);
+        return new BBDecl(m_Bridge, m_Context, request);
     }
     if (matches.size() > 1) {
-        return new BBSpec(m_Bridge,
+        return new BBDecl(m_Bridge,
                           m_Context,
                           request,
                           fmt::format("BB prototype '{}' is ambiguous. Candidates: {}.",
@@ -1641,43 +1641,43 @@ BBSpec *BBBridge::Require(const std::string &query) const {
                                       ScriptBridgeBBInternal::PrototypeCandidateList(matches)));
     }
 
-    return new BBSpec(m_Bridge,
+    return new BBDecl(m_Bridge,
                       m_Context,
                       request,
                       fmt::format("BB prototype '{}' was not found. Use BB::FindAll(query) to inspect candidates.", query));
 }
 
-BBSpec *BBBridge::RequireGuid(CKGUID guid) const {
+BBDecl *BBBridge::RequireGuid(CKGUID guid) const {
     ScriptBridgeBBInvocationSpec request;
     request.ComponentId = ComponentIdFromContext(m_Context);
     request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
     request.Guid = guid;
 
     if (!m_Bridge) {
-        return new BBSpec(nullptr, m_Context, request, "AngelScript BB bridge is not available.");
+        return new BBDecl(nullptr, m_Context, request, "AngelScript BB bridge is not available.");
     }
     if (!guid.IsValid() || !CKGetPrototypeFromGuid(guid)) {
-        return new BBSpec(m_Bridge, m_Context, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(guid)));
+        return new BBDecl(m_Bridge, m_Context, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(guid)));
     }
-    return new BBSpec(m_Bridge, m_Context, request);
+    return new BBDecl(m_Bridge, m_Context, request);
 }
 
-BBBinding *BBBridge::Bind(const std::string &query) const {
-    BBSpec *spec = Require(query);
+BBConfig *BBBridge::Bind(const std::string &query) const {
+    BBDecl *spec = Require(query);
     if (!spec) {
-        return new BBBinding(m_Bridge, m_Context, MakeDefaultRequest(m_Context), "Failed to create BBSpec.");
+        return new BBConfig(m_Bridge, m_Context, MakeDefaultRequest(m_Context), "Failed to create BBDecl.");
     }
-    BBBinding *binding = spec->Bind();
+    BBConfig *binding = spec->Bind();
     spec->Release();
     return binding;
 }
 
-BBBinding *BBBridge::BindGuid(CKGUID guid) const {
-    BBSpec *spec = RequireGuid(guid);
+BBConfig *BBBridge::BindGuid(CKGUID guid) const {
+    BBDecl *spec = RequireGuid(guid);
     if (!spec) {
-        return new BBBinding(m_Bridge, m_Context, MakeDefaultRequest(m_Context), "Failed to create BBSpec.");
+        return new BBConfig(m_Bridge, m_Context, MakeDefaultRequest(m_Context), "Failed to create BBDecl.");
     }
-    BBBinding *binding = spec->Bind();
+    BBConfig *binding = spec->Bind();
     spec->Release();
     return binding;
 }

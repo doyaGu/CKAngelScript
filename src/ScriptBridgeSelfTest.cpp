@@ -868,7 +868,19 @@ static bool RunBehaviorBridgeNativePrototypeDiscoverySelfTest(CKContext *context
     return true;
 }
 
-static bool RunBehaviorBridgeNativeInternalShapeSelfTest(std::string &error) {
+static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (engine) {
+        if (!engine->GetTypeInfoByName("BBDecl") || !engine->GetTypeInfoByName("BBConfig") ||
+            !engine->GetTypeInfoByName("BBInstance")) {
+            error = "Bridge v3 public type registration self-test failed.";
+            return false;
+        }
+        if (engine->GetTypeInfoByName("BBSpec") || engine->GetTypeInfoByName("BBBinding")) {
+            error = "Bridge v3 clean-break self-test found legacy BBSpec/BBBinding types.";
+            return false;
+        }
+    }
+
     ScriptBridgeInputSourceBindings bindings;
     bindings.Set(4, 44);
     bindings.Set(1, 11);
@@ -1185,7 +1197,7 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     }
 
     WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-internal-shape", std::string());
-    if (!RunBehaviorBridgeNativeInternalShapeSelfTest(error)) {
+    if (!RunBehaviorBridgeNativeInternalShapeSelfTest(engine, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-internal-shape", error);
         return false;
     }

@@ -41,9 +41,9 @@ enum class ScriptComponentBindingKind {
     ParamTypeInfo,
     BehaviorRef,
     BBPrototype,
-    BBSpec,
+    BBDecl,
     BBSlot,
-    BBBinding
+    BBConfig
 };
 
 struct ScriptComponentRequiredSlot {
@@ -72,7 +72,7 @@ struct ScriptComponentBinding {
     std::string SlotKindName;
     std::string SlotName;
     int SlotOccurrence = 0;
-    bool ManagedBBBinding = false;
+    bool ManagedBBConfig = false;
     std::string BindingStartInput;
     std::string BindingStopInput;
     std::vector<ScriptComponentRequiredSlot> RequiredSlots;

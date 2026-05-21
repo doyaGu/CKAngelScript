@@ -141,7 +141,6 @@ bool IsComponentBindingKeyword(const std::string &keyword) {
            key == "behavior" ||
            key == "bb" ||
            key == "bbslot" ||
-           key == "bbbind" ||
            key == "bbdecl" ||
            key == "bbconfig";
 }
@@ -204,14 +203,14 @@ ScriptComponentBindingKind KindFromTypeName(const std::string &typeName) {
     if (type == "bb" || type == "bbprototype" || type == "buildingblock") {
         return ScriptComponentBindingKind::BBPrototype;
     }
-    if (type == "bbdecl" || type == "bbspec" || type == "buildingblockspec") {
-        return ScriptComponentBindingKind::BBSpec;
+    if (type == "bbdecl" || type == "BBDecl" || type == "buildingblockdecl") {
+        return ScriptComponentBindingKind::BBDecl;
     }
     if (type == "bbslot" || type == "buildingblockslot") {
         return ScriptComponentBindingKind::BBSlot;
     }
-    if (type == "bbconfig" || type == "bbbinding" || type == "bbbind" || type == "buildingblockbinding") {
-        return ScriptComponentBindingKind::BBBinding;
+    if (type == "bbconfig" || type == "BBConfig" || type == "buildingblockconfig") {
+        return ScriptComponentBindingKind::BBConfig;
     }
     if (type == "object" || type == "ckobject" || type == "ckbeobject" || type == "behavior" ||
         type == "ckbehavior" || type == "3dentity" || type == "ck3dentity" || type == "2dentity" ||
@@ -249,9 +248,9 @@ CKGUID GuidFromTypeName(CKContext *context, const std::string &typeName, ScriptC
         return ScriptParameterGuidForValueKind(valueKind);
     }
     if (kind == ScriptComponentBindingKind::BBPrototype ||
-        kind == ScriptComponentBindingKind::BBSpec ||
+        kind == ScriptComponentBindingKind::BBDecl ||
         kind == ScriptComponentBindingKind::BBSlot ||
-        kind == ScriptComponentBindingKind::BBBinding) {
+        kind == ScriptComponentBindingKind::BBConfig) {
         return CKPGUID_STRING;
     }
     if (kind == ScriptComponentBindingKind::ParamRef ||
@@ -438,14 +437,14 @@ ScriptComponentBindingKind InferKindFromProperty(asIScriptEngine *engine, int ty
     if (typeId == engine->GetTypeIdByDecl("BBPrototype@")) {
         return ScriptComponentBindingKind::BBPrototype;
     }
-    if (typeId == engine->GetTypeIdByDecl("BBDecl@") || typeId == engine->GetTypeIdByDecl("BBSpec@")) {
-        return ScriptComponentBindingKind::BBSpec;
+    if (typeId == engine->GetTypeIdByDecl("BBDecl@")) {
+        return ScriptComponentBindingKind::BBDecl;
     }
     if (typeId == engine->GetTypeIdByDecl("BBSlot@")) {
         return ScriptComponentBindingKind::BBSlot;
     }
-    if (typeId == engine->GetTypeIdByDecl("BBConfig@") || typeId == engine->GetTypeIdByDecl("BBBinding@")) {
-        return ScriptComponentBindingKind::BBBinding;
+    if (typeId == engine->GetTypeIdByDecl("BBConfig@")) {
+        return ScriptComponentBindingKind::BBConfig;
     }
 
     asITypeInfo *type = engine->GetTypeInfoById(typeId);
@@ -502,15 +501,15 @@ bool IsCompatiblePropertyType(asIScriptEngine *engine,
         case ScriptComponentBindingKind::BBPrototype:
             expected = "BBPrototype@";
             return typeId == engine->GetTypeIdByDecl("BBPrototype@");
-        case ScriptComponentBindingKind::BBSpec:
+        case ScriptComponentBindingKind::BBDecl:
             expected = "BBDecl@";
-            return typeId == engine->GetTypeIdByDecl("BBDecl@") || typeId == engine->GetTypeIdByDecl("BBSpec@");
+            return typeId == engine->GetTypeIdByDecl("BBDecl@");
         case ScriptComponentBindingKind::BBSlot:
             expected = "BBSlot@";
             return typeId == engine->GetTypeIdByDecl("BBSlot@");
-        case ScriptComponentBindingKind::BBBinding:
+        case ScriptComponentBindingKind::BBConfig:
             expected = "BBConfig@";
-            return typeId == engine->GetTypeIdByDecl("BBConfig@") || typeId == engine->GetTypeIdByDecl("BBBinding@");
+            return typeId == engine->GetTypeIdByDecl("BBConfig@");
         case ScriptComponentBindingKind::Object: {
             expected = "CKObject@ or subclass";
             asITypeInfo *type = engine->GetTypeInfoById(typeId);
@@ -543,9 +542,9 @@ std::string BindingKindName(ScriptComponentBindingKind kind) {
         case ScriptComponentBindingKind::ParamTypeInfo: return "ParamTypeInfo@";
         case ScriptComponentBindingKind::BehaviorRef: return "BehaviorRef@";
         case ScriptComponentBindingKind::BBPrototype: return "BBPrototype@";
-        case ScriptComponentBindingKind::BBSpec: return "BBDecl@";
+        case ScriptComponentBindingKind::BBDecl: return "BBDecl@";
         case ScriptComponentBindingKind::BBSlot: return "BBSlot@";
-        case ScriptComponentBindingKind::BBBinding: return "BBConfig@";
+        case ScriptComponentBindingKind::BBConfig: return "BBConfig@";
         default: return "unknown";
     }
 }
@@ -565,9 +564,9 @@ std::string BindingSummary(const ScriptComponentBinding &binding, CKContext *con
             << ", slotKind='" << (binding.SlotKindName.empty() ? "<missing>" : binding.SlotKindName) << "'"
             << ", slotName='" << (binding.SlotName.empty() ? "<missing>" : binding.SlotName) << "'"
             << ", occurrence=" << binding.SlotOccurrence;
-    } else if (binding.Kind == ScriptComponentBindingKind::BBBinding) {
+    } else if (binding.Kind == ScriptComponentBindingKind::BBConfig) {
         out << ", prototype='" << (binding.SlotPrototypeName.empty() ? "<parameter/default>" : binding.SlotPrototypeName) << "'"
-            << ", managed=" << (binding.ManagedBBBinding ? "true" : "false");
+            << ", managed=" << (binding.ManagedBBConfig ? "true" : "false");
         if (!binding.BindingStartInput.empty()) {
             out << ", start='" << binding.BindingStartInput << "'";
         }
@@ -723,7 +722,7 @@ bool ParseBindingMetadata(const std::string &metadata,
     binding.SlotKindName.clear();
     binding.SlotName.clear();
     binding.SlotOccurrence = 0;
-    binding.ManagedBBBinding = false;
+    binding.ManagedBBConfig = false;
     binding.BindingStartInput.clear();
     binding.BindingStopInput.clear();
     binding.RequiredSlots.clear();
@@ -738,7 +737,7 @@ bool ParseBindingMetadata(const std::string &metadata,
         binding.TypeName = "bbslot";
     } else if (lowerKeyword == "bbdecl") {
         binding.TypeName = "bbdecl";
-    } else if (lowerKeyword == "bbbind" || lowerKeyword == "bbconfig") {
+    } else if (lowerKeyword == "bbconfig") {
         binding.TypeName = "bbconfig";
     }
 
@@ -760,7 +759,7 @@ bool ParseBindingMetadata(const std::string &metadata,
             } else if (key == "update" || key == "sync") {
                 binding.InjectEveryFrame = ParseBoolText(value, true);
             } else if (key == "managed") {
-                binding.ManagedBBBinding = ParseBoolText(value, true);
+                binding.ManagedBBConfig = ParseBoolText(value, true);
             } else if (key == "start") {
                 binding.BindingStartInput = value;
             } else if (key == "stop") {
@@ -1016,9 +1015,9 @@ bool SetParameterDefaultValue(CKParameterLocal *local, const ScriptComponentBind
             return SetParameterDefaultText(local, binding.DefaultValue, error);
         }
         case ScriptComponentBindingKind::BBPrototype:
-        case ScriptComponentBindingKind::BBSpec:
+        case ScriptComponentBindingKind::BBDecl:
         case ScriptComponentBindingKind::BBSlot:
-        case ScriptComponentBindingKind::BBBinding:
+        case ScriptComponentBindingKind::BBConfig:
             return local->SetStringValue(const_cast<CKSTRING>(binding.DefaultValue.c_str())) == CK_OK;
         case ScriptComponentBindingKind::Object:
         case ScriptComponentBindingKind::BehaviorRef: {
@@ -1289,38 +1288,38 @@ bool AssignRefCountedHandle(asIScriptObject *object, int propertyIndex, T *value
     return true;
 }
 
-BBBinding *GetBBBindingField(ScriptComponentState *state, const ScriptComponentBinding &binding) {
-    if (!state || !state->Object || binding.PropertyIndex < 0 || binding.Kind != ScriptComponentBindingKind::BBBinding) {
+BBConfig *GetBBConfigField(ScriptComponentState *state, const ScriptComponentBinding &binding) {
+    if (!state || !state->Object || binding.PropertyIndex < 0 || binding.Kind != ScriptComponentBindingKind::BBConfig) {
         return nullptr;
     }
     void **slot = GetHandleSlot(state->Object, binding.PropertyIndex);
-    return slot ? static_cast<BBBinding *>(*slot) : nullptr;
+    return slot ? static_cast<BBConfig *>(*slot) : nullptr;
 }
 
-void StopManagedBBBindings(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
+void StopManagedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
     if (!state || !state->Object) {
         return;
     }
     for (const ScriptComponentBinding &binding : state->Bindings) {
-        if (!binding.ManagedBBBinding) {
+        if (!binding.ManagedBBConfig) {
             continue;
         }
-        BBBinding *bbinding = GetBBBindingField(state, binding);
+        BBConfig *bbinding = GetBBConfigField(state, binding);
         if (bbinding) {
             bbinding->Stop(behcontext);
         }
     }
 }
 
-void DestroyManagedBBBindings(ScriptComponentState *state) {
+void DestroyManagedBBConfigs(ScriptComponentState *state) {
     if (!state || !state->Object) {
         return;
     }
     for (const ScriptComponentBinding &binding : state->Bindings) {
-        if (!binding.ManagedBBBinding) {
+        if (!binding.ManagedBBConfig) {
             continue;
         }
-        BBBinding *bbinding = GetBBBindingField(state, binding);
+        BBConfig *bbinding = GetBBConfigField(state, binding);
         if (bbinding) {
             bbinding->Destroy();
         }
@@ -1416,16 +1415,16 @@ ScriptBridgeSlotKind SlotKindFromText(const std::string &value) {
     return ScriptBridgeSlotKind::Standalone;
 }
 
-BBSpec *CreateSpecFromParameter(ScriptBehaviorBridge *bridge,
+BBDecl *CreateSpecFromParameter(ScriptBehaviorBridge *bridge,
                                 const CKBehaviorContext &behcontext,
                                 CKParameter *source,
                                 std::string &error) {
     if (!bridge) {
-        error = "BBSpec Component injection requires ScriptBehaviorBridge.";
+        error = "BBDecl Component injection requires ScriptBehaviorBridge.";
         return nullptr;
     }
     if (!source) {
-        error = "BBSpec Component parameter source is not available.";
+        error = "BBDecl Component parameter source is not available.";
         return nullptr;
     }
 
@@ -1435,7 +1434,7 @@ BBSpec *CreateSpecFromParameter(ScriptBehaviorBridge *bridge,
         if (guid.IsValid()) {
             return bb.RequireGuid(guid);
         }
-        error = "BBSpec Component parameter '" + SafeString(source->GetName()) +
+        error = "BBDecl Component parameter '" + SafeString(source->GetName()) +
                 "' references behavior '" + SafeString(behavior->GetName()) +
                 "' without a prototype GUID.";
         return nullptr;
@@ -1443,21 +1442,21 @@ BBSpec *CreateSpecFromParameter(ScriptBehaviorBridge *bridge,
 
     std::string query;
     if (!ReadStringValue(source, query)) {
-        error = "Failed to read BBSpec Component parameter '" + SafeString(source->GetName()) +
+        error = "Failed to read BBDecl Component parameter '" + SafeString(source->GetName()) +
                 "' as text. CK type=" + ParameterTypeLabel(behcontext.Context, source) + ".";
         return nullptr;
     }
 
     query = TrimString(query);
     if (query.empty()) {
-        error = "BBSpec Component parameter '" + SafeString(source->GetName()) +
+        error = "BBDecl Component parameter '" + SafeString(source->GetName()) +
                 "' is empty. Expected BB name, Category/Name, GUID, or CKBehavior object.";
         return nullptr;
     }
 
-    BBSpec *spec = bb.Require(query);
+    BBDecl *spec = bb.Require(query);
     if (!spec || !spec->IsValid()) {
-        error = spec ? spec->Error() : "Failed to create BBSpec.";
+        error = spec ? spec->Error() : "Failed to create BBDecl.";
         if (spec) {
             spec->Release();
         }
@@ -1487,7 +1486,7 @@ BBSlot *CreateSlotFromBinding(ScriptBehaviorBridge *bridge,
     }
 
     BBBridge bb(bridge, behcontext);
-    BBSpec *spec = nullptr;
+    BBDecl *spec = nullptr;
     if (!binding.SlotPrototypeName.empty()) {
         spec = bb.Require(binding.SlotPrototypeName);
     } else {
@@ -1525,18 +1524,18 @@ BBSlot *CreateSlotFromBinding(ScriptBehaviorBridge *bridge,
     return slot;
 }
 
-BBBinding *CreateBBBindingFromBinding(ScriptBehaviorBridge *bridge,
+BBConfig *CreateBBConfigFromBinding(ScriptBehaviorBridge *bridge,
                                       const CKBehaviorContext &behcontext,
                                       CKParameter *source,
                                       const ScriptComponentBinding &binding,
                                       std::string &error) {
     if (!bridge) {
-        error = "BBBinding Component injection requires ScriptBehaviorBridge.";
+        error = "BBConfig Component injection requires ScriptBehaviorBridge.";
         return nullptr;
     }
 
     BBBridge bb(bridge, behcontext);
-    BBSpec *spec = nullptr;
+    BBDecl *spec = nullptr;
     if (!binding.SlotPrototypeName.empty()) {
         spec = bb.Require(binding.SlotPrototypeName);
     } else {
@@ -1551,29 +1550,29 @@ BBBinding *CreateBBBindingFromBinding(ScriptBehaviorBridge *bridge,
         return nullptr;
     }
 
-    BBBinding *bbinding = spec->Bind();
+    BBConfig *bbinding = spec->Bind();
     spec->Release();
     if (!bbinding || !bbinding->IsValid()) {
-        error = bbinding ? bbinding->Error() : "Failed to create BBBinding.";
+        error = bbinding ? bbinding->Error() : "Failed to create BBConfig.";
         if (bbinding) {
             bbinding->Release();
         }
         return nullptr;
     }
 
-    bbinding->SetManaged(binding.ManagedBBBinding);
+    bbinding->SetManaged(binding.ManagedBBConfig);
     bbinding->SetDefaultStart(binding.BindingStartInput);
     bbinding->SetDefaultStop(binding.BindingStopInput);
 
     for (const ScriptComponentRequiredSlot &required : binding.RequiredSlots) {
         const ScriptBridgeSlotKind kind = SlotKindFromText(required.KindName);
         if (kind == ScriptBridgeSlotKind::Standalone) {
-            error = "BBBinding required slot has invalid kind '" + required.KindName + "' (" + BindingSummary(binding, behcontext.Context) + ").";
+            error = "BBConfig required slot has invalid kind '" + required.KindName + "' (" + BindingSummary(binding, behcontext.Context) + ").";
             bbinding->Release();
             return nullptr;
         }
         if (!bbinding->RequireSlot(kind, required.Name, required.Occurrence)) {
-            error = "BBBinding required slot failed: " + bbinding->Error() + " (" + BindingSummary(binding, behcontext.Context) + ")";
+            error = "BBConfig required slot failed: " + bbinding->Error() + " (" + BindingSummary(binding, behcontext.Context) + ")";
             bbinding->Release();
             return nullptr;
         }
@@ -1591,7 +1590,7 @@ BBBinding *CreateBBBindingFromBinding(ScriptBehaviorBridge *bridge,
             bbinding->Release();
             return nullptr;
         }
-        BBBinding *configured = bbinding->SetSettingString(slot, settingValue.Value);
+        BBConfig *configured = bbinding->SetSettingString(slot, settingValue.Value);
         slot->Release();
         if (!configured) {
             error = "BBConfig setting failed: " + bbinding->Error() + " (" + BindingSummary(binding, behcontext.Context) + ")";
@@ -1940,7 +1939,7 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 binding.LastTextValue = sourceText;
                 break;
             }
-            case ScriptComponentBindingKind::BBSpec: {
+            case ScriptComponentBindingKind::BBDecl: {
                 CKBehavior *behaviorSource = CKBehavior::Cast(ReadObjectValue(source, behcontext.Context));
                 std::string sourceText;
                 if (!behaviorSource) {
@@ -1953,13 +1952,13 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 }
 
                 std::string specError;
-                BBSpec *spec = CreateSpecFromParameter(bridge, behcontext, source, specError);
+                BBDecl *spec = CreateSpecFromParameter(bridge, behcontext, source, specError);
                 if (!spec) {
                     error = specError + " (" + BindingSummary(binding, behcontext.Context) + ")";
                     return false;
                 }
-                if (!AssignRefCountedHandle<BBSpec>(state->Object, binding.PropertyIndex, spec)) {
-                    error = "Failed to assign BBSpec Component field (" + BindingSummary(binding, behcontext.Context) + ").";
+                if (!AssignRefCountedHandle<BBDecl>(state->Object, binding.PropertyIndex, spec)) {
+                    error = "Failed to assign BBDecl Component field (" + BindingSummary(binding, behcontext.Context) + ").";
                     return false;
                 }
                 binding.HandleInjected = true;
@@ -1991,7 +1990,7 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 binding.LastTextValue = cacheText;
                 break;
             }
-            case ScriptComponentBindingKind::BBBinding: {
+            case ScriptComponentBindingKind::BBConfig: {
                 CKBehavior *behaviorSource = CKBehavior::Cast(ReadObjectValue(source, behcontext.Context));
                 std::string sourceText;
                 if (!behaviorSource) {
@@ -2009,19 +2008,19 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 const CK_ID sourceId = behaviorSource ? behaviorSource->GetID() : 0;
                 const std::string cacheText = std::to_string(sourceId) + "|" + sourceText + "|" + binding.SlotPrototypeName + "|" +
                     binding.BindingStartInput + "|" + binding.BindingStopInput + "|" +
-                    (binding.ManagedBBBinding ? "managed" : "unmanaged") + requiredText + settingText;
+                    (binding.ManagedBBConfig ? "managed" : "unmanaged") + requiredText + settingText;
                 if (!initial && binding.HandleInjected && binding.LastTextValue == cacheText) {
                     break;
                 }
 
                 std::string bindingError;
-                BBBinding *bbinding = CreateBBBindingFromBinding(bridge, behcontext, source, binding, bindingError);
+                BBConfig *bbinding = CreateBBConfigFromBinding(bridge, behcontext, source, binding, bindingError);
                 if (!bbinding) {
                     error = bindingError;
                     return false;
                 }
-                if (!AssignRefCountedHandle<BBBinding>(state->Object, binding.PropertyIndex, bbinding)) {
-                    error = "Failed to assign BBBinding Component field (" + BindingSummary(binding, behcontext.Context) + ").";
+                if (!AssignRefCountedHandle<BBConfig>(state->Object, binding.PropertyIndex, bbinding)) {
+                    error = "Failed to assign BBConfig Component field (" + BindingSummary(binding, behcontext.Context) + ").";
                     return false;
                 }
                 binding.HandleInjected = true;
@@ -2395,7 +2394,7 @@ bool DisableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *
         return false;
     }
 
-    StopManagedBBBindings(behcontext, state);
+    StopManagedBBConfigs(behcontext, state);
     state->InstanceEnabled = false;
     return true;
 }
@@ -2407,7 +2406,7 @@ void DestroyInstance(const CKBehaviorContext &behcontext, ScriptComponentState *
 
     DisableInstance(behcontext, state);
     InvokeLifecycle(behcontext.Behavior, state, state->OnDestroy, behcontext, "OnDestroy");
-    DestroyManagedBBBindings(state);
+    DestroyManagedBBConfigs(state);
 }
 
 void SyncErrorOutputParameters(CKBehavior *beh) {
@@ -2618,7 +2617,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         case CKM_BEHAVIORRESET: {
             state = AngelScriptComponentInternal::GetState(behcontext);
             if (state) {
-                AngelScriptComponentInternal::DestroyManagedBBBindings(state);
+                AngelScriptComponentInternal::DestroyManagedBBConfigs(state);
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->ResetComponentTasks(beh->GetID());
                 }

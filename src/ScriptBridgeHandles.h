@@ -9,7 +9,7 @@
 class CScriptArray;
 class BBCallBuilder;
 class BBTaskBuilder;
-class BBBinding;
+class BBConfig;
 
 class ParamInfo final : public RefCounted {
 public:
@@ -410,9 +410,9 @@ private:
     std::string m_Error;
 };
 
-class BBSpec final : public RefCounted {
+class BBDecl final : public RefCounted {
 public:
-    BBSpec(ScriptBehaviorBridge *bridge,
+    BBDecl(ScriptBehaviorBridge *bridge,
            const CKBehaviorContext &ctx,
            const ScriptBridgeBBInvocationSpec &request,
            const std::string &error = std::string());
@@ -427,8 +427,8 @@ public:
     BehaviorLayout *Layout() const;
     BBCallBuilder *Call();
     BBTaskBuilder *Spawn();
-    BBBinding *Bind();
-    BBBinding *Configure();
+    BBConfig *Bind();
+    BBConfig *Configure();
     BBSlot *In(const std::string &name, int occurrence = 0) const;
     BBSlot *Input(const std::string &name, int occurrence = 0) const;
     BBSlot *Out(const std::string &name, int occurrence = 0) const;
@@ -458,18 +458,18 @@ private:
     std::string m_Error;
 };
 
-class BBBinding final : public RefCounted {
+class BBConfig final : public RefCounted {
 public:
-    BBBinding(ScriptBehaviorBridge *bridge,
+    BBConfig(ScriptBehaviorBridge *bridge,
               const CKBehaviorContext &ctx,
               const ScriptBridgeBBInvocationSpec &request,
               const std::string &error = std::string());
-    ~BBBinding() override;
+    ~BBConfig() override;
 
     bool IsValid() const;
     std::string Error() const;
     std::string Describe() const;
-    BBSpec *Spec() const;
+    BBDecl *Spec() const;
     BBTask *Task() const;
     BehaviorRef *Behavior() const;
     bool Raise(const CKBehaviorContext &ctx) const;
@@ -481,28 +481,28 @@ public:
     BBSlot *Local(const std::string &name, int occurrence = 0);
     bool RequireSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence = 0);
 
-    BBBinding *Owner(CKBeObject *owner);
-    BBBinding *Target(CKBeObject *target);
-    BBBinding *Set(const std::string &pinName, ParamValue *value);
-    BBBinding *SetInt(const std::string &pinName, int value);
-    BBBinding *SetFloat(const std::string &pinName, float value);
-    BBBinding *SetBool(const std::string &pinName, bool value);
-    BBBinding *SetString(const std::string &pinName, const std::string &value);
-    BBBinding *SetObject(const std::string &pinName, CKObject *value);
-    BBBinding *SetSlot(BBSlot *pin, ParamValue *value);
-    BBBinding *SetSlotInt(BBSlot *pin, int value);
-    BBBinding *SetSlotFloat(BBSlot *pin, float value);
-    BBBinding *SetSlotBool(BBSlot *pin, bool value);
-    BBBinding *SetSlotString(BBSlot *pin, const std::string &value);
-    BBBinding *SetSlotObject(BBSlot *pin, CKObject *value);
-    BBBinding *Source(const std::string &pinName, ParamRef *source);
-    BBBinding *SourceSlot(BBSlot *pin, ParamRef *source);
-    BBBinding *Operation(const std::string &pinName, ParamOp *operation);
-    BBBinding *OperationSlot(BBSlot *pin, ParamOp *operation);
-    BBBinding *SetSetting(BBSlot *setting, ParamValue *value);
-    BBBinding *SetSettingString(BBSlot *setting, const std::string &value);
+    BBConfig *Owner(CKBeObject *owner);
+    BBConfig *Target(CKBeObject *target);
+    BBConfig *Set(const std::string &pinName, ParamValue *value);
+    BBConfig *SetInt(const std::string &pinName, int value);
+    BBConfig *SetFloat(const std::string &pinName, float value);
+    BBConfig *SetBool(const std::string &pinName, bool value);
+    BBConfig *SetString(const std::string &pinName, const std::string &value);
+    BBConfig *SetObject(const std::string &pinName, CKObject *value);
+    BBConfig *SetSlot(BBSlot *pin, ParamValue *value);
+    BBConfig *SetSlotInt(BBSlot *pin, int value);
+    BBConfig *SetSlotFloat(BBSlot *pin, float value);
+    BBConfig *SetSlotBool(BBSlot *pin, bool value);
+    BBConfig *SetSlotString(BBSlot *pin, const std::string &value);
+    BBConfig *SetSlotObject(BBSlot *pin, CKObject *value);
+    BBConfig *Source(const std::string &pinName, ParamRef *source);
+    BBConfig *SourceSlot(BBSlot *pin, ParamRef *source);
+    BBConfig *Operation(const std::string &pinName, ParamOp *operation);
+    BBConfig *OperationSlot(BBSlot *pin, ParamOp *operation);
+    BBConfig *SetSetting(BBSlot *setting, ParamValue *value);
+    BBConfig *SetSettingString(BBSlot *setting, const std::string &value);
     bool Validate(const CKBehaviorContext &ctx) const;
-    BBSpec *Decl() const;
+    BBDecl *Decl() const;
     BBInstance *SpawnInstance(const CKBehaviorContext &ctx);
 
     BBTask *Start(const CKBehaviorContext &ctx);
@@ -573,7 +573,7 @@ public:
 
     bool IsValid() const;
     std::string Error() const;
-    BBSpec *Decl() const;
+    BBDecl *Decl() const;
     BehaviorRef *Behavior() const;
     bool Start(BBSlot *input);
     bool Step(const CKBehaviorContext &ctx);
@@ -685,10 +685,10 @@ public:
     BBPrototype *At(int index) const;
     BBPrototype *Find(const std::string &query, int occurrence = 0) const;
     CScriptArray *FindAll(const std::string &query) const;
-    BBSpec *Require(const std::string &query) const;
-    BBSpec *RequireGuid(CKGUID guid) const;
-    BBBinding *Bind(const std::string &query) const;
-    BBBinding *BindGuid(CKGUID guid) const;
+    BBDecl *Require(const std::string &query) const;
+    BBDecl *RequireGuid(CKGUID guid) const;
+    BBConfig *Bind(const std::string &query) const;
+    BBConfig *BindGuid(CKGUID guid) const;
 
 private:
     ScriptBehaviorBridge *m_Bridge = nullptr;
