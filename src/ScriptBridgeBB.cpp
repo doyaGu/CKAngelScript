@@ -1482,28 +1482,40 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         return true;
     }
 
-    m_Bridge->RemoveInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-    m_Bridge->RemoveInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-    BehaviorRef *behavior = Behavior();
-    ParamOperationRef *op = behavior ? behavior->ConnectOperationSlot(slot, operation) : nullptr;
-    if (behavior) {
-        behavior->Release();
-    }
+    CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration());
+    std::string operationError;
+    ParamOperationRef *op = behavior
+        ? ConnectOperationToInput(m_Bridge, behavior, pinIndex, operationRequest, operationError, true, nullptr)
+        : nullptr;
     if (!op || !op->IsValid()) {
-        SetError(fmt::format("{} failed to connect live operation.", method));
+        SetError(fmt::format("{} failed to connect live operation.{}",
+                             method,
+                             operationError.empty() ? "" : " " + operationError));
         if (op) {
             op->Release();
         }
         SetScriptException(m_Error);
         return false;
     }
+    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     if (!m_Bridge->StoreInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, op)) {
         op->Destroy();
         op->Release();
+        if (oldOperation) {
+            if (!m_Bridge->StoreInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, oldOperation)) {
+                oldOperation->DestroyDetached();
+                oldOperation->Release();
+            }
+        }
         SetError(fmt::format("{} failed to store live operation.", method));
         SetScriptException(m_Error);
         return false;
     }
+    if (oldOperation) {
+        oldOperation->DestroyDetached();
+        oldOperation->Release();
+    }
+    m_Bridge->RemoveInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     RemovePendingValue(pinIndex);
     RemovePendingSource(pinIndex);
     ReplacePendingOperation(operationRequest);
@@ -2096,28 +2108,39 @@ bool BBInstance::OperationForPin(BBSlot *pin, ParamOp *operation, const char *me
         return false;
     }
 
-    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
-    m_Bridge->RemoveInstanceOperation(m_InstanceId, m_Generation, pinIndex);
-    BehaviorRef *behaviorRef = Behavior();
-    ParamOperationRef *op = behaviorRef ? behaviorRef->ConnectOperationSlot(pin, operation) : nullptr;
-    if (behaviorRef) {
-        behaviorRef->Release();
-    }
+    std::string operationError;
+    ParamOperationRef *op = behavior
+        ? ConnectOperationToInput(m_Bridge, behavior, pinIndex, operation->RequestForPin(pinIndex), operationError, true, nullptr)
+        : nullptr;
     if (!op || !op->IsValid()) {
-        SetError(fmt::format("{} failed to connect live operation.", method));
+        SetError(fmt::format("{} failed to connect live operation.{}",
+                             method,
+                             operationError.empty() ? "" : " " + operationError));
         if (op) {
             op->Release();
         }
         SetScriptException(m_Error);
         return false;
     }
+    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_InstanceId, m_Generation, pinIndex);
     if (!m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, pinIndex, op)) {
         op->Destroy();
         op->Release();
+        if (oldOperation) {
+            if (!m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, pinIndex, oldOperation)) {
+                oldOperation->DestroyDetached();
+                oldOperation->Release();
+            }
+        }
         SetError(fmt::format("{} failed to store live operation.", method));
         SetScriptException(m_Error);
         return false;
     }
+    if (oldOperation) {
+        oldOperation->DestroyDetached();
+        oldOperation->Release();
+    }
+    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
     return true;
 }
 

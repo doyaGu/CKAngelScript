@@ -302,7 +302,17 @@ static void DestroySelfTestObject(CKContext *context, CKObject *object) {
 }
 
 static CKGUID FindSelfTestOperationGuid(CKContext *context,
+                                        CKParameterManager *parameterManager,
+                                        CKGUID valueGuid);
+
+static CKGUID FindSelfTestOperationGuid(CKContext *context,
                                         CKParameterManager *parameterManager) {
+    return FindSelfTestOperationGuid(context, parameterManager, CKPGUID_INT);
+}
+
+static CKGUID FindSelfTestOperationGuid(CKContext *context,
+                                        CKParameterManager *parameterManager,
+                                        CKGUID valueGuid) {
     if (!context || !parameterManager) {
         return CKGUID();
     }
@@ -316,9 +326,9 @@ static CKGUID FindSelfTestOperationGuid(CKContext *context,
         CKParameterOperation *operation = context->CreateCKParameterOperation(
             const_cast<CKSTRING>("__CKAS_OperationProbe"),
             guid,
-            CKPGUID_INT,
-            CKPGUID_INT,
-            CKPGUID_INT);
+            valueGuid,
+            valueGuid,
+            valueGuid);
         if (!operation) {
             continue;
         }
@@ -331,6 +341,196 @@ static CKGUID FindSelfTestOperationGuid(CKContext *context,
     }
 
     return CKGUID();
+}
+
+static ScriptParamValue MakeSelfTestOperationValue(CKContext *context, CKGUID typeGuid, int value) {
+    CKParameterManager *pm = context ? context->GetParameterManager() : nullptr;
+    if (typeGuid == CKPGUID_FLOAT) {
+        return MakeScriptParamFloat(static_cast<float>(value));
+    }
+    if (typeGuid == CKPGUID_BOOL) {
+        return MakeScriptParamBool(value != 0);
+    }
+    if (typeGuid == CKPGUID_INT) {
+        return MakeScriptParamInt(value);
+    }
+    if (pm && pm->IsTypeCompatible(typeGuid, CKPGUID_INT)) {
+        return MakeScriptParamInt(value);
+    }
+    if (pm && pm->IsTypeCompatible(typeGuid, CKPGUID_FLOAT)) {
+        return MakeScriptParamFloat(static_cast<float>(value));
+    }
+    if (pm && pm->IsTypeCompatible(typeGuid, CKPGUID_BOOL)) {
+        return MakeScriptParamBool(value != 0);
+    }
+    return MakeScriptParamInt(value);
+}
+
+static ParamOp *CreateSelfTestParamOperation(ScriptBehaviorBridge *bridge,
+                                             const CKBehaviorContext &ctx,
+                                             CKGUID operationGuid,
+                                             CKGUID typeGuid,
+                                             bool invalidInput) {
+    ParamOp *operation = new ParamOp(bridge, ctx, operationGuid);
+    ParamOp *returnedOperation = operation->Result(typeGuid);
+    if (returnedOperation) {
+        returnedOperation->Release();
+    }
+
+    int rawValue = 7;
+    ParamValue *firstValue = invalidInput
+        ? new ParamValue(MakeScriptParamRaw(typeGuid, DescribeScriptParamType(ctx.Context, typeGuid), &rawValue, 1))
+        : new ParamValue(MakeSelfTestOperationValue(ctx.Context, typeGuid, 1));
+    ParamValue *secondValue = new ParamValue(MakeSelfTestOperationValue(ctx.Context, typeGuid, 2));
+    returnedOperation = operation->InValue(0, firstValue);
+    if (returnedOperation) {
+        returnedOperation->Release();
+    }
+    returnedOperation = operation->InValue(1, secondValue);
+    if (returnedOperation) {
+        returnedOperation->Release();
+    }
+    firstValue->Release();
+    secondValue->Release();
+    return operation;
+}
+
+static bool RunLiveOperationReplacementSelfTest(CKContext *context,
+                                                ScriptBehaviorBridge *bridge,
+                                                const CKBehaviorContext &ctx,
+                                                bool throughConfig,
+                                                std::string &error) {
+    CKParameterManager *parameterManager = context ? context->GetParameterManager() : nullptr;
+    if (!context || !bridge || !parameterManager) {
+        error = "Live operation replacement self-test requires CKContext, bridge, and CKParameterManager.";
+        return false;
+    }
+
+    ScriptBridgeBBInvocationSpec request = MakeDefaultRequest(ctx);
+    request.PrototypeName = "Logics/Calculator/Identity";
+    BBConfig *config = new BBConfig(bridge, ctx, request);
+    BBSlot *pin = config ? config->Pin("pIn 0") : nullptr;
+    BBInstance *instance = nullptr;
+    ParamOp *goodOperation = nullptr;
+    ParamOp *badOperation = nullptr;
+
+    auto cleanup = [&]() {
+        if (badOperation) {
+            badOperation->Release();
+            badOperation = nullptr;
+        }
+        if (goodOperation) {
+            goodOperation->Release();
+            goodOperation = nullptr;
+        }
+        if (instance) {
+            instance->Destroy();
+            instance->Release();
+            instance = nullptr;
+        }
+        if (pin) {
+            pin->Release();
+            pin = nullptr;
+        }
+        if (config) {
+            config->Release();
+            config = nullptr;
+        }
+    };
+
+    if (!config || !config->IsValid() || !pin || !pin->IsValid()) {
+        error = fmt::format("{} operation replacement self-test could not resolve Identity.pIn 0: {}.",
+                            throughConfig ? "BBConfig" : "BBInstance",
+                            config ? config->Error() : std::string("<null config>"));
+        cleanup();
+        return false;
+    }
+
+    instance = config->SpawnInstance(ctx);
+    CKBehavior *behavior = instance ? bridge->GetInstanceBehavior(instance->BridgeInstanceId(), instance->BridgeGeneration()) : nullptr;
+    if (!instance || !behavior) {
+        error = fmt::format("{} operation replacement self-test could not spawn Identity instance: {}.",
+                            throughConfig ? "BBConfig" : "BBInstance",
+                            instance ? instance->Error() : config->Error());
+        cleanup();
+        return false;
+    }
+
+    CKParameterIn *createdPin = behavior->CreateInputParameter(const_cast<CKSTRING>("__CKAS_OperationReplacementPin"), CKPGUID_INT);
+    bridge->InvalidateBehaviorLayout(behavior->GetID());
+    pin->Release();
+    pin = instance->PinSlot("__CKAS_OperationReplacementPin");
+    CKParameterIn *targetPin = createdPin && pin && pin->IsValid() && pin->Index() >= 0 && pin->Index() < behavior->GetInputParameterCount()
+        ? behavior->GetInputParameter(pin->Index())
+        : nullptr;
+    if (!createdPin || !pin || !pin->IsValid() || targetPin != createdPin) {
+        error = fmt::format("{} operation replacement self-test could not create runtime operation pin: {}.",
+                            throughConfig ? "BBConfig" : "BBInstance",
+                            pin ? pin->Error() : std::string("<null slot>"));
+        cleanup();
+        return false;
+    }
+
+    const CKGUID valueGuid = targetPin->GetGUID();
+    CKGUID operationGuid;
+    for (int i = 0; i < parameterManager->GetParameterOperationCount(); ++i) {
+        const CKGUID candidateGuid = parameterManager->OperationCodeToGuid(i);
+        if (!candidateGuid.IsValid()) {
+            continue;
+        }
+
+        ParamOp *candidate = CreateSelfTestParamOperation(bridge, ctx, candidateGuid, valueGuid, false);
+        const bool accepted = throughConfig
+            ? [&]() {
+                  BBConfig *returnedConfig = config->OperationSlot(pin, candidate);
+                  const bool acceptedConfig = returnedConfig != nullptr;
+                  if (returnedConfig) {
+                      returnedConfig->Release();
+                  }
+                  return acceptedConfig;
+              }()
+            : instance->OperationSlot(pin, candidate);
+        if (accepted && targetPin->GetDirectSource()) {
+            goodOperation = candidate;
+            operationGuid = candidateGuid;
+            break;
+        }
+        candidate->Release();
+    }
+
+    CKParameter *goodSource = targetPin->GetDirectSource();
+    CKParameterOperation *installedOperation = goodSource ? CKParameterOperation::Cast(goodSource->GetOwner()) : nullptr;
+    if (!operationGuid.IsValid() || !goodSource || !installedOperation || installedOperation->DoOperation() != CK_OK) {
+        error = fmt::format("{} operation replacement self-test could not install any operation on Identity.pIn 0 (type {}).",
+                            throughConfig ? "BBConfig" : "BBInstance",
+                            ParameterTypeLabel(context, valueGuid));
+        cleanup();
+        return false;
+    }
+
+    badOperation = CreateSelfTestParamOperation(bridge, ctx, operationGuid, valueGuid, true);
+    const bool badAccepted = throughConfig
+        ? [&]() {
+              BBConfig *returnedConfig = config->OperationSlot(pin, badOperation);
+              const bool accepted = returnedConfig != nullptr;
+              if (returnedConfig) {
+                  returnedConfig->Release();
+              }
+              return accepted;
+          }()
+        : instance->OperationSlot(pin, badOperation);
+    if (badAccepted ||
+        targetPin->GetDirectSource() != goodSource ||
+        installedOperation->IsToBeDeleted() ||
+        installedOperation->DoOperation() != CK_OK) {
+        error = fmt::format("{} runtime self-test did not preserve live operation after failed operation replacement.",
+                            throughConfig ? "BBConfig" : "BBInstance");
+        cleanup();
+        return false;
+    }
+
+    cleanup();
+    return true;
 }
 
 static bool RunBehaviorBridgeNativeMutationSelfTest(CKContext *context,
@@ -1692,6 +1892,16 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         return false;
     }
     cleanupLiveConfig();
+
+    if (!RunLiveOperationReplacementSelfTest(context, bridge, behaviorContext, true, error)) {
+        manager->UnloadScript(scriptName);
+        return false;
+    }
+
+    if (!RunLiveOperationReplacementSelfTest(context, bridge, behaviorContext, false, error)) {
+        manager->UnloadScript(scriptName);
+        return false;
+    }
 
     BBTask *task = bridge->StartTask(request, behaviorContext, 0);
     if (!task) {

@@ -735,7 +735,7 @@ void ScriptBehaviorBridge::RemoveInstanceSourceLink(CK_ID instanceId, int genera
     record->SourceLinks.erase(it);
 }
 
-void ScriptBehaviorBridge::RemoveInstanceOperation(CK_ID instanceId, int generation, int pinIndex) {
+void ScriptBehaviorBridge::RemoveInstanceOperation(CK_ID instanceId, int generation, int pinIndex, bool restoreTarget) {
     InstanceRecord *record = FindInstance(instanceId, generation);
     if (!record) {
         return;
@@ -750,10 +750,33 @@ void ScriptBehaviorBridge::RemoveInstanceOperation(CK_ID instanceId, int generat
         return;
     }
     if (it->Operation) {
-        it->Operation->Destroy();
+        if (restoreTarget) {
+            it->Operation->Destroy();
+        } else {
+            it->Operation->DestroyDetached();
+        }
         it->Operation->Release();
     }
     record->Operations.erase(it);
+}
+
+ParamOperationRef *ScriptBehaviorBridge::TakeInstanceOperation(CK_ID instanceId, int generation, int pinIndex) {
+    InstanceRecord *record = FindInstance(instanceId, generation);
+    if (!record) {
+        return nullptr;
+    }
+    const auto it = std::lower_bound(record->Operations.begin(),
+                                     record->Operations.end(),
+                                     pinIndex,
+                                     [](const InstanceRecord::OperationLink &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it == record->Operations.end() || it->PinIndex != pinIndex) {
+        return nullptr;
+    }
+    ParamOperationRef *operation = it->Operation;
+    record->Operations.erase(it);
+    return operation;
 }
 
 bool ScriptBehaviorBridge::StoreInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex, ParamSourceLinkRef *link) {

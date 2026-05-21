@@ -267,6 +267,7 @@ public:
     CKERROR Do() const;
     bool Restore();
     bool Destroy();
+    bool DestroyDetached();
     std::string Describe() const;
 
 private:

@@ -860,6 +860,24 @@ bool ParamOperationRef::Destroy() {
     return true;
 }
 
+bool ParamOperationRef::DestroyDetached() {
+    CKParameterOperation *op = Get();
+    if (!op || !m_Bridge || !m_Bridge->GetManager() || !m_Bridge->GetManager()->GetCKContext()) {
+        return false;
+    }
+
+    CKBehavior *owner = op->GetOwner();
+    if (owner) {
+        owner->RemoveParameterOperation(op);
+    }
+    m_Bridge->GetManager()->GetCKContext()->DestroyObject(op);
+    DestroyOwnedLocalSources(owner);
+    m_TargetRestored = true;
+    m_OperationId = 0;
+    m_Stamp = ScriptBridgeObjectStamp();
+    return true;
+}
+
 std::string ParamOperationRef::Describe() const {
     CKParameterOperation *op = Get();
     if (!op) return "ParamOperationRef is not valid.";
