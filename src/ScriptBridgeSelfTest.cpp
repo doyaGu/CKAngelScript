@@ -957,6 +957,39 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     }
     secondApply->Release();
 
+    target->UseGraph();
+    CKBehaviorContext targetGraphCtx = ctx;
+    targetGraphCtx.Behavior = target;
+    BehaviorGraph *targetGraph = new BehaviorGraph(bridge, targetGraphCtx, target->GetID());
+    BehaviorGraphEdit *selfMoveEdit = graph->Edit();
+    selfMoveEdit->Move(targetNode, targetGraph)->Release();
+    GraphEditResult *selfMoveValidation = selfMoveEdit->Validate(ctx);
+    if (!selfMoveValidation || selfMoveValidation->Ok() ||
+        selfMoveValidation->Error().find("itself") == std::string::npos) {
+        error = fmt::format("Graph edit self-test failed self-move validation: {}.",
+                            selfMoveValidation ? selfMoveValidation->Error() : std::string("<null>"));
+        if (selfMoveValidation) selfMoveValidation->Release();
+        selfMoveEdit->Release();
+        targetGraph->Release();
+        unlinkResult->Release();
+        unlinkEdit->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+    selfMoveValidation->Release();
+    selfMoveEdit->Release();
+    targetGraph->Release();
+
     const ScriptBridgeLayoutRecord *targetLayout = bridge->GetBehaviorLayout(target->GetID(), CaptureBridgeObjectStamp(target));
     BBSlot *valueSlot = targetLayout
         ? new BBSlot(bridge,

@@ -153,6 +153,27 @@ bool IsDirectChildOf(CKBehavior *container, CKBehavior *behavior) {
     return false;
 }
 
+bool ContainsSubBehaviorRecursive(CKBehavior *container, CKBehavior *behavior, std::set<CK_ID> &visited) {
+    if (!container || !behavior) {
+        return false;
+    }
+    if (!visited.insert(container->GetID()).second) {
+        return false;
+    }
+    for (int i = 0; i < container->GetSubBehaviorCount(); ++i) {
+        CKBehavior *child = container->GetSubBehavior(i);
+        if (child == behavior || ContainsSubBehaviorRecursive(child, behavior, visited)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ContainsSubBehaviorRecursive(CKBehavior *container, CKBehavior *behavior) {
+    std::set<CK_ID> visited;
+    return ContainsSubBehaviorRecursive(container, behavior, visited);
+}
+
 bool LinkTouches(CKBehaviorLink *link, CKBehavior *behavior) {
     return behavior && (SourceBehavior(link) == behavior || TargetBehavior(link) == behavior);
 }
@@ -1496,6 +1517,14 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
         CKBehavior *behavior = ResolveNodeBehavior(move.NodeIndex);
         if (!behavior) {
             error = "BehaviorGraphEdit.Move can only move existing nodes.";
+            return false;
+        }
+        if (targetRoot == root) {
+            error = "BehaviorGraphEdit.Move target graph is the current graph; Move requires another non-descendant graph.";
+            return false;
+        }
+        if (targetRoot == behavior || ScriptBridgeGraphInternal::ContainsSubBehaviorRecursive(behavior, targetRoot)) {
+            error = "BehaviorGraphEdit.Move cannot move a behavior into itself or one of its descendant graphs.";
             return false;
         }
         for (int i = 0; i < root->GetSubBehaviorLinkCount(); ++i) {
