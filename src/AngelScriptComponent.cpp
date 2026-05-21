@@ -574,9 +574,6 @@ std::string BindingSummary(const ScriptComponentBinding &binding, CKContext *con
         if (!binding.BindingStopInput.empty()) {
             out << ", stop='" << binding.BindingStopInput << "'";
         }
-        if (!binding.SettingValues.empty()) {
-            out << ", settings=" << binding.SettingValues.size();
-        }
     }
     return out.str();
 }
@@ -649,37 +646,6 @@ void AddRequiredSlotDeclaration(ScriptComponentBinding &binding,
     flush();
 }
 
-void AddSettingValueDeclarations(ScriptComponentBinding &binding, const std::string &value) {
-    std::string token;
-    auto flush = [&]() {
-        token = TrimString(token);
-        if (token.empty()) {
-            return;
-        }
-        const std::size_t equal = token.find('=');
-        if (equal == std::string::npos) {
-            token.clear();
-            return;
-        }
-        ScriptComponentSettingValue setting;
-        setting.Name = TrimString(token.substr(0, equal));
-        setting.Value = TrimString(token.substr(equal + 1));
-        if (!setting.Name.empty()) {
-            binding.SettingValues.push_back(setting);
-        }
-        token.clear();
-    };
-
-    for (char c : value) {
-        if (c == ';') {
-            flush();
-        } else {
-            token.push_back(c);
-        }
-    }
-    flush();
-}
-
 bool ParseBindingMetadata(const std::string &metadata,
                           const std::string &defaultFieldName,
                           ScriptComponentBinding &binding) {
@@ -727,10 +693,10 @@ bool ParseBindingMetadata(const std::string &metadata,
     binding.SlotMetadataFlags = 0;
     binding.SlotValue.clear();
     binding.ManagedBBConfig = false;
+    binding.HasManagedBBConfig = false;
     binding.BindingStartInput.clear();
     binding.BindingStopInput.clear();
     binding.RequiredSlots.clear();
-    binding.SettingValues.clear();
 
     const std::string lowerKeyword = ToLower(keyword);
     if (lowerKeyword == "behavior") {
@@ -775,6 +741,7 @@ bool ParseBindingMetadata(const std::string &metadata,
                 binding.InjectEveryFrame = ParseBoolText(value, true);
             } else if (key == "managed") {
                 binding.ManagedBBConfig = ParseBoolText(value, true);
+                binding.HasManagedBBConfig = true;
             } else if (key == "start") {
                 if (lowerKeyword == "bbslot") {
                     SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::Start, ParseBoolText(value, true));
@@ -818,8 +785,6 @@ bool ParseBindingMetadata(const std::string &metadata,
                 binding.SlotOccurrence = end && *end == '\0' && parsed >= 0 ? static_cast<int>(parsed) : 0;
             } else if (key == "requiredsettings" || key == "required_settings") {
                 AddRequiredSlotDeclaration(binding, "setting", value);
-            } else if (key == "settings" || key == "settingvalues" || key == "setting_values") {
-                AddSettingValueDeclarations(binding, value);
             } else if (key == "inputs" || key == "ins") {
                 AddRequiredSlotDeclaration(binding, "input", value);
             } else if (key == "outputs" || key == "outs") {
@@ -1021,6 +986,9 @@ bool ResolveComponentBinding(asIScriptEngine *engine,
         }
         if (binding.Kind == ScriptComponentBindingKind::Auto) {
             binding.Kind = inferred;
+        }
+        if (binding.Kind == ScriptComponentBindingKind::BBConfig && !binding.HasManagedBBConfig) {
+            binding.ManagedBBConfig = true;
         }
 
         std::string expected;
@@ -1698,28 +1666,6 @@ BBConfig *CreateBBConfigFromBinding(ScriptBehaviorBridge *bridge,
         }
     }
 
-    for (const ScriptComponentSettingValue &settingValue : binding.SettingValues) {
-        BBSlot *slot = spec->Setting(settingValue.Name, settingValue.Occurrence);
-        if (!slot || !slot->IsValid()) {
-            error = "BBConfig setting failed: " +
-                    (slot ? slot->Error() : "Failed to create setting slot.") +
-                    " (" + BindingSummary(binding, behcontext.Context) + ")";
-            if (slot) {
-                slot->Release();
-            }
-            bbinding->Release();
-            return nullptr;
-        }
-        BBConfig *configured = bbinding->SetSettingString(slot, settingValue.Value);
-        slot->Release();
-        if (!configured) {
-            error = "BBConfig setting failed: " + bbinding->Error() + " (" + BindingSummary(binding, behcontext.Context) + ")";
-            bbinding->Release();
-            return nullptr;
-        }
-        configured->Release();
-    }
-
     return bbinding;
 }
 
@@ -2137,14 +2083,10 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 for (const ScriptComponentRequiredSlot &required : binding.RequiredSlots) {
                     requiredText += "|" + required.KindName + ":" + required.Name + ":" + std::to_string(required.Occurrence);
                 }
-                std::string settingText;
-                for (const ScriptComponentSettingValue &setting : binding.SettingValues) {
-                    settingText += "|setting:" + setting.Name + "=" + setting.Value + ":" + std::to_string(setting.Occurrence);
-                }
                 const CK_ID sourceId = behaviorSource ? behaviorSource->GetID() : 0;
                 const std::string cacheText = std::to_string(sourceId) + "|" + sourceText + "|" + binding.SlotPrototypeName + "|" +
                     binding.BindingStartInput + "|" + binding.BindingStopInput + "|" +
-                    (binding.ManagedBBConfig ? "managed" : "unmanaged") + requiredText + settingText;
+                    (binding.ManagedBBConfig ? "managed" : "unmanaged") + requiredText;
                 if (!initial && binding.HandleInjected && binding.LastTextValue == cacheText) {
                     break;
                 }
