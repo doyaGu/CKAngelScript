@@ -626,6 +626,13 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBSlot", "uint Caps() const", asMETHOD(BBSlot, Caps), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSlot", "int LayoutGeneration() const", asMETHOD(BBSlot, LayoutGeneration), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSlot", "bool IsSetting() const", asMETHOD(BBSlot, IsSetting), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBSlot", "bool IsRequired() const", asMETHOD(BBSlot, IsRequired), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBSlot", "bool IsStart() const", asMETHOD(BBSlot, IsStart), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBSlot", "bool IsStop() const", asMETHOD(BBSlot, IsStop), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBSlot", "bool HasDefault() const", asMETHOD(BBSlot, HasDefault), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBSlot", "string DefaultText() const", asMETHOD(BBSlot, DefaultText), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBSlot", "bool HasValue() const", asMETHOD(BBSlot, HasValue), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBSlot", "string ValueText() const", asMETHOD(BBSlot, ValueText), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSlot", "string Describe() const", asMETHOD(BBSlot, Describe), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("BBDecl", "bool IsValid() const", asMETHOD(BBDecl, IsValid), asCALL_THISCALL); assert(r >= 0);
@@ -676,7 +683,8 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBInstance", "string Error() const", asMETHOD(BBInstance, Error), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBInstance", "BBDecl@ Decl() const", asMETHOD(BBInstance, Decl), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBInstance", "BehaviorRef@ Behavior() const", asMETHOD(BBInstance, Behavior), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("BBInstance", "bool Start(BBSlot@ input)", asMETHOD(BBInstance, Start), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBInstance", "bool Start()", asMETHODPR(BBInstance, Start, (), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBInstance", "bool Start(BBSlot@ input)", asMETHODPR(BBInstance, Start, (BBSlot *), bool), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBInstance", "bool Step(const CKBehaviorContext &in ctx)", asMETHOD(BBInstance, Step), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBInstance", "bool Stop()", asMETHOD(BBInstance, Stop), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBInstance", "bool OutputActive(BBSlot@ output) const", asMETHOD(BBInstance, OutputActive), asCALL_THISCALL); assert(r >= 0);

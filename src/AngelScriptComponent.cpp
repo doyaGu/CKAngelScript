@@ -560,7 +560,8 @@ std::string BindingSummary(const ScriptComponentBinding &binding, CKContext *con
             << " " << GuidToString(binding.ParameterGuid);
     }
     if (binding.Kind == ScriptComponentBindingKind::BBSlot) {
-        out << ", prototype='" << (binding.SlotPrototypeName.empty() ? "<parameter/default>" : binding.SlotPrototypeName) << "'"
+        out << ", from='" << (binding.SlotFromFieldName.empty() ? "<none>" : binding.SlotFromFieldName) << "'"
+            << ", prototype='" << (binding.SlotPrototypeName.empty() ? "<parameter/default>" : binding.SlotPrototypeName) << "'"
             << ", slotKind='" << (binding.SlotKindName.empty() ? "<missing>" : binding.SlotKindName) << "'"
             << ", slotName='" << (binding.SlotName.empty() ? "<missing>" : binding.SlotName) << "'"
             << ", occurrence=" << binding.SlotOccurrence;
@@ -718,10 +719,13 @@ bool ParseBindingMetadata(const std::string &metadata,
     binding.InjectEveryFrame = true;
     binding.HandleInjected = false;
     binding.Kind = ScriptComponentBindingKind::Auto;
+    binding.SlotFromFieldName.clear();
     binding.SlotPrototypeName.clear();
     binding.SlotKindName.clear();
     binding.SlotName.clear();
     binding.SlotOccurrence = 0;
+    binding.SlotMetadataFlags = 0;
+    binding.SlotValue.clear();
     binding.ManagedBBConfig = false;
     binding.BindingStartInput.clear();
     binding.BindingStopInput.clear();
@@ -753,32 +757,65 @@ bool ParseBindingMetadata(const std::string &metadata,
                 binding.FieldName = value;
             } else if (key == "type" || key == "kind") {
                 binding.TypeName = value;
-            } else if (key == "default" || key == "value") {
+            } else if (key == "default") {
                 binding.DefaultValue = value;
                 binding.HasDefault = true;
+                if (lowerKeyword == "bbslot") {
+                    SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::HasDefault, true);
+                }
+            } else if (key == "value") {
+                if (lowerKeyword == "bbslot") {
+                    binding.SlotValue = value;
+                    SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::HasValue, true);
+                } else {
+                    binding.DefaultValue = value;
+                    binding.HasDefault = true;
+                }
             } else if (key == "update" || key == "sync") {
                 binding.InjectEveryFrame = ParseBoolText(value, true);
             } else if (key == "managed") {
                 binding.ManagedBBConfig = ParseBoolText(value, true);
             } else if (key == "start") {
-                binding.BindingStartInput = value;
+                if (lowerKeyword == "bbslot") {
+                    SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::Start, ParseBoolText(value, true));
+                } else {
+                    binding.BindingStartInput = value;
+                }
             } else if (key == "stop") {
-                binding.BindingStopInput = value;
+                if (lowerKeyword == "bbslot") {
+                    SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::Stop, ParseBoolText(value, true));
+                } else {
+                    binding.BindingStopInput = value;
+                }
+            } else if (key == "required") {
+                if (lowerKeyword == "bbslot") {
+                    SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::Required, ParseBoolText(value, true));
+                } else {
+                    AddRequiredSlotDeclaration(binding, std::string(), value);
+                }
+            } else if (key == "from" || key == "config" || key == "bbconfig") {
+                binding.SlotFromFieldName = value;
             } else if (key == "prototype" || key == "proto" || key == "bbname" || key == "bbquery") {
                 binding.SlotPrototypeName = value;
             } else if (key == "slot" || key == "slotkind") {
                 binding.SlotKindName = value;
-            } else if (key == "slotname" || key == "slot_name" || key == "pin" || key == "pout") {
+            } else if (key == "slotname" || key == "slot_name" ||
+                       key == "input" || key == "in" ||
+                       key == "output" || key == "out" ||
+                       key == "pin" || key == "pout" ||
+                       key == "local" || key == "setting") {
                 binding.SlotName = value;
-                if (key == "pin" || key == "pout") {
+                if (key == "input" || key == "in") {
+                    binding.SlotKindName = "input";
+                } else if (key == "output" || key == "out") {
+                    binding.SlotKindName = "output";
+                } else if (key == "pin" || key == "pout" || key == "local" || key == "setting") {
                     binding.SlotKindName = key;
                 }
             } else if (key == "occurrence" || key == "index") {
                 char *end = nullptr;
                 const long parsed = std::strtol(value.c_str(), &end, 0);
                 binding.SlotOccurrence = end && *end == '\0' && parsed >= 0 ? static_cast<int>(parsed) : 0;
-            } else if (key == "required") {
-                AddRequiredSlotDeclaration(binding, std::string(), value);
             } else if (key == "requiredsettings" || key == "required_settings") {
                 AddRequiredSlotDeclaration(binding, "setting", value);
             } else if (key == "settings" || key == "settingvalues" || key == "setting_values") {
@@ -797,6 +834,23 @@ bool ParseBindingMetadata(const std::string &metadata,
                 AddRequiredSlotDeclaration(binding, "setting", value);
             }
             i += 3;
+            continue;
+        }
+
+        const std::string flag = ToLower(StripQuotes(tokens[i]));
+        if (lowerKeyword == "bbslot" && flag == "start") {
+            SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::Start, true);
+            ++i;
+            continue;
+        }
+        if (lowerKeyword == "bbslot" && flag == "stop") {
+            SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::Stop, true);
+            ++i;
+            continue;
+        }
+        if (lowerKeyword == "bbslot" && flag == "required") {
+            SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::Required, true);
+            ++i;
             continue;
         }
 
@@ -1296,6 +1350,18 @@ BBConfig *GetBBConfigField(ScriptComponentState *state, const ScriptComponentBin
     return slot ? static_cast<BBConfig *>(*slot) : nullptr;
 }
 
+BBConfig *GetBBConfigFieldByName(ScriptComponentState *state, const std::string &fieldName) {
+    if (!state || !state->Object || fieldName.empty()) {
+        return nullptr;
+    }
+    for (const ScriptComponentBinding &binding : state->Bindings) {
+        if (binding.Kind == ScriptComponentBindingKind::BBConfig && binding.FieldName == fieldName) {
+            return GetBBConfigField(state, binding);
+        }
+    }
+    return nullptr;
+}
+
 void StopManagedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
     if (!state || !state->Object) {
         return;
@@ -1522,6 +1588,60 @@ BBSlot *CreateSlotFromBinding(ScriptBehaviorBridge *bridge,
 
     spec->Release();
     return slot;
+}
+
+BBSlot *CreateSlotFromConfig(BBConfig *config,
+                             const ScriptComponentBinding &binding,
+                             const CKBehaviorContext &behcontext,
+                             std::string &error) {
+    if (!config || !config->IsValid()) {
+        error = "BBSlot Component binding references unavailable BBConfig field '" +
+                binding.SlotFromFieldName + "' (" + BindingSummary(binding, behcontext.Context) + ").";
+        return nullptr;
+    }
+
+    const ScriptBridgeSlotKind kind = SlotKindFromText(binding.SlotKindName);
+    if (kind == ScriptBridgeSlotKind::Standalone) {
+        error = "BBSlot Component binding has invalid or missing slot kind (" + BindingSummary(binding, behcontext.Context) + ").";
+        return nullptr;
+    }
+    if (binding.SlotName.empty()) {
+        error = "BBSlot Component binding has no slotName (" + BindingSummary(binding, behcontext.Context) + ").";
+        return nullptr;
+    }
+
+    BBSlot *slot = nullptr;
+    switch (kind) {
+        case ScriptBridgeSlotKind::Input: slot = config->In(binding.SlotName, binding.SlotOccurrence); break;
+        case ScriptBridgeSlotKind::Output: slot = config->Out(binding.SlotName, binding.SlotOccurrence); break;
+        case ScriptBridgeSlotKind::Pin: slot = config->Pin(binding.SlotName, binding.SlotOccurrence); break;
+        case ScriptBridgeSlotKind::Pout: slot = config->Pout(binding.SlotName, binding.SlotOccurrence); break;
+        case ScriptBridgeSlotKind::Local: slot = config->Local(binding.SlotName, binding.SlotOccurrence); break;
+        case ScriptBridgeSlotKind::Setting: {
+            BBDecl *decl = config->Decl();
+            slot = decl ? decl->Setting(binding.SlotName, binding.SlotOccurrence) : nullptr;
+            if (decl) {
+                decl->Release();
+            }
+            break;
+        }
+        default: break;
+    }
+    if (!slot || !slot->IsValid()) {
+        error = (slot ? slot->Error() : "Failed to create BBSlot.") + " (" + BindingSummary(binding, behcontext.Context) + ")";
+        if (slot) {
+            slot->Release();
+        }
+        return nullptr;
+    }
+    return slot;
+}
+
+void ApplySlotBindingMetadata(BBSlot *slot, const ScriptComponentBinding &binding) {
+    if (!slot) {
+        return;
+    }
+    slot->SetMetadata(binding.SlotMetadataFlags, binding.DefaultValue, binding.SlotValue);
 }
 
 BBConfig *CreateBBConfigFromBinding(ScriptBehaviorBridge *bridge,
@@ -1971,15 +2091,31 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 ReadStringValue(source, sourceText);
                 sourceText = TrimString(sourceText);
                 const std::string cacheText = sourceText + "|" + binding.SlotPrototypeName + "|" +
-                    binding.SlotKindName + "|" + binding.SlotName + "|" + std::to_string(binding.SlotOccurrence);
+                    binding.SlotFromFieldName + "|" + binding.SlotKindName + "|" + binding.SlotName + "|" +
+                    std::to_string(binding.SlotOccurrence) + "|" + std::to_string(binding.SlotMetadataFlags) + "|" +
+                    binding.DefaultValue + "|" + binding.SlotValue;
                 if (!initial && binding.HandleInjected && binding.LastTextValue == cacheText) {
                     break;
                 }
 
                 std::string slotError;
-                BBSlot *slot = CreateSlotFromBinding(bridge, behcontext, source, binding, slotError);
+                BBConfig *ownerConfig = nullptr;
+                BBSlot *slot = nullptr;
+                if (!binding.SlotFromFieldName.empty()) {
+                    ownerConfig = GetBBConfigFieldByName(state, binding.SlotFromFieldName);
+                    slot = CreateSlotFromConfig(ownerConfig, binding, behcontext, slotError);
+                } else {
+                    slot = CreateSlotFromBinding(bridge, behcontext, source, binding, slotError);
+                }
                 if (!slot) {
                     error = slotError;
+                    return false;
+                }
+                ApplySlotBindingMetadata(slot, binding);
+                if (ownerConfig && !ownerConfig->RegisterSlot(slot)) {
+                    error = "Failed to register BBSlot with BBConfig '" + binding.SlotFromFieldName + "': " +
+                            ownerConfig->Error() + " (" + BindingSummary(binding, behcontext.Context) + ")";
+                    slot->Release();
                     return false;
                 }
                 if (!AssignRefCountedHandle<BBSlot>(state->Object, binding.PropertyIndex, slot)) {

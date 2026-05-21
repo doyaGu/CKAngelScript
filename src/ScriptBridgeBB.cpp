@@ -359,6 +359,13 @@ int BBSlot::DataSize() const { return m_DataSize; }
 CKDWORD BBSlot::Caps() const { return m_Caps; }
 int BBSlot::LayoutGeneration() const { return m_LayoutGeneration; }
 bool BBSlot::IsSetting() const { return HasScriptBridgeSlotCap(m_Caps, ScriptBridgeSlotCaps::Setting) || m_Kind == ScriptBridgeSlotKind::Setting; }
+bool BBSlot::IsRequired() const { return HasScriptBridgeSlotMetadataFlag(m_MetadataFlags, ScriptBridgeSlotMetadataFlags::Required); }
+bool BBSlot::IsStart() const { return HasScriptBridgeSlotMetadataFlag(m_MetadataFlags, ScriptBridgeSlotMetadataFlags::Start); }
+bool BBSlot::IsStop() const { return HasScriptBridgeSlotMetadataFlag(m_MetadataFlags, ScriptBridgeSlotMetadataFlags::Stop); }
+bool BBSlot::HasDefault() const { return HasScriptBridgeSlotMetadataFlag(m_MetadataFlags, ScriptBridgeSlotMetadataFlags::HasDefault); }
+std::string BBSlot::DefaultText() const { return m_DefaultText; }
+bool BBSlot::HasValue() const { return HasScriptBridgeSlotMetadataFlag(m_MetadataFlags, ScriptBridgeSlotMetadataFlags::HasValue); }
+std::string BBSlot::ValueText() const { return m_ValueText; }
 
 std::string BBSlot::Describe() const {
     if (!IsValid()) {
@@ -389,6 +396,12 @@ bool BBSlot::ResolveIndex(ScriptBridgeSlotKind expected, int &index, std::string
     }
     index = m_Index;
     return true;
+}
+
+void BBSlot::SetMetadata(CKDWORD flags, const std::string &defaultText, const std::string &valueText) {
+    m_MetadataFlags = flags;
+    m_DefaultText = defaultText;
+    m_ValueText = valueText;
 }
 
 const ScriptBridgeLayoutRecord *BBSlot::LayoutRecord() const {
@@ -580,6 +593,12 @@ BBConfig::BBConfig(ScriptBehaviorBridge *bridge,
 
 BBConfig::~BBConfig() {
     Destroy();
+    for (BBSlot *slot : m_RegisteredSlots) {
+        if (slot) {
+            slot->Release();
+        }
+    }
+    m_RegisteredSlots.clear();
     for (CachedSlot &slot : m_Slots) {
         if (slot.Slot) {
             slot.Slot->Release();
@@ -991,7 +1010,7 @@ BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
         m_Instance->Release();
         m_Instance = nullptr;
     }
-    BBInstance *instance = new BBInstance(m_Bridge, ctx, m_Request, instanceId, generation);
+    BBInstance *instance = new BBInstance(m_Bridge, ctx, m_Request, instanceId, generation, m_DefaultStartInput);
     m_Instance = instance;
     m_Instance->AddRef();
     return instance;
@@ -1197,6 +1216,21 @@ bool BBConfig::IsManaged() const {
     return m_Managed;
 }
 
+bool BBConfig::RegisterSlot(BBSlot *slot) {
+    if (!slot || !slot->IsValid()) {
+        SetError(slot ? slot->Error() : "BBConfig.RegisterSlot requires a valid BBSlot.");
+        return false;
+    }
+    for (BBSlot *registered : m_RegisteredSlots) {
+        if (registered == slot) {
+            return true;
+        }
+    }
+    slot->AddRef();
+    m_RegisteredSlots.push_back(slot);
+    return ApplySlotMetadata(slot);
+}
+
 BBSlot *BBConfig::Slot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) {
     if (BBSlot *cached = FindCachedSlot(kind, name, occurrence)) {
         cached->AddRef();
@@ -1265,6 +1299,22 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
         return false;
     }
     ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value);
+    if (m_Instance && m_Instance->IsValid()) {
+        ParamRef *ref = m_Instance->Pin(slot);
+        if (!ref) {
+            SetError(fmt::format("{} could not resolve live instance pin.", method));
+            SetScriptException(m_Error);
+            return false;
+        }
+        ParamValue paramValue(value);
+        const bool ok = ref->Set(&paramValue);
+        ref->Release();
+        if (!ok) {
+            SetError(fmt::format("{} failed to write live instance pin '{}'.", method, slot ? slot->Name() : std::string("<null>")));
+            SetScriptException(m_Error);
+        }
+        return ok;
+    }
     if (m_Task && m_Task->IsAlive()) {
         return SetLiveValue(slot, value, method);
     }
@@ -1280,6 +1330,14 @@ bool BBConfig::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, c
         return false;
     }
     ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, value);
+    if (m_Instance && m_Instance->IsValid()) {
+        if (!m_Instance->SetSetting(slot, ScriptParamValueToText(value))) {
+            SetError(m_Instance->Error());
+            SetScriptException(m_Error);
+            return false;
+        }
+        return true;
+    }
     if (!m_Task || !m_Task->IsAlive()) {
         return true;
     }
@@ -1287,6 +1345,33 @@ bool BBConfig::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, c
         SetError(error);
         SetScriptException(m_Error);
         return false;
+    }
+    return true;
+}
+
+bool BBConfig::ApplySlotMetadata(BBSlot *slot) {
+    if (!slot) {
+        return true;
+    }
+    if ((slot->IsStart() || slot->IsStop()) && slot->Kind() != static_cast<int>(ScriptBridgeSlotKind::Input)) {
+        SetError(fmt::format("BBSlot '{}' marks start/stop but is not an input slot.", slot->Name()));
+        SetScriptException(m_Error);
+        return false;
+    }
+    if (slot->IsStart()) {
+        SetDefaultStart(slot->Name());
+    }
+    if (slot->IsStop()) {
+        SetDefaultStop(slot->Name());
+    }
+    if (slot->HasDefault() && slot->Kind() == static_cast<int>(ScriptBridgeSlotKind::Pin)) {
+        return SetValueForPin(slot, MakeScriptParamString(slot->DefaultText()), "BBConfig.RegisterSlot");
+    }
+    if (slot->HasValue() && slot->Kind() == static_cast<int>(ScriptBridgeSlotKind::Setting)) {
+        return SetValueForSetting(slot, MakeScriptParamString(slot->ValueText()), "BBConfig.RegisterSlot");
+    }
+    if (slot->HasDefault() && slot->Kind() == static_cast<int>(ScriptBridgeSlotKind::Setting)) {
+        return SetValueForSetting(slot, MakeScriptParamString(slot->DefaultText()), "BBConfig.RegisterSlot");
     }
     return true;
 }
@@ -1414,8 +1499,15 @@ BBInstance::BBInstance(ScriptBehaviorBridge *bridge,
                        const ScriptBridgeBBInvocationSpec &request,
                        CK_ID instanceId,
                        int generation,
+                       const std::string &defaultStartInput,
                        const std::string &error)
-    : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_Error(error), m_InstanceId(instanceId), m_Generation(generation) {}
+    : m_Bridge(bridge),
+      m_Context(ctx),
+      m_Request(request),
+      m_Error(error),
+      m_InstanceId(instanceId),
+      m_Generation(generation),
+      m_DefaultStartInput(defaultStartInput) {}
 
 BBInstance::~BBInstance() {
     Destroy();
@@ -1442,6 +1534,19 @@ BBDecl *BBInstance::Decl() const {
 
 BehaviorRef *BBInstance::Behavior() const {
     return m_Bridge ? m_Bridge->WrapBehavior(m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation)) : nullptr;
+}
+
+bool BBInstance::Start() {
+    if (m_DefaultStartInput.empty()) {
+        return Start(nullptr);
+    }
+    BBDecl decl(m_Bridge, m_Context, m_Request);
+    BBSlot *slot = decl.Input(m_DefaultStartInput);
+    const bool result = Start(slot);
+    if (slot) {
+        slot->Release();
+    }
+    return result;
 }
 
 bool BBInstance::Start(BBSlot *input) {

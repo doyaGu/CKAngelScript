@@ -57,6 +57,15 @@ enum class ScriptBridgeSlotCaps : CKDWORD {
     Internal = 1u << 2,
 };
 
+enum class ScriptBridgeSlotMetadataFlags : CKDWORD {
+    None = 0,
+    Required = 1u << 0,
+    Start = 1u << 1,
+    Stop = 1u << 2,
+    HasDefault = 1u << 3,
+    HasValue = 1u << 4,
+};
+
 enum class ScriptBridgeInputBindingKind : CKBYTE {
     Empty,
     Value,
@@ -152,6 +161,22 @@ inline void SetScriptBridgeSlotCap(CKDWORD &caps, ScriptBridgeSlotCaps cap, bool
         caps |= ScriptBridgeSlotCapMask(cap);
     } else {
         caps &= ~ScriptBridgeSlotCapMask(cap);
+    }
+}
+
+inline CKDWORD ScriptBridgeSlotMetadataFlagMask(ScriptBridgeSlotMetadataFlags flag) {
+    return static_cast<CKDWORD>(flag);
+}
+
+inline bool HasScriptBridgeSlotMetadataFlag(CKDWORD flags, ScriptBridgeSlotMetadataFlags flag) {
+    return (flags & ScriptBridgeSlotMetadataFlagMask(flag)) != 0;
+}
+
+inline void SetScriptBridgeSlotMetadataFlag(CKDWORD &flags, ScriptBridgeSlotMetadataFlags flag, bool enabled) {
+    if (enabled) {
+        flags |= ScriptBridgeSlotMetadataFlagMask(flag);
+    } else {
+        flags &= ~ScriptBridgeSlotMetadataFlagMask(flag);
     }
 }
 

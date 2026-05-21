@@ -68,10 +68,13 @@ struct ScriptComponentBinding {
     bool HandleInjected = false;
     CK_ID LastObjectId = 0;
     std::string LastTextValue;
+    std::string SlotFromFieldName;
     std::string SlotPrototypeName;
     std::string SlotKindName;
     std::string SlotName;
     int SlotOccurrence = 0;
+    CKDWORD SlotMetadataFlags = 0;
+    std::string SlotValue;
     bool ManagedBBConfig = false;
     std::string BindingStartInput;
     std::string BindingStopInput;

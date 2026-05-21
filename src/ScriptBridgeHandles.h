@@ -387,9 +387,17 @@ public:
     CKDWORD Caps() const;
     int LayoutGeneration() const;
     bool IsSetting() const;
+    bool IsRequired() const;
+    bool IsStart() const;
+    bool IsStop() const;
+    bool HasDefault() const;
+    std::string DefaultText() const;
+    bool HasValue() const;
+    std::string ValueText() const;
     std::string Describe() const;
 
     bool ResolveIndex(ScriptBridgeSlotKind expected, int &index, std::string &error) const;
+    void SetMetadata(CKDWORD flags, const std::string &defaultText, const std::string &valueText);
 
 private:
     const ScriptBridgeLayoutRecord *LayoutRecord() const;
@@ -405,8 +413,11 @@ private:
     std::string m_TypeName;
     int m_DataSize = 0;
     CKDWORD m_Caps = 0;
+    CKDWORD m_MetadataFlags = 0;
     int m_LayoutGeneration = 0;
     std::string m_LayoutSignature;
+    std::string m_DefaultText;
+    std::string m_ValueText;
     std::string m_Error;
 };
 
@@ -526,6 +537,7 @@ public:
     void SetDefaultStop(const std::string &inputName);
     void SetManaged(bool managed);
     bool IsManaged() const;
+    bool RegisterSlot(BBSlot *slot);
 
 private:
     struct CachedSlot {
@@ -545,6 +557,7 @@ private:
     bool SourceForPin(BBSlot *slot, ParamRef *source, const char *method);
     bool OperationForPin(BBSlot *slot, ParamOp *operation, const char *method);
     bool SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, const char *method);
+    bool ApplySlotMetadata(BBSlot *slot);
     void ClearOwnedGraphLinks();
     void SetError(const std::string &error) const;
     BBTask *ReturnTask() const;
@@ -556,6 +569,7 @@ private:
     std::vector<CachedSlot> m_Slots;
     std::vector<ParamSourceLinkRef *> m_SourceLinks;
     std::vector<ParamOperationRef *> m_Operations;
+    std::vector<BBSlot *> m_RegisteredSlots;
     BBInstance *m_Instance = nullptr;
     BBTask *m_Task = nullptr;
     std::string m_DefaultStartInput;
@@ -570,6 +584,7 @@ public:
                const ScriptBridgeBBInvocationSpec &request,
                CK_ID instanceId,
                int generation,
+               const std::string &defaultStartInput,
                const std::string &error = std::string());
     ~BBInstance() override;
 
@@ -577,6 +592,7 @@ public:
     std::string Error() const;
     BBDecl *Decl() const;
     BehaviorRef *Behavior() const;
+    bool Start();
     bool Start(BBSlot *input);
     bool Step(const CKBehaviorContext &ctx);
     bool Stop();
@@ -596,6 +612,7 @@ private:
     mutable std::string m_Error;
     CK_ID m_InstanceId = 0;
     int m_Generation = 0;
+    std::string m_DefaultStartInput;
 };
 
 class BBCallBuilder final : public RefCounted {
