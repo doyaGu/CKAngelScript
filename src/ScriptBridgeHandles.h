@@ -568,6 +568,8 @@ public:
     BBInstance(ScriptBehaviorBridge *bridge,
                const CKBehaviorContext &ctx,
                const ScriptBridgeBBInvocationSpec &request,
+               CK_ID instanceId,
+               int generation,
                const std::string &error = std::string());
     ~BBInstance() override;
 
@@ -592,7 +594,8 @@ private:
     CKBehaviorContext m_Context;
     ScriptBridgeBBInvocationSpec m_Request;
     mutable std::string m_Error;
-    BBTask *m_Task = nullptr;
+    CK_ID m_InstanceId = 0;
+    int m_Generation = 0;
 };
 
 class BBCallBuilder final : public RefCounted {

@@ -296,6 +296,15 @@ public:
     BBResult *RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     BBTask *StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     bool SetTaskSetting(CK_ID taskId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
+    CK_ID CreateInstance(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int &generation, std::string &error);
+    bool StartInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
+    bool StepInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx);
+    bool DestroyInstance(CK_ID instanceId, int generation);
+    bool SetInstanceSetting(CK_ID instanceId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
+    bool IsInstanceValid(CK_ID instanceId, int generation) const;
+    bool IsInstanceAlive(CK_ID instanceId, int generation) const;
+    ScriptBridgeExecutionState GetInstanceState(CK_ID instanceId, int generation) const;
+    CKBehavior *GetInstanceBehavior(CK_ID instanceId, int generation) const;
     CKBehaviorPrototype *ResolvePrototypeObject(const ScriptBridgeBBInvocationSpec &request, std::string &error) const;
     const ScriptBridgeLayoutRecord *GetBehaviorLayout(CK_ID behaviorId, const ScriptBridgeObjectStamp &stamp) const;
     const ScriptBridgeLayoutRecord *GetPrototypeLayout(const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request) const;
@@ -343,6 +352,21 @@ private:
 
     struct TaskRecord {
         CK_ID TaskId = 0;
+        int Generation = 0;
+        CK_ID ComponentId = 0;
+        CK_ID BehaviorId = 0;
+        ScriptBridgeObjectStamp BehaviorStamp;
+        CKDWORD Flags = 0;
+        ScriptBridgeExecutionState LastState;
+        ScriptBridgeInputSourceBindings InputSources;
+        std::vector<CK_ID> OperationIds;
+
+        bool HasFlag(ScriptBridgeTaskFlags flag) const { return HasScriptBridgeTaskFlag(Flags, flag); }
+        void SetFlag(ScriptBridgeTaskFlags flag, bool enabled) { SetScriptBridgeTaskFlag(Flags, flag, enabled); }
+    };
+
+    struct InstanceRecord {
+        CK_ID InstanceId = 0;
         int Generation = 0;
         CK_ID ComponentId = 0;
         CK_ID BehaviorId = 0;
@@ -407,8 +431,11 @@ private:
     void QueueDestroy(CKBehavior *behavior, bool sendCallbacks, bool deleteCallbackAlreadySent = false);
     void DestroyQueuedReady();
     void ForceDestroyQueued();
+    bool SetBehaviorSetting(CKBehavior *behavior, int settingIndex, const ScriptParamValue &value, std::string &error);
     TaskRecord *FindTask(CK_ID taskId, int generation);
     const TaskRecord *FindTask(CK_ID taskId, int generation) const;
+    InstanceRecord *FindInstance(CK_ID instanceId, int generation);
+    const InstanceRecord *FindInstance(CK_ID instanceId, int generation) const;
     ResultRecord *FindResult(CK_ID resultId, int generation);
     const ResultRecord *FindResult(CK_ID resultId, int generation) const;
     ScriptBridgeGraphWatch *FindGraphWatch(CK_ID watchId, int generation);
@@ -421,10 +448,12 @@ private:
     CK_ID m_NextRuntimeId = 1;
     CK_ID m_NextResultId = 1;
     CK_ID m_NextTaskId = 1;
+    CK_ID m_NextInstanceId = 1;
     CK_ID m_NextGraphWatchId = 1;
     int m_NextGeneration = 1;
     std::unordered_map<CK_ID, ResultRecord> m_Results;
     std::unordered_map<CK_ID, TaskRecord> m_Tasks;
+    std::unordered_map<CK_ID, InstanceRecord> m_Instances;
     std::unordered_map<CK_ID, ScriptBridgeGraphWatch> m_GraphWatches;
     mutable std::unordered_map<CK_ID, ScriptBridgeLayoutRecord> m_BehaviorLayouts;
     mutable std::unordered_map<std::string, ScriptBridgeLayoutRecord> m_PrototypeLayouts;

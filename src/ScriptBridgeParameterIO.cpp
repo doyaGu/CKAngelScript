@@ -143,6 +143,67 @@ void DestroyCreatedOperationPieces(CKContext *context,
 
 } // namespace ScriptBridgeParameterIOInternal
 
+bool ValidateOperationSpec(CKContext *context,
+                           CKGUID targetTypeGuid,
+                           const ScriptBridgeOperationSpec &request,
+                           std::string &error) {
+    CKParameterManager *pm = context ? context->GetParameterManager() : nullptr;
+    if (!pm) {
+        error = "CKParameterManager is not available.";
+        return false;
+    }
+
+    const CKGUID operationGuid = ResolveOperationGuid(context, request.OperationGuid, request.OperationName, error);
+    if (!operationGuid.IsValid()) {
+        return false;
+    }
+
+    CKGUID resultGuid = request.ResultTypeGuid.IsValid()
+        ? request.ResultTypeGuid
+        : (!request.ResultTypeName.empty()
+            ? ScriptResolveParameterGuid(context, request.ResultTypeName)
+            : targetTypeGuid);
+    if (!resultGuid.IsValid() || resultGuid == CKPGUID_NONE) {
+        resultGuid = targetTypeGuid;
+    }
+
+    const CKGUID in1Guid = ScriptBridgeParameterIOInternal::ResolveOperationInputGuid(context, request.In1, error);
+    if (!error.empty()) {
+        return false;
+    }
+    const CKGUID in2Guid = ScriptBridgeParameterIOInternal::ResolveOperationInputGuid(context, request.In2, error);
+    if (!error.empty()) {
+        return false;
+    }
+
+    const std::string opName = "__CKAS_ValidateOp";
+    CKParameterOperation *operation = context->CreateCKParameterOperation(const_cast<CKSTRING>(opName.c_str()), operationGuid, resultGuid, in1Guid, in2Guid);
+    if (!operation) {
+        error = "Failed to create validation CKParameterOperation.";
+        return false;
+    }
+
+    bool ok = true;
+    if (!operation->GetOutParameter()) {
+        error = "Parameter operation did not create an output parameter.";
+        ok = false;
+    } else if (!operation->GetOperationFunction()) {
+        CKSTRING opText = pm->OperationGuidToName(operationGuid);
+        error = fmt::format("No operation function registered for '{}' with result {}, input1 {}, input2 {}, target {}.",
+            opText && opText[0] ? opText : GuidToString(operationGuid),
+            ParameterTypeLabel(context, resultGuid),
+            ParameterTypeLabel(context, in1Guid),
+            ParameterTypeLabel(context, in2Guid),
+            ParameterTypeLabel(context, targetTypeGuid));
+        ok = false;
+    }
+
+    if (!operation->IsToBeDeleted()) {
+        context->DestroyObject(operation);
+    }
+    return ok;
+}
+
 ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
                                                   CKBehavior *behavior,
                                                   int pinIndex,

@@ -15,4 +15,9 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
                                            bool allowOwnerOnly,
                                            std::vector<CK_ID> *operationIds);
 
+bool ValidateOperationSpec(CKContext *context,
+                           CKGUID targetTypeGuid,
+                           const ScriptBridgeOperationSpec &request,
+                           std::string &error);
+
 #endif // CK_SCRIPTBRIDGEPARAMETERIO_H

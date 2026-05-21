@@ -221,6 +221,19 @@ void ScriptBehaviorBridge::Clear() {
         }
     }
 
+    std::vector<CK_ID> instanceIds;
+    instanceIds.reserve(m_Instances.size());
+    for (const auto &entry : m_Instances) {
+        instanceIds.push_back(entry.first);
+    }
+
+    for (CK_ID instanceId : instanceIds) {
+        auto it = m_Instances.find(instanceId);
+        if (it != m_Instances.end()) {
+            DestroyInstance(it->second.InstanceId, it->second.Generation);
+        }
+    }
+
     m_GraphWatches.clear();
     m_BehaviorLayouts.clear();
     m_PrototypeLayouts.clear();
@@ -239,6 +252,19 @@ void ScriptBehaviorBridge::DestroyComponentTasks(CK_ID componentId) {
         auto it = m_Tasks.find(taskId);
         if (it != m_Tasks.end()) {
             DestroyTask(it->second.TaskId, it->second.Generation);
+        }
+    }
+
+    std::vector<CK_ID> instanceIds;
+    for (const auto &entry : m_Instances) {
+        if (entry.second.ComponentId == componentId) {
+            instanceIds.push_back(entry.first);
+        }
+    }
+    for (CK_ID instanceId : instanceIds) {
+        auto it = m_Instances.find(instanceId);
+        if (it != m_Instances.end()) {
+            DestroyInstance(it->second.InstanceId, it->second.Generation);
         }
     }
 
@@ -263,6 +289,19 @@ void ScriptBehaviorBridge::ResetComponentTasks(CK_ID componentId) {
         }
     }
 
+    std::vector<CK_ID> instanceIds;
+    for (const auto &entry : m_Instances) {
+        if (entry.second.ComponentId == componentId) {
+            instanceIds.push_back(entry.first);
+        }
+    }
+    for (CK_ID instanceId : instanceIds) {
+        auto it = m_Instances.find(instanceId);
+        if (it != m_Instances.end()) {
+            DestroyInstance(it->second.InstanceId, it->second.Generation);
+        }
+    }
+
     std::vector<CK_ID> watchIds;
     for (const auto &entry : m_GraphWatches) {
         if (entry.second.ComponentId == componentId) {
@@ -279,6 +318,12 @@ void ScriptBehaviorBridge::ResetComponentTasks(CK_ID componentId) {
 
 void ScriptBehaviorBridge::PauseComponentTasks(CK_ID componentId, bool paused) {
     for (auto &entry : m_Tasks) {
+        if (entry.second.ComponentId == componentId) {
+            entry.second.SetFlag(ScriptBridgeTaskFlags::Paused, paused);
+        }
+    }
+
+    for (auto &entry : m_Instances) {
         if (entry.second.ComponentId == componentId) {
             entry.second.SetFlag(ScriptBridgeTaskFlags::Paused, paused);
         }
@@ -396,21 +441,156 @@ BBTask *ScriptBehaviorBridge::StartTask(const ScriptBridgeBBInvocationSpec &requ
 bool ScriptBehaviorBridge::SetTaskSetting(CK_ID taskId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error) {
     CKBehavior *behavior = GetTaskBehavior(taskId, generation);
     if (!behavior) {
+        error = "BBTask behavior is not available.";
+        return false;
+    }
+    return SetBehaviorSetting(behavior, settingIndex, value, error);
+}
+
+CK_ID ScriptBehaviorBridge::CreateInstance(const ScriptBridgeBBInvocationSpec &request,
+                                           const CKBehaviorContext &ctx,
+                                           int &generation,
+                                           std::string &error) {
+    ScriptBridgeExecutionState state;
+    ScriptBridgeInputSourceBindings sources;
+    std::vector<CK_ID> operations;
+    CKBehavior *behavior = CreateRuntimeBehavior(request, ctx, state, &sources, &operations);
+    if (!behavior) {
+        error = state.Error.empty() ? "Failed to create BBInstance." : state.Error;
+        generation = 0;
+        return 0;
+    }
+
+    InstanceRecord record;
+    record.InstanceId = m_NextInstanceId++;
+    record.Generation = m_NextGeneration++;
+    record.ComponentId = request.ComponentId;
+    record.BehaviorId = behavior->GetID();
+    record.BehaviorStamp = CaptureBridgeObjectStamp(behavior);
+    record.SetFlag(ScriptBridgeTaskFlags::Alive, true);
+    record.LastState = CaptureExecutionState(behavior, CKBR_OK);
+    record.InputSources = std::move(sources);
+    record.OperationIds = std::move(operations);
+
+    auto [it, inserted] = m_Instances.emplace(record.InstanceId, std::move(record));
+    (void) inserted;
+    generation = it->second.Generation;
+    error.clear();
+    return it->second.InstanceId;
+}
+
+bool ScriptBehaviorBridge::StartInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex) {
+    InstanceRecord *record = FindInstance(instanceId, generation);
+    if (!record || !record->HasFlag(ScriptBridgeTaskFlags::Alive)) {
+        SetScriptException("BBInstance is not alive.");
+        return false;
+    }
+    if (record->HasFlag(ScriptBridgeTaskFlags::Paused)) {
+        record->LastState.Ok = false;
+        record->LastState.Error = "BBInstance is paused.";
+        SetScriptException(record->LastState.Error);
+        return false;
+    }
+    CKBehavior *behavior = GetInstanceBehavior(instanceId, generation);
+    if (!behavior) {
+        record->SetFlag(ScriptBridgeTaskFlags::Alive, false);
+        record->LastState.Ok = false;
+        record->LastState.ReturnCode = CKBR_BEHAVIORERROR;
+        record->LastState.Error = "BBInstance behavior is no longer available.";
+        SetScriptException(record->LastState.Error);
+        return false;
+    }
+    record->LastState = ExecuteOnce(behavior, ctx, inputIndex, &record->InputSources, true);
+    return record->LastState.Ok;
+}
+
+bool ScriptBehaviorBridge::StepInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx) {
+    InstanceRecord *record = FindInstance(instanceId, generation);
+    if (!record || !record->HasFlag(ScriptBridgeTaskFlags::Alive)) {
+        SetScriptException("BBInstance is not alive.");
+        return false;
+    }
+    if (record->HasFlag(ScriptBridgeTaskFlags::Paused)) {
+        record->LastState.Ok = false;
+        record->LastState.Error = "BBInstance is paused.";
+        SetScriptException(record->LastState.Error);
+        return false;
+    }
+    CKBehavior *behavior = GetInstanceBehavior(instanceId, generation);
+    if (!behavior) {
+        record->SetFlag(ScriptBridgeTaskFlags::Alive, false);
+        record->LastState.Ok = false;
+        record->LastState.ReturnCode = CKBR_BEHAVIORERROR;
+        record->LastState.Error = "BBInstance behavior is no longer available.";
+        SetScriptException(record->LastState.Error);
+        return false;
+    }
+    record->LastState = ExecuteOnce(behavior, ctx, -1, &record->InputSources, false);
+    return record->LastState.Ok;
+}
+
+bool ScriptBehaviorBridge::DestroyInstance(CK_ID instanceId, int generation) {
+    auto it = m_Instances.find(instanceId);
+    if (it == m_Instances.end() || it->second.Generation != generation) {
+        return false;
+    }
+
+    CKBehavior *behavior = GetInstanceBehavior(instanceId, generation);
+    CKContext *context = m_Manager ? m_Manager->GetCKContext() : nullptr;
+    for (CK_ID operationId : it->second.OperationIds) {
+        if (context) {
+            if (CKObject *op = GetCKObjectById(context, operationId)) {
+                context->DestroyObject(op);
+            }
+        }
+    }
+    if (behavior) {
+        QueueDestroy(behavior, true, it->second.HasFlag(ScriptBridgeTaskFlags::DeleteCallbackSent));
+    }
+    m_Instances.erase(it);
+    return true;
+}
+
+bool ScriptBehaviorBridge::SetInstanceSetting(CK_ID instanceId,
+                                              int generation,
+                                              int settingIndex,
+                                              const ScriptParamValue &value,
+                                              std::string &error) {
+    CKBehavior *behavior = GetInstanceBehavior(instanceId, generation);
+    if (!behavior) {
         error = "BBInstance behavior is not available.";
         return false;
     }
-    if (!ScriptBehaviorBridgeInternal::SetLocalParameterValueByIndex(behavior, settingIndex, value, error)) {
-        return false;
+    return SetBehaviorSetting(behavior, settingIndex, value, error);
+}
+
+bool ScriptBehaviorBridge::IsInstanceValid(CK_ID instanceId, int generation) const {
+    return FindInstance(instanceId, generation) != nullptr;
+}
+
+bool ScriptBehaviorBridge::IsInstanceAlive(CK_ID instanceId, int generation) const {
+    const InstanceRecord *record = FindInstance(instanceId, generation);
+    return record && record->HasFlag(ScriptBridgeTaskFlags::Alive);
+}
+
+ScriptBridgeExecutionState ScriptBehaviorBridge::GetInstanceState(CK_ID instanceId, int generation) const {
+    const InstanceRecord *record = FindInstance(instanceId, generation);
+    if (record) {
+        return record->LastState;
     }
-    CKERROR err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED);
-    if (err != CK_OK) {
-        error = fmt::format("Building Block SETTINGSEDITED callback failed for '{}' (CKERROR {}).",
-            SafeString(behavior->GetPrototypeName()),
-            err);
-        return false;
+    ScriptBridgeExecutionState state;
+    state.Ok = false;
+    state.ReturnCode = CKBR_BEHAVIORERROR;
+    state.Error = "BBInstance is not valid.";
+    return state;
+}
+
+CKBehavior *ScriptBehaviorBridge::GetInstanceBehavior(CK_ID instanceId, int generation) const {
+    const InstanceRecord *record = FindInstance(instanceId, generation);
+    if (!record || !m_Manager || !m_Manager->GetCKContext()) {
+        return nullptr;
     }
-    m_BehaviorLayouts.erase(behavior->GetID());
-    return true;
+    return CKBehavior::Cast(GetStampedCKObjectById(m_Manager->GetCKContext(), record->BehaviorId, record->BehaviorStamp));
 }
 
 bool ScriptBehaviorBridge::StepTask(CK_ID taskId, int generation, const CKBehaviorContext &ctx, int inputIndex) {
@@ -1121,6 +1301,28 @@ void ScriptBehaviorBridge::ForceDestroyQueued() {
     DestroyQueuedReady();
 }
 
+bool ScriptBehaviorBridge::SetBehaviorSetting(CKBehavior *behavior,
+                                              int settingIndex,
+                                              const ScriptParamValue &value,
+                                              std::string &error) {
+    if (!behavior) {
+        error = "Building Block behavior is not available.";
+        return false;
+    }
+    if (!ScriptBehaviorBridgeInternal::SetLocalParameterValueByIndex(behavior, settingIndex, value, error)) {
+        return false;
+    }
+    CKERROR err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED);
+    if (err != CK_OK) {
+        error = fmt::format("Building Block SETTINGSEDITED callback failed for '{}' (CKERROR {}).",
+            SafeString(behavior->GetPrototypeName()),
+            err);
+        return false;
+    }
+    m_BehaviorLayouts.erase(behavior->GetID());
+    return true;
+}
+
 ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *behavior) const {
     ScriptBridgeLayoutRecord layout;
     layout.Prototype = false;
@@ -1369,6 +1571,22 @@ ScriptBehaviorBridge::TaskRecord *ScriptBehaviorBridge::FindTask(CK_ID taskId, i
 const ScriptBehaviorBridge::TaskRecord *ScriptBehaviorBridge::FindTask(CK_ID taskId, int generation) const {
     auto it = m_Tasks.find(taskId);
     if (it == m_Tasks.end() || it->second.Generation != generation) {
+        return nullptr;
+    }
+    return &it->second;
+}
+
+ScriptBehaviorBridge::InstanceRecord *ScriptBehaviorBridge::FindInstance(CK_ID instanceId, int generation) {
+    auto it = m_Instances.find(instanceId);
+    if (it == m_Instances.end() || it->second.Generation != generation) {
+        return nullptr;
+    }
+    return &it->second;
+}
+
+const ScriptBehaviorBridge::InstanceRecord *ScriptBehaviorBridge::FindInstance(CK_ID instanceId, int generation) const {
+    auto it = m_Instances.find(instanceId);
+    if (it == m_Instances.end() || it->second.Generation != generation) {
         return nullptr;
     }
     return &it->second;

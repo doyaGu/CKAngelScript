@@ -73,6 +73,32 @@ const char *SlotKindName(ScriptBridgeSlotKind kind) {
     }
 }
 
+const std::vector<ScriptBridgeLayoutIoSlot> *IoSlotsForKind(const ScriptBridgeLayoutRecord &layout, ScriptBridgeSlotKind kind) {
+    if (kind == ScriptBridgeSlotKind::Input) {
+        return &layout.Inputs;
+    }
+    if (kind == ScriptBridgeSlotKind::Output) {
+        return &layout.Outputs;
+    }
+    return nullptr;
+}
+
+const std::vector<ScriptBridgeLayoutParamSlot> *ParamSlotsForKind(const ScriptBridgeLayoutRecord &layout, ScriptBridgeSlotKind kind) {
+    if (kind == ScriptBridgeSlotKind::Pin) {
+        return &layout.Pins;
+    }
+    if (kind == ScriptBridgeSlotKind::Pout) {
+        return &layout.Pouts;
+    }
+    if (kind == ScriptBridgeSlotKind::Setting) {
+        return &layout.Settings;
+    }
+    if (kind == ScriptBridgeSlotKind::Local) {
+        return &layout.Locals;
+    }
+    return nullptr;
+}
+
 std::string CandidateList(const ScriptBridgeLayoutRecord &layout, ScriptBridgeSlotKind kind) {
     std::string text;
     auto append = [&](int index, const std::string &name) {
@@ -87,13 +113,9 @@ std::string CandidateList(const ScriptBridgeLayoutRecord &layout, ScriptBridgeSl
     } else if (kind == ScriptBridgeSlotKind::Output) {
         for (int i = 0; i < static_cast<int>(layout.Outputs.size()); ++i) append(i, layout.Outputs[i].Name);
     } else {
-        const std::vector<ScriptBridgeLayoutParamSlot> *slots = nullptr;
-        if (kind == ScriptBridgeSlotKind::Pin) slots = &layout.Pins;
-        if (kind == ScriptBridgeSlotKind::Pout) slots = &layout.Pouts;
-        if (kind == ScriptBridgeSlotKind::Setting) slots = &layout.Settings;
-        if (kind == ScriptBridgeSlotKind::Local) slots = &layout.Locals;
+        const std::vector<ScriptBridgeLayoutParamSlot> *slots = ParamSlotsForKind(layout, kind);
         if (slots) {
-            for (int i = 0; i < static_cast<int>(slots->size()); ++i) append(i, (*slots)[i].Name);
+            for (const ScriptBridgeLayoutParamSlot &slot : *slots) append(slot.Index, slot.Name);
         }
     }
 
@@ -125,15 +147,26 @@ bool FindIoSlot(const ScriptBridgeLayoutRecord &layout,
     return false;
 }
 
+const ScriptBridgeLayoutParamSlot *FindParamSlotByIndex(const ScriptBridgeLayoutRecord &layout,
+                                                        ScriptBridgeSlotKind kind,
+                                                        int index) {
+    const std::vector<ScriptBridgeLayoutParamSlot> *slots = ParamSlotsForKind(layout, kind);
+    if (!slots || index < 0) {
+        return nullptr;
+    }
+    for (const ScriptBridgeLayoutParamSlot &slot : *slots) {
+        if (slot.Index == index) {
+            return &slot;
+        }
+    }
+    return nullptr;
+}
+
 const ScriptBridgeLayoutParamSlot *FindParamSlot(const ScriptBridgeLayoutRecord &layout,
                                                  ScriptBridgeSlotKind kind,
                                                  const std::string &name,
                                                  int occurrence) {
-    const std::vector<ScriptBridgeLayoutParamSlot> *slots = nullptr;
-    if (kind == ScriptBridgeSlotKind::Pin) slots = &layout.Pins;
-    if (kind == ScriptBridgeSlotKind::Pout) slots = &layout.Pouts;
-    if (kind == ScriptBridgeSlotKind::Setting) slots = &layout.Settings;
-    if (kind == ScriptBridgeSlotKind::Local) slots = &layout.Locals;
+    const std::vector<ScriptBridgeLayoutParamSlot> *slots = ParamSlotsForKind(layout, kind);
     if (!slots || occurrence < 0) {
         return nullptr;
     }
@@ -148,6 +181,94 @@ const ScriptBridgeLayoutParamSlot *FindParamSlot(const ScriptBridgeLayoutRecord 
         }
     }
     return nullptr;
+}
+
+std::string StaleSlotError(const char *method,
+                           BBSlot *slot,
+                           ScriptBridgeSlotKind expected,
+                           CKBehavior *behavior,
+                           const ScriptBridgeLayoutRecord *layout,
+                           const std::string &reason) {
+    return fmt::format("{} rejected stale {} slot #{} '{}' for Building Block '{}': {}. Slot generation {}, current runtime generation {}.",
+                       method ? method : "BBInstance",
+                       SlotKindName(expected),
+                       slot ? slot->Index() : -1,
+                       slot ? slot->Name() : std::string(),
+                       SafeString(behavior ? behavior->GetPrototypeName() : nullptr),
+                       reason,
+                       slot ? slot->LayoutGeneration() : 0,
+                       layout ? layout->LayoutGeneration : 0);
+}
+
+bool ResolveRuntimeSlot(ScriptBehaviorBridge *bridge,
+                        CKBehavior *behavior,
+                        BBSlot *slot,
+                        ScriptBridgeSlotKind expected,
+                        const char *method,
+                        int &index,
+                        std::string &error) {
+    if (!slot || !slot->ResolveIndex(expected, index, error)) {
+        if (error.empty()) {
+            error = fmt::format("{} requires a {} BBSlot.", method ? method : "BBInstance", SlotKindName(expected));
+        }
+        return false;
+    }
+    if (!bridge || !behavior) {
+        error = fmt::format("{} requires a live BBInstance behavior.", method ? method : "BBInstance");
+        return false;
+    }
+
+    const ScriptBridgeLayoutRecord *layout = bridge->GetBehaviorLayout(behavior->GetID(), CaptureBridgeObjectStamp(behavior));
+    if (!layout) {
+        error = fmt::format("{} could not read runtime layout for Building Block '{}'.",
+                            method ? method : "BBInstance",
+                            SafeString(behavior->GetPrototypeName()));
+        return false;
+    }
+
+    const std::vector<ScriptBridgeLayoutIoSlot> *ioSlots = IoSlotsForKind(*layout, expected);
+    if (ioSlots) {
+        if (index < 0 || index >= static_cast<int>(ioSlots->size())) {
+            error = StaleSlotError(method, slot, expected, behavior, layout, "runtime slot index is no longer present");
+            return false;
+        }
+        const std::string &runtimeName = (*ioSlots)[index].Name;
+        if (runtimeName != slot->Name()) {
+            error = StaleSlotError(method,
+                                   slot,
+                                   expected,
+                                   behavior,
+                                   layout,
+                                   fmt::format("runtime name is now '{}'", runtimeName));
+            return false;
+        }
+        return true;
+    }
+
+    const ScriptBridgeLayoutParamSlot *runtimeSlot = FindParamSlotByIndex(*layout, expected, index);
+    if (!runtimeSlot) {
+        error = StaleSlotError(method, slot, expected, behavior, layout, "runtime slot index is no longer present");
+        return false;
+    }
+    if (runtimeSlot->Name != slot->Name()) {
+        error = StaleSlotError(method,
+                               slot,
+                               expected,
+                               behavior,
+                               layout,
+                               fmt::format("runtime name is now '{}'", runtimeSlot->Name));
+        return false;
+    }
+    if (runtimeSlot->TypeGuid != slot->TypeGuid()) {
+        error = StaleSlotError(method,
+                               slot,
+                               expected,
+                               behavior,
+                               layout,
+                               fmt::format("runtime type is now {}", runtimeSlot->TypeName));
+        return false;
+    }
+    return true;
 }
 
 asITypeInfo *PrototypeArrayType(ScriptBehaviorBridge *bridge) {
@@ -678,11 +799,170 @@ BBConfig *BBConfig::SetSettingString(BBSlot *setting, const std::string &value) 
 }
 
 bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
-    (void) ctx;
     if (!IsValid()) {
         SetScriptException(Error());
         return false;
     }
+
+    CKContext *context = ctx.Context ? ctx.Context : (m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr);
+    if (!context) {
+        SetError("BBConfig.Validate requires CKContext.");
+        SetScriptException(m_Error);
+        return false;
+    }
+
+    const ScriptBridgeLayoutRecord *layout = m_Bridge ? m_Bridge->GetPrototypeLayout(ctx, m_Request) : nullptr;
+    if (!layout) {
+        SetError("BBConfig.Validate could not resolve prototype layout.");
+        SetScriptException(m_Error);
+        return false;
+    }
+
+    for (const CKGUID &managerGuid : layout->NeededManagers) {
+        if (!context->GetManagerByGuid(managerGuid)) {
+            SetError(fmt::format("Building Block '{}' requires manager {} which is not available.",
+                                 layout->QualifiedName,
+                                 GuidToString(managerGuid)));
+            SetScriptException(m_Error);
+            return false;
+        }
+    }
+
+    CKObject *ownerObject = m_Request.OwnerId ? GetCKObjectById(context, m_Request.OwnerId) : nullptr;
+    CKObject *targetObject = m_Request.TargetId ? GetCKObjectById(context, m_Request.TargetId) : nullptr;
+    if (targetObject) {
+        if (!CKIsChildClassOf(targetObject, layout->CompatibleClassId)) {
+            SetError(fmt::format("Target '{}' is not compatible with Building Block '{}' expected class {}.",
+                                 SafeString(targetObject->GetName()),
+                                 layout->QualifiedName,
+                                 layout->CompatibleClassId));
+            SetScriptException(m_Error);
+            return false;
+        }
+    } else if (ownerObject) {
+        if (!CKIsChildClassOf(ownerObject, layout->CompatibleClassId)) {
+            SetError(fmt::format("Owner '{}' is not compatible with Building Block '{}' expected class {}.",
+                                 SafeString(ownerObject->GetName()),
+                                 layout->QualifiedName,
+                                 layout->CompatibleClassId));
+            SetScriptException(m_Error);
+            return false;
+        }
+    } else if (layout->CompatibleClassId != CKCID_OBJECT && layout->CompatibleClassId != CKCID_BEOBJECT) {
+        SetError(fmt::format("Building Block '{}' requires an owner or target compatible with class {}.",
+                             layout->QualifiedName,
+                             layout->CompatibleClassId));
+        SetScriptException(m_Error);
+        return false;
+    }
+
+    auto findSlot = [](const std::vector<ScriptBridgeLayoutParamSlot> &slots, int index) -> const ScriptBridgeLayoutParamSlot * {
+        for (const ScriptBridgeLayoutParamSlot &slot : slots) {
+            if (slot.Index == index) {
+                return &slot;
+            }
+        }
+        return nullptr;
+    };
+
+    auto validateValue = [&](const char *label,
+                             const std::vector<ScriptBridgeLayoutParamSlot> &slots,
+                             const ScriptBridgeIndexedValue &entry) -> bool {
+        const ScriptBridgeLayoutParamSlot *slot = findSlot(slots, entry.PinIndex);
+        if (!slot) {
+            SetError(fmt::format("BBConfig.Validate has invalid {} index {} for '{}'.",
+                                 label,
+                                 entry.PinIndex,
+                                 layout->QualifiedName));
+            return false;
+        }
+        CKParameterLocal *probe = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ValidateParam"), slot->TypeGuid, TRUE);
+        if (!probe) {
+            SetError(fmt::format("BBConfig.Validate failed to create validation parameter for {} #{} '{}'.",
+                                 label,
+                                 slot->Index,
+                                 slot->Name));
+            return false;
+        }
+        std::string writeError;
+        const CKERROR err = WriteParameterValue(probe, entry.Value, writeError);
+        context->DestroyObject(probe);
+        if (err != CK_OK) {
+            SetError(fmt::format("BBConfig.Validate failed for {} #{} '{}' expected {}: {}",
+                                 label,
+                                 slot->Index,
+                                 slot->Name,
+                                 slot->TypeName,
+                                 writeError.empty() ? fmt::format("CKERROR {}", err) : writeError));
+            return false;
+        }
+        return true;
+    };
+
+    for (const ScriptBridgeIndexedValue &entry : m_Request.IndexedSettings) {
+        if (!validateValue("setting", layout->Settings, entry)) {
+            SetScriptException(m_Error);
+            return false;
+        }
+    }
+
+    for (const ScriptBridgeIndexedValue &entry : m_Request.IndexedParameters) {
+        if (!validateValue("pin", layout->Pins, entry)) {
+            SetScriptException(m_Error);
+            return false;
+        }
+    }
+
+    CKParameterManager *pm = context->GetParameterManager();
+    for (const ScriptBridgeInputSource &source : m_Request.SourceParameters) {
+        const ScriptBridgeLayoutParamSlot *slot = findSlot(layout->Pins, source.PinIndex);
+        if (!slot) {
+            SetError(fmt::format("BBConfig.Validate has invalid source pin index {} for '{}'.",
+                                 source.PinIndex,
+                                 layout->QualifiedName));
+            SetScriptException(m_Error);
+            return false;
+        }
+        CKParameter *sourceParam = ResolveStampedParameterSource(context, source.SourceId, source.SourceStamp, m_Error);
+        if (!sourceParam) {
+            if (m_Error.empty()) {
+                SetError(fmt::format("BBConfig.Validate source for pin #{} '{}' is not valid.", slot->Index, slot->Name));
+            }
+            SetScriptException(m_Error);
+            return false;
+        }
+        if (pm && pm->IsTypeCompatible(slot->TypeGuid, sourceParam->GetGUID()) == FALSE &&
+            pm->IsTypeCompatible(sourceParam->GetGUID(), slot->TypeGuid) == FALSE) {
+            SetError(fmt::format("BBConfig.Validate source type mismatch for pin #{} '{}' expected {}, got {}.",
+                                 slot->Index,
+                                 slot->Name,
+                                 slot->TypeName,
+                                 ParameterTypeLabel(context, sourceParam)));
+            SetScriptException(m_Error);
+            return false;
+        }
+    }
+
+    for (const ScriptBridgeOperationSpec &operation : m_Request.OperationParameters) {
+        const ScriptBridgeLayoutParamSlot *slot = findSlot(layout->Pins, operation.TargetPinIndex);
+        if (!slot) {
+            SetError(fmt::format("BBConfig.Validate has invalid operation target pin index {} for '{}'.",
+                                 operation.TargetPinIndex,
+                                 layout->QualifiedName));
+            SetScriptException(m_Error);
+            return false;
+        }
+        std::string operationError;
+        if (!ValidateOperationSpec(context, slot->TypeGuid, operation, operationError)) {
+            SetError(fmt::format("BBConfig.Validate operation for pin #{} '{}' failed: {}",
+                                 slot->Index,
+                                 slot->Name,
+                                 operationError));
+            SetScriptException(m_Error);
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -691,7 +971,23 @@ BBDecl *BBConfig::Decl() const {
 }
 
 BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
-    return new BBInstance(m_Bridge, ctx, m_Request, Error());
+    if (!m_Bridge) {
+        SetError("BBConfig.Spawn requires ScriptBehaviorBridge.");
+        SetScriptException(m_Error);
+        return nullptr;
+    }
+    if (!Validate(ctx)) {
+        return nullptr;
+    }
+    int generation = 0;
+    std::string error;
+    const CK_ID instanceId = m_Bridge->CreateInstance(m_Request, ctx, generation, error);
+    if (!instanceId) {
+        SetError(error.empty() ? "BBConfig.Spawn failed to create runtime behavior." : error);
+        SetScriptException(m_Error);
+        return nullptr;
+    }
+    return new BBInstance(m_Bridge, ctx, m_Request, instanceId, generation);
 }
 
 BBTask *BBConfig::Start(const CKBehaviorContext &ctx) {
@@ -1101,15 +1397,17 @@ BBTask *BBConfig::ReturnTask() const {
 BBInstance::BBInstance(ScriptBehaviorBridge *bridge,
                        const CKBehaviorContext &ctx,
                        const ScriptBridgeBBInvocationSpec &request,
+                       CK_ID instanceId,
+                       int generation,
                        const std::string &error)
-    : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_Error(error) {}
+    : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_Error(error), m_InstanceId(instanceId), m_Generation(generation) {}
 
 BBInstance::~BBInstance() {
     Destroy();
 }
 
 bool BBInstance::IsValid() const {
-    return m_Error.empty() && m_Bridge != nullptr;
+    return m_Error.empty() && m_Bridge && m_InstanceId != 0 && m_Bridge->IsInstanceValid(m_InstanceId, m_Generation);
 }
 
 std::string BBInstance::Error() const {
@@ -1119,7 +1417,8 @@ std::string BBInstance::Error() const {
     if (!m_Bridge) {
         return "BBInstance bridge is not available.";
     }
-    return m_Task ? m_Task->Error() : std::string();
+    ScriptBridgeExecutionState state = m_Bridge->GetInstanceState(m_InstanceId, m_Generation);
+    return state.Error;
 }
 
 BBDecl *BBInstance::Decl() const {
@@ -1127,7 +1426,7 @@ BBDecl *BBInstance::Decl() const {
 }
 
 BehaviorRef *BBInstance::Behavior() const {
-    return m_Task ? m_Task->Behavior() : nullptr;
+    return m_Bridge ? m_Bridge->WrapBehavior(m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation)) : nullptr;
 }
 
 bool BBInstance::Start(BBSlot *input) {
@@ -1139,29 +1438,32 @@ bool BBInstance::Start(BBSlot *input) {
     int inputIndex = 0;
     if (input) {
         std::string error;
-        if (!input->ResolveIndex(ScriptBridgeSlotKind::Input, inputIndex, error)) {
-            SetError(error.empty() ? "BBInstance.Start requires an input BBSlot." : error);
+        CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation);
+        if (!ScriptBridgeBBInternal::ResolveRuntimeSlot(m_Bridge, behavior, input, ScriptBridgeSlotKind::Input, "BBInstance.Start", inputIndex, error)) {
+            SetError(error);
             SetScriptException(m_Error);
             return false;
         }
     }
-    Destroy();
-    m_Task = m_Bridge->StartTask(m_Request, m_Context, inputIndex);
-    if (!m_Task) {
-        SetError("BBInstance.Start failed to create runtime behavior.");
+    if (!m_Bridge->StartInstance(m_InstanceId, m_Generation, m_Context, inputIndex)) {
+        SetError(m_Bridge->GetInstanceState(m_InstanceId, m_Generation).Error);
         SetScriptException(m_Error);
         return false;
     }
-    return m_Task->IsAlive();
+    return true;
 }
 
 bool BBInstance::Step(const CKBehaviorContext &ctx) {
-    if (!m_Task || !m_Task->IsAlive()) {
+    if (!m_Bridge || !m_Bridge->IsInstanceAlive(m_InstanceId, m_Generation)) {
         SetError("BBInstance.Step called before Start or after Destroy.");
         SetScriptException(m_Error);
         return false;
     }
-    return m_Task->Step(ctx, -1);
+    if (!m_Bridge->StepInstance(m_InstanceId, m_Generation, ctx)) {
+        SetError(m_Bridge->GetInstanceState(m_InstanceId, m_Generation).Error);
+        return false;
+    }
+    return true;
 }
 
 bool BBInstance::Stop() {
@@ -1169,35 +1471,59 @@ bool BBInstance::Stop() {
 }
 
 bool BBInstance::OutputActive(BBSlot *output) const {
-    return m_Task && m_Task->OutputActiveSlot(output);
+    int outputIndex = -1;
+    std::string error;
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation) : nullptr;
+    if (!ScriptBridgeBBInternal::ResolveRuntimeSlot(m_Bridge, behavior, output, ScriptBridgeSlotKind::Output, "BBInstance.OutputActive", outputIndex, error)) {
+        SetScriptException(error);
+        return false;
+    }
+    return ExecutionOutputActive(m_Bridge ? m_Bridge->GetInstanceState(m_InstanceId, m_Generation) : ScriptBridgeExecutionState(), outputIndex);
 }
 
 ParamRef *BBInstance::Pin(BBSlot *pin) const {
-    BehaviorRef *behavior = Behavior();
-    ParamRef *ref = behavior ? behavior->PinSlot(pin) : nullptr;
-    if (behavior) {
-        behavior->Release();
+    int index = -1;
+    std::string error;
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation) : nullptr;
+    if (!ScriptBridgeBBInternal::ResolveRuntimeSlot(m_Bridge, behavior, pin, ScriptBridgeSlotKind::Pin, "BBInstance.Pin", index, error)) {
+        SetScriptException(error);
+        return nullptr;
     }
-    return ref;
+    CKParameterIn *param = behavior && index >= 0 && index < behavior->GetInputParameterCount() ? behavior->GetInputParameter(index) : nullptr;
+    return m_Bridge && param ? new ParamRef(m_Bridge, param->GetID(), ScriptBridgeSlotKind::Pin, index, behavior->GetID()) : nullptr;
 }
 
 ParamRef *BBInstance::Pout(BBSlot *pout) const {
-    return m_Task ? m_Task->PoutSlot(pout) : nullptr;
+    int index = -1;
+    std::string error;
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation) : nullptr;
+    if (!ScriptBridgeBBInternal::ResolveRuntimeSlot(m_Bridge, behavior, pout, ScriptBridgeSlotKind::Pout, "BBInstance.Pout", index, error)) {
+        SetScriptException(error);
+        return nullptr;
+    }
+    CKParameterOut *param = behavior && index >= 0 && index < behavior->GetOutputParameterCount() ? behavior->GetOutputParameter(index) : nullptr;
+    return m_Bridge && param ? new ParamRef(m_Bridge, param->GetID(), ScriptBridgeSlotKind::Pout, index, behavior->GetID()) : nullptr;
 }
 
 bool BBInstance::SetSetting(BBSlot *setting, const std::string &value) {
     int settingIndex = -1;
     std::string error;
-    if (!setting || !setting->ResolveIndex(ScriptBridgeSlotKind::Setting, settingIndex, error)) {
-        SetError(error.empty() ? "BBInstance.SetSetting requires a setting BBSlot." : error);
-        SetScriptException(m_Error);
-        return false;
-    }
-    if (!m_Task || !m_Task->IsAlive()) {
+    if (!m_Bridge || !m_Bridge->IsInstanceAlive(m_InstanceId, m_Generation)) {
+        if (!setting || !setting->ResolveIndex(ScriptBridgeSlotKind::Setting, settingIndex, error)) {
+            SetError(error.empty() ? "BBInstance.SetSetting requires a setting BBSlot." : error);
+            SetScriptException(m_Error);
+            return false;
+        }
         ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, MakeScriptParamString(value));
         return true;
     }
-    if (!m_Bridge->SetTaskSetting(m_Task->BridgeTaskId(), m_Task->BridgeGeneration(), settingIndex, MakeScriptParamString(value), error)) {
+    CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation);
+    if (!ScriptBridgeBBInternal::ResolveRuntimeSlot(m_Bridge, behavior, setting, ScriptBridgeSlotKind::Setting, "BBInstance.SetSetting", settingIndex, error)) {
+        SetError(error);
+        SetScriptException(m_Error);
+        return false;
+    }
+    if (!m_Bridge->SetInstanceSetting(m_InstanceId, m_Generation, settingIndex, MakeScriptParamString(value), error)) {
         SetError(error);
         SetScriptException(m_Error);
         return false;
@@ -1206,12 +1532,12 @@ bool BBInstance::SetSetting(BBSlot *setting, const std::string &value) {
 }
 
 bool BBInstance::Destroy() {
-    if (!m_Task) {
+    if (!m_Bridge || !m_InstanceId) {
         return false;
     }
-    const bool result = m_Task->Destroy();
-    m_Task->Release();
-    m_Task = nullptr;
+    const bool result = m_Bridge->DestroyInstance(m_InstanceId, m_Generation);
+    m_InstanceId = 0;
+    m_Generation = 0;
     return result;
 }
 
