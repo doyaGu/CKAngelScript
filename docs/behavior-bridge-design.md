@@ -101,11 +101,9 @@ Component metadata can inject the same v3 objects:
 class FpsOverlay {
     CK2dEntity@ target;
 
-    [bbconfig prototype="Interface/Text/2D Text"
-              target="target"
-              settings="Text Properties='Screen Proportionnal,WordWrap'"
-              pins="Text='FPS: ...'"
-              lifetime="component"]
+    [bbconfig prototype="Interface/Text/2D Text" target="target" lifetime="component"]
+    [bbsetting "Text Properties"="Screen Proportionnal,WordWrap"]
+    [bbpin "Text"="FPS: ..."]
     BBConfig@ text;
 
     BBInstance@ instance;

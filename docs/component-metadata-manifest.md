@@ -38,13 +38,12 @@ class DoorComponent {
     BBDecl@ TextBB;
 
     [bbconfig prototype="Interface/Text/2D Text"]
+    [bbsetting "Text Properties"="Screen Proportionnal,WordWrap"]
+    [bbpin "Text"="Ready"]
     BBConfig@ TextConfig;
 
     [bbslot from="TextConfig" pin="Text"]
     BBSlot@ TextPin;
-
-    [bbslot from="TextConfig" setting="Text Properties" value="Screen Proportionnal,WordWrap"]
-    BBSlot@ TextProperties;
 
     [bb param="Existing Delay" type="behavior"]
     BBPrototype@ ExistingDelayPrototype;
@@ -77,6 +76,7 @@ Recognized metadata keywords:
 - `bbdecl` for `BBDecl@`
 - `bbslot` for `BBSlot@`
 - `bbconfig` for `BBConfig@`
+- `bbpin`, `bbsetting`, `bbsource`, `bbinput`, `bboutput`, `bbpout`, `bblocal` as short `BBConfig@` fragments
 
 Recognized keys:
 
@@ -98,6 +98,24 @@ Recognized keys:
 - `sources`: semicolon-separated `Pin<-Field.Pout` or `Pin<-ParamRefField` source wiring for `BBConfig@`; the right side resolves during autostart/auto-step, so source configs declared earlier can create their instances first
 - `autostart`: when true, the Component calls `EnsureStarted(ctx)` before the first `Update`
 - `step`: `manual` (default), `eachUpdate`, or `onChange`
+
+AngelScript metadata blocks can span multiple source lines, and multiple metadata blocks attached to the same field are merged. Prefer short stacked fragments for readable BB configs:
+
+```angelscript
+[bbconfig prototype="Interface/Text/2D Text" target="Target"]
+[bbsetting "Text Properties"="Screen Proportionnal,WordWrap"]
+[bbpin "Text"="Ready"]
+[bbsource "Font"="FontConfig.Font Created"]
+[bboutput "Out"]
+BBConfig@ Text;
+```
+
+The long aggregate form remains valid for generated code or compact scripts:
+
+```angelscript
+[bbconfig prototype="Interface/Text/2D Text" pins="Text='Ready'" settings="Text Properties='Screen Proportionnal,WordWrap'" sources="Font<-FontConfig.Font Created"]
+BBConfig@ Text;
+```
 
 ## Manifest Syntax
 
@@ -175,7 +193,9 @@ Object metadata can use editor type aliases such as `object`, `behavior`, `3dent
 class HudText {
     CK2dEntity@ Target;
 
-    [bbconfig prototype="Interface/Text/2D Text" target="Target" settings="Text Properties='Screen Proportionnal,WordWrap'" pins="Text='Ready'" lifetime="component"]
+    [bbconfig prototype="Interface/Text/2D Text" target="Target" lifetime="component"]
+    [bbsetting "Text Properties"="Screen Proportionnal,WordWrap"]
+    [bbpin "Text"="Ready"]
     BBConfig@ Text;
 
     BBInstance@ TextInstance;
