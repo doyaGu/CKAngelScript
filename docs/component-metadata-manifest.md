@@ -37,13 +37,14 @@ class DoorComponent {
     [param param="Text BB" type="bbdecl" default="Interface/Text/2D Text"]
     BBDecl@ TextBB;
 
-    [bbslot prototype="Interface/Text/2D Text" slot="pin" slotName="Text"]
+    [bbconfig prototype="Interface/Text/2D Text" managed=true]
+    BBConfig@ TextConfig;
+
+    [bbslot from="TextConfig" pin="Text"]
     BBSlot@ TextPin;
 
-    [bbconfig prototype="Interface/Text/2D Text" managed=true
-              settings="Text Properties=Screen Proportionnal,WordWrap"
-              required="in:On,in:Off,pin:Font,pin:Text,setting:Text Properties"]
-    BBConfig@ TextConfig;
+    [bbslot from="TextConfig" setting="Text Properties" value="Screen Proportionnal,WordWrap"]
+    BBSlot@ TextProperties;
 
     [bb param="Existing Delay" type="behavior"]
     BBPrototype@ ExistingDelayPrototype;
@@ -82,14 +83,15 @@ Recognized keys:
 - `field`, `member`, `property`: script field name; normally inferred from the annotated field
 - `name`, `param`, `parameter`: Virtools input parameter name
 - `type`, `kind`: parameter/editor type
-- `default`, `value`: default local source value
+- `default`, `value`: default local source value; for `BBSlot@`, `default` applies pin defaults and `value` applies setting values
 - `update`, `sync`: whether scalar/object values are refreshed before each lifecycle/update call
-- `prototype`, `proto`, `bbname`, `bbquery`: prototype query for `BBDecl@`, `BBConfig@`, or `BBSlot@`
+- `prototype`, `proto`, `bbname`, `bbquery`: prototype query for `BBDecl@`, `BBConfig@`, or standalone `BBSlot@`
+- `from`, `config`, `bbconfig`: owning `BBConfig@` field name for `BBSlot@`; this is the recommended style
 - `slot`, `slotKind`: one of `input`, `output`, `pin`, `pout`, `setting`, or `local`
-- `slotName`: slot name for `BBSlot@`
+- `slotName`, `input`, `output`, `pin`, `pout`, `setting`, `local`: slot selector for `BBSlot@`
 - `occurrence`: duplicate-name occurrence for `BBSlot@`
 - `managed`: for `BBConfig@`; when true, Component lifecycle destroys the latest owned `BBInstance@` and any low-level runtime task during disable/reset/delete
-- `start`, `stop`: optional managed stop input names; v3 scripts should still create and start explicit `BBInstance@` objects
+- `start`, `stop`: for `BBSlot@` input fields, mark the config's default start/stop input; for `BBConfig@`, legacy input-name defaults are still accepted
 - `required`: comma/semicolon/pipe separated required slots for `BBConfig@`, such as `in:On,pin:Text,pout:Font Created,setting:Text Properties`
 - `settings`: semicolon-separated `Name=Value` pre-create setting values for `BBConfig@`
 - `inputs`, `outputs`, `pins`, `pouts`, `locals`, `requiredSettings`: shorthand required slot lists for `BBConfig@`
@@ -104,8 +106,10 @@ param field=Target type=3dentity name="Target"
 behavior field=OpenGraph param="Open Graph"
 bb field=DelayBB param="Delay BB" default="Logics/Time/Timer"
 param field=TextBB type=bbdecl param="Text BB" default="Interface/Text/2D Text"
-bbslot field=TextPin prototype="Interface/Text/2D Text" slot=pin slotName=Text
-bbconfig field=TextConfig prototype="Interface/Text/2D Text" managed=true settings="Text Properties=Screen Proportionnal,WordWrap" required="in:On,in:Off,pin:Font,pin:Text,setting:Text Properties"
+bbconfig field=TextConfig prototype="Interface/Text/2D Text" managed=true
+bbslot field=TextOn from=TextConfig input=On start
+bbslot field=TextPin from=TextConfig pin=Text
+bbslot field=TextProperties from=TextConfig setting="Text Properties" value="Screen Proportionnal,WordWrap"
 bb field=ExistingDelayPrototype type=behavior param="Existing Delay"
 ```
 
@@ -161,35 +165,33 @@ Object metadata can use editor type aliases such as `object`, `behavior`, `3dent
 
 `BBPrototype@` defaults to a string input containing a prototype name, `Category/Name`, or `guid:0x...,0x...`. If the declaration uses `type="behavior"` / `type=behavior`, the input parameter uses `CKPGUID_BEHAVIOR` instead; the injected `BBPrototype@` is built from the referenced behavior's prototype GUID.
 
-`BBDecl@` uses the same string/GUID/behavior source rules as `BBPrototype@`, but exposes real prototype metadata and the v3 layout API. `BBSlot@` binds a setup-time slot from a `BBDecl`; declare `prototype`, `slot`, and `slotName` in metadata/manifest so native injection can resolve the slot once and report candidates on failure.
+`BBDecl@` uses the same string/GUID/behavior source rules as `BBPrototype@`, but exposes real prototype metadata and the v3 layout API. `BBSlot@` binds a setup-time slot from a `BBConfig@` through `from="ConfigField"` or from a standalone prototype query. Prefer `from` because the slot can register `start`, `stop`, `default`, and `value` metadata with the owning config automatically.
 
-`BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, validates `required` slots immediately, applies `settings` before `CKM_BEHAVIORCREATE`, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(ctx)`.
+`BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, receives declarative `BBSlot@` metadata, applies setting values before `CKM_BEHAVIORCREATE`, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(ctx)`.
 
 ```angelscript
 class HudText {
     CK2dEntity@ Target;
 
-    [bbconfig prototype="Interface/Text/2D Text" managed=true
-              settings="Text Properties=Screen Proportionnal,WordWrap"
-              required="in:On,in:Off,pin:Font,pin:Text,pin:Offset,setting:Text Properties"]
+    [bbconfig prototype="Interface/Text/2D Text" managed=true]
     BBConfig@ Text;
 
     BBInstance@ TextInstance;
+
+    [bbslot from="Text" input="On" start]
     BBSlot@ TextOn;
+
+    [bbslot from="Text" pin="Text"]
     BBSlot@ TextText;
+
+    [bbslot from="Text" pin="Offset" default="0,0"]
     BBSlot@ TextOffset;
 
     void Start(const CKBehaviorContext &in ctx) {
-        BBDecl@ decl = Text.Decl();
-        @TextOn = decl.Input("On");
-        @TextText = decl.Pin("Text");
-        @TextOffset = decl.Pin("Offset");
-
         @TextInstance = Text.Target(Target)
             .Set(TextText, "Ready")
-            .Set(TextOffset, Param::Vector2(Vx2DVector(0, 0)))
             .Spawn(ctx);
-        TextInstance.Start(TextOn);
+        TextInstance.Start();
     }
 
     void Update(const CKBehaviorContext &in ctx) {
@@ -199,7 +201,7 @@ class HudText {
 }
 ```
 
-`managed=true` does not autostart the BB. It means the Component destroys the latest `BBInstance@` created by that config, plus any low-level task state, during disable/pause/reset/delete so the script does not leak runtime BBs. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
+`managed=true` does not autostart the BB. It means the Component destroys the latest `BBInstance@` created by that config, plus any low-level task state, during disable/pause/reset/delete so the script does not leak runtime BBs. If a `BBSlot@` marks an input with `start`, `BBInstance.Start()` uses it automatically. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
 
 `ParamTypeInfo@` injects the runtime CK parameter type metadata for the connected input source. It is useful when a component accepts plugin-defined or enum/flags parameters and wants to expose `Name()`, `Guid()`, `Describe()`, `Enum()`, `Flags()`, or `Struct()` without guessing the data layout.
 

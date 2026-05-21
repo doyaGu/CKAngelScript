@@ -144,18 +144,19 @@ def bb_slot_items(item: dict[str, Any], key: str) -> list[str]:
 
 def add_bb_slot_helpers(lines: list[str], bb: dict[str, Any]) -> None:
     slot_specs = [
-        ("In", "inputs"),
-        ("Out", "outputs"),
-        ("Pin", "input_params"),
-        ("Pout", "output_params"),
-        ("Setting", "settings"),
-        ("Local", "local_params"),
+        ("In", "input", "inputs"),
+        ("Out", "output", "outputs"),
+        ("Pin", "pin", "input_params"),
+        ("Pout", "pout", "output_params"),
+        ("Setting", "setting", "settings"),
+        ("Local", "local", "local_params"),
     ]
-    for method, key in slot_specs:
+    for method, metadata_key, key in slot_specs:
         used_names: set[str] = set()
         for name in bb_slot_items(bb, key):
             function_name = identifier(name or f"{method}Slot", used_names)
             lines.append(f"    BBSlot@ {method}_{function_name}(const CKBehaviorContext &in ctx) {{ BBDecl@ decl = Decl(ctx); return decl is null ? null : decl.{method}({as_string(name)}); }}")
+            lines.append(f"    string {method}_{function_name}_Metadata(const string &in fromField) {{ return \"[bbslot from=\\\"\" + fromField + \"\\\" {metadata_key}=\\\"\" + {as_string(name)} + \"\\\"]\"; }}")
 
 
 def value_items(params: Iterable[dict[str, Any]], category: str) -> Iterable[dict[str, Any]]:

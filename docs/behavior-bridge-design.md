@@ -64,7 +64,7 @@ The v3 high-level BB model has three phases:
 2. `BBConfig@` stores pre-create settings, pin values, sources, operations, owner, and target.
 3. `BBInstance@` owns the runtime `CKBehavior` and steps or destroys it.
 
-Settings are separate from pins. `SetSetting()` is applied before `CKM_BEHAVIORCREATE`, which is required for real BBs such as `2D Text`, `Text Display`, and `Move To` where settings create or retag runtime parameters.
+Settings are separate from pins. `BBSlot` metadata can carry setting values and pin defaults; `BBConfig` applies those values before `CKM_BEHAVIORCREATE`, which is required for real BBs such as `2D Text`, `Text Display`, and `Move To` where settings create or retag runtime parameters.
 
 ```angelscript
 BBDecl@ textDecl = BB::Require(ctx, "Interface/Text/2D Text");
@@ -99,21 +99,20 @@ Component metadata can inject the same v3 objects:
 class FpsOverlay {
     CK2dEntity@ target;
 
-    [bbconfig prototype="Interface/Text/2D Text" managed=true
-              settings="Text Properties=Screen Proportionnal,WordWrap"
-              required="in:On,pin:Text,pin:Offset,setting:Text Properties"]
+    [bbconfig prototype="Interface/Text/2D Text" managed=true]
     BBConfig@ text;
 
     BBInstance@ instance;
+
+    [bbslot from="text" input="On" start]
     BBSlot@ on;
+
+    [bbslot from="text" pin="Text"]
     BBSlot@ textPin;
 
     void Start(const CKBehaviorContext &in ctx) {
-        BBDecl@ decl = text.Decl();
-        @on = decl.Input("On");
-        @textPin = decl.Pin("Text");
         @instance = text.Target(target).Set(textPin, "Ready").Spawn(ctx);
-        instance.Start(on);
+        instance.Start();
     }
 }
 ```
@@ -166,7 +165,7 @@ BBPrototype@ text = CKASCatalog::BBHints::Interface_Text_2D_Text::Find(ctx);
 BBDecl@ textDecl = CKASCatalog::BBHints::Interface_Text_2D_Text::Decl(ctx);
 BBConfig@ textConfig = CKASCatalog::BBHints::Interface_Text_2D_Text::Config(ctx);
 BBSlot@ textPin = CKASCatalog::BBHints::Interface_Text_2D_Text::Pin_Text(ctx);
-BBSlot@ textProperties = CKASCatalog::BBHints::Interface_Text_2D_Text::Setting_Text_Properties(ctx);
+string textPinMetadata = CKASCatalog::BBHints::Interface_Text_2D_Text::Pin_Text_Metadata("text");
 
 uint flags = CKASCatalog::Flags::Render_Options::Mask(ctx, "Clear ZBuffer,Buffer Swapping");
 string flagsText = CKASCatalog::Flags::Render_Options::Text(ctx, flags);
