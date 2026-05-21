@@ -543,6 +543,9 @@ private:
     bool OperationForPin(BBSlot *slot, ParamOp *operation, const char *method);
     bool SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, const char *method);
     bool ApplySlotMetadata(BBSlot *slot);
+    void RemovePendingValue(int pinIndex);
+    void RemovePendingSource(int pinIndex);
+    void RemovePendingOperation(int pinIndex);
     void ReplacePendingSource(const ScriptBridgeInputSource &source);
     void ReplacePendingOperation(const ScriptBridgeOperationSpec &operation);
     void SetError(const std::string &error) const;

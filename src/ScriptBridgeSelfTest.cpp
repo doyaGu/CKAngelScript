@@ -1039,6 +1039,59 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         return false;
     }
 
+    CKParameterLocal *wrongScriptSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_WrongScriptSource"), CKPGUID_STRING, TRUE);
+    BBConfig *replacementConfig = new BBConfig(bridge, behaviorContext, request);
+    BBSlot *replacementScriptSlot = replacementConfig ? replacementConfig->Pin("Script") : nullptr;
+    BBSlot *replacementFunctionSlot = replacementConfig ? replacementConfig->Pin("Function") : nullptr;
+    ParamRef *wrongScriptRef = wrongScriptSource ? new ParamRef(bridge, wrongScriptSource->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
+    if (!wrongScriptSource ||
+        wrongScriptSource->SetStringValue(const_cast<CKSTRING>("__CKAS_MissingScript")) != CK_OK ||
+        !replacementConfig ||
+        !replacementScriptSlot ||
+        !replacementFunctionSlot ||
+        !wrongScriptRef) {
+        if (replacementScriptSlot) replacementScriptSlot->Release();
+        if (replacementFunctionSlot) replacementFunctionSlot->Release();
+        if (wrongScriptRef) wrongScriptRef->Release();
+        if (replacementConfig) replacementConfig->Release();
+        DestroySelfTestObject(context, wrongScriptSource);
+        manager->UnloadScript(scriptName);
+        error = "BBConfig replacement precedence self-test setup failed.";
+        return false;
+    }
+
+    BBConfig *returnedConfig = replacementConfig->SourceSlot(replacementScriptSlot, wrongScriptRef);
+    if (returnedConfig) returnedConfig->Release();
+    returnedConfig = replacementConfig->SetSlotString(replacementScriptSlot, scriptName);
+    if (returnedConfig) returnedConfig->Release();
+    returnedConfig = replacementConfig->SetSlotString(replacementFunctionSlot, "BridgeRunnerEntry");
+    if (returnedConfig) returnedConfig->Release();
+    BBInstance *replacementInstance = replacementConfig->SpawnStarted(behaviorContext);
+    count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
+    if (!replacementInstance || !error.empty() || count != 2) {
+        const std::string replacementError = replacementInstance ? replacementInstance->Error() : replacementConfig->Error();
+        if (replacementInstance) replacementInstance->Release();
+        replacementScriptSlot->Release();
+        replacementFunctionSlot->Release();
+        wrongScriptRef->Release();
+        replacementConfig->Release();
+        DestroySelfTestObject(context, wrongScriptSource);
+        manager->UnloadScript(scriptName);
+        if (error.empty()) {
+            error = fmt::format("BBConfig replacement precedence self-test expected count 2, got {}. {}",
+                                count,
+                                replacementError.empty() ? std::string() : replacementError);
+        }
+        return false;
+    }
+    replacementInstance->Destroy();
+    replacementInstance->Release();
+    replacementScriptSlot->Release();
+    replacementFunctionSlot->Release();
+    wrongScriptRef->Release();
+    replacementConfig->Release();
+    DestroySelfTestObject(context, wrongScriptSource);
+
     BBTask *task = bridge->StartTask(request, behaviorContext, 0);
     if (!task) {
         manager->UnloadScript(scriptName);
@@ -1138,10 +1191,10 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
 
     error.clear();
     count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
-    if (!error.empty() || count != 3) {
+    if (!error.empty() || count != 4) {
         manager->UnloadScript(scriptName);
         if (error.empty()) {
-            error = fmt::format("BB.Spawn runtime self-test expected count 3, got {}.", count);
+            error = fmt::format("BB.Spawn runtime self-test expected count 4, got {}.", count);
         }
         return false;
     }

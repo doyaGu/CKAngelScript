@@ -1162,6 +1162,8 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
         return false;
     }
     if (m_Instance && m_Instance->IsValid()) {
+        m_Bridge->RemoveInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
+        m_Bridge->RemoveInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
         ParamRef *ref = m_Instance->Pin(slot);
         if (!ref) {
             SetError(fmt::format("{} could not resolve live instance pin.", method));
@@ -1179,6 +1181,8 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
             return false;
         }
     }
+    RemovePendingSource(pinIndex);
+    RemovePendingOperation(pinIndex);
     ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value);
     return true;
 }
@@ -1262,11 +1266,14 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
     request.SourceId = source->GetID();
     request.SourceStamp = source->Stamp();
     if (!m_Instance || !m_Instance->IsValid()) {
+        RemovePendingValue(pinIndex);
+        RemovePendingOperation(pinIndex);
         ReplacePendingSource(request);
         return true;
     }
 
     m_Bridge->RemoveInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
+    m_Bridge->RemoveInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     ParamRef *target = PinRefSlot(slot);
     ParamSourceLinkRef *link = target ? target->SetSourceScoped(source) : nullptr;
     if (target) {
@@ -1287,6 +1294,8 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         SetScriptException(m_Error);
         return false;
     }
+    RemovePendingValue(pinIndex);
+    RemovePendingOperation(pinIndex);
     ReplacePendingSource(request);
     return true;
 }
@@ -1304,10 +1313,13 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
 
     const ScriptBridgeOperationSpec operationRequest = operation->RequestForPin(pinIndex);
     if (!m_Instance || !m_Instance->IsValid()) {
+        RemovePendingValue(pinIndex);
+        RemovePendingSource(pinIndex);
         ReplacePendingOperation(operationRequest);
         return true;
     }
 
+    m_Bridge->RemoveInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     m_Bridge->RemoveInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     BehaviorRef *behavior = Behavior();
     ParamOperationRef *op = behavior ? behavior->ConnectOperationSlot(slot, operation) : nullptr;
@@ -1329,8 +1341,46 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         SetScriptException(m_Error);
         return false;
     }
+    RemovePendingValue(pinIndex);
+    RemovePendingSource(pinIndex);
     ReplacePendingOperation(operationRequest);
     return true;
+}
+
+void BBConfig::RemovePendingValue(int pinIndex) {
+    const auto it = std::lower_bound(m_Request.IndexedParameters.begin(),
+                                     m_Request.IndexedParameters.end(),
+                                     pinIndex,
+                                     [](const ScriptBridgeIndexedValue &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it != m_Request.IndexedParameters.end() && it->PinIndex == pinIndex) {
+        m_Request.IndexedParameters.erase(it);
+    }
+}
+
+void BBConfig::RemovePendingSource(int pinIndex) {
+    const auto it = std::lower_bound(m_Request.SourceParameters.begin(),
+                                     m_Request.SourceParameters.end(),
+                                     pinIndex,
+                                     [](const ScriptBridgeInputSource &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it != m_Request.SourceParameters.end() && it->PinIndex == pinIndex) {
+        m_Request.SourceParameters.erase(it);
+    }
+}
+
+void BBConfig::RemovePendingOperation(int pinIndex) {
+    const auto it = std::lower_bound(m_Request.OperationParameters.begin(),
+                                     m_Request.OperationParameters.end(),
+                                     pinIndex,
+                                     [](const ScriptBridgeOperationSpec &entry, int index) {
+                                         return entry.TargetPinIndex < index;
+                                     });
+    if (it != m_Request.OperationParameters.end() && it->TargetPinIndex == pinIndex) {
+        m_Request.OperationParameters.erase(it);
+    }
 }
 
 void BBConfig::ReplacePendingSource(const ScriptBridgeInputSource &source) {
