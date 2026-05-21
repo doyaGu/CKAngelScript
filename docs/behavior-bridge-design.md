@@ -101,7 +101,7 @@ Supported persistent operations are:
 - `Remove(node, removeIncidentLinks)`: destroy a direct child behavior; incident links must be removed explicitly unless `removeIncidentLinks=true`.
 - `Move(node, targetGraph)`: move a direct child behavior to another graph; existing incident links must be unlinked first.
 
-Validation rejects stale handles, foreign graph handles, function behaviors used as graph roots, invalid IO indices, removing nodes with remaining incident links, missing managers, bad target/owner compatibility, and bad pending parameter/settings conversion. `Apply()` creates nodes and links before destructive edits, and rolls back objects it created if a creation step fails. After `Apply()` succeeds the edit is persistent in the live CK graph; component lifetime hooks do not roll it back.
+Validation rejects stale handles, foreign graph handles, function behaviors used as graph roots, invalid IO indices, removing nodes with remaining incident links, missing managers, bad target/owner compatibility, and bad pending parameter/settings conversion. `Apply()` creates nodes and links before destructive edits, and rolls back objects it created if a creation step fails. Existing behavior value/source/operation mutations are applied through scoped replacements: if a new source or operation cannot be installed, the previous direct source remains intact. Destructive edits are validated up front; if an external CK object disappears during `Apply()`, the result reports a partial-failure diagnostic instead of pretending the transaction fully succeeded. After `Apply()` succeeds the edit is persistent in the live CK graph; component lifetime hooks do not roll it back.
 
 ## Parameter Handles
 
@@ -148,6 +148,13 @@ The v3 high-level BB model has three phases:
 Settings are separate from pins. `BBConfig` uses the SDK/prototype defaults for every parameter that the script does not explicitly mention. If a script only needs fixed setup values, Component metadata can put them directly on the config. If a script needs to update a value every frame, connect a source, read an output parameter, or apply a live setting, it keeps a `BBSlot@`; the slot carries the parameter metadata and the bridge applies it at the correct point in the BB lifecycle.
 
 Runtime creation follows the CK2 callback order that real Building Blocks expect: create the dynamic `CKBehavior`, `InitFromGuid`, write pending settings, send `CKM_BEHAVIORCREATE`, attach owner/target, then write pins, sources, and operations before the first execution. Live `SetSetting()` sends `CKM_BEHAVIORSETTINGSEDITED` and refreshes the runtime layout generation.
+
+Live pin replacement has transaction semantics:
+
+- `BBInstance.Set(slot, value)` writes a value and removes any bridge-owned live source or operation on that pin.
+- `BBInstance.Source(slot, source)` and `BBInstance.Operation(slot, op)` install the new link first, then clean up the old bridge-owned source or operation.
+- If a live source/operation replacement fails, the previous direct source remains active and owned cleanup is not run.
+- Replaced operations are destroyed with an internal detached cleanup path so they do not restore over the newly installed source. This `DestroyDetached` behavior is internal only and is not a script API.
 
 ```angelscript
 BBDecl@ textDecl = BB::Require(ctx, "Interface/Text/2D Text");
@@ -317,7 +324,7 @@ proto.Call()
     .Run(inputIndex);
 ```
 
-The bridge creates a real `CKParameterOperation`, binds `In1/In2` sources or literal locals, verifies `GetOperationFunction()`, and connects the operation output to the target `CKParameterIn`.
+The bridge creates a real `CKParameterOperation`, binds `In1/In2` sources or literal locals, verifies `GetOperationFunction()`, and connects the operation output to the target `CKParameterIn`. Runtime replacements are ordered so a failed operation replacement never clears the previous live source/operation. When a replacement succeeds, the old bridge-owned operation and its literal locals are destroyed without restoring the target source over the new operation output.
 
 ## Lifecycle Boundaries
 
