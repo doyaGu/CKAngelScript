@@ -6,6 +6,7 @@
 #include "add_on/scriptarray/scriptarray.h"
 
 #include <fstream>
+#include <functional>
 
 static std::string EscapeAngelScriptString(const std::string &value) {
     std::string escaped;
@@ -530,6 +531,215 @@ static bool RunLiveOperationReplacementSelfTest(CKContext *context,
     }
 
     cleanup();
+    return true;
+}
+
+static bool RunLiveMixedLinkReplacementSelfTest(CKContext *context,
+                                                ScriptBehaviorBridge *bridge,
+                                                const CKBehaviorContext &ctx,
+                                                bool throughConfig,
+                                                std::string &error) {
+    CKParameterManager *parameterManager = context ? context->GetParameterManager() : nullptr;
+    if (!context || !bridge || !parameterManager) {
+        error = "Mixed link replacement self-test requires CKContext, bridge, and CKParameterManager.";
+        return false;
+    }
+
+    auto runWithTarget = [&](const char *scenario, const std::function<bool(BBConfig *, BBInstance *, BBSlot *, CKParameterIn *)> &body) -> bool {
+        ScriptBridgeBBInvocationSpec request = MakeDefaultRequest(ctx);
+        request.PrototypeName = "Logics/Calculator/Identity";
+        BBConfig *config = new BBConfig(bridge, ctx, request);
+        BBInstance *instance = config ? config->SpawnInstance(ctx) : nullptr;
+        CKBehavior *behavior = instance ? bridge->GetInstanceBehavior(instance->BridgeInstanceId(), instance->BridgeGeneration()) : nullptr;
+        CKParameterIn *createdPin = behavior ? behavior->CreateInputParameter(const_cast<CKSTRING>("__CKAS_MixedReplacementPin"), CKPGUID_INT) : nullptr;
+        if (behavior) {
+            bridge->InvalidateBehaviorLayout(behavior->GetID());
+        }
+        BBSlot *pin = instance ? instance->PinSlot("__CKAS_MixedReplacementPin") : nullptr;
+        CKParameterIn *targetPin = createdPin && pin && pin->IsValid() && pin->Index() >= 0 && behavior && pin->Index() < behavior->GetInputParameterCount()
+            ? behavior->GetInputParameter(pin->Index())
+            : nullptr;
+
+        bool ok = config && config->IsValid() && instance && instance->IsValid() && behavior && targetPin == createdPin;
+        if (!ok) {
+            error = fmt::format("{} mixed link replacement setup failed: {}.",
+                                scenario,
+                                pin ? pin->Error() : (instance ? instance->Error() : (config ? config->Error() : std::string("<null config>"))));
+        } else {
+            ok = body(config, instance, pin, targetPin);
+        }
+
+        if (pin) {
+            pin->Release();
+        }
+        if (instance) {
+            instance->Destroy();
+            instance->Release();
+        }
+        if (config) {
+            config->Release();
+        }
+        return ok;
+    };
+
+    auto installOperation = [&](BBConfig *config,
+                                BBInstance *instance,
+                                BBSlot *pin,
+                                CKParameterIn *targetPin,
+                                CKGUID &operationGuid,
+                                CKParameterOperation *&installedOperation) -> bool {
+        operationGuid = CKGUID();
+        installedOperation = nullptr;
+        const CKGUID valueGuid = targetPin->GetGUID();
+        for (int i = 0; i < parameterManager->GetParameterOperationCount(); ++i) {
+            const CKGUID candidateGuid = parameterManager->OperationCodeToGuid(i);
+            if (!candidateGuid.IsValid()) {
+                continue;
+            }
+
+            ParamOp *candidate = CreateSelfTestParamOperation(bridge, ctx, candidateGuid, valueGuid, false);
+            const bool accepted = throughConfig
+                ? [&]() {
+                      BBConfig *returnedConfig = config->OperationSlot(pin, candidate);
+                      const bool acceptedConfig = returnedConfig != nullptr;
+                      if (returnedConfig) {
+                          returnedConfig->Release();
+                      }
+                      return acceptedConfig;
+                  }()
+                : instance->OperationSlot(pin, candidate);
+            candidate->Release();
+            CKParameter *source = targetPin->GetDirectSource();
+            CKParameterOperation *operation = source ? CKParameterOperation::Cast(source->GetOwner()) : nullptr;
+            if (accepted && operation && operation->DoOperation() == CK_OK) {
+                operationGuid = candidateGuid;
+                installedOperation = operation;
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto makeSource = [&](const char *name, CKParameterLocal *&source, ParamRef *&ref) -> bool {
+        source = context->CreateCKParameterLocal(const_cast<CKSTRING>(name), CKPGUID_INT, TRUE);
+        ref = source ? new ParamRef(bridge, source->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
+        return source && ref;
+    };
+
+    if (!runWithTarget(throughConfig ? "BBConfig operation-to-source" : "BBInstance operation-to-source",
+                       [&](BBConfig *config, BBInstance *instance, BBSlot *pin, CKParameterIn *targetPin) {
+                           CKGUID operationGuid;
+                           CKParameterOperation *installedOperation = nullptr;
+                           if (!installOperation(config, instance, pin, targetPin, operationGuid, installedOperation)) {
+                               error = "Mixed link replacement self-test could not install initial operation.";
+                               return false;
+                           }
+
+                           CKParameterLocal *source = nullptr;
+                           ParamRef *sourceRef = nullptr;
+                           if (!makeSource("__CKAS_OperationToSource", source, sourceRef)) {
+                               if (sourceRef) sourceRef->Release();
+                               DestroySelfTestObject(context, source);
+                               error = "Mixed link replacement self-test could not create replacement source.";
+                               return false;
+                           }
+                           const bool accepted = throughConfig
+                               ? [&]() {
+                                     BBConfig *returnedConfig = config->SourceSlot(pin, sourceRef);
+                                     const bool acceptedConfig = returnedConfig != nullptr;
+                                     if (returnedConfig) {
+                                         returnedConfig->Release();
+                                     }
+                                     return acceptedConfig;
+                                 }()
+                               : instance->SourceSlot(pin, sourceRef);
+                           sourceRef->Release();
+                           const bool ok = accepted && targetPin->GetDirectSource() == source && installedOperation->IsToBeDeleted();
+                           DestroySelfTestObject(context, source);
+                           if (!ok) {
+                               error = fmt::format("{} mixed link replacement did not detached-destroy old operation when replacing it with a source.",
+                                                   throughConfig ? "BBConfig" : "BBInstance");
+                           }
+                           return ok;
+                       })) {
+        return false;
+    }
+
+    if (!runWithTarget(throughConfig ? "BBConfig source-to-operation" : "BBInstance source-to-operation",
+                       [&](BBConfig *config, BBInstance *instance, BBSlot *pin, CKParameterIn *targetPin) {
+                           CKParameterLocal *source = nullptr;
+                           ParamRef *sourceRef = nullptr;
+                           if (!makeSource("__CKAS_SourceToOperation", source, sourceRef)) {
+                               if (sourceRef) sourceRef->Release();
+                               DestroySelfTestObject(context, source);
+                               error = "Mixed link replacement self-test could not create initial source.";
+                               return false;
+                           }
+                           const bool sourceAccepted = throughConfig
+                               ? [&]() {
+                                     BBConfig *returnedConfig = config->SourceSlot(pin, sourceRef);
+                                     const bool acceptedConfig = returnedConfig != nullptr;
+                                     if (returnedConfig) {
+                                         returnedConfig->Release();
+                                     }
+                                     return acceptedConfig;
+                                 }()
+                               : instance->SourceSlot(pin, sourceRef);
+                           sourceRef->Release();
+                           if (!sourceAccepted || targetPin->GetDirectSource() != source) {
+                               DestroySelfTestObject(context, source);
+                               error = "Mixed link replacement self-test could not install initial source.";
+                               return false;
+                           }
+
+                           CKGUID operationGuid;
+                           CKParameterOperation *installedOperation = nullptr;
+                           const bool ok = installOperation(config, instance, pin, targetPin, operationGuid, installedOperation) &&
+                                           targetPin->GetDirectSource() &&
+                                           CKParameterOperation::Cast(targetPin->GetDirectSource()->GetOwner()) == installedOperation;
+                           DestroySelfTestObject(context, source);
+                           if (!ok) {
+                               error = fmt::format("{} mixed link replacement did not preserve new operation when replacing a source.",
+                                                   throughConfig ? "BBConfig" : "BBInstance");
+                           }
+                           return ok;
+                       })) {
+        return false;
+    }
+
+    if (!runWithTarget(throughConfig ? "BBConfig operation-to-value" : "BBInstance operation-to-value",
+                       [&](BBConfig *config, BBInstance *instance, BBSlot *pin, CKParameterIn *targetPin) {
+                           CKGUID operationGuid;
+                           CKParameterOperation *installedOperation = nullptr;
+                           if (!installOperation(config, instance, pin, targetPin, operationGuid, installedOperation)) {
+                               error = "Mixed link replacement self-test could not install operation before value write.";
+                               return false;
+                           }
+
+                           const bool accepted = throughConfig
+                               ? [&]() {
+                                     BBConfig *returnedConfig = config->SetSlotInt(pin, 42);
+                                     const bool acceptedConfig = returnedConfig != nullptr;
+                                     if (returnedConfig) {
+                                         returnedConfig->Release();
+                                     }
+                                     return acceptedConfig;
+                                 }()
+                               : instance->SetSlotInt(pin, 42);
+                           CKParameter *valueSource = targetPin->GetDirectSource();
+                           if (!accepted ||
+                               !valueSource ||
+                               CKParameterOperation::Cast(valueSource->GetOwner()) == installedOperation ||
+                               !installedOperation->IsToBeDeleted()) {
+                               error = fmt::format("{} mixed link replacement did not clear old operation on value write.",
+                                                   throughConfig ? "BBConfig" : "BBInstance");
+                               return false;
+                           }
+                           return true;
+                       })) {
+        return false;
+    }
+
     return true;
 }
 
@@ -1899,6 +2109,16 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     }
 
     if (!RunLiveOperationReplacementSelfTest(context, bridge, behaviorContext, false, error)) {
+        manager->UnloadScript(scriptName);
+        return false;
+    }
+
+    if (!RunLiveMixedLinkReplacementSelfTest(context, bridge, behaviorContext, true, error)) {
+        manager->UnloadScript(scriptName);
+        return false;
+    }
+
+    if (!RunLiveMixedLinkReplacementSelfTest(context, bridge, behaviorContext, false, error)) {
         manager->UnloadScript(scriptName);
         return false;
     }

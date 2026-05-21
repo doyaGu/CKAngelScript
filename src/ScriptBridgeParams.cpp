@@ -296,6 +296,11 @@ bool ParamSourceLinkRef::Restore() {
     return true;
 }
 
+bool ParamSourceLinkRef::DestroyDetached() {
+    m_Restored = true;
+    return true;
+}
+
 std::string ParamSourceLinkRef::Describe() const {
     CKParameterIn *target = Target();
     return fmt::format("ParamSourceLink target={} previous={} installed={} committed={} restored={}",

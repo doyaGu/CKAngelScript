@@ -126,6 +126,7 @@ public:
     bool IsRestored() const;
     bool Commit();
     bool Restore();
+    bool DestroyDetached();
     std::string Describe() const;
 
 private:

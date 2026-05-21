@@ -1324,8 +1324,23 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
         return false;
     }
     if (m_Instance && m_Instance->IsValid()) {
-        m_Bridge->RemoveInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-        m_Bridge->RemoveInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
+        ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
+        ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
+        if (oldSource) {
+            oldSource->DestroyDetached();
+            oldSource->Release();
+        }
+        if (oldOperation) {
+            oldOperation->DestroyDetached();
+            oldOperation->Release();
+        }
+        CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration());
+        CKParameterIn *input = behavior && pinIndex >= 0 && pinIndex < behavior->GetInputParameterCount()
+            ? behavior->GetInputParameter(pinIndex)
+            : nullptr;
+        if (input) {
+            input->SetDirectSource(nullptr);
+        }
         ParamRef *ref = m_Instance->Pin(slot);
         if (!ref) {
             SetError(fmt::format("{} could not resolve live instance pin.", method));
@@ -1449,14 +1464,31 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         SetScriptException(m_Error);
         return false;
     }
+    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
+    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     if (!m_Bridge->StoreInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, link)) {
         link->Restore();
         link->Release();
+        if (oldSource && !m_Bridge->StoreInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, oldSource)) {
+            oldSource->DestroyDetached();
+            oldSource->Release();
+        }
+        if (oldOperation && !m_Bridge->StoreInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, oldOperation)) {
+            oldOperation->DestroyDetached();
+            oldOperation->Release();
+        }
         SetError(fmt::format("{} failed to store live source link.", method));
         SetScriptException(m_Error);
         return false;
     }
-    m_Bridge->RemoveInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
+    if (oldSource) {
+        oldSource->DestroyDetached();
+        oldSource->Release();
+    }
+    if (oldOperation) {
+        oldOperation->DestroyDetached();
+        oldOperation->Release();
+    }
     RemovePendingValue(pinIndex);
     RemovePendingOperation(pinIndex);
     ReplacePendingSource(request);
@@ -1497,10 +1529,17 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         SetScriptException(m_Error);
         return false;
     }
+    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     if (!m_Bridge->StoreInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, op)) {
         op->Destroy();
         op->Release();
+        if (oldSource) {
+            if (!m_Bridge->StoreInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, oldSource)) {
+                oldSource->DestroyDetached();
+                oldSource->Release();
+            }
+        }
         if (oldOperation) {
             if (!m_Bridge->StoreInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, oldOperation)) {
                 oldOperation->DestroyDetached();
@@ -1511,11 +1550,14 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         SetScriptException(m_Error);
         return false;
     }
+    if (oldSource) {
+        oldSource->DestroyDetached();
+        oldSource->Release();
+    }
     if (oldOperation) {
         oldOperation->DestroyDetached();
         oldOperation->Release();
     }
-    m_Bridge->RemoveInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     RemovePendingValue(pinIndex);
     RemovePendingSource(pinIndex);
     ReplacePendingOperation(operationRequest);
@@ -2032,8 +2074,22 @@ bool BBInstance::SetValueForPin(BBSlot *pin, const ScriptParamValue &value, cons
         return false;
     }
 
-    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
-    m_Bridge->RemoveInstanceOperation(m_InstanceId, m_Generation, pinIndex);
+    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
+    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_InstanceId, m_Generation, pinIndex);
+    if (oldSource) {
+        oldSource->DestroyDetached();
+        oldSource->Release();
+    }
+    if (oldOperation) {
+        oldOperation->DestroyDetached();
+        oldOperation->Release();
+    }
+    CKParameterIn *input = behavior && pinIndex >= 0 && pinIndex < behavior->GetInputParameterCount()
+        ? behavior->GetInputParameter(pinIndex)
+        : nullptr;
+    if (input) {
+        input->SetDirectSource(nullptr);
+    }
     ParamRef *ref = Pin(pin);
     if (!ref) {
         SetError(fmt::format("{} could not resolve live pin '{}'.", method, pin ? pin->Name() : std::string("<null>")));
@@ -2081,14 +2137,30 @@ bool BBInstance::SourceForPin(BBSlot *pin, ParamRef *source, const char *method)
         SetScriptException(m_Error);
         return false;
     }
-    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
-    m_Bridge->RemoveInstanceOperation(m_InstanceId, m_Generation, pinIndex);
+    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
+    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_InstanceId, m_Generation, pinIndex);
     if (!m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, pinIndex, link)) {
         link->Restore();
         link->Release();
+        if (oldSource && !m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, pinIndex, oldSource)) {
+            oldSource->DestroyDetached();
+            oldSource->Release();
+        }
+        if (oldOperation && !m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, pinIndex, oldOperation)) {
+            oldOperation->DestroyDetached();
+            oldOperation->Release();
+        }
         SetError(fmt::format("{} failed to store live source link.", method));
         SetScriptException(m_Error);
         return false;
+    }
+    if (oldSource) {
+        oldSource->DestroyDetached();
+        oldSource->Release();
+    }
+    if (oldOperation) {
+        oldOperation->DestroyDetached();
+        oldOperation->Release();
     }
     return true;
 }
@@ -2122,10 +2194,17 @@ bool BBInstance::OperationForPin(BBSlot *pin, ParamOp *operation, const char *me
         SetScriptException(m_Error);
         return false;
     }
+    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
     ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_InstanceId, m_Generation, pinIndex);
     if (!m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, pinIndex, op)) {
         op->Destroy();
         op->Release();
+        if (oldSource) {
+            if (!m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, pinIndex, oldSource)) {
+                oldSource->DestroyDetached();
+                oldSource->Release();
+            }
+        }
         if (oldOperation) {
             if (!m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, pinIndex, oldOperation)) {
                 oldOperation->DestroyDetached();
@@ -2136,11 +2215,14 @@ bool BBInstance::OperationForPin(BBSlot *pin, ParamOp *operation, const char *me
         SetScriptException(m_Error);
         return false;
     }
+    if (oldSource) {
+        oldSource->DestroyDetached();
+        oldSource->Release();
+    }
     if (oldOperation) {
         oldOperation->DestroyDetached();
         oldOperation->Release();
     }
-    m_Bridge->RemoveInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
     return true;
 }
 

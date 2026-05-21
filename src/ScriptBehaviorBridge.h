@@ -330,7 +330,8 @@ public:
     bool StartInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
     bool StepInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx);
     bool StopInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
-    void RemoveInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex);
+    void RemoveInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex, bool restoreTarget = true);
+    ParamSourceLinkRef *TakeInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex);
     void RemoveInstanceOperation(CK_ID instanceId, int generation, int pinIndex, bool restoreTarget = true);
     ParamOperationRef *TakeInstanceOperation(CK_ID instanceId, int generation, int pinIndex);
     bool StoreInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex, ParamSourceLinkRef *link);
