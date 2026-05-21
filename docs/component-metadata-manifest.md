@@ -90,9 +90,9 @@ Recognized keys:
 - `slot`, `slotKind`: one of `input`, `output`, `pin`, `pout`, `setting`, or `local`
 - `slotName`, `input`, `output`, `pin`, `pout`, `setting`, `local`: slot selector for `BBSlot@`
 - `occurrence`: duplicate-name occurrence for `BBSlot@`
-- `lifetime`: for `BBConfig@`; `component` (default) lets the Component stop the latest owned `BBInstance@` on disable/deactivate/pause and destroy it on reset/delete/script rebuild. `manual` leaves cleanup to the script. `managed=true/false` is still accepted as a legacy alias.
+- `lifetime`: for `BBConfig@`; `component` (default) lets the Component stop the latest owned `BBInstance@` on disable/deactivate/pause and destroy it on reset/delete/script rebuild. `manual` leaves cleanup to the script. `managed=true/false` is rejected; use `lifetime` explicitly.
 - `owner`, `target`: object source for `BBConfig@`; accepted values include a public object field name, `$owner`, `$target`, and `$level`
-- `start`, `stop`: for `BBSlot@` input fields, mark the config's default start/stop input; for `BBConfig@`, legacy input-name defaults are still accepted
+- `start`, `stop`: for `BBSlot@` input fields, mark the config's default start/stop input; for `BBConfig@`, set default input names directly
 - `required`: comma/semicolon/pipe separated required slots for `BBConfig@`, such as `in:On,pin:Text,pout:Font Created,setting:Text Properties`
 - `inputs`, `outputs`, `pins`, `pouts`, `locals`, `requiredSettings`: shorthand required slot lists for `BBConfig@`; `pins` and `settings` also accept semicolon-separated `Name='value'` entries
 - `sources`: semicolon-separated `Pin<-Field.Pout` or `Pin<-ParamRefField` source wiring for `BBConfig@`; the right side resolves during autostart/auto-step, so source configs declared earlier can create their instances first
@@ -133,7 +133,15 @@ bbslot field=TextPin from=TextConfig pin=Text
 bb field=ExistingDelayPrototype type=behavior param="Existing Delay"
 ```
 
-Short form is also accepted:
+Short fragment form is also accepted and is preferred for readable BB configs:
+
+```text
+bbconfig field=TextConfig prototype="Interface/Text/2D Text" lifetime=component
+bbsetting field=TextConfig "Text Properties"="Screen Proportionnal,WordWrap"
+bbpin field=TextConfig "Text"="Ready"
+bbsource field=TextConfig "Font"="FontConfig.Font Created"
+bbslot field=TextPin from=TextConfig pin=Text
+```
 
 ```text
 Speed float "Speed" = 1.0
@@ -254,10 +262,10 @@ All helpers also accept `CKContext@` in place of `CKBehaviorContext`. The type a
 
 - Metadata is read from `CachedScript`, so it works for Loader-managed shared modules and for private `Source`/`File` modules.
 - The Component creates missing input parameters and default local sources on first script object creation.
-- On script identity or manifest change, the old script object is released, managed input parameters no longer declared are removed, and the object is rebuilt.
+- On script identity or manifest change, the old script object is released, Component-created input parameters no longer declared are removed, and the object is rebuilt.
 - Field injection runs before `OnLoad` and `Awake`.
 - Scalar, string, math value, CK object, `BehaviorRef@`, `ParamTypeInfo@`, `BBPrototype@`, `BBDecl@`, `BBSlot@`, and `BBConfig@` fields are refreshed before later lifecycle/update calls unless `update=false` / `sync=false` is declared.
-- Ref-counted handle fields are replaced through bridge-managed release helpers, so changing a behavior or BB prototype parameter no longer requires a full script object rebuild.
+- Ref-counted handle fields are replaced through bridge-owned release helpers, so changing a behavior or BB prototype parameter no longer requires a full script object rebuild.
 - CK object injection validates the actual object against the script field type before writing the handle, so a `CKMaterial@` parameter cannot silently be written into a `CK3dEntity@` field.
 
 ## Errors
