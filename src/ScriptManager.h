@@ -52,6 +52,27 @@ struct ScriptComponentRequiredSlot {
     int Occurrence = 0;
 };
 
+struct ScriptComponentNamedSlotValue {
+    std::string Name;
+    std::string Value;
+    int Occurrence = 0;
+    bool HasValue = false;
+};
+
+struct ScriptComponentSourceSlot {
+    std::string PinName;
+    std::string SourceFieldName;
+    std::string SourceSlotName;
+    int PinOccurrence = 0;
+    int SourceOccurrence = 0;
+};
+
+enum class ScriptComponentBBStepPolicy {
+    Manual,
+    EachUpdate,
+    OnChange
+};
+
 struct ScriptComponentBinding {
     std::string FieldName;
     std::string ParameterName;
@@ -74,6 +95,15 @@ struct ScriptComponentBinding {
     std::string BindingStartInput;
     std::string BindingStopInput;
     std::vector<ScriptComponentRequiredSlot> RequiredSlots;
+    std::vector<ScriptComponentNamedSlotValue> ConfigPinValues;
+    std::vector<ScriptComponentNamedSlotValue> ConfigSettingValues;
+    std::vector<ScriptComponentSourceSlot> ConfigSources;
+    std::string BBConfigOwnerExpression;
+    std::string BBConfigTargetExpression;
+    ScriptComponentBBStepPolicy BBStepPolicy = ScriptComponentBBStepPolicy::Manual;
+    bool AutoStartBBConfig = false;
+    bool HasAutoStartBBConfig = false;
+    bool BBConfigChanged = false;
 
     ScriptComponentBindingKind Kind = ScriptComponentBindingKind::Auto;
     CKGUID ParameterGuid;

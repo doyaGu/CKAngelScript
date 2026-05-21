@@ -646,6 +646,132 @@ void AddRequiredSlotDeclaration(ScriptComponentBinding &binding,
     flush();
 }
 
+std::vector<std::string> SplitQuotedList(const std::string &value, char delimiter = ';') {
+    std::vector<std::string> tokens;
+    std::string current;
+    char quote = '\0';
+    for (char c : value) {
+        if (quote != '\0') {
+            current.push_back(c);
+            if (c == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (c == '"' || c == '\'') {
+            quote = c;
+            current.push_back(c);
+            continue;
+        }
+        if (c == delimiter) {
+            std::string token = TrimString(current);
+            if (!token.empty()) {
+                tokens.push_back(token);
+            }
+            current.clear();
+            continue;
+        }
+        current.push_back(c);
+    }
+    std::string token = TrimString(current);
+    if (!token.empty()) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
+std::size_t FindUnquoted(const std::string &value, const std::string &needle) {
+    if (needle.empty()) {
+        return std::string::npos;
+    }
+    char quote = '\0';
+    for (std::size_t i = 0; i < value.size(); ++i) {
+        const char c = value[i];
+        if (quote != '\0') {
+            if (c == quote) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (c == '"' || c == '\'') {
+            quote = c;
+            continue;
+        }
+        if (value.compare(i, needle.size(), needle) == 0) {
+            return i;
+        }
+    }
+    return std::string::npos;
+}
+
+void AddRequiredSlot(ScriptComponentBinding &binding, const std::string &kind, const std::string &name) {
+    const std::string cleanName = TrimString(name);
+    if (kind.empty() || cleanName.empty()) {
+        return;
+    }
+    for (const ScriptComponentRequiredSlot &existing : binding.RequiredSlots) {
+        if (ToLower(existing.KindName) == ToLower(kind) && existing.Name == cleanName && existing.Occurrence == 0) {
+            return;
+        }
+    }
+    ScriptComponentRequiredSlot required;
+    required.KindName = kind;
+    required.Name = cleanName;
+    binding.RequiredSlots.push_back(required);
+}
+
+void AddNamedSlotValues(ScriptComponentBinding &binding,
+                        std::vector<ScriptComponentNamedSlotValue> &target,
+                        const std::string &slotKind,
+                        const std::string &value) {
+    for (const std::string &entry : SplitQuotedList(value)) {
+        const std::size_t equal = FindUnquoted(entry, "=");
+        ScriptComponentNamedSlotValue slot;
+        slot.Name = StripQuotes(equal == std::string::npos ? entry : entry.substr(0, equal));
+        if (equal != std::string::npos) {
+            slot.Value = StripQuotes(entry.substr(equal + 1));
+            slot.HasValue = true;
+        }
+        if (slot.Name.empty()) {
+            continue;
+        }
+        AddRequiredSlot(binding, slotKind, slot.Name);
+        if (slot.HasValue) {
+            target.push_back(slot);
+        }
+    }
+}
+
+void AddConfigSourceSlots(ScriptComponentBinding &binding, const std::string &value) {
+    for (const std::string &entry : SplitQuotedList(value)) {
+        const std::size_t arrow = FindUnquoted(entry, "<-");
+        if (arrow == std::string::npos) {
+            continue;
+        }
+        ScriptComponentSourceSlot source;
+        source.PinName = StripQuotes(entry.substr(0, arrow));
+        std::string rhs = TrimString(entry.substr(arrow + 2));
+        const std::size_t dot = FindUnquoted(rhs, ".");
+        source.SourceFieldName = StripQuotes(dot == std::string::npos ? rhs : rhs.substr(0, dot));
+        source.SourceSlotName = StripQuotes(dot == std::string::npos ? std::string() : rhs.substr(dot + 1));
+        if (!source.PinName.empty() && !source.SourceFieldName.empty()) {
+            AddRequiredSlot(binding, "pin", source.PinName);
+            binding.ConfigSources.push_back(source);
+        }
+    }
+}
+
+ScriptComponentBBStepPolicy ParseBBStepPolicy(const std::string &value) {
+    const std::string text = ToLower(StripQuotes(value));
+    if (text == "eachupdate" || text == "each_update" || text == "update" || text == "always") {
+        return ScriptComponentBBStepPolicy::EachUpdate;
+    }
+    if (text == "onchange" || text == "on_change" || text == "changed") {
+        return ScriptComponentBBStepPolicy::OnChange;
+    }
+    return ScriptComponentBBStepPolicy::Manual;
+}
+
 bool ParseBindingMetadata(const std::string &metadata,
                           const std::string &defaultFieldName,
                           ScriptComponentBinding &binding) {
@@ -697,6 +823,15 @@ bool ParseBindingMetadata(const std::string &metadata,
     binding.BindingStartInput.clear();
     binding.BindingStopInput.clear();
     binding.RequiredSlots.clear();
+    binding.ConfigPinValues.clear();
+    binding.ConfigSettingValues.clear();
+    binding.ConfigSources.clear();
+    binding.BBConfigOwnerExpression.clear();
+    binding.BBConfigTargetExpression.clear();
+    binding.BBStepPolicy = ScriptComponentBBStepPolicy::Manual;
+    binding.AutoStartBBConfig = false;
+    binding.HasAutoStartBBConfig = false;
+    binding.BBConfigChanged = false;
 
     const std::string lowerKeyword = ToLower(keyword);
     if (lowerKeyword == "behavior") {
@@ -739,9 +874,22 @@ bool ParseBindingMetadata(const std::string &metadata,
                 }
             } else if (key == "update" || key == "sync") {
                 binding.InjectEveryFrame = ParseBoolText(value, true);
+            } else if (key == "owner") {
+                binding.BBConfigOwnerExpression = value;
+            } else if (key == "target") {
+                binding.BBConfigTargetExpression = value;
             } else if (key == "managed") {
                 binding.ManagedBBConfig = ParseBoolText(value, true);
                 binding.HasManagedBBConfig = true;
+            } else if (key == "lifetime") {
+                const std::string lifetime = ToLower(value);
+                binding.ManagedBBConfig = lifetime != "manual";
+                binding.HasManagedBBConfig = true;
+            } else if (key == "autostart" || key == "auto_start") {
+                binding.AutoStartBBConfig = ParseBoolText(value, true);
+                binding.HasAutoStartBBConfig = true;
+            } else if (key == "step") {
+                binding.BBStepPolicy = ParseBBStepPolicy(value);
             } else if (key == "start") {
                 if (lowerKeyword == "bbslot") {
                     SetScriptBridgeSlotMetadataFlag(binding.SlotMetadataFlags, ScriptBridgeSlotMetadataFlags::Start, ParseBoolText(value, true));
@@ -790,13 +938,31 @@ bool ParseBindingMetadata(const std::string &metadata,
             } else if (key == "outputs" || key == "outs") {
                 AddRequiredSlotDeclaration(binding, "output", value);
             } else if (key == "pins") {
-                AddRequiredSlotDeclaration(binding, "pin", value);
+                if (lowerKeyword == "bbconfig") {
+                    AddNamedSlotValues(binding, binding.ConfigPinValues, "pin", value);
+                } else {
+                    AddRequiredSlotDeclaration(binding, "pin", value);
+                }
             } else if (key == "pouts") {
                 AddRequiredSlotDeclaration(binding, "pout", value);
             } else if (key == "locals") {
                 AddRequiredSlotDeclaration(binding, "local", value);
+            } else if (key == "settings") {
+                if (lowerKeyword == "bbconfig") {
+                    AddNamedSlotValues(binding, binding.ConfigSettingValues, "setting", value);
+                } else {
+                    AddRequiredSlotDeclaration(binding, "setting", value);
+                }
             } else if (key == "setting") {
-                AddRequiredSlotDeclaration(binding, "setting", value);
+                if (lowerKeyword == "bbconfig") {
+                    AddNamedSlotValues(binding, binding.ConfigSettingValues, "setting", value);
+                } else {
+                    AddRequiredSlotDeclaration(binding, "setting", value);
+                }
+            } else if (key == "sources" || key == "source") {
+                if (lowerKeyword == "bbconfig") {
+                    AddConfigSourceSlots(binding, value);
+                }
             }
             i += 3;
             continue;
@@ -1330,6 +1496,96 @@ BBConfig *GetBBConfigFieldByName(ScriptComponentState *state, const std::string 
     return nullptr;
 }
 
+ParamRef *GetParamRefFieldByName(ScriptComponentState *state, const std::string &fieldName) {
+    if (!state || !state->Object || fieldName.empty()) {
+        return nullptr;
+    }
+    for (const ScriptComponentBinding &binding : state->Bindings) {
+        if (binding.Kind == ScriptComponentBindingKind::ParamRef && binding.FieldName == fieldName) {
+            void **slot = GetHandleSlot(state->Object, binding.PropertyIndex);
+            ParamRef *ref = slot ? static_cast<ParamRef *>(*slot) : nullptr;
+            if (ref) {
+                ref->AddRef();
+            }
+            return ref;
+        }
+    }
+    return nullptr;
+}
+
+BBInstance *GetBBInstanceFieldByName(ScriptComponentState *state, const std::string &fieldName) {
+    if (!state || !state->Object || fieldName.empty()) {
+        return nullptr;
+    }
+    asITypeInfo *type = state->Object->GetObjectType();
+    asIScriptEngine *engine = type ? type->GetEngine() : nullptr;
+    for (asUINT i = 0; type && i < type->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        int propertyTypeId = 0;
+        bool isPrivate = false;
+        bool isProtected = false;
+        bool isConst = false;
+        type->GetProperty(i, &propertyName, &propertyTypeId, &isPrivate, &isProtected, nullptr, nullptr, nullptr, nullptr, nullptr, &isConst);
+        if (!propertyName || fieldName != propertyName || isPrivate || isProtected || isConst) {
+            continue;
+        }
+        const char *decl = engine ? engine->GetTypeDeclaration(propertyTypeId, true) : nullptr;
+        if (!decl || std::string(decl) != "BBInstance@") {
+            return nullptr;
+        }
+        void **slot = GetHandleSlot(state->Object, static_cast<int>(i));
+        BBInstance *instance = slot ? static_cast<BBInstance *>(*slot) : nullptr;
+        if (instance) {
+            instance->AddRef();
+        }
+        return instance;
+    }
+    return nullptr;
+}
+
+CKBeObject *GetBeObjectFieldByName(ScriptComponentState *state, const std::string &fieldName) {
+    if (!state || !state->Object || fieldName.empty()) {
+        return nullptr;
+    }
+    asITypeInfo *type = state->Object->GetObjectType();
+    for (asUINT i = 0; type && i < type->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        int propertyTypeId = 0;
+        bool isPrivate = false;
+        bool isProtected = false;
+        bool isConst = false;
+        type->GetProperty(i, &propertyName, &propertyTypeId, &isPrivate, &isProtected, nullptr, nullptr, nullptr, nullptr, nullptr, &isConst);
+        if (!propertyName || fieldName != propertyName || isPrivate || isProtected || isConst) {
+            continue;
+        }
+        if (InferKindFromProperty(type->GetEngine(), propertyTypeId) != ScriptComponentBindingKind::Object) {
+            return nullptr;
+        }
+        void **slot = GetHandleSlot(state->Object, static_cast<int>(i));
+        return slot ? CKBeObject::Cast(static_cast<CKObject *>(*slot)) : nullptr;
+    }
+    return nullptr;
+}
+
+CKBeObject *ResolveBBConfigObjectExpression(ScriptComponentState *state,
+                                            const CKBehaviorContext &behcontext,
+                                            const std::string &expression) {
+    const std::string text = StripQuotes(expression);
+    if (text.empty()) {
+        return nullptr;
+    }
+    if (text == "$owner") {
+        return behcontext.Behavior ? behcontext.Behavior->GetOwner() : nullptr;
+    }
+    if (text == "$target") {
+        return behcontext.Behavior ? behcontext.Behavior->GetTarget() : nullptr;
+    }
+    if (text == "$level") {
+        return behcontext.CurrentLevel ? behcontext.CurrentLevel : (behcontext.Context ? behcontext.Context->GetCurrentLevel() : nullptr);
+    }
+    return GetBeObjectFieldByName(state, text);
+}
+
 void StopManagedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
     if (!state || !state->Object) {
         return;
@@ -1612,7 +1868,143 @@ void ApplySlotBindingMetadata(BBSlot *slot, const ScriptComponentBinding &bindin
     slot->SetMetadata(binding.SlotMetadataFlags, binding.DefaultValue, binding.SlotValue);
 }
 
+bool ApplyBBConfigSlotValues(BBConfig *bbinding,
+                             const ScriptComponentBinding &binding,
+                             std::string &error) {
+    if (!bbinding) {
+        error = "BBConfig metadata application requires a config.";
+        return false;
+    }
+    for (const ScriptComponentNamedSlotValue &entry : binding.ConfigPinValues) {
+        BBSlot *slot = bbinding->Pin(entry.Name, entry.Occurrence);
+        if (!slot || !slot->IsValid()) {
+            error = "BBConfig pin metadata failed for '" + entry.Name + "': " +
+                    (slot ? slot->Error() : std::string("slot was not created")) + " (" + BindingSummary(binding, nullptr) + ")";
+            if (slot) {
+                slot->Release();
+            }
+            return false;
+        }
+        if (entry.HasValue && !bbinding->SetSlotString(slot, entry.Value)) {
+            error = "BBConfig pin value failed for '" + entry.Name + "': " + bbinding->Error() + " (" + BindingSummary(binding, nullptr) + ")";
+            slot->Release();
+            return false;
+        }
+        slot->Release();
+    }
+    for (const ScriptComponentNamedSlotValue &entry : binding.ConfigSettingValues) {
+        BBSlot *slot = bbinding->Setting(entry.Name, entry.Occurrence);
+        if (!slot || !slot->IsValid()) {
+            error = "BBConfig setting metadata failed for '" + entry.Name + "': " +
+                    (slot ? slot->Error() : std::string("slot was not created")) + " (" + BindingSummary(binding, nullptr) + ")";
+            if (slot) {
+                slot->Release();
+            }
+            return false;
+        }
+        if (entry.HasValue && !bbinding->SetSettingString(slot, entry.Value)) {
+            error = "BBConfig setting value failed for '" + entry.Name + "': " + bbinding->Error() + " (" + BindingSummary(binding, nullptr) + ")";
+            slot->Release();
+            return false;
+        }
+        slot->Release();
+    }
+    return true;
+}
+
+ParamRef *ResolveBBConfigSourceRef(ScriptComponentState *state,
+                                   const CKBehaviorContext &behcontext,
+                                   const ScriptComponentSourceSlot &source,
+                                   std::string &error) {
+    if (source.SourceSlotName.empty()) {
+        ParamRef *ref = GetParamRefFieldByName(state, source.SourceFieldName);
+        if (!ref) {
+            error = "BBConfig source '" + source.SourceFieldName + "' is not a ParamRef@ field.";
+        }
+        return ref;
+    }
+
+    if (BBConfig *config = GetBBConfigFieldByName(state, source.SourceFieldName)) {
+        BBInstance *instance = config->Instance();
+        if (!instance) {
+            error = "BBConfig source config '" + source.SourceFieldName + "' has no live instance: " + config->Error();
+            return nullptr;
+        }
+        BBSlot *slot = instance->PoutSlot(source.SourceSlotName, source.SourceOccurrence);
+        ParamRef *ref = slot ? instance->Pout(slot) : nullptr;
+        if (!ref) {
+            error = "BBConfig source config '" + source.SourceFieldName + "' has no pout '" + source.SourceSlotName + "'.";
+        }
+        if (slot) {
+            slot->Release();
+        }
+        instance->Release();
+        return ref;
+    }
+
+    BBInstance *instance = GetBBInstanceFieldByName(state, source.SourceFieldName);
+    if (!instance) {
+        error = "BBConfig source '" + source.SourceFieldName + "' is not a BBConfig@ or BBInstance@ field.";
+        return nullptr;
+    }
+    BBSlot *slot = instance->PoutSlot(source.SourceSlotName, source.SourceOccurrence);
+    ParamRef *ref = slot ? instance->Pout(slot) : nullptr;
+    if (!ref) {
+        error = "BBConfig source instance '" + source.SourceFieldName + "' has no pout '" + source.SourceSlotName + "'.";
+    }
+    if (slot) {
+        slot->Release();
+    }
+    instance->Release();
+    return ref;
+}
+
+bool ApplyBBConfigSourceBindings(const CKBehaviorContext &behcontext,
+                                 ScriptComponentState *state,
+                                 const ScriptComponentBinding &binding,
+                                 BBConfig *bbinding,
+                                 bool requireResolved,
+                                 std::string &error) {
+    if (!bbinding) {
+        error = "BBConfig source binding requires a config.";
+        return false;
+    }
+    for (const ScriptComponentSourceSlot &source : binding.ConfigSources) {
+        std::string sourceError;
+        ParamRef *ref = ResolveBBConfigSourceRef(state, behcontext, source, sourceError);
+        if (!ref) {
+            if (requireResolved) {
+                error = "BBConfig source '" + source.PinName + "<-" + source.SourceFieldName +
+                        (source.SourceSlotName.empty() ? std::string() : "." + source.SourceSlotName) +
+                        "' failed: " + sourceError + " (" + BindingSummary(binding, behcontext.Context) + ")";
+                return false;
+            }
+            continue;
+        }
+
+        BBSlot *pin = bbinding->Pin(source.PinName, source.PinOccurrence);
+        if (!pin || !pin->IsValid()) {
+            error = "BBConfig source pin '" + source.PinName + "' failed: " +
+                    (pin ? pin->Error() : std::string("slot was not created")) + " (" + BindingSummary(binding, behcontext.Context) + ")";
+            if (pin) {
+                pin->Release();
+            }
+            ref->Release();
+            return false;
+        }
+        const bool ok = bbinding->SourceSlot(pin, ref) != nullptr;
+        pin->Release();
+        ref->Release();
+        if (!ok) {
+            error = "BBConfig source binding failed for pin '" + source.PinName + "': " + bbinding->Error();
+            return false;
+        }
+    }
+    return true;
+}
+
 BBConfig *CreateBBConfigFromBinding(ScriptBehaviorBridge *bridge,
+                                      ScriptComponentState *state,
                                       const CKBehaviorContext &behcontext,
                                       CKParameter *source,
                                       const ScriptComponentBinding &binding,
@@ -1651,6 +2043,17 @@ BBConfig *CreateBBConfigFromBinding(ScriptBehaviorBridge *bridge,
     bbinding->SetManaged(binding.ManagedBBConfig);
     bbinding->SetDefaultStart(binding.BindingStartInput);
     bbinding->SetDefaultStop(binding.BindingStopInput);
+    if (!binding.BBConfigOwnerExpression.empty()) {
+        bbinding->Owner(ResolveBBConfigObjectExpression(state, behcontext, binding.BBConfigOwnerExpression));
+    }
+    if (!binding.BBConfigTargetExpression.empty()) {
+        bbinding->Target(ResolveBBConfigObjectExpression(state, behcontext, binding.BBConfigTargetExpression));
+    }
+
+    if (!ApplyBBConfigSlotValues(bbinding, binding, error)) {
+        bbinding->Release();
+        return nullptr;
+    }
 
     for (const ScriptComponentRequiredSlot &required : binding.RequiredSlots) {
         const ScriptBridgeSlotKind kind = SlotKindFromText(required.KindName);
@@ -1664,6 +2067,11 @@ BBConfig *CreateBBConfigFromBinding(ScriptBehaviorBridge *bridge,
             bbinding->Release();
             return nullptr;
         }
+    }
+
+    if (!ApplyBBConfigSourceBindings(behcontext, state, binding, bbinding, false, error)) {
+        bbinding->Release();
+        return nullptr;
     }
 
     return bbinding;
@@ -2083,16 +2491,29 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 for (const ScriptComponentRequiredSlot &required : binding.RequiredSlots) {
                     requiredText += "|" + required.KindName + ":" + required.Name + ":" + std::to_string(required.Occurrence);
                 }
+                std::string valueText;
+                for (const ScriptComponentNamedSlotValue &entry : binding.ConfigPinValues) {
+                    valueText += "|pin:" + entry.Name + "=" + entry.Value;
+                }
+                for (const ScriptComponentNamedSlotValue &entry : binding.ConfigSettingValues) {
+                    valueText += "|setting:" + entry.Name + "=" + entry.Value;
+                }
+                std::string sourceBindingText;
+                for (const ScriptComponentSourceSlot &entry : binding.ConfigSources) {
+                    sourceBindingText += "|source:" + entry.PinName + "<-" + entry.SourceFieldName + "." + entry.SourceSlotName;
+                }
                 const CK_ID sourceId = behaviorSource ? behaviorSource->GetID() : 0;
                 const std::string cacheText = std::to_string(sourceId) + "|" + sourceText + "|" + binding.SlotPrototypeName + "|" +
                     binding.BindingStartInput + "|" + binding.BindingStopInput + "|" +
-                    (binding.ManagedBBConfig ? "managed" : "unmanaged") + requiredText;
+                    (binding.ManagedBBConfig ? "managed" : "unmanaged") + "|" + binding.BBConfigOwnerExpression + "|" +
+                    binding.BBConfigTargetExpression + "|" + std::to_string(binding.AutoStartBBConfig ? 1 : 0) + "|" +
+                    std::to_string(static_cast<int>(binding.BBStepPolicy)) + requiredText + valueText + sourceBindingText;
                 if (!initial && binding.HandleInjected && binding.LastTextValue == cacheText) {
                     break;
                 }
 
                 std::string bindingError;
-                BBConfig *bbinding = CreateBBConfigFromBinding(bridge, behcontext, source, binding, bindingError);
+                BBConfig *bbinding = CreateBBConfigFromBinding(bridge, state, behcontext, source, binding, bindingError);
                 if (!bbinding) {
                     error = bindingError;
                     return false;
@@ -2102,6 +2523,7 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                     return false;
                 }
                 binding.HandleInjected = true;
+                binding.BBConfigChanged = true;
                 binding.LastObjectId = sourceId;
                 binding.LastTextValue = cacheText;
                 break;
@@ -2172,6 +2594,66 @@ void SetRunnerErrorOutput(CKBehavior *beh, ScriptComponentState *state, const ch
     }
 
     SetErrorOutput(beh, state, message, stackTrace);
+}
+
+bool EnsureAutoStartedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state, std::string &error) {
+    if (!state || !state->Object) {
+        return true;
+    }
+    for (ScriptComponentBinding &binding : state->Bindings) {
+        if (binding.Kind != ScriptComponentBindingKind::BBConfig || !binding.AutoStartBBConfig) {
+            continue;
+        }
+        BBConfig *bbinding = GetBBConfigField(state, binding);
+        if (!bbinding) {
+            error = "Autostart BBConfig field is not available (" + BindingSummary(binding, behcontext.Context) + ").";
+            return false;
+        }
+        if (!ApplyBBConfigSourceBindings(behcontext, state, binding, bbinding, true, error)) {
+            return false;
+        }
+        BBInstance *instance = bbinding->EnsureStarted(behcontext);
+        if (!instance) {
+            error = "Autostart BBConfig failed: " + bbinding->Error() + " (" + BindingSummary(binding, behcontext.Context) + ").";
+            return false;
+        }
+        instance->Release();
+    }
+    return true;
+}
+
+bool StepAutomatedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state, std::string &error) {
+    if (!state || !state->Object) {
+        return true;
+    }
+    for (ScriptComponentBinding &binding : state->Bindings) {
+        if (binding.Kind != ScriptComponentBindingKind::BBConfig || binding.BBStepPolicy == ScriptComponentBBStepPolicy::Manual) {
+            continue;
+        }
+        BBConfig *bbinding = GetBBConfigField(state, binding);
+        if (!bbinding) {
+            error = "Automated BBConfig field is not available (" + BindingSummary(binding, behcontext.Context) + ").";
+            return false;
+        }
+        BBInstance *instance = bbinding->Instance();
+        if (!instance) {
+            continue;
+        }
+        if (!ApplyBBConfigSourceBindings(behcontext, state, binding, bbinding, true, error)) {
+            instance->Release();
+            return false;
+        }
+        const bool shouldStep = binding.BBStepPolicy == ScriptComponentBBStepPolicy::EachUpdate ||
+                                (binding.BBStepPolicy == ScriptComponentBBStepPolicy::OnChange && binding.BBConfigChanged);
+        if (shouldStep && !instance->Step(behcontext)) {
+            error = "Automated BBConfig step failed: " + instance->Error() + " (" + BindingSummary(binding, behcontext.Context) + ").";
+            instance->Release();
+            return false;
+        }
+        binding.BBConfigChanged = false;
+        instance->Release();
+    }
+    return true;
 }
 
 ScriptComponentState *GetState(const CKBehaviorContext &behcontext) {
@@ -2615,8 +3097,24 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         state->StartCalled = true;
     }
 
+    {
+        std::string automationError;
+        if (!AngelScriptComponentInternal::EnsureAutoStartedBBConfigs(behcontext, state, automationError)) {
+            AngelScriptComponentInternal::SetErrorOutput(beh, state, automationError);
+            return CKBR_OK;
+        }
+    }
+
     if (!AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->Update, behcontext, "Update")) {
         return CKBR_OK;
+    }
+
+    {
+        std::string automationError;
+        if (!AngelScriptComponentInternal::StepAutomatedBBConfigs(behcontext, state, automationError)) {
+            AngelScriptComponentInternal::SetErrorOutput(beh, state, automationError);
+            return CKBR_OK;
+        }
     }
 
     return CKBR_ACTIVATENEXTFRAME;
