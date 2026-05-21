@@ -1641,12 +1641,12 @@ bool BBInstance::SetSettingValue(BBSlot *setting, ParamValue *value) {
         SetScriptException(m_Error);
         return false;
     }
-    ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, value->Value());
     if (!m_Bridge->SetInstanceSetting(m_InstanceId, m_Generation, settingIndex, value->Value(), error)) {
         SetError(error);
         SetScriptException(m_Error);
         return false;
     }
+    ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, value->Value());
     return true;
 }
 
