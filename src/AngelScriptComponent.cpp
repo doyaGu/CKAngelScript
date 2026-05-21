@@ -1550,7 +1550,7 @@ BBConfig *CreateBBConfigFromBinding(ScriptBehaviorBridge *bridge,
         return nullptr;
     }
 
-    BBConfig *bbinding = spec->Bind();
+    BBConfig *bbinding = spec->Configure();
     spec->Release();
     if (!bbinding || !bbinding->IsValid()) {
         error = bbinding ? bbinding->Error() : "Failed to create BBConfig.";

@@ -501,12 +501,8 @@ BBTaskBuilder *BBDecl::Spawn() {
     return IsValid() ? new BBTaskBuilder(m_Bridge, m_Context, m_Request) : nullptr;
 }
 
-BBConfig *BBDecl::Bind() {
-    return new BBConfig(m_Bridge, m_Context, m_Request, Error());
-}
-
 BBConfig *BBDecl::Configure() {
-    return Bind();
+    return new BBConfig(m_Bridge, m_Context, m_Request, Error());
 }
 
 BBSlot *BBDecl::In(const std::string &name, int occurrence) const { return ResolveSlot(ScriptBridgeSlotKind::Input, name, occurrence); }
@@ -1986,24 +1982,4 @@ BBDecl *BBBridge::RequireGuid(CKGUID guid) const {
         return new BBDecl(m_Bridge, m_Context, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(guid)));
     }
     return new BBDecl(m_Bridge, m_Context, request);
-}
-
-BBConfig *BBBridge::Bind(const std::string &query) const {
-    BBDecl *spec = Require(query);
-    if (!spec) {
-        return new BBConfig(m_Bridge, m_Context, MakeDefaultRequest(m_Context), "Failed to create BBDecl.");
-    }
-    BBConfig *binding = spec->Bind();
-    spec->Release();
-    return binding;
-}
-
-BBConfig *BBBridge::BindGuid(CKGUID guid) const {
-    BBDecl *spec = RequireGuid(guid);
-    if (!spec) {
-        return new BBConfig(m_Bridge, m_Context, MakeDefaultRequest(m_Context), "Failed to create BBDecl.");
-    }
-    BBConfig *binding = spec->Bind();
-    spec->Release();
-    return binding;
 }

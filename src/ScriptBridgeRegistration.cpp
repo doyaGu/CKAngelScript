@@ -185,26 +185,6 @@ BBDecl *BBRequireByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
     return spec;
 }
 
-BBConfig *BBBindByName(const CKBehaviorContext &ctx, const std::string &query) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBConfig *binding = bridge->Bind(query);
-    bridge->Release();
-    return binding;
-}
-
-BBConfig *BBBindByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBConfig *binding = bridge->BindGuid(guid);
-    bridge->Release();
-    return binding;
-}
-
 ParamValue *ParamInt(int value) { return new ParamValue(MakeScriptParamInt(value)); }
 ParamValue *ParamFloat(float value) { return new ParamValue(MakeScriptParamFloat(value)); }
 ParamValue *ParamBool(bool value) { return new ParamValue(MakeScriptParamBool(value)); }
@@ -724,8 +704,6 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBBridge", "array<BBPrototype@>@ FindAll(const string &in query = \"\") const", asMETHOD(BBBridge, FindAll), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBBridge", "BBDecl@ Require(const string &in query) const", asMETHOD(BBBridge, Require), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBBridge", "BBDecl@ Require(CKGUID guid) const", asMETHOD(BBBridge, RequireGuid), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("BBBridge", "BBConfig@ Bind(const string &in query) const", asMETHOD(BBBridge, Bind), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("BBBridge", "BBConfig@ Bind(CKGUID guid) const", asMETHOD(BBBridge, BindGuid), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Owner(CKBeObject@ owner)", asMETHOD(BBCallBuilder, Owner), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Target(CKBeObject@ target)", asMETHOD(BBCallBuilder, Target), asCALL_THISCALL); assert(r >= 0);
@@ -830,8 +808,6 @@ void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("array<BBPrototype@>@ FindAll(const CKBehaviorContext &in ctx, const string &in query = \"\")", asFUNCTION(BBFindAll), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBDecl@ Require(const CKBehaviorContext &in ctx, const string &in query)", asFUNCTION(BBRequireByName), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBDecl@ Require(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBRequireByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBConfig@ Bind(const CKBehaviorContext &in ctx, const string &in query)", asFUNCTION(BBBindByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBConfig@ Bind(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBBindByGuid), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBCallByName), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBSpawnByName), asCALL_CDECL); assert(r >= 0);
 

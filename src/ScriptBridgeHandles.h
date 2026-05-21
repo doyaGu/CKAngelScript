@@ -427,7 +427,6 @@ public:
     BehaviorLayout *Layout() const;
     BBCallBuilder *Call();
     BBTaskBuilder *Spawn();
-    BBConfig *Bind();
     BBConfig *Configure();
     BBSlot *In(const std::string &name, int occurrence = 0) const;
     BBSlot *Input(const std::string &name, int occurrence = 0) const;
@@ -690,8 +689,6 @@ public:
     CScriptArray *FindAll(const std::string &query) const;
     BBDecl *Require(const std::string &query) const;
     BBDecl *RequireGuid(CKGUID guid) const;
-    BBConfig *Bind(const std::string &query) const;
-    BBConfig *BindGuid(CKGUID guid) const;
 
 private:
     ScriptBehaviorBridge *m_Bridge = nullptr;

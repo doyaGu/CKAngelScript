@@ -252,7 +252,7 @@ def generate(params: list[dict[str, Any]], ops: list[dict[str, Any]], bbs: list[
         lines.append(f"    const string QualifiedName = {as_string(qualified)};")
         lines.append("    BBPrototype@ Find(const CKBehaviorContext &in ctx) { return BB::Prototype(ctx, Guid()); }")
         lines.append("    BBDecl@ Decl(const CKBehaviorContext &in ctx) { return BB::Require(ctx, Guid()); }")
-        lines.append("    BBConfig@ Config(const CKBehaviorContext &in ctx) { return BB::Bind(ctx, Guid()); }")
+        lines.append("    BBConfig@ Config(const CKBehaviorContext &in ctx) { BBDecl@ decl = Decl(ctx); return decl is null ? null : decl.Configure(); }")
         add_bb_slot_helpers(lines, bb)
         lines.append("}")
     lines.append("}")
