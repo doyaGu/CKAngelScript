@@ -1090,6 +1090,52 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         return false;
     }
 
+    int instanceGeneration = 0;
+    std::string instanceError;
+    CK_ID instanceId = bridge->CreateInstance(request, behaviorContext, instanceGeneration, instanceError);
+    CKBehavior *instanceBehavior = instanceId ? bridge->GetInstanceBehavior(instanceId, instanceGeneration) : nullptr;
+    CKParameterIn *scriptPin = instanceBehavior ? instanceBehavior->GetInputParameter(0) : nullptr;
+    CKParameter *previousSource = scriptPin ? scriptPin->GetDirectSource() : nullptr;
+    CKParameterLocal *liveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_InstanceLiveSource"), CKPGUID_STRING, TRUE);
+    if (!instanceId || !instanceBehavior || !scriptPin || !previousSource || !liveSource ||
+        liveSource->SetStringValue(const_cast<CKSTRING>(scriptName)) != CK_OK) {
+        if (instanceId) {
+            bridge->DestroyInstance(instanceId, instanceGeneration);
+        }
+        DestroySelfTestObject(context, liveSource);
+        manager->UnloadScript(scriptName);
+        error = instanceError.empty() ? "BBInstance runtime self-test setup failed." : instanceError;
+        return false;
+    }
+
+    ParamRef *targetRef = new ParamRef(bridge, scriptPin->GetID(), ScriptBridgeSlotKind::Pin, 0, instanceBehavior->GetID());
+    ParamRef *sourceRef = new ParamRef(bridge, liveSource->GetID(), ScriptBridgeSlotKind::Standalone, -1);
+    ParamSourceLinkRef *link = targetRef->SetSourceScoped(sourceRef);
+    const bool linkStored = link && link->IsValid() && bridge->StoreInstanceSourceLink(instanceId, instanceGeneration, 0, link);
+    if (!linkStored || scriptPin->GetDirectSource() != liveSource) {
+        if (link) {
+            link->Restore();
+            link->Release();
+        }
+        targetRef->Release();
+        sourceRef->Release();
+        bridge->DestroyInstance(instanceId, instanceGeneration);
+        DestroySelfTestObject(context, liveSource);
+        manager->UnloadScript(scriptName);
+        error = "BBInstance runtime self-test failed to install owned source link.";
+        return false;
+    }
+
+    targetRef->Release();
+    sourceRef->Release();
+    if (!bridge->DestroyInstance(instanceId, instanceGeneration) || scriptPin->GetDirectSource() != previousSource) {
+        DestroySelfTestObject(context, liveSource);
+        manager->UnloadScript(scriptName);
+        error = "BBInstance runtime self-test did not restore owned source link on Destroy.";
+        return false;
+    }
+    DestroySelfTestObject(context, liveSource);
+
     error.clear();
     count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
     if (!error.empty() || count != 3) {

@@ -325,6 +325,10 @@ public:
     bool StartInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
     bool StepInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx);
     bool StopInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
+    void RemoveInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex);
+    void RemoveInstanceOperation(CK_ID instanceId, int generation, int pinIndex);
+    bool StoreInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex, ParamSourceLinkRef *link);
+    bool StoreInstanceOperation(CK_ID instanceId, int generation, int pinIndex, ParamOperationRef *operation);
     bool DestroyInstance(CK_ID instanceId, int generation);
     bool SetInstanceSetting(CK_ID instanceId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
     bool IsInstanceValid(CK_ID instanceId, int generation) const;
@@ -392,6 +396,16 @@ private:
     };
 
     struct InstanceRecord {
+        struct SourceLink {
+            int PinIndex = -1;
+            ParamSourceLinkRef *Link = nullptr;
+        };
+
+        struct OperationLink {
+            int PinIndex = -1;
+            ParamOperationRef *Operation = nullptr;
+        };
+
         CK_ID InstanceId = 0;
         int Generation = 0;
         CK_ID ComponentId = 0;
@@ -401,6 +415,8 @@ private:
         ScriptBridgeExecutionState LastState;
         ScriptBridgeInputSourceBindings InputSources;
         std::vector<CK_ID> OperationIds;
+        std::vector<SourceLink> SourceLinks;
+        std::vector<OperationLink> Operations;
 
         bool HasFlag(ScriptBridgeTaskFlags flag) const { return HasScriptBridgeTaskFlag(Flags, flag); }
         void SetFlag(ScriptBridgeTaskFlags flag, bool enabled) { SetScriptBridgeTaskFlag(Flags, flag, enabled); }
@@ -457,6 +473,7 @@ private:
     void QueueDestroy(CKBehavior *behavior, bool sendCallbacks, bool deleteCallbackAlreadySent = false);
     void DestroyQueuedReady();
     void ForceDestroyQueued();
+    void ClearInstanceGraphLinks(InstanceRecord &record);
     bool SetBehaviorSetting(CKBehavior *behavior, int settingIndex, const ScriptParamValue &value, std::string &error);
     TaskRecord *FindTask(CK_ID taskId, int generation);
     const TaskRecord *FindTask(CK_ID taskId, int generation) const;

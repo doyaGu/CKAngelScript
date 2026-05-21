@@ -528,16 +528,6 @@ private:
         BBSlot *Slot = nullptr;
     };
 
-    struct SourceLink {
-        int PinIndex = -1;
-        ParamSourceLinkRef *Link = nullptr;
-    };
-
-    struct OperationLink {
-        int PinIndex = -1;
-        ParamOperationRef *Operation = nullptr;
-    };
-
     BBSlot *Slot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence);
     BBSlot *FindCachedSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const;
     BBSlot *DefaultInputSlot();
@@ -551,11 +541,6 @@ private:
     bool ApplySlotMetadata(BBSlot *slot);
     void ReplacePendingSource(const ScriptBridgeInputSource &source);
     void ReplacePendingOperation(const ScriptBridgeOperationSpec &operation);
-    void RemoveLiveSourceLink(int pinIndex);
-    void RemoveLiveOperation(int pinIndex);
-    void ReplaceLiveSourceLink(int pinIndex, ParamSourceLinkRef *link);
-    void ReplaceLiveOperation(int pinIndex, ParamOperationRef *operation);
-    void ClearOwnedGraphLinks();
     void SetError(const std::string &error) const;
 
     ScriptBehaviorBridge *m_Bridge = nullptr;
@@ -563,8 +548,6 @@ private:
     ScriptBridgeBBInvocationSpec m_Request;
     mutable std::string m_Error;
     std::vector<CachedSlot> m_Slots;
-    std::vector<SourceLink> m_SourceLinks;
-    std::vector<OperationLink> m_Operations;
     std::vector<BBSlot *> m_RegisteredSlots;
     BBInstance *m_Instance = nullptr;
     std::string m_DefaultStartInput;
@@ -599,6 +582,8 @@ public:
     bool SetSetting(BBSlot *setting, const std::string &value);
     bool Destroy();
     bool Raise(const CKBehaviorContext &ctx) const;
+    CK_ID BridgeInstanceId() const;
+    int BridgeGeneration() const;
 
 private:
     void SetError(const std::string &error) const;

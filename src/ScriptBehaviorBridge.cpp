@@ -561,12 +561,99 @@ bool ScriptBehaviorBridge::StopInstance(CK_ID instanceId, int generation, const 
     return true;
 }
 
+void ScriptBehaviorBridge::RemoveInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex) {
+    InstanceRecord *record = FindInstance(instanceId, generation);
+    if (!record) {
+        return;
+    }
+    const auto it = std::lower_bound(record->SourceLinks.begin(),
+                                     record->SourceLinks.end(),
+                                     pinIndex,
+                                     [](const InstanceRecord::SourceLink &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it == record->SourceLinks.end() || it->PinIndex != pinIndex) {
+        return;
+    }
+    if (it->Link) {
+        it->Link->Restore();
+        it->Link->Release();
+    }
+    record->SourceLinks.erase(it);
+}
+
+void ScriptBehaviorBridge::RemoveInstanceOperation(CK_ID instanceId, int generation, int pinIndex) {
+    InstanceRecord *record = FindInstance(instanceId, generation);
+    if (!record) {
+        return;
+    }
+    const auto it = std::lower_bound(record->Operations.begin(),
+                                     record->Operations.end(),
+                                     pinIndex,
+                                     [](const InstanceRecord::OperationLink &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it == record->Operations.end() || it->PinIndex != pinIndex) {
+        return;
+    }
+    if (it->Operation) {
+        it->Operation->Destroy();
+        it->Operation->Release();
+    }
+    record->Operations.erase(it);
+}
+
+bool ScriptBehaviorBridge::StoreInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex, ParamSourceLinkRef *link) {
+    InstanceRecord *record = FindInstance(instanceId, generation);
+    if (!record || !link) {
+        return false;
+    }
+    const auto it = std::lower_bound(record->SourceLinks.begin(),
+                                     record->SourceLinks.end(),
+                                     pinIndex,
+                                     [](const InstanceRecord::SourceLink &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it != record->SourceLinks.end() && it->PinIndex == pinIndex) {
+        if (it->Link) {
+            it->Link->Release();
+        }
+        it->Link = link;
+    } else {
+        record->SourceLinks.insert(it, InstanceRecord::SourceLink{pinIndex, link});
+    }
+    return true;
+}
+
+bool ScriptBehaviorBridge::StoreInstanceOperation(CK_ID instanceId, int generation, int pinIndex, ParamOperationRef *operation) {
+    InstanceRecord *record = FindInstance(instanceId, generation);
+    if (!record || !operation) {
+        return false;
+    }
+    const auto it = std::lower_bound(record->Operations.begin(),
+                                     record->Operations.end(),
+                                     pinIndex,
+                                     [](const InstanceRecord::OperationLink &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it != record->Operations.end() && it->PinIndex == pinIndex) {
+        if (it->Operation) {
+            it->Operation->Release();
+        }
+        it->Operation = operation;
+    } else {
+        record->Operations.insert(it, InstanceRecord::OperationLink{pinIndex, operation});
+    }
+    return true;
+}
+
 bool ScriptBehaviorBridge::DestroyInstance(CK_ID instanceId, int generation) {
     auto it = m_Instances.find(instanceId);
     if (it == m_Instances.end() || it->second.Generation != generation) {
         return false;
     }
 
+    ClearInstanceGraphLinks(it->second);
     CKBehavior *behavior = GetInstanceBehavior(instanceId, generation);
     CKContext *context = m_Manager ? m_Manager->GetCKContext() : nullptr;
     for (CK_ID operationId : it->second.OperationIds) {
@@ -1331,6 +1418,26 @@ void ScriptBehaviorBridge::ForceDestroyQueued() {
         entry.FramesToWait = 0;
     }
     DestroyQueuedReady();
+}
+
+void ScriptBehaviorBridge::ClearInstanceGraphLinks(InstanceRecord &record) {
+    for (InstanceRecord::SourceLink &link : record.SourceLinks) {
+        if (link.Link) {
+            link.Link->Restore();
+            link.Link->Release();
+            link.Link = nullptr;
+        }
+    }
+    record.SourceLinks.clear();
+
+    for (InstanceRecord::OperationLink &operation : record.Operations) {
+        if (operation.Operation) {
+            operation.Operation->Destroy();
+            operation.Operation->Release();
+            operation.Operation = nullptr;
+        }
+    }
+    record.Operations.clear();
 }
 
 bool ScriptBehaviorBridge::SetBehaviorSetting(CKBehavior *behavior,

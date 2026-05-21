@@ -999,7 +999,6 @@ bool BBConfig::Stop(const CKBehaviorContext &ctx) {
 }
 
 bool BBConfig::Destroy() {
-    ClearOwnedGraphLinks();
     if (m_Instance) {
         m_Instance->Destroy();
         m_Instance->Release();
@@ -1248,7 +1247,7 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         return true;
     }
 
-    RemoveLiveSourceLink(pinIndex);
+    m_Bridge->RemoveInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     ParamRef *target = PinRefSlot(slot);
     ParamSourceLinkRef *link = target ? target->SetSourceScoped(source) : nullptr;
     if (target) {
@@ -1262,7 +1261,13 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         SetScriptException(m_Error);
         return false;
     }
-    ReplaceLiveSourceLink(pinIndex, link);
+    if (!m_Bridge->StoreInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, link)) {
+        link->Restore();
+        link->Release();
+        SetError(fmt::format("{} failed to store live source link.", method));
+        SetScriptException(m_Error);
+        return false;
+    }
     return true;
 }
 
@@ -1282,7 +1287,7 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         return true;
     }
 
-    RemoveLiveOperation(pinIndex);
+    m_Bridge->RemoveInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     BehaviorRef *behavior = Behavior();
     ParamOperationRef *op = behavior ? behavior->ConnectOperationSlot(slot, operation) : nullptr;
     if (behavior) {
@@ -1296,7 +1301,13 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         SetScriptException(m_Error);
         return false;
     }
-    ReplaceLiveOperation(pinIndex, op);
+    if (!m_Bridge->StoreInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, op)) {
+        op->Destroy();
+        op->Release();
+        SetError(fmt::format("{} failed to store live operation.", method));
+        SetScriptException(m_Error);
+        return false;
+    }
     return true;
 }
 
@@ -1326,94 +1337,6 @@ void BBConfig::ReplacePendingOperation(const ScriptBridgeOperationSpec &operatio
     } else {
         m_Request.OperationParameters.insert(it, operation);
     }
-}
-
-void BBConfig::RemoveLiveSourceLink(int pinIndex) {
-    const auto it = std::lower_bound(m_SourceLinks.begin(),
-                                     m_SourceLinks.end(),
-                                     pinIndex,
-                                     [](const SourceLink &entry, int index) {
-                                         return entry.PinIndex < index;
-                                     });
-    if (it == m_SourceLinks.end() || it->PinIndex != pinIndex) {
-        return;
-    }
-    if (it->Link) {
-        it->Link->Restore();
-        it->Link->Release();
-    }
-    m_SourceLinks.erase(it);
-}
-
-void BBConfig::RemoveLiveOperation(int pinIndex) {
-    const auto it = std::lower_bound(m_Operations.begin(),
-                                     m_Operations.end(),
-                                     pinIndex,
-                                     [](const OperationLink &entry, int index) {
-                                         return entry.PinIndex < index;
-                                     });
-    if (it == m_Operations.end() || it->PinIndex != pinIndex) {
-        return;
-    }
-    if (it->Operation) {
-        it->Operation->Destroy();
-        it->Operation->Release();
-    }
-    m_Operations.erase(it);
-}
-
-void BBConfig::ReplaceLiveSourceLink(int pinIndex, ParamSourceLinkRef *link) {
-    const auto it = std::lower_bound(m_SourceLinks.begin(),
-                                     m_SourceLinks.end(),
-                                     pinIndex,
-                                     [](const SourceLink &entry, int index) {
-                                         return entry.PinIndex < index;
-                                     });
-    if (it != m_SourceLinks.end() && it->PinIndex == pinIndex) {
-        if (it->Link) {
-            it->Link->Release();
-        }
-        it->Link = link;
-    } else {
-        m_SourceLinks.insert(it, SourceLink{pinIndex, link});
-    }
-}
-
-void BBConfig::ReplaceLiveOperation(int pinIndex, ParamOperationRef *operation) {
-    const auto it = std::lower_bound(m_Operations.begin(),
-                                     m_Operations.end(),
-                                     pinIndex,
-                                     [](const OperationLink &entry, int index) {
-                                         return entry.PinIndex < index;
-                                     });
-    if (it != m_Operations.end() && it->PinIndex == pinIndex) {
-        if (it->Operation) {
-            it->Operation->Release();
-        }
-        it->Operation = operation;
-    } else {
-        m_Operations.insert(it, OperationLink{pinIndex, operation});
-    }
-}
-
-void BBConfig::ClearOwnedGraphLinks() {
-    for (SourceLink &link : m_SourceLinks) {
-        if (link.Link) {
-            link.Link->Restore();
-            link.Link->Release();
-            link.Link = nullptr;
-        }
-    }
-    m_SourceLinks.clear();
-
-    for (OperationLink &operation : m_Operations) {
-        if (operation.Operation) {
-            operation.Operation->Destroy();
-            operation.Operation->Release();
-            operation.Operation = nullptr;
-        }
-    }
-    m_Operations.clear();
 }
 
 void BBConfig::SetError(const std::string &error) const {
@@ -1627,6 +1550,10 @@ bool BBInstance::Destroy() {
     m_Generation = 0;
     return result;
 }
+
+CK_ID BBInstance::BridgeInstanceId() const { return m_InstanceId; }
+
+int BBInstance::BridgeGeneration() const { return m_Generation; }
 
 bool BBInstance::Raise(const CKBehaviorContext &ctx) const {
     if (IsValid()) {
