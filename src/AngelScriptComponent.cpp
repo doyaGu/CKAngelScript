@@ -857,6 +857,43 @@ void AddConfigSourceSlot(ScriptComponentBinding &binding, const std::string &pin
     }
 }
 
+std::string FormatSlotNameOccurrence(const std::string &name, int occurrence) {
+    if (occurrence <= 0 || name.empty()) {
+        return name;
+    }
+    return name + "[" + std::to_string(occurrence) + "]";
+}
+
+std::string BuildBBConfigBindingCacheText(const ScriptComponentBinding &binding,
+                                          CK_ID sourceId,
+                                          const std::string &sourceText) {
+    std::string requiredText;
+    for (const ScriptComponentRequiredSlot &required : binding.RequiredSlots) {
+        requiredText += "|" + required.KindName + ":" +
+            FormatSlotNameOccurrence(required.Name, required.Occurrence);
+    }
+
+    std::string valueText;
+    for (const ScriptComponentNamedSlotValue &entry : binding.ConfigPinValues) {
+        valueText += "|pin:" + FormatSlotNameOccurrence(entry.Name, entry.Occurrence) + "=" + entry.Value;
+    }
+    for (const ScriptComponentNamedSlotValue &entry : binding.ConfigSettingValues) {
+        valueText += "|setting:" + FormatSlotNameOccurrence(entry.Name, entry.Occurrence) + "=" + entry.Value;
+    }
+
+    std::string sourceBindingText;
+    for (const ScriptComponentSourceSlot &entry : binding.ConfigSources) {
+        sourceBindingText += "|source:" + FormatSlotNameOccurrence(entry.PinName, entry.PinOccurrence) +
+            "<-" + entry.SourceFieldName + "." + FormatSlotNameOccurrence(entry.SourceSlotName, entry.SourceOccurrence);
+    }
+
+    return std::to_string(sourceId) + "|" + sourceText + "|" + binding.SlotPrototypeName + "|" +
+        binding.BindingStartInput + "|" + binding.BindingStopInput + "|" +
+        "lifetime=" + BBConfigLifetimeText(binding) + "|" + binding.BBConfigOwnerExpression + "|" +
+        binding.BBConfigTargetExpression + "|" + std::to_string(binding.AutoStartBBConfig ? 1 : 0) + "|" +
+        std::to_string(static_cast<int>(binding.BBStepPolicy)) + requiredText + valueText + sourceBindingText;
+}
+
 ScriptComponentBBStepPolicy ParseBBStepPolicy(const std::string &value) {
     const std::string text = ToLower(StripQuotes(value));
     if (text == "eachupdate" || text == "each_update" || text == "update" || text == "always") {
@@ -2969,27 +3006,8 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                     ReadStringValue(source, sourceText);
                     sourceText = TrimString(sourceText);
                 }
-                std::string requiredText;
-                for (const ScriptComponentRequiredSlot &required : binding.RequiredSlots) {
-                    requiredText += "|" + required.KindName + ":" + required.Name + ":" + std::to_string(required.Occurrence);
-                }
-                std::string valueText;
-                for (const ScriptComponentNamedSlotValue &entry : binding.ConfigPinValues) {
-                    valueText += "|pin:" + entry.Name + "=" + entry.Value;
-                }
-                for (const ScriptComponentNamedSlotValue &entry : binding.ConfigSettingValues) {
-                    valueText += "|setting:" + entry.Name + "=" + entry.Value;
-                }
-                std::string sourceBindingText;
-                for (const ScriptComponentSourceSlot &entry : binding.ConfigSources) {
-                    sourceBindingText += "|source:" + entry.PinName + "<-" + entry.SourceFieldName + "." + entry.SourceSlotName;
-                }
                 const CK_ID sourceId = behaviorSource ? behaviorSource->GetID() : 0;
-                const std::string cacheText = std::to_string(sourceId) + "|" + sourceText + "|" + binding.SlotPrototypeName + "|" +
-                    binding.BindingStartInput + "|" + binding.BindingStopInput + "|" +
-                    "lifetime=" + BBConfigLifetimeText(binding) + "|" + binding.BBConfigOwnerExpression + "|" +
-                    binding.BBConfigTargetExpression + "|" + std::to_string(binding.AutoStartBBConfig ? 1 : 0) + "|" +
-                    std::to_string(static_cast<int>(binding.BBStepPolicy)) + requiredText + valueText + sourceBindingText;
+                const std::string cacheText = BuildBBConfigBindingCacheText(binding, sourceId, sourceText);
                 if (!initial && binding.HandleInjected && binding.LastTextValue == cacheText) {
                     break;
                 }
@@ -3690,6 +3708,12 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
         slotOccurrenceBinding.SlotName != "Out" ||
         slotOccurrenceBinding.SlotOccurrence != 2) {
         error = "Component metadata self-test did not preserve BBSlot field occurrence.";
+        return false;
+    }
+    const std::string occurrenceCacheText = AngelScriptComponentInternal::BuildBBConfigBindingCacheText(occurrenceBinding, 0, std::string());
+    if (occurrenceCacheText.find("pin:Value[3]=") == std::string::npos ||
+        occurrenceCacheText.find("source:pIn 0[1]<-SourceConfig.pout:Value[2]") == std::string::npos) {
+        error = "Component metadata self-test did not include slot occurrences in BBConfig cache text.";
         return false;
     }
 
