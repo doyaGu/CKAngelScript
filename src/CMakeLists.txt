@@ -24,6 +24,7 @@ set(CKAS_HEADERS
         ScriptCK2.h
         ScriptParameterConversion.h
         ScriptParameterRegistry.h
+        ScriptRuntime.h
         ScriptRefCounted.h
         ScriptBehaviorBridge.h
         ScriptComponentMetadata.h
@@ -64,6 +65,7 @@ set(CKAS_SOURCES
         ScriptCK2.cpp
         ScriptParameterConversion.cpp
         ScriptParameterRegistry.cpp
+        ScriptRuntime.cpp
         ScriptBehaviorBridge.cpp
         ScriptBridgeRuntime.cpp
         ScriptBridgeLayoutCache.cpp

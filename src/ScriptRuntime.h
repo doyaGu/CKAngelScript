@@ -1,0 +1,85 @@
+#ifndef CK_SCRIPTRUNTIME_H
+#define CK_SCRIPTRUNTIME_H
+
+#include <memory>
+#include <string>
+#include <vector>
+
+#include <angelscript.h>
+
+#include "CKTypes.h"
+
+class CKContext;
+class ScriptManager;
+
+class ScriptRuntimeContext {
+public:
+    ScriptRuntimeContext();
+    ScriptRuntimeContext(CKContext *context,
+                         std::string scriptId,
+                         std::string rootPath,
+                         float deltaTime,
+                         float timeSeconds);
+
+    CKContext *Context() const;
+    float DeltaTime() const;
+    float TimeSeconds() const;
+    std::string ScriptId() const;
+    std::string RootPath() const;
+    void Raise(const std::string &message) const;
+
+    CKBehaviorContext ToBehaviorContext() const;
+
+private:
+    CKContext *m_Context = nullptr;
+    std::string m_ScriptId;
+    std::string m_RootPath;
+    float m_DeltaTime = 0.0f;
+    float m_TimeSeconds = 0.0f;
+};
+
+class ScriptRuntime {
+public:
+    explicit ScriptRuntime(ScriptManager *manager);
+    ~ScriptRuntime();
+
+    void PreProcess();
+    void PostLoad();
+    void OnReset();
+    void OnPause();
+    void OnResume();
+    void OnEnd();
+    void Clear();
+
+    bool ReloadAll(std::string *error = nullptr);
+    bool Reload(const std::string &id, std::string *error = nullptr);
+    bool Enable(const std::string &id, bool enabled, std::string *error = nullptr);
+    std::vector<std::string> List() const;
+
+private:
+    struct Metadata;
+    struct Module;
+
+    void EnsureScanned();
+    std::vector<Metadata> Discover(std::string &error) const;
+    bool LoadDiscovered(const std::vector<Metadata> &scripts);
+    bool LoadModule(const Metadata &metadata, std::unique_ptr<Module> &module, std::string &error);
+    bool ReplaceModule(const Metadata &metadata, std::unique_ptr<Module> module);
+    void DestroyModule(Module &module);
+    void DisableModule(Module &module);
+    void UpdateModule(Module &module, float deltaTime, float timeSeconds);
+    bool Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required = false);
+    void SetModuleError(Module &module, const std::string &error);
+    void OutputDiagnostic(const std::string &message) const;
+
+    ScriptManager *m_Manager = nullptr;
+    bool m_Scanned = false;
+    bool m_Paused = false;
+    int m_Generation = 0;
+    std::vector<std::unique_ptr<Module>> m_Modules;
+};
+
+void RegisterScriptRuntime(asIScriptEngine *engine);
+bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
+
+#endif // CK_SCRIPTRUNTIME_H

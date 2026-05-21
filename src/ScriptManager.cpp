@@ -19,6 +19,7 @@
 #include "ScriptBehaviorBridge.h"
 #include "ScriptParameterConversion.h"
 #include "ScriptParameterRegistry.h"
+#include "ScriptRuntime.h"
 
 // Application modules
 #include "add_on/scripthelper/scripthelper.h"
@@ -94,6 +95,9 @@ CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
 }
 
 CKERROR ScriptManager::PostClearAll() {
+    if (m_Runtime) {
+        m_Runtime->Clear();
+    }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
@@ -106,6 +110,9 @@ CKERROR ScriptManager::PreProcess() {
     const CKERROR selfTestResult = RunStartupSelfTests();
     if (selfTestResult != CK_OK) {
         return selfTestResult;
+    }
+    if (m_Runtime) {
+        m_Runtime->PreProcess();
     }
     return m_BehaviorBridge ? m_BehaviorBridge->PreProcess() : CK_OK;
 }
@@ -174,11 +181,24 @@ CKERROR ScriptManager::RunStartupSelfTests() {
         ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "behavior-bridge", conversionError);
         return CKERR_INVALIDOPERATION;
     }
+    ScriptManagerInternal::WriteStartupSelfTestMarker("running", "runtime", std::string());
+    if (!RunScriptRuntimeSelfTest(m_Context, m_ScriptEngine, conversionError)) {
+        if (m_Context) {
+            m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] Runtime self-test failed: %s"),
+                                         conversionError.c_str());
+        }
+        ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "runtime", conversionError);
+        return CKERR_INVALIDOPERATION;
+    }
+    ScriptManagerInternal::WriteStartupSelfTestMarker("ok", "complete", std::string());
     return CK_OK;
 #endif
 }
 
 CKERROR ScriptManager::OnCKEnd() {
+    if (m_Runtime) {
+        m_Runtime->OnEnd();
+    }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
@@ -187,6 +207,9 @@ CKERROR ScriptManager::OnCKEnd() {
 }
 
 CKERROR ScriptManager::OnCKReset() {
+    if (m_Runtime) {
+        m_Runtime->OnReset();
+    }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
@@ -194,10 +217,23 @@ CKERROR ScriptManager::OnCKReset() {
 }
 
 CKERROR ScriptManager::OnCKPause() {
+    if (m_Runtime) {
+        m_Runtime->OnPause();
+    }
+    return CK_OK;
+}
+
+CKERROR ScriptManager::OnCKPlay() {
+    if (m_Runtime) {
+        m_Runtime->OnResume();
+    }
     return CK_OK;
 }
 
 CKERROR ScriptManager::PostLoad() {
+    if (m_Runtime) {
+        m_Runtime->PostLoad();
+    }
     return CK_OK;
 }
 
@@ -217,6 +253,10 @@ int ScriptManager::Init() {
     if (r < 0)
         return r;
 
+    if (!m_Runtime) {
+        m_Runtime = std::make_unique<ScriptRuntime>(this);
+    }
+
     m_Flags |= AS_INITED;
     return r;
 }
@@ -227,6 +267,9 @@ int ScriptManager::Shutdown() {
 
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
+    }
+    if (m_Runtime) {
+        m_Runtime->Clear();
     }
     ClearComponentStates();
 
@@ -239,6 +282,7 @@ int ScriptManager::Shutdown() {
     m_ScriptCache.Clear();
 
     m_BehaviorBridge.reset();
+    m_Runtime.reset();
     m_ParameterRegistry.reset();
 
     if (m_ScriptEngine) {
@@ -847,4 +891,5 @@ void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
     RegisterCK2(m_ScriptEngine);
     RegisterScriptParameterRegistry(m_ScriptEngine);
     RegisterScriptBehaviorBridge(m_ScriptEngine);
+    RegisterScriptRuntime(m_ScriptEngine);
 }

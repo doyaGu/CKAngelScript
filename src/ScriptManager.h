@@ -20,6 +20,7 @@
 class CKBehavior;
 class ScriptBehaviorBridge;
 class ScriptParameterRegistry;
+class ScriptRuntime;
 class ScriptRunner;
 
 enum class ScriptComponentBindingKind {
@@ -177,6 +178,7 @@ public:
 
     CKERROR OnCKReset() override;
     CKERROR OnCKPause() override;
+    CKERROR OnCKPlay() override;
 
     CKERROR PostLoad() override;
 
@@ -188,6 +190,7 @@ public:
                CKMANAGER_FUNC_PostProcess |
                CKMANAGER_FUNC_OnCKInit |
                CKMANAGER_FUNC_OnCKEnd |
+               CKMANAGER_FUNC_OnCKPlay |
                CKMANAGER_FUNC_OnCKReset |
                CKMANAGER_FUNC_OnCKPause |
                CKMANAGER_FUNC_PostLoad |
@@ -257,6 +260,9 @@ public:
     void ClearComponentStates();
 
     ScriptBehaviorBridge *GetBehaviorBridge();
+    ScriptRuntime *GetRuntime() const {
+        return m_Runtime.get();
+    }
     ScriptParameterRegistry *GetParameterRegistry() const {
         return m_ParameterRegistry.get();
     }
@@ -302,6 +308,7 @@ protected:
     std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > m_ComponentStates;
     std::unique_ptr<ScriptBehaviorBridge> m_BehaviorBridge;
     std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
+    std::unique_ptr<ScriptRuntime> m_Runtime;
     bool m_StartupSelfTestsAttempted = false;
 };
 
