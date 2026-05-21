@@ -1292,6 +1292,56 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
         return false;
     }
 
+    behavior->CreateInput(const_cast<CKSTRING>("In"));
+    const ScriptBridgeLayoutRecord *duplicateInputLayout = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
+    BBSlot *duplicateInput = duplicateInputLayout
+        ? new BBSlot(bridge,
+                     CKBehaviorContext(),
+                     MakeDefaultRequest(CKBehaviorContext()),
+                     ScriptBridgeSlotKind::Input,
+                     1,
+                     "In",
+                     CKGUID(),
+                     std::string(),
+                     0,
+                     0,
+                     duplicateInputLayout->LayoutGeneration,
+                     duplicateInputLayout->Signature,
+                     std::string(),
+                     behavior->GetID(),
+                     stamp)
+        : nullptr;
+    if (!duplicateInput || !duplicateInput->IsValid()) {
+        if (duplicateInput) {
+            duplicateInput->Release();
+        }
+        DestroySelfTestObject(context, behavior);
+        error = "Layout cache duplicate input slot setup self-test failed.";
+        return false;
+    }
+
+    CKDWORD defaultInputFlags = 0;
+    SetScriptBridgeSlotMetadataFlag(defaultInputFlags, ScriptBridgeSlotMetadataFlags::Start, true);
+    SetScriptBridgeSlotMetadataFlag(defaultInputFlags, ScriptBridgeSlotMetadataFlags::Stop, true);
+    duplicateInput->SetMetadata(defaultInputFlags, std::string(), std::string());
+
+    BBConfig defaultInputConfig(bridge, CKBehaviorContext(), MakeDefaultRequest(CKBehaviorContext()));
+    if (!defaultInputConfig.RegisterSlot(duplicateInput)) {
+        error = "BBConfig duplicate input metadata self-test failed to register slot: " + defaultInputConfig.Error();
+        duplicateInput->Release();
+        DestroySelfTestObject(context, behavior);
+        return false;
+    }
+    const std::string defaultInputText = defaultInputConfig.Explain();
+    if (defaultInputText.find("Default start input: 'In[1]'") == std::string::npos ||
+        defaultInputText.find("Default stop input: 'In[1]'") == std::string::npos) {
+        error = "BBConfig duplicate input metadata self-test lost start/stop occurrence.";
+        duplicateInput->Release();
+        DestroySelfTestObject(context, behavior);
+        return false;
+    }
+    duplicateInput->Release();
+
     DestroySelfTestObject(context, behavior);
     return true;
 }

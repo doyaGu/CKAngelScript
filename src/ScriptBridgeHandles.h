@@ -752,6 +752,7 @@ public:
     int DataSize() const;
     CKDWORD Caps() const;
     int LayoutGeneration() const;
+    int Occurrence() const;
     bool IsSetting() const;
     bool IsRequired() const;
     bool IsStart() const;
@@ -928,7 +929,9 @@ private:
     std::vector<BBSlot *> m_RegisteredSlots;
     BBInstance *m_Instance = nullptr;
     std::string m_DefaultStartInput;
+    int m_DefaultStartOccurrence = 0;
     std::string m_DefaultStopInput;
+    int m_DefaultStopOccurrence = 0;
     bool m_ComponentLifetime = false;
 };
 
@@ -940,7 +943,9 @@ public:
                CK_ID instanceId,
                int generation,
                const std::string &defaultStartInput,
+               int defaultStartOccurrence,
                const std::string &defaultStopInput,
+               int defaultStopOccurrence,
                const std::string &error = std::string());
     ~BBInstance() override;
 
@@ -1002,7 +1007,9 @@ private:
     CK_ID m_InstanceId = 0;
     int m_Generation = 0;
     std::string m_DefaultStartInput;
+    int m_DefaultStartOccurrence = 0;
     std::string m_DefaultStopInput;
+    int m_DefaultStopOccurrence = 0;
 };
 
 class BBCallBuilder final : public RefCounted {

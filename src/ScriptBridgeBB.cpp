@@ -1,5 +1,7 @@
 #include "ScriptBridgeHandles.h"
 
+#include <cstdlib>
+
 #include <fmt/format.h>
 
 #include "add_on/scriptarray/scriptarray.h"
@@ -323,6 +325,46 @@ void AppendPrototype(CScriptArray *array, BBPrototype *prototype) {
     prototype->Release();
 }
 
+struct SlotNameOccurrence {
+    std::string Name;
+    int Occurrence = 0;
+};
+
+SlotNameOccurrence ParseSlotNameOccurrenceText(const std::string &text) {
+    SlotNameOccurrence result;
+    result.Name = text;
+
+    const std::size_t open = text.rfind('[');
+    if (open != std::string::npos && !text.empty() && text.back() == ']') {
+        char *end = nullptr;
+        const std::string number = text.substr(open + 1, text.size() - open - 2);
+        const long occurrence = std::strtol(number.c_str(), &end, 10);
+        if (end && *end == '\0' && occurrence >= 0) {
+            result.Name = text.substr(0, open);
+            result.Occurrence = static_cast<int>(occurrence);
+            return result;
+        }
+    }
+
+    const std::size_t hash = text.rfind('#');
+    if (hash != std::string::npos && hash + 1 < text.size()) {
+        char *end = nullptr;
+        const long occurrence = std::strtol(text.c_str() + hash + 1, &end, 10);
+        if (end && *end == '\0' && occurrence >= 0) {
+            result.Name = text.substr(0, hash);
+            result.Occurrence = static_cast<int>(occurrence);
+        }
+    }
+
+    return result;
+}
+
+std::string FormatSlotNameOccurrenceText(const std::string &name, int occurrence) {
+    return occurrence > 0 && !name.empty()
+        ? fmt::format("{}[{}]", name, occurrence)
+        : name;
+}
+
 } // namespace ScriptBridgeBBInternal
 
 BBSlot::BBSlot(ScriptBehaviorBridge *bridge,
@@ -392,6 +434,48 @@ std::string BBSlot::TypeName() const { return m_TypeName; }
 int BBSlot::DataSize() const { return m_DataSize; }
 CKDWORD BBSlot::Caps() const { return m_Caps; }
 int BBSlot::LayoutGeneration() const { return m_LayoutGeneration; }
+int BBSlot::Occurrence() const {
+    const ScriptBridgeLayoutRecord *layout = LayoutRecord();
+    if (!layout || m_Index < 0) {
+        return 0;
+    }
+
+    int occurrence = 0;
+    auto countIoOccurrence = [&](const std::vector<ScriptBridgeLayoutIoSlot> &slots) {
+        for (int i = 0; i < static_cast<int>(slots.size()); ++i) {
+            if (slots[i].Name != m_Name) {
+                continue;
+            }
+            if (i == m_Index) {
+                return occurrence;
+            }
+            ++occurrence;
+        }
+        return 0;
+    };
+    auto countParamOccurrence = [&](const std::vector<ScriptBridgeLayoutParamSlot> &slots) {
+        for (const ScriptBridgeLayoutParamSlot &slot : slots) {
+            if (slot.Name != m_Name) {
+                continue;
+            }
+            if (slot.Index == m_Index) {
+                return occurrence;
+            }
+            ++occurrence;
+        }
+        return 0;
+    };
+
+    switch (m_Kind) {
+        case ScriptBridgeSlotKind::Input: return countIoOccurrence(layout->Inputs);
+        case ScriptBridgeSlotKind::Output: return countIoOccurrence(layout->Outputs);
+        case ScriptBridgeSlotKind::Pin: return countParamOccurrence(layout->Pins);
+        case ScriptBridgeSlotKind::Pout: return countParamOccurrence(layout->Pouts);
+        case ScriptBridgeSlotKind::Setting: return countParamOccurrence(layout->Settings);
+        case ScriptBridgeSlotKind::Local: return countParamOccurrence(layout->Locals);
+        default: return 0;
+    }
+}
 bool BBSlot::IsSetting() const { return HasScriptBridgeSlotCap(m_Caps, ScriptBridgeSlotCaps::Setting) || m_Kind == ScriptBridgeSlotKind::Setting; }
 bool BBSlot::IsRequired() const { return HasScriptBridgeSlotMetadataFlag(m_MetadataFlags, ScriptBridgeSlotMetadataFlags::Required); }
 bool BBSlot::IsStart() const { return HasScriptBridgeSlotMetadataFlag(m_MetadataFlags, ScriptBridgeSlotMetadataFlags::Start); }
@@ -673,10 +757,12 @@ std::string BBConfig::Describe() const {
     BBDecl spec(m_Bridge, m_Context, m_Request, m_Error);
     std::string text = spec.Describe();
     if (!m_DefaultStartInput.empty()) {
-        text += fmt::format("\nDefault start input: '{}'", m_DefaultStartInput);
+        text += fmt::format("\nDefault start input: '{}'",
+                            ScriptBridgeBBInternal::FormatSlotNameOccurrenceText(m_DefaultStartInput, m_DefaultStartOccurrence));
     }
     if (!m_DefaultStopInput.empty()) {
-        text += fmt::format("\nDefault stop input: '{}'", m_DefaultStopInput);
+        text += fmt::format("\nDefault stop input: '{}'",
+                            ScriptBridgeBBInternal::FormatSlotNameOccurrenceText(m_DefaultStopInput, m_DefaultStopOccurrence));
     }
     return text;
 }
@@ -1043,7 +1129,15 @@ BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
         m_Instance->Release();
         m_Instance = nullptr;
     }
-    BBInstance *instance = new BBInstance(m_Bridge, ctx, m_Request, instanceId, generation, m_DefaultStartInput, m_DefaultStopInput);
+    BBInstance *instance = new BBInstance(m_Bridge,
+                                          ctx,
+                                          m_Request,
+                                          instanceId,
+                                          generation,
+                                          m_DefaultStartInput,
+                                          m_DefaultStartOccurrence,
+                                          m_DefaultStopInput,
+                                          m_DefaultStopOccurrence);
     m_Instance = instance;
     m_Instance->AddRef();
     return instance;
@@ -1114,11 +1208,15 @@ ParamRef *BBConfig::PoutRefSlot(BBSlot *pout) {
 }
 
 void BBConfig::SetDefaultStart(const std::string &inputName) {
-    m_DefaultStartInput = inputName;
+    const ScriptBridgeBBInternal::SlotNameOccurrence slot = ScriptBridgeBBInternal::ParseSlotNameOccurrenceText(inputName);
+    m_DefaultStartInput = slot.Name;
+    m_DefaultStartOccurrence = slot.Occurrence;
 }
 
 void BBConfig::SetDefaultStop(const std::string &inputName) {
-    m_DefaultStopInput = inputName;
+    const ScriptBridgeBBInternal::SlotNameOccurrence slot = ScriptBridgeBBInternal::ParseSlotNameOccurrenceText(inputName);
+    m_DefaultStopInput = slot.Name;
+    m_DefaultStopOccurrence = slot.Occurrence;
 }
 
 void BBConfig::SetComponentLifetime(bool componentLifetime) {
@@ -1194,7 +1292,7 @@ BBSlot *BBConfig::FindCachedSlot(ScriptBridgeSlotKind kind, const std::string &n
 
 BBSlot *BBConfig::DefaultInputSlot() {
     if (!m_DefaultStartInput.empty()) {
-        return In(m_DefaultStartInput);
+        return In(m_DefaultStartInput, m_DefaultStartOccurrence);
     }
     const ScriptBridgeLayoutRecord *layout = m_Bridge ? m_Bridge->GetPrototypeLayout(m_Context, m_Request) : nullptr;
     const std::string inferred = layout ? ScriptBridgeBBInternal::SelectDefaultInputName(*layout) : std::string();
@@ -1203,7 +1301,7 @@ BBSlot *BBConfig::DefaultInputSlot() {
 
 BBSlot *BBConfig::DefaultStopSlot() {
     if (!m_DefaultStopInput.empty()) {
-        return In(m_DefaultStopInput);
+        return In(m_DefaultStopInput, m_DefaultStopOccurrence);
     }
     const ScriptBridgeLayoutRecord *layout = m_Bridge ? m_Bridge->GetPrototypeLayout(m_Context, m_Request) : nullptr;
     const std::string inferred = layout ? ScriptBridgeBBInternal::SelectDefaultStopInputName(*layout) : std::string();
@@ -1281,10 +1379,12 @@ bool BBConfig::ApplySlotMetadata(BBSlot *slot) {
         return false;
     }
     if (slot->IsStart()) {
-        SetDefaultStart(slot->Name());
+        m_DefaultStartInput = slot->Name();
+        m_DefaultStartOccurrence = slot->Occurrence();
     }
     if (slot->IsStop()) {
-        SetDefaultStop(slot->Name());
+        m_DefaultStopInput = slot->Name();
+        m_DefaultStopOccurrence = slot->Occurrence();
     }
     if (slot->HasDefault() && slot->Kind() == static_cast<int>(ScriptBridgeSlotKind::Pin)) {
         return SetValueForPin(slot, MakeScriptParamString(slot->DefaultText()), "BBConfig.RegisterSlot");
@@ -1487,7 +1587,9 @@ BBInstance::BBInstance(ScriptBehaviorBridge *bridge,
                        CK_ID instanceId,
                        int generation,
                        const std::string &defaultStartInput,
+                       int defaultStartOccurrence,
                        const std::string &defaultStopInput,
+                       int defaultStopOccurrence,
                        const std::string &error)
     : m_Bridge(bridge),
       m_Context(ctx),
@@ -1496,7 +1598,9 @@ BBInstance::BBInstance(ScriptBehaviorBridge *bridge,
       m_InstanceId(instanceId),
       m_Generation(generation),
       m_DefaultStartInput(defaultStartInput),
-      m_DefaultStopInput(defaultStopInput) {}
+      m_DefaultStartOccurrence(defaultStartOccurrence),
+      m_DefaultStopInput(defaultStopInput),
+      m_DefaultStopOccurrence(defaultStopOccurrence) {}
 
 BBInstance::~BBInstance() {
     Destroy();
@@ -1528,10 +1632,12 @@ std::string BBInstance::Explain() const {
     CKBehavior *behavior = m_Bridge ? m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation) : nullptr;
     text += fmt::format("\nBehavior: {}", behavior ? SafeString(behavior->GetName()) : std::string("<none>"));
     if (!m_DefaultStartInput.empty()) {
-        text += fmt::format("\nDefault start input: '{}'", m_DefaultStartInput);
+        text += fmt::format("\nDefault start input: '{}'",
+                            ScriptBridgeBBInternal::FormatSlotNameOccurrenceText(m_DefaultStartInput, m_DefaultStartOccurrence));
     }
     if (!m_DefaultStopInput.empty()) {
-        text += fmt::format("\nDefault stop input: '{}'", m_DefaultStopInput);
+        text += fmt::format("\nDefault stop input: '{}'",
+                            ScriptBridgeBBInternal::FormatSlotNameOccurrenceText(m_DefaultStopInput, m_DefaultStopOccurrence));
     }
     const ScriptBridgeExecutionState state = m_Bridge ? m_Bridge->GetInstanceState(m_InstanceId, m_Generation) : ScriptBridgeExecutionState();
     text += fmt::format("\nLast return: {}", state.ReturnCode);
@@ -1583,7 +1689,7 @@ bool BBInstance::Start() {
     if (m_DefaultStartInput.empty()) {
         return Start(nullptr);
     }
-    BBSlot *slot = Input(m_DefaultStartInput);
+    BBSlot *slot = Input(m_DefaultStartInput, m_DefaultStartOccurrence);
     const bool result = Start(slot);
     if (slot) {
         slot->Release();
@@ -1645,7 +1751,7 @@ bool BBInstance::Stop() {
 
     int inputIndex = -1;
     if (!m_DefaultStopInput.empty()) {
-        BBSlot *slot = Input(m_DefaultStopInput);
+        BBSlot *slot = Input(m_DefaultStopInput, m_DefaultStopOccurrence);
         if (slot) {
             std::string error;
             CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_InstanceId, m_Generation);
