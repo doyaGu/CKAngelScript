@@ -1,6 +1,7 @@
 #include "ScriptManager.h"
 
 #include <cstdlib>
+#include <fstream>
 
 #include <fmt/format.h>
 
@@ -48,6 +49,24 @@ bool ShouldRunStartupSelfTests() {
     return IsTruthyEnvironmentValue("CKAS_RUN_SELFTESTS") || IsTruthyEnvironmentValue("CKAS_SELFTEST_MARKER");
 }
 
+void WriteStartupSelfTestMarker(const char *status, const char *stage, const std::string &message) {
+    const char *path = std::getenv("CKAS_SELFTEST_MARKER");
+    if (!path || path[0] == '\0') {
+        return;
+    }
+
+    std::ofstream out(path, std::ios::out | std::ios::trunc);
+    if (!out) {
+        return;
+    }
+
+    out << "status=" << (status ? status : "unknown") << "\n";
+    out << "stage=" << (stage ? stage : "unknown") << "\n";
+    if (!message.empty()) {
+        out << "message=" << message << "\n";
+    }
+}
+
 } // namespace ScriptManagerInternal
 
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
@@ -80,6 +99,10 @@ CKERROR ScriptManager::PostClearAll() {
 }
 
 CKERROR ScriptManager::PreProcess() {
+    const CKERROR selfTestResult = RunStartupSelfTests();
+    if (selfTestResult != CK_OK) {
+        return selfTestResult;
+    }
     return m_BehaviorBridge ? m_BehaviorBridge->PreProcess() : CK_OK;
 }
 
@@ -88,30 +111,45 @@ CKERROR ScriptManager::PostProcess() {
 }
 
 CKERROR ScriptManager::OnCKInit() {
+    return CK_OK;
+}
+
+CKERROR ScriptManager::RunStartupSelfTests() {
+    if (m_StartupSelfTestsAttempted) {
+        return CK_OK;
+    }
     if (!ScriptManagerInternal::ShouldRunStartupSelfTests()) {
         return CK_OK;
     }
+    m_StartupSelfTestsAttempted = true;
+    ScriptManagerInternal::WriteStartupSelfTestMarker("running", "start", std::string());
 
     std::string conversionError;
+    ScriptManagerInternal::WriteStartupSelfTestMarker("running", "parameter-conversion", std::string());
     if (!RunScriptParameterConversionSelfTest(conversionError)) {
         if (m_Context) {
             m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] Parameter conversion self-test failed: %s"),
                                          conversionError.c_str());
         }
+        ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "parameter-conversion", conversionError);
         return CKERR_INVALIDOPERATION;
     }
+    ScriptManagerInternal::WriteStartupSelfTestMarker("running", "parameter-registry", std::string());
     if (!RunScriptParameterRegistrySelfTest(m_Context, conversionError)) {
         if (m_Context) {
             m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] Parameter registry self-test failed: %s"),
                                          conversionError.c_str());
         }
+        ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "parameter-registry", conversionError);
         return CKERR_INVALIDOPERATION;
     }
+    ScriptManagerInternal::WriteStartupSelfTestMarker("running", "behavior-bridge", std::string());
     if (!RunScriptBehaviorBridgeSelfTest(m_Context, m_ScriptEngine, conversionError)) {
         if (m_Context) {
             m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] Behavior bridge self-test failed: %s"),
                                          conversionError.c_str());
         }
+        ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "behavior-bridge", conversionError);
         return CKERR_INVALIDOPERATION;
     }
     return CK_OK;

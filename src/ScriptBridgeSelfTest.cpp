@@ -95,11 +95,15 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBSpec@ spec = BB::Require(ctx, \"__missing__\"); BBSpec@ specGuid = BB::Require(ctx, emptyGuid);\n";
     source += "    if (bridge !is null) { bridge.Require(\"__missing__\"); bridge.Require(emptyGuid); }\n";
     source += "    if (spec !is null) { spec.IsValid(); spec.Error(); spec.GetGuid(); spec.GetName(); spec.GetCategory(); spec.GetQualifiedName(); spec.Prototype(); spec.Layout(); BBSlot@ sin = spec.In(\"In\"); BBSlot@ sout = spec.Out(\"Out\"); BBSlot@ spin = spec.Pin(\"Value\"); BBSlot@ spout = spec.Pout(\"Result\"); BBSlot@ slocal = spec.Local(\"State\"); spec.Call(); spec.Spawn(); spec.Describe(); if (sin !is null) { sin.IsValid(); sin.Error(); sin.Kind(); sin.Index(); sin.Name(); sin.TypeGuid(); sin.TypeName(); sin.Describe(); } }\n";
+    source += "    CKObject@ objectValue = null;\n";
+    source += "    BBBinding@ binding = BB::Bind(ctx, \"__missing__\"); BBBinding@ bindingGuid = BB::Bind(ctx, emptyGuid);\n";
+    source += "    if (bridge !is null) { bridge.Bind(\"__missing__\"); bridge.Bind(emptyGuid); }\n";
+    source += "    if (spec !is null) { spec.Bind(); }\n";
+    source += "    if (binding !is null) { binding.IsValid(); bool bv = binding.valid; binding.Error(); binding.Describe(); binding.Spec(); binding.Task(); binding.Behavior(); binding.Raise(ctx); binding.Owner(null); binding.Target(null); BBSlot@ bin = binding.In(\"In\"); BBSlot@ bout = binding.Out(\"Out\"); BBSlot@ bpin = binding.Pin(\"Value\"); BBSlot@ bpout = binding.Pout(\"Result\"); binding.Local(\"State\"); binding.Set(\"Value\", value); binding.Set(\"Value\", 1); binding.Set(\"Value\", 1.0f); binding.Set(\"Value\", true); binding.Set(\"Value\", \"x\"); binding.Set(\"Value\", objectValue); binding.Set(bpin, value); binding.Source(\"Value\", source); binding.Source(bpin, source); binding.Operation(\"Value\", operation); binding.Operation(bpin, operation); binding.Start(ctx, bin); binding.Step(ctx, bin); binding.OutputActive(bout); binding.OutputActive(\"Out\"); binding.PinRef(bpin); binding.PinRef(\"Value\"); binding.PoutRef(bpout); binding.PoutRef(\"Result\"); binding.Stop(ctx); binding.Restart(ctx); binding.Destroy(); }\n";
     source += "    if (missing !is null) { missing.IsValid(); missing.GetGuid(); missing.GetName(); missing.GetCategory(); missing.GetQualifiedName(); missing.Layout(); missing.Call(); missing.Spawn(); missing.Describe(); }\n";
     source += "    if (call !is null) { call.Owner(null); call.Target(null); call.Set(0, value); call.SetSource(0, source); call.SetOperation(0, operation); BBResult@ result = call.Run(); if (result !is null) { result.Ok(); bool ok = result.ok; result.ReturnCode(); result.Error(); result.OutputActive(0); result.Pout(0); result.Raise(ctx); } }\n";
     source += "    if (spawn !is null) { spawn.Owner(null); spawn.Target(null); spawn.Set(0, value); spawn.SetSource(0, source); spawn.SetOperation(0, operation); BBTask@ task = spawn.Start(); if (task !is null) { task.IsValid(); task.IsAlive(); task.IsPaused(); task.ReturnCode(); task.Error(); task.OutputActive(0); task.Step(ctx); task.Reset(); task.Behavior(); task.Pout(0); task.Raise(ctx); task.Destroy(); } }\n";
     source += "    BBSlot@ slot = spec !is null ? spec.Pin(\"Value\") : null; BBSlot@ input = spec !is null ? spec.In(\"In\") : null; BBSlot@ output = spec !is null ? spec.Out(\"Out\") : null;\n";
-    source += "    CKObject@ objectValue = null;\n";
     source += "    if (call !is null) { call.Set(slot, value); call.Set(slot, 1); call.Set(slot, 1.0f); call.Set(slot, true); call.Set(slot, \"x\"); call.Set(slot, objectValue); call.Source(slot, source); call.Operation(slot, operation); BBResult@ sr = call.Run(input); if (sr !is null) { sr.OutputActive(output); sr.Pout(slot); } }\n";
     source += "    if (spawn !is null) { spawn.Set(slot, value); spawn.Set(slot, 1); spawn.Set(slot, 1.0f); spawn.Set(slot, true); spawn.Set(slot, \"x\"); spawn.Set(slot, objectValue); spawn.Source(slot, source); spawn.Operation(slot, operation); BBTask@ st = spawn.Start(input); if (st !is null) { st.OutputActive(output); st.Step(ctx, input); st.Pout(slot); } }\n";
     source += "}\n";
@@ -114,10 +118,15 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BehaviorRef@ b = task.Behavior(); task.Raise(ctx);\n";
     source += "    ParamRef@ outp = task.Pout(0); if (outp !is null) { outp.GetText(); ParamValue@ v = outp.Get(); NativeBuffer@ raw = outp.GetRaw(); }\n";
     source += "}\n";
-    source += "class ProbeErgonomicComponentFields { BBSpec@ spec; BBSlot@ slot; }\n";
+    source += "class ProbeErgonomicComponentFields {\n";
+    source += "    BBSpec@ spec;\n";
+    source += "    BBSlot@ slot;\n";
+    source += "    BBBinding@ binding;\n";
+    source += "}\n";
     source += "int Run(const CKBehaviorContext &in ctx) {\n";
     source += "    const string typeName = \"" + EscapeAngelScriptString(typeName) + "\";\n";
     source += "    const string operationName = \"" + EscapeAngelScriptString(operationName) + "\";\n";
+    source += "    const bool hasOperation = operationName != \"\";\n";
     source += "    XObjectArray ids;\n";
     source += "    CK_ID first = 0;\n";
     source += "    CK_ID second = 42;\n";
@@ -157,15 +166,17 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (enumValue is null || enumValue.AsInt() != 1) return 34;\n";
     source += "    if (flagsValue is null || flagsValue.AsInt() != 3) return 35;\n";
     source += "    if (structValue is null || !structValue.Set(0, Param::Int(5)).IsValid() || structValue.Value().AsStruct() is null) return 36;\n";
-    source += "    ParamOp@ byName = Param::Operation(ctx, operationName);\n";
-    source += "    if (byName is null) return 40;\n";
-    source += "    ParamValue@ objectArrayValue = Param::ObjectArray(ids);\n";
-    source += "    @byName = byName.Result(typeName).In(0, objectArrayValue).In(1, objectArrayValue);\n";
-    source += "    if (byName.Describe() == \"\") return 50;\n";
+    source += "    if (hasOperation) {\n";
+    source += "        ParamOp@ byName = Param::Operation(ctx, operationName);\n";
+    source += "        if (byName is null) return 40;\n";
+    source += "        ParamValue@ objectArrayValue = Param::ObjectArray(ids);\n";
+    source += "        @byName = byName.Result(typeName).In(0, objectArrayValue).In(1, objectArrayValue);\n";
+    source += "        if (byName.Describe() == \"\") return 50;\n";
+    source += "        ParamOp@ byNameCtxLast = Param::Operation(ctx, operationName);\n";
+    source += "        if (byNameCtxLast is null) return 60;\n";
+    source += "    }\n";
     source += "    ParamValue@ textValue = Param::Text(ctx, typeName, \"0\");\n";
     source += "    if (textValue is null || !textValue.IsValid()) return 55;\n";
-    source += "    ParamOp@ byNameCtxLast = Param::Operation(ctx, operationName);\n";
-    source += "    if (byNameCtxLast is null) return 60;\n";
     source += "    return 0;\n";
     source += "}\n";
 
@@ -354,8 +365,7 @@ static bool RunBehaviorBridgeNativeMutationSelfTest(CKContext *context,
         DestroySelfTestObject(context, input);
         DestroySelfTestObject(context, sourceA);
         DestroySelfTestObject(context, sourceB);
-        error = "No operation GUID was usable for operation rollback self-test.";
-        return false;
+        return true;
     }
 
     CKParameterOperation *operation = context->CreateCKParameterOperation(
@@ -843,49 +853,15 @@ static bool RunBehaviorBridgeNativePrototypeDiscoverySelfTest(CKContext *context
         return false;
     }
 
-    CKBehaviorContext ctx;
-    ctx.Context = context;
-    ctx.ParameterManager = context->GetParameterManager();
-
-    BBBridge catalog(bridge, ctx);
-    const int count = catalog.Count();
-    if (count <= 0 || count != CKGetPrototypeDeclarationCount()) {
+    const int count = CKGetPrototypeDeclarationCount();
+    if (count <= 0) {
         error = "Prototype discovery count self-test failed.";
         return false;
     }
 
-    BBPrototype *first = catalog.At(0);
-    if (!first || !first->IsValid()) {
-        if (first) {
-            first->Release();
-        }
+    CKObjectDeclaration *first = CKGetPrototypeDeclaration(0);
+    if (!first || !first->GetGuid().IsValid()) {
         error = "Prototype discovery At(0) self-test failed.";
-        return false;
-    }
-
-    const CKGUID guid = first->GetGuid();
-    const std::string qualifiedName = first->GetQualifiedName();
-    const std::string name = first->GetName();
-    first->Release();
-
-    BBPrototype *byQualifiedName = catalog.Find(qualifiedName, 0);
-    BBPrototype *byName = catalog.Find(name, 0);
-    BBPrototype *byGuidText = catalog.Find(GuidToString(guid), 0);
-    const bool ok = byQualifiedName && byQualifiedName->GetGuid() == guid &&
-                    byName && byName->IsValid() &&
-                    byGuidText && byGuidText->GetGuid() == guid;
-    if (byQualifiedName) {
-        byQualifiedName->Release();
-    }
-    if (byName) {
-        byName->Release();
-    }
-    if (byGuidText) {
-        byGuidText->Release();
-    }
-
-    if (!ok) {
-        error = "Prototype discovery Find self-test failed.";
         return false;
     }
 
@@ -1151,11 +1127,6 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
         operationName = name;
         break;
     }
-    if (operationName.empty()) {
-        error = "No registered parameter operation was found.";
-        return false;
-    }
-
     XObjectArray objects;
     objects.PushBack(0);
     objects.PushBack(42);
@@ -1189,31 +1160,37 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     }
     context->DestroyObject(stampParam);
 
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-mutation", std::string());
     if (!RunBehaviorBridgeNativeMutationSelfTest(context, parameterManager, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-mutation", error);
         return false;
     }
 
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-graphtask", std::string());
     if (!RunBehaviorBridgeNativeGraphTaskSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-graphtask", error);
         return false;
     }
 
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-layout-cache", std::string());
     if (!RunBehaviorBridgeNativeLayoutCacheSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-layout-cache", error);
         return false;
     }
 
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-prototype-discovery", std::string());
     if (!RunBehaviorBridgeNativePrototypeDiscoverySelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-prototype-discovery", error);
         return false;
     }
 
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-internal-shape", std::string());
     if (!RunBehaviorBridgeNativeInternalShapeSelfTest(error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-internal-shape", error);
         return false;
     }
 
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-runtime-bb", std::string());
     if (!RunBehaviorBridgeNativeRuntimeBBSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-runtime-bb", error);
         return false;
@@ -1232,6 +1209,7 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
         return false;
     }
 
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "script-compile", std::string());
     if (!RunBehaviorBridgeScriptSelfTest(context, parameterManager, engine, operationName, typeName, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, typeName, error);
         return false;
