@@ -271,6 +271,33 @@ bool ResolveRuntimeSlot(ScriptBehaviorBridge *bridge,
     return true;
 }
 
+bool NameEqualsAny(const std::string &name, std::initializer_list<const char *> candidates) {
+    for (const char *candidate : candidates) {
+        if (candidate && name == candidate) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string SelectDefaultInputName(const ScriptBridgeLayoutRecord &layout) {
+    for (const ScriptBridgeLayoutIoSlot &slot : layout.Inputs) {
+        if (NameEqualsAny(slot.Name, {"In", "On", "Start", "Enable"})) {
+            return slot.Name;
+        }
+    }
+    return layout.Inputs.size() == 1 ? layout.Inputs.front().Name : std::string();
+}
+
+std::string SelectDefaultStopInputName(const ScriptBridgeLayoutRecord &layout) {
+    for (const ScriptBridgeLayoutIoSlot &slot : layout.Inputs) {
+        if (NameEqualsAny(slot.Name, {"Off", "Stop", "Disable"})) {
+            return slot.Name;
+        }
+    }
+    return std::string();
+}
+
 asITypeInfo *PrototypeArrayType(ScriptBehaviorBridge *bridge) {
     ScriptManager *manager = bridge ? bridge->GetManager() : nullptr;
     asIScriptEngine *engine = manager ? manager->GetScriptEngine() : nullptr;
@@ -668,6 +695,7 @@ BBSlot *BBConfig::In(const std::string &name, int occurrence) { return Slot(Scri
 BBSlot *BBConfig::Out(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Output, name, occurrence); }
 BBSlot *BBConfig::Pin(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Pin, name, occurrence); }
 BBSlot *BBConfig::Pout(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Pout, name, occurrence); }
+BBSlot *BBConfig::Setting(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Setting, name, occurrence); }
 BBSlot *BBConfig::Local(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Local, name, occurrence); }
 
 bool BBConfig::RequireSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) {
@@ -692,60 +720,6 @@ BBConfig *BBConfig::Target(CKBeObject *target) {
     m_Request.TargetId = target ? target->GetID() : 0;
     AddRef();
     return this;
-}
-
-BBConfig *BBConfig::Set(const std::string &pinName, ParamValue *value) {
-    BBSlot *slot = Pin(pinName);
-    BBConfig *result = SetSlot(slot, value);
-    if (slot) {
-        slot->Release();
-    }
-    return result;
-}
-
-BBConfig *BBConfig::SetInt(const std::string &pinName, int value) {
-    BBSlot *slot = Pin(pinName);
-    BBConfig *result = SetSlotInt(slot, value);
-    if (slot) {
-        slot->Release();
-    }
-    return result;
-}
-
-BBConfig *BBConfig::SetFloat(const std::string &pinName, float value) {
-    BBSlot *slot = Pin(pinName);
-    BBConfig *result = SetSlotFloat(slot, value);
-    if (slot) {
-        slot->Release();
-    }
-    return result;
-}
-
-BBConfig *BBConfig::SetBool(const std::string &pinName, bool value) {
-    BBSlot *slot = Pin(pinName);
-    BBConfig *result = SetSlotBool(slot, value);
-    if (slot) {
-        slot->Release();
-    }
-    return result;
-}
-
-BBConfig *BBConfig::SetString(const std::string &pinName, const std::string &value) {
-    BBSlot *slot = Pin(pinName);
-    BBConfig *result = SetSlotString(slot, value);
-    if (slot) {
-        slot->Release();
-    }
-    return result;
-}
-
-BBConfig *BBConfig::SetObject(const std::string &pinName, CKObject *value) {
-    BBSlot *slot = Pin(pinName);
-    BBConfig *result = SetSlotObject(slot, value);
-    if (slot) {
-        slot->Release();
-    }
-    return result;
 }
 
 BBConfig *BBConfig::SetSlot(BBSlot *pin, ParamValue *value) {
@@ -777,26 +751,8 @@ BBConfig *BBConfig::SetSlotObject(BBSlot *pin, CKObject *value) {
     return SetValueForPin(pin, MakeScriptParamObject(value), "BBConfig.Set") ? (AddRef(), this) : nullptr;
 }
 
-BBConfig *BBConfig::Source(const std::string &pinName, ParamRef *source) {
-    BBSlot *slot = Pin(pinName);
-    BBConfig *result = SourceSlot(slot, source);
-    if (slot) {
-        slot->Release();
-    }
-    return result;
-}
-
 BBConfig *BBConfig::SourceSlot(BBSlot *pin, ParamRef *source) {
     return SourceForPin(pin, source, "BBConfig.Source") ? (AddRef(), this) : nullptr;
-}
-
-BBConfig *BBConfig::Operation(const std::string &pinName, ParamOp *operation) {
-    BBSlot *slot = Pin(pinName);
-    BBConfig *result = OperationSlot(slot, operation);
-    if (slot) {
-        slot->Release();
-    }
-    return result;
 }
 
 BBConfig *BBConfig::OperationSlot(BBSlot *pin, ParamOp *operation) {
@@ -1016,18 +972,23 @@ BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
     return instance;
 }
 
+BBInstance *BBConfig::SpawnStarted(const CKBehaviorContext &ctx) {
+    BBInstance *instance = SpawnInstance(ctx);
+    if (!instance) {
+        return nullptr;
+    }
+    if (!instance->Start()) {
+        SetError(instance->Error());
+        SetScriptException(m_Error);
+        instance->Release();
+        return nullptr;
+    }
+    return instance;
+}
+
 BBTask *BBConfig::Start(const CKBehaviorContext &ctx) {
     BBSlot *input = DefaultInputSlot();
     BBTask *task = StartSlot(ctx, input);
-    if (input) {
-        input->Release();
-    }
-    return task;
-}
-
-BBTask *BBConfig::StartName(const CKBehaviorContext &ctx, const std::string &inputName) {
-    BBSlot *input = inputName.empty() ? nullptr : In(inputName);
-    BBTask *task = input ? StartSlot(ctx, input) : Start(ctx);
     if (input) {
         input->Release();
     }
@@ -1082,15 +1043,6 @@ bool BBConfig::Step(const CKBehaviorContext &ctx) {
     return result;
 }
 
-bool BBConfig::StepName(const CKBehaviorContext &ctx, const std::string &inputName) {
-    BBSlot *input = inputName.empty() ? nullptr : In(inputName);
-    const bool result = input ? StepSlot(ctx, input) : Step(ctx);
-    if (input) {
-        input->Release();
-    }
-    return result;
-}
-
 bool BBConfig::StepSlot(const CKBehaviorContext &ctx, BBSlot *input) {
     if (!m_Task || !m_Task->IsAlive()) {
         SetError("BBConfig.Step called before Start or after Destroy.");
@@ -1112,15 +1064,6 @@ bool BBConfig::Stop(const CKBehaviorContext &ctx) {
     const bool result = stop ? StopSlot(ctx, stop) : Destroy();
     if (stop) {
         stop->Release();
-    }
-    return result;
-}
-
-bool BBConfig::StopName(const CKBehaviorContext &ctx, const std::string &inputName) {
-    BBSlot *input = inputName.empty() ? nullptr : In(inputName);
-    const bool result = input ? StopSlot(ctx, input) : Stop(ctx);
-    if (input) {
-        input->Release();
     }
     return result;
 }
@@ -1156,26 +1099,11 @@ bool BBConfig::Destroy() {
     return result;
 }
 
-bool BBConfig::OutputActive(const std::string &outputName) {
-    BBSlot *output = Out(outputName);
-    const bool result = OutputActiveSlot(output);
-    if (output) {
-        output->Release();
-    }
-    return result;
-}
-
 bool BBConfig::OutputActiveSlot(BBSlot *output) {
-    return m_Task && m_Task->OutputActiveSlot(output);
-}
-
-ParamRef *BBConfig::PinRef(const std::string &pinName) {
-    BBSlot *slot = Pin(pinName);
-    ParamRef *ref = PinRefSlot(slot);
-    if (slot) {
-        slot->Release();
+    if (m_Instance && m_Instance->IsValid()) {
+        return m_Instance->OutputActive(output);
     }
-    return ref;
+    return m_Task && m_Task->OutputActiveSlot(output);
 }
 
 ParamRef *BBConfig::PinRefSlot(BBSlot *pin) {
@@ -1187,16 +1115,10 @@ ParamRef *BBConfig::PinRefSlot(BBSlot *pin) {
     return ref;
 }
 
-ParamRef *BBConfig::PoutRef(const std::string &poutName) {
-    BBSlot *slot = Pout(poutName);
-    ParamRef *ref = PoutRefSlot(slot);
-    if (slot) {
-        slot->Release();
-    }
-    return ref;
-}
-
 ParamRef *BBConfig::PoutRefSlot(BBSlot *pout) {
+    if (m_Instance && m_Instance->IsValid()) {
+        return m_Instance->Pout(pout);
+    }
     return m_Task ? m_Task->PoutSlot(pout) : nullptr;
 }
 
@@ -1276,11 +1198,21 @@ BBSlot *BBConfig::FindCachedSlot(ScriptBridgeSlotKind kind, const std::string &n
 }
 
 BBSlot *BBConfig::DefaultInputSlot() {
-    return m_DefaultStartInput.empty() ? nullptr : In(m_DefaultStartInput);
+    if (!m_DefaultStartInput.empty()) {
+        return In(m_DefaultStartInput);
+    }
+    const ScriptBridgeLayoutRecord *layout = m_Bridge ? m_Bridge->GetPrototypeLayout(m_Context, m_Request) : nullptr;
+    const std::string inferred = layout ? ScriptBridgeBBInternal::SelectDefaultInputName(*layout) : std::string();
+    return inferred.empty() ? nullptr : In(inferred);
 }
 
 BBSlot *BBConfig::DefaultStopSlot() {
-    return m_DefaultStopInput.empty() ? nullptr : In(m_DefaultStopInput);
+    if (!m_DefaultStopInput.empty()) {
+        return In(m_DefaultStopInput);
+    }
+    const ScriptBridgeLayoutRecord *layout = m_Bridge ? m_Bridge->GetPrototypeLayout(m_Context, m_Request) : nullptr;
+    const std::string inferred = layout ? ScriptBridgeBBInternal::SelectDefaultStopInputName(*layout) : std::string();
+    return inferred.empty() ? nullptr : In(inferred);
 }
 
 bool BBConfig::ResolvePin(BBSlot *slot, int &pinIndex, const char *method) {
@@ -1338,7 +1270,9 @@ bool BBConfig::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, c
         }
         return true;
     }
-    if (!m_Task || !m_Task->IsAlive()) {
+    const bool hasLiveInstance = m_Instance && m_Instance->IsValid();
+    const bool hasLiveTask = m_Task && m_Task->IsAlive();
+    if (!hasLiveInstance && !hasLiveTask) {
         return true;
     }
     if (!m_Bridge->SetTaskSetting(m_Task->BridgeTaskId(), m_Task->BridgeGeneration(), settingIndex, value, error)) {
@@ -1409,7 +1343,9 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
     request.SourceStamp = source->Stamp();
     m_Request.SourceParameters.push_back(request);
 
-    if (!m_Task || !m_Task->IsAlive()) {
+    const bool hasLiveInstance = m_Instance && m_Instance->IsValid();
+    const bool hasLiveTask = m_Task && m_Task->IsAlive();
+    if (!hasLiveInstance && !hasLiveTask) {
         return true;
     }
 
@@ -1442,7 +1378,9 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
     }
 
     m_Request.OperationParameters.push_back(operation->RequestForPin(pinIndex));
-    if (!m_Task || !m_Task->IsAlive()) {
+    const bool hasLiveInstance = m_Instance && m_Instance->IsValid();
+    const bool hasLiveTask = m_Task && m_Task->IsAlive();
+    if (!hasLiveInstance && !hasLiveTask) {
         return true;
     }
 
