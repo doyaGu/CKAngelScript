@@ -629,6 +629,13 @@ std::string PublicFieldCandidates(asIScriptEngine *engine, asITypeInfo *type) {
     return out.str();
 }
 
+struct ScriptComponentSlotName {
+    std::string Name;
+    int Occurrence = 0;
+};
+
+ScriptComponentSlotName ParseSlotNameOccurrence(const std::string &value);
+
 void AddRequiredSlotDeclaration(ScriptComponentBinding &binding,
                                 const std::string &defaultKind,
                                 const std::string &value) {
@@ -649,6 +656,9 @@ void AddRequiredSlotDeclaration(ScriptComponentBinding &binding,
         }
         slot.KindName = StripQuotes(slot.KindName);
         slot.Name = StripQuotes(slot.Name);
+        const ScriptComponentSlotName parsedName = ParseSlotNameOccurrence(slot.Name);
+        slot.Name = parsedName.Name;
+        slot.Occurrence = parsedName.Occurrence;
         if (!slot.KindName.empty() && !slot.Name.empty()) {
             binding.RequiredSlots.push_back(slot);
         }
@@ -723,19 +733,60 @@ std::size_t FindUnquoted(const std::string &value, const std::string &needle) {
     return std::string::npos;
 }
 
-void AddRequiredSlot(ScriptComponentBinding &binding, const std::string &kind, const std::string &name) {
+bool TryParseNonNegativeInt(const std::string &value, int &parsed) {
+    const std::string text = TrimString(value);
+    if (text.empty()) {
+        return false;
+    }
+    char *end = nullptr;
+    const long result = std::strtol(text.c_str(), &end, 0);
+    if (!end || *end != '\0' || result < 0) {
+        return false;
+    }
+    parsed = static_cast<int>(result);
+    return true;
+}
+
+ScriptComponentSlotName ParseSlotNameOccurrence(const std::string &value) {
+    ScriptComponentSlotName slot;
+    slot.Name = StripQuotes(value);
+    if (slot.Name.size() >= 3 && slot.Name.back() == ']') {
+        const std::size_t open = slot.Name.rfind('[');
+        int occurrence = 0;
+        if (open != std::string::npos &&
+            open + 1 < slot.Name.size() - 1 &&
+            TryParseNonNegativeInt(slot.Name.substr(open + 1, slot.Name.size() - open - 2), occurrence)) {
+            slot.Name = TrimString(slot.Name.substr(0, open));
+            slot.Occurrence = occurrence;
+            return slot;
+        }
+    }
+
+    const std::size_t hash = slot.Name.rfind('#');
+    int occurrence = 0;
+    if (hash != std::string::npos &&
+        hash + 1 < slot.Name.size() &&
+        TryParseNonNegativeInt(slot.Name.substr(hash + 1), occurrence)) {
+        slot.Name = TrimString(slot.Name.substr(0, hash));
+        slot.Occurrence = occurrence;
+    }
+    return slot;
+}
+
+void AddRequiredSlot(ScriptComponentBinding &binding, const std::string &kind, const std::string &name, int occurrence = 0) {
     const std::string cleanName = TrimString(name);
     if (kind.empty() || cleanName.empty()) {
         return;
     }
     for (const ScriptComponentRequiredSlot &existing : binding.RequiredSlots) {
-        if (ToLower(existing.KindName) == ToLower(kind) && existing.Name == cleanName && existing.Occurrence == 0) {
+        if (ToLower(existing.KindName) == ToLower(kind) && existing.Name == cleanName && existing.Occurrence == occurrence) {
             return;
         }
     }
     ScriptComponentRequiredSlot required;
     required.KindName = kind;
     required.Name = cleanName;
+    required.Occurrence = occurrence;
     binding.RequiredSlots.push_back(required);
 }
 
@@ -746,7 +797,9 @@ void AddNamedSlotValues(ScriptComponentBinding &binding,
     for (const std::string &entry : SplitQuotedList(value)) {
         const std::size_t equal = FindUnquoted(entry, "=");
         ScriptComponentNamedSlotValue slot;
-        slot.Name = StripQuotes(equal == std::string::npos ? entry : entry.substr(0, equal));
+        const ScriptComponentSlotName parsedName = ParseSlotNameOccurrence(equal == std::string::npos ? entry : entry.substr(0, equal));
+        slot.Name = parsedName.Name;
+        slot.Occurrence = parsedName.Occurrence;
         if (equal != std::string::npos) {
             slot.Value = StripQuotes(entry.substr(equal + 1));
             slot.HasValue = true;
@@ -754,7 +807,7 @@ void AddNamedSlotValues(ScriptComponentBinding &binding,
         if (slot.Name.empty()) {
             continue;
         }
-        AddRequiredSlot(binding, slotKind, slot.Name);
+        AddRequiredSlot(binding, slotKind, slot.Name, slot.Occurrence);
         if (slot.HasValue) {
             target.push_back(slot);
         }
@@ -768,13 +821,17 @@ void AddConfigSourceSlots(ScriptComponentBinding &binding, const std::string &va
             continue;
         }
         ScriptComponentSourceSlot source;
-        source.PinName = StripQuotes(entry.substr(0, arrow));
+        const ScriptComponentSlotName pin = ParseSlotNameOccurrence(entry.substr(0, arrow));
+        source.PinName = pin.Name;
+        source.PinOccurrence = pin.Occurrence;
         std::string rhs = TrimString(entry.substr(arrow + 2));
         const std::size_t dot = FindUnquoted(rhs, ".");
         source.SourceFieldName = StripQuotes(dot == std::string::npos ? rhs : rhs.substr(0, dot));
-        source.SourceSlotName = StripQuotes(dot == std::string::npos ? std::string() : rhs.substr(dot + 1));
+        const ScriptComponentSlotName sourceSlot = ParseSlotNameOccurrence(dot == std::string::npos ? std::string() : rhs.substr(dot + 1));
+        source.SourceSlotName = sourceSlot.Name;
+        source.SourceOccurrence = sourceSlot.Occurrence;
         if (!source.PinName.empty() && !source.SourceFieldName.empty()) {
-            AddRequiredSlot(binding, "pin", source.PinName);
+            AddRequiredSlot(binding, "pin", source.PinName, source.PinOccurrence);
             binding.ConfigSources.push_back(source);
         }
     }
@@ -782,13 +839,17 @@ void AddConfigSourceSlots(ScriptComponentBinding &binding, const std::string &va
 
 void AddConfigSourceSlot(ScriptComponentBinding &binding, const std::string &pinName, const std::string &sourceExpression) {
     ScriptComponentSourceSlot source;
-    source.PinName = StripQuotes(pinName);
+    const ScriptComponentSlotName pin = ParseSlotNameOccurrence(pinName);
+    source.PinName = pin.Name;
+    source.PinOccurrence = pin.Occurrence;
     std::string rhs = TrimString(StripQuotes(sourceExpression));
     const std::size_t dot = FindUnquoted(rhs, ".");
     source.SourceFieldName = StripQuotes(dot == std::string::npos ? rhs : rhs.substr(0, dot));
-    source.SourceSlotName = StripQuotes(dot == std::string::npos ? std::string() : rhs.substr(dot + 1));
+    const ScriptComponentSlotName sourceSlot = ParseSlotNameOccurrence(dot == std::string::npos ? std::string() : rhs.substr(dot + 1));
+    source.SourceSlotName = sourceSlot.Name;
+    source.SourceOccurrence = sourceSlot.Occurrence;
     if (!source.PinName.empty() && !source.SourceFieldName.empty()) {
-        AddRequiredSlot(binding, "pin", source.PinName);
+        AddRequiredSlot(binding, "pin", source.PinName, source.PinOccurrence);
         binding.ConfigSources.push_back(source);
     }
 }
@@ -3578,6 +3639,35 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
         manifestBindings[0].ConfigSettingValues.size() != 1 ||
         manifestBindings[0].ConfigSources.size() != 1) {
         error = "Component metadata self-test did not merge manifest BBConfig fragments correctly.";
+        return false;
+    }
+
+    ScriptComponentBinding occurrenceBinding;
+    if (!AngelScriptComponentInternal::ParseBindingMetadata(
+            "bbconfig prototype=\"Logics/Calculator/Identity\" pins=\"Value[3]='42'\" sources=\"pIn 0[1]<-SourceConfig.pout:Value[2]\" required=\"pout:Out[4]\"",
+            "OccurrenceConfig",
+            occurrenceBinding)) {
+        error = "Component metadata self-test failed to parse occurrence metadata.";
+        return false;
+    }
+    if (occurrenceBinding.ConfigPinValues.size() != 1 ||
+        occurrenceBinding.ConfigPinValues[0].Name != "Value" ||
+        occurrenceBinding.ConfigPinValues[0].Occurrence != 3 ||
+        occurrenceBinding.ConfigSources.size() != 1 ||
+        occurrenceBinding.ConfigSources[0].PinName != "pIn 0" ||
+        occurrenceBinding.ConfigSources[0].PinOccurrence != 1 ||
+        occurrenceBinding.ConfigSources[0].SourceFieldName != "SourceConfig" ||
+        occurrenceBinding.ConfigSources[0].SourceSlotName != "pout:Value" ||
+        occurrenceBinding.ConfigSources[0].SourceOccurrence != 2) {
+        error = "Component metadata self-test did not preserve BBConfig slot occurrences.";
+        return false;
+    }
+    bool sawPoutOccurrence = false;
+    for (const ScriptComponentRequiredSlot &slot : occurrenceBinding.RequiredSlots) {
+        sawPoutOccurrence = sawPoutOccurrence || (slot.KindName == "pout" && slot.Name == "Out" && slot.Occurrence == 4);
+    }
+    if (!sawPoutOccurrence) {
+        error = "Component metadata self-test did not preserve required slot occurrence.";
         return false;
     }
 
