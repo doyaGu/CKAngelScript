@@ -131,6 +131,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "        BehaviorNode@ required = graph.Require(query);\n";
     source += "        array<BehaviorNode@>@ nodes = graph.FindAll(query);\n";
     source += "        graph.Root(); graph.Describe(); graph.DescribeCandidates(query);\n";
+    source += "        BehaviorGraphEdit@ edit = graph.Edit();\n";
+    source += "        if (edit !is null) { edit.IsValid(); edit.Error(); edit.Describe(); GraphEditNode@ rootEdit = edit.Import(graph.Root()); BBDecl@ missingDecl = BB::Require(ctx, \"__missing__\"); BBConfig@ missingConfig = missingDecl !is null ? missingDecl.Configure() : null; GraphEditNode@ addedDecl = edit.Add(missingDecl); GraphEditNode@ addedConfig = edit.Add(missingConfig, \"Created\"); GraphEditLink@ pendingLink = edit.Link(rootEdit, 0, rootEdit, 0); GraphEditLink@ pendingSlotLink = edit.Link(rootEdit, null, rootEdit, null); edit.Remove(graph.Root(), true); edit.Move(graph.Root(), graph); GraphEditResult@ validation = edit.Validate(ctx); GraphEditResult@ applied = edit.Apply(ctx); if (validation !is null) { validation.Ok(); bool ok = validation.ok; validation.IsOk(); validation.Error(); validation.Describe(); validation.CreatedNodes(); validation.CreatedLinks(); validation.Raise(ctx); } if (rootEdit !is null) { rootEdit.IsValid(); rootEdit.Error(); rootEdit.Behavior(); rootEdit.Describe(); } if (pendingLink !is null) { pendingLink.IsValid(); pendingLink.Error(); pendingLink.Link(); pendingLink.Describe(); } }\n";
     source += "        if (node !is null) {\n";
     source += "            node.IsValid(); bool valid = node.valid; node.Error(); node.Describe(); node.Behavior(); node.AsGraph();\n";
     source += "            BehaviorNode@ input = node.Input(0); BehaviorNode@ output = node.Output(0); BehaviorNode@ next = node.Next(query); BehaviorNode@ prev = node.Prev(query); BehaviorNode@ end = node.End(8);\n";
@@ -787,6 +789,164 @@ static bool RunBehaviorBridgeNativeGraphSearchSelfTest(CKContext *context,
     return true;
 }
 
+static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
+                                                     std::string &error) {
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
+    if (!context || !bridge) {
+        error = "Graph edit native self-test requires CKContext and ScriptBehaviorBridge.";
+        return false;
+    }
+
+    CKBehavior *root = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, "__CKAS_GraphEditRoot", CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *source = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, "__CKAS_GraphEditSource", CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *target = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, "__CKAS_GraphEditTarget", CK_OBJECTCREATION_DYNAMIC));
+    if (!root || !source || !target) {
+        DestroySelfTestObject(context, target);
+        DestroySelfTestObject(context, source);
+        DestroySelfTestObject(context, root);
+        error = "Graph edit self-test failed to create graph objects.";
+        return false;
+    }
+
+    root->UseGraph();
+    source->CreateOutput("Out");
+    target->CreateInput("In");
+    root->AddSubBehavior(source);
+    root->AddSubBehavior(target);
+
+    CKBehaviorContext ctx;
+    ctx.Context = context;
+    ctx.Behavior = root;
+    ctx.ParameterManager = context->GetParameterManager();
+
+    auto cleanup = [&]() {
+        if (root && source) root->RemoveSubBehavior(source);
+        if (root && target && !target->IsToBeDeleted()) root->RemoveSubBehavior(target);
+        DestroySelfTestObject(context, target);
+        DestroySelfTestObject(context, source);
+        DestroySelfTestObject(context, root);
+    };
+
+    BehaviorGraph *graph = new BehaviorGraph(bridge, ctx, root->GetID());
+    BehaviorQuery *sourceQuery = (new BehaviorQuery())->Name("__CKAS_GraphEditSource")->Recursive(false);
+    BehaviorQuery *targetQuery = (new BehaviorQuery())->Name("__CKAS_GraphEditTarget")->Recursive(false);
+    BehaviorNode *sourceNode = graph->Require(sourceQuery);
+    BehaviorNode *targetNode = graph->Require(targetQuery);
+    sourceQuery->Release();
+    targetQuery->Release();
+    if (!sourceNode || !sourceNode->IsValid() || !targetNode || !targetNode->IsValid()) {
+        error = "Graph edit self-test failed to resolve graph nodes.";
+        if (targetNode) targetNode->Release();
+        if (sourceNode) sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    BehaviorGraphEdit *edit = graph->Edit();
+    GraphEditNode *editSource = edit->Import(sourceNode);
+    GraphEditNode *editTarget = edit->Import(targetNode);
+    GraphEditLink *pendingLink = edit->Link(editSource, 0, editTarget, 0, 3);
+    GraphEditResult *validation = edit->Validate(ctx);
+    GraphEditResult *applied = edit->Apply(ctx);
+    if (!pendingLink || !pendingLink->IsValid() || !validation || !validation->Ok() || !applied || !applied->Ok() ||
+        root->GetSubBehaviorLinkCount() != 1) {
+        error = "Graph edit self-test failed link apply.";
+        if (applied) applied->Release();
+        if (validation) validation->Release();
+        if (pendingLink) pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    BehaviorLinkRef *createdLink = sourceNode->NextLink(nullptr);
+    if (!createdLink || !createdLink->IsValid() || createdLink->SourceOutputIndex() != 0 ||
+        createdLink->TargetInputIndex() != 0 || createdLink->Delay() != 3) {
+        error = "Graph edit self-test failed created link inspection.";
+        if (createdLink) createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    BehaviorGraphEdit *unlinkEdit = graph->Edit();
+    unlinkEdit->Unlink(createdLink)->Release();
+    GraphEditResult *unlinkResult = unlinkEdit->Apply(ctx);
+    if (!unlinkResult || !unlinkResult->Ok() || root->GetSubBehaviorLinkCount() != 0) {
+        error = "Graph edit self-test failed unlink apply.";
+        if (unlinkResult) unlinkResult->Release();
+        unlinkEdit->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    BehaviorGraphEdit *removeEdit = graph->Edit();
+    removeEdit->Remove(targetNode, true)->Release();
+    GraphEditResult *removeResult = removeEdit->Apply(ctx);
+    if (!removeResult || !removeResult->Ok() || targetNode->IsValid()) {
+        error = "Graph edit self-test failed remove apply.";
+        if (removeResult) removeResult->Release();
+        removeEdit->Release();
+        unlinkResult->Release();
+        unlinkEdit->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+    target = nullptr;
+
+    removeResult->Release();
+    removeEdit->Release();
+    unlinkResult->Release();
+    unlinkEdit->Release();
+    createdLink->Release();
+    applied->Release();
+    validation->Release();
+    pendingLink->Release();
+    editTarget->Release();
+    editSource->Release();
+    edit->Release();
+    targetNode->Release();
+    sourceNode->Release();
+    graph->Release();
+    cleanup();
+    return true;
+}
+
 static int ReadSelfTestGlobalInt(asIScriptModule *module,
                                  const char *name,
                                  std::string &error) {
@@ -1427,6 +1587,12 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-graph-search", std::string());
     if (!RunBehaviorBridgeNativeGraphSearchSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-graph-search", error);
+        return false;
+    }
+
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-graph-edit", std::string());
+    if (!RunBehaviorBridgeNativeGraphEditSelfTest(context, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-graph-edit", error);
         return false;
     }
 
