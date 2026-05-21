@@ -691,6 +691,16 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditLink@ Link(GraphEditNode@ source, BBSlot@ sourceOutput, GraphEditNode@ target, BBSlot@ targetInput, int delay = 1)", asMETHOD(BehaviorGraphEdit, LinkSlots), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Unlink(BehaviorLinkRef@ link)", asMETHOD(BehaviorGraphEdit, Unlink), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditLink@ Relink(BehaviorLinkRef@ link, GraphEditNode@ source, int sourceOutputIndex, GraphEditNode@ target, int targetInputIndex, int delay = 1)", asMETHOD(BehaviorGraphEdit, Relink), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Set(GraphEditNode@ node, BBSlot@ pin, ParamValue@ value)", asMETHOD(BehaviorGraphEdit, SetSlot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Set(GraphEditNode@ node, BBSlot@ pin, int value)", asMETHOD(BehaviorGraphEdit, SetSlotInt), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Set(GraphEditNode@ node, BBSlot@ pin, float value)", asMETHOD(BehaviorGraphEdit, SetSlotFloat), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Set(GraphEditNode@ node, BBSlot@ pin, bool value)", asMETHOD(BehaviorGraphEdit, SetSlotBool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Set(GraphEditNode@ node, BBSlot@ pin, const string &in value)", asMETHOD(BehaviorGraphEdit, SetSlotString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Set(GraphEditNode@ node, BBSlot@ pin, CKObject@ value)", asMETHOD(BehaviorGraphEdit, SetSlotObject), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ SetSetting(GraphEditNode@ node, BBSlot@ setting, ParamValue@ value)", asMETHOD(BehaviorGraphEdit, SetSetting), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ SetSetting(GraphEditNode@ node, BBSlot@ setting, const string &in value)", asMETHOD(BehaviorGraphEdit, SetSettingString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Source(GraphEditNode@ node, BBSlot@ pin, ParamRef@ source)", asMETHOD(BehaviorGraphEdit, Source), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Operation(GraphEditNode@ node, BBSlot@ pin, ParamOp@ operation)", asMETHOD(BehaviorGraphEdit, Operation), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Validate(const CKBehaviorContext &in ctx) const", asMETHOD(BehaviorGraphEdit, Validate), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Apply(const CKBehaviorContext &in ctx)", asMETHOD(BehaviorGraphEdit, Apply), asCALL_THISCALL); assert(r >= 0);
 

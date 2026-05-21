@@ -336,6 +336,7 @@ public:
     bool StoreInstanceOperation(CK_ID instanceId, int generation, int pinIndex, ParamOperationRef *operation);
     bool DestroyInstance(CK_ID instanceId, int generation);
     bool SetInstanceSetting(CK_ID instanceId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
+    bool SetBehaviorSetting(CKBehavior *behavior, int settingIndex, const ScriptParamValue &value, std::string &error);
     bool IsInstanceValid(CK_ID instanceId, int generation) const;
     bool IsInstanceAlive(CK_ID instanceId, int generation) const;
     ScriptBridgeExecutionState GetInstanceState(CK_ID instanceId, int generation) const;
@@ -480,7 +481,6 @@ private:
     void DestroyQueuedReady();
     void ForceDestroyQueued();
     void ClearInstanceGraphLinks(InstanceRecord &record);
-    bool SetBehaviorSetting(CKBehavior *behavior, int settingIndex, const ScriptParamValue &value, std::string &error);
     TaskRecord *FindTask(CK_ID taskId, int generation);
     const TaskRecord *FindTask(CK_ID taskId, int generation) const;
     InstanceRecord *FindInstance(CK_ID instanceId, int generation);

@@ -132,7 +132,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "        array<BehaviorNode@>@ nodes = graph.FindAll(query);\n";
     source += "        graph.Root(); graph.Describe(); graph.DescribeCandidates(query);\n";
     source += "        BehaviorGraphEdit@ edit = graph.Edit();\n";
-    source += "        if (edit !is null) { edit.IsValid(); edit.Error(); edit.Describe(); GraphEditNode@ rootEdit = edit.Import(graph.Root()); BBDecl@ missingDecl = BB::Require(ctx, \"__missing__\"); BBConfig@ missingConfig = missingDecl !is null ? missingDecl.Configure() : null; GraphEditNode@ addedDecl = edit.Add(missingDecl); GraphEditNode@ addedConfig = edit.Add(missingConfig, \"Created\"); GraphEditLink@ pendingLink = edit.Link(rootEdit, 0, rootEdit, 0); GraphEditLink@ pendingSlotLink = edit.Link(rootEdit, null, rootEdit, null); edit.Remove(graph.Root(), true); edit.Move(graph.Root(), graph); GraphEditResult@ validation = edit.Validate(ctx); GraphEditResult@ applied = edit.Apply(ctx); if (validation !is null) { validation.Ok(); bool ok = validation.ok; validation.IsOk(); validation.Error(); validation.Describe(); validation.CreatedNodes(); validation.CreatedLinks(); validation.Raise(ctx); } if (rootEdit !is null) { rootEdit.IsValid(); rootEdit.Error(); rootEdit.Behavior(); rootEdit.Describe(); } if (pendingLink !is null) { pendingLink.IsValid(); pendingLink.Error(); pendingLink.Link(); pendingLink.Describe(); } }\n";
+    source += "        ParamValue@ value = Param::String(\"x\"); BBSlot@ pinSlot = null; CKObject@ objectValue = null;\n";
+    source += "        if (edit !is null) { edit.IsValid(); edit.Error(); edit.Describe(); GraphEditNode@ rootEdit = edit.Import(graph.Root()); BBDecl@ missingDecl = BB::Require(ctx, \"__missing__\"); BBConfig@ missingConfig = missingDecl !is null ? missingDecl.Configure() : null; GraphEditNode@ addedDecl = edit.Add(missingDecl); GraphEditNode@ addedConfig = edit.Add(missingConfig, \"Created\"); GraphEditLink@ pendingLink = edit.Link(rootEdit, 0, rootEdit, 0); GraphEditLink@ pendingSlotLink = edit.Link(rootEdit, null, rootEdit, null); edit.Set(addedDecl, pinSlot, value); edit.Set(addedDecl, pinSlot, 1); edit.Set(addedDecl, pinSlot, 1.0f); edit.Set(addedDecl, pinSlot, true); edit.Set(addedDecl, pinSlot, \"x\"); edit.Set(addedDecl, pinSlot, objectValue); edit.SetSetting(addedDecl, pinSlot, value); edit.SetSetting(addedDecl, pinSlot, \"x\"); edit.Source(addedDecl, pinSlot, null); edit.Operation(addedDecl, pinSlot, null); edit.Remove(graph.Root(), true); edit.Move(graph.Root(), graph); GraphEditResult@ validation = edit.Validate(ctx); GraphEditResult@ applied = edit.Apply(ctx); if (validation !is null) { validation.Ok(); bool ok = validation.ok; validation.IsOk(); validation.Error(); validation.Describe(); validation.CreatedNodes(); validation.CreatedLinks(); validation.Raise(ctx); } if (rootEdit !is null) { rootEdit.IsValid(); rootEdit.Error(); rootEdit.Behavior(); rootEdit.Describe(); } if (pendingLink !is null) { pendingLink.IsValid(); pendingLink.Error(); pendingLink.Link(); pendingLink.Describe(); } }\n";
     source += "        if (node !is null) {\n";
     source += "            node.IsValid(); bool valid = node.valid; node.Error(); node.Describe(); node.Behavior(); node.AsGraph();\n";
     source += "            BehaviorNode@ input = node.Input(0); BehaviorNode@ output = node.Output(0); BehaviorNode@ next = node.Next(query); BehaviorNode@ prev = node.Prev(query); BehaviorNode@ end = node.End(8);\n";
@@ -904,6 +905,27 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
         cleanup();
         return false;
     }
+
+    GraphEditResult *secondApply = unlinkEdit->Apply(ctx);
+    if (!secondApply || secondApply->Ok() || secondApply->Error().find("already applied") == std::string::npos) {
+        error = "Graph edit self-test failed to reject repeated Apply.";
+        if (secondApply) secondApply->Release();
+        unlinkResult->Release();
+        unlinkEdit->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+    secondApply->Release();
 
     BehaviorGraphEdit *removeEdit = graph->Edit();
     removeEdit->Remove(targetNode, true)->Release();

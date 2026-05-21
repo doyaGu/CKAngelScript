@@ -516,6 +516,16 @@ public:
     GraphEditLink *LinkSlots(GraphEditNode *source, BBSlot *sourceOutput, GraphEditNode *target, BBSlot *targetInput, int delay = 1);
     BehaviorGraphEdit *Unlink(BehaviorLinkRef *link);
     GraphEditLink *Relink(BehaviorLinkRef *link, GraphEditNode *source, int sourceOutputIndex, GraphEditNode *target, int targetInputIndex, int delay = 1);
+    BehaviorGraphEdit *SetSlot(GraphEditNode *node, BBSlot *pin, ParamValue *value);
+    BehaviorGraphEdit *SetSlotInt(GraphEditNode *node, BBSlot *pin, int value);
+    BehaviorGraphEdit *SetSlotFloat(GraphEditNode *node, BBSlot *pin, float value);
+    BehaviorGraphEdit *SetSlotBool(GraphEditNode *node, BBSlot *pin, bool value);
+    BehaviorGraphEdit *SetSlotString(GraphEditNode *node, BBSlot *pin, const std::string &value);
+    BehaviorGraphEdit *SetSlotObject(GraphEditNode *node, BBSlot *pin, CKObject *value);
+    BehaviorGraphEdit *SetSetting(GraphEditNode *node, BBSlot *setting, ParamValue *value);
+    BehaviorGraphEdit *SetSettingString(GraphEditNode *node, BBSlot *setting, const std::string &value);
+    BehaviorGraphEdit *Source(GraphEditNode *node, BBSlot *pin, ParamRef *source);
+    BehaviorGraphEdit *Operation(GraphEditNode *node, BBSlot *pin, ParamOp *operation);
     GraphEditResult *Validate(const CKBehaviorContext &ctx) const;
     GraphEditResult *Apply(const CKBehaviorContext &ctx);
 
@@ -561,6 +571,25 @@ private:
         ScriptBridgeObjectStamp TargetRootStamp;
     };
 
+    struct ValueSpec {
+        int NodeIndex = -1;
+        ScriptBridgeSlotKind Kind = ScriptBridgeSlotKind::Standalone;
+        int SlotIndex = -1;
+        ScriptParamValue Value;
+    };
+
+    struct SourceSpec {
+        int NodeIndex = -1;
+        int PinIndex = -1;
+        CK_ID SourceId = 0;
+        ScriptBridgeObjectStamp SourceStamp;
+    };
+
+    struct OperationSpec {
+        int NodeIndex = -1;
+        ScriptBridgeOperationSpec Operation;
+    };
+
     GraphEditResult *MakeResult(bool ok,
                                 const std::string &error,
                                 const std::string &description,
@@ -570,6 +599,26 @@ private:
     bool ResolveNodeIndex(const GraphEditNode *node, int &index, std::string &error) const;
     CKBehavior *ResolveNodeBehavior(int index) const;
     CKBehaviorLink *ResolveExistingLink(const LinkSpec &spec) const;
+    bool ValidateValueSpec(CKContext *context, const ValueSpec &spec, std::string &error) const;
+    bool ApplyExistingValue(CKBehavior *behavior,
+                            const ValueSpec &spec,
+                            std::string &error,
+                            std::vector<ParamSourceLinkRef *> &sourceLinks,
+                            std::vector<CK_ID> &localSourceIds);
+    bool ApplyExistingSource(CKBehavior *behavior,
+                             const SourceSpec &spec,
+                             std::string &error,
+                             std::vector<ParamSourceLinkRef *> &sourceLinks);
+    bool ApplyExistingOperation(CKBehavior *behavior,
+                                const OperationSpec &spec,
+                                std::string &error,
+                                std::vector<ParamOperationRef *> &operations);
+    BehaviorGraphEdit *SetValue(GraphEditNode *node, BBSlot *slot, ScriptBridgeSlotKind kind, const ScriptParamValue &value, const char *method);
+    void RemoveNodeValue(int nodeIndex, ScriptBridgeSlotKind kind, int slotIndex);
+    void RemoveNodeSource(int nodeIndex, int pinIndex);
+    void RemoveNodeOperation(int nodeIndex, int pinIndex);
+    void SetRequestSource(ScriptBridgeBBInvocationSpec &request, const ScriptBridgeInputSource &source);
+    void SetRequestOperation(ScriptBridgeBBInvocationSpec &request, const ScriptBridgeOperationSpec &operation);
     void SetError(const std::string &error) const;
 
     ScriptBehaviorBridge *m_Bridge = nullptr;
@@ -577,10 +626,14 @@ private:
     CK_ID m_RootBehaviorId = 0;
     ScriptBridgeObjectStamp m_RootStamp;
     mutable std::string m_Error;
+    bool m_Applied = false;
     std::vector<NodeSpec> m_Nodes;
     std::vector<LinkSpec> m_Links;
     std::vector<RemoveSpec> m_Removes;
     std::vector<MoveSpec> m_Moves;
+    std::vector<ValueSpec> m_Values;
+    std::vector<SourceSpec> m_Sources;
+    std::vector<OperationSpec> m_Operations;
 };
 
 class BehaviorNode final : public RefCounted {

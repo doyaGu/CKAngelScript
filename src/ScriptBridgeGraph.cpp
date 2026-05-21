@@ -1,5 +1,6 @@
 #include "ScriptBridgeHandles.h"
 
+#include <algorithm>
 #include <set>
 
 #include <fmt/format.h>
@@ -166,6 +167,75 @@ bool GraphContainsLink(CKBehavior *container, CKBehaviorLink *link) {
         }
     }
     return false;
+}
+
+const ScriptBridgeLayoutParamSlot *FindLayoutSlot(const std::vector<ScriptBridgeLayoutParamSlot> &slots, int index) {
+    const auto it = std::lower_bound(slots.begin(),
+                                     slots.end(),
+                                     index,
+                                     [](const ScriptBridgeLayoutParamSlot &slot, int value) {
+                                         return slot.Index < value;
+                                     });
+    return it != slots.end() && it->Index == index ? &*it : nullptr;
+}
+
+CKParameterLocal *CreateGraphEditInputSource(CKBehavior *behavior,
+                                             int pinIndex,
+                                             const ScriptParamValue &value,
+                                             std::string &error) {
+    if (!behavior || pinIndex < 0 || pinIndex >= behavior->GetInputParameterCount()) {
+        error = fmt::format("Input parameter index #{} is out of range.", pinIndex);
+        return nullptr;
+    }
+
+    CKParameterIn *pin = behavior->GetInputParameter(pinIndex);
+    if (!pin) {
+        error = fmt::format("Input parameter #{} is not valid.", pinIndex);
+        return nullptr;
+    }
+
+    const std::string name = fmt::format("__CKAS_GraphEditInput_{}_{}", pinIndex, behavior->GetLocalParameterCount());
+    CKParameterLocal *local = behavior->CreateLocalParameter(const_cast<CKSTRING>(name.c_str()), pin->GetGUID());
+    if (!local) {
+        error = fmt::format("Failed to create graph edit literal source for input parameter #{} '{}'.",
+                            pinIndex,
+                            SafeString(pin->GetName()));
+        return nullptr;
+    }
+
+    CKERROR err = SetBridgeParamValue(local, value, error);
+    if (err != CK_OK) {
+        error = fmt::format("Failed to set graph edit literal source for input parameter #{} '{}' (expected {}, got {}, CKERROR {}).",
+                            pinIndex,
+                            SafeString(pin->GetName()),
+                            ParameterTypeLabel(behavior->GetCKContext(), pin),
+                            error.empty() ? ScriptParamValueKindName(value.Kind) : error,
+                            err);
+        const int position = behavior->GetLocalParameterPosition(local);
+        if (position >= 0) {
+            behavior->RemoveLocalParameter(position);
+        }
+        behavior->GetCKContext()->DestroyObject(local);
+        return nullptr;
+    }
+
+    return local;
+}
+
+void DestroyGraphEditLocalSource(CKContext *context, CK_ID localId) {
+    CKParameterLocal *local = CKParameterLocal::Cast(GetCKObjectById(context, localId));
+    if (!local) {
+        return;
+    }
+    if (CKBehavior *owner = CKBehavior::Cast(local->GetOwner())) {
+        const int position = owner->GetLocalParameterPosition(local);
+        if (position >= 0) {
+            owner->RemoveLocalParameter(position);
+        }
+    }
+    if (!local->IsToBeDeleted()) {
+        context->DestroyObject(local);
+    }
 }
 
 std::string BehaviorLabel(CKBehavior *behavior) {
@@ -770,6 +840,108 @@ GraphEditLink *BehaviorGraphEdit::Relink(BehaviorLinkRef *link,
     return Link(source, sourceOutputIndex, target, targetInputIndex, delay);
 }
 
+BehaviorGraphEdit *BehaviorGraphEdit::SetSlot(GraphEditNode *node, BBSlot *pin, ParamValue *value) {
+    if (!value) {
+        SetError("BehaviorGraphEdit.Set requires a valid ParamValue.");
+        AddRef();
+        return this;
+    }
+    return SetValue(node, pin, ScriptBridgeSlotKind::Pin, value->Value(), "BehaviorGraphEdit.Set");
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::SetSlotInt(GraphEditNode *node, BBSlot *pin, int value) {
+    return SetValue(node, pin, ScriptBridgeSlotKind::Pin, MakeScriptParamInt(value), "BehaviorGraphEdit.Set");
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::SetSlotFloat(GraphEditNode *node, BBSlot *pin, float value) {
+    return SetValue(node, pin, ScriptBridgeSlotKind::Pin, MakeScriptParamFloat(value), "BehaviorGraphEdit.Set");
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::SetSlotBool(GraphEditNode *node, BBSlot *pin, bool value) {
+    return SetValue(node, pin, ScriptBridgeSlotKind::Pin, MakeScriptParamBool(value), "BehaviorGraphEdit.Set");
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::SetSlotString(GraphEditNode *node, BBSlot *pin, const std::string &value) {
+    return SetValue(node, pin, ScriptBridgeSlotKind::Pin, MakeScriptParamString(value), "BehaviorGraphEdit.Set");
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::SetSlotObject(GraphEditNode *node, BBSlot *pin, CKObject *value) {
+    return SetValue(node, pin, ScriptBridgeSlotKind::Pin, MakeScriptParamObject(value), "BehaviorGraphEdit.Set");
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::SetSetting(GraphEditNode *node, BBSlot *setting, ParamValue *value) {
+    if (!value) {
+        SetError("BehaviorGraphEdit.SetSetting requires a valid ParamValue.");
+        AddRef();
+        return this;
+    }
+    return SetValue(node, setting, ScriptBridgeSlotKind::Setting, value->Value(), "BehaviorGraphEdit.SetSetting");
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::SetSettingString(GraphEditNode *node, BBSlot *setting, const std::string &value) {
+    return SetValue(node, setting, ScriptBridgeSlotKind::Setting, MakeScriptParamString(value), "BehaviorGraphEdit.SetSetting");
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::Source(GraphEditNode *node, BBSlot *pin, ParamRef *source) {
+    int nodeIndex = -1;
+    int pinIndex = -1;
+    std::string error;
+    if (!ResolveNodeIndex(node, nodeIndex, error)) {
+        SetError(error);
+    } else if (!pin || !pin->ResolveIndex(ScriptBridgeSlotKind::Pin, pinIndex, error)) {
+        SetError(error.empty() ? "BehaviorGraphEdit.Source requires a pin slot." : error);
+    } else if (!source || !source->IsValid()) {
+        SetError("BehaviorGraphEdit.Source requires a valid ParamRef source.");
+    } else {
+        RemoveNodeValue(nodeIndex, ScriptBridgeSlotKind::Pin, pinIndex);
+        RemoveNodeOperation(nodeIndex, pinIndex);
+        SourceSpec spec;
+        spec.NodeIndex = nodeIndex;
+        spec.PinIndex = pinIndex;
+        spec.SourceId = source->GetID();
+        spec.SourceStamp = source->Stamp();
+        RemoveNodeSource(nodeIndex, pinIndex);
+        if (m_Nodes[nodeIndex].Type == NodeSpec::Kind::Create) {
+            ScriptBridgeInputSource request;
+            request.PinIndex = pinIndex;
+            request.SourceId = spec.SourceId;
+            request.SourceStamp = spec.SourceStamp;
+            SetRequestSource(m_Nodes[nodeIndex].Request, request);
+        } else {
+            m_Sources.push_back(spec);
+        }
+    }
+    AddRef();
+    return this;
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::Operation(GraphEditNode *node, BBSlot *pin, ParamOp *operation) {
+    int nodeIndex = -1;
+    int pinIndex = -1;
+    std::string error;
+    if (!ResolveNodeIndex(node, nodeIndex, error)) {
+        SetError(error);
+    } else if (!pin || !pin->ResolveIndex(ScriptBridgeSlotKind::Pin, pinIndex, error)) {
+        SetError(error.empty() ? "BehaviorGraphEdit.Operation requires a pin slot." : error);
+    } else if (!operation) {
+        SetError("BehaviorGraphEdit.Operation requires a valid ParamOp.");
+    } else {
+        RemoveNodeValue(nodeIndex, ScriptBridgeSlotKind::Pin, pinIndex);
+        RemoveNodeSource(nodeIndex, pinIndex);
+        OperationSpec spec;
+        spec.NodeIndex = nodeIndex;
+        spec.Operation = operation->RequestForPin(pinIndex);
+        RemoveNodeOperation(nodeIndex, pinIndex);
+        if (m_Nodes[nodeIndex].Type == NodeSpec::Kind::Create) {
+            SetRequestOperation(m_Nodes[nodeIndex].Request, spec.Operation);
+        } else {
+            m_Operations.push_back(spec);
+        }
+    }
+    AddRef();
+    return this;
+}
+
 GraphEditResult *BehaviorGraphEdit::Validate(const CKBehaviorContext &ctx) const {
     std::string error;
     if (!ValidateInternal(ctx, error)) {
@@ -790,8 +962,29 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
     std::vector<CK_ID> createdNodes;
     std::vector<CK_ID> createdLinks;
     std::vector<CK_ID> createdOperations;
+    std::vector<ParamSourceLinkRef *> appliedSourceLinks;
+    std::vector<ParamOperationRef *> appliedOperations;
+    std::vector<CK_ID> createdValueLocalSources;
 
     auto rollbackCreated = [&]() {
+        for (ParamOperationRef *operation : appliedOperations) {
+            if (operation) {
+                operation->Destroy();
+                operation->Release();
+            }
+        }
+        appliedOperations.clear();
+        for (ParamSourceLinkRef *link : appliedSourceLinks) {
+            if (link) {
+                link->Restore();
+                link->Release();
+            }
+        }
+        appliedSourceLinks.clear();
+        for (CK_ID localId : createdValueLocalSources) {
+            ScriptBridgeGraphInternal::DestroyGraphEditLocalSource(context, localId);
+        }
+        createdValueLocalSources.clear();
         for (CK_ID linkId : createdLinks) {
             if (CKBehaviorLink *link = CKBehaviorLink::Cast(GetCKObjectById(context, linkId))) {
                 if (root) {
@@ -815,6 +1008,12 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         }
     };
 
+    auto failApply = [&](const std::string &message) -> GraphEditResult * {
+        rollbackCreated();
+        SetError(message);
+        return MakeResult(false, message, message);
+    };
+
     for (int i = 0; i < static_cast<int>(m_Nodes.size()); ++i) {
         NodeSpec &spec = m_Nodes[i];
         if (spec.Type != NodeSpec::Kind::Create) {
@@ -823,21 +1022,17 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         std::vector<CK_ID> operationIds;
         CKBehavior *behavior = m_Bridge->CreatePersistentBehavior(spec.Request, ctx, spec.Name, error, &operationIds);
         if (!behavior) {
-            rollbackCreated();
-            SetError(error);
-            return MakeResult(false, error, error);
+            return failApply(error);
         }
         createdOperations.insert(createdOperations.end(), operationIds.begin(), operationIds.end());
         CKERROR err = root->AddSubBehavior(behavior);
         if (err != CK_OK) {
             context->DestroyObject(behavior);
-            rollbackCreated();
             error = fmt::format("Failed to add behavior '{}' to graph '{}' (CKERROR {}).",
                                 SafeString(behavior->GetName()),
                                 SafeString(root->GetName()),
                                 err);
-            SetError(error);
-            return MakeResult(false, error, error);
+            return failApply(error);
         }
         spec.CreatedBehaviorId = behavior->GetID();
         createdNodes.push_back(behavior->GetID());
@@ -858,10 +1053,8 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             if (link) {
                 context->DestroyObject(link);
             }
-            rollbackCreated();
             error = "Failed to create behavior link: source or target IO is not valid.";
-            SetError(error);
-            return MakeResult(false, error, error);
+            return failApply(error);
         }
         CKERROR err = link->SetInBehaviorIO(sourceIo);
         if (err == CK_OK) {
@@ -874,18 +1067,50 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         }
         if (err != CK_OK) {
             context->DestroyObject(link);
-            rollbackCreated();
             error = fmt::format("Failed to add behavior link {}#{} -> {}#{} (CKERROR {}).",
                                 ScriptBridgeGraphInternal::BehaviorLabel(source),
                                 spec.SourceOutputIndex,
                                 ScriptBridgeGraphInternal::BehaviorLabel(target),
                                 spec.TargetInputIndex,
                                 err);
-            SetError(error);
-            return MakeResult(false, error, error);
+            return failApply(error);
         }
         spec.CreatedLinkId = link->GetID();
         createdLinks.push_back(link->GetID());
+    }
+
+    for (const ValueSpec &spec : m_Values) {
+        if (spec.Kind == ScriptBridgeSlotKind::Setting) {
+            continue;
+        }
+        CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
+        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources)) {
+            return failApply(error);
+        }
+    }
+
+    for (const SourceSpec &spec : m_Sources) {
+        CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
+        if (!ApplyExistingSource(behavior, spec, error, appliedSourceLinks)) {
+            return failApply(error);
+        }
+    }
+
+    for (const OperationSpec &spec : m_Operations) {
+        CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
+        if (!ApplyExistingOperation(behavior, spec, error, appliedOperations)) {
+            return failApply(error);
+        }
+    }
+
+    for (const ValueSpec &spec : m_Values) {
+        if (spec.Kind != ScriptBridgeSlotKind::Setting) {
+            continue;
+        }
+        CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
+        if (!ApplyExistingValue(behavior, spec, error, appliedSourceLinks, createdValueLocalSources)) {
+            return failApply(error);
+        }
     }
 
     for (const LinkSpec &spec : m_Links) {
@@ -913,8 +1138,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
                                 SafeString(behavior->GetName()),
                                 SafeString(targetRoot->GetName()),
                                 err);
-            SetError(error);
-            return MakeResult(false, error, error, createdNodes, createdLinks);
+            return failApply(error);
         }
         if (m_Bridge) {
             m_Bridge->InvalidateBehaviorLayout(targetRoot->GetID());
@@ -948,6 +1172,21 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         m_Bridge->InvalidateBehaviorLayout(root->GetID());
     }
     root->NotifyEdition();
+    for (ParamSourceLinkRef *link : appliedSourceLinks) {
+        if (link) {
+            link->Commit();
+            link->Release();
+        }
+    }
+    appliedSourceLinks.clear();
+    for (ParamOperationRef *operation : appliedOperations) {
+        if (operation) {
+            operation->Release();
+        }
+    }
+    appliedOperations.clear();
+    createdValueLocalSources.clear();
+    m_Applied = true;
     m_Error.clear();
     return MakeResult(true,
                       std::string(),
@@ -1020,6 +1259,10 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
     }
     if (!m_Error.empty()) {
         error = m_Error;
+        return false;
+    }
+    if (m_Applied) {
+        error = "BehaviorGraphEdit has already applied. Create a new edit transaction for additional graph mutations.";
         return false;
     }
 
@@ -1125,6 +1368,77 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
         }
     }
 
+    for (const ValueSpec &spec : m_Values) {
+        if (spec.NodeIndex < 0 || spec.NodeIndex >= static_cast<int>(m_Nodes.size()) || nodeRemoved(spec.NodeIndex)) {
+            error = "BehaviorGraphEdit.Set references an invalid or removed node.";
+            return false;
+        }
+        if (m_Nodes[spec.NodeIndex].Type != NodeSpec::Kind::Existing) {
+            error = "BehaviorGraphEdit.Set has an unexpected pending-node value entry.";
+            return false;
+        }
+        if (!ValidateValueSpec(context, spec, error)) {
+            return false;
+        }
+    }
+
+    CKParameterManager *pm = context->GetParameterManager();
+    for (const SourceSpec &spec : m_Sources) {
+        if (spec.NodeIndex < 0 || spec.NodeIndex >= static_cast<int>(m_Nodes.size()) || nodeRemoved(spec.NodeIndex)) {
+            error = "BehaviorGraphEdit.Source references an invalid or removed node.";
+            return false;
+        }
+        CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
+        CKParameterIn *pin = behavior && spec.PinIndex >= 0 && spec.PinIndex < behavior->GetInputParameterCount()
+            ? behavior->GetInputParameter(spec.PinIndex)
+            : nullptr;
+        if (!pin) {
+            error = fmt::format("BehaviorGraphEdit.Source pin index #{} is out of range.", spec.PinIndex);
+            return false;
+        }
+        CKParameter *source = ResolveStampedParameterSource(context, spec.SourceId, spec.SourceStamp, error);
+        if (!source) {
+            if (error.empty()) {
+                error = "BehaviorGraphEdit.Source parameter is not valid.";
+            }
+            return false;
+        }
+        if (pm && pm->IsTypeCompatible(pin->GetGUID(), source->GetGUID()) == FALSE &&
+            pm->IsTypeCompatible(source->GetGUID(), pin->GetGUID()) == FALSE) {
+            error = fmt::format("BehaviorGraphEdit.Source type mismatch for pin #{} '{}' expected {}, got {}.",
+                                spec.PinIndex,
+                                SafeString(pin->GetName()),
+                                ParameterTypeLabel(context, pin),
+                                ParameterTypeLabel(context, source));
+            return false;
+        }
+    }
+
+    for (const OperationSpec &spec : m_Operations) {
+        if (spec.NodeIndex < 0 || spec.NodeIndex >= static_cast<int>(m_Nodes.size()) || nodeRemoved(spec.NodeIndex)) {
+            error = "BehaviorGraphEdit.Operation references an invalid or removed node.";
+            return false;
+        }
+        CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
+        CKParameterIn *pin = behavior && spec.Operation.TargetPinIndex >= 0 &&
+                spec.Operation.TargetPinIndex < behavior->GetInputParameterCount()
+            ? behavior->GetInputParameter(spec.Operation.TargetPinIndex)
+            : nullptr;
+        if (!pin) {
+            error = fmt::format("BehaviorGraphEdit.Operation pin index #{} is out of range.",
+                                spec.Operation.TargetPinIndex);
+            return false;
+        }
+        std::string operationError;
+        if (!ValidateOperationSpec(context, pin->GetGUID(), spec.Operation, operationError)) {
+            error = fmt::format("BehaviorGraphEdit.Operation failed for pin #{} '{}': {}",
+                                spec.Operation.TargetPinIndex,
+                                SafeString(pin->GetName()),
+                                operationError);
+            return false;
+        }
+    }
+
     for (const MoveSpec &move : m_Moves) {
         if (move.NodeIndex < 0 || move.NodeIndex >= static_cast<int>(m_Nodes.size()) || nodeRemoved(move.NodeIndex)) {
             error = "BehaviorGraphEdit.Move has an invalid or removed node reference.";
@@ -1194,6 +1508,322 @@ CKBehavior *BehaviorGraphEdit::ResolveNodeBehavior(int index) const {
 
 CKBehaviorLink *BehaviorGraphEdit::ResolveExistingLink(const LinkSpec &spec) const {
     return ScriptBridgeGraphInternal::StampedLinkById(m_Bridge, spec.ExistingLinkId, spec.ExistingLinkStamp);
+}
+
+bool BehaviorGraphEdit::ValidateValueSpec(CKContext *context, const ValueSpec &spec, std::string &error) const {
+    if (!context) {
+        error = "BehaviorGraphEdit value validation requires CKContext.";
+        return false;
+    }
+    if (spec.NodeIndex < 0 || spec.NodeIndex >= static_cast<int>(m_Nodes.size())) {
+        error = "BehaviorGraphEdit value has an invalid node reference.";
+        return false;
+    }
+
+    CKGUID targetGuid;
+    std::string label;
+    if (CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex)) {
+        if (spec.Kind == ScriptBridgeSlotKind::Pin) {
+            CKParameterIn *pin = spec.SlotIndex >= 0 && spec.SlotIndex < behavior->GetInputParameterCount()
+                ? behavior->GetInputParameter(spec.SlotIndex)
+                : nullptr;
+            if (!pin) {
+                error = fmt::format("Pin index #{} is out of range for {}.",
+                                    spec.SlotIndex,
+                                    ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+                return false;
+            }
+            targetGuid = pin->GetGUID();
+            label = fmt::format("pin #{} '{}'", spec.SlotIndex, SafeString(pin->GetName()));
+        } else if (spec.Kind == ScriptBridgeSlotKind::Setting) {
+            CKParameterLocal *setting = spec.SlotIndex >= 0 && spec.SlotIndex < behavior->GetLocalParameterCount()
+                ? behavior->GetLocalParameter(spec.SlotIndex)
+                : nullptr;
+            if (!setting || !behavior->IsLocalParameterSetting(spec.SlotIndex)) {
+                error = fmt::format("Setting index #{} is out of range for {}.",
+                                    spec.SlotIndex,
+                                    ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+                return false;
+            }
+            targetGuid = setting->GetGUID();
+            label = fmt::format("setting #{} '{}'", spec.SlotIndex, SafeString(setting->GetName()));
+        } else {
+            error = "BehaviorGraphEdit value target must be a pin or setting slot.";
+            return false;
+        }
+    } else {
+        const NodeSpec &node = m_Nodes[spec.NodeIndex];
+        const ScriptBridgeLayoutRecord *layout = m_Bridge ? m_Bridge->GetPrototypeLayout(m_Context, node.Request) : nullptr;
+        const ScriptBridgeLayoutParamSlot *slot = nullptr;
+        if (layout && spec.Kind == ScriptBridgeSlotKind::Pin) {
+            slot = ScriptBridgeGraphInternal::FindLayoutSlot(layout->Pins, spec.SlotIndex);
+            label = fmt::format("pending pin #{}", spec.SlotIndex);
+        } else if (layout && spec.Kind == ScriptBridgeSlotKind::Setting) {
+            slot = ScriptBridgeGraphInternal::FindLayoutSlot(layout->Settings, spec.SlotIndex);
+            label = fmt::format("pending setting #{}", spec.SlotIndex);
+        }
+        if (!slot) {
+            error = fmt::format("BehaviorGraphEdit value slot #{} is not valid for pending node #{}.",
+                                spec.SlotIndex,
+                                spec.NodeIndex);
+            return false;
+        }
+        targetGuid = slot->TypeGuid;
+        label = fmt::format("{} '{}'", label, slot->Name);
+    }
+
+    CKParameterLocal *probe = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_GraphEditValidate"), targetGuid, TRUE);
+    if (!probe) {
+        error = fmt::format("Failed to create validation parameter for {}.", label);
+        return false;
+    }
+
+    std::string writeError;
+    const CKERROR err = WriteParameterValue(probe, spec.Value, writeError);
+    context->DestroyObject(probe);
+    if (err != CK_OK) {
+        error = fmt::format("BehaviorGraphEdit value validation failed for {} expected {}: {}",
+                            label,
+                            ParameterTypeLabel(context, targetGuid),
+                            writeError.empty() ? fmt::format("CKERROR {}", err) : writeError);
+        return false;
+    }
+    return true;
+}
+
+bool BehaviorGraphEdit::ApplyExistingValue(CKBehavior *behavior,
+                                           const ValueSpec &spec,
+                                           std::string &error,
+                                           std::vector<ParamSourceLinkRef *> &sourceLinks,
+                                           std::vector<CK_ID> &localSourceIds) {
+    if (!behavior) {
+        error = "BehaviorGraphEdit value target behavior is not valid.";
+        return false;
+    }
+
+    if (spec.Kind == ScriptBridgeSlotKind::Setting) {
+        return m_Bridge && m_Bridge->SetBehaviorSetting(behavior, spec.SlotIndex, spec.Value, error);
+    }
+    if (spec.Kind != ScriptBridgeSlotKind::Pin) {
+        error = "BehaviorGraphEdit.Set can only target pin slots.";
+        return false;
+    }
+
+    CKParameterIn *pin = spec.SlotIndex >= 0 && spec.SlotIndex < behavior->GetInputParameterCount()
+        ? behavior->GetInputParameter(spec.SlotIndex)
+        : nullptr;
+    if (!pin) {
+        error = fmt::format("Input parameter index #{} is out of range for {}.",
+                            spec.SlotIndex,
+                            ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+        return false;
+    }
+
+    CKParameterLocal *local = ScriptBridgeGraphInternal::CreateGraphEditInputSource(behavior, spec.SlotIndex, spec.Value, error);
+    if (!local) {
+        return false;
+    }
+
+    CKParameter *previous = pin->GetDirectSource();
+    const CKERROR err = pin->SetDirectSource(local);
+    if (err != CK_OK) {
+        error = fmt::format("Failed to connect graph edit literal source to input parameter #{} '{}' (CKERROR {}).",
+                            spec.SlotIndex,
+                            SafeString(pin->GetName()),
+                            err);
+        ScriptBridgeGraphInternal::DestroyGraphEditLocalSource(behavior->GetCKContext(), local->GetID());
+        return false;
+    }
+
+    sourceLinks.push_back(new ParamSourceLinkRef(m_Bridge, pin, previous, local));
+    localSourceIds.push_back(local->GetID());
+    return true;
+}
+
+bool BehaviorGraphEdit::ApplyExistingSource(CKBehavior *behavior,
+                                            const SourceSpec &spec,
+                                            std::string &error,
+                                            std::vector<ParamSourceLinkRef *> &sourceLinks) {
+    if (!behavior) {
+        error = "BehaviorGraphEdit source target behavior is not valid.";
+        return false;
+    }
+    CKParameterIn *pin = spec.PinIndex >= 0 && spec.PinIndex < behavior->GetInputParameterCount()
+        ? behavior->GetInputParameter(spec.PinIndex)
+        : nullptr;
+    if (!pin) {
+        error = fmt::format("Input parameter index #{} is out of range for {}.",
+                            spec.PinIndex,
+                            ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+        return false;
+    }
+
+    CKParameter *source = ResolveStampedParameterSource(behavior->GetCKContext(), spec.SourceId, spec.SourceStamp, error);
+    if (!source) {
+        if (error.empty()) {
+            error = "BehaviorGraphEdit source parameter is not valid.";
+        }
+        return false;
+    }
+
+    CKParameter *previous = pin->GetDirectSource();
+    const CKERROR err = pin->SetDirectSource(source);
+    if (err != CK_OK) {
+        error = fmt::format("Failed to connect graph edit source to pin #{} '{}' (expected {}, got {}, CKERROR {}).",
+                            spec.PinIndex,
+                            SafeString(pin->GetName()),
+                            ParameterTypeLabel(behavior->GetCKContext(), pin),
+                            ParameterTypeLabel(behavior->GetCKContext(), source),
+                            err);
+        return false;
+    }
+
+    sourceLinks.push_back(new ParamSourceLinkRef(m_Bridge, pin, previous, source));
+    return true;
+}
+
+bool BehaviorGraphEdit::ApplyExistingOperation(CKBehavior *behavior,
+                                               const OperationSpec &spec,
+                                               std::string &error,
+                                               std::vector<ParamOperationRef *> &operations) {
+    if (!behavior) {
+        error = "BehaviorGraphEdit operation target behavior is not valid.";
+        return false;
+    }
+    ParamOperationRef *operation = ConnectOperationToInput(m_Bridge, behavior, spec.Operation.TargetPinIndex, spec.Operation, error, true, nullptr);
+    if (!operation) {
+        return false;
+    }
+    operations.push_back(operation);
+    return true;
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::SetValue(GraphEditNode *node,
+                                               BBSlot *slot,
+                                               ScriptBridgeSlotKind kind,
+                                               const ScriptParamValue &value,
+                                               const char *method) {
+    int nodeIndex = -1;
+    int slotIndex = -1;
+    std::string error;
+    if (!ResolveNodeIndex(node, nodeIndex, error)) {
+        SetError(error);
+    } else if (!slot || !slot->ResolveIndex(kind, slotIndex, error)) {
+        SetError(fmt::format("{} requires a {} BBSlot.{}",
+                             method ? method : "BehaviorGraphEdit.Set",
+                             kind == ScriptBridgeSlotKind::Setting ? "setting" : "pin",
+                             error.empty() ? "" : " " + error));
+    } else {
+        if (kind == ScriptBridgeSlotKind::Pin) {
+            RemoveNodeSource(nodeIndex, slotIndex);
+            RemoveNodeOperation(nodeIndex, slotIndex);
+        }
+        RemoveNodeValue(nodeIndex, kind, slotIndex);
+
+        NodeSpec &nodeSpec = m_Nodes[nodeIndex];
+        if (nodeSpec.Type == NodeSpec::Kind::Create) {
+            if (kind == ScriptBridgeSlotKind::Pin) {
+                nodeSpec.Request.SourceParameters.erase(
+                    std::remove_if(nodeSpec.Request.SourceParameters.begin(),
+                                   nodeSpec.Request.SourceParameters.end(),
+                                   [slotIndex](const ScriptBridgeInputSource &entry) { return entry.PinIndex == slotIndex; }),
+                    nodeSpec.Request.SourceParameters.end());
+                nodeSpec.Request.OperationParameters.erase(
+                    std::remove_if(nodeSpec.Request.OperationParameters.begin(),
+                                   nodeSpec.Request.OperationParameters.end(),
+                                   [slotIndex](const ScriptBridgeOperationSpec &entry) { return entry.TargetPinIndex == slotIndex; }),
+                    nodeSpec.Request.OperationParameters.end());
+                ScriptBridgeSetIndexedValue(nodeSpec.Request.IndexedParameters, slotIndex, value);
+            } else {
+                ScriptBridgeSetIndexedValue(nodeSpec.Request.IndexedSettings, slotIndex, value);
+            }
+        } else {
+            ValueSpec spec;
+            spec.NodeIndex = nodeIndex;
+            spec.Kind = kind;
+            spec.SlotIndex = slotIndex;
+            spec.Value = value;
+            m_Values.push_back(spec);
+        }
+    }
+    AddRef();
+    return this;
+}
+
+void BehaviorGraphEdit::RemoveNodeValue(int nodeIndex, ScriptBridgeSlotKind kind, int slotIndex) {
+    m_Values.erase(std::remove_if(m_Values.begin(),
+                                  m_Values.end(),
+                                  [nodeIndex, kind, slotIndex](const ValueSpec &spec) {
+                                      return spec.NodeIndex == nodeIndex &&
+                                             spec.Kind == kind &&
+                                             spec.SlotIndex == slotIndex;
+                                  }),
+                   m_Values.end());
+}
+
+void BehaviorGraphEdit::RemoveNodeSource(int nodeIndex, int pinIndex) {
+    m_Sources.erase(std::remove_if(m_Sources.begin(),
+                                   m_Sources.end(),
+                                   [nodeIndex, pinIndex](const SourceSpec &spec) {
+                                       return spec.NodeIndex == nodeIndex && spec.PinIndex == pinIndex;
+                                   }),
+                    m_Sources.end());
+    if (nodeIndex >= 0 && nodeIndex < static_cast<int>(m_Nodes.size())) {
+        ScriptBridgeBBInvocationSpec &request = m_Nodes[nodeIndex].Request;
+        request.SourceParameters.erase(std::remove_if(request.SourceParameters.begin(),
+                                                      request.SourceParameters.end(),
+                                                      [pinIndex](const ScriptBridgeInputSource &entry) {
+                                                          return entry.PinIndex == pinIndex;
+                                                      }),
+                                       request.SourceParameters.end());
+    }
+}
+
+void BehaviorGraphEdit::RemoveNodeOperation(int nodeIndex, int pinIndex) {
+    m_Operations.erase(std::remove_if(m_Operations.begin(),
+                                      m_Operations.end(),
+                                      [nodeIndex, pinIndex](const OperationSpec &spec) {
+                                          return spec.NodeIndex == nodeIndex &&
+                                                 spec.Operation.TargetPinIndex == pinIndex;
+                                      }),
+                       m_Operations.end());
+    if (nodeIndex >= 0 && nodeIndex < static_cast<int>(m_Nodes.size())) {
+        ScriptBridgeBBInvocationSpec &request = m_Nodes[nodeIndex].Request;
+        request.OperationParameters.erase(std::remove_if(request.OperationParameters.begin(),
+                                                         request.OperationParameters.end(),
+                                                         [pinIndex](const ScriptBridgeOperationSpec &entry) {
+                                                             return entry.TargetPinIndex == pinIndex;
+                                                         }),
+                                          request.OperationParameters.end());
+    }
+}
+
+void BehaviorGraphEdit::SetRequestSource(ScriptBridgeBBInvocationSpec &request, const ScriptBridgeInputSource &source) {
+    const auto it = std::lower_bound(request.SourceParameters.begin(),
+                                     request.SourceParameters.end(),
+                                     source.PinIndex,
+                                     [](const ScriptBridgeInputSource &entry, int index) {
+                                         return entry.PinIndex < index;
+                                     });
+    if (it != request.SourceParameters.end() && it->PinIndex == source.PinIndex) {
+        *it = source;
+    } else {
+        request.SourceParameters.insert(it, source);
+    }
+}
+
+void BehaviorGraphEdit::SetRequestOperation(ScriptBridgeBBInvocationSpec &request, const ScriptBridgeOperationSpec &operation) {
+    const auto it = std::lower_bound(request.OperationParameters.begin(),
+                                     request.OperationParameters.end(),
+                                     operation.TargetPinIndex,
+                                     [](const ScriptBridgeOperationSpec &entry, int index) {
+                                         return entry.TargetPinIndex < index;
+                                     });
+    if (it != request.OperationParameters.end() && it->TargetPinIndex == operation.TargetPinIndex) {
+        *it = operation;
+    } else {
+        request.OperationParameters.insert(it, operation);
+    }
 }
 
 void BehaviorGraphEdit::SetError(const std::string &error) const {
