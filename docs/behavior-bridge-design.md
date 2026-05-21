@@ -66,6 +66,8 @@ The v3 high-level BB model has three phases:
 
 Settings are separate from pins. `BBConfig` uses the SDK/prototype defaults for every parameter that the script does not explicitly mention. If a script needs to override a value, connect a source, read an output parameter, or apply a pre-create setting, it declares a `BBSlot@`; the slot carries the parameter metadata and the bridge applies it at the correct point in the BB lifecycle.
 
+Runtime creation follows the CK2 callback order that real Building Blocks expect: create the dynamic `CKBehavior`, `InitFromGuid`, write pending settings, send `CKM_BEHAVIORCREATE`, attach owner/target, then write pins, sources, and operations before the first execution. Live `SetSetting()` sends `CKM_BEHAVIORSETTINGSEDITED` and refreshes the runtime layout generation.
+
 ```angelscript
 BBDecl@ textDecl = BB::Require(ctx, "Interface/Text/2D Text");
 BBSlot@ textPin = textDecl.Pin("Text");
@@ -220,7 +222,7 @@ The bridge creates a real `CKParameterOperation`, binds `In1/In2` sources or lit
 
 - Runtime `BB.Call()` behavior is held by `BBResult` and deferred-destroyed after result release.
 - Runtime `BB.Spawn()` behavior is owned by `BBTask` and is destroyed by `Destroy()`, component reset, component delete, or bridge clear.
-- Runtime `BBConfig.Spawn()` behavior is owned by `BBInstance`. `Stop()` only stops/deactivates it, optionally pulsing the configured stop input; `Destroy()` releases the runtime behavior and owned links. Managed components stop instances on disable/pause and destroy them on reset/delete.
+- Runtime `BBConfig.Spawn()` behavior is owned by `BBInstance`. `Stop()` only stops/deactivates it, optionally pulsing the configured stop input; `Destroy()` releases the runtime behavior and owned source/operation links. Managed components stop instances on disable/pause and destroy them on reset/delete.
 - `GraphTask` never owns the watched behavior; component reset/delete only cancels the watch.
 - Component pause pauses bridge-owned tasks and watches; it does not mutate external graphs.
 

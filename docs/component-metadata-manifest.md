@@ -266,4 +266,4 @@ When `Output Error Message` is enabled, the error text is written to the Compone
 - A dedicated BB prototype picker is still preferable long term. `type=behavior` is a practical editor-facing fallback because Virtools already has a behavior picker.
 - Managed parameter pruning is intentionally tied to manifest/metadata rebuilds, not to arbitrary runtime graph edits.
 - Generic plugin-defined struct parameters are not decoded field-by-field. Use `ParamRef@` source connections or SDK string-backed defaults for unknown types.
-- `BehaviorRef.ConnectOperation()` mutates the existing graph and is not automatically rolled back by Component lifecycle. Runtime `BB.Call/Spawn.SetOperation()` remains the safe scoped path.
+- `BehaviorRef.ConnectOperation()` mutates the existing graph and is not automatically rolled back by Component lifecycle. Runtime `BBConfig.Operation()` and low-level `BB.Call/Spawn.SetOperation()` remain the safe scoped paths because their owned operations are released with the runtime instance/result/task.
