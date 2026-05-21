@@ -632,6 +632,7 @@ std::string PublicFieldCandidates(asIScriptEngine *engine, asITypeInfo *type) {
 struct ScriptComponentSlotName {
     std::string Name;
     int Occurrence = 0;
+    bool HasOccurrence = false;
 };
 
 ScriptComponentSlotName ParseSlotNameOccurrence(const std::string &value);
@@ -758,6 +759,7 @@ ScriptComponentSlotName ParseSlotNameOccurrence(const std::string &value) {
             TryParseNonNegativeInt(slot.Name.substr(open + 1, slot.Name.size() - open - 2), occurrence)) {
             slot.Name = TrimString(slot.Name.substr(0, open));
             slot.Occurrence = occurrence;
+            slot.HasOccurrence = true;
             return slot;
         }
     }
@@ -769,6 +771,7 @@ ScriptComponentSlotName ParseSlotNameOccurrence(const std::string &value) {
         TryParseNonNegativeInt(slot.Name.substr(hash + 1), occurrence)) {
         slot.Name = TrimString(slot.Name.substr(0, hash));
         slot.Occurrence = occurrence;
+        slot.HasOccurrence = true;
     }
     return slot;
 }
@@ -1131,7 +1134,11 @@ bool ParseBindingMetadata(const std::string &metadata,
                        key == "output" || key == "out" ||
                        key == "pin" || key == "pout" ||
                        key == "local" || key == "setting") {
-                binding.SlotName = value;
+                const ScriptComponentSlotName parsedSlotName = ParseSlotNameOccurrence(value);
+                binding.SlotName = parsedSlotName.Name;
+                if (parsedSlotName.HasOccurrence) {
+                    binding.SlotOccurrence = parsedSlotName.Occurrence;
+                }
                 if (key == "input" || key == "in") {
                     binding.SlotKindName = "input";
                 } else if (key == "output" || key == "out") {
@@ -3668,6 +3675,21 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     }
     if (!sawPoutOccurrence) {
         error = "Component metadata self-test did not preserve required slot occurrence.";
+        return false;
+    }
+
+    ScriptComponentBinding slotOccurrenceBinding;
+    if (!AngelScriptComponentInternal::ParseBindingMetadata(
+            "bbslot from=\"OccurrenceConfig\" pout=\"Out[2]\"",
+            "OutSlot",
+            slotOccurrenceBinding)) {
+        error = "Component metadata self-test failed to parse BBSlot occurrence metadata.";
+        return false;
+    }
+    if (slotOccurrenceBinding.Kind != ScriptComponentBindingKind::BBSlot ||
+        slotOccurrenceBinding.SlotName != "Out" ||
+        slotOccurrenceBinding.SlotOccurrence != 2) {
+        error = "Component metadata self-test did not preserve BBSlot field occurrence.";
         return false;
     }
 
