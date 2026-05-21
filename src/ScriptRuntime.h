@@ -8,6 +8,7 @@
 #include <angelscript.h>
 
 #include "CKTypes.h"
+#include "ScriptRuntimeMetadata.h"
 
 class CKContext;
 class ScriptManager;
@@ -17,7 +18,10 @@ public:
     ScriptRuntimeContext();
     ScriptRuntimeContext(CKContext *context,
                          std::string scriptId,
+                         std::string scriptName,
+                         std::string scriptVersion,
                          std::string rootPath,
+                         std::vector<ScriptRuntimeMetadataEntry> metadata,
                          float deltaTime,
                          float timeSeconds);
 
@@ -25,7 +29,13 @@ public:
     float DeltaTime() const;
     float TimeSeconds() const;
     std::string ScriptId() const;
+    std::string ScriptName() const;
+    std::string ScriptVersion() const;
     std::string RootPath() const;
+    std::string Metadata(const std::string &key, const std::string &fallback = std::string()) const;
+    int MetadataCount() const;
+    std::string MetadataKey(int index) const;
+    std::string MetadataValue(int index) const;
     void Raise(const std::string &message) const;
 
     CKBehaviorContext ToBehaviorContext() const;
@@ -33,7 +43,10 @@ public:
 private:
     CKContext *m_Context = nullptr;
     std::string m_ScriptId;
+    std::string m_ScriptName;
+    std::string m_ScriptVersion;
     std::string m_RootPath;
+    std::vector<ScriptRuntimeMetadataEntry> m_Metadata;
     float m_DeltaTime = 0.0f;
     float m_TimeSeconds = 0.0f;
 };
@@ -55,16 +68,18 @@ public:
     bool Reload(const std::string &id, std::string *error = nullptr);
     bool Enable(const std::string &id, bool enabled, std::string *error = nullptr);
     std::vector<std::string> List() const;
+    std::string Version(const std::string &id) const;
+    std::string Metadata(const std::string &id, const std::string &key, const std::string &fallback = std::string()) const;
+    std::vector<std::string> Dependencies(const std::string &id) const;
 
 private:
-    struct Metadata;
     struct Module;
 
     void EnsureScanned();
-    std::vector<Metadata> Discover(std::string &error) const;
-    bool LoadDiscovered(const std::vector<Metadata> &scripts);
-    bool LoadModule(const Metadata &metadata, std::unique_ptr<Module> &module, std::string &error);
-    bool ReplaceModule(const Metadata &metadata, std::unique_ptr<Module> module);
+    std::vector<ScriptRuntimeManifest> Discover(std::string &error) const;
+    bool LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scripts);
+    bool LoadModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> &module, std::string &error);
+    bool ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module);
     void DestroyModule(Module &module);
     void DisableModule(Module &module);
     void UpdateModule(Module &module, float deltaTime, float timeSeconds);

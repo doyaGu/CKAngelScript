@@ -1,14 +1,9 @@
 #include "ScriptRuntime.h"
 
 #include <algorithm>
-#include <cctype>
-#include <cstring>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
-#include <map>
 #include <set>
-#include <sstream>
 #include <unordered_set>
 
 #include <fmt/format.h>
@@ -20,6 +15,8 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
 #include "ScriptParameterRegistry.h"
+#include "ScriptRuntimeDependency.h"
+#include "ScriptRuntimeMetadata.h"
 #include "ScriptUtils.h"
 #include "add_on/scriptarray/scriptarray.h"
 
@@ -28,292 +25,6 @@ namespace ScriptRuntimeInternal {
 constexpr const char *kModulePrefix = "__CKASRuntime_";
 
 BehaviorGraph *RuntimeBehaviorGraphByRoot(const ScriptRuntimeContext &ctx, const std::string &rootBehaviorName);
-
-struct KeyValue {
-    std::string Key;
-    std::string Value;
-};
-
-std::string Trim(const std::string &text) {
-    std::size_t first = 0;
-    while (first < text.size() && std::isspace(static_cast<unsigned char>(text[first]))) {
-        ++first;
-    }
-    std::size_t last = text.size();
-    while (last > first && std::isspace(static_cast<unsigned char>(text[last - 1]))) {
-        --last;
-    }
-    return text.substr(first, last - first);
-}
-
-std::string ToLower(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
-    return value;
-}
-
-std::string StripQuotes(const std::string &value) {
-    if (value.size() >= 2) {
-        const char first = value.front();
-        const char last = value.back();
-        if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
-            return value.substr(1, value.size() - 2);
-        }
-    }
-    return value;
-}
-
-std::vector<std::string> SplitList(const std::string &value) {
-    std::vector<std::string> result;
-    std::string current;
-    bool quoted = false;
-    char quote = '\0';
-    for (char c : value) {
-        if ((c == '"' || c == '\'') && (!quoted || quote == c)) {
-            quoted = !quoted;
-            quote = quoted ? c : '\0';
-            current.push_back(c);
-            continue;
-        }
-        if (c == ';' && !quoted) {
-            std::string item = Trim(StripQuotes(Trim(current)));
-            if (!item.empty()) {
-                result.push_back(std::move(item));
-            }
-            current.clear();
-            continue;
-        }
-        current.push_back(c);
-    }
-    std::string item = Trim(StripQuotes(Trim(current)));
-    if (!item.empty()) {
-        result.push_back(std::move(item));
-    }
-    return result;
-}
-
-bool ParseBool(const std::string &value, bool fallback) {
-    const std::string lowered = ToLower(Trim(StripQuotes(value)));
-    if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "on") {
-        return true;
-    }
-    if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off") {
-        return false;
-    }
-    return fallback;
-}
-
-int ParseInt(const std::string &value, int fallback) {
-    char *end = nullptr;
-    const std::string text = Trim(StripQuotes(value));
-    const long parsed = std::strtol(text.c_str(), &end, 0);
-    if (end && *end == '\0') {
-        return static_cast<int>(parsed);
-    }
-    return fallback;
-}
-
-std::vector<KeyValue> ParseKeyValues(const std::string &metadataBody) {
-    std::vector<KeyValue> result;
-    std::size_t pos = 0;
-    while (pos < metadataBody.size()) {
-        while (pos < metadataBody.size() && std::isspace(static_cast<unsigned char>(metadataBody[pos]))) {
-            ++pos;
-        }
-        if (pos >= metadataBody.size()) {
-            break;
-        }
-
-        const std::size_t keyStart = pos;
-        while (pos < metadataBody.size()) {
-            const char c = metadataBody[pos];
-            if (std::isspace(static_cast<unsigned char>(c)) || c == '=') {
-                break;
-            }
-            ++pos;
-        }
-        std::string key = metadataBody.substr(keyStart, pos - keyStart);
-        while (pos < metadataBody.size() && std::isspace(static_cast<unsigned char>(metadataBody[pos]))) {
-            ++pos;
-        }
-        std::string value = "true";
-        if (pos < metadataBody.size() && metadataBody[pos] == '=') {
-            ++pos;
-            while (pos < metadataBody.size() && std::isspace(static_cast<unsigned char>(metadataBody[pos]))) {
-                ++pos;
-            }
-            if (pos < metadataBody.size() && (metadataBody[pos] == '"' || metadataBody[pos] == '\'')) {
-                const char quote = metadataBody[pos++];
-                std::string parsed;
-                while (pos < metadataBody.size()) {
-                    const char c = metadataBody[pos++];
-                    if (c == quote) {
-                        break;
-                    }
-                    if (c == '\\' && pos < metadataBody.size()) {
-                        parsed.push_back(metadataBody[pos++]);
-                    } else {
-                        parsed.push_back(c);
-                    }
-                }
-                value = parsed;
-            } else {
-                const std::size_t valueStart = pos;
-                while (pos < metadataBody.size() && !std::isspace(static_cast<unsigned char>(metadataBody[pos]))) {
-                    ++pos;
-                }
-                value = metadataBody.substr(valueStart, pos - valueStart);
-            }
-        }
-        if (!key.empty()) {
-            result.push_back({ToLower(key), value});
-        }
-    }
-    return result;
-}
-
-std::string SanitizeId(const std::string &id) {
-    std::string result;
-    result.reserve(id.size());
-    for (char c : id) {
-        const unsigned char u = static_cast<unsigned char>(c);
-        if (std::isalnum(u) || c == '_' || c == '-' || c == '.') {
-            result.push_back(c);
-        } else {
-            result.push_back('_');
-        }
-    }
-    return result.empty() ? "script" : result;
-}
-
-std::string PathString(const std::filesystem::path &path) {
-    return path.string();
-}
-
-bool IsSkippedMainFile(const std::filesystem::path &path) {
-    const std::string filename = ToLower(path.filename().string());
-    return filename.ends_with(".inc.as") || filename.ends_with(".include.as");
-}
-
-bool IsSkippedDirectory(const std::filesystem::path &path) {
-    const std::string name = path.filename().string();
-    return name.empty() || name.front() == '_' || name.front() == '.';
-}
-
-std::string ReadTextFile(const std::filesystem::path &path) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        return std::string();
-    }
-    std::ostringstream stream;
-    stream << input.rdbuf();
-    return stream.str();
-}
-
-bool StartsWithWord(const std::string &text, std::size_t pos, const char *word) {
-    const std::size_t length = std::strlen(word);
-    if (text.compare(pos, length, word) != 0) {
-        return false;
-    }
-    const std::size_t end = pos + length;
-    return end >= text.size() || !std::isalnum(static_cast<unsigned char>(text[end]));
-}
-
-std::string ParseClassAfterMetadata(const std::string &source, std::size_t pos) {
-    while (pos < source.size()) {
-        while (pos < source.size() && std::isspace(static_cast<unsigned char>(source[pos]))) {
-            ++pos;
-        }
-        if (source.compare(pos, 2, "//") == 0) {
-            pos = source.find('\n', pos);
-            if (pos == std::string::npos) {
-                return std::string();
-            }
-            continue;
-        }
-        if (source.compare(pos, 2, "/*") == 0) {
-            pos = source.find("*/", pos + 2);
-            if (pos == std::string::npos) {
-                return std::string();
-            }
-            pos += 2;
-            continue;
-        }
-        break;
-    }
-    if (!StartsWithWord(source, pos, "class")) {
-        return std::string();
-    }
-    pos += 5;
-    while (pos < source.size() && std::isspace(static_cast<unsigned char>(source[pos]))) {
-        ++pos;
-    }
-    const std::size_t start = pos;
-    while (pos < source.size()) {
-        const unsigned char c = static_cast<unsigned char>(source[pos]);
-        if (!std::isalnum(c) && source[pos] != '_') {
-            break;
-        }
-        ++pos;
-    }
-    return source.substr(start, pos - start);
-}
-
-bool ExtractScriptMetadata(const std::string &source,
-                           std::map<std::string, std::string> &values,
-                           std::string &attachedClass,
-                           std::string &error) {
-    int count = 0;
-    std::size_t pos = 0;
-    while ((pos = source.find("[script", pos)) != std::string::npos) {
-        const std::size_t start = pos;
-        pos += 7;
-        if (pos < source.size()) {
-            const char next = source[pos];
-            if (!std::isspace(static_cast<unsigned char>(next)) && next != ']') {
-                continue;
-            }
-        }
-
-        bool quoted = false;
-        char quote = '\0';
-        std::size_t end = pos;
-        for (; end < source.size(); ++end) {
-            const char c = source[end];
-            if ((c == '"' || c == '\'') && (!quoted || quote == c)) {
-                quoted = !quoted;
-                quote = quoted ? c : '\0';
-            } else if (c == ']' && !quoted) {
-                break;
-            }
-        }
-        if (end >= source.size()) {
-            error = "unterminated [script] metadata";
-            return false;
-        }
-        ++count;
-        if (count > 1) {
-            error = "multiple [script] metadata blocks are not allowed";
-            return false;
-        }
-        const std::string body = source.substr(pos, end - pos);
-        for (const KeyValue &pair : ParseKeyValues(body)) {
-            values[pair.Key] = pair.Value;
-        }
-        attachedClass = ParseClassAfterMetadata(source, end + 1);
-        pos = end + 1;
-        (void)start;
-    }
-    return true;
-}
-
-std::string MetadataValue(const std::map<std::string, std::string> &values,
-                          const std::string &key,
-                          const std::string &fallback = std::string()) {
-    const auto it = values.find(key);
-    return it == values.end() ? fallback : it->second;
-}
 
 CKBehavior *FindBehaviorByName(CKContext *context, const std::string &name) {
     if (!context || name.empty()) {
@@ -326,6 +37,20 @@ CKBehaviorContext MakeBehaviorContext(const ScriptRuntimeContext &ctx, CKBehavio
     CKBehaviorContext behaviorContext = ctx.ToBehaviorContext();
     behaviorContext.Behavior = behavior;
     return behaviorContext;
+}
+
+ScriptRuntimeContext MakeRuntimeContext(CKContext *context,
+                                        const ScriptRuntimeManifest &metadata,
+                                        float deltaTime,
+                                        float timeSeconds) {
+    return ScriptRuntimeContext(context,
+                                metadata.Id,
+                                metadata.Name,
+                                metadata.VersionText,
+                                ScriptRuntimeMetadata::PathString(metadata.RootPath),
+                                metadata.CustomMetadata,
+                                deltaTime,
+                                timeSeconds);
 }
 
 ScriptManager *ManagerFromRuntimeContext(const ScriptRuntimeContext &ctx) {
@@ -518,25 +243,38 @@ CScriptArray *RuntimeList(const ScriptRuntimeContext &ctx) {
     return array;
 }
 
+std::string RuntimeVersion(const ScriptRuntimeContext &ctx, const std::string &id) {
+    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
+    return manager && manager->GetRuntime() ? manager->GetRuntime()->Version(id) : std::string();
+}
+
+std::string RuntimeMetadata(const ScriptRuntimeContext &ctx,
+                            const std::string &id,
+                            const std::string &key,
+                            const std::string &fallback) {
+    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
+    return manager && manager->GetRuntime() ? manager->GetRuntime()->Metadata(id, key, fallback) : fallback;
+}
+
+CScriptArray *RuntimeDependencies(const ScriptRuntimeContext &ctx, const std::string &id) {
+    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
+    asIScriptEngine *engine = manager ? manager->GetScriptEngine() : nullptr;
+    asITypeInfo *arrayType = engine ? engine->GetTypeInfoByDecl("array<string>") : nullptr;
+    if (!arrayType || !manager || !manager->GetRuntime()) {
+        return nullptr;
+    }
+    std::vector<std::string> dependencies = manager->GetRuntime()->Dependencies(id);
+    CScriptArray *array = CScriptArray::Create(arrayType, static_cast<asUINT>(dependencies.size()));
+    for (asUINT i = 0; i < static_cast<asUINT>(dependencies.size()); ++i) {
+        array->SetValue(i, &dependencies[i]);
+    }
+    return array;
+}
+
 } // namespace ScriptRuntimeInternal
 
-struct ScriptRuntime::Metadata {
-    std::string Id;
-    std::string Name;
-    std::string ClassName;
-    std::filesystem::path RootPath;
-    std::filesystem::path ManifestPath;
-    std::filesystem::path EntryPath;
-    std::vector<std::filesystem::path> Files;
-    bool Enabled = true;
-    int Order = 1000;
-    bool Reloadable = true;
-    bool HasManifest = false;
-    std::string Error;
-};
-
 struct ScriptRuntime::Module {
-    Metadata Meta;
+    ScriptRuntimeManifest Meta;
     std::string ModuleName;
     std::shared_ptr<CachedScript> Cached;
     asIScriptObject *Object = nullptr;
@@ -554,12 +292,18 @@ ScriptRuntimeContext::ScriptRuntimeContext() = default;
 
 ScriptRuntimeContext::ScriptRuntimeContext(CKContext *context,
                                            std::string scriptId,
+                                           std::string scriptName,
+                                           std::string scriptVersion,
                                            std::string rootPath,
+                                           std::vector<ScriptRuntimeMetadataEntry> metadata,
                                            float deltaTime,
                                            float timeSeconds)
     : m_Context(context),
       m_ScriptId(std::move(scriptId)),
+      m_ScriptName(std::move(scriptName)),
+      m_ScriptVersion(std::move(scriptVersion)),
       m_RootPath(std::move(rootPath)),
+      m_Metadata(std::move(metadata)),
       m_DeltaTime(deltaTime),
       m_TimeSeconds(timeSeconds) {}
 
@@ -579,8 +323,32 @@ std::string ScriptRuntimeContext::ScriptId() const {
     return m_ScriptId;
 }
 
+std::string ScriptRuntimeContext::ScriptName() const {
+    return m_ScriptName;
+}
+
+std::string ScriptRuntimeContext::ScriptVersion() const {
+    return m_ScriptVersion;
+}
+
 std::string ScriptRuntimeContext::RootPath() const {
     return m_RootPath;
+}
+
+std::string ScriptRuntimeContext::Metadata(const std::string &key, const std::string &fallback) const {
+    return ScriptRuntimeMetadata::MetadataValue(m_Metadata, key, fallback);
+}
+
+int ScriptRuntimeContext::MetadataCount() const {
+    return static_cast<int>(m_Metadata.size());
+}
+
+std::string ScriptRuntimeContext::MetadataKey(int index) const {
+    return index >= 0 && index < static_cast<int>(m_Metadata.size()) ? m_Metadata[index].Key : std::string();
+}
+
+std::string ScriptRuntimeContext::MetadataValue(int index) const {
+    return index >= 0 && index < static_cast<int>(m_Metadata.size()) ? m_Metadata[index].Value : std::string();
 }
 
 void ScriptRuntimeContext::Raise(const std::string &message) const {
@@ -636,11 +404,10 @@ void ScriptRuntime::OnReset() {
         if (!module || !module->Loaded || module->Failed) {
             continue;
         }
-        ScriptRuntimeContext ctx(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                 module->Meta.Id,
-                                 ScriptRuntimeInternal::PathString(module->Meta.RootPath),
-                                 0.0f,
-                                 0.0f);
+        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                                             module->Meta,
+                                                                             0.0f,
+                                                                             0.0f);
         Invoke(*module, "OnReset", ctx);
         module->StartCalled = false;
     }
@@ -655,11 +422,10 @@ void ScriptRuntime::OnPause() {
         if (!module || !module->Loaded || module->Failed || !module->Enabled) {
             continue;
         }
-        ScriptRuntimeContext ctx(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                 module->Meta.Id,
-                                 ScriptRuntimeInternal::PathString(module->Meta.RootPath),
-                                 0.0f,
-                                 0.0f);
+        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                                             module->Meta,
+                                                                             0.0f,
+                                                                             0.0f);
         Invoke(*module, "OnPause", ctx);
         if (module->EnableCalled) {
             Invoke(*module, "OnDisable", ctx);
@@ -677,11 +443,10 @@ void ScriptRuntime::OnResume() {
         if (!module || !module->Loaded || module->Failed || !module->Enabled) {
             continue;
         }
-        ScriptRuntimeContext ctx(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                 module->Meta.Id,
-                                 ScriptRuntimeInternal::PathString(module->Meta.RootPath),
-                                 0.0f,
-                                 0.0f);
+        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                                             module->Meta,
+                                                                             0.0f,
+                                                                             0.0f);
         Invoke(*module, "OnResume", ctx);
         if (!module->EnableCalled) {
             Invoke(*module, "OnEnable", ctx);
@@ -707,7 +472,7 @@ void ScriptRuntime::Clear() {
 
 bool ScriptRuntime::ReloadAll(std::string *error) {
     std::string discoveryError;
-    std::vector<Metadata> scripts = Discover(discoveryError);
+    std::vector<ScriptRuntimeManifest> scripts = Discover(discoveryError);
     if (!discoveryError.empty()) {
         if (error) {
             *error = discoveryError;
@@ -721,9 +486,9 @@ bool ScriptRuntime::ReloadAll(std::string *error) {
 bool ScriptRuntime::Reload(const std::string &id, std::string *error) {
     EnsureScanned();
     std::string discoveryError;
-    std::vector<Metadata> scripts = Discover(discoveryError);
-    const std::string canonical = ScriptRuntimeInternal::SanitizeId(id);
-    const auto it = std::find_if(scripts.begin(), scripts.end(), [&](const Metadata &metadata) {
+    std::vector<ScriptRuntimeManifest> scripts = Discover(discoveryError);
+    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
+    const auto it = std::find_if(scripts.begin(), scripts.end(), [&](const ScriptRuntimeManifest &metadata) {
         return metadata.Id == canonical || metadata.Id == id;
     });
     if (it == scripts.end()) {
@@ -773,12 +538,48 @@ std::vector<std::string> ScriptRuntime::List() const {
     return result;
 }
 
+std::string ScriptRuntime::Version(const std::string &id) const {
+    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
+    for (const std::unique_ptr<Module> &module : m_Modules) {
+        if (module && (module->Meta.Id == canonical || module->Meta.Id == id)) {
+            return module->Meta.VersionText;
+        }
+    }
+    return std::string();
+}
+
+std::string ScriptRuntime::Metadata(const std::string &id, const std::string &key, const std::string &fallback) const {
+    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
+    for (const std::unique_ptr<Module> &module : m_Modules) {
+        if (module && (module->Meta.Id == canonical || module->Meta.Id == id)) {
+            return ScriptRuntimeMetadata::MetadataValue(module->Meta.CustomMetadata, key, fallback);
+        }
+    }
+    return fallback;
+}
+
+std::vector<std::string> ScriptRuntime::Dependencies(const std::string &id) const {
+    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
+    for (const std::unique_ptr<Module> &module : m_Modules) {
+        if (!module || (module->Meta.Id != canonical && module->Meta.Id != id)) {
+            continue;
+        }
+        std::vector<std::string> result;
+        result.reserve(module->Meta.RequiredDependencies.size());
+        for (const ScriptRuntimeDependency &dependency : module->Meta.RequiredDependencies) {
+            result.push_back(ScriptRuntimeMetadata::VersionRequirementText(dependency));
+        }
+        return result;
+    }
+    return {};
+}
+
 void ScriptRuntime::EnsureScanned() {
     if (m_Scanned) {
         return;
     }
     std::string error;
-    std::vector<Metadata> scripts = Discover(error);
+    std::vector<ScriptRuntimeManifest> scripts = Discover(error);
     if (!error.empty()) {
         OutputDiagnostic(error);
     }
@@ -786,7 +587,7 @@ void ScriptRuntime::EnsureScanned() {
     m_Scanned = true;
 }
 
-std::vector<ScriptRuntime::Metadata> ScriptRuntime::Discover(std::string &error) const {
+std::vector<ScriptRuntimeManifest> ScriptRuntime::Discover(std::string &error) const {
     namespace fs = std::filesystem;
     std::vector<fs::path> roots;
     CKContext *context = m_Manager ? m_Manager->GetCKContext() : nullptr;
@@ -801,12 +602,12 @@ std::vector<ScriptRuntime::Metadata> ScriptRuntime::Discover(std::string &error)
         }
     }
     if (const char *envRoots = std::getenv("CKAS_SCRIPT_ROOTS")) {
-        for (const std::string &root : ScriptRuntimeInternal::SplitList(envRoots)) {
+        for (const std::string &root : ScriptRuntimeMetadata::SplitList(envRoots)) {
             roots.emplace_back(root);
         }
     }
 
-    std::vector<Metadata> result;
+    std::vector<ScriptRuntimeManifest> candidatesOut;
     std::unordered_set<std::string> seenRoots;
     std::set<std::string> seenIds;
     for (fs::path root : roots) {
@@ -816,7 +617,7 @@ std::vector<ScriptRuntime::Metadata> ScriptRuntime::Discover(std::string &error)
         if (ec) {
             root = fs::absolute(root);
         }
-        const std::string rootKey = ScriptRuntimeInternal::ToLower(ScriptRuntimeInternal::PathString(root));
+        const std::string rootKey = ScriptRuntimeMetadata::ToLower(ScriptRuntimeMetadata::PathString(root));
         if (!seenRoots.insert(rootKey).second || !fs::is_directory(root)) {
             continue;
         }
@@ -827,11 +628,11 @@ std::vector<ScriptRuntime::Metadata> ScriptRuntime::Discover(std::string &error)
                 break;
             }
             const fs::path path = entry.path();
-            if (entry.is_regular_file() && path.extension() == ".as" && !ScriptRuntimeInternal::IsSkippedMainFile(path)) {
+            if (entry.is_regular_file() && path.extension() == ".as" && !ScriptRuntimeMetadata::IsSkippedMainFile(path)) {
                 candidates.push_back(path);
-            } else if (entry.is_directory() && !ScriptRuntimeInternal::IsSkippedDirectory(path)) {
+            } else if (entry.is_directory() && !ScriptRuntimeMetadata::IsSkippedDirectory(path)) {
                 fs::path main = path / "main.as";
-                if (fs::is_regular_file(main) && !ScriptRuntimeInternal::IsSkippedMainFile(main)) {
+                if (fs::is_regular_file(main) && !ScriptRuntimeMetadata::IsSkippedMainFile(main)) {
                     candidates.push_back(main);
                 }
             }
@@ -839,46 +640,30 @@ std::vector<ScriptRuntime::Metadata> ScriptRuntime::Discover(std::string &error)
         std::sort(candidates.begin(), candidates.end());
 
         for (const fs::path &candidate : candidates) {
-            Metadata metadata;
+            ScriptRuntimeManifest metadata;
             metadata.RootPath = candidate.parent_path();
             metadata.ManifestPath = candidate;
             metadata.EntryPath = candidate;
-            metadata.Id = candidate.stem().string();
+            metadata.Id = ScriptRuntimeMetadata::ToLower(candidate.filename().string()) == "main.as"
+                              ? candidate.parent_path().filename().string()
+                              : candidate.stem().string();
             metadata.Name = metadata.Id;
-
-            std::map<std::string, std::string> values;
-            std::string attachedClass;
             std::string parseError;
-            const std::string source = ScriptRuntimeInternal::ReadTextFile(candidate);
-            if (!ScriptRuntimeInternal::ExtractScriptMetadata(source, values, attachedClass, parseError)) {
-                error += fmt::format("Skipping '{}': {}.\n", ScriptRuntimeInternal::PathString(candidate), parseError);
+            const std::string source = ScriptRuntimeMetadata::ReadTextFile(candidate);
+            if (!ScriptRuntimeMetadata::ParseManifestSource(source, candidate, metadata, parseError)) {
+                error += fmt::format("Skipping '{}': {}.\n", ScriptRuntimeMetadata::PathString(candidate), parseError);
                 continue;
             }
-            metadata.HasManifest = !values.empty();
-            if (metadata.HasManifest) {
-                metadata.Id = ScriptRuntimeInternal::MetadataValue(values, "id", metadata.Id);
-                metadata.Name = ScriptRuntimeInternal::MetadataValue(values, "name", metadata.Id);
-                metadata.ClassName = ScriptRuntimeInternal::MetadataValue(values, "class", attachedClass);
-                metadata.Enabled = ScriptRuntimeInternal::ParseBool(ScriptRuntimeInternal::MetadataValue(values, "enabled", "true"), true);
-                metadata.Order = ScriptRuntimeInternal::ParseInt(ScriptRuntimeInternal::MetadataValue(values, "order", "1000"), 1000);
-                metadata.Reloadable = ScriptRuntimeInternal::ParseBool(ScriptRuntimeInternal::MetadataValue(values, "reload", "true"), true);
-                const std::string entry = ScriptRuntimeInternal::MetadataValue(values, "entry");
-                if (!entry.empty()) {
-                    metadata.EntryPath = metadata.RootPath / entry;
-                }
-            }
-            metadata.Id = ScriptRuntimeInternal::SanitizeId(metadata.Id);
 
             metadata.Files.push_back(metadata.EntryPath);
-            const std::string filesText = ScriptRuntimeInternal::MetadataValue(values, "files");
-            for (const std::string &file : ScriptRuntimeInternal::SplitList(filesText)) {
+            for (const std::string &file : metadata.FileSpecs) {
                 metadata.Files.push_back(metadata.RootPath / file);
             }
             std::vector<fs::path> uniqueFiles;
             std::set<std::string> seenFiles;
             for (fs::path file : metadata.Files) {
                 file = fs::absolute(file);
-                const std::string fileKey = ScriptRuntimeInternal::ToLower(ScriptRuntimeInternal::PathString(file));
+                const std::string fileKey = ScriptRuntimeMetadata::ToLower(ScriptRuntimeMetadata::PathString(file));
                 if (seenFiles.insert(fileKey).second) {
                     uniqueFiles.push_back(file);
                 }
@@ -890,7 +675,7 @@ std::vector<ScriptRuntime::Metadata> ScriptRuntime::Discover(std::string &error)
                 if (!fs::is_regular_file(file)) {
                     error += fmt::format("Skipping '{}': source file '{}' is missing.\n",
                                          metadata.Id,
-                                         ScriptRuntimeInternal::PathString(file));
+                                         ScriptRuntimeMetadata::PathString(file));
                     missing = true;
                     break;
                 }
@@ -904,29 +689,42 @@ std::vector<ScriptRuntime::Metadata> ScriptRuntime::Discover(std::string &error)
             if (!seenIds.insert(metadata.Id).second) {
                 error += fmt::format("Duplicate runtime script id '{}' from '{}' ignored.\n",
                                      metadata.Id,
-                                     ScriptRuntimeInternal::PathString(candidate));
+                                     ScriptRuntimeMetadata::PathString(candidate));
                 continue;
             }
-            result.push_back(std::move(metadata));
+            candidatesOut.push_back(std::move(metadata));
         }
     }
 
-    std::sort(result.begin(), result.end(), [](const Metadata &lhs, const Metadata &rhs) {
+    std::sort(candidatesOut.begin(), candidatesOut.end(), [](const ScriptRuntimeManifest &lhs, const ScriptRuntimeManifest &rhs) {
         if (lhs.Order != rhs.Order) {
             return lhs.Order < rhs.Order;
         }
         return lhs.Id < rhs.Id;
     });
-    return result;
+    ScriptRuntimeLoadPlan plan = ScriptRuntimeDependencyResolver::Resolve(candidatesOut);
+    if (!plan.Diagnostics.empty()) {
+        error += plan.Diagnostics;
+    }
+    return plan.Scripts;
 }
 
-bool ScriptRuntime::LoadDiscovered(const std::vector<Metadata> &scripts) {
+bool ScriptRuntime::LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scripts) {
     bool ok = true;
-    for (const Metadata &metadata : scripts) {
+    std::vector<std::string> failedIds;
+    for (const ScriptRuntimeManifest &metadata : scripts) {
+        std::string dependencyError;
+        if (ScriptRuntimeDependencyResolver::HasDependencyFailure(metadata, failedIds, dependencyError)) {
+            ok = false;
+            failedIds.push_back(metadata.Id);
+            OutputDiagnostic(dependencyError);
+            continue;
+        }
         std::unique_ptr<Module> module;
         std::string error;
         if (!LoadModule(metadata, module, error)) {
             ok = false;
+            failedIds.push_back(metadata.Id);
             OutputDiagnostic(error);
             continue;
         }
@@ -935,7 +733,7 @@ bool ScriptRuntime::LoadDiscovered(const std::vector<Metadata> &scripts) {
     return ok;
 }
 
-bool ScriptRuntime::LoadModule(const Metadata &metadata, std::unique_ptr<Module> &module, std::string &error) {
+bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> &module, std::string &error) {
     asIScriptEngine *engine = m_Manager ? m_Manager->GetScriptEngine() : nullptr;
     if (!engine) {
         error = "Script runtime cannot load modules before the AngelScript engine is initialized.";
@@ -946,7 +744,7 @@ bool ScriptRuntime::LoadModule(const Metadata &metadata, std::unique_ptr<Module>
     std::vector<std::string> files;
     files.reserve(metadata.Files.size());
     for (const std::filesystem::path &file : metadata.Files) {
-        files.push_back(ScriptRuntimeInternal::PathString(file));
+        files.push_back(ScriptRuntimeMetadata::PathString(file));
     }
     std::shared_ptr<CachedScript> cached = m_Manager->GetScriptCache().LoadScript(engine, moduleName, files);
     if (!cached || !cached->module) {
@@ -977,11 +775,10 @@ bool ScriptRuntime::LoadModule(const Metadata &metadata, std::unique_ptr<Module>
         loaded->Object = static_cast<asIScriptObject *>(object);
     }
 
-    ScriptRuntimeContext ctx(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                             metadata.Id,
-                             ScriptRuntimeInternal::PathString(metadata.RootPath),
-                             0.0f,
-                             0.0f);
+    ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                                         metadata,
+                                                                         0.0f,
+                                                                         0.0f);
     if (!Invoke(*loaded, "OnLoad", ctx) || !Invoke(*loaded, "Awake", ctx)) {
         error = fmt::format("Runtime script '{}' failed during load: {}", metadata.Id, loaded->Error);
         DestroyModule(*loaded);
@@ -992,7 +789,7 @@ bool ScriptRuntime::LoadModule(const Metadata &metadata, std::unique_ptr<Module>
     return true;
 }
 
-bool ScriptRuntime::ReplaceModule(const Metadata &metadata, std::unique_ptr<Module> module) {
+bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module) {
     for (std::unique_ptr<Module> &existing : m_Modules) {
         if (existing && existing->Meta.Id == metadata.Id) {
             DestroyModule(*existing);
@@ -1006,11 +803,10 @@ bool ScriptRuntime::ReplaceModule(const Metadata &metadata, std::unique_ptr<Modu
 
 void ScriptRuntime::DestroyModule(Module &module) {
     if (module.Loaded && !module.Failed) {
-        ScriptRuntimeContext ctx(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                 module.Meta.Id,
-                                 ScriptRuntimeInternal::PathString(module.Meta.RootPath),
-                                 0.0f,
-                                 0.0f);
+        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                                             module.Meta,
+                                                                             0.0f,
+                                                                             0.0f);
         if (module.EnableCalled) {
             Invoke(module, "OnDisable", ctx);
             module.EnableCalled = false;
@@ -1032,11 +828,10 @@ void ScriptRuntime::DisableModule(Module &module) {
     if (!module.EnableCalled) {
         return;
     }
-    ScriptRuntimeContext ctx(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                             module.Meta.Id,
-                             ScriptRuntimeInternal::PathString(module.Meta.RootPath),
-                             0.0f,
-                             0.0f);
+    ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                                         module.Meta,
+                                                                         0.0f,
+                                                                         0.0f);
     Invoke(module, "OnDisable", ctx);
     module.EnableCalled = false;
 }
@@ -1045,11 +840,10 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
     if (!module.Loaded || !module.Enabled || module.Failed) {
         return;
     }
-    ScriptRuntimeContext ctx(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                             module.Meta.Id,
-                             ScriptRuntimeInternal::PathString(module.Meta.RootPath),
-                             deltaTime,
-                             timeSeconds);
+    ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                                         module.Meta,
+                                                                         deltaTime,
+                                                                         timeSeconds);
     if (!module.EnableCalled) {
         if (!Invoke(module, "OnEnable", ctx)) {
             return;
@@ -1171,7 +965,13 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ScriptRuntimeContext", "float DeltaTime() const", asMETHOD(ScriptRuntimeContext, DeltaTime), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptRuntimeContext", "float TimeSeconds() const", asMETHOD(ScriptRuntimeContext, TimeSeconds), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string ScriptId() const", asMETHOD(ScriptRuntimeContext, ScriptId), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string ScriptName() const", asMETHOD(ScriptRuntimeContext, ScriptName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string ScriptVersion() const", asMETHOD(ScriptRuntimeContext, ScriptVersion), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string RootPath() const", asMETHOD(ScriptRuntimeContext, RootPath), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string Metadata(const string &in key, const string &in fallback = \"\") const", asMETHOD(ScriptRuntimeContext, Metadata), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "int MetadataCount() const", asMETHOD(ScriptRuntimeContext, MetadataCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string MetadataKey(int index) const", asMETHOD(ScriptRuntimeContext, MetadataKey), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string MetadataValue(int index) const", asMETHOD(ScriptRuntimeContext, MetadataValue), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptRuntimeContext", "void Raise(const string &in message) const", asMETHOD(ScriptRuntimeContext, Raise), asCALL_THISCALL); assert(r >= 0);
 
     const char *previousNamespace = engine->GetDefaultNamespace();
@@ -1205,6 +1005,9 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool Reload(const ScriptRuntimeContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeReload), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool Enable(const ScriptRuntimeContext &in ctx, const string &in id, bool enabled)", asFUNCTION(ScriptRuntimeInternal::RuntimeEnable), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("array<string>@ List(const ScriptRuntimeContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeList), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Version(const ScriptRuntimeContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeVersion), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Metadata(const ScriptRuntimeContext &in ctx, const string &in id, const string &in key, const string &in fallback = \"\")", asFUNCTION(ScriptRuntimeInternal::RuntimeMetadata), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("array<string>@ Dependencies(const ScriptRuntimeContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeDependencies), asCALL_CDECL); assert(r >= 0);
 
     r = engine->SetDefaultNamespace(previous.c_str()); assert(r >= 0);
 }
@@ -1214,17 +1017,32 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         error = "Runtime self-test requires a CKContext and AngelScript engine.";
         return false;
     }
+    if (!ScriptRuntimeMetadata::RunScriptRuntimeMetadataSelfTest(error)) {
+        return false;
+    }
+    if (!ScriptRuntimeDependencyResolver::RunScriptRuntimeDependencySelfTest(error)) {
+        return false;
+    }
     const char *source =
         "void __ckas_runtime_compile_probe(const ScriptRuntimeContext &in ctx) {\n"
         "  CKContext@ c = ctx.Context();\n"
         "  float dt = ctx.DeltaTime();\n"
         "  string id = ctx.ScriptId();\n"
+        "  string name = ctx.ScriptName();\n"
+        "  string version = ctx.ScriptVersion();\n"
+        "  string custom = ctx.Metadata(\"custom\", \"fallback\");\n"
+        "  int metadataCount = ctx.MetadataCount();\n"
+        "  string metadataKey = ctx.MetadataKey(0);\n"
+        "  string metadataValue = ctx.MetadataValue(0);\n"
         "  BehaviorGraph@ graph = Behavior::Graph(ctx, \"__missing__\");\n"
         "  BehaviorRef@ behavior = Behavior::Find(ctx, \"__missing__\");\n"
         "  BBDecl@ decl = BB::Require(ctx, \"__missing__\");\n"
         "  int bbCount = BB::Count(ctx);\n"
         "  ParamTypeInfo@ param = Param::Find(ctx, \"int\");\n"
         "  array<string>@ scripts = Runtime::List(ctx);\n"
+        "  string runtimeVersion = Runtime::Version(ctx, \"ckas.runtime.smoke\");\n"
+        "  string runtimeMetadata = Runtime::Metadata(ctx, \"ckas.runtime.smoke\", \"custom\", \"fallback\");\n"
+        "  array<string>@ deps = Runtime::Dependencies(ctx, \"ckas.runtime.smoke\");\n"
         "}\n";
     const std::string moduleName = "__CKAS_RuntimeCompileSelfTest";
     std::shared_ptr<CachedScript> script = ScriptManager::GetManager(context)->GetScriptCache().CompileScript(engine, moduleName, source);
