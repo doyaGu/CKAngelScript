@@ -64,7 +64,7 @@ The v3 high-level BB model has three phases:
 2. `BBConfig@` stores owner/target and pending slot-based values, sources, and operations.
 3. `BBInstance@` owns the runtime `CKBehavior` and steps or destroys it.
 
-Settings are separate from pins. `BBConfig` uses the SDK/prototype defaults for every parameter that the script does not explicitly mention. If a script needs to override a value, connect a source, read an output parameter, or apply a pre-create setting, it declares a `BBSlot@`; the slot carries the parameter metadata and the bridge applies it at the correct point in the BB lifecycle.
+Settings are separate from pins. `BBConfig` uses the SDK/prototype defaults for every parameter that the script does not explicitly mention. If a script only needs fixed setup values, Component metadata can put them directly on the config. If a script needs to update a value every frame, connect a source, read an output parameter, or apply a live setting, it keeps a `BBSlot@`; the slot carries the parameter metadata and the bridge applies it at the correct point in the BB lifecycle.
 
 Runtime creation follows the CK2 callback order that real Building Blocks expect: create the dynamic `CKBehavior`, `InitFromGuid`, write pending settings, send `CKM_BEHAVIORCREATE`, attach owner/target, then write pins, sources, and operations before the first execution. Live `SetSetting()` sends `CKM_BEHAVIORSETTINGSEDITED` and refreshes the runtime layout generation.
 
@@ -84,10 +84,14 @@ BBInstance@ inst = cfg.SpawnStarted(ctx);
 Live parameter updates are explicit and lazy:
 
 ```angelscript
-ParamRef@ liveText = inst.Pin(textPin);
-liveText.SetString("FPS: 120");
+inst.Set(textPin, "FPS: 120");
 inst.Step(ctx);
+
+// High-frequency Set + Step path.
+inst.StepSet(ctx, textPin, "FPS: 121");
 ```
+
+`BBConfig.EnsureSpawned(ctx)` and `EnsureStarted(ctx)` reuse the current live `BBInstance@` when possible, so setup code can be idempotent. `BBConfig.Instance()` returns the current instance or `null` with a clear error. `BBConfig.Explain()` and `BBInstance.Explain()` return multi-line diagnostics for metadata, source wiring, target, and current runtime errors.
 
 `BBSlot` records the slot kind, index, name, parameter type, layout caps, and layout generation. Passing a `pout` slot to `Set()`, passing a pin slot to `SetSetting()`, or using a stale slot after a dynamic layout change fails with a targeted diagnostic. The lower-level `BBPrototype.Call()` / `Spawn()` and raw index API remain available for generated code and performance-sensitive scripts.
 
@@ -97,7 +101,11 @@ Component metadata can inject the same v3 objects:
 class FpsOverlay {
     CK2dEntity@ target;
 
-    [bbconfig prototype="Interface/Text/2D Text"]
+    [bbconfig prototype="Interface/Text/2D Text"
+              target="target"
+              settings="Text Properties='Screen Proportionnal,WordWrap'"
+              pins="Text='FPS: ...'"
+              lifetime="component"]
     BBConfig@ text;
 
     BBInstance@ instance;
@@ -106,7 +114,13 @@ class FpsOverlay {
     BBSlot@ textPin;
 
     void Start(const CKBehaviorContext &in ctx) {
-        @instance = text.Target(target).Set(textPin, "Ready").SpawnStarted(ctx);
+        @instance = text.EnsureStarted(ctx);
+    }
+
+    void Update(const CKBehaviorContext &in ctx) {
+        if (instance !is null) {
+            instance.StepSet(ctx, textPin, "FPS: 120");
+        }
     }
 }
 ```
@@ -151,6 +165,12 @@ For IDE hints or script constants, generate a catalog from validation exports:
 python tools/generate_angelscript_catalog.py --validation-dir build/validation/ballance
 ```
 
+For scripts that use only a few BBs, ask the generator for selected wrappers instead of a large hand-written helper layer:
+
+```text
+python tools/generate_angelscript_catalog.py --validation-dir build/validation/ballance --selected-bb "Interface/Text/2D Text" --selected-bb "Interface/Fonts/Create System Font"
+```
+
 The generated hints keep the flat GUID functions and add ergonomic helper namespaces:
 
 ```angelscript
@@ -166,6 +186,8 @@ string flagsText = CKASCatalog::Flags::Render_Options::Text(ctx, flags);
 
 ParamOp@ add = CKASCatalog::OperationHints::Addition::Create(ctx);
 ```
+
+Selected wrappers expose a tiny class per requested BB with `Config(ctx)`, cached slot helpers, `EnsureStarted(ctx)`, and simple typed setters. They are optional; the runtime bridge still resolves everything from SDK prototype declarations.
 
 Generated names are sanitized deterministically; duplicate source names get numeric suffixes.
 
@@ -222,7 +244,7 @@ The bridge creates a real `CKParameterOperation`, binds `In1/In2` sources or lit
 
 - Runtime `BB.Call()` behavior is held by `BBResult` and deferred-destroyed after result release.
 - Runtime `BB.Spawn()` behavior is owned by `BBTask` and is destroyed by `Destroy()`, component reset, component delete, or bridge clear.
-- Runtime `BBConfig.Spawn()` behavior is owned by `BBInstance`. `Stop()` only stops/deactivates it, optionally pulsing the configured stop input; `Destroy()` releases the runtime behavior and owned source/operation links. Managed components stop instances on disable/pause and destroy them on reset/delete.
+- Runtime `BBConfig.Spawn()` behavior is owned by `BBInstance`. `Stop()` only stops/deactivates it, optionally pulsing the configured stop input; `Destroy()` releases the runtime behavior and owned source/operation links. Component metadata uses `lifetime="component"` by default: disable/deactivate/pause call `Stop()`, while reset/delete/script rebuild call `Destroy()`. `lifetime="manual"` leaves cleanup to the script.
 - `GraphTask` never owns the watched behavior; component reset/delete only cancels the watch.
 - Component pause pauses bridge-owned tasks and watches; it does not mutate external graphs.
 

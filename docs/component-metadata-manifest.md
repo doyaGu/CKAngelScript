@@ -90,10 +90,14 @@ Recognized keys:
 - `slot`, `slotKind`: one of `input`, `output`, `pin`, `pout`, `setting`, or `local`
 - `slotName`, `input`, `output`, `pin`, `pout`, `setting`, `local`: slot selector for `BBSlot@`
 - `occurrence`: duplicate-name occurrence for `BBSlot@`
-- `managed`: for `BBConfig@`; defaults to `true`. Component disable/deactivate/pause stops the latest owned `BBInstance@`; component reset/delete or script rebuild destroys it. Use `managed=false` only when the script deliberately owns cleanup.
+- `lifetime`: for `BBConfig@`; `component` (default) lets the Component stop the latest owned `BBInstance@` on disable/deactivate/pause and destroy it on reset/delete/script rebuild. `manual` leaves cleanup to the script. `managed=true/false` is still accepted as a legacy alias.
+- `owner`, `target`: object source for `BBConfig@`; accepted values include a public object field name, `$owner`, `$target`, and `$level`
 - `start`, `stop`: for `BBSlot@` input fields, mark the config's default start/stop input; for `BBConfig@`, legacy input-name defaults are still accepted
 - `required`: comma/semicolon/pipe separated required slots for `BBConfig@`, such as `in:On,pin:Text,pout:Font Created,setting:Text Properties`
-- `inputs`, `outputs`, `pins`, `pouts`, `locals`, `requiredSettings`: shorthand required slot lists for `BBConfig@`
+- `inputs`, `outputs`, `pins`, `pouts`, `locals`, `requiredSettings`: shorthand required slot lists for `BBConfig@`; `pins` and `settings` also accept semicolon-separated `Name='value'` entries
+- `sources`: semicolon-separated `Pin<-Field.Pout` or `Pin<-ParamRefField` source wiring for `BBConfig@`; the right side resolves during autostart/auto-step, so source configs declared earlier can create their instances first
+- `autostart`: when true, the Component calls `EnsureStarted(ctx)` before the first `Update`
+- `step`: `manual` (default), `eachUpdate`, or `onChange`
 
 ## Manifest Syntax
 
@@ -105,10 +109,9 @@ param field=Target type=3dentity name="Target"
 behavior field=OpenGraph param="Open Graph"
 bb field=DelayBB param="Delay BB" default="Logics/Time/Timer"
 param field=TextBB type=bbdecl param="Text BB" default="Interface/Text/2D Text"
-bbconfig field=TextConfig prototype="Interface/Text/2D Text"
+bbconfig field=TextConfig prototype="Interface/Text/2D Text" settings="Text Properties='Screen Proportionnal,WordWrap'" pins="Text='Ready'" lifetime=component
 bbslot field=TextOn from=TextConfig input=On start
 bbslot field=TextPin from=TextConfig pin=Text
-bbslot field=TextProperties from=TextConfig setting="Text Properties" value="Screen Proportionnal,WordWrap"
 bb field=ExistingDelayPrototype type=behavior param="Existing Delay"
 ```
 
@@ -166,13 +169,13 @@ Object metadata can use editor type aliases such as `object`, `behavior`, `3dent
 
 `BBDecl@` uses the same string/GUID/behavior source rules as `BBPrototype@`, but exposes real prototype metadata and the v3 layout API. `BBSlot@` binds a setup-time slot from a `BBConfig@` through `from="ConfigField"` or from a standalone prototype query. Prefer `from` because the slot can register `start`, `stop`, `default`, and `value` metadata with the owning config automatically.
 
-`BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, receives declarative `BBSlot@` metadata, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(ctx)` or `SpawnStarted(ctx)`. Parameters not mentioned by a `BBSlot@` keep the SDK/prototype defaults.
+`BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, receives declarative metadata, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(ctx)`, `SpawnStarted(ctx)`, `EnsureSpawned(ctx)`, or `EnsureStarted(ctx)`. Parameters not mentioned by metadata or `BBSlot@` keep the SDK/prototype defaults.
 
 ```angelscript
 class HudText {
     CK2dEntity@ Target;
 
-    [bbconfig prototype="Interface/Text/2D Text"]
+    [bbconfig prototype="Interface/Text/2D Text" target="Target" settings="Text Properties='Screen Proportionnal,WordWrap'" pins="Text='Ready'" lifetime="component"]
     BBConfig@ Text;
 
     BBInstance@ TextInstance;
@@ -180,23 +183,19 @@ class HudText {
     [bbslot from="Text" pin="Text"]
     BBSlot@ TextText;
 
-    [bbslot from="Text" pin="Offset" default="0,0"]
-    BBSlot@ TextOffset;
-
     void Start(const CKBehaviorContext &in ctx) {
-        @TextInstance = Text.Target(Target)
-            .Set(TextText, "Ready")
-            .SpawnStarted(ctx);
+        @TextInstance = Text.EnsureStarted(ctx);
     }
 
     void Update(const CKBehaviorContext &in ctx) {
-        TextInstance.Pin(TextText).SetString("Running");
-        TextInstance.Step(ctx);
+        TextInstance.StepSet(ctx, TextText, "Running");
     }
 }
 ```
 
-`BBConfig@` is managed by default. This does not autostart the BB. It means the Component calls `Stop()` on the latest `BBInstance@` during disable/deactivate/pause and calls `Destroy()` during reset/delete or script object rebuild. `Stop()` leaves the runtime behavior alive so it can be restarted; `Destroy()` releases the runtime behavior and owned source/operation links. If a `BBSlot@` marks an input with `start`, `BBInstance.Start()` uses it automatically. If a `BBSlot@` marks an input with `stop`, `BBInstance.Stop()` pulses it before deactivating the behavior. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
+`BBConfig@` uses `lifetime="component"` by default. This does not autostart the BB unless `autostart=true` is declared. Component lifetime stops instances on disable/deactivate/pause and destroys them on reset/delete or script object rebuild. `Stop()` leaves the runtime behavior alive so it can be restarted; `Destroy()` releases the runtime behavior and owned source/operation links. If a `BBSlot@` marks an input with `start`, `BBInstance.Start()` uses it automatically. If a `BBSlot@` marks an input with `stop`, `BBInstance.Stop()` pulses it before deactivating the behavior. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
+
+`autostart=true` calls `EnsureStarted(ctx)` before the first script `Update`. `step="eachUpdate"` steps the live instance after every script `Update`; `step="onChange"` steps only after the Component reinjects changed metadata or parameter-derived config. Manual script calls to `BBConfig.Set(...)` or `BBInstance.Set(...)` should still step explicitly.
 
 `ParamTypeInfo@` injects the runtime CK parameter type metadata for the connected input source. It is useful when a component accepts plugin-defined or enum/flags parameters and wants to expose `Name()`, `Guid()`, `Describe()`, `Enum()`, `Flags()`, or `Struct()` without guessing the data layout.
 
