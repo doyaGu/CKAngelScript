@@ -26,6 +26,9 @@ set(CKAS_HEADERS
         ScriptParameterRegistry.h
         ScriptRefCounted.h
         ScriptBehaviorBridge.h
+        ScriptComponentMetadata.h
+        ScriptComponentInjection.h
+        ScriptComponentAutomation.h
         ScriptBridgeCommon.h
         ScriptBridgeHandles.h
         ScriptBridgeParameterIO.h
@@ -40,6 +43,9 @@ set(CKAS_SOURCES
         AngelScriptLoader.cpp
         AngelScriptRunner.cpp
         AngelScriptComponent.cpp
+        ScriptComponentMetadata.cpp
+        ScriptComponentInjection.cpp
+        ScriptComponentAutomation.cpp
         ScriptInfo.cpp
         ScriptFormat.cpp
         ScriptNativePointer.cpp
