@@ -979,6 +979,11 @@ BBInstance *BBConfig::SpawnStarted(const CKBehaviorContext &ctx) {
     if (!instance->Start()) {
         SetError(instance->Error());
         SetScriptException(m_Error);
+        instance->Destroy();
+        if (m_Instance == instance) {
+            m_Instance->Release();
+            m_Instance = nullptr;
+        }
         instance->Release();
         return nullptr;
     }
