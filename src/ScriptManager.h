@@ -73,6 +73,11 @@ enum class ScriptComponentBBStepPolicy {
     OnChange
 };
 
+enum class ScriptComponentBBConfigLifetime {
+    Component,
+    Manual
+};
+
 struct ScriptComponentBinding {
     std::string FieldName;
     std::string ParameterName;
@@ -90,8 +95,8 @@ struct ScriptComponentBinding {
     int SlotOccurrence = 0;
     CKDWORD SlotMetadataFlags = 0;
     std::string SlotValue;
-    bool ManagedBBConfig = false;
-    bool HasManagedBBConfig = false;
+    ScriptComponentBBConfigLifetime BBConfigLifetime = ScriptComponentBBConfigLifetime::Component;
+    bool HasBBConfigLifetime = false;
     std::string BindingStartInput;
     std::string BindingStopInput;
     std::vector<ScriptComponentRequiredSlot> RequiredSlots;
@@ -105,6 +110,7 @@ struct ScriptComponentBinding {
     bool HasAutoStartBBConfig = false;
     bool HasBBStepPolicy = false;
     bool BBConfigChanged = false;
+    std::string MetadataError;
 
     ScriptComponentBindingKind Kind = ScriptComponentBindingKind::Auto;
     CKGUID ParameterGuid;

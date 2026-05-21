@@ -524,8 +524,8 @@ public:
 
     void SetDefaultStart(const std::string &inputName);
     void SetDefaultStop(const std::string &inputName);
-    void SetManaged(bool managed);
-    bool IsManaged() const;
+    void SetComponentLifetime(bool componentLifetime);
+    bool UsesComponentLifetime() const;
     bool RegisterSlot(BBSlot *slot);
 
 private:
@@ -563,7 +563,7 @@ private:
     BBInstance *m_Instance = nullptr;
     std::string m_DefaultStartInput;
     std::string m_DefaultStopInput;
-    bool m_Managed = false;
+    bool m_ComponentLifetime = false;
 };
 
 class BBInstance final : public RefCounted {

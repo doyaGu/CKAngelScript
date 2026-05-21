@@ -558,6 +558,14 @@ std::string BindingKindName(ScriptComponentBindingKind kind) {
     }
 }
 
+bool UsesComponentLifetime(const ScriptComponentBinding &binding) {
+    return binding.BBConfigLifetime == ScriptComponentBBConfigLifetime::Component;
+}
+
+std::string BBConfigLifetimeText(const ScriptComponentBinding &binding) {
+    return UsesComponentLifetime(binding) ? "component" : "manual";
+}
+
 std::string BindingSummary(const ScriptComponentBinding &binding, CKContext *context = nullptr) {
     std::ostringstream out;
     out << "field='" << binding.FieldName << "'"
@@ -576,7 +584,7 @@ std::string BindingSummary(const ScriptComponentBinding &binding, CKContext *con
             << ", occurrence=" << binding.SlotOccurrence;
     } else if (binding.Kind == ScriptComponentBindingKind::BBConfig) {
         out << ", prototype='" << (binding.SlotPrototypeName.empty() ? "<parameter/default>" : binding.SlotPrototypeName) << "'"
-            << ", managed=" << (binding.ManagedBBConfig ? "true" : "false");
+            << ", lifetime=" << BBConfigLifetimeText(binding);
         if (!binding.BindingStartInput.empty()) {
             out << ", start='" << binding.BindingStartInput << "'";
         }
@@ -809,6 +817,35 @@ bool IsBBConfigFragmentKeyword(const std::string &keyword) {
            key == "bbsource";
 }
 
+bool IsBBConfigFragmentCommonOption(const std::string &key) {
+    return key == "field" ||
+           key == "member" ||
+           key == "property" ||
+           key == "from" ||
+           key == "config" ||
+           key == "bbconfig";
+}
+
+std::string StripBBConfigFragmentCommonOptions(const std::string &args) {
+    const std::vector<std::string> tokens = TokenizeArguments(args);
+    std::string stripped;
+    for (std::size_t i = 0; i < tokens.size();) {
+        if (i + 2 < tokens.size() && tokens[i + 1] == "=") {
+            const std::string key = ToLower(StripQuotes(tokens[i]));
+            if (IsBBConfigFragmentCommonOption(key)) {
+                i += 3;
+                continue;
+            }
+        }
+        if (!stripped.empty()) {
+            stripped += " ";
+        }
+        stripped += tokens[i];
+        ++i;
+    }
+    return stripped;
+}
+
 std::string BBConfigFragmentSlotKind(const std::string &keyword) {
     const std::string key = ToLower(keyword);
     if (key == "bbinput" || key == "bbin") {
@@ -836,12 +873,13 @@ bool ApplyBBConfigFragmentMetadata(const std::string &keyword,
                                    const std::string &args,
                                    ScriptComponentBinding &binding) {
     const std::string lowerKeyword = ToLower(keyword);
+    const std::string fragmentArgs = StripBBConfigFragmentCommonOptions(args);
     if (lowerKeyword == "bbsource") {
-        if (FindUnquoted(args, "<-") != std::string::npos) {
-            AddConfigSourceSlots(binding, args);
+        if (FindUnquoted(fragmentArgs, "<-") != std::string::npos) {
+            AddConfigSourceSlots(binding, fragmentArgs);
             return true;
         }
-        const std::vector<std::string> tokens = TokenizeArguments(args);
+        const std::vector<std::string> tokens = TokenizeArguments(fragmentArgs);
         bool added = false;
         for (std::size_t i = 0; i + 2 < tokens.size();) {
             if (tokens[i + 1] == "=") {
@@ -861,15 +899,15 @@ bool ApplyBBConfigFragmentMetadata(const std::string &keyword,
     }
 
     if (slotKind == "pin") {
-        AddNamedSlotValues(binding, binding.ConfigPinValues, "pin", args);
+        AddNamedSlotValues(binding, binding.ConfigPinValues, "pin", fragmentArgs);
         return true;
     }
     if (slotKind == "setting") {
-        AddNamedSlotValues(binding, binding.ConfigSettingValues, "setting", args);
+        AddNamedSlotValues(binding, binding.ConfigSettingValues, "setting", fragmentArgs);
         return true;
     }
 
-    AddRequiredSlotDeclaration(binding, slotKind, args);
+    AddRequiredSlotDeclaration(binding, slotKind, fragmentArgs);
     return true;
 }
 
@@ -919,8 +957,8 @@ bool ParseBindingMetadata(const std::string &metadata,
     binding.SlotOccurrence = 0;
     binding.SlotMetadataFlags = 0;
     binding.SlotValue.clear();
-    binding.ManagedBBConfig = false;
-    binding.HasManagedBBConfig = false;
+    binding.BBConfigLifetime = ScriptComponentBBConfigLifetime::Component;
+    binding.HasBBConfigLifetime = false;
     binding.BindingStartInput.clear();
     binding.BindingStopInput.clear();
     binding.RequiredSlots.clear();
@@ -934,6 +972,7 @@ bool ParseBindingMetadata(const std::string &metadata,
     binding.HasAutoStartBBConfig = false;
     binding.HasBBStepPolicy = false;
     binding.BBConfigChanged = false;
+    binding.MetadataError.clear();
 
     const std::string lowerKeyword = ToLower(keyword);
     if (lowerKeyword == "behavior") {
@@ -984,12 +1023,18 @@ bool ParseBindingMetadata(const std::string &metadata,
             } else if (key == "target") {
                 binding.BBConfigTargetExpression = value;
             } else if (key == "managed") {
-                binding.ManagedBBConfig = ParseBoolText(value, true);
-                binding.HasManagedBBConfig = true;
+                binding.MetadataError = "Component BBConfig metadata key 'managed' was removed. Use lifetime=\"component\" or lifetime=\"manual\".";
             } else if (key == "lifetime") {
                 const std::string lifetime = ToLower(value);
-                binding.ManagedBBConfig = lifetime != "manual";
-                binding.HasManagedBBConfig = true;
+                if (lifetime == "manual") {
+                    binding.BBConfigLifetime = ScriptComponentBBConfigLifetime::Manual;
+                    binding.HasBBConfigLifetime = true;
+                } else if (lifetime == "component" || lifetime.empty()) {
+                    binding.BBConfigLifetime = ScriptComponentBBConfigLifetime::Component;
+                    binding.HasBBConfigLifetime = true;
+                } else {
+                    binding.MetadataError = "Component BBConfig lifetime must be 'component' or 'manual', got '" + value + "'.";
+                }
             } else if (key == "autostart" || key == "auto_start") {
                 binding.AutoStartBBConfig = ParseBoolText(value, true);
                 binding.HasAutoStartBBConfig = true;
@@ -1221,9 +1266,12 @@ void MergeBBConfigBinding(ScriptComponentBinding &target, const ScriptComponentB
     if (!source.BBConfigTargetExpression.empty()) {
         target.BBConfigTargetExpression = source.BBConfigTargetExpression;
     }
-    if (source.HasManagedBBConfig) {
-        target.ManagedBBConfig = source.ManagedBBConfig;
-        target.HasManagedBBConfig = true;
+    if (source.HasBBConfigLifetime) {
+        target.BBConfigLifetime = source.BBConfigLifetime;
+        target.HasBBConfigLifetime = true;
+    }
+    if (!source.MetadataError.empty()) {
+        target.MetadataError = source.MetadataError;
     }
     if (source.HasAutoStartBBConfig) {
         target.AutoStartBBConfig = source.AutoStartBBConfig;
@@ -1341,8 +1389,12 @@ bool ResolveComponentBinding(asIScriptEngine *engine,
         if (binding.Kind == ScriptComponentBindingKind::Auto) {
             binding.Kind = inferred;
         }
-        if (binding.Kind == ScriptComponentBindingKind::BBConfig && !binding.HasManagedBBConfig) {
-            binding.ManagedBBConfig = true;
+        if (!binding.MetadataError.empty()) {
+            error = binding.MetadataError + " (" + BindingSummary(binding, context) + ").";
+            return false;
+        }
+        if (binding.Kind == ScriptComponentBindingKind::BBConfig && !binding.HasBBConfigLifetime) {
+            binding.BBConfigLifetime = ScriptComponentBBConfigLifetime::Component;
         }
 
         std::string expected;
@@ -1774,12 +1826,12 @@ CKBeObject *ResolveBBConfigObjectExpression(ScriptComponentState *state,
     return GetBeObjectFieldByName(state, text);
 }
 
-void StopManagedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
+void StopComponentLifetimeBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
     if (!state || !state->Object) {
         return;
     }
     for (const ScriptComponentBinding &binding : state->Bindings) {
-        if (!binding.ManagedBBConfig) {
+        if (!UsesComponentLifetime(binding)) {
             continue;
         }
         BBConfig *bbinding = GetBBConfigField(state, binding);
@@ -1789,12 +1841,12 @@ void StopManagedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentSt
     }
 }
 
-void DestroyManagedBBConfigs(ScriptComponentState *state) {
+void DestroyComponentLifetimeBBConfigs(ScriptComponentState *state) {
     if (!state || !state->Object) {
         return;
     }
     for (const ScriptComponentBinding &binding : state->Bindings) {
-        if (!binding.ManagedBBConfig) {
+        if (!UsesComponentLifetime(binding)) {
             continue;
         }
         BBConfig *bbinding = GetBBConfigField(state, binding);
@@ -2228,7 +2280,7 @@ BBConfig *CreateBBConfigFromBinding(ScriptBehaviorBridge *bridge,
         return nullptr;
     }
 
-    bbinding->SetManaged(binding.ManagedBBConfig);
+    bbinding->SetComponentLifetime(UsesComponentLifetime(binding));
     bbinding->SetDefaultStart(binding.BindingStartInput);
     bbinding->SetDefaultStop(binding.BindingStopInput);
     if (!binding.BBConfigOwnerExpression.empty()) {
@@ -2693,7 +2745,7 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                 const CK_ID sourceId = behaviorSource ? behaviorSource->GetID() : 0;
                 const std::string cacheText = std::to_string(sourceId) + "|" + sourceText + "|" + binding.SlotPrototypeName + "|" +
                     binding.BindingStartInput + "|" + binding.BindingStopInput + "|" +
-                    (binding.ManagedBBConfig ? "managed" : "unmanaged") + "|" + binding.BBConfigOwnerExpression + "|" +
+                    "lifetime=" + BBConfigLifetimeText(binding) + "|" + binding.BBConfigOwnerExpression + "|" +
                     binding.BBConfigTargetExpression + "|" + std::to_string(binding.AutoStartBBConfig ? 1 : 0) + "|" +
                     std::to_string(static_cast<int>(binding.BBStepPolicy)) + requiredText + valueText + sourceBindingText;
                 if (!initial && binding.HandleInjected && binding.LastTextValue == cacheText) {
@@ -3142,7 +3194,7 @@ bool DisableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *
         return false;
     }
 
-    StopManagedBBConfigs(behcontext, state);
+    StopComponentLifetimeBBConfigs(behcontext, state);
     state->InstanceEnabled = false;
     return true;
 }
@@ -3154,7 +3206,7 @@ void DestroyInstance(const CKBehaviorContext &behcontext, ScriptComponentState *
 
     DisableInstance(behcontext, state);
     InvokeLifecycle(behcontext.Behavior, state, state->OnDestroy, behcontext, "OnDestroy");
-    DestroyManagedBBConfigs(state);
+    DestroyComponentLifetimeBBConfigs(state);
 }
 
 void SyncErrorOutputParameters(CKBehavior *beh) {
@@ -3212,7 +3264,7 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     if (binding.Kind != ScriptComponentBindingKind::BBConfig ||
         binding.FieldName != "TextConfig" ||
         binding.SlotPrototypeName != "Interface/Text/2D Text" ||
-        !binding.ManagedBBConfig ||
+        binding.BBConfigLifetime != ScriptComponentBBConfigLifetime::Component ||
         binding.ConfigPinValues.size() != 1 ||
         binding.ConfigPinValues[0].Name != "Text" ||
         binding.ConfigPinValues[0].Value != "FPS: ..." ||
@@ -3239,6 +3291,68 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     }
     if (!sawOutput || !sawPout || !sawFontPin || !sawSetting) {
         error = "Component metadata self-test missed required slot fragments.";
+        return false;
+    }
+
+    ScriptComponentBinding legacyManaged;
+    if (!AngelScriptComponentInternal::ParseBindingMetadata(
+            "bbconfig prototype=\"Interface/Text/2D Text\" managed=true",
+            "LegacyConfig",
+            legacyManaged)) {
+        error = "Component metadata self-test failed to parse legacy managed= diagnostic metadata.";
+        return false;
+    }
+    if (legacyManaged.MetadataError.find("lifetime=\"component\"") == std::string::npos ||
+        legacyManaged.MetadataError.find("lifetime=\"manual\"") == std::string::npos) {
+        error = "Component metadata self-test did not reject managed= with a lifetime replacement diagnostic.";
+        return false;
+    }
+
+    std::vector<ScriptComponentBinding> aggregateBindings;
+    auto addAggregateMetadata = [&](const std::string &metadata) -> bool {
+        ScriptComponentBinding aggregateBinding;
+        if (!AngelScriptComponentInternal::ParseBindingMetadata(metadata, "AggregateConfig", aggregateBinding)) {
+            error = "Component metadata self-test failed to parse aggregate metadata '" + metadata + "'.";
+            return false;
+        }
+        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(aggregateBindings, aggregateBinding);
+        return true;
+    };
+    if (!addAggregateMetadata("bbconfig prototype=\"Interface/Text/2D Text\" pins=\"Text='Aggregate'\" settings=\"Text Properties='Screen Proportionnal'\" sources=\"Font<-FontConfig.Font Created\"") ||
+        !addAggregateMetadata("bbpin \"Text\"=\"Fragment\"")) {
+        return false;
+    }
+    if (aggregateBindings.size() != 1 ||
+        aggregateBindings[0].ConfigPinValues.size() != 2 ||
+        aggregateBindings[0].ConfigPinValues.back().Name != "Text" ||
+        aggregateBindings[0].ConfigPinValues.back().Value != "Fragment" ||
+        aggregateBindings[0].ConfigSettingValues.size() != 1 ||
+        aggregateBindings[0].ConfigSources.size() != 1) {
+        error = "Component metadata self-test did not preserve aggregate metadata with fragment overwrite order.";
+        return false;
+    }
+
+    std::vector<ScriptComponentBinding> manifestBindings;
+    for (const std::string &line : {
+             std::string("bbconfig field=ManifestConfig prototype=\"Interface/Text/2D Text\" lifetime=manual pins=\"Text='Aggregate'\""),
+             std::string("bbpin field=ManifestConfig \"Text\"=\"Fragment\""),
+             std::string("bbsetting field=ManifestConfig \"Text Properties\"=\"Screen Proportionnal\""),
+             std::string("bbsource field=ManifestConfig \"Font\"=\"FontConfig.Font Created\"")}) {
+        ScriptComponentBinding manifestBinding;
+        if (!AngelScriptComponentInternal::ParseManifestLine(line, manifestBinding)) {
+            error = "Component metadata self-test failed to parse manifest line '" + line + "'.";
+            return false;
+        }
+        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(manifestBindings, manifestBinding);
+    }
+    if (manifestBindings.size() != 1 ||
+        manifestBindings[0].BBConfigLifetime != ScriptComponentBBConfigLifetime::Manual ||
+        manifestBindings[0].ConfigPinValues.size() != 2 ||
+        manifestBindings[0].ConfigPinValues.back().Name != "Text" ||
+        manifestBindings[0].ConfigPinValues.back().Value != "Fragment" ||
+        manifestBindings[0].ConfigSettingValues.size() != 1 ||
+        manifestBindings[0].ConfigSources.size() != 1) {
+        error = "Component metadata self-test did not merge manifest BBConfig fragments correctly.";
         return false;
     }
 
@@ -3443,7 +3557,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         case CKM_BEHAVIORRESET: {
             state = AngelScriptComponentInternal::GetState(behcontext);
             if (state) {
-                AngelScriptComponentInternal::DestroyManagedBBConfigs(state);
+                AngelScriptComponentInternal::DestroyComponentLifetimeBBConfigs(state);
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->ResetComponentTasks(beh->GetID());
                 }

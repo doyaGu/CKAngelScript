@@ -680,7 +680,7 @@ std::string BBConfig::Describe() const {
 std::string BBConfig::Explain() const {
     std::string text = Describe();
     text += fmt::format("\nValid: {}", IsValid() ? "true" : "false");
-    text += fmt::format("\nLifetime: {}", m_Managed ? "component" : "manual");
+    text += fmt::format("\nLifetime: {}", m_ComponentLifetime ? "component" : "manual");
     text += fmt::format("\nPending pins: {}", m_Request.IndexedParameters.size());
     text += fmt::format("\nPending settings: {}", m_Request.IndexedSettings.size());
     text += fmt::format("\nPending sources: {}", m_Request.SourceParameters.size());
@@ -1112,12 +1112,12 @@ void BBConfig::SetDefaultStop(const std::string &inputName) {
     m_DefaultStopInput = inputName;
 }
 
-void BBConfig::SetManaged(bool managed) {
-    m_Managed = managed;
+void BBConfig::SetComponentLifetime(bool componentLifetime) {
+    m_ComponentLifetime = componentLifetime;
 }
 
-bool BBConfig::IsManaged() const {
-    return m_Managed;
+bool BBConfig::UsesComponentLifetime() const {
+    return m_ComponentLifetime;
 }
 
 bool BBConfig::RegisterSlot(BBSlot *slot) {
