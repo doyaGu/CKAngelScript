@@ -62,7 +62,6 @@ set(CKAS_SOURCES
         ScriptBridgeCommon.cpp
         ScriptBridgeParameterIO.cpp
         ScriptBridgeRegistration.cpp
-        ScriptBridgeSelfTest.cpp
         ScriptBridgeParams.cpp
         ScriptBridgeBehavior.cpp
         ScriptBridgeGraph.cpp
@@ -72,8 +71,16 @@ set(CKAS_SOURCES
         AngelScript.rc
 )
 
+if (CKAS_BUILD_SELF_TESTS)
+    list(APPEND CKAS_SOURCES ScriptBridgeSelfTest.cpp)
+endif ()
+
 add_library(CKAngelScript SHARED ${CKAS_SOURCES} ${CKAS_HEADERS})
 set_target_properties(CKAngelScript PROPERTIES OUTPUT_NAME "AngelScript")
+
+target_compile_definitions(CKAngelScript PRIVATE
+        CKAS_BUILD_SELF_TESTS=$<BOOL:${CKAS_BUILD_SELF_TESTS}>
+)
 
 target_include_directories(CKAngelScript
         PUBLIC

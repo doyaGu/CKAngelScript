@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.12)
 
 project(CKAngelScript VERSION 0.1.0.0)
 
+option(CKAS_BUILD_SELF_TESTS "Build optional AngelScript startup self-test support" OFF)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED NO)
 set(CMAKE_CXX_EXTENSIONS YES)

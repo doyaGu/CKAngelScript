@@ -38,6 +38,10 @@
 #include "add_on/scriptgrid/scriptgrid.h"
 #include "add_on/datetime/datetime.h"
 
+#ifndef CKAS_BUILD_SELF_TESTS
+#define CKAS_BUILD_SELF_TESTS 0
+#endif
+
 namespace ScriptManagerInternal {
 
 bool IsTruthyEnvironmentValue(const char *name) {
@@ -122,6 +126,15 @@ CKERROR ScriptManager::RunStartupSelfTests() {
         return CK_OK;
     }
     m_StartupSelfTestsAttempted = true;
+
+#if !CKAS_BUILD_SELF_TESTS
+    constexpr const char *message = "Startup self-tests were not compiled. Configure with -DCKAS_BUILD_SELF_TESTS=ON to enable them.";
+    if (m_Context) {
+        m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), message);
+    }
+    ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "disabled", message);
+    return CKERR_INVALIDOPERATION;
+#else
     ScriptManagerInternal::WriteStartupSelfTestMarker("running", "start", std::string());
 
     std::string conversionError;
@@ -162,6 +175,7 @@ CKERROR ScriptManager::RunStartupSelfTests() {
         return CKERR_INVALIDOPERATION;
     }
     return CK_OK;
+#endif
 }
 
 CKERROR ScriptManager::OnCKEnd() {
