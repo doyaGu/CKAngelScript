@@ -1227,6 +1227,16 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
         return layout;
     }
     CKObjectDeclaration *decl = prototype->GetSoureObjectDeclaration();
+    if (!decl || decl->GetManagerNeededCount() == 0) {
+        const CKGUID guid = prototype->GetGuid();
+        for (int i = 0; i < CKGetPrototypeDeclarationCount(); ++i) {
+            CKObjectDeclaration *candidate = CKGetPrototypeDeclaration(i);
+            if (candidate && candidate->GetGuid() == guid) {
+                decl = candidate;
+                break;
+            }
+        }
+    }
     layout.Name = SafeString(prototype->GetName());
     layout.Category = decl ? SafeString(decl->GetCategory()) : std::string();
     layout.QualifiedName = layout.Category.empty() ? layout.Name : layout.Category + "/" + layout.Name;
