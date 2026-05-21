@@ -628,6 +628,9 @@ BBTask *BBConfig::Task() const {
 }
 
 BehaviorRef *BBConfig::Behavior() const {
+    if (m_Instance && m_Instance->IsValid()) {
+        return m_Instance->Behavior();
+    }
     return m_Task ? m_Task->Behavior() : nullptr;
 }
 
@@ -983,7 +986,15 @@ BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
         SetScriptException(m_Error);
         return nullptr;
     }
-    return new BBInstance(m_Bridge, ctx, m_Request, instanceId, generation);
+    if (m_Instance) {
+        m_Instance->Destroy();
+        m_Instance->Release();
+        m_Instance = nullptr;
+    }
+    BBInstance *instance = new BBInstance(m_Bridge, ctx, m_Request, instanceId, generation);
+    m_Instance = instance;
+    m_Instance->AddRef();
+    return instance;
 }
 
 BBTask *BBConfig::Start(const CKBehaviorContext &ctx) {
@@ -1096,6 +1107,9 @@ bool BBConfig::StopName(const CKBehaviorContext &ctx, const std::string &inputNa
 }
 
 bool BBConfig::StopSlot(const CKBehaviorContext &ctx, BBSlot *input) {
+    if (m_Instance && m_Instance->IsValid() && input) {
+        m_Instance->Start(input);
+    }
     if (m_Task && m_Task->IsAlive() && input) {
         m_Task->StepSlot(ctx, input);
     }
@@ -1109,6 +1123,11 @@ BBTask *BBConfig::Restart(const CKBehaviorContext &ctx) {
 
 bool BBConfig::Destroy() {
     ClearOwnedGraphLinks();
+    if (m_Instance) {
+        m_Instance->Destroy();
+        m_Instance->Release();
+        m_Instance = nullptr;
+    }
     if (!m_Task) {
         return true;
     }

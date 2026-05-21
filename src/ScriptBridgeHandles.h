@@ -556,6 +556,7 @@ private:
     std::vector<CachedSlot> m_Slots;
     std::vector<ParamSourceLinkRef *> m_SourceLinks;
     std::vector<ParamOperationRef *> m_Operations;
+    BBInstance *m_Instance = nullptr;
     BBTask *m_Task = nullptr;
     std::string m_DefaultStartInput;
     std::string m_DefaultStopInput;

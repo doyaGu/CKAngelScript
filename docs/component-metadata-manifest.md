@@ -88,8 +88,8 @@ Recognized keys:
 - `slot`, `slotKind`: one of `input`, `output`, `pin`, `pout`, `setting`, or `local`
 - `slotName`: slot name for `BBSlot@`
 - `occurrence`: duplicate-name occurrence for `BBSlot@`
-- `managed`: for `BBConfig@`; when true, Component lifecycle destroys the owned runtime task/config state during disable/reset/delete
-- `start`, `stop`: accepted for compatibility; v3 scripts should use explicit `BBInstance.Start(slot)` and `Destroy()`
+- `managed`: for `BBConfig@`; when true, Component lifecycle destroys the latest owned `BBInstance@` and any low-level runtime task during disable/reset/delete
+- `start`, `stop`: optional managed stop input names; v3 scripts should still create and start explicit `BBInstance@` objects
 - `required`: comma/semicolon/pipe separated required slots for `BBConfig@`, such as `in:On,pin:Text,pout:Font Created,setting:Text Properties`
 - `settings`: semicolon-separated `Name=Value` pre-create setting values for `BBConfig@`
 - `inputs`, `outputs`, `pins`, `pouts`, `locals`, `requiredSettings`: shorthand required slot lists for `BBConfig@`
@@ -199,7 +199,7 @@ class HudText {
 }
 ```
 
-`managed=true` does not autostart the BB. It means the Component destroys managed runtime state during disable/pause/reset/delete so the script does not leak runtime BB tasks. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
+`managed=true` does not autostart the BB. It means the Component destroys the latest `BBInstance@` created by that config, plus any low-level task state, during disable/pause/reset/delete so the script does not leak runtime BBs. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
 
 `ParamTypeInfo@` injects the runtime CK parameter type metadata for the connected input source. It is useful when a component accepts plugin-defined or enum/flags parameters and wants to expose `Name()`, `Guid()`, `Describe()`, `Enum()`, `Flags()`, or `Struct()` without guessing the data layout.
 
