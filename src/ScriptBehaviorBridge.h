@@ -25,6 +25,7 @@ class BehaviorLayout;
 class BBPrototype;
 class BBSpec;
 class BBSlot;
+class BBBinding;
 class BBResult;
 class BBTask;
 class GraphTask;

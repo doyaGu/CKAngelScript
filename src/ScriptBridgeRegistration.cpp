@@ -185,6 +185,26 @@ BBSpec *BBRequireByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
     return spec;
 }
 
+BBBinding *BBBindByName(const CKBehaviorContext &ctx, const std::string &query) {
+    BBBridge *bridge = BBFromContext(ctx);
+    if (!bridge) {
+        return nullptr;
+    }
+    BBBinding *binding = bridge->Bind(query);
+    bridge->Release();
+    return binding;
+}
+
+BBBinding *BBBindByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
+    BBBridge *bridge = BBFromContext(ctx);
+    if (!bridge) {
+        return nullptr;
+    }
+    BBBinding *binding = bridge->BindGuid(guid);
+    bridge->Release();
+    return binding;
+}
+
 ParamValue *ParamInt(int value) { return new ParamValue(MakeScriptParamInt(value)); }
 ParamValue *ParamFloat(float value) { return new ParamValue(MakeScriptParamFloat(value)); }
 ParamValue *ParamBool(bool value) { return new ParamValue(MakeScriptParamBool(value)); }
@@ -429,6 +449,7 @@ void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
     RegisterObjectTypeAndRefCount<BehaviorBridge>(engine, "BehaviorBridge");
     RegisterObjectTypeAndRefCount<BBSlot>(engine, "BBSlot");
     RegisterObjectTypeAndRefCount<BBSpec>(engine, "BBSpec");
+    RegisterObjectTypeAndRefCount<BBBinding>(engine, "BBBinding");
     RegisterObjectTypeAndRefCount<BBPrototype>(engine, "BBPrototype");
     RegisterObjectTypeAndRefCount<BBBridge>(engine, "BBBridge");
     RegisterObjectTypeAndRefCount<BBCallBuilder>(engine, "BBCallBuilder");
@@ -609,12 +630,62 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBSpec", "BehaviorLayout@ Layout() const", asMETHOD(BBSpec, Layout), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSpec", "BBCallBuilder@ Call()", asMETHOD(BBSpec, Call), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSpec", "BBTaskBuilder@ Spawn()", asMETHOD(BBSpec, Spawn), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBSpec", "BBBinding@ Bind()", asMETHOD(BBSpec, Bind), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSpec", "BBSlot@ In(const string &in name, int occurrence = 0) const", asMETHOD(BBSpec, In), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSpec", "BBSlot@ Out(const string &in name, int occurrence = 0) const", asMETHOD(BBSpec, Out), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSpec", "BBSlot@ Pin(const string &in name, int occurrence = 0) const", asMETHOD(BBSpec, Pin), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSpec", "BBSlot@ Pout(const string &in name, int occurrence = 0) const", asMETHOD(BBSpec, Pout), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSpec", "BBSlot@ Local(const string &in name, int occurrence = 0) const", asMETHOD(BBSpec, Local), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBSpec", "string Describe() const", asMETHOD(BBSpec, Describe), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("BBBinding", "bool IsValid() const", asMETHOD(BBBinding, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool get_valid() const", asMETHOD(BBBinding, IsValid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "string Error() const", asMETHOD(BBBinding, Error), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "string Describe() const", asMETHOD(BBBinding, Describe), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBSpec@ Spec() const", asMETHOD(BBBinding, Spec), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBTask@ Task() const", asMETHOD(BBBinding, Task), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BehaviorRef@ Behavior() const", asMETHOD(BBBinding, Behavior), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(BBBinding, Raise), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBSlot@ In(const string &in name, int occurrence = 0)", asMETHOD(BBBinding, In), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBSlot@ Out(const string &in name, int occurrence = 0)", asMETHOD(BBBinding, Out), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBSlot@ Pin(const string &in name, int occurrence = 0)", asMETHOD(BBBinding, Pin), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBSlot@ Pout(const string &in name, int occurrence = 0)", asMETHOD(BBBinding, Pout), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBSlot@ Local(const string &in name, int occurrence = 0)", asMETHOD(BBBinding, Local), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Owner(CKBeObject@ owner)", asMETHOD(BBBinding, Owner), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Target(CKBeObject@ target)", asMETHOD(BBBinding, Target), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(const string &in pin, ParamValue@ value)", asMETHOD(BBBinding, Set), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(const string &in pin, int value)", asMETHOD(BBBinding, SetInt), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(const string &in pin, float value)", asMETHOD(BBBinding, SetFloat), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(const string &in pin, bool value)", asMETHOD(BBBinding, SetBool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(const string &in pin, const string &in value)", asMETHOD(BBBinding, SetString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(const string &in pin, CKObject@ value)", asMETHOD(BBBinding, SetObject), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(BBSlot@ pin, ParamValue@ value)", asMETHOD(BBBinding, SetSlot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(BBSlot@ pin, int value)", asMETHOD(BBBinding, SetSlotInt), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(BBSlot@ pin, float value)", asMETHOD(BBBinding, SetSlotFloat), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(BBSlot@ pin, bool value)", asMETHOD(BBBinding, SetSlotBool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(BBSlot@ pin, const string &in value)", asMETHOD(BBBinding, SetSlotString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Set(BBSlot@ pin, CKObject@ value)", asMETHOD(BBBinding, SetSlotObject), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Source(const string &in pin, ParamRef@ source)", asMETHOD(BBBinding, Source), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Source(BBSlot@ pin, ParamRef@ source)", asMETHOD(BBBinding, SourceSlot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Operation(const string &in pin, ParamOp@ operation)", asMETHOD(BBBinding, Operation), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBBinding@ Operation(BBSlot@ pin, ParamOp@ operation)", asMETHOD(BBBinding, OperationSlot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBTask@ Start(const CKBehaviorContext &in ctx)", asMETHOD(BBBinding, Start), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBTask@ Start(const CKBehaviorContext &in ctx, const string &in input)", asMETHOD(BBBinding, StartName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBTask@ Start(const CKBehaviorContext &in ctx, BBSlot@ input)", asMETHOD(BBBinding, StartSlot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool Step(const CKBehaviorContext &in ctx)", asMETHOD(BBBinding, Step), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool Step(const CKBehaviorContext &in ctx, const string &in input)", asMETHOD(BBBinding, StepName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool Step(const CKBehaviorContext &in ctx, BBSlot@ input)", asMETHOD(BBBinding, StepSlot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool Stop(const CKBehaviorContext &in ctx)", asMETHOD(BBBinding, Stop), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool Stop(const CKBehaviorContext &in ctx, const string &in input)", asMETHOD(BBBinding, StopName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool Stop(const CKBehaviorContext &in ctx, BBSlot@ input)", asMETHOD(BBBinding, StopSlot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "BBTask@ Restart(const CKBehaviorContext &in ctx)", asMETHOD(BBBinding, Restart), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool Destroy()", asMETHOD(BBBinding, Destroy), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool OutputActive(const string &in output)", asMETHOD(BBBinding, OutputActive), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "bool OutputActive(BBSlot@ output)", asMETHOD(BBBinding, OutputActiveSlot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "ParamRef@ PinRef(const string &in pin)", asMETHOD(BBBinding, PinRef), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "ParamRef@ PinRef(BBSlot@ pin)", asMETHOD(BBBinding, PinRefSlot), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "ParamRef@ PoutRef(const string &in pout)", asMETHOD(BBBinding, PoutRef), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBinding", "ParamRef@ PoutRef(BBSlot@ pout)", asMETHOD(BBBinding, PoutRefSlot), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("BBPrototype", "bool IsValid() const", asMETHOD(BBPrototype, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBPrototype", "CKGUID GetGuid() const", asMETHOD(BBPrototype, GetGuid), asCALL_THISCALL); assert(r >= 0);
@@ -634,6 +705,8 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBBridge", "array<BBPrototype@>@ FindAll(const string &in query = \"\") const", asMETHOD(BBBridge, FindAll), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBBridge", "BBSpec@ Require(const string &in query) const", asMETHOD(BBBridge, Require), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBBridge", "BBSpec@ Require(CKGUID guid) const", asMETHOD(BBBridge, RequireGuid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBridge", "BBBinding@ Bind(const string &in query) const", asMETHOD(BBBridge, Bind), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("BBBridge", "BBBinding@ Bind(CKGUID guid) const", asMETHOD(BBBridge, BindGuid), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Owner(CKBeObject@ owner)", asMETHOD(BBCallBuilder, Owner), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Target(CKBeObject@ target)", asMETHOD(BBCallBuilder, Target), asCALL_THISCALL); assert(r >= 0);
@@ -738,6 +811,8 @@ void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("array<BBPrototype@>@ FindAll(const CKBehaviorContext &in ctx, const string &in query = \"\")", asFUNCTION(BBFindAll), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBSpec@ Require(const CKBehaviorContext &in ctx, const string &in query)", asFUNCTION(BBRequireByName), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBSpec@ Require(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBRequireByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BBBinding@ Bind(const CKBehaviorContext &in ctx, const string &in query)", asFUNCTION(BBBindByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BBBinding@ Bind(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBBindByGuid), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBCallByName), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBSpawnByName), asCALL_CDECL); assert(r >= 0);
 

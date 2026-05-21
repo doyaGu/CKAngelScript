@@ -42,7 +42,14 @@ enum class ScriptComponentBindingKind {
     BehaviorRef,
     BBPrototype,
     BBSpec,
-    BBSlot
+    BBSlot,
+    BBBinding
+};
+
+struct ScriptComponentRequiredSlot {
+    std::string KindName;
+    std::string Name;
+    int Occurrence = 0;
 };
 
 struct ScriptComponentBinding {
@@ -59,6 +66,10 @@ struct ScriptComponentBinding {
     std::string SlotKindName;
     std::string SlotName;
     int SlotOccurrence = 0;
+    bool ManagedBBBinding = false;
+    std::string BindingStartInput;
+    std::string BindingStopInput;
+    std::vector<ScriptComponentRequiredSlot> RequiredSlots;
 
     ScriptComponentBindingKind Kind = ScriptComponentBindingKind::Auto;
     CKGUID ParameterGuid;
@@ -213,6 +224,7 @@ public:
         return (m_Flags & AS_INITED) != 0;
     }
 
+    CKERROR RunStartupSelfTests();
     int Init();
     int Shutdown();
 
@@ -249,6 +261,7 @@ protected:
     std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > m_ComponentStates;
     std::unique_ptr<ScriptBehaviorBridge> m_BehaviorBridge;
     std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
+    bool m_StartupSelfTestsAttempted = false;
 };
 
 #endif // CK_SCRIPTMANAGER_H
