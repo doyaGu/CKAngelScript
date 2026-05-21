@@ -65,6 +65,9 @@ set(CKAS_SOURCES
         ScriptParameterConversion.cpp
         ScriptParameterRegistry.cpp
         ScriptBehaviorBridge.cpp
+        ScriptBridgeRuntime.cpp
+        ScriptBridgeLayoutCache.cpp
+        ScriptBridgeWatch.cpp
         ScriptBridgeCommon.cpp
         ScriptBridgeParameterIO.cpp
         ScriptBridgeRegistration.cpp
