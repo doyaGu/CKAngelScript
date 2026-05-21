@@ -28,7 +28,7 @@ std::vector<CKObjectDeclaration *> FindPrototypeDeclarations(const std::string &
     CKGUID parsed;
     if (!query.empty() && ParseScriptGuidString(query, parsed)) {
         if (CKBehaviorPrototype *prototype = CKGetPrototypeFromGuid(parsed)) {
-            if (CKObjectDeclaration *decl = prototype->GetSoureObjectDeclaration()) {
+            if (CKObjectDeclaration *decl = ResolvePrototypeDeclaration(prototype)) {
                 matches.push_back(decl);
             }
         }
@@ -486,7 +486,7 @@ std::string BBDecl::GetName() const {
 std::string BBDecl::GetCategory() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
-    CKObjectDeclaration *decl = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
+    CKObjectDeclaration *decl = ResolvePrototypeDeclaration(prototype);
     return decl ? SafeString(decl->GetCategory()) : std::string();
 }
 
@@ -523,21 +523,21 @@ CK_CLASSID BBDecl::CompatibleClassId() const {
     if (!prototype) {
         return 0;
     }
-    CKObjectDeclaration *decl = prototype->GetSoureObjectDeclaration();
+    CKObjectDeclaration *decl = ResolvePrototypeDeclaration(prototype);
     return decl ? decl->GetCompatibleClassId() : prototype->GetApplyToClassID();
 }
 
 int BBDecl::NeededManagerCount() const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
-    CKObjectDeclaration *decl = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
+    CKObjectDeclaration *decl = ResolvePrototypeDeclaration(prototype, true);
     return decl ? decl->GetManagerNeededCount() : 0;
 }
 
 CKGUID BBDecl::NeededManagerGuid(int index) const {
     std::string error;
     CKBehaviorPrototype *prototype = PrototypeObject(error);
-    CKObjectDeclaration *decl = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
+    CKObjectDeclaration *decl = ResolvePrototypeDeclaration(prototype, true);
     return decl && index >= 0 && index < decl->GetManagerNeededCount() ? decl->GetManagerNeeded(index) : CKGUID();
 }
 
@@ -2290,7 +2290,7 @@ std::string BBPrototype::GetName() const {
 std::string BBPrototype::GetCategory() const {
     std::string error;
     CKBehaviorPrototype *prototype = Prototype(error);
-    CKObjectDeclaration *decl = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
+    CKObjectDeclaration *decl = ResolvePrototypeDeclaration(prototype);
     return decl ? SafeString(decl->GetCategory()) : std::string();
 }
 

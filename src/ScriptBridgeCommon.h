@@ -16,6 +16,7 @@ CKObject *GetCKObjectById(CKContext *context, CK_ID id);
 ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object);
 bool BridgeObjectStampMatches(CKObject *object, const ScriptBridgeObjectStamp &stamp);
 CKObject *GetStampedCKObjectById(CKContext *context, CK_ID id, const ScriptBridgeObjectStamp &stamp);
+CKObjectDeclaration *ResolvePrototypeDeclaration(CKBehaviorPrototype *prototype, bool requireManagerMetadata = false);
 CKERROR CallBridgeBehaviorCallback(CKBehavior *behavior,
                                    CKDWORD message,
                                    const CKBehaviorContext *sourceContext = nullptr);

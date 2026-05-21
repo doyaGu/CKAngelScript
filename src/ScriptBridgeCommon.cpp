@@ -131,9 +131,32 @@ CKObject *GetStampedCKObjectById(CKContext *context, CK_ID id, const ScriptBridg
     return BridgeObjectStampMatches(object, stamp) ? object : nullptr;
 }
 
+CKObjectDeclaration *ResolvePrototypeDeclaration(CKBehaviorPrototype *prototype, bool requireManagerMetadata) {
+    if (!prototype) {
+        return nullptr;
+    }
+
+    CKObjectDeclaration *decl = prototype->GetSoureObjectDeclaration();
+    if (decl && (!requireManagerMetadata || decl->GetManagerNeededCount() > 0)) {
+        return decl;
+    }
+
+    const CKGUID guid = prototype->GetGuid();
+    for (int i = 0; i < CKGetPrototypeDeclarationCount(); ++i) {
+        CKObjectDeclaration *candidate = CKGetPrototypeDeclaration(i);
+        if (!candidate || candidate->GetGuid() != guid) {
+            continue;
+        }
+        if (!requireManagerMetadata || candidate->GetManagerNeededCount() > 0) {
+            return candidate;
+        }
+    }
+    return decl;
+}
+
 CKERROR CallBridgeBehaviorCallback(CKBehavior *behavior,
-                                          CKDWORD message,
-                                          const CKBehaviorContext *sourceContext) {
+                                   CKDWORD message,
+                                   const CKBehaviorContext *sourceContext) {
     if (!behavior) {
         return CKERR_INVALIDPARAMETER;
     }

@@ -504,7 +504,7 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
     }
 
     CKBehaviorPrototype *prototype = CKGetPrototypeFromGuid(guid);
-    CKObjectDeclaration *declaration = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
+    CKObjectDeclaration *declaration = ResolvePrototypeDeclaration(prototype, true);
     if (declaration) {
         for (int i = 0; i < declaration->GetManagerNeededCount(); ++i) {
             const CKGUID managerGuid = declaration->GetManagerNeeded(i);
@@ -1315,7 +1315,7 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         return nullptr;
     }
     CKBehaviorPrototype *prototype = CKGetPrototypeFromGuid(guid);
-    CKObjectDeclaration *declaration = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
+    CKObjectDeclaration *declaration = ResolvePrototypeDeclaration(prototype, true);
     if (declaration) {
         for (int i = 0; i < declaration->GetManagerNeededCount(); ++i) {
             const CKGUID managerGuid = declaration->GetManagerNeeded(i);
@@ -1728,17 +1728,7 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
     if (!prototype) {
         return layout;
     }
-    CKObjectDeclaration *decl = prototype->GetSoureObjectDeclaration();
-    if (!decl || decl->GetManagerNeededCount() == 0) {
-        const CKGUID guid = prototype->GetGuid();
-        for (int i = 0; i < CKGetPrototypeDeclarationCount(); ++i) {
-            CKObjectDeclaration *candidate = CKGetPrototypeDeclaration(i);
-            if (candidate && candidate->GetGuid() == guid) {
-                decl = candidate;
-                break;
-            }
-        }
-    }
+    CKObjectDeclaration *decl = ResolvePrototypeDeclaration(prototype, true);
     layout.Name = SafeString(prototype->GetName());
     layout.Category = decl ? SafeString(decl->GetCategory()) : std::string();
     layout.QualifiedName = layout.Category.empty() ? layout.Name : layout.Category + "/" + layout.Name;
