@@ -61,26 +61,22 @@ The bridge delegates type names, enum/flags text, object compatibility, and oper
 The v3 high-level BB model has three phases:
 
 1. `BBDecl@` discovers the real SDK prototype declaration and exposes metadata.
-2. `BBConfig@` stores pre-create settings, pin values, sources, operations, owner, and target.
+2. `BBConfig@` stores owner/target and pending slot-based values, sources, and operations.
 3. `BBInstance@` owns the runtime `CKBehavior` and steps or destroys it.
 
-Settings are separate from pins. `BBSlot` metadata can carry setting values and pin defaults; `BBConfig` applies those values before `CKM_BEHAVIORCREATE`, which is required for real BBs such as `2D Text`, `Text Display`, and `Move To` where settings create or retag runtime parameters.
+Settings are separate from pins. `BBConfig` uses the SDK/prototype defaults for every parameter that the script does not explicitly mention. If a script needs to override a value, connect a source, read an output parameter, or apply a pre-create setting, it declares a `BBSlot@`; the slot carries the parameter metadata and the bridge applies it at the correct point in the BB lifecycle.
 
 ```angelscript
 BBDecl@ textDecl = BB::Require(ctx, "Interface/Text/2D Text");
-BBSlot@ on = textDecl.Input("On");
 BBSlot@ textPin = textDecl.Pin("Text");
-BBSlot@ offsetPin = textDecl.Pin("Offset");
 BBSlot@ textProperties = textDecl.Setting("Text Properties");
 
 BBConfig@ cfg = textDecl.Configure()
     .Target(target)
     .SetSetting(textProperties, "Screen Proportionnal,WordWrap")
-    .Set(textPin, "FPS: ...")
-    .Set(offsetPin, Param::Vector2(Vx2DVector(0, 0)));
+    .Set(textPin, "FPS: ...");
 
-BBInstance@ inst = cfg.Spawn(ctx);
-inst.Start(on);
+BBInstance@ inst = cfg.SpawnStarted(ctx);
 ```
 
 Live parameter updates are explicit and lazy:
@@ -99,20 +95,16 @@ Component metadata can inject the same v3 objects:
 class FpsOverlay {
     CK2dEntity@ target;
 
-    [bbconfig prototype="Interface/Text/2D Text" managed=true]
+    [bbconfig prototype="Interface/Text/2D Text"]
     BBConfig@ text;
 
     BBInstance@ instance;
-
-    [bbslot from="text" input="On" start]
-    BBSlot@ on;
 
     [bbslot from="text" pin="Text"]
     BBSlot@ textPin;
 
     void Start(const CKBehaviorContext &in ctx) {
-        @instance = text.Target(target).Set(textPin, "Ready").Spawn(ctx);
-        instance.Start();
+        @instance = text.Target(target).Set(textPin, "Ready").SpawnStarted(ctx);
     }
 }
 ```
