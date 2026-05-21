@@ -69,6 +69,10 @@ bool ApplyIndexedLocalParameters(CKBehavior *behavior,
     return true;
 }
 
+bool BehaviorFlagSet(CKDWORD flags, CKDWORD flag) {
+    return (flags & flag) != 0;
+}
+
 } // namespace ScriptBehaviorBridgeInternal
 
 void ScriptBridgeSetIndexedValue(std::vector<ScriptBridgeIndexedValue> &values,
@@ -854,6 +858,20 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         state.Error = error;
         return nullptr;
     }
+    CKBehaviorPrototype *prototype = CKGetPrototypeFromGuid(guid);
+    CKObjectDeclaration *declaration = prototype ? prototype->GetSoureObjectDeclaration() : nullptr;
+    if (declaration) {
+        for (int i = 0; i < declaration->GetManagerNeededCount(); ++i) {
+            const CKGUID managerGuid = declaration->GetManagerNeeded(i);
+            if (!context->GetManagerByGuid(managerGuid)) {
+                state.Ok = false;
+                state.Error = fmt::format("Building Block '{}' requires manager {} which is not available.",
+                    SafeString(declaration->GetName()),
+                    GuidToString(managerGuid));
+                return nullptr;
+            }
+        }
+    }
 
     const std::string name = fmt::format("__CKAS_BB_{}_{}", request.ComponentId, m_NextRuntimeId++);
     CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, const_cast<CKSTRING>(name.c_str()), CK_OBJECTCREATION_DYNAMIC));
@@ -1140,6 +1158,11 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
         slot.Kind = ScriptBridgeSlotKind::Pin;
         slot.Index = i;
         slot.ParameterId = pin ? pin->GetID() : 0;
+        slot.Caps = 0;
+        SetScriptBridgeSlotCap(slot.Caps,
+                               ScriptBridgeSlotCaps::Dynamic,
+                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETERINPUTS) ||
+                                   ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS));
         slot.Name = SafeString(pin ? pin->GetName() : nullptr);
         slot.TypeGuid = pin ? pin->GetGUID() : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -1154,6 +1177,11 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
         slot.Kind = ScriptBridgeSlotKind::Pout;
         slot.Index = i;
         slot.ParameterId = param ? param->GetID() : 0;
+        slot.Caps = 0;
+        SetScriptBridgeSlotCap(slot.Caps,
+                               ScriptBridgeSlotCaps::Dynamic,
+                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETEROUTPUTS) ||
+                                   ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS));
         slot.Name = SafeString(param ? param->GetName() : nullptr);
         slot.TypeGuid = param ? param->GetGUID() : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -1172,6 +1200,7 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
         slot.ParameterId = param ? param->GetID() : 0;
         slot.Caps = 0;
         SetScriptBridgeSlotCap(slot.Caps, ScriptBridgeSlotCaps::Setting, isSetting);
+        SetScriptBridgeSlotCap(slot.Caps, ScriptBridgeSlotCaps::Dynamic, true);
         slot.Name = SafeString(param ? param->GetName() : nullptr);
         slot.TypeGuid = param ? param->GetGUID() : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -1229,6 +1258,11 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
         ScriptBridgeLayoutParamSlot slot;
         slot.Kind = ScriptBridgeSlotKind::Pin;
         slot.Index = i;
+        slot.Caps = 0;
+        SetScriptBridgeSlotCap(slot.Caps,
+                               ScriptBridgeSlotCaps::Dynamic,
+                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETERINPUTS) ||
+                                   ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS));
         slot.Name = SafeString(param ? param->Name : nullptr);
         slot.TypeGuid = param ? param->Guid : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -1242,6 +1276,11 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
         ScriptBridgeLayoutParamSlot slot;
         slot.Kind = ScriptBridgeSlotKind::Pout;
         slot.Index = i;
+        slot.Caps = 0;
+        SetScriptBridgeSlotCap(slot.Caps,
+                               ScriptBridgeSlotCaps::Dynamic,
+                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETEROUTPUTS) ||
+                                   ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS));
         slot.Name = SafeString(param ? param->Name : nullptr);
         slot.TypeGuid = param ? param->Guid : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -1259,6 +1298,9 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
         slot.Index = i;
         slot.Caps = 0;
         SetScriptBridgeSlotCap(slot.Caps, ScriptBridgeSlotCaps::Setting, isSetting);
+        SetScriptBridgeSlotCap(slot.Caps,
+                               ScriptBridgeSlotCaps::Dynamic,
+                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDLOCALPARAMS));
         slot.Name = SafeString(param ? param->Name : nullptr);
         slot.TypeGuid = param ? param->Guid : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);

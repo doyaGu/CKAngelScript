@@ -23,6 +23,44 @@ bool PrototypeMatches(CKObjectDeclaration *decl, const std::string &query) {
     return SafeString(decl->GetName()) == query || PrototypeQualifiedName(decl) == query || GuidToString(decl->GetGuid()) == query;
 }
 
+std::vector<CKObjectDeclaration *> FindPrototypeDeclarations(const std::string &query) {
+    std::vector<CKObjectDeclaration *> matches;
+    CKGUID parsed;
+    if (!query.empty() && ParseScriptGuidString(query, parsed)) {
+        if (CKBehaviorPrototype *prototype = CKGetPrototypeFromGuid(parsed)) {
+            if (CKObjectDeclaration *decl = prototype->GetSoureObjectDeclaration()) {
+                matches.push_back(decl);
+            }
+        }
+        return matches;
+    }
+
+    const int count = CKGetPrototypeDeclarationCount();
+    for (int i = 0; i < count; ++i) {
+        CKObjectDeclaration *decl = CKGetPrototypeDeclaration(i);
+        if (query.empty() || PrototypeMatches(decl, query)) {
+            if (decl) {
+                matches.push_back(decl);
+            }
+        }
+    }
+    return matches;
+}
+
+std::string PrototypeCandidateList(const std::vector<CKObjectDeclaration *> &matches) {
+    std::string text;
+    for (CKObjectDeclaration *decl : matches) {
+        if (!decl) {
+            continue;
+        }
+        if (!text.empty()) {
+            text += "; ";
+        }
+        text += fmt::format("{} ({})", PrototypeQualifiedName(decl), GuidToString(decl->GetGuid()));
+    }
+    return text.empty() ? "<none>" : text;
+}
+
 const char *SlotKindName(ScriptBridgeSlotKind kind) {
     switch (kind) {
         case ScriptBridgeSlotKind::Input: return "input";
@@ -1558,15 +1596,8 @@ CScriptArray *BBBridge::FindAll(const std::string &query) const {
         return results;
     }
 
-    const int count = CKGetPrototypeDeclarationCount();
-    for (int i = 0; i < count; ++i) {
-        CKObjectDeclaration *decl = CKGetPrototypeDeclaration(i);
-        if (!query.empty() && !ScriptBridgeBBInternal::PrototypeMatches(decl, query)) {
-            continue;
-        }
-        if (decl) {
-            ScriptBridgeBBInternal::AppendPrototype(results, m_Bridge->CreatePrototype(m_Context, decl->GetGuid()));
-        }
+    for (CKObjectDeclaration *decl : ScriptBridgeBBInternal::FindPrototypeDeclarations(query)) {
+        ScriptBridgeBBInternal::AppendPrototype(results, m_Bridge->CreatePrototype(m_Context, decl->GetGuid()));
     }
 
     return results;
@@ -1594,15 +1625,19 @@ BBSpec *BBBridge::Require(const std::string &query) const {
         return new BBSpec(m_Bridge, m_Context, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(parsed)));
     }
 
-    BBPrototype *prototype = Find(query, 0);
-    if (prototype && prototype->IsValid()) {
+    const std::vector<CKObjectDeclaration *> matches = ScriptBridgeBBInternal::FindPrototypeDeclarations(query);
+    if (matches.size() == 1 && matches[0]) {
         request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
-        request.Guid = prototype->GetGuid();
-        prototype->Release();
+        request.Guid = matches[0]->GetGuid();
         return new BBSpec(m_Bridge, m_Context, request);
     }
-    if (prototype) {
-        prototype->Release();
+    if (matches.size() > 1) {
+        return new BBSpec(m_Bridge,
+                          m_Context,
+                          request,
+                          fmt::format("BB prototype '{}' is ambiguous. Candidates: {}.",
+                                      query,
+                                      ScriptBridgeBBInternal::PrototypeCandidateList(matches)));
     }
 
     return new BBSpec(m_Bridge,
