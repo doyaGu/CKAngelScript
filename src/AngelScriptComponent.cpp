@@ -2004,6 +2004,36 @@ ScriptBridgeSlotKind SlotKindFromText(const std::string &value) {
     return ScriptBridgeSlotKind::Standalone;
 }
 
+struct ScriptComponentSourceSelector {
+    ScriptBridgeSlotKind Kind = ScriptBridgeSlotKind::Pout;
+    std::string Name;
+    std::string Prefix;
+};
+
+ScriptComponentSourceSelector ParseSourceSelector(const std::string &value) {
+    ScriptComponentSourceSelector selector;
+    selector.Name = StripQuotes(value);
+    const std::size_t separator = selector.Name.find(':');
+    if (separator != std::string::npos) {
+        selector.Prefix = StripQuotes(selector.Name.substr(0, separator));
+        selector.Kind = SlotKindFromText(selector.Prefix);
+        selector.Name = StripQuotes(selector.Name.substr(separator + 1));
+    }
+    return selector;
+}
+
+std::string SourceSelectorKindName(const ScriptComponentSourceSelector &selector) {
+    if (!selector.Prefix.empty()) {
+        return selector.Prefix;
+    }
+    switch (selector.Kind) {
+        case ScriptBridgeSlotKind::Pin: return "pin";
+        case ScriptBridgeSlotKind::Pout: return "pout";
+        case ScriptBridgeSlotKind::Local: return "local";
+        default: return "source";
+    }
+}
+
 BBDecl *CreateSpecFromParameter(ScriptBehaviorBridge *bridge,
                                 const CKBehaviorContext &behcontext,
                                 CKParameter *source,
@@ -2211,6 +2241,64 @@ bool ApplyBBConfigSlotValues(BBConfig *bbinding,
     return true;
 }
 
+ParamRef *ResolveBBInstanceSourceRef(BBInstance *instance,
+                                     const ScriptComponentSourceSelector &selector,
+                                     const std::string &fieldName,
+                                     int occurrence,
+                                     std::string &error) {
+    if (!instance) {
+        error = "BBConfig source instance '" + fieldName + "' is not available.";
+        return nullptr;
+    }
+    if (selector.Kind != ScriptBridgeSlotKind::Pin &&
+        selector.Kind != ScriptBridgeSlotKind::Pout &&
+        selector.Kind != ScriptBridgeSlotKind::Local) {
+        error = "BBConfig source instance '" + fieldName +
+                "' source selector '" + SourceSelectorKindName(selector) +
+                "' must use pin:, pout:, or local:.";
+        return nullptr;
+    }
+
+    BBSlot *slot = nullptr;
+    ParamRef *ref = nullptr;
+    switch (selector.Kind) {
+        case ScriptBridgeSlotKind::Pin:
+            slot = instance->PinSlot(selector.Name, occurrence);
+            ref = slot ? instance->Pin(slot) : nullptr;
+            break;
+        case ScriptBridgeSlotKind::Pout:
+            slot = instance->PoutSlot(selector.Name, occurrence);
+            ref = slot ? instance->Pout(slot) : nullptr;
+            break;
+        case ScriptBridgeSlotKind::Local: {
+            slot = instance->Local(selector.Name, occurrence);
+            int index = -1;
+            std::string slotError;
+            if (slot && slot->ResolveIndex(ScriptBridgeSlotKind::Local, index, slotError)) {
+                BehaviorRef *behavior = instance->Behavior();
+                ref = behavior ? behavior->Local(index) : nullptr;
+                if (behavior) {
+                    behavior->Release();
+                }
+            } else if (!slotError.empty()) {
+                error = slotError;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+
+    if (!ref && error.empty()) {
+        error = "BBConfig source instance '" + fieldName + "' has no " +
+                SourceSelectorKindName(selector) + " '" + selector.Name + "'.";
+    }
+    if (slot) {
+        slot->Release();
+    }
+    return ref;
+}
+
 ParamRef *ResolveBBConfigSourceRef(ScriptComponentState *state,
                                    const CKBehaviorContext &behcontext,
                                    const ScriptComponentSourceSlot &source,
@@ -2224,27 +2312,20 @@ ParamRef *ResolveBBConfigSourceRef(ScriptComponentState *state,
     }
 
     if (BehaviorRef *behavior = GetBehaviorRefFieldByName(state, source.SourceFieldName)) {
-        std::string slotName = StripQuotes(source.SourceSlotName);
-        ScriptBridgeSlotKind kind = ScriptBridgeSlotKind::Pout;
-        const std::size_t separator = slotName.find(':');
-        if (separator != std::string::npos) {
-            kind = SlotKindFromText(slotName.substr(0, separator));
-            slotName = StripQuotes(slotName.substr(separator + 1));
-        }
-
+        const ScriptComponentSourceSelector selector = ParseSourceSelector(source.SourceSlotName);
         ParamRef *ref = nullptr;
         BehaviorLayout *layout = behavior->Layout();
         int index = -1;
         if (!layout) {
             error = "BBConfig source behavior '" + source.SourceFieldName + "' has no layout.";
-        } else if (kind == ScriptBridgeSlotKind::Pin) {
-            index = layout->FindPin(slotName, source.SourceOccurrence);
+        } else if (selector.Kind == ScriptBridgeSlotKind::Pin) {
+            index = layout->FindPin(selector.Name, source.SourceOccurrence);
             ref = index >= 0 ? behavior->Pin(index) : nullptr;
-        } else if (kind == ScriptBridgeSlotKind::Pout) {
-            index = layout->FindPout(slotName, source.SourceOccurrence);
+        } else if (selector.Kind == ScriptBridgeSlotKind::Pout) {
+            index = layout->FindPout(selector.Name, source.SourceOccurrence);
             ref = index >= 0 ? behavior->Pout(index) : nullptr;
-        } else if (kind == ScriptBridgeSlotKind::Local) {
-            index = layout->FindLocal(slotName, source.SourceOccurrence);
+        } else if (selector.Kind == ScriptBridgeSlotKind::Local) {
+            index = layout->FindLocal(selector.Name, source.SourceOccurrence);
             ref = index >= 0 ? behavior->Local(index) : nullptr;
         } else {
             error = "BBConfig source behavior '" + source.SourceFieldName +
@@ -2254,8 +2335,8 @@ ParamRef *ResolveBBConfigSourceRef(ScriptComponentState *state,
 
         if (!ref && error.empty()) {
             error = "BBConfig source behavior '" + source.SourceFieldName +
-                    "' has no " + (separator == std::string::npos ? std::string("pout") : source.SourceSlotName.substr(0, separator)) +
-                    " '" + slotName + "'.";
+                    "' has no " + SourceSelectorKindName(selector) +
+                    " '" + selector.Name + "'.";
         }
         if (layout) {
             layout->Release();
@@ -2275,14 +2356,8 @@ ParamRef *ResolveBBConfigSourceRef(ScriptComponentState *state,
             }
             return nullptr;
         }
-        BBSlot *slot = instance->PoutSlot(source.SourceSlotName, source.SourceOccurrence);
-        ParamRef *ref = slot ? instance->Pout(slot) : nullptr;
-        if (!ref) {
-            error = "BBConfig source config '" + source.SourceFieldName + "' has no pout '" + source.SourceSlotName + "'.";
-        }
-        if (slot) {
-            slot->Release();
-        }
+        const ScriptComponentSourceSelector selector = ParseSourceSelector(source.SourceSlotName);
+        ParamRef *ref = ResolveBBInstanceSourceRef(instance, selector, source.SourceFieldName, source.SourceOccurrence, error);
         instance->Release();
         return ref;
     }
@@ -2292,14 +2367,8 @@ ParamRef *ResolveBBConfigSourceRef(ScriptComponentState *state,
         error = "BBConfig source '" + source.SourceFieldName + "' is not a BehaviorRef@, BBConfig@, or BBInstance@ field.";
         return nullptr;
     }
-    BBSlot *slot = instance->PoutSlot(source.SourceSlotName, source.SourceOccurrence);
-    ParamRef *ref = slot ? instance->Pout(slot) : nullptr;
-    if (!ref) {
-        error = "BBConfig source instance '" + source.SourceFieldName + "' has no pout '" + source.SourceSlotName + "'.";
-    }
-    if (slot) {
-        slot->Release();
-    }
+    const ScriptComponentSourceSelector selector = ParseSourceSelector(source.SourceSlotName);
+    ParamRef *ref = ResolveBBInstanceSourceRef(instance, selector, source.SourceFieldName, source.SourceOccurrence, error);
     instance->Release();
     return ref;
 }
