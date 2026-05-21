@@ -1223,6 +1223,7 @@ void RegisterScriptParameterRegistry(asIScriptEngine *engine) {
     ScriptParameterRegistryRegistrationInternal::RegisterParamRegistryGlobals(engine, r);
 }
 
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptParameterRegistrySelfTest(CKContext *context, std::string &error) {
     ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     if (!registry) {
@@ -1303,3 +1304,4 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, std::string &error) 
     error.clear();
     return true;
 }
+#endif

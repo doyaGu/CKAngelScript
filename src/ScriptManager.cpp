@@ -1,8 +1,5 @@
 #include "ScriptManager.h"
 
-#include <cstdlib>
-#include <fstream>
-
 #include <fmt/format.h>
 
 #include "CKPathManager.h"
@@ -17,9 +14,15 @@
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
 #include "ScriptBehaviorBridge.h"
-#include "ScriptParameterConversion.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptRuntime.h"
+
+#if CKAS_BUILD_SELF_TESTS
+#include <cstdlib>
+#include <fstream>
+
+#include "ScriptParameterConversion.h"
+#endif
 
 // Application modules
 #include "add_on/scripthelper/scripthelper.h"
@@ -43,6 +46,7 @@
 #define CKAS_BUILD_SELF_TESTS 0
 #endif
 
+#if CKAS_BUILD_SELF_TESTS
 namespace ScriptManagerInternal {
 
 bool IsTruthyEnvironmentValue(const char *name) {
@@ -73,6 +77,7 @@ void WriteStartupSelfTestMarker(const char *status, const char *stage, const std
 }
 
 } // namespace ScriptManagerInternal
+#endif
 
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
     int r = Init();
@@ -107,10 +112,12 @@ CKERROR ScriptManager::PostClearAll() {
 }
 
 CKERROR ScriptManager::PreProcess() {
+#if CKAS_BUILD_SELF_TESTS
     const CKERROR selfTestResult = RunStartupSelfTests();
     if (selfTestResult != CK_OK) {
         return selfTestResult;
     }
+#endif
     if (m_Runtime) {
         m_Runtime->PreProcess();
     }
@@ -125,6 +132,7 @@ CKERROR ScriptManager::OnCKInit() {
     return CK_OK;
 }
 
+#if CKAS_BUILD_SELF_TESTS
 CKERROR ScriptManager::RunStartupSelfTests() {
     if (m_StartupSelfTestsAttempted) {
         return CK_OK;
@@ -134,14 +142,6 @@ CKERROR ScriptManager::RunStartupSelfTests() {
     }
     m_StartupSelfTestsAttempted = true;
 
-#if !CKAS_BUILD_SELF_TESTS
-    constexpr const char *message = "Startup self-tests were not compiled. Configure with -DCKAS_BUILD_SELF_TESTS=ON to enable them.";
-    if (m_Context) {
-        m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), message);
-    }
-    ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "disabled", message);
-    return CKERR_INVALIDOPERATION;
-#else
     ScriptManagerInternal::WriteStartupSelfTestMarker("running", "start", std::string());
 
     std::string conversionError;
@@ -192,8 +192,8 @@ CKERROR ScriptManager::RunStartupSelfTests() {
     }
     ScriptManagerInternal::WriteStartupSelfTestMarker("ok", "complete", std::string());
     return CK_OK;
-#endif
 }
+#endif
 
 CKERROR ScriptManager::OnCKEnd() {
     if (m_Runtime) {

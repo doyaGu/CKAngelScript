@@ -512,6 +512,8 @@ private:
 };
 
 void RegisterScriptBehaviorBridge(asIScriptEngine *engine);
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
+#endif
 
 #endif // CK_SCRIPTBEHAVIORBRIDGE_H

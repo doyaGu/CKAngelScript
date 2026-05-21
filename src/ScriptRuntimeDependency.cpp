@@ -255,6 +255,7 @@ bool HasDependencyFailure(const ScriptRuntimeManifest &script,
     return false;
 }
 
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptRuntimeDependencySelfTest(std::string &error) {
     ScriptRuntimeManifest core;
     core.Id = "core";
@@ -314,5 +315,6 @@ bool RunScriptRuntimeDependencySelfTest(std::string &error) {
     }
     return true;
 }
+#endif
 
 } // namespace ScriptRuntimeDependencyResolver

@@ -85,7 +85,9 @@ std::string MetadataValue(const std::vector<ScriptRuntimeMetadataEntry> &metadat
                           const std::string &fallback = std::string());
 std::vector<std::string> MetadataKeys(const std::vector<ScriptRuntimeMetadataEntry> &metadata);
 
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptRuntimeMetadataSelfTest(std::string &error);
+#endif
 
 } // namespace ScriptRuntimeMetadata
 

@@ -625,6 +625,7 @@ void SyncErrorOutputParameters(CKBehavior *beh) {
 
 } // namespace AngelScriptComponentInternal
 
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptComponentMetadataSelfTest(std::string &error) {
     std::vector<ScriptComponentBinding> bindings;
     auto addMetadata = [&](const std::string &metadata) -> bool {
@@ -824,6 +825,7 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
 
     return true;
 }
+#endif
 
 CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl() {
     CKObjectDeclaration *od = CreateCKObjectDeclaration("AngelScript Component");

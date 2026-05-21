@@ -1850,6 +1850,7 @@ bool SetParameterDefaultText(CKParameterLocal *local, const std::string &default
     return WriteParameterValue(local, MakeScriptParamString(ScriptParamCodecInternal::StripQuotes(defaultValue)), error) == CK_OK;
 }
 
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptParameterConversionSelfTest(std::string &error) {
     if (ScriptParamValueKindFromTypeName("ckguid") != ScriptParamValueKind::Guid ||
         ScriptParamValueKindFromTypeName("vxquaternion") != ScriptParamValueKind::Quaternion ||
@@ -1884,3 +1885,4 @@ bool RunScriptParameterConversionSelfTest(std::string &error) {
     error.clear();
     return true;
 }
+#endif

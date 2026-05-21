@@ -17,7 +17,9 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
 bool HasDependencyFailure(const ScriptRuntimeManifest &script,
                           const std::vector<std::string> &failedIds,
                           std::string &error);
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptRuntimeDependencySelfTest(std::string &error);
+#endif
 
 } // namespace ScriptRuntimeDependencyResolver
 

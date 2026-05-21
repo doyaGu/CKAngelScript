@@ -184,6 +184,8 @@ CKERROR CopyParameterValue(CKParameter *target, CKParameter *source, std::string
 ScriptParamValue ReadParameterValue(CKParameter *param, std::string *error = nullptr);
 bool ReadParameterValueAs(CKParameter *param, ScriptParamValueKind kind, ScriptParamValue &value, std::string &error);
 bool SetParameterDefaultText(CKParameterLocal *local, const std::string &defaultValue, std::string &error);
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptParameterConversionSelfTest(std::string &error);
+#endif
 
 #endif // CK_SCRIPTPARAMETERCONVERSION_H

@@ -643,6 +643,7 @@ std::vector<std::string> MetadataKeys(const std::vector<ScriptRuntimeMetadataEnt
     return keys;
 }
 
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
     const std::string source =
         "[script\n"
@@ -692,5 +693,6 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
     }
     return true;
 }
+#endif
 
 } // namespace ScriptRuntimeMetadata

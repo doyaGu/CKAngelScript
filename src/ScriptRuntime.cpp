@@ -1049,6 +1049,7 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->SetDefaultNamespace(previous.c_str()); assert(r >= 0);
 }
 
+#if CKAS_BUILD_SELF_TESTS
 bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "Runtime self-test requires a CKContext and AngelScript engine.";
@@ -1130,3 +1131,4 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     ScriptManager::GetManager(context)->GetScriptCache().UnloadScript(moduleName);
     return true;
 }
+#endif
