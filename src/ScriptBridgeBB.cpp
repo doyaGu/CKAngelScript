@@ -1436,8 +1436,6 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         return true;
     }
 
-    m_Bridge->RemoveInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-    m_Bridge->RemoveInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     ParamRef *target = PinRefSlot(slot);
     ParamSourceLinkRef *link = target ? target->SetSourceScoped(source) : nullptr;
     if (target) {
@@ -1458,6 +1456,7 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         SetScriptException(m_Error);
         return false;
     }
+    m_Bridge->RemoveInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
     RemovePendingValue(pinIndex);
     RemovePendingOperation(pinIndex);
     ReplacePendingSource(request);

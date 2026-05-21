@@ -1595,6 +1595,104 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     replacementConfig->Release();
     DestroySelfTestObject(context, wrongScriptSource);
 
+    CKParameterLocal *configInitialSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigInitialSource"), CKPGUID_STRING, TRUE);
+    CKParameterLocal *configLiveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigLiveSource"), CKPGUID_STRING, TRUE);
+    CKParameterLocal *configBadSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigBadSource"), CKPGUID_INT, TRUE);
+    BBConfig *liveConfig = new BBConfig(bridge, behaviorContext, request);
+    BBSlot *liveConfigScriptSlot = liveConfig ? liveConfig->Pin("Script") : nullptr;
+    BBSlot *liveConfigFunctionSlot = liveConfig ? liveConfig->Pin("Function") : nullptr;
+    ParamRef *configInitialRef = configInitialSource ? new ParamRef(bridge, configInitialSource->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
+    ParamRef *configLiveRef = configLiveSource ? new ParamRef(bridge, configLiveSource->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
+    ParamRef *configBadRef = configBadSource ? new ParamRef(bridge, configBadSource->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
+    BBInstance *liveConfigInstance = nullptr;
+    auto cleanupLiveConfig = [&]() {
+        if (liveConfigInstance) {
+            liveConfigInstance->Destroy();
+            liveConfigInstance->Release();
+            liveConfigInstance = nullptr;
+        }
+        if (liveConfigScriptSlot) {
+            liveConfigScriptSlot->Release();
+            liveConfigScriptSlot = nullptr;
+        }
+        if (liveConfigFunctionSlot) {
+            liveConfigFunctionSlot->Release();
+            liveConfigFunctionSlot = nullptr;
+        }
+        if (configInitialRef) {
+            configInitialRef->Release();
+            configInitialRef = nullptr;
+        }
+        if (configLiveRef) {
+            configLiveRef->Release();
+            configLiveRef = nullptr;
+        }
+        if (configBadRef) {
+            configBadRef->Release();
+            configBadRef = nullptr;
+        }
+        if (liveConfig) {
+            liveConfig->Release();
+            liveConfig = nullptr;
+        }
+        DestroySelfTestObject(context, configBadSource);
+        DestroySelfTestObject(context, configLiveSource);
+        DestroySelfTestObject(context, configInitialSource);
+    };
+
+    if (!configInitialSource ||
+        !configLiveSource ||
+        !configBadSource ||
+        configInitialSource->SetStringValue(const_cast<CKSTRING>(scriptName)) != CK_OK ||
+        configLiveSource->SetStringValue(const_cast<CKSTRING>(scriptName)) != CK_OK ||
+        !liveConfig ||
+        !liveConfigScriptSlot ||
+        !liveConfigFunctionSlot ||
+        !configInitialRef ||
+        !configLiveRef ||
+        !configBadRef) {
+        cleanupLiveConfig();
+        manager->UnloadScript(scriptName);
+        error = "BBConfig live source replacement self-test setup failed.";
+        return false;
+    }
+
+    returnedConfig = liveConfig->SourceSlot(liveConfigScriptSlot, configInitialRef);
+    if (returnedConfig) returnedConfig->Release();
+    returnedConfig = liveConfig->SetSlotString(liveConfigFunctionSlot, "BridgeRunnerEntry");
+    if (returnedConfig) returnedConfig->Release();
+    liveConfigInstance = liveConfig->SpawnInstance(behaviorContext);
+    CKBehavior *liveConfigBehavior = liveConfigInstance ? bridge->GetInstanceBehavior(liveConfigInstance->BridgeInstanceId(), liveConfigInstance->BridgeGeneration()) : nullptr;
+    CKParameterIn *liveConfigScriptPin = liveConfigBehavior ? liveConfigBehavior->GetInputParameter(0) : nullptr;
+    if (!liveConfigInstance || !liveConfigBehavior || !liveConfigScriptPin || liveConfigScriptPin->GetDirectSource() != configInitialSource) {
+        const std::string configError = liveConfigInstance ? liveConfigInstance->Error() : liveConfig->Error();
+        cleanupLiveConfig();
+        manager->UnloadScript(scriptName);
+        error = configError.empty() ? "BBConfig live source replacement self-test failed to install initial source." : configError;
+        return false;
+    }
+
+    returnedConfig = liveConfig->SourceSlot(liveConfigScriptSlot, configLiveRef);
+    const bool liveSourceAccepted = returnedConfig != nullptr;
+    if (returnedConfig) returnedConfig->Release();
+    if (!liveSourceAccepted || liveConfigScriptPin->GetDirectSource() != configLiveSource) {
+        cleanupLiveConfig();
+        manager->UnloadScript(scriptName);
+        error = "BBConfig live source replacement self-test failed to install live source.";
+        return false;
+    }
+
+    returnedConfig = liveConfig->SourceSlot(liveConfigScriptSlot, configBadRef);
+    const bool badConfigSourceAccepted = returnedConfig != nullptr;
+    if (returnedConfig) returnedConfig->Release();
+    if (badConfigSourceAccepted || liveConfigScriptPin->GetDirectSource() != configLiveSource) {
+        cleanupLiveConfig();
+        manager->UnloadScript(scriptName);
+        error = "BBConfig runtime self-test did not preserve live source after failed source replacement.";
+        return false;
+    }
+    cleanupLiveConfig();
+
     BBTask *task = bridge->StartTask(request, behaviorContext, 0);
     if (!task) {
         manager->UnloadScript(scriptName);
