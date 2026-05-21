@@ -251,6 +251,7 @@ def generate(params: list[dict[str, Any]], ops: list[dict[str, Any]], bbs: list[
         lines.append(f"    const string QualifiedName = {as_string(qualified)};")
         lines.append("    BBPrototype@ Find(const CKBehaviorContext &in ctx) { return BB::Prototype(ctx, Guid()); }")
         lines.append("    BBSpec@ Spec(const CKBehaviorContext &in ctx) { return BB::Require(ctx, Guid()); }")
+        lines.append("    BBBinding@ Binding(const CKBehaviorContext &in ctx) { return BB::Bind(ctx, Guid()); }")
         add_bb_slot_helpers(lines, bb)
         lines.append("}")
     lines.append("}")

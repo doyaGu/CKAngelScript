@@ -106,6 +106,32 @@ task.Step(ctx, on);
 
 `BBSlot` records the slot kind, index, name, parameter type, and layout signature. Passing a `pout` slot to `Set()`, or using a stale slot after a prototype layout change, fails with a targeted diagnostic. The lower-level `int` API remains available for generated code and performance-sensitive scripts.
 
+For Component scripts that repeatedly drive the same Building Block, `BBBinding@` removes the remaining setup boilerplate. A binding owns the prototype spec, caches slots by name, stores pending parameter/source/operation bindings before startup, and can keep the runtime `BBTask@` alive across frames:
+
+```angelscript
+class FpsOverlay {
+    CK2dEntity@ target;
+
+    [bbbind prototype="Interface/Text/2D Text" managed=true start="On" stop="Off"
+            required="in:On,in:Off,pin:Font,pin:Text,pin:Offset"]
+    BBBinding@ text;
+
+    void Start(const CKBehaviorContext &in ctx) {
+        text.Target(target)
+            .Set("Text", "FPS: ...")
+            .Set("Offset", Param::Vector2(Vx2DVector(0, 0)))
+            .Start(ctx);
+    }
+
+    void Update(const CKBehaviorContext &in ctx) {
+        text.Set("Text", "FPS: " + 60);
+        text.Step(ctx);
+    }
+}
+```
+
+`BBBinding` keeps the same index-first core: string lookup happens once through the binding slot cache, then live updates use the resolved slot index. `managed=true` lets the Component stop/destroy the owned task during disable, pause, reset, and delete. Use lower-level `BBSpec`/`BBSlot` when a script needs multiple independent invocations from the same prototype, and use raw indices for generated or very hot code.
+
 ## Catalog Discovery
 
 BB prototype discovery is SDK-driven and uses `CKGetPrototypeDeclaration*` order:
@@ -149,6 +175,7 @@ The generated hints keep the flat GUID functions and add ergonomic helper namesp
 CKGUID textGuid = CKASCatalog::BBHints::Interface_Text_2D_Text::Guid();
 BBPrototype@ text = CKASCatalog::BBHints::Interface_Text_2D_Text::Find(ctx);
 BBSpec@ textSpec = CKASCatalog::BBHints::Interface_Text_2D_Text::Spec(ctx);
+BBBinding@ textBinding = CKASCatalog::BBHints::Interface_Text_2D_Text::Binding(ctx);
 BBSlot@ textPin = CKASCatalog::BBHints::Interface_Text_2D_Text::Pin_Text(ctx);
 
 uint flags = CKASCatalog::Flags::Render_Options::Mask(ctx, "Clear ZBuffer,Buffer Swapping");
