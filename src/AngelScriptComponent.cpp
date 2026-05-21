@@ -1140,7 +1140,8 @@ bool ParseBindingMetadata(const std::string &metadata,
         ++i;
     }
 
-    if (!positional.empty()) {
+    const bool isBBConfigFragment = IsBBConfigFragmentKeyword(lowerKeyword);
+    if (!positional.empty() && !isBBConfigFragment) {
         if (binding.ParameterName.empty() || binding.ParameterName == defaultFieldName) {
             binding.ParameterName = positional[0];
         }
@@ -3390,6 +3391,32 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     }
     if (!sawOutput || !sawPout || !sawFontPin || !sawSetting) {
         error = "Component metadata self-test missed required slot fragments.";
+        return false;
+    }
+
+    std::vector<ScriptComponentBinding> repeatedSlotBindings;
+    for (const std::string &fieldName : {std::string("FirstConfig"), std::string("SecondConfig")}) {
+        ScriptComponentBinding configBinding;
+        if (!AngelScriptComponentInternal::ParseBindingMetadata(
+                "bbconfig prototype=\"Logics/Calculator/Identity\"",
+                fieldName,
+                configBinding)) {
+            error = "Component metadata self-test failed to parse repeated-slot config metadata.";
+            return false;
+        }
+        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(repeatedSlotBindings, configBinding);
+
+        ScriptComponentBinding slotBinding;
+        if (!AngelScriptComponentInternal::ParseBindingMetadata("bbpout \"pOut 0\"", fieldName, slotBinding)) {
+            error = "Component metadata self-test failed to parse repeated-slot fragment metadata.";
+            return false;
+        }
+        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(repeatedSlotBindings, slotBinding);
+    }
+    if (repeatedSlotBindings.size() != 2 ||
+        repeatedSlotBindings[0].ParameterName != "FirstConfig" ||
+        repeatedSlotBindings[1].ParameterName != "SecondConfig") {
+        error = "Component metadata self-test let BBConfig fragment slot names override field parameter names.";
         return false;
     }
 
