@@ -2,7 +2,68 @@
 
 #include <fmt/format.h>
 
+#include "ScriptAsync.h"
 #include "ScriptManager.h"
+
+namespace {
+
+std::string BuildContextStackTrace(asIScriptContext *ctx, const char *prefix) {
+    if (!ctx) {
+        return std::string();
+    }
+
+    const char *section = nullptr;
+    int col = 0;
+    int row = ctx->GetExceptionLineNumber(&col, &section);
+
+    asIScriptFunction *exFunc = ctx->GetExceptionFunction();
+    const char *exFuncDecl = exFunc ? exFunc->GetDeclaration() : nullptr;
+    const char *exStr = ctx->GetExceptionString();
+
+    std::string stackTrace = fmt::format("Exception in '{}' at {}({},{}): '{}'\n",
+        exFuncDecl ? exFuncDecl : "<unknown function>",
+        section ? section : "<unknown section>",
+        row,
+        col,
+        exStr ? exStr : "");
+
+    for (asUINT i = 0; i < ctx->GetCallstackSize(); i++) {
+        asIScriptFunction *f = ctx->GetFunction(i);
+        row = ctx->GetLineNumber(i, &col, &section);
+        const char *funcDecl = f ? f->GetDeclaration() : nullptr;
+        stackTrace.append(fmt::format("\t{} at {}({},{})\n",
+            funcDecl ? funcDecl : "<unknown function>",
+            section ? section : "<unknown section>",
+            row,
+            col));
+    }
+
+    (void) prefix;
+    return stackTrace;
+}
+
+ScriptExecutionStatus HandleExecutionResult(ScriptRunner *runner, asIScriptContext *ctx, int result, const char *label) {
+    if (result == asEXECUTION_FINISHED) {
+        return ScriptExecutionStatus::Finished;
+    }
+    if (result == asEXECUTION_SUSPENDED) {
+        return ScriptExecutionStatus::Suspended;
+    }
+
+    if (result == asEXECUTION_EXCEPTION) {
+        runner->SetStackTrace(BuildContextStackTrace(ctx, label));
+        runner->SetErrorMessage(std::string(label ? label : "Script") + " Threw Exception.");
+    } else if (result == asEXECUTION_ABORTED) {
+        runner->SetErrorMessage(std::string(label ? label : "Script") + " Aborted.");
+    } else {
+        runner->SetErrorMessage(fmt::format("{} failed with result code: {}",
+                                            label ? label : "Script",
+                                            result));
+    }
+    return ScriptExecutionStatus::Failed;
+}
+
+} // namespace
 
 ScriptRunner::ScriptRunner(ScriptManager *man) : m_ScriptManager(man) {}
 
@@ -99,6 +160,9 @@ void ScriptRunner::ReleaseContext() {
     auto *ctx = m_Context;
     m_Context = nullptr;
 
+    if (m_ScriptManager && m_ScriptManager->GetAsyncScheduler()) {
+        m_ScriptManager->GetAsyncScheduler()->ForgetContext(ctx);
+    }
     if (m_ScriptManager && m_ScriptManager->GetScriptEngine()) {
         m_ScriptManager->GetScriptEngine()->ReturnContext(ctx);
     } else {
@@ -189,20 +253,24 @@ asIScriptFunction *ScriptRunner::GetFunctionByDecl(const char *decl) const {
 }
 
 bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler, const ScriptFunctionArgumentHandler &retHandler) {
+    return ExecuteScriptStatus(func, argsHandler, retHandler) == ScriptExecutionStatus::Finished;
+}
+
+ScriptExecutionStatus ScriptRunner::ExecuteScriptStatus(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler, const ScriptFunctionArgumentHandler &retHandler) {
     if (!m_CachedScript) {
         SetErrorMessage("No script to execute.");
-        return false;
+        return ScriptExecutionStatus::Failed;
     }
 
     if (!func) {
         SetErrorMessage("No function to execute.");
-        return false;
+        return ScriptExecutionStatus::Failed;
     }
 
     auto *engine = func->GetEngine();
     if (!engine) {
         SetErrorMessage("Script engine is null.");
-        return false;
+        return ScriptExecutionStatus::Failed;
     }
 
     asIScriptContext *ctx = GetContext();
@@ -210,74 +278,57 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
         ctx = engine->RequestContext();
         if (!ctx) {
             SetErrorMessage("Failed to create AngelScript context.");
-            return false;
+            return ScriptExecutionStatus::Failed;
         }
         SetContext(ctx);
     }
 
     int r = 0;
 
-    if (func->GetFuncType() == asFUNC_DELEGATE) {
-        asIScriptFunction *delegate = func->GetDelegateFunction();
-        void *delegateObject = func->GetDelegateObject();
-        r = ctx->Prepare(delegate);
-        if (r >= 0)
-            ctx->SetObject(delegateObject);
+    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
+        std::string waitError;
+        ScriptAsyncScheduler *scheduler = m_ScriptManager ? m_ScriptManager->GetAsyncScheduler() : nullptr;
+        const ScriptAsyncScheduler::ResumeState resume = scheduler
+            ? scheduler->PrepareContextResume(ctx, waitError)
+            : ScriptAsyncScheduler::ResumeState::Ready;
+        if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
+            return ScriptExecutionStatus::Suspended;
+        }
+        if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
+            SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
+            ctx->Abort();
+            return ScriptExecutionStatus::Failed;
+        }
     } else {
-        r = ctx->Prepare(func);
-    }
+        if (func->GetFuncType() == asFUNC_DELEGATE) {
+            asIScriptFunction *delegate = func->GetDelegateFunction();
+            void *delegateObject = func->GetDelegateObject();
+            r = ctx->Prepare(delegate);
+            if (r >= 0)
+                ctx->SetObject(delegateObject);
+        } else {
+            r = ctx->Prepare(func);
+        }
 
-    if (r < 0) {
-        SetErrorMessage("Failed to prepare script function.");
-        return false;
-    }
+        if (r < 0) {
+            SetErrorMessage("Failed to prepare script function.");
+            return ScriptExecutionStatus::Failed;
+        }
 
-    if (argsHandler) {
-        argsHandler(ctx);
+        if (argsHandler) {
+            argsHandler(ctx);
+        }
     }
 
     if (IsProfiling())
         StartTiming();
 
     r = ctx->Execute();
-    if (r != asEXECUTION_FINISHED) {
-        if (r == asEXECUTION_EXCEPTION) {
-            // Gather exception info
-            const char *section;
-            int col;
-            int row = ctx->GetExceptionLineNumber(&col, &section);
-
-            asIScriptFunction *exFunc = ctx->GetExceptionFunction();
-            const char *exFuncDecl = exFunc ? exFunc->GetDeclaration() : nullptr;
-            const char *exStr = ctx->GetExceptionString();
-
-            std::string stackTrace = fmt::format("Exception in '{}' at {}({},{}): '{}'\n",
-                exFuncDecl ? exFuncDecl : "<unknown function>",
-                section ? section : "<unknown section>",
-                row,
-                col,
-                exStr ? exStr : "");
-
-            // Append the call stack
-            for (asUINT i = 0; i < ctx->GetCallstackSize(); i++) {
-                asIScriptFunction *f = ctx->GetFunction(i);
-                row = ctx->GetLineNumber(i, &col, &section);
-                const char *funcDecl = f ? f->GetDeclaration() : nullptr;
-                stackTrace.append(fmt::format("\t{} at {}({},{})\n",
-                    funcDecl ? funcDecl : "<unknown function>",
-                    section ? section : "<unknown section>",
-                    row,
-                    col));
-            }
-
-            SetStackTrace(stackTrace);
-            SetErrorMessage("Script Execution Threw Exception.");
-        } else if (r == asEXECUTION_SUSPENDED) {
-            SetErrorMessage("Script Execution Suspended.");
-        } else {
-            SetErrorMessage("Script execution failed with result code: " + std::to_string(r));
-        }
-        return false;
+    const ScriptExecutionStatus status = HandleExecutionResult(this, ctx, r, "Script Execution");
+    if (status != ScriptExecutionStatus::Finished) {
+        if (IsProfiling())
+            EndTiming();
+        return status;
     }
 
     if (retHandler) {
@@ -287,29 +338,33 @@ bool ScriptRunner::ExecuteScript(asIScriptFunction *func, const ScriptFunctionAr
     if (IsProfiling())
         EndTiming();
 
-    return true;
+    return ScriptExecutionStatus::Finished;
 }
 
 bool ScriptRunner::ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext) {
+    return ExecuteObjectMethodStatus(object, func, behcontext) == ScriptExecutionStatus::Finished;
+}
+
+ScriptExecutionStatus ScriptRunner::ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext) {
     if (!m_CachedScript) {
         SetErrorMessage("No script to execute.");
-        return false;
+        return ScriptExecutionStatus::Failed;
     }
 
     if (!object) {
         SetErrorMessage("No script object to execute.");
-        return false;
+        return ScriptExecutionStatus::Failed;
     }
 
     if (!func) {
         SetErrorMessage("No object method to execute.");
-        return false;
+        return ScriptExecutionStatus::Failed;
     }
 
     auto *engine = func->GetEngine();
     if (!engine) {
         SetErrorMessage("Script engine is null.");
-        return false;
+        return ScriptExecutionStatus::Failed;
     }
 
     asIScriptContext *ctx = GetContext();
@@ -317,73 +372,71 @@ bool ScriptRunner::ExecuteObjectMethod(asIScriptObject *object, asIScriptFunctio
         ctx = engine->RequestContext();
         if (!ctx) {
             SetErrorMessage("Failed to create AngelScript context.");
-            return false;
+            return ScriptExecutionStatus::Failed;
         }
         SetContext(ctx);
     }
 
-    int r = ctx->Prepare(func);
-    if (r < 0) {
-        SetErrorMessage("Failed to prepare script method.");
-        return false;
-    }
+    m_BehaviorContextStorage = behcontext;
+    int r = 0;
+    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
+        std::string waitError;
+        ScriptAsyncScheduler *scheduler = m_ScriptManager ? m_ScriptManager->GetAsyncScheduler() : nullptr;
+        const ScriptAsyncScheduler::ResumeState resume = scheduler
+            ? scheduler->PrepareContextResume(ctx, waitError)
+            : ScriptAsyncScheduler::ResumeState::Ready;
+        if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
+            return ScriptExecutionStatus::Suspended;
+        }
+        if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
+            SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
+            ctx->Abort();
+            return ScriptExecutionStatus::Failed;
+        }
+    } else {
+        r = ctx->Prepare(func);
+        if (r < 0) {
+            SetErrorMessage("Failed to prepare script method.");
+            return ScriptExecutionStatus::Failed;
+        }
 
-    r = ctx->SetObject(object);
-    if (r < 0) {
-        SetErrorMessage("Failed to bind script method object.");
-        return false;
-    }
+        r = ctx->SetObject(object);
+        if (r < 0) {
+            SetErrorMessage("Failed to bind script method object.");
+            return ScriptExecutionStatus::Failed;
+        }
 
-    if (func->GetParamCount() > 0) {
-        ctx->SetArgObject(0, (void *) &behcontext);
+        if (func->GetParamCount() > 0) {
+            ctx->SetArgObject(0, (void *) &m_BehaviorContextStorage);
+        }
     }
 
     if (IsProfiling())
         StartTiming();
 
     r = ctx->Execute();
-    if (r != asEXECUTION_FINISHED) {
-        if (r == asEXECUTION_EXCEPTION) {
-            const char *section;
-            int col;
-            int row = ctx->GetExceptionLineNumber(&col, &section);
-
-            asIScriptFunction *exFunc = ctx->GetExceptionFunction();
-            const char *exFuncDecl = exFunc ? exFunc->GetDeclaration() : nullptr;
-            const char *exStr = ctx->GetExceptionString();
-
-            std::string stackTrace = fmt::format("Exception in '{}' at {}({},{}): '{}'\n",
-                exFuncDecl ? exFuncDecl : "<unknown function>",
-                section ? section : "<unknown section>",
-                row,
-                col,
-                exStr ? exStr : "");
-
-            for (asUINT i = 0; i < ctx->GetCallstackSize(); i++) {
-                asIScriptFunction *f = ctx->GetFunction(i);
-                row = ctx->GetLineNumber(i, &col, &section);
-                const char *funcDecl = f ? f->GetDeclaration() : nullptr;
-                stackTrace.append(fmt::format("\t{} at {}({},{})\n",
-                    funcDecl ? funcDecl : "<unknown function>",
-                    section ? section : "<unknown section>",
-                    row,
-                    col));
-            }
-
-            SetStackTrace(stackTrace);
-            SetErrorMessage("Script Method Threw Exception.");
-        } else if (r == asEXECUTION_SUSPENDED) {
-            SetErrorMessage("Script Method Suspended.");
-        } else {
-            SetErrorMessage("Script method failed with result code: " + std::to_string(r));
-        }
-        return false;
+    const ScriptExecutionStatus status = HandleExecutionResult(this, ctx, r, "Script Method");
+    if (status != ScriptExecutionStatus::Finished) {
+        if (IsProfiling())
+            EndTiming();
+        return status;
     }
 
     if (IsProfiling())
         EndTiming();
 
-    return true;
+    return ScriptExecutionStatus::Finished;
+}
+
+bool ScriptRunner::IsContextSuspended() const {
+    return m_Context && m_Context->GetState() == asEXECUTION_SUSPENDED;
+}
+
+void ScriptRunner::AbortContext() {
+    if (m_Context) {
+        m_Context->Abort();
+    }
+    ReleaseContext();
 }
 
 void ScriptRunner::StartTiming() {

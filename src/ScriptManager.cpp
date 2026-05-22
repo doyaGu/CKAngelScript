@@ -16,6 +16,7 @@
 #include "ScriptBehaviorBridge.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptRuntime.h"
+#include "ScriptAsync.h"
 
 #if CKAS_BUILD_SELF_TESTS
 #include <cstdlib>
@@ -100,6 +101,9 @@ CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
 }
 
 CKERROR ScriptManager::PostClearAll() {
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->Clear();
+    }
     if (m_Runtime) {
         m_Runtime->Clear();
     }
@@ -118,6 +122,9 @@ CKERROR ScriptManager::PreProcess() {
         return selfTestResult;
     }
 #endif
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->Tick();
+    }
     if (m_Runtime) {
         m_Runtime->PreProcess();
     }
@@ -190,12 +197,24 @@ CKERROR ScriptManager::RunStartupSelfTests() {
         ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "runtime", conversionError);
         return CKERR_INVALIDOPERATION;
     }
+    ScriptManagerInternal::WriteStartupSelfTestMarker("running", "async", std::string());
+    if (!RunScriptAsyncSelfTest(m_Context, m_ScriptEngine, conversionError)) {
+        if (m_Context) {
+            m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] Async self-test failed: %s"),
+                                         conversionError.c_str());
+        }
+        ScriptManagerInternal::WriteStartupSelfTestMarker("failed", "async", conversionError);
+        return CKERR_INVALIDOPERATION;
+    }
     ScriptManagerInternal::WriteStartupSelfTestMarker("ok", "complete", std::string());
     return CK_OK;
 }
 #endif
 
 CKERROR ScriptManager::OnCKEnd() {
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->Clear();
+    }
     if (m_Runtime) {
         m_Runtime->OnEnd();
     }
@@ -207,6 +226,9 @@ CKERROR ScriptManager::OnCKEnd() {
 }
 
 CKERROR ScriptManager::OnCKReset() {
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->Clear();
+    }
     if (m_Runtime) {
         m_Runtime->OnReset();
     }
@@ -217,6 +239,9 @@ CKERROR ScriptManager::OnCKReset() {
 }
 
 CKERROR ScriptManager::OnCKPause() {
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->Clear();
+    }
     if (m_Runtime) {
         m_Runtime->OnPause();
     }
@@ -256,6 +281,9 @@ int ScriptManager::Init() {
     if (!m_Runtime) {
         m_Runtime = std::make_unique<ScriptRuntime>(this);
     }
+    if (!m_AsyncScheduler) {
+        m_AsyncScheduler = std::make_unique<ScriptAsyncScheduler>(this);
+    }
 
     m_Flags |= AS_INITED;
     return r;
@@ -265,6 +293,9 @@ int ScriptManager::Shutdown() {
     if (!IsInited())
         return -2;
 
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->Clear();
+    }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
@@ -283,6 +314,7 @@ int ScriptManager::Shutdown() {
 
     m_BehaviorBridge.reset();
     m_Runtime.reset();
+    m_AsyncScheduler.reset();
     m_ParameterRegistry.reset();
 
     if (m_ScriptEngine) {
@@ -609,6 +641,8 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     ReleaseScriptFunction(state->OnDisable);
     ReleaseScriptFunction(state->OnDestroy);
     ReleaseScriptFunction(state->OnReset);
+    state->ActiveLifecycle = nullptr;
+    state->ActiveLifecycleName.clear();
 
     if (state->Object) {
         state->Object->Release();
@@ -634,6 +668,9 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->StartCalled = false;
     state->InstanceEnabled = false;
     state->Failed = false;
+    state->PendingDestroy = false;
+    state->PendingDisableOutput = false;
+    state->PendingResetRuntime = false;
 }
 
 void ScriptManager::ReleaseComponentState(CKBehavior *behavior) {
@@ -892,4 +929,5 @@ void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
     RegisterScriptParameterRegistry(m_ScriptEngine);
     RegisterScriptBehaviorBridge(m_ScriptEngine);
     RegisterScriptRuntime(m_ScriptEngine);
+    RegisterScriptAsync(m_ScriptEngine);
 }

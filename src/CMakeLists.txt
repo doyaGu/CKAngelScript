@@ -27,6 +27,7 @@ set(CKAS_HEADERS
         ScriptRuntime.h
         ScriptRuntimeMetadata.h
         ScriptRuntimeDependency.h
+        ScriptAsync.h
         ScriptRefCounted.h
         ScriptBehaviorBridge.h
         ScriptComponentMetadata.h
@@ -70,6 +71,7 @@ set(CKAS_SOURCES
         ScriptRuntime.cpp
         ScriptRuntimeMetadata.cpp
         ScriptRuntimeDependency.cpp
+        ScriptAsync.cpp
         ScriptBehaviorBridge.cpp
         ScriptBridgeRuntime.cpp
         ScriptBridgeLayoutCache.cpp

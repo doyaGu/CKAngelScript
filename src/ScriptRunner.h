@@ -15,6 +15,12 @@ struct CachedScript;
 
 using ScriptFunctionArgumentHandler = std::function<void(asIScriptContext *)>;
 
+enum class ScriptExecutionStatus {
+    Finished,
+    Suspended,
+    Failed
+};
+
 class ScriptRunner {
 public:
     explicit ScriptRunner(ScriptManager *man);
@@ -42,7 +48,11 @@ public:
     asIScriptFunction *GetFunctionByDecl(const char *decl) const;
 
     bool ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
+    ScriptExecutionStatus ExecuteScriptStatus(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
     bool ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
+    ScriptExecutionStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
+    bool IsContextSuspended() const;
+    void AbortContext();
 
     // Timing / metrics
     bool IsProfiling() const { return m_Profiling; }
@@ -72,6 +82,7 @@ private:
     double m_ElapsedMs = 0.0;
     std::string m_ErrorMessage;
     std::string m_StackTrace;
+    CKBehaviorContext m_BehaviorContextStorage;
 };
 
 #endif // CK_SCRIPTRUNNER_H

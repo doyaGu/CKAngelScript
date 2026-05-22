@@ -18,6 +18,7 @@
 #define SCRIPT_MANAGER_TYPE 3000
 
 class CKBehavior;
+class ScriptAsyncScheduler;
 class ScriptBehaviorBridge;
 class ScriptParameterRegistry;
 class ScriptRuntime;
@@ -134,6 +135,8 @@ struct ScriptComponentState {
     asIScriptFunction *OnDisable = nullptr;
     asIScriptFunction *OnDestroy = nullptr;
     asIScriptFunction *OnReset = nullptr;
+    asIScriptFunction *ActiveLifecycle = nullptr;
+    std::string ActiveLifecycleName;
 
     std::string ScriptName;
     std::string ClassName;
@@ -154,6 +157,9 @@ struct ScriptComponentState {
     bool ScriptActive = false;
     bool Paused = false;
     bool Failed = false;
+    bool PendingDestroy = false;
+    bool PendingDisableOutput = false;
+    bool PendingResetRuntime = false;
 };
 
 class ScriptManager : public CKBaseManager {
@@ -263,6 +269,9 @@ public:
     ScriptRuntime *GetRuntime() const {
         return m_Runtime.get();
     }
+    ScriptAsyncScheduler *GetAsyncScheduler() const {
+        return m_AsyncScheduler.get();
+    }
     ScriptParameterRegistry *GetParameterRegistry() const {
         return m_ParameterRegistry.get();
     }
@@ -311,6 +320,7 @@ protected:
     std::unique_ptr<ScriptBehaviorBridge> m_BehaviorBridge;
     std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
     std::unique_ptr<ScriptRuntime> m_Runtime;
+    std::unique_ptr<ScriptAsyncScheduler> m_AsyncScheduler;
 #if CKAS_BUILD_SELF_TESTS
     bool m_StartupSelfTestsAttempted = false;
 #endif
