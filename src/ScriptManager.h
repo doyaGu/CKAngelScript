@@ -280,9 +280,6 @@ public:
         return (m_Flags & AS_INITED) != 0;
     }
 
-#if CKAS_BUILD_SELF_TESTS
-    CKERROR RunStartupSelfTests();
-#endif
     int Init();
     int Shutdown();
 
@@ -321,13 +318,6 @@ protected:
     std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
     std::unique_ptr<ScriptRuntime> m_Runtime;
     std::unique_ptr<ScriptAsyncScheduler> m_AsyncScheduler;
-#if CKAS_BUILD_SELF_TESTS
-    bool m_StartupSelfTestsAttempted = false;
-#endif
 };
-
-#if CKAS_BUILD_SELF_TESTS
-bool RunScriptComponentMetadataSelfTest(std::string &error);
-#endif
 
 #endif // CK_SCRIPTMANAGER_H

@@ -185,8 +185,4 @@ private:
 
 void RegisterScriptAsync(asIScriptEngine *engine);
 
-#if CKAS_BUILD_SELF_TESTS
-bool RunScriptAsyncSelfTest(class CKContext *context, asIScriptEngine *engine, std::string &error);
-#endif
-
 #endif // CK_SCRIPTASYNC_H

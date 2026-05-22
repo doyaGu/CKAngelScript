@@ -240,8 +240,4 @@ private:
 };
 
 void RegisterScriptParameterRegistry(asIScriptEngine *engine);
-#if CKAS_BUILD_SELF_TESTS
-bool RunScriptParameterRegistrySelfTest(CKContext *context, std::string &error);
-#endif
-
 #endif // CK_SCRIPTPARAMETERREGISTRY_H

@@ -1,0 +1,53 @@
+#include "ScriptSelfTests.h"
+
+#include <memory>
+#include <string>
+
+#include "ScriptCache.h"
+#include "ScriptManager.h"
+#include "ScriptRuntime.h"
+#include "ScriptRuntimeDependency.h"
+#include "ScriptRuntimeMetadata.h"
+
+bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "Runtime self-test requires a CKContext and AngelScript engine.";
+        return false;
+    }
+    if (!ScriptRuntimeMetadata::RunScriptRuntimeMetadataSelfTest(error)) {
+        return false;
+    }
+    if (!ScriptRuntimeDependencyResolver::RunScriptRuntimeDependencySelfTest(error)) {
+        return false;
+    }
+    const char *source =
+        "void __ckas_runtime_compile_probe(const ScriptRuntimeContext &in ctx) {\n"
+        "  CKContext@ c = ctx.Context();\n"
+        "  float dt = ctx.DeltaTime();\n"
+        "  string id = ctx.ScriptId();\n"
+        "  string name = ctx.ScriptName();\n"
+        "  string version = ctx.ScriptVersion();\n"
+        "  string custom = ctx.Metadata(\"custom\", \"fallback\");\n"
+        "  int metadataCount = ctx.MetadataCount();\n"
+        "  string metadataKey = ctx.MetadataKey(0);\n"
+        "  string metadataValue = ctx.MetadataValue(0);\n"
+        "  CKBehaviorContext behaviorContext = ctx.ToBehaviorContext();\n"
+        "  BehaviorGraph@ graph = Behavior::Graph(ctx, \"__missing__\");\n"
+        "  BehaviorRef@ behavior = Behavior::Find(ctx, \"__missing__\");\n"
+        "  BBDecl@ decl = BB::Require(ctx, \"__missing__\");\n"
+        "  int bbCount = BB::Count(ctx);\n"
+        "  ParamTypeInfo@ param = Param::Find(ctx, \"int\");\n"
+        "  array<string>@ scripts = Runtime::List(ctx);\n"
+        "  string runtimeVersion = Runtime::Version(ctx, \"ckas.runtime.smoke\");\n"
+        "  string runtimeMetadata = Runtime::Metadata(ctx, \"ckas.runtime.smoke\", \"custom\", \"fallback\");\n"
+        "  array<string>@ deps = Runtime::Dependencies(ctx, \"ckas.runtime.smoke\");\n"
+        "}\n";
+    const std::string moduleName = "__CKAS_RuntimeCompileSelfTest";
+    std::shared_ptr<CachedScript> script = ScriptManager::GetManager(context)->GetScriptCache().CompileScript(engine, moduleName, source);
+    if (!script || !script->module) {
+        error = "Runtime script API compile probe failed.";
+        return false;
+    }
+    ScriptManager::GetManager(context)->GetScriptCache().UnloadScript(moduleName);
+    return true;
+}

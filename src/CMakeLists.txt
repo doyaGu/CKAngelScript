@@ -28,6 +28,7 @@ set(CKAS_HEADERS
         ScriptRuntimeMetadata.h
         ScriptRuntimeDependency.h
         ScriptAsync.h
+        ScriptSelfTests.h
         ScriptRefCounted.h
         ScriptBehaviorBridge.h
         ScriptComponentMetadata.h
@@ -89,7 +90,17 @@ set(CKAS_SOURCES
 )
 
 if (CKAS_BUILD_SELF_TESTS)
-    list(APPEND CKAS_SOURCES ScriptBridgeSelfTest.cpp)
+    list(APPEND CKAS_SOURCES
+            ScriptStartupSelfTest.cpp
+            ScriptComponentMetadataSelfTest.cpp
+            ScriptParameterConversionSelfTest.cpp
+            ScriptParameterRegistrySelfTest.cpp
+            ScriptRuntimeMetadataSelfTest.cpp
+            ScriptRuntimeDependencySelfTest.cpp
+            ScriptRuntimeSelfTest.cpp
+            ScriptAsyncSelfTest.cpp
+            ScriptBridgeSelfTest.cpp
+    )
 endif ()
 
 add_library(CKAngelScript SHARED ${CKAS_SOURCES} ${CKAS_HEADERS})

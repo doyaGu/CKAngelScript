@@ -80,10 +80,6 @@ private:
         Failed
     };
 
-#if CKAS_BUILD_SELF_TESTS
-    friend bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
-#endif
-
     void EnsureScanned();
     std::vector<ScriptRuntimeManifest> Discover(std::string &error) const;
     bool LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scripts, bool reconcileModules);
@@ -111,8 +107,5 @@ private:
 };
 
 void RegisterScriptRuntime(asIScriptEngine *engine);
-#if CKAS_BUILD_SELF_TESTS
-bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
-#endif
 
 #endif // CK_SCRIPTRUNTIME_H
