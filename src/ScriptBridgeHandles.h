@@ -510,12 +510,14 @@ public:
     std::string Error() const;
     std::string Describe() const;
     GraphEditNode *Import(BehaviorNode *node);
+    GraphEditNode *Clone(BehaviorNode *node, const std::string &name = std::string());
     GraphEditNode *AddDecl(BBDecl *decl, const std::string &name = std::string());
     GraphEditNode *AddConfig(BBConfig *config, const std::string &name = std::string());
     BehaviorGraphEdit *Remove(BehaviorNode *node, bool removeIncidentLinks = false);
     BehaviorGraphEdit *Move(BehaviorNode *node, BehaviorGraph *targetGraph);
     BehaviorGraphEdit *EnsureInputCount(GraphEditNode *node, int count, const std::string &prefix = std::string());
     BehaviorGraphEdit *EnsureOutputCount(GraphEditNode *node, int count, const std::string &prefix = std::string());
+    BehaviorGraphEdit *Target(GraphEditNode *node, CKBeObject *target);
     GraphEditLink *Link(GraphEditNode *source, int sourceOutputIndex, GraphEditNode *target, int targetInputIndex, int delay = 1);
     GraphEditLink *LinkSlots(GraphEditNode *source, BBSlot *sourceOutput, GraphEditNode *target, BBSlot *targetInput, int delay = 1);
     BehaviorGraphEdit *Unlink(BehaviorLinkRef *link);
@@ -542,7 +544,7 @@ public:
 
 private:
     struct NodeSpec {
-        enum class Kind { Existing, Create };
+        enum class Kind { Existing, Create, Clone };
         Kind Type = Kind::Existing;
         CK_ID BehaviorId = 0;
         ScriptBridgeObjectStamp BehaviorStamp;
@@ -581,6 +583,12 @@ private:
         int NodeIndex = -1;
         int Count = 0;
         std::string Prefix;
+    };
+
+    struct TargetSpec {
+        int NodeIndex = -1;
+        CK_ID TargetId = 0;
+        ScriptBridgeObjectStamp TargetStamp;
     };
 
     struct ValueSpec {
@@ -652,6 +660,7 @@ private:
     std::vector<RemoveSpec> m_Removes;
     std::vector<MoveSpec> m_Moves;
     std::vector<LayoutSpec> m_LayoutEdits;
+    std::vector<TargetSpec> m_Targets;
     std::vector<ValueSpec> m_Values;
     std::vector<SourceSpec> m_Sources;
     std::vector<OperationSpec> m_Operations;

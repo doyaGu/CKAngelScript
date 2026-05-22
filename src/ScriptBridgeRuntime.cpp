@@ -50,6 +50,75 @@ bool ApplyIndexedLocalParameters(CKBehavior *behavior,
     return true;
 }
 
+bool ConfigureBehaviorOwnerAndTarget(CKContext *context,
+                                     CKBehavior *behavior,
+                                     const ScriptBridgeBBInvocationSpec &request,
+                                     std::string &error) {
+    CKBeObject *owner = request.OwnerId ? CKBeObject::Cast(GetCKObjectById(context, request.OwnerId)) : nullptr;
+    CKBeObject *target = request.TargetId ? CKBeObject::Cast(GetCKObjectById(context, request.TargetId)) : nullptr;
+    const CK_CLASSID compatibleClassId = behavior->GetCompatibleClassID();
+
+    if (target) {
+        if (!behavior->IsTargetable()) {
+            error = fmt::format("Building Block '{}' is not targetable.", SafeString(behavior->GetPrototypeName()));
+            return false;
+        }
+
+        if (!CKIsChildClassOf(target, compatibleClassId)) {
+            error = fmt::format("Target '{}' is not compatible with Building Block '{}'.",
+                                SafeString(target->GetName()),
+                                SafeString(behavior->GetPrototypeName()));
+            return false;
+        }
+
+        CKERROR err = behavior->UseTarget(TRUE);
+        if (err != CK_OK) {
+            error = fmt::format("Failed to enable target parameter for Building Block '{}' (CKERROR {}).",
+                                SafeString(behavior->GetPrototypeName()),
+                                err);
+            return false;
+        }
+
+        CKParameterIn *targetParam = behavior->GetTargetParameter();
+        if (!targetParam) {
+            error = "Target parameter was not created.";
+            return false;
+        }
+
+        CKParameterLocal *targetSource = behavior->CreateLocalParameter(const_cast<CKSTRING>("__CKAS_Target"), targetParam->GetGUID());
+        if (!targetSource) {
+            error = "Failed to create target source parameter.";
+            return false;
+        }
+
+        CK_ID targetId = target->GetID();
+        if (targetSource->SetValue(&targetId, sizeof(targetId)) != CK_OK || targetParam->SetDirectSource(targetSource) != CK_OK) {
+            error = "Failed to set target parameter.";
+            return false;
+        }
+    } else {
+        if (owner && !CKIsChildClassOf(owner, compatibleClassId)) {
+            error = fmt::format("Owner '{}' is not compatible with Building Block '{}'.",
+                                SafeString(owner->GetName()),
+                                SafeString(behavior->GetPrototypeName()));
+            return false;
+        }
+
+        if (!owner && compatibleClassId != CKCID_OBJECT && compatibleClassId != CKCID_BEOBJECT) {
+            error = fmt::format("Building Block '{}' requires an owner or target.", SafeString(behavior->GetPrototypeName()));
+            return false;
+        }
+    }
+
+    CKERROR err = behavior->SetOwner(owner, FALSE);
+    if (err != CK_OK) {
+        error = fmt::format("Failed to set Building Block owner (CKERROR {}).", err);
+        return false;
+    }
+
+    return true;
+}
+
 } // namespace ScriptBehaviorBridgeInternal
 
 BBResult *ScriptBehaviorBridge::RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex) {
@@ -218,6 +287,10 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
         return fail(error);
     }
 
+    if (!ScriptBehaviorBridgeInternal::ConfigureBehaviorOwnerAndTarget(context, behavior, request, error)) {
+        return fail(error);
+    }
+
     err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &ctx);
     if (err != CK_OK) {
         return fail(fmt::format("Building Block CREATE callback failed (CKERROR {}).", err));
@@ -225,58 +298,6 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
     createCallbackSent = true;
 
     CKBeObject *owner = request.OwnerId ? CKBeObject::Cast(GetCKObjectById(context, request.OwnerId)) : nullptr;
-    CKBeObject *target = request.TargetId ? CKBeObject::Cast(GetCKObjectById(context, request.TargetId)) : nullptr;
-    const CK_CLASSID compatibleClassId = behavior->GetCompatibleClassID();
-
-    if (target) {
-        if (!behavior->IsTargetable()) {
-            return fail(fmt::format("Building Block '{}' is not targetable.", SafeString(behavior->GetPrototypeName())));
-        }
-
-        if (!CKIsChildClassOf(target, compatibleClassId)) {
-            return fail(fmt::format("Target '{}' is not compatible with Building Block '{}'.",
-                                    SafeString(target->GetName()),
-                                    SafeString(behavior->GetPrototypeName())));
-        }
-
-        err = behavior->UseTarget(TRUE);
-        if (err != CK_OK) {
-            return fail(fmt::format("Failed to enable target parameter for Building Block '{}' (CKERROR {}).",
-                                    SafeString(behavior->GetPrototypeName()),
-                                    err));
-        }
-
-        CKParameterIn *targetParam = behavior->GetTargetParameter();
-        if (!targetParam) {
-            return fail("Target parameter was not created.");
-        }
-
-        CKParameterLocal *targetSource = behavior->CreateLocalParameter(const_cast<CKSTRING>("__CKAS_Target"), targetParam->GetGUID());
-        if (!targetSource) {
-            return fail("Failed to create target source parameter.");
-        }
-
-        CK_ID targetId = target->GetID();
-        if (targetSource->SetValue(&targetId, sizeof(targetId)) != CK_OK || targetParam->SetDirectSource(targetSource) != CK_OK) {
-            return fail("Failed to set target parameter.");
-        }
-    } else {
-        if (owner && !CKIsChildClassOf(owner, compatibleClassId)) {
-            return fail(fmt::format("Owner '{}' is not compatible with Building Block '{}'.",
-                                    SafeString(owner->GetName()),
-                                    SafeString(behavior->GetPrototypeName())));
-        }
-
-        if (!owner && compatibleClassId != CKCID_OBJECT && compatibleClassId != CKCID_BEOBJECT) {
-            return fail(fmt::format("Building Block '{}' requires an owner or target.", SafeString(behavior->GetPrototypeName())));
-        }
-    }
-
-    err = behavior->SetOwner(owner, FALSE);
-    if (err != CK_OK) {
-        return fail(fmt::format("Failed to set Building Block owner (CKERROR {}).", err));
-    }
-
     if (owner) {
         err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORATTACH, &ctx);
         if (err != CK_OK) {
@@ -835,6 +856,10 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         return fail(error);
     }
 
+    if (!ScriptBehaviorBridgeInternal::ConfigureBehaviorOwnerAndTarget(context, behavior, request, error)) {
+        return fail(error);
+    }
+
     err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &ctx);
     if (err != CK_OK) {
         return fail(fmt::format("Building Block CREATE callback failed (CKERROR {}).", err));
@@ -842,58 +867,6 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
     createCallbackSent = true;
 
     CKBeObject *owner = request.OwnerId ? CKBeObject::Cast(GetCKObjectById(context, request.OwnerId)) : nullptr;
-    CKBeObject *target = request.TargetId ? CKBeObject::Cast(GetCKObjectById(context, request.TargetId)) : nullptr;
-    const CK_CLASSID compatibleClassId = behavior->GetCompatibleClassID();
-
-    if (target) {
-        if (!behavior->IsTargetable()) {
-            return fail(fmt::format("Building Block '{}' is not targetable.", SafeString(behavior->GetPrototypeName())));
-        }
-
-        if (!CKIsChildClassOf(target, compatibleClassId)) {
-            return fail(fmt::format("Target '{}' is not compatible with Building Block '{}'.",
-                SafeString(target->GetName()),
-                SafeString(behavior->GetPrototypeName())));
-        }
-
-        err = behavior->UseTarget(TRUE);
-        if (err != CK_OK) {
-            return fail(fmt::format("Failed to enable target parameter for Building Block '{}' (CKERROR {}).",
-                SafeString(behavior->GetPrototypeName()),
-                err));
-        }
-
-        CKParameterIn *targetParam = behavior->GetTargetParameter();
-        if (!targetParam) {
-            return fail("Target parameter was not created.");
-        }
-
-        CKParameterLocal *targetSource = behavior->CreateLocalParameter(const_cast<CKSTRING>("__CKAS_Target"), targetParam->GetGUID());
-        if (!targetSource) {
-            return fail("Failed to create target source parameter.");
-        }
-
-        CK_ID targetId = target->GetID();
-        if (targetSource->SetValue(&targetId, sizeof(targetId)) != CK_OK || targetParam->SetDirectSource(targetSource) != CK_OK) {
-            return fail("Failed to set target parameter.");
-        }
-    } else {
-        if (owner && !CKIsChildClassOf(owner, compatibleClassId)) {
-            return fail(fmt::format("Owner '{}' is not compatible with Building Block '{}'.",
-                SafeString(owner->GetName()),
-                SafeString(behavior->GetPrototypeName())));
-        }
-
-        if (!owner && compatibleClassId != CKCID_OBJECT && compatibleClassId != CKCID_BEOBJECT) {
-            return fail(fmt::format("Building Block '{}' requires an owner or target.", SafeString(behavior->GetPrototypeName())));
-        }
-    }
-
-    err = behavior->SetOwner(owner, FALSE);
-    if (err != CK_OK) {
-        return fail(fmt::format("Failed to set Building Block owner (CKERROR {}).", err));
-    }
-
     if (owner) {
         err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORATTACH, &ctx);
         if (err != CK_OK) {
