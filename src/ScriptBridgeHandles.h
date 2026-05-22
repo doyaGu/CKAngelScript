@@ -514,6 +514,8 @@ public:
     GraphEditNode *AddConfig(BBConfig *config, const std::string &name = std::string());
     BehaviorGraphEdit *Remove(BehaviorNode *node, bool removeIncidentLinks = false);
     BehaviorGraphEdit *Move(BehaviorNode *node, BehaviorGraph *targetGraph);
+    BehaviorGraphEdit *EnsureInputCount(GraphEditNode *node, int count, const std::string &prefix = std::string());
+    BehaviorGraphEdit *EnsureOutputCount(GraphEditNode *node, int count, const std::string &prefix = std::string());
     GraphEditLink *Link(GraphEditNode *source, int sourceOutputIndex, GraphEditNode *target, int targetInputIndex, int delay = 1);
     GraphEditLink *LinkSlots(GraphEditNode *source, BBSlot *sourceOutput, GraphEditNode *target, BBSlot *targetInput, int delay = 1);
     BehaviorGraphEdit *Unlink(BehaviorLinkRef *link);
@@ -573,6 +575,14 @@ private:
         ScriptBridgeObjectStamp TargetRootStamp;
     };
 
+    struct LayoutSpec {
+        enum class Kind { EnsureInputCount, EnsureOutputCount };
+        Kind Type = Kind::EnsureInputCount;
+        int NodeIndex = -1;
+        int Count = 0;
+        std::string Prefix;
+    };
+
     struct ValueSpec {
         int NodeIndex = -1;
         ScriptBridgeSlotKind Kind = ScriptBridgeSlotKind::Standalone;
@@ -601,6 +611,8 @@ private:
     bool ResolveNodeIndex(const GraphEditNode *node, int &index, std::string &error) const;
     CKBehavior *ResolveNodeBehavior(int index) const;
     CKBehaviorLink *ResolveExistingLink(const LinkSpec &spec) const;
+    int PlannedInputCount(int nodeIndex) const;
+    int PlannedOutputCount(int nodeIndex) const;
     bool ValidateValueSpec(CKContext *context, const ValueSpec &spec, std::string &error) const;
     bool ApplyExistingValue(CKBehavior *behavior,
                             const ValueSpec &spec,
@@ -621,6 +633,7 @@ private:
                                 std::vector<ParamOperationRef *> &operations,
                                 std::vector<CK_ID> &replacedOperations);
     BehaviorGraphEdit *SetValue(GraphEditNode *node, BBSlot *slot, ScriptBridgeSlotKind kind, const ScriptParamValue &value, const char *method);
+    BehaviorGraphEdit *EnsureIoCount(GraphEditNode *node, LayoutSpec::Kind kind, int count, const std::string &prefix, const char *method);
     void RemoveNodeValue(int nodeIndex, ScriptBridgeSlotKind kind, int slotIndex);
     void RemoveNodeSource(int nodeIndex, int pinIndex);
     void RemoveNodeOperation(int nodeIndex, int pinIndex);
@@ -638,6 +651,7 @@ private:
     std::vector<LinkSpec> m_Links;
     std::vector<RemoveSpec> m_Removes;
     std::vector<MoveSpec> m_Moves;
+    std::vector<LayoutSpec> m_LayoutEdits;
     std::vector<ValueSpec> m_Values;
     std::vector<SourceSpec> m_Sources;
     std::vector<OperationSpec> m_Operations;

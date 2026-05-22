@@ -200,6 +200,49 @@ const ScriptBridgeLayoutParamSlot *FindLayoutSlot(const std::vector<ScriptBridge
     return it != slots.end() && it->Index == index ? &*it : nullptr;
 }
 
+std::string BehaviorIoName(const std::string &prefix, int index, const char *fallback) {
+    const char *actualPrefix = prefix.empty() ? fallback : prefix.c_str();
+    return fmt::format("{} {}", actualPrefix, index);
+}
+
+int BehaviorIoCount(CKBehavior *behavior, bool input) {
+    if (!behavior) {
+        return 0;
+    }
+    return input ? behavior->GetInputCount() : behavior->GetOutputCount();
+}
+
+CKBehaviorIO *CreateBehaviorIo(CKBehavior *behavior, bool input, const std::string &name) {
+    if (!behavior) {
+        return nullptr;
+    }
+    return input ? behavior->CreateInput(const_cast<CKSTRING>(name.c_str()))
+                 : behavior->CreateOutput(const_cast<CKSTRING>(name.c_str()));
+}
+
+CKBehaviorIO *RemoveLastBehaviorIo(CKBehavior *behavior, bool input) {
+    if (!behavior) {
+        return nullptr;
+    }
+    const int count = BehaviorIoCount(behavior, input);
+    if (count <= 0) {
+        return nullptr;
+    }
+    return input ? behavior->RemoveInput(count - 1)
+                 : behavior->RemoveOutput(count - 1);
+}
+
+void NotifyBehaviorLayoutEdited(ScriptBehaviorBridge *bridge, CKBehavior *behavior) {
+    if (!behavior) {
+        return;
+    }
+    CallBridgeBehaviorCallback(behavior, CKM_BEHAVIOREDITED);
+    if (bridge) {
+        bridge->InvalidateBehaviorLayout(behavior->GetID());
+    }
+    behavior->NotifyEdition();
+}
+
 CKParameterLocal *CreateGraphEditInputSource(CKBehavior *behavior,
                                              int pinIndex,
                                              const ScriptParamValue &value,
@@ -762,12 +805,13 @@ std::string BehaviorGraphEdit::Error() const {
 }
 
 std::string BehaviorGraphEdit::Describe() const {
-    return fmt::format("BehaviorGraphEdit(root={}, nodes={}, links={}, removes={}, moves={})",
+    return fmt::format("BehaviorGraphEdit(root={}, nodes={}, links={}, removes={}, moves={}, layoutEdits={})",
                        ScriptBridgeGraphInternal::BehaviorLabel(RootBehavior()),
                        m_Nodes.size(),
                        m_Links.size(),
                        m_Removes.size(),
-                       m_Moves.size());
+                       m_Moves.size(),
+                       m_LayoutEdits.size());
 }
 
 GraphEditNode *BehaviorGraphEdit::Import(BehaviorNode *node) {
@@ -862,6 +906,14 @@ BehaviorGraphEdit *BehaviorGraphEdit::Move(BehaviorNode *node, BehaviorGraph *ta
     }
     AddRef();
     return this;
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::EnsureInputCount(GraphEditNode *node, int count, const std::string &prefix) {
+    return EnsureIoCount(node, LayoutSpec::Kind::EnsureInputCount, count, prefix, "BehaviorGraphEdit.EnsureInputCount");
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::EnsureOutputCount(GraphEditNode *node, int count, const std::string &prefix) {
+    return EnsureIoCount(node, LayoutSpec::Kind::EnsureOutputCount, count, prefix, "BehaviorGraphEdit.EnsureOutputCount");
 }
 
 GraphEditLink *BehaviorGraphEdit::Link(GraphEditNode *source,
@@ -1067,6 +1119,12 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
     std::vector<CK_ID> createdValueLocalSources;
     std::vector<CK_ID> replacedValueLocalSources;
     std::vector<CK_ID> replacedOperations;
+    struct AppliedLayoutEdit {
+        CK_ID BehaviorId = 0;
+        LayoutSpec::Kind Type = LayoutSpec::Kind::EnsureInputCount;
+        int OriginalCount = 0;
+    };
+    std::vector<AppliedLayoutEdit> appliedLayoutEdits;
 
     auto rollbackCreated = [&]() {
         for (ParamOperationRef *operation : appliedOperations) {
@@ -1095,6 +1153,23 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
                 context->DestroyObject(link);
             }
         }
+        for (auto it = appliedLayoutEdits.rbegin(); it != appliedLayoutEdits.rend(); ++it) {
+            CKBehavior *behavior = CKBehavior::Cast(GetCKObjectById(context, it->BehaviorId));
+            if (!behavior) {
+                continue;
+            }
+            const bool input = it->Type == LayoutSpec::Kind::EnsureInputCount;
+            while (ScriptBridgeGraphInternal::BehaviorIoCount(behavior, input) > it->OriginalCount) {
+                CKBehaviorIO *removed = ScriptBridgeGraphInternal::RemoveLastBehaviorIo(behavior, input);
+                if (removed) {
+                    context->DestroyObject(removed);
+                } else {
+                    break;
+                }
+            }
+            ScriptBridgeGraphInternal::NotifyBehaviorLayoutEdited(m_Bridge, behavior);
+        }
+        appliedLayoutEdits.clear();
         for (CK_ID behaviorId : createdNodes) {
             if (CKBehavior *behavior = CKBehavior::Cast(GetCKObjectById(context, behaviorId))) {
                 if (root) {
@@ -1138,6 +1213,29 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         }
         spec.CreatedBehaviorId = behavior->GetID();
         createdNodes.push_back(behavior->GetID());
+    }
+
+    for (const LayoutSpec &spec : m_LayoutEdits) {
+        CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
+        if (!behavior) {
+            return failApply("BehaviorGraphEdit layout edit target behavior is not valid.");
+        }
+        const bool input = spec.Type == LayoutSpec::Kind::EnsureInputCount;
+        const char *fallbackPrefix = input ? "In" : "Out";
+        const int originalCount = ScriptBridgeGraphInternal::BehaviorIoCount(behavior, input);
+        appliedLayoutEdits.push_back(AppliedLayoutEdit{behavior->GetID(), spec.Type, originalCount});
+        for (int i = originalCount; i < spec.Count; ++i) {
+            const std::string name = ScriptBridgeGraphInternal::BehaviorIoName(spec.Prefix, i, fallbackPrefix);
+            if (!ScriptBridgeGraphInternal::CreateBehaviorIo(behavior, input, name)) {
+                error = fmt::format("Failed to create {} #{} '{}' on {}.",
+                                    input ? "input" : "output",
+                                    i,
+                                    name,
+                                    ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+                return failApply(error);
+            }
+        }
+        ScriptBridgeGraphInternal::NotifyBehaviorLayoutEdited(m_Bridge, behavior);
     }
 
     for (LinkSpec &spec : m_Links) {
@@ -1419,6 +1517,33 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
         return removedNodes.find(index) != removedNodes.end();
     };
 
+    for (const LayoutSpec &spec : m_LayoutEdits) {
+        if (spec.NodeIndex < 0 || spec.NodeIndex >= static_cast<int>(m_Nodes.size()) || nodeRemoved(spec.NodeIndex)) {
+            error = "BehaviorGraphEdit layout edit references an invalid or removed node.";
+            return false;
+        }
+        const NodeSpec &node = m_Nodes[spec.NodeIndex];
+        if (node.Type != NodeSpec::Kind::Existing) {
+            error = "BehaviorGraphEdit layout edit can only target existing behavior nodes.";
+            return false;
+        }
+        CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
+        if (!behavior) {
+            error = "BehaviorGraphEdit layout edit target behavior is not valid.";
+            return false;
+        }
+        const int currentCount = spec.Type == LayoutSpec::Kind::EnsureInputCount
+            ? behavior->GetInputCount()
+            : behavior->GetOutputCount();
+        if (spec.Count < currentCount) {
+            error = fmt::format("BehaviorGraphEdit layout edit cannot shrink {} from {} to {}.",
+                                ScriptBridgeGraphInternal::BehaviorLabel(behavior),
+                                currentCount,
+                                spec.Count);
+            return false;
+        }
+    }
+
     for (const LinkSpec &spec : m_Links) {
         if (spec.Type == LinkSpec::Kind::Unlink) {
             CKBehaviorLink *link = ResolveExistingLink(spec);
@@ -1442,7 +1567,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
         CKBehavior *source = ResolveNodeBehavior(spec.SourceNodeIndex);
         CKBehavior *target = ResolveNodeBehavior(spec.TargetNodeIndex);
         if (source) {
-            if (spec.SourceOutputIndex < 0 || spec.SourceOutputIndex >= source->GetOutputCount()) {
+            if (spec.SourceOutputIndex < 0 || spec.SourceOutputIndex >= PlannedOutputCount(spec.SourceNodeIndex)) {
                 error = fmt::format("Source output index #{} is out of range for {}.",
                                     spec.SourceOutputIndex,
                                     ScriptBridgeGraphInternal::BehaviorLabel(source));
@@ -1460,7 +1585,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
         }
 
         if (target) {
-            if (spec.TargetInputIndex < 0 || spec.TargetInputIndex >= target->GetInputCount()) {
+            if (spec.TargetInputIndex < 0 || spec.TargetInputIndex >= PlannedInputCount(spec.TargetNodeIndex)) {
                 error = fmt::format("Target input index #{} is out of range for {}.",
                                     spec.TargetInputIndex,
                                     ScriptBridgeGraphInternal::BehaviorLabel(target));
@@ -1626,6 +1751,28 @@ CKBehavior *BehaviorGraphEdit::ResolveNodeBehavior(int index) const {
 
 CKBehaviorLink *BehaviorGraphEdit::ResolveExistingLink(const LinkSpec &spec) const {
     return ScriptBridgeGraphInternal::StampedLinkById(m_Bridge, spec.ExistingLinkId, spec.ExistingLinkStamp);
+}
+
+int BehaviorGraphEdit::PlannedInputCount(int nodeIndex) const {
+    CKBehavior *behavior = ResolveNodeBehavior(nodeIndex);
+    int count = behavior ? behavior->GetInputCount() : 0;
+    for (const LayoutSpec &spec : m_LayoutEdits) {
+        if (spec.NodeIndex == nodeIndex && spec.Type == LayoutSpec::Kind::EnsureInputCount) {
+            count = std::max(count, spec.Count);
+        }
+    }
+    return count;
+}
+
+int BehaviorGraphEdit::PlannedOutputCount(int nodeIndex) const {
+    CKBehavior *behavior = ResolveNodeBehavior(nodeIndex);
+    int count = behavior ? behavior->GetOutputCount() : 0;
+    for (const LayoutSpec &spec : m_LayoutEdits) {
+        if (spec.NodeIndex == nodeIndex && spec.Type == LayoutSpec::Kind::EnsureOutputCount) {
+            count = std::max(count, spec.Count);
+        }
+    }
+    return count;
 }
 
 bool BehaviorGraphEdit::ValidateValueSpec(CKContext *context, const ValueSpec &spec, std::string &error) const {
@@ -1886,6 +2033,29 @@ BehaviorGraphEdit *BehaviorGraphEdit::SetValue(GraphEditNode *node,
             spec.Value = value;
             m_Values.push_back(spec);
         }
+    }
+    AddRef();
+    return this;
+}
+
+BehaviorGraphEdit *BehaviorGraphEdit::EnsureIoCount(GraphEditNode *node,
+                                                    LayoutSpec::Kind kind,
+                                                    int count,
+                                                    const std::string &prefix,
+                                                    const char *method) {
+    int nodeIndex = -1;
+    std::string error;
+    if (!ResolveNodeIndex(node, nodeIndex, error)) {
+        SetError(error);
+    } else if (count < 0) {
+        SetError(fmt::format("{} requires a non-negative count.", method ? method : "BehaviorGraphEdit.EnsureIoCount"));
+    } else {
+        LayoutSpec spec;
+        spec.Type = kind;
+        spec.NodeIndex = nodeIndex;
+        spec.Count = count;
+        spec.Prefix = TrimString(prefix);
+        m_LayoutEdits.push_back(spec);
     }
     AddRef();
     return this;

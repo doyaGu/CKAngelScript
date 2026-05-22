@@ -134,7 +134,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "        graph.Root(); graph.Describe(); graph.DescribeCandidates(query);\n";
     source += "        BehaviorGraphEdit@ edit = graph.Edit();\n";
     source += "        ParamValue@ value = Param::String(\"x\"); BBSlot@ pinSlot = null; CKObject@ objectValue = null;\n";
-    source += "        if (edit !is null) { edit.IsValid(); edit.Error(); edit.Describe(); GraphEditNode@ rootEdit = edit.Import(graph.Root()); BBDecl@ missingDecl = BB::Require(ctx, \"__missing__\"); BBConfig@ missingConfig = missingDecl !is null ? missingDecl.Configure() : null; GraphEditNode@ addedDecl = edit.Add(missingDecl); GraphEditNode@ addedConfig = edit.Add(missingConfig, \"Created\"); GraphEditLink@ pendingLink = edit.Link(rootEdit, 0, rootEdit, 0); GraphEditLink@ pendingSlotLink = edit.Link(rootEdit, null, rootEdit, null); edit.Set(addedDecl, pinSlot, value); edit.Set(addedDecl, pinSlot, 1); edit.Set(addedDecl, pinSlot, 1.0f); edit.Set(addedDecl, pinSlot, true); edit.Set(addedDecl, pinSlot, \"x\"); edit.Set(addedDecl, pinSlot, objectValue); edit.SetSetting(addedDecl, pinSlot, value); edit.SetSetting(addedDecl, pinSlot, \"x\"); edit.Source(addedDecl, pinSlot, null); edit.Operation(addedDecl, pinSlot, null); edit.Remove(graph.Root(), true); edit.Move(graph.Root(), graph); GraphEditResult@ validation = edit.Validate(ctx); GraphEditResult@ applied = edit.Apply(ctx); if (validation !is null) { validation.Ok(); bool ok = validation.ok; validation.IsOk(); validation.Error(); validation.Describe(); validation.CreatedNodes(); validation.CreatedLinks(); validation.Raise(ctx); } if (rootEdit !is null) { rootEdit.IsValid(); rootEdit.Error(); rootEdit.Behavior(); rootEdit.Describe(); } if (pendingLink !is null) { pendingLink.IsValid(); pendingLink.Error(); pendingLink.Link(); pendingLink.Describe(); } }\n";
+    source += "        if (edit !is null) { edit.IsValid(); edit.Error(); edit.Describe(); GraphEditNode@ rootEdit = edit.Import(graph.Root()); BBDecl@ missingDecl = BB::Require(ctx, \"__missing__\"); BBConfig@ missingConfig = missingDecl !is null ? missingDecl.Configure() : null; GraphEditNode@ addedDecl = edit.Add(missingDecl); GraphEditNode@ addedConfig = edit.Add(missingConfig, \"Created\"); edit.EnsureInputCount(rootEdit, 1); edit.EnsureOutputCount(rootEdit, 1); GraphEditLink@ pendingLink = edit.Link(rootEdit, 0, rootEdit, 0); GraphEditLink@ pendingSlotLink = edit.Link(rootEdit, null, rootEdit, null); edit.Set(addedDecl, pinSlot, value); edit.Set(addedDecl, pinSlot, 1); edit.Set(addedDecl, pinSlot, 1.0f); edit.Set(addedDecl, pinSlot, true); edit.Set(addedDecl, pinSlot, \"x\"); edit.Set(addedDecl, pinSlot, objectValue); edit.SetSetting(addedDecl, pinSlot, value); edit.SetSetting(addedDecl, pinSlot, \"x\"); edit.Source(addedDecl, pinSlot, null); edit.Operation(addedDecl, pinSlot, null); edit.Remove(graph.Root(), true); edit.Move(graph.Root(), graph); GraphEditResult@ validation = edit.Validate(ctx); GraphEditResult@ applied = edit.Apply(ctx); if (validation !is null) { validation.Ok(); bool ok = validation.ok; validation.IsOk(); validation.Error(); validation.Describe(); validation.CreatedNodes(); validation.CreatedLinks(); validation.Raise(ctx); } if (rootEdit !is null) { rootEdit.IsValid(); rootEdit.Error(); rootEdit.Behavior(); rootEdit.Describe(); } if (pendingLink !is null) { pendingLink.IsValid(); pendingLink.Error(); pendingLink.Link(); pendingLink.Describe(); } }\n";
     source += "        if (node !is null) {\n";
     source += "            node.IsValid(); bool valid = node.valid; node.Error(); node.Describe(); node.Behavior(); node.AsGraph();\n";
     source += "            BehaviorNode@ input = node.Input(0); BehaviorNode@ output = node.Output(0); BehaviorNode@ next = node.Next(query); BehaviorNode@ prev = node.Prev(query); BehaviorNode@ end = node.End(8);\n";
@@ -1229,6 +1229,202 @@ static int CountGraphEditInputSources(CKBehavior *behavior) {
     return count;
 }
 
+static CKObjectDeclaration *FindSelfTestPrototypeDeclarationByName(const char *name) {
+    for (int i = 0; i < CKGetPrototypeDeclarationCount(); ++i) {
+        CKObjectDeclaration *decl = CKGetPrototypeDeclaration(i);
+        if (decl && SafeString(decl->GetName()) == SafeString(const_cast<CKSTRING>(name))) {
+            return decl;
+        }
+    }
+    return nullptr;
+}
+
+static CKBehavior *CreateSelfTestPrototypeBehavior(CKContext *context,
+                                                   const char *objectName,
+                                                   const char *prototypeName,
+                                                   std::string &error) {
+    CKObjectDeclaration *decl = FindSelfTestPrototypeDeclarationByName(prototypeName);
+    if (!decl) {
+        error = fmt::format("Graph edit dynamic layout self-test could not find prototype '{}'.", prototypeName);
+        return nullptr;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, const_cast<CKSTRING>(objectName), CK_OBJECTCREATION_DYNAMIC));
+    if (!behavior) {
+        error = fmt::format("Graph edit dynamic layout self-test failed to create behavior '{}'.", objectName);
+        return nullptr;
+    }
+
+    behavior->UseFunction();
+    const CKERROR err = behavior->InitFromGuid(decl->GetGuid());
+    if (err != CK_OK) {
+        error = fmt::format("Graph edit dynamic layout self-test failed to initialize '{}' from prototype '{}' (CKERROR {}).",
+                            objectName,
+                            prototypeName,
+                            err);
+        DestroySelfTestObject(context, behavior);
+        return nullptr;
+    }
+    behavior->SetName(const_cast<CKSTRING>(objectName), TRUE);
+    return behavior;
+}
+
+static bool RunBehaviorBridgeNativeGraphEditDynamicLayoutSelfTest(CKContext *context,
+                                                                  std::string &error) {
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
+    if (!context || !bridge) {
+        error = "Graph edit dynamic layout self-test requires CKContext and ScriptBehaviorBridge.";
+        return false;
+    }
+
+    CKBehavior *root = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, "__CKAS_GraphEditDynamicRoot", CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *switcher = CreateSelfTestPrototypeBehavior(context, "__CKAS_GraphEditDynamicSwitch", "Switch On Parameter", error);
+    CKBehavior *selector = CreateSelfTestPrototypeBehavior(context, "__CKAS_GraphEditDynamicSelector", "Parameter Selector", error);
+    if (!root || !switcher || !selector) {
+        DestroySelfTestObject(context, selector);
+        DestroySelfTestObject(context, switcher);
+        DestroySelfTestObject(context, root);
+        return false;
+    }
+
+    root->UseGraph();
+    root->AddSubBehavior(switcher);
+    root->AddSubBehavior(selector);
+    bool switcherCreated = false;
+    bool selectorCreated = false;
+    CKERROR callbackErr = CallBridgeBehaviorCallback(switcher, CKM_BEHAVIORCREATE);
+    if (callbackErr == CK_OK) {
+        switcherCreated = true;
+        callbackErr = CallBridgeBehaviorCallback(selector, CKM_BEHAVIORCREATE);
+    }
+    if (callbackErr != CK_OK) {
+        error = fmt::format("Graph edit dynamic layout self-test CREATE callback failed with CKERROR {}.", callbackErr);
+        if (switcherCreated) {
+            CallBridgeBehaviorCallback(switcher, CKM_BEHAVIORDELETE);
+        }
+        root->RemoveSubBehavior(selector);
+        root->RemoveSubBehavior(switcher);
+        DestroySelfTestObject(context, selector);
+        DestroySelfTestObject(context, switcher);
+        DestroySelfTestObject(context, root);
+        return false;
+    }
+    selectorCreated = true;
+
+    const int targetOutputCount = std::max(switcher->GetOutputCount() + 1, 6);
+    const int targetInputCount = std::max(selector->GetInputCount() + 1, 5);
+
+    CKBehaviorContext ctx;
+    ctx.Context = context;
+    ctx.Behavior = root;
+    ctx.ParameterManager = context->GetParameterManager();
+
+    auto cleanup = [&]() {
+        if (root) {
+            while (root->GetSubBehaviorLinkCount() > 0) {
+                CKBehaviorLink *link = root->GetSubBehaviorLink(0);
+                root->RemoveSubBehaviorLink(link);
+                DestroySelfTestObject(context, link);
+            }
+            if (switcher && !switcher->IsToBeDeleted()) root->RemoveSubBehavior(switcher);
+            if (selector && !selector->IsToBeDeleted()) root->RemoveSubBehavior(selector);
+        }
+        if (selectorCreated && selector && !selector->IsToBeDeleted()) {
+            CallBridgeBehaviorCallback(selector, CKM_BEHAVIORDELETE);
+        }
+        if (switcherCreated && switcher && !switcher->IsToBeDeleted()) {
+            CallBridgeBehaviorCallback(switcher, CKM_BEHAVIORDELETE);
+        }
+        DestroySelfTestObject(context, selector);
+        DestroySelfTestObject(context, switcher);
+        DestroySelfTestObject(context, root);
+    };
+
+    BehaviorGraph *graph = new BehaviorGraph(bridge, ctx, root->GetID());
+    BehaviorQuery *switchQuery = (new BehaviorQuery())->Name("__CKAS_GraphEditDynamicSwitch")->Recursive(false);
+    BehaviorQuery *selectorQuery = (new BehaviorQuery())->Name("__CKAS_GraphEditDynamicSelector")->Recursive(false);
+    BehaviorNode *switchNode = graph->Require(switchQuery);
+    BehaviorNode *selectorNode = graph->Require(selectorQuery);
+    switchQuery->Release();
+    selectorQuery->Release();
+    if (!switchNode || !switchNode->IsValid() || !selectorNode || !selectorNode->IsValid()) {
+        error = "Graph edit dynamic layout self-test failed to resolve behavior nodes.";
+        if (selectorNode) selectorNode->Release();
+        if (switchNode) switchNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    BehaviorGraphEdit *edit = graph->Edit();
+    GraphEditNode *editSwitch = edit->Import(switchNode);
+    GraphEditNode *editSelector = edit->Import(selectorNode);
+    edit->EnsureOutputCount(editSwitch, targetOutputCount)->Release();
+    edit->EnsureInputCount(editSelector, targetInputCount)->Release();
+    GraphEditLink *plannedLink = edit->Link(editSwitch, targetOutputCount - 1, editSelector, targetInputCount - 1, 1);
+    GraphEditResult *validation = edit->Validate(ctx);
+    GraphEditResult *applied = edit->Apply(ctx);
+    if (!plannedLink || !plannedLink->IsValid() || !validation || !validation->Ok() || !applied || !applied->Ok()) {
+        error = fmt::format("Graph edit dynamic layout self-test failed apply: validation={} apply={}.",
+                            validation && validation->Ok() ? "ok" : (validation ? validation->Error() : "<null>"),
+                            applied && applied->Ok() ? "ok" : (applied ? applied->Error() : "<null>"));
+        if (applied) applied->Release();
+        if (validation) validation->Release();
+        if (plannedLink) plannedLink->Release();
+        editSelector->Release();
+        editSwitch->Release();
+        edit->Release();
+        selectorNode->Release();
+        switchNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    const bool switchOk = switcher->GetOutputCount() == targetOutputCount &&
+        switcher->GetInputParameterCount() == targetOutputCount;
+    const bool selectorOk = selector->GetInputCount() == targetInputCount &&
+        selector->GetInputParameterCount() == targetInputCount;
+    CKBehaviorLink *link = root->GetSubBehaviorLinkCount() == 1 ? root->GetSubBehaviorLink(0) : nullptr;
+    CKBehaviorIO *sourceIo = link ? link->GetInBehaviorIO() : nullptr;
+    CKBehaviorIO *targetIo = link ? link->GetOutBehaviorIO() : nullptr;
+    const bool linkOk = link &&
+        switcher->GetOutputPosition(sourceIo) == targetOutputCount - 1 &&
+        selector->GetInputPosition(targetIo) == targetInputCount - 1;
+    if (!switchOk || !selectorOk || !linkOk) {
+        error = fmt::format("Graph edit dynamic layout self-test count mismatch: switch outputs={} pins={} selector inputs={} pins={} link={}.",
+                            switcher->GetOutputCount(),
+                            switcher->GetInputParameterCount(),
+                            selector->GetInputCount(),
+                            selector->GetInputParameterCount(),
+                            linkOk ? "ok" : "bad");
+        applied->Release();
+        validation->Release();
+        plannedLink->Release();
+        editSelector->Release();
+        editSwitch->Release();
+        edit->Release();
+        selectorNode->Release();
+        switchNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    applied->Release();
+    validation->Release();
+    plannedLink->Release();
+    editSelector->Release();
+    editSwitch->Release();
+    edit->Release();
+    selectorNode->Release();
+    switchNode->Release();
+    graph->Release();
+    cleanup();
+    return true;
+}
+
 static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
                                                      std::string &error) {
     ScriptManager *manager = ScriptManager::GetManager(context);
@@ -1724,6 +1920,7 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     behavior->CreateInputParameter(const_cast<CKSTRING>("Value"), CKPGUID_INT);
     behavior->CreateOutputParameter(const_cast<CKSTRING>("Result"), CKPGUID_FLOAT);
     behavior->CreateLocalParameter(const_cast<CKSTRING>("State"), CKPGUID_BOOL);
+    bridge->InvalidateBehaviorLayout(behavior->GetID());
 
     const ScriptBridgeObjectStamp stamp = CaptureBridgeObjectStamp(behavior);
     const ScriptBridgeLayoutRecord *layout = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
@@ -1741,6 +1938,7 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     }
 
     const std::string firstSignature = layout->Signature;
+    WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-handle", std::string());
     BehaviorLayout layoutHandle(bridge, behavior->GetID());
     ParamInfo *pinInfo = layoutHandle.Pin(0);
     if (layoutHandle.InputCount() != 1 ||
@@ -1762,6 +1960,8 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     pinInfo->Release();
 
     behavior->CreateInputParameter(const_cast<CKSTRING>("Second"), CKPGUID_STRING);
+    bridge->InvalidateBehaviorLayout(behavior->GetID());
+    WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-refresh", std::string());
     const ScriptBridgeLayoutRecord *refreshed = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
     if (!refreshed ||
         refreshed->Pins.size() != 2 ||
@@ -1773,6 +1973,8 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     }
 
     behavior->CreateInput(const_cast<CKSTRING>("In"));
+    bridge->InvalidateBehaviorLayout(behavior->GetID());
+    WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-duplicate", std::string());
     const ScriptBridgeLayoutRecord *duplicateInputLayout = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
     BBSlot *duplicateInput = duplicateInputLayout
         ? new BBSlot(bridge,
@@ -1806,6 +2008,7 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     duplicateInput->SetMetadata(defaultInputFlags, std::string(), std::string());
 
     BBConfig defaultInputConfig(bridge, CKBehaviorContext(), MakeDefaultRequest(CKBehaviorContext()));
+    WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-register", std::string());
     if (!defaultInputConfig.RegisterSlot(duplicateInput)) {
         error = "BBConfig duplicate input metadata self-test failed to register slot: " + defaultInputConfig.Error();
         duplicateInput->Release();
@@ -1822,6 +2025,7 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     }
     duplicateInput->Release();
 
+    WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-destroy", std::string());
     DestroySelfTestObject(context, behavior);
     return true;
 }
@@ -2423,6 +2627,12 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-layout-cache", std::string());
     if (!RunBehaviorBridgeNativeLayoutCacheSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-layout-cache", error);
+        return false;
+    }
+
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-graph-edit-dynamic-layout", std::string());
+    if (!RunBehaviorBridgeNativeGraphEditDynamicLayoutSelfTest(context, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-graph-edit-dynamic-layout", error);
         return false;
     }
 
