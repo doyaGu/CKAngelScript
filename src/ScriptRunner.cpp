@@ -5,7 +5,7 @@
 #include "ScriptAsync.h"
 #include "ScriptManager.h"
 
-namespace {
+namespace ScriptRunnerInternal {
 
 std::string BuildContextStackTrace(asIScriptContext *ctx, const char *prefix) {
     if (!ctx) {
@@ -63,7 +63,7 @@ ScriptExecutionStatus HandleExecutionResult(ScriptRunner *runner, asIScriptConte
     return ScriptExecutionStatus::Failed;
 }
 
-} // namespace
+} // namespace ScriptRunnerInternal
 
 ScriptRunner::ScriptRunner(ScriptManager *man) : m_ScriptManager(man) {}
 
@@ -324,7 +324,7 @@ ScriptExecutionStatus ScriptRunner::ExecuteScriptStatus(asIScriptFunction *func,
         StartTiming();
 
     r = ctx->Execute();
-    const ScriptExecutionStatus status = HandleExecutionResult(this, ctx, r, "Script Execution");
+    const ScriptExecutionStatus status = ScriptRunnerInternal::HandleExecutionResult(this, ctx, r, "Script Execution");
     if (status != ScriptExecutionStatus::Finished) {
         if (IsProfiling())
             EndTiming();
@@ -415,7 +415,7 @@ ScriptExecutionStatus ScriptRunner::ExecuteObjectMethodStatus(asIScriptObject *o
         StartTiming();
 
     r = ctx->Execute();
-    const ScriptExecutionStatus status = HandleExecutionResult(this, ctx, r, "Script Method");
+    const ScriptExecutionStatus status = ScriptRunnerInternal::HandleExecutionResult(this, ctx, r, "Script Method");
     if (status != ScriptExecutionStatus::Finished) {
         if (IsProfiling())
             EndTiming();
