@@ -678,6 +678,11 @@ asIScriptContext *ScriptManager::RequestContextFromPool() {
     } else
         ctx = m_ScriptEngine->CreateContext();
 
+    const int state = ctx->GetState();
+    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
+        ctx->Abort();
+    }
+    ctx->Unprepare();
     ctx->SetExceptionCallback(asMETHOD(ScriptManager, ExceptionCallback), this, asCALL_THISCALL);
     return ctx;
 }
@@ -689,6 +694,10 @@ void ScriptManager::ReturnContextToPool(asIScriptContext *ctx) {
 
     // Unprepare the context to free any objects that might be held
     // as we don't know when the context will be used again.
+    const int state = ctx->GetState();
+    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
+        ctx->Abort();
+    }
     ctx->Unprepare();
     m_ScriptContexts.push_back(ctx);
 }
