@@ -74,6 +74,11 @@ public:
 
 private:
     struct Module;
+    enum class InvokeStatus {
+        Finished,
+        Suspended,
+        Failed
+    };
 
 #if CKAS_BUILD_SELF_TESTS
     friend bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
@@ -86,10 +91,15 @@ private:
     bool ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module);
     bool RemoveModuleById(const std::string &id);
     void RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts);
-    void DestroyModule(Module &module);
-    void DisableModule(Module &module);
+    bool DestroyModule(Module &module, bool hard = false);
+    bool DisableModule(Module &module);
+    bool PauseModule(Module &module, const ScriptRuntimeContext &context);
+    bool ResetModule(Module &module, const ScriptRuntimeContext &context);
+    void FinalizePendingModules();
     void UpdateModule(Module &module, float deltaTime, float timeSeconds);
-    bool Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required = false);
+    InvokeStatus Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required = false);
+    bool InvokeFinished(Module &module, const char *name, const ScriptRuntimeContext &context, bool required = false);
+    void CancelActiveInvocation(Module &module);
     void SetModuleError(Module &module, const std::string &error);
     void OutputDiagnostic(const std::string &message) const;
 

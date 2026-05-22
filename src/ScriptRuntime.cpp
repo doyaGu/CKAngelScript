@@ -13,6 +13,7 @@
 #include "CKTimeManager.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
+#include "ScriptAsync.h"
 #include "ScriptManager.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptRuntimeDependency.h"
@@ -281,11 +282,21 @@ struct ScriptRuntime::Module {
     asITypeInfo *Type = nullptr;
     bool Enabled = true;
     bool Loaded = false;
+    bool LoadCalled = false;
     bool AwakeCalled = false;
     bool EnableCalled = false;
     bool StartCalled = false;
     bool Failed = false;
     std::string Error;
+    asIScriptContext *ActiveContext = nullptr;
+    std::string ActiveInvocation;
+    ScriptRuntimeContext ContextStorage;
+    bool PendingDisable = false;
+    bool PendingDestroy = false;
+    bool PendingErase = false;
+    bool PendingPause = false;
+    bool PendingReset = false;
+    std::unique_ptr<Module> PendingReplacement;
 };
 
 ScriptRuntimeContext::ScriptRuntimeContext() = default;
@@ -380,9 +391,6 @@ ScriptRuntime::~ScriptRuntime() {
 
 void ScriptRuntime::PreProcess() {
     EnsureScanned();
-    if (m_Paused) {
-        return;
-    }
 
     CKContext *context = m_Manager ? m_Manager->GetCKContext() : nullptr;
     CKTimeManager *time = context ? context->GetTimeManager() : nullptr;
@@ -390,9 +398,17 @@ void ScriptRuntime::PreProcess() {
     const float timeSeconds = time ? (time->GetTime() * 0.001f) : 0.0f;
     for (std::unique_ptr<Module> &module : m_Modules) {
         if (module) {
+            if (m_Paused &&
+                !module->PendingDisable &&
+                !module->PendingDestroy &&
+                !module->PendingPause &&
+                !module->PendingReset) {
+                continue;
+            }
             UpdateModule(*module, deltaTime, timeSeconds);
         }
     }
+    FinalizePendingModules();
 }
 
 void ScriptRuntime::PostLoad() {
@@ -408,8 +424,7 @@ void ScriptRuntime::OnReset() {
                                                                              module->Meta,
                                                                              0.0f,
                                                                              0.0f);
-        Invoke(*module, "OnReset", ctx);
-        module->StartCalled = false;
+        ResetModule(*module, ctx);
     }
 }
 
@@ -419,18 +434,14 @@ void ScriptRuntime::OnPause() {
     }
     m_Paused = true;
     for (std::unique_ptr<Module> &module : m_Modules) {
-        if (!module || !module->Loaded || module->Failed || !module->Enabled) {
+        if (!module || !module->Loaded || module->Failed) {
             continue;
         }
         ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                              module->Meta,
                                                                              0.0f,
                                                                              0.0f);
-        Invoke(*module, "OnPause", ctx);
-        if (module->EnableCalled) {
-            Invoke(*module, "OnDisable", ctx);
-            module->EnableCalled = false;
-        }
+        PauseModule(*module, ctx);
     }
 }
 
@@ -447,10 +458,14 @@ void ScriptRuntime::OnResume() {
                                                                              module->Meta,
                                                                              0.0f,
                                                                              0.0f);
-        Invoke(*module, "OnResume", ctx);
+        if (module->PendingPause || module->PendingDisable || module->PendingDestroy || module->PendingReset) {
+            continue;
+        }
+        InvokeFinished(*module, "OnResume", ctx);
         if (!module->EnableCalled) {
-            Invoke(*module, "OnEnable", ctx);
-            module->EnableCalled = true;
+            if (InvokeFinished(*module, "OnEnable", ctx)) {
+                module->EnableCalled = true;
+            }
         }
     }
 }
@@ -462,7 +477,7 @@ void ScriptRuntime::OnEnd() {
 void ScriptRuntime::Clear() {
     for (std::unique_ptr<Module> &module : m_Modules) {
         if (module) {
-            DestroyModule(*module);
+            DestroyModule(*module, true);
         }
     }
     m_Modules.clear();
@@ -746,8 +761,11 @@ bool ScriptRuntime::RemoveModuleById(const std::string &id) {
         if (!module || (module->Meta.Id != canonical && module->Meta.Id != id)) {
             continue;
         }
-        DestroyModule(*module);
-        m_Modules.erase(it);
+        if (DestroyModule(*module)) {
+            m_Modules.erase(it);
+        } else {
+            module->PendingErase = true;
+        }
         return true;
     }
     return false;
@@ -762,8 +780,12 @@ void ScriptRuntime::RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> 
     for (auto it = m_Modules.begin(); it != m_Modules.end();) {
         Module *module = it->get();
         if (module && allowedIds.find(module->Meta.Id) == allowedIds.end()) {
-            DestroyModule(*module);
-            it = m_Modules.erase(it);
+            if (DestroyModule(*module)) {
+                it = m_Modules.erase(it);
+            } else {
+                module->PendingErase = true;
+                ++it;
+            }
         } else {
             ++it;
         }
@@ -816,12 +838,24 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
                                                                          metadata,
                                                                          0.0f,
                                                                          0.0f);
-    if (!Invoke(*loaded, "OnLoad", ctx) || !Invoke(*loaded, "Awake", ctx)) {
+    InvokeStatus status = Invoke(*loaded, "OnLoad", ctx);
+    if (status == InvokeStatus::Failed) {
         error = fmt::format("Runtime script '{}' failed during load: {}", metadata.Id, loaded->Error);
-        DestroyModule(*loaded);
+        DestroyModule(*loaded, true);
         return false;
     }
-    loaded->AwakeCalled = true;
+    if (status == InvokeStatus::Finished) {
+        loaded->LoadCalled = true;
+        status = Invoke(*loaded, "Awake", ctx);
+        if (status == InvokeStatus::Failed) {
+            error = fmt::format("Runtime script '{}' failed during load: {}", metadata.Id, loaded->Error);
+            DestroyModule(*loaded, true);
+            return false;
+        }
+        if (status == InvokeStatus::Finished) {
+            loaded->AwakeCalled = true;
+        }
+    }
     module = std::move(loaded);
     return true;
 }
@@ -829,8 +863,11 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
 bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module) {
     for (std::unique_ptr<Module> &existing : m_Modules) {
         if (existing && existing->Meta.Id == metadata.Id) {
-            DestroyModule(*existing);
-            existing = std::move(module);
+            if (DestroyModule(*existing)) {
+                existing = std::move(module);
+            } else {
+                existing->PendingReplacement = std::move(module);
+            }
             return true;
         }
     }
@@ -838,17 +875,33 @@ bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::un
     return true;
 }
 
-void ScriptRuntime::DestroyModule(Module &module) {
+bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
+    if (hard) {
+        CancelActiveInvocation(module);
+    }
+    module.PendingDestroy = !hard;
     if (module.Loaded && !module.Failed) {
         ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                              module.Meta,
                                                                              0.0f,
                                                                              0.0f);
         if (module.EnableCalled) {
-            Invoke(module, "OnDisable", ctx);
+            const InvokeStatus status = Invoke(module, "OnDisable", ctx);
+            if (status == InvokeStatus::Suspended) {
+                if (!hard) {
+                    return false;
+                }
+                CancelActiveInvocation(module);
+            }
             module.EnableCalled = false;
         }
-        Invoke(module, "OnDestroy", ctx);
+        const InvokeStatus status = Invoke(module, "OnDestroy", ctx);
+        if (status == InvokeStatus::Suspended) {
+            if (!hard) {
+                return false;
+            }
+            CancelActiveInvocation(module);
+        }
     }
     if (module.Object) {
         module.Object->Release();
@@ -859,36 +912,148 @@ void ScriptRuntime::DestroyModule(Module &module) {
     }
     module.Cached.reset();
     module.Loaded = false;
+    module.PendingDestroy = false;
+    module.PendingDisable = false;
+    module.PendingPause = false;
+    module.PendingReset = false;
+    return true;
 }
 
-void ScriptRuntime::DisableModule(Module &module) {
+bool ScriptRuntime::DisableModule(Module &module) {
+    if (!module.PendingDisable) {
+        CancelActiveInvocation(module);
+    }
+    module.PendingDisable = true;
     if (!module.EnableCalled) {
-        return;
+        module.PendingDisable = false;
+        return true;
     }
     ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                          module.Meta,
                                                                          0.0f,
                                                                          0.0f);
-    Invoke(module, "OnDisable", ctx);
+    const InvokeStatus status = Invoke(module, "OnDisable", ctx);
+    if (status == InvokeStatus::Suspended) {
+        return false;
+    }
     module.EnableCalled = false;
+    module.PendingDisable = false;
+    return true;
+}
+
+bool ScriptRuntime::PauseModule(Module &module, const ScriptRuntimeContext &context) {
+    if (!module.PendingPause) {
+        CancelActiveInvocation(module);
+    }
+    module.PendingPause = true;
+    if (!module.Enabled) {
+        module.PendingPause = false;
+        return true;
+    }
+    InvokeStatus status = Invoke(module, "OnPause", context);
+    if (status == InvokeStatus::Suspended) {
+        return false;
+    }
+    if (status == InvokeStatus::Failed) {
+        module.PendingPause = false;
+        return true;
+    }
+    if (module.EnableCalled) {
+        status = Invoke(module, "OnDisable", context);
+        if (status == InvokeStatus::Suspended) {
+            return false;
+        }
+        module.EnableCalled = false;
+    }
+    module.PendingPause = false;
+    return true;
+}
+
+bool ScriptRuntime::ResetModule(Module &module, const ScriptRuntimeContext &context) {
+    if (!module.PendingReset) {
+        CancelActiveInvocation(module);
+    }
+    module.PendingReset = true;
+    const InvokeStatus status = Invoke(module, "OnReset", context);
+    if (status == InvokeStatus::Suspended) {
+        return false;
+    }
+    module.StartCalled = false;
+    module.PendingReset = false;
+    return true;
+}
+
+void ScriptRuntime::FinalizePendingModules() {
+    for (auto it = m_Modules.begin(); it != m_Modules.end();) {
+        Module *module = it->get();
+        if (!module) {
+            it = m_Modules.erase(it);
+            continue;
+        }
+        if (module->PendingReplacement && !module->PendingDestroy && !module->ActiveContext) {
+            *it = std::move(module->PendingReplacement);
+            ++it;
+            continue;
+        }
+        if (module->PendingErase && !module->PendingDestroy && !module->ActiveContext) {
+            it = m_Modules.erase(it);
+            continue;
+        }
+        ++it;
+    }
 }
 
 void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeconds) {
-    if (!module.Loaded || !module.Enabled || module.Failed) {
+    if (!module.Loaded || module.Failed) {
         return;
     }
     ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                          module.Meta,
                                                                          deltaTime,
                                                                          timeSeconds);
+    if (module.PendingDestroy) {
+        DestroyModule(module);
+        return;
+    }
+    if (module.PendingDisable) {
+        DisableModule(module);
+        return;
+    }
+    if (module.PendingPause) {
+        PauseModule(module, ctx);
+        return;
+    }
+    if (module.PendingReset) {
+        ResetModule(module, ctx);
+        return;
+    }
+    if (!module.LoadCalled) {
+        const InvokeStatus status = Invoke(module, "OnLoad", ctx);
+        if (status != InvokeStatus::Finished) {
+            return;
+        }
+        module.LoadCalled = true;
+    }
+    if (!module.AwakeCalled) {
+        const InvokeStatus status = Invoke(module, "Awake", ctx);
+        if (status != InvokeStatus::Finished) {
+            return;
+        }
+        module.AwakeCalled = true;
+    }
+    if (!module.Enabled) {
+        return;
+    }
     if (!module.EnableCalled) {
-        if (!Invoke(module, "OnEnable", ctx)) {
+        const InvokeStatus status = Invoke(module, "OnEnable", ctx);
+        if (status != InvokeStatus::Finished) {
             return;
         }
         module.EnableCalled = true;
     }
     if (!module.StartCalled) {
-        if (!Invoke(module, "Start", ctx)) {
+        const InvokeStatus status = Invoke(module, "Start", ctx);
+        if (status != InvokeStatus::Finished) {
             return;
         }
         module.StartCalled = true;
@@ -896,46 +1061,78 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
     Invoke(module, "Update", ctx);
 }
 
-bool ScriptRuntime::Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required) {
+ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required) {
     if (!module.Cached || !module.Cached->module || !name || name[0] == '\0') {
-        return !required;
+        return required ? InvokeStatus::Failed : InvokeStatus::Finished;
     }
 
     asIScriptFunction *func = nullptr;
-    std::string decl = fmt::format("void {}(const ScriptRuntimeContext &in ctx)", name);
-    if (module.Type) {
-        func = module.Type->GetMethodByDecl(decl.c_str());
-        if (!func) {
-            decl = fmt::format("void {}()", name);
+    if (!module.ActiveContext) {
+        std::string decl = fmt::format("void {}(const ScriptRuntimeContext &in ctx)", name);
+        if (module.Type) {
             func = module.Type->GetMethodByDecl(decl.c_str());
+            if (!func) {
+                decl = fmt::format("void {}()", name);
+                func = module.Type->GetMethodByDecl(decl.c_str());
+            }
+        } else {
+            func = module.Cached->module->GetFunctionByDecl(decl.c_str());
+            if (!func) {
+                decl = fmt::format("void {}()", name);
+                func = module.Cached->module->GetFunctionByDecl(decl.c_str());
+            }
+        }
+        if (!func) {
+            return required ? InvokeStatus::Failed : InvokeStatus::Finished;
+        }
+    }
+
+    asIScriptEngine *engine = module.ActiveContext ? module.ActiveContext->GetEngine() : (func ? func->GetEngine() : nullptr);
+    asIScriptContext *ctx = module.ActiveContext;
+    if (!ctx) {
+        ctx = engine ? engine->RequestContext() : nullptr;
+        if (!ctx) {
+            SetModuleError(module, fmt::format("{}: failed to request AngelScript context", name));
+            return InvokeStatus::Failed;
+        }
+        module.ActiveContext = ctx;
+        module.ActiveInvocation = name;
+    }
+
+    module.ContextStorage = context;
+    int r = 0;
+    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
+        std::string waitError;
+        ScriptAsyncScheduler *scheduler = m_Manager ? m_Manager->GetAsyncScheduler() : nullptr;
+        const ScriptAsyncScheduler::ResumeState resume = scheduler
+            ? scheduler->PrepareContextResume(ctx, waitError)
+            : ScriptAsyncScheduler::ResumeState::Ready;
+        if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
+            return InvokeStatus::Suspended;
+        }
+        if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
+            CancelActiveInvocation(module);
+            SetModuleError(module, waitError.empty() ? "Awaited async task failed." : waitError);
+            return InvokeStatus::Failed;
         }
     } else {
-        func = module.Cached->module->GetFunctionByDecl(decl.c_str());
-        if (!func) {
-            decl = fmt::format("void {}()", name);
-            func = module.Cached->module->GetFunctionByDecl(decl.c_str());
+        r = ctx->Prepare(func);
+        if (r >= 0 && module.Object) {
+            r = ctx->SetObject(module.Object);
+        }
+        if (r >= 0 && func->GetParamCount() > 0) {
+            r = ctx->SetArgObject(0, &module.ContextStorage);
+        }
+        if (r < 0) {
+            CancelActiveInvocation(module);
+            SetModuleError(module, fmt::format("{}: failed to prepare AngelScript context", name));
+            return InvokeStatus::Failed;
         }
     }
-    if (!func) {
-        return !required;
-    }
 
-    asIScriptEngine *engine = func->GetEngine();
-    asIScriptContext *ctx = engine ? engine->RequestContext() : nullptr;
-    if (!ctx) {
-        SetModuleError(module, fmt::format("{}: failed to request AngelScript context", name));
-        return false;
-    }
-
-    int r = ctx->Prepare(func);
-    if (r >= 0 && module.Object) {
-        r = ctx->SetObject(module.Object);
-    }
-    if (r >= 0 && func->GetParamCount() > 0) {
-        r = ctx->SetArgObject(0, const_cast<ScriptRuntimeContext *>(&context));
-    }
-    if (r >= 0) {
-        r = ctx->Execute();
+    r = ctx->Execute();
+    if (r == asEXECUTION_SUSPENDED) {
+        return InvokeStatus::Suspended;
     }
     if (r != asEXECUTION_FINISHED) {
         std::string message;
@@ -945,21 +1142,50 @@ bool ScriptRuntime::Invoke(Module &module, const char *name, const ScriptRuntime
             const int row = ctx->GetExceptionLineNumber(&col, &section);
             asIScriptFunction *exFunc = ctx->GetExceptionFunction();
             message = fmt::format("{} threw in {} at {}({},{}): {}",
-                                  name,
+                                  module.ActiveInvocation.empty() ? name : module.ActiveInvocation,
                                   exFunc ? exFunc->GetDeclaration() : "<unknown>",
                                   section ? section : "<unknown>",
                                   row,
                                   col,
                                   ctx->GetExceptionString() ? ctx->GetExceptionString() : "");
         } else {
-            message = fmt::format("{} failed with AngelScript result {}", name, r);
+            message = fmt::format("{} failed with AngelScript result {}",
+                                  module.ActiveInvocation.empty() ? name : module.ActiveInvocation,
+                                  r);
         }
-        engine->ReturnContext(ctx);
+        CancelActiveInvocation(module);
         SetModuleError(module, message);
-        return false;
+        return InvokeStatus::Failed;
     }
-    engine->ReturnContext(ctx);
-    return true;
+
+    CancelActiveInvocation(module);
+    return InvokeStatus::Finished;
+}
+
+bool ScriptRuntime::InvokeFinished(Module &module, const char *name, const ScriptRuntimeContext &context, bool required) {
+    return Invoke(module, name, context, required) == InvokeStatus::Finished;
+}
+
+void ScriptRuntime::CancelActiveInvocation(Module &module) {
+    if (!module.ActiveContext) {
+        module.ActiveInvocation.clear();
+        return;
+    }
+    asIScriptContext *ctx = module.ActiveContext;
+    module.ActiveContext = nullptr;
+    if (m_Manager && m_Manager->GetAsyncScheduler()) {
+        m_Manager->GetAsyncScheduler()->ForgetContext(ctx);
+    }
+    const int state = ctx->GetState();
+    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
+        ctx->Abort();
+    }
+    if (ctx->GetEngine()) {
+        ctx->GetEngine()->ReturnContext(ctx);
+    } else {
+        ctx->Release();
+    }
+    module.ActiveInvocation.clear();
 }
 
 void ScriptRuntime::SetModuleError(Module &module, const std::string &error) {
@@ -1010,6 +1236,7 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string MetadataKey(int index) const", asMETHOD(ScriptRuntimeContext, MetadataKey), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string MetadataValue(int index) const", asMETHOD(ScriptRuntimeContext, MetadataValue), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptRuntimeContext", "void Raise(const string &in message) const", asMETHOD(ScriptRuntimeContext, Raise), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "CKBehaviorContext ToBehaviorContext() const", asMETHOD(ScriptRuntimeContext, ToBehaviorContext), asCALL_THISCALL); assert(r >= 0);
 
     const char *previousNamespace = engine->GetDefaultNamespace();
     const std::string previous = previousNamespace ? previousNamespace : "";
@@ -1112,6 +1339,7 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  int metadataCount = ctx.MetadataCount();\n"
         "  string metadataKey = ctx.MetadataKey(0);\n"
         "  string metadataValue = ctx.MetadataValue(0);\n"
+        "  CKBehaviorContext behaviorContext = ctx.ToBehaviorContext();\n"
         "  BehaviorGraph@ graph = Behavior::Graph(ctx, \"__missing__\");\n"
         "  BehaviorRef@ behavior = Behavior::Find(ctx, \"__missing__\");\n"
         "  BBDecl@ decl = BB::Require(ctx, \"__missing__\");\n"
