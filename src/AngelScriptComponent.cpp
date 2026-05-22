@@ -42,6 +42,8 @@ constexpr int FILE_PARAM = 3;
 constexpr int MANIFEST_PARAM = 4;
 constexpr int FIXED_INPUT_PARAMETER_COUNT = 5;
 
+bool DestroyInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state);
+
 std::string ReadStringParameter(CKBehavior *beh, int index) {
     if (!beh) {
         return {};
@@ -380,19 +382,72 @@ bool CacheComponentMethods(ScriptComponentState *state, asITypeInfo *type) {
            CacheLifecycleMethod(type, "OnReset", false, state->OnReset, state->Runner);
 }
 
-bool InvokeLifecycle(CKBehavior *beh, ScriptComponentState *state, asIScriptFunction *method, const CKBehaviorContext &behcontext, const char *name) {
+enum class LifecycleInvokeStatus {
+    Finished,
+    Suspended,
+    Failed
+};
+
+LifecycleInvokeStatus InvokeLifecycle(CKBehavior *beh, ScriptComponentState *state, asIScriptFunction *method, const CKBehaviorContext &behcontext, const char *name) {
     if (!method) {
-        return true;
+        return LifecycleInvokeStatus::Finished;
     }
 
     if (!state || !state->Runner || !state->Object) {
         SetErrorOutput(beh, state, std::string("Cannot execute lifecycle method: ") + name);
-        return false;
+        return LifecycleInvokeStatus::Failed;
     }
 
-    if (!state->Runner->ExecuteObjectMethod(state->Object, method, behcontext)) {
+    if (!state->Runner->IsContextSuspended()) {
+        state->ActiveLifecycle = method;
+        state->ActiveLifecycleName = name ? name : "";
+    }
+
+    const ScriptExecutionStatus status = state->Runner->ExecuteObjectMethodStatus(state->Object, method, behcontext);
+    if (status == ScriptExecutionStatus::Suspended) {
+        return LifecycleInvokeStatus::Suspended;
+    }
+    state->ActiveLifecycle = nullptr;
+    state->ActiveLifecycleName.clear();
+    if (status == ScriptExecutionStatus::Failed) {
         SetRunnerErrorOutput(beh, state, name);
-        return false;
+        return LifecycleInvokeStatus::Failed;
+    }
+
+    return LifecycleInvokeStatus::Finished;
+}
+
+bool LifecycleFinished(LifecycleInvokeStatus status) {
+    return status == LifecycleInvokeStatus::Finished;
+}
+
+void CancelSuspendedLifecycle(ScriptComponentState *state, const char *unlessName = nullptr) {
+    if (!state || !state->Runner || !state->Runner->IsContextSuspended()) {
+        return;
+    }
+    if (unlessName && state->ActiveLifecycleName == unlessName) {
+        return;
+    }
+    state->Runner->AbortContext();
+    state->ActiveLifecycle = nullptr;
+    state->ActiveLifecycleName.clear();
+}
+
+bool CompleteInitialLifecycles(CKBehavior *beh, ScriptComponentState *state, const CKBehaviorContext &behcontext) {
+    if (!state->OnLoadCalled) {
+        const LifecycleInvokeStatus status = InvokeLifecycle(beh, state, state->OnLoad, behcontext, "OnLoad");
+        if (!LifecycleFinished(status)) {
+            return false;
+        }
+        state->OnLoadCalled = true;
+    }
+
+    if (!state->AwakeCalled) {
+        const LifecycleInvokeStatus status = InvokeLifecycle(beh, state, state->Awake, behcontext, "Awake");
+        if (!LifecycleFinished(status)) {
+            return false;
+        }
+        state->AwakeCalled = true;
     }
 
     return true;
@@ -450,6 +505,13 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
     const std::string runtimeModuleName = privateModule ? BuildRuntimeModuleName(beh, scriptName) : scriptName;
 
     if (ComponentIdentityChanged(state, scriptName, className, source, file, manifest, runtimeModuleName, privateModule)) {
+        if (state->Loaded && state->Object) {
+            state->PendingResetRuntime = true;
+            if (!DestroyInstance(behcontext, state)) {
+                return false;
+            }
+            state->PendingResetRuntime = false;
+        }
         if (man->GetBehaviorBridge()) {
             man->GetBehaviorBridge()->DestroyComponentTasks(state->BehaviorId);
         }
@@ -474,7 +536,7 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
             SetErrorOutput(beh, state, injectError);
             return false;
         }
-        return true;
+        return CompleteInitialLifecycles(beh, state, behcontext);
     }
 
     if (privateModule) {
@@ -538,21 +600,7 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
 
     state->Loaded = true;
 
-    if (!state->OnLoadCalled) {
-        if (!InvokeLifecycle(beh, state, state->OnLoad, behcontext, "OnLoad")) {
-            return false;
-        }
-        state->OnLoadCalled = true;
-    }
-
-    if (!state->AwakeCalled) {
-        if (!InvokeLifecycle(beh, state, state->Awake, behcontext, "Awake")) {
-            return false;
-        }
-        state->AwakeCalled = true;
-    }
-
-    return true;
+    return CompleteInitialLifecycles(beh, state, behcontext);
 }
 
 bool EnableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
@@ -565,7 +613,8 @@ bool EnableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *s
         return false;
     }
 
-    if (!InvokeLifecycle(beh, state, state->OnEnable, behcontext, "OnEnable")) {
+    const LifecycleInvokeStatus status = InvokeLifecycle(beh, state, state->OnEnable, behcontext, "OnEnable");
+    if (!LifecycleFinished(status)) {
         return false;
     }
 
@@ -575,12 +624,17 @@ bool EnableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *s
 
 bool DisableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
     CKBehavior *beh = behcontext.Behavior;
-    if (!state || !state->InstanceEnabled) {
+    if (!state || (!state->InstanceEnabled && state->ActiveLifecycleName != "OnDisable")) {
         return true;
     }
 
-    if (!InvokeLifecycle(beh, state, state->OnDisable, behcontext, "OnDisable")) {
-        state->InstanceEnabled = false;
+    CancelSuspendedLifecycle(state, "OnDisable");
+    const LifecycleInvokeStatus status = InvokeLifecycle(beh, state, state->OnDisable, behcontext, "OnDisable");
+    if (!LifecycleFinished(status)) {
+        if (status == LifecycleInvokeStatus::Failed) {
+            state->InstanceEnabled = false;
+            return false;
+        }
         return false;
     }
 
@@ -589,14 +643,26 @@ bool DisableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *
     return true;
 }
 
-void DestroyInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
+bool DestroyInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
     if (!state || !state->Object) {
-        return;
+        return true;
     }
 
-    DisableInstance(behcontext, state);
-    InvokeLifecycle(behcontext.Behavior, state, state->OnDestroy, behcontext, "OnDestroy");
+    state->PendingDestroy = true;
+    if (!DisableInstance(behcontext, state)) {
+        return false;
+    }
+    CancelSuspendedLifecycle(state, "OnDestroy");
+    const LifecycleInvokeStatus status = InvokeLifecycle(behcontext.Behavior, state, state->OnDestroy, behcontext, "OnDestroy");
+    if (status != LifecycleInvokeStatus::Finished) {
+        if (status == LifecycleInvokeStatus::Failed) {
+            state->PendingDestroy = false;
+        }
+        return false;
+    }
     DestroyComponentLifetimeBBConfigs(state);
+    state->PendingDestroy = false;
+    return true;
 }
 
 void SyncErrorOutputParameters(CKBehavior *beh) {
@@ -890,10 +956,37 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         return CKBR_OWNERERROR;
     }
 
+    if (state->PendingDestroy) {
+        if (!AngelScriptComponentInternal::DestroyInstance(behcontext, state)) {
+            return state->Runner && state->Runner->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
+        }
+        if (state->PendingResetRuntime) {
+            if (ScriptManager *man = ScriptManager::GetManager(behcontext.Context)) {
+                man->ResetComponentStateRuntime(state, true);
+            }
+            return CKBR_ACTIVATENEXTFRAME;
+        }
+        return CKBR_OK;
+    }
+
+    if (state->ActiveLifecycleName == "OnDisable") {
+        if (!AngelScriptComponentInternal::DisableInstance(behcontext, state)) {
+            return state->Runner && state->Runner->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
+        }
+        if (state->PendingDisableOutput) {
+            state->PendingDisableOutput = false;
+            beh->ActivateOutput(1);
+        }
+        return CKBR_OK;
+    }
+
     if (beh->IsInputActive(1)) {
         beh->ActivateInput(1, FALSE);
         state->DesiredEnabled = false;
-        AngelScriptComponentInternal::DisableInstance(behcontext, state);
+        if (!AngelScriptComponentInternal::DisableInstance(behcontext, state)) {
+            state->PendingDisableOutput = true;
+            return state->Runner && state->Runner->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
+        }
         beh->ActivateOutput(1);
         return CKBR_OK;
     }
@@ -907,7 +1000,7 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
 
         if (!AngelScriptComponentInternal::EnsureComponentReady(behcontext, state) ||
             !AngelScriptComponentInternal::EnableInstance(behcontext, state)) {
-            return CKBR_OK;
+            return state->Runner && state->Runner->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
         }
 
         beh->ActivateOutput(0);
@@ -919,12 +1012,16 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
 
     if (!AngelScriptComponentInternal::EnsureComponentReady(behcontext, state) ||
         !AngelScriptComponentInternal::EnableInstance(behcontext, state)) {
-        return CKBR_OK;
+        return state->Runner && state->Runner->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
     }
 
     if (!state->StartCalled) {
-        if (!AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->Start, behcontext, "Start")) {
-            return CKBR_OK;
+        const AngelScriptComponentInternal::LifecycleInvokeStatus status =
+            AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->Start, behcontext, "Start");
+        if (status != AngelScriptComponentInternal::LifecycleInvokeStatus::Finished) {
+            return status == AngelScriptComponentInternal::LifecycleInvokeStatus::Suspended
+                ? CKBR_ACTIVATENEXTFRAME
+                : CKBR_OK;
         }
         state->StartCalled = true;
     }
@@ -937,8 +1034,14 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         }
     }
 
-    if (!AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->Update, behcontext, "Update")) {
-        return CKBR_OK;
+    {
+        const AngelScriptComponentInternal::LifecycleInvokeStatus status =
+            AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->Update, behcontext, "Update");
+        if (status != AngelScriptComponentInternal::LifecycleInvokeStatus::Finished) {
+            return status == AngelScriptComponentInternal::LifecycleInvokeStatus::Suspended
+                ? CKBR_ACTIVATENEXTFRAME
+                : CKBR_OK;
+        }
     }
 
     {
@@ -1031,9 +1134,13 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                 }
                 state->Failed = false;
                 state->StartCalled = false;
-                if (state->Object &&
-                    !AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset")) {
-                    return CKBR_OK;
+                if (state->Object) {
+                    AngelScriptComponentInternal::CancelSuspendedLifecycle(state, "OnReset");
+                    const AngelScriptComponentInternal::LifecycleInvokeStatus status =
+                        AngelScriptComponentInternal::InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset");
+                    if (status == AngelScriptComponentInternal::LifecycleInvokeStatus::Failed) {
+                        return CKBR_OK;
+                    }
                 }
                 if (state->DesiredEnabled && state->ScriptActive && !state->Paused) {
                     beh->Activate(TRUE);
@@ -1063,7 +1170,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
             if (state) {
                 state->DesiredEnabled = false;
                 state->ScriptActive = false;
-                AngelScriptComponentInternal::DestroyInstance(behcontext, state);
+                man->ResetComponentStateRuntime(state, true);
             }
             man->ReleaseComponentState(beh);
         }
