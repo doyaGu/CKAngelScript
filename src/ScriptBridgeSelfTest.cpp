@@ -1596,6 +1596,37 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     selfMoveEdit->Release();
     targetGraph->Release();
 
+    CKParameterLocal *internalGraphEditTarget = target->CreateLocalParameter(
+        const_cast<CKSTRING>("__CKAS_GraphEdit_Target"),
+        CKPGUID_INT);
+    const ScriptBridgeLayoutRecord *internalFilteredLayout = bridge->GetBehaviorLayout(target->GetID(), CaptureBridgeObjectStamp(target));
+    bool exposedInternalLocal = false;
+    if (internalFilteredLayout) {
+        for (const ScriptBridgeLayoutParamSlot &local : internalFilteredLayout->Locals) {
+            if (local.Name == "__CKAS_GraphEdit_Target") {
+                exposedInternalLocal = true;
+                break;
+            }
+        }
+    }
+    if (!internalGraphEditTarget || exposedInternalLocal) {
+        error = "Graph edit self-test exposed internal graph edit target local.";
+        unlinkResult->Release();
+        unlinkEdit->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
     const ScriptBridgeLayoutRecord *targetLayout = bridge->GetBehaviorLayout(target->GetID(), CaptureBridgeObjectStamp(target));
     BBSlot *valueSlot = targetLayout
         ? new BBSlot(bridge,
@@ -1897,6 +1928,103 @@ static bool ProbeRuntimeRunnerInputBinding(CKContext *context,
     return true;
 }
 
+static bool RunInitialSettingsEditedSelfTest(CKContext *context,
+                                             ScriptBehaviorBridge *bridge,
+                                             const CKBehaviorContext &behaviorContext,
+                                             std::string &error) {
+    const CKGUID genericOrbitGuid(0x104d0913, 0x766563dd);
+    bool hasGenericOrbit = CKGetPrototypeFromGuid(genericOrbitGuid) != nullptr;
+    if (!hasGenericOrbit) {
+        for (int i = 0; i < CKGetPrototypeDeclarationCount(); ++i) {
+            CKObjectDeclaration *decl = CKGetPrototypeDeclaration(i);
+            if (decl && decl->GetGuid() == genericOrbitGuid) {
+                hasGenericOrbit = true;
+                break;
+            }
+        }
+    }
+    if (!hasGenericOrbit) {
+        return true;
+    }
+
+    CKBeObject *target = CKBeObject::Cast(context->CreateObject(CKCID_3DENTITY,
+                                                                 "__CKAS_SettingsEditedTarget",
+                                                                 CK_OBJECTCREATION_DYNAMIC));
+    ScriptBridgeBBInvocationSpec request = MakeDefaultRequest(behaviorContext);
+    request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
+    request.Guid = genericOrbitGuid;
+    request.TargetId = target ? target->GetID() : 0;
+
+    BBConfig *config = new BBConfig(bridge, behaviorContext, request);
+    BBSlot *returnsSetting = config ? config->Setting("Returns") : nullptr;
+    BBSlot *returnSpeedPin = config ? config->Pin("Return Speed") : nullptr;
+    ParamValue *falseValue = new ParamValue(MakeScriptParamBool(false));
+    BBInstance *instance = nullptr;
+
+    auto cleanup = [&]() {
+        if (instance) {
+            instance->Destroy();
+            instance->Release();
+            instance = nullptr;
+        }
+        if (falseValue) {
+            falseValue->Release();
+            falseValue = nullptr;
+        }
+        if (returnSpeedPin) {
+            returnSpeedPin->Release();
+            returnSpeedPin = nullptr;
+        }
+        if (returnsSetting) {
+            returnsSetting->Release();
+            returnsSetting = nullptr;
+        }
+        if (config) {
+            config->Release();
+            config = nullptr;
+        }
+        DestroySelfTestObject(context, target);
+    };
+
+    int returnSpeedIndex = -1;
+    std::string slotError;
+    if (!target ||
+        !config ||
+        !returnsSetting ||
+        !returnSpeedPin ||
+        !returnSpeedPin->ResolveIndex(ScriptBridgeSlotKind::Pin, returnSpeedIndex, slotError)) {
+        cleanup();
+        error = slotError.empty() ? "Initial setting edit self-test setup failed." : slotError;
+        return false;
+    }
+
+    BBConfig *returnedConfig = config->SetSetting(returnsSetting, falseValue);
+    const bool settingAccepted = returnedConfig != nullptr;
+    if (returnedConfig) returnedConfig->Release();
+    instance = settingAccepted ? config->SpawnInstance(behaviorContext) : nullptr;
+    CKBehavior *behavior = instance ? bridge->GetInstanceBehavior(instance->BridgeInstanceId(), instance->BridgeGeneration()) : nullptr;
+    const bool returnSpeedEnabled = behavior && returnSpeedIndex >= 0 && returnSpeedIndex < behavior->GetInputParameterCount()
+        ? behavior->IsInputParameterEnabled(returnSpeedIndex) != FALSE
+        : true;
+
+    if (!settingAccepted || !instance || !behavior || returnSpeedEnabled) {
+        const std::string configError = instance ? instance->Error() : (config ? config->Error() : std::string());
+        cleanup();
+        error = fmt::format("Initial setting edit self-test failed: setting={} instance={} behavior={} returnSpeedEnabled={}{}{}",
+                            settingAccepted ? "ok" : "failed",
+                            instance ? "ok" : "null",
+                            behavior ? "ok" : "null",
+                            returnSpeedEnabled ? "true" : "false",
+                            configError.empty() ? "" : " error=",
+                            configError);
+        return false;
+    }
+
+    cleanup();
+    error.clear();
+    return true;
+}
+
 static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
                                                        std::string &error) {
     ScriptManager *manager = ScriptManager::GetManager(context);
@@ -2182,6 +2310,11 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     behaviorContext.CallbackMessage = 0;
     behaviorContext.CallbackArg = nullptr;
 
+    if (!RunInitialSettingsEditedSelfTest(context, bridge, behaviorContext, error)) {
+        manager->UnloadScript(scriptName);
+        return false;
+    }
+
     ScriptBridgeBBInvocationSpec request = MakeDefaultRequest(behaviorContext);
     request.PrototypeName = "AngelScript Runner";
     ScriptBridgeSetIndexedValue(request.IndexedParameters, 0, MakeScriptParamString(scriptName));
@@ -2375,6 +2508,15 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         error = "BBConfig runtime self-test did not preserve live source after failed source replacement.";
         return false;
     }
+    returnedConfig = liveConfig->SetSlotObject(liveConfigScriptSlot, liveConfigBehavior);
+    const bool badConfigValueAccepted = returnedConfig != nullptr;
+    if (returnedConfig) returnedConfig->Release();
+    if (badConfigValueAccepted || liveConfigScriptPin->GetDirectSource() != configLiveSource) {
+        cleanupLiveConfig();
+        manager->UnloadScript(scriptName);
+        error = "BBConfig runtime self-test did not preserve live source after failed value replacement.";
+        return false;
+    }
     cleanupLiveConfig();
 
     if (!RunLiveOperationReplacementSelfTest(context, bridge, behaviorContext, true, error)) {
@@ -2425,6 +2567,19 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
                             taskStepReturnCode,
                             taskStepOutActive ? "true" : "false",
                             taskStepErrorActive ? "true" : "false",
+                            taskError.empty() ? "<empty>" : taskError);
+        return false;
+    }
+    const bool taskIdleStepOk = task->Step(behaviorContext, -1);
+    const bool taskIdleOutActive = task->OutputActive(0);
+    if (!taskIdleStepOk || taskIdleOutActive) {
+        taskError = task->Error();
+        task->Destroy();
+        task->Release();
+        manager->UnloadScript(scriptName);
+        error = fmt::format("BB.Spawn runtime self-test kept output active after inactive idle Step: ok={} out={} error={}",
+                            taskIdleStepOk ? "true" : "false",
+                            taskIdleOutActive ? "true" : "false",
                             taskError.empty() ? "<empty>" : taskError);
         return false;
     }
@@ -2502,6 +2657,19 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         DestroySelfTestObject(context, liveSource);
         manager->UnloadScript(scriptName);
         error = "BBInstance runtime self-test did not preserve live source after failed source replacement.";
+        return false;
+    }
+    const bool badValueAccepted = liveInstance.SetSlotObject(liveScriptSlot, instanceBehavior);
+    if (badValueAccepted || scriptPin->GetDirectSource() != liveSource) {
+        if (liveScriptSlot) liveScriptSlot->Release();
+        badSourceRef->Release();
+        targetRef->Release();
+        sourceRef->Release();
+        bridge->DestroyInstance(instanceId, instanceGeneration);
+        DestroySelfTestObject(context, badSource);
+        DestroySelfTestObject(context, liveSource);
+        manager->UnloadScript(scriptName);
+        error = "BBInstance runtime self-test did not preserve live source after failed value replacement.";
         return false;
     }
     if (liveScriptSlot) liveScriptSlot->Release();
