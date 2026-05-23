@@ -50,6 +50,22 @@ bool ApplyIndexedLocalParameters(CKBehavior *behavior,
     return true;
 }
 
+bool NotifyIndexedSettingsEdited(CKBehavior *behavior,
+                                  const std::vector<ScriptBridgeIndexedValue> &settings,
+                                  const CKBehaviorContext &ctx,
+                                  std::string &error) {
+    if (settings.empty()) {
+        return true;
+    }
+
+    const CKERROR err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED, &ctx);
+    if (err != CK_OK) {
+        error = fmt::format("Building Block SETTINGSEDITED callback failed (CKERROR {}).", err);
+        return false;
+    }
+    return true;
+}
+
 bool ConfigureBehaviorOwnerAndTarget(CKContext *context,
                                      CKBehavior *behavior,
                                      const ScriptBridgeBBInvocationSpec &request,
@@ -303,6 +319,10 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
         if (err != CK_OK) {
             return fail(fmt::format("Building Block ATTACH callback failed (CKERROR {}).", err));
         }
+    }
+
+    if (!ScriptBehaviorBridgeInternal::NotifyIndexedSettingsEdited(behavior, request.IndexedSettings, ctx, error)) {
+        return fail(error);
     }
 
     if (!ApplyIndexedInputParameters(behavior, request.IndexedParameters, error, nullptr)) {
@@ -617,6 +637,7 @@ bool ScriptBehaviorBridge::StepTask(CK_ID taskId, int generation, const CKBehavi
     }
 
     if (inputIndex < 0 && !behavior->IsActive()) {
+        record->LastState.ActiveOutputs.Clear();
         return record->LastState.Ok;
     }
 
@@ -872,6 +893,10 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         if (err != CK_OK) {
             return fail(fmt::format("Building Block ATTACH callback failed (CKERROR {}).", err));
         }
+    }
+
+    if (!ScriptBehaviorBridgeInternal::NotifyIndexedSettingsEdited(behavior, request.IndexedSettings, ctx, state.Error)) {
+        return fail(state.Error);
     }
 
     if (!ApplyIndexedInputParameters(behavior, request.IndexedParameters, error, inputSources)) {
