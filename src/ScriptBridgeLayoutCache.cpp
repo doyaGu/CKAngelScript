@@ -33,6 +33,7 @@ bool IsBridgeInternalLocalName(const std::string &name) {
            name.find("__CKAS_BridgeOutput_") == 0 ||
            name.find("__CKAS_GraphEditInput_") == 0 ||
            name.find("__CKAS_Op") == 0 ||
+           name == "__CKAS_GraphEdit_Target" ||
            name == "__CKAS_Target";
 }
 
