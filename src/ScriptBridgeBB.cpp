@@ -49,6 +49,59 @@ std::vector<CKObjectDeclaration *> FindPrototypeDeclarations(const std::string &
     return matches;
 }
 
+bool WriteLivePinValue(CKBehavior *behavior,
+                       int pinIndex,
+                       const ScriptParamValue &value,
+                       const char *method,
+                       const std::string &pinName,
+                       std::string &error) {
+    if (!behavior || pinIndex < 0 || pinIndex >= behavior->GetInputParameterCount()) {
+        error = fmt::format("{} could not resolve live pin '{}'.", method, pinName);
+        return false;
+    }
+
+    CKParameterIn *input = behavior->GetInputParameter(pinIndex);
+    CKParameter *previousSource = input ? input->GetDirectSource() : nullptr;
+    const std::string bridgeSourceName = fmt::format("__CKAS_BridgeInput_{}", pinIndex);
+    CKParameterLocal *existingBridgeSource = FindLocalParameterByName(behavior, bridgeSourceName);
+    const CK_ID existingBridgeSourceId = existingBridgeSource ? existingBridgeSource->GetID() : 0;
+
+    std::string writeError;
+    if (SetInputParameterValueByIndex(behavior, pinIndex, value, writeError, nullptr)) {
+        return true;
+    }
+
+    CKParameter *currentSource = input ? input->GetDirectSource() : nullptr;
+    if (input && currentSource != previousSource) {
+        const CKERROR restoreError = input->SetDirectSource(previousSource);
+        if (restoreError != CK_OK) {
+            writeError = fmt::format("{} Failed to restore previous source (CKERROR {}).",
+                                     writeError.empty() ? std::string("Conversion failed.") : writeError,
+                                     restoreError);
+        }
+    }
+
+    CKParameterLocal *createdBridgeSource = FindLocalParameterByName(behavior, bridgeSourceName);
+    if (createdBridgeSource && createdBridgeSource->GetID() != existingBridgeSourceId) {
+        const int position = behavior->GetLocalParameterPosition(createdBridgeSource);
+        if (position >= 0) {
+            behavior->RemoveLocalParameter(position);
+        }
+        if (CKContext *context = behavior->GetCKContext()) {
+            if (!createdBridgeSource->IsToBeDeleted()) {
+                context->DestroyObject(createdBridgeSource);
+            }
+        }
+    }
+
+    error = fmt::format("{} failed to write live pin '{}'.{}{}",
+                        method,
+                        pinName,
+                        writeError.empty() ? "" : " ",
+                        writeError);
+    return false;
+}
+
 std::string PrototypeCandidateList(const std::vector<CKObjectDeclaration *> &matches) {
     std::string text;
     for (CKObjectDeclaration *decl : matches) {
@@ -1324,6 +1377,19 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
         return false;
     }
     if (m_Instance && m_Instance->IsValid()) {
+        CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration());
+        std::string writeError;
+        if (!ScriptBridgeBBInternal::WriteLivePinValue(behavior,
+                                                       pinIndex,
+                                                       value,
+                                                       method,
+                                                       slot ? slot->Name() : std::string("<null>"),
+                                                       writeError)) {
+            SetError(writeError);
+            SetScriptException(m_Error);
+            return false;
+        }
+
         ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
         ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
         if (oldSource) {
@@ -1333,29 +1399,6 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
         if (oldOperation) {
             oldOperation->DestroyDetached();
             oldOperation->Release();
-        }
-        CKBehavior *behavior = m_Bridge->GetInstanceBehavior(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration());
-        CKParameterIn *input = behavior && pinIndex >= 0 && pinIndex < behavior->GetInputParameterCount()
-            ? behavior->GetInputParameter(pinIndex)
-            : nullptr;
-        if (input) {
-            input->SetDirectSource(nullptr);
-        }
-        ParamRef *ref = m_Instance->Pin(slot);
-        if (!ref) {
-            SetError(fmt::format("{} could not resolve live instance pin.", method));
-            SetScriptException(m_Error);
-            return false;
-        }
-        ParamValue paramValue(value);
-        const bool ok = ref->Set(&paramValue);
-        ref->Release();
-        if (!ok) {
-            SetError(fmt::format("{} failed to write live instance pin '{}'.", method, slot ? slot->Name() : std::string("<null>")));
-            SetScriptException(m_Error);
-        }
-        if (!ok) {
-            return false;
         }
     }
     RemovePendingSource(pinIndex);
@@ -2074,6 +2117,18 @@ bool BBInstance::SetValueForPin(BBSlot *pin, const ScriptParamValue &value, cons
         return false;
     }
 
+    std::string writeError;
+    if (!ScriptBridgeBBInternal::WriteLivePinValue(behavior,
+                                                   pinIndex,
+                                                   value,
+                                                   method,
+                                                   pin ? pin->Name() : std::string("<null>"),
+                                                   writeError)) {
+        SetError(writeError);
+        SetScriptException(m_Error);
+        return false;
+    }
+
     ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
     ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_InstanceId, m_Generation, pinIndex);
     if (oldSource) {
@@ -2083,27 +2138,6 @@ bool BBInstance::SetValueForPin(BBSlot *pin, const ScriptParamValue &value, cons
     if (oldOperation) {
         oldOperation->DestroyDetached();
         oldOperation->Release();
-    }
-    CKParameterIn *input = behavior && pinIndex >= 0 && pinIndex < behavior->GetInputParameterCount()
-        ? behavior->GetInputParameter(pinIndex)
-        : nullptr;
-    if (input) {
-        input->SetDirectSource(nullptr);
-    }
-    ParamRef *ref = Pin(pin);
-    if (!ref) {
-        SetError(fmt::format("{} could not resolve live pin '{}'.", method, pin ? pin->Name() : std::string("<null>")));
-        SetScriptException(m_Error);
-        return false;
-    }
-
-    ParamValue paramValue(value);
-    const bool ok = ref->Set(&paramValue);
-    ref->Release();
-    if (!ok) {
-        SetError(fmt::format("{} failed to write live pin '{}'.", method, pin ? pin->Name() : std::string("<null>")));
-        SetScriptException(m_Error);
-        return false;
     }
     ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value);
     return true;
