@@ -58,10 +58,11 @@ struct AngelScriptExecuteOptions {
 struct AngelScriptResult {
     AngelScriptStatus Status = ANGELSCRIPT_STATUS_OK;
     int AngelScriptCode = 0;
-    // ErrorMessage and StackTrace are borrowed strings. For GetLastResult(),
-    // they remain valid until the next manager API call that updates the last
-    // result. For GetExecutionResult(), they remain valid until the execution
-    // handle is released or started/resumed/cancelled again.
+    // ErrorMessage and StackTrace are borrowed strings. Results returned
+    // through API output parameters and GetLastResult() remain valid until the
+    // next manager API call that updates the last result. GetExecutionResult()
+    // strings remain valid until the execution handle is released or started,
+    // resumed, or cancelled again.
     const char *ErrorMessage = nullptr;
     const char *StackTrace = nullptr;
 };
