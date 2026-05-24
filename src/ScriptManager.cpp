@@ -392,6 +392,18 @@ bool ScriptManager::OwnsExecution(const AngelScriptExecution *execution) const {
     return execution && m_Executions.find(const_cast<AngelScriptExecution *>(execution)) != m_Executions.end();
 }
 
+bool ScriptManager::HasExecutionForModule(const char *moduleName) const {
+    if (!moduleName || moduleName[0] == '\0') {
+        return false;
+    }
+    for (const AngelScriptExecution *execution : m_Executions) {
+        if (execution && execution->ModuleName == moduleName) {
+            return true;
+        }
+    }
+    return false;
+}
+
 AngelScriptStatus ScriptManager::LoadModule(const AngelScriptLoadOptions &options, AngelScriptResult *result) {
     if (!options.ModuleName || options.ModuleName[0] == '\0') {
         return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name is required.");
@@ -412,6 +424,12 @@ AngelScriptStatus ScriptManager::LoadModule(const AngelScriptLoadOptions &option
     if (HasModule(options.ModuleName)) {
         if (!options.ReplaceExisting) {
             return StoreResult(result, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Module already exists.");
+        }
+        if (HasExecutionForModule(options.ModuleName)) {
+            return StoreResult(result,
+                               ANGELSCRIPT_STATUS_EXECUTION_FAILED,
+                               0,
+                               "Module has active execution handles.");
         }
         UnloadScript(options.ModuleName);
     }
@@ -460,6 +478,12 @@ AngelScriptStatus ScriptManager::CompileModule(const char *moduleName,
         if (!replaceExisting) {
             return StoreResult(result, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Module already exists.");
         }
+        if (HasExecutionForModule(moduleName)) {
+            return StoreResult(result,
+                               ANGELSCRIPT_STATUS_EXECUTION_FAILED,
+                               0,
+                               "Module has active execution handles.");
+        }
         UnloadScript(moduleName);
     }
 
@@ -478,6 +502,12 @@ AngelScriptStatus ScriptManager::CompileModule(const char *moduleName,
 AngelScriptStatus ScriptManager::UnloadModule(const char *moduleName, AngelScriptResult *result) {
     if (!moduleName || moduleName[0] == '\0') {
         return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name is required.");
+    }
+    if (HasExecutionForModule(moduleName)) {
+        return StoreResult(result,
+                           ANGELSCRIPT_STATUS_EXECUTION_FAILED,
+                           0,
+                           "Module has active execution handles.");
     }
     if (!UnloadScript(moduleName)) {
         return StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, "Module was not loaded.");

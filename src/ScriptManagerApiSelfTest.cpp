@@ -339,6 +339,16 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
         manager->ReleaseExecution(execution);
         return false;
     }
+    if (manager->UnloadModule(moduleName, &result) != ANGELSCRIPT_STATUS_EXECUTION_FAILED) {
+        error = "AngelScriptManager API self-test expected UnloadModule with an active execution handle to fail.";
+        manager->ReleaseExecution(execution);
+        return false;
+    }
+    if (manager->CompileModule(moduleName, source, true, &result) != ANGELSCRIPT_STATUS_EXECUTION_FAILED) {
+        error = "AngelScriptManager API self-test expected replace CompileModule with an active execution handle to fail.";
+        manager->ReleaseExecution(execution);
+        return false;
+    }
     if (!ExpectStatus(manager->CancelExecution(execution),
                       ANGELSCRIPT_STATUS_CANCELLED,
                       "CancelExecution",

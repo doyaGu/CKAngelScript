@@ -325,6 +325,7 @@ protected:
     void RegisterVirtools(asIScriptEngine *engine);
 
     bool OwnsExecution(const AngelScriptExecution *execution) const;
+    bool HasExecutionForModule(const char *moduleName) const;
     AngelScriptResult MakeResult(AngelScriptStatus status,
                                  int angelScriptCode = 0,
                                  const std::string &errorMessage = std::string(),

@@ -306,6 +306,8 @@ void RunPublicApiExample(CKContext *context) {
 
 `AngelScriptResult::ErrorMessage` and `StackTrace` are borrowed strings. `GetLastResult()` strings remain valid until the next manager API call that updates the last result. `GetExecutionResult()` strings remain valid until the execution handle is released or started, resumed, or cancelled again.
 
+Execution handles keep their module alive from the public API perspective. `UnloadModule` and replacing an existing module fail with `ANGELSCRIPT_STATUS_EXECUTION_FAILED` while any `AngelScriptExecution` for that module is still unreleased. Call `CancelExecution` if needed, then `ReleaseExecution`, before unloading or replacing the module.
+
 Typed async aggregate results should use the out-parameter overloads:
 
 ```angelscript
