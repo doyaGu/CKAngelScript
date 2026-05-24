@@ -389,66 +389,6 @@ ScriptAsyncTaskBase *AsyncAnyVoid(CScriptArray *tasks) {
     return CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::Any, asTYPEID_VOID);
 }
 
-ScriptAsyncTaskBase *AsyncAllInt(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::All");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::All, ArrayHandleType(engine, "int")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncAllFloat(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::All");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::All, ArrayHandleType(engine, "float")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncAllString(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::All");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::All, ArrayHandleType(engine, "string")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncAllObject(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::All");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::All, ArrayHandleType(engine, "CKObject@")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncRaceInt(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::Race");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::Race, engine->GetTypeIdByDecl("int")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncRaceFloat(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::Race");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::Race, engine->GetTypeIdByDecl("float")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncRaceString(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::Race");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::Race, engine->GetTypeIdByDecl("string")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncRaceObject(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::Race");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::Race, engine->GetTypeIdByDecl("CKObject@")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncAnyInt(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::Any");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::Any, engine->GetTypeIdByDecl("int")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncAnyFloat(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::Any");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::Any, engine->GetTypeIdByDecl("float")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncAnyString(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::Any");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::Any, engine->GetTypeIdByDecl("string")) : nullptr;
-}
-
-ScriptAsyncTaskBase *AsyncAnyObject(CScriptArray *tasks) {
-    asIScriptEngine *engine = EngineFromActiveContext("Async::Any");
-    return engine ? CreateAggregateFromArray(tasks, ScriptAsyncTaskKind::Any, engine->GetTypeIdByDecl("CKObject@")) : nullptr;
-}
-
 ScriptAsyncTaskBase *AsyncWaitBBTask(BBTask *task) {
     ScriptAsyncScheduler *scheduler = SchedulerFromActiveContext();
     if (!scheduler) {
@@ -1444,22 +1384,12 @@ void RegisterScriptAsync(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void Create(?&in fn, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnGeneric), asCALL_GENERIC); assert(r >= 0);
 
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ All(array<AsyncTask<void>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAllVoid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<array<int>@>@ All(array<AsyncTask<int>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAllInt), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<array<float>@>@ All(array<AsyncTask<float>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAllFloat), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<array<string>@>@ All(array<AsyncTask<string>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAllString), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<array<CKObject@>@>@ All(array<AsyncTask<CKObject@>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAllObject), asCALL_CDECL); assert(r >= 0);
+    // Use the out-parameter aggregate overloads for typed results. The direct typed-return
+    // overloads can make AngelScript's overload resolver hang in the Virtools Player host.
     r = engine->RegisterGlobalFunction("void All(?&in tasks, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncAllGeneric), asCALL_GENERIC); assert(r >= 0);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Race(array<AsyncTask<void>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncRaceVoid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Race(array<AsyncTask<int>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncRaceInt), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Race(array<AsyncTask<float>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncRaceFloat), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Race(array<AsyncTask<string>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncRaceString), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Race(array<AsyncTask<CKObject@>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncRaceObject), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void Race(?&in tasks, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncRaceGeneric), asCALL_GENERIC); assert(r >= 0);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Any(array<AsyncTask<void>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAnyVoid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Any(array<AsyncTask<int>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAnyInt), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Any(array<AsyncTask<float>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAnyFloat), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Any(array<AsyncTask<string>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAnyString), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Any(array<AsyncTask<CKObject@>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAnyObject), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("void Any(?&in tasks, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncAnyGeneric), asCALL_GENERIC); assert(r >= 0);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(BBTask@ task)", asFUNCTION(ScriptAsyncInternal::AsyncWaitBBTask), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(GraphTask@ task)", asFUNCTION(ScriptAsyncInternal::AsyncWaitGraphTask), asCALL_CDECL); assert(r >= 0);
