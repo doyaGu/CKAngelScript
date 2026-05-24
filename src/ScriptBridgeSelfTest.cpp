@@ -2274,7 +2274,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     }
 
     constexpr const char *scriptName = "__CKAS_RuntimeBBSelfTest";
-    manager->UnloadScript(scriptName);
+    manager->UnloadModule(scriptName, nullptr);
 
     const char *source =
         "int g_BridgeRunnerCount = 0;\n"
@@ -2283,14 +2283,17 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         "    return 0;\n"
         "}\n";
 
-    if (manager->CompileScript(scriptName, source) < 0) {
-        error = "Failed to compile runtime BB self-test script.";
+    AngelScriptResult compileResult = {};
+    if (manager->CompileModule(scriptName, source, true, &compileResult) != ANGELSCRIPT_STATUS_OK) {
+        error = compileResult.ErrorMessage && compileResult.ErrorMessage[0] != '\0'
+            ? compileResult.ErrorMessage
+            : "Failed to compile runtime BB self-test script.";
         return false;
     }
 
-    asIScriptModule *module = manager->GetScript(scriptName);
+    asIScriptModule *module = manager->GetModule(scriptName);
     if (!module) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "Runtime BB self-test script module was not found after compilation.";
         return false;
     }
@@ -2311,7 +2314,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     behaviorContext.CallbackArg = nullptr;
 
     if (!RunInitialSettingsEditedSelfTest(context, bridge, behaviorContext, error)) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
 
@@ -2321,13 +2324,13 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     ScriptBridgeSetIndexedValue(request.IndexedParameters, 1, MakeScriptParamString("BridgeRunnerEntry"));
 
     if (!ProbeRuntimeRunnerInputBinding(context, request, scriptName, "BridgeRunnerEntry", error)) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
 
     BBResult *result = bridge->RunCall(request, behaviorContext, 0);
     if (!result) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BB.Call runtime self-test did not return a result.";
         return false;
     }
@@ -2340,7 +2343,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     std::string callError = result->Error();
     result->Release();
     if (!callOk) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = fmt::format("BB.Call runtime self-test failed: ok={} rc={} out={} errorOut={} error={}",
                             callStateOk ? "true" : "false",
                             callReturnCode,
@@ -2352,7 +2355,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
 
     int count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
     if (!error.empty() || count != 1) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         if (error.empty()) {
             error = fmt::format("BB.Call runtime self-test expected count 1, got {}.", count);
         }
@@ -2375,7 +2378,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         if (wrongScriptRef) wrongScriptRef->Release();
         if (replacementConfig) replacementConfig->Release();
         DestroySelfTestObject(context, wrongScriptSource);
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BBConfig replacement precedence self-test setup failed.";
         return false;
     }
@@ -2396,7 +2399,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         wrongScriptRef->Release();
         replacementConfig->Release();
         DestroySelfTestObject(context, wrongScriptSource);
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         if (error.empty()) {
             error = fmt::format("BBConfig replacement precedence self-test expected count 2, got {}. {}",
                                 count,
@@ -2469,7 +2472,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         !configLiveRef ||
         !configBadRef) {
         cleanupLiveConfig();
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BBConfig live source replacement self-test setup failed.";
         return false;
     }
@@ -2484,7 +2487,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     if (!liveConfigInstance || !liveConfigBehavior || !liveConfigScriptPin || liveConfigScriptPin->GetDirectSource() != configInitialSource) {
         const std::string configError = liveConfigInstance ? liveConfigInstance->Error() : liveConfig->Error();
         cleanupLiveConfig();
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = configError.empty() ? "BBConfig live source replacement self-test failed to install initial source." : configError;
         return false;
     }
@@ -2494,7 +2497,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     if (returnedConfig) returnedConfig->Release();
     if (!liveSourceAccepted || liveConfigScriptPin->GetDirectSource() != configLiveSource) {
         cleanupLiveConfig();
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BBConfig live source replacement self-test failed to install live source.";
         return false;
     }
@@ -2504,7 +2507,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     if (returnedConfig) returnedConfig->Release();
     if (badConfigSourceAccepted || liveConfigScriptPin->GetDirectSource() != configLiveSource) {
         cleanupLiveConfig();
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BBConfig runtime self-test did not preserve live source after failed source replacement.";
         return false;
     }
@@ -2513,35 +2516,35 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     if (returnedConfig) returnedConfig->Release();
     if (badConfigValueAccepted || liveConfigScriptPin->GetDirectSource() != configLiveSource) {
         cleanupLiveConfig();
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BBConfig runtime self-test did not preserve live source after failed value replacement.";
         return false;
     }
     cleanupLiveConfig();
 
     if (!RunLiveOperationReplacementSelfTest(context, bridge, behaviorContext, true, error)) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
 
     if (!RunLiveOperationReplacementSelfTest(context, bridge, behaviorContext, false, error)) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
 
     if (!RunLiveMixedLinkReplacementSelfTest(context, bridge, behaviorContext, true, error)) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
 
     if (!RunLiveMixedLinkReplacementSelfTest(context, bridge, behaviorContext, false, error)) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
 
     BBTask *task = bridge->StartTask(request, behaviorContext, 0);
     if (!task) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BB.Spawn runtime self-test did not return a task.";
         return false;
     }
@@ -2561,7 +2564,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         taskError = task->Error();
         task->Destroy();
         task->Release();
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = fmt::format("BB.Spawn runtime self-test Step failed: ok={} rc={} out={} errorOut={} error={}",
                             taskStepOk ? "true" : "false",
                             taskStepReturnCode,
@@ -2576,7 +2579,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         taskError = task->Error();
         task->Destroy();
         task->Release();
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = fmt::format("BB.Spawn runtime self-test kept output active after inactive idle Step: ok={} out={} error={}",
                             taskIdleStepOk ? "true" : "false",
                             taskIdleOutActive ? "true" : "false",
@@ -2585,14 +2588,14 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     }
     if (!task->Destroy() || task->IsValid()) {
         task->Release();
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BB.Spawn runtime self-test task did not destroy cleanly.";
         return false;
     }
     task->Release();
 
     if (!taskOk) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = fmt::format("BB.Spawn runtime self-test failed: valid={} alive={} rc={} out={} errorOut={} error={}",
                             taskValid ? "true" : "false",
                             taskAlive ? "true" : "false",
@@ -2619,7 +2622,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         }
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = instanceError.empty() ? "BBInstance runtime self-test setup failed." : instanceError;
         return false;
     }
@@ -2638,7 +2641,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         bridge->DestroyInstance(instanceId, instanceGeneration);
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BBInstance runtime self-test failed to install owned source link.";
         return false;
     }
@@ -2655,7 +2658,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         bridge->DestroyInstance(instanceId, instanceGeneration);
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BBInstance runtime self-test did not preserve live source after failed source replacement.";
         return false;
     }
@@ -2668,7 +2671,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         bridge->DestroyInstance(instanceId, instanceGeneration);
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BBInstance runtime self-test did not preserve live source after failed value replacement.";
         return false;
     }
@@ -2680,7 +2683,7 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     if (!bridge->DestroyInstance(instanceId, instanceGeneration) || scriptPin->GetDirectSource() != previousSource) {
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         error = "BBInstance runtime self-test did not restore owned source link on Destroy.";
         return false;
     }
@@ -2690,14 +2693,14 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     error.clear();
     count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
     if (!error.empty() || count != 4) {
-        manager->UnloadScript(scriptName);
+        manager->UnloadModule(scriptName, nullptr);
         if (error.empty()) {
             error = fmt::format("BB.Spawn runtime self-test expected count 4, got {}.", count);
         }
         return false;
     }
 
-    manager->UnloadScript(scriptName);
+    manager->UnloadModule(scriptName, nullptr);
     error.clear();
     return true;
 }

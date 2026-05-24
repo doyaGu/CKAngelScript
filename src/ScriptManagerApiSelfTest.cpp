@@ -37,6 +37,11 @@ bool WriteTextFile(const std::filesystem::path &path, const char *text, std::str
     return true;
 }
 
+void RemoveTextFile(const std::filesystem::path &path) {
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+
 bool ContainsCompileLocation(const AngelScriptResult &result) {
     if (!result.ErrorMessage || result.ErrorMessage[0] == '\0') {
         return false;
@@ -133,9 +138,11 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
     const std::filesystem::path singleFile = tempDir / "__ckas_manager_api_single.as";
     const std::filesystem::path multiFileA = tempDir / "__ckas_manager_api_multi_a.as";
     const std::filesystem::path multiFileB = tempDir / "__ckas_manager_api_multi_b.as";
+    const std::filesystem::path defaultFile = std::filesystem::current_path() / "__CKAS_ManagerApiDefaultFileLoadSelfTest.as";
     if (!WriteTextFile(singleFile, "int __ckas_public_file_loaded() { return 11; }\n", error) ||
         !WriteTextFile(multiFileA, "int __ckas_public_multi_a() { return 12; }\n", error) ||
-        !WriteTextFile(multiFileB, "int __ckas_public_multi_b() { return __ckas_public_multi_a() + 1; }\n", error)) {
+        !WriteTextFile(multiFileB, "int __ckas_public_multi_b() { return __ckas_public_multi_a() + 1; }\n", error) ||
+        !WriteTextFile(defaultFile, "int __ckas_public_default_file_loaded() { return 14; }\n", error)) {
         return false;
     }
 
@@ -180,6 +187,40 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
     }
     manager->UnloadModule(multiFileModuleName, nullptr);
 
+    constexpr const char *defaultFileModuleName = "__CKAS_ManagerApiDefaultFileLoadSelfTest";
+    AngelScriptLoadOptions defaultFileOptions = {};
+    defaultFileOptions.ModuleName = defaultFileModuleName;
+    defaultFileOptions.ReplaceExisting = true;
+    if (!ExpectStatus(manager->LoadModule(defaultFileOptions, &result),
+                      ANGELSCRIPT_STATUS_OK,
+                      "LoadModule default file",
+                      &result,
+                      error)) {
+        RemoveTextFile(defaultFile);
+        return false;
+    }
+    if (!manager->FindFunctionByName(defaultFileModuleName, "__ckas_public_default_file_loaded")) {
+        error = "AngelScriptManager API self-test could not query LoadModule default-file output.";
+        manager->UnloadModule(defaultFileModuleName, nullptr);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
+    manager->UnloadModule(defaultFileModuleName, nullptr);
+    RemoveTextFile(defaultFile);
+
+    AngelScriptLoadOptions missingFileOptions = {};
+    missingFileOptions.ModuleName = "__CKAS_ManagerApiMissingFileLoadSelfTest";
+    const std::string missingFilePath = (tempDir / "__ckas_manager_api_missing_file.as").string();
+    missingFileOptions.Filename = missingFilePath.c_str();
+    missingFileOptions.ReplaceExisting = true;
+    if (manager->LoadModule(missingFileOptions, &result) != ANGELSCRIPT_STATUS_COMPILE_ERROR ||
+        !result.ErrorMessage ||
+        result.ErrorMessage[0] == '\0') {
+        error = "AngelScriptManager API self-test expected missing file LoadModule to return diagnostics.";
+        manager->UnloadModule(missingFileOptions.ModuleName, nullptr);
+        return false;
+    }
+
     AngelScriptLoadOptions conflictingOptions = {};
     conflictingOptions.ModuleName = "__CKAS_ManagerApiConflictingLoadSelfTest";
     conflictingOptions.Code = "int __ckas_public_conflict() { return 1; }\n";
@@ -190,6 +231,9 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
         manager->UnloadModule(conflictingOptions.ModuleName, nullptr);
         return false;
     }
+    RemoveTextFile(singleFile);
+    RemoveTextFile(multiFileA);
+    RemoveTextFile(multiFileB);
 
     constexpr const char *badModuleName = "__CKAS_ManagerApiBadCompileSelfTest";
     if (manager->CompileModule(badModuleName, "int __ckas_bad_compile( {", true, &result) !=
