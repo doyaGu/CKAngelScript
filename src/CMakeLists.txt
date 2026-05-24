@@ -93,6 +93,7 @@ if (CKAS_BUILD_SELF_TESTS)
     list(APPEND CKAS_SOURCES
             ScriptStartupSelfTest.cpp
             ScriptComponentMetadataSelfTest.cpp
+            ScriptManagerApiSelfTest.cpp
             ScriptParameterConversionSelfTest.cpp
             ScriptParameterRegistrySelfTest.cpp
             ScriptRuntimeMetadataSelfTest.cpp
@@ -114,6 +115,7 @@ target_include_directories(CKAngelScript
         PUBLIC
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
         PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${DYNCALL_INCLUDE_DIR}
         ${DYNCALLBACK_INCLUDE_DIR}
