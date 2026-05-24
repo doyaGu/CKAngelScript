@@ -5,11 +5,14 @@
 #include "CKContext.h"
 #include "CKTypes.h"
 
+#include <cstddef>
+
 #include <angelscript.h>
 
 #define ANGEL_SCRIPT_MANAGER_GUID CKGUID(0x70955bd2,0x30684456)
 
 struct AngelScriptExecution;
+struct CKBehaviorContext;
 
 enum AngelScriptStatus {
     ANGELSCRIPT_STATUS_OK = 0,

@@ -238,6 +238,8 @@ By following these steps, you can fully utilize AngelScript within Virtools Dev 
 
 External Virtools plugins can retrieve the public manager with `AngelScriptManager::GetManager(context)`. The public API focuses on module loading, function lookup, task-style execution, and result diagnostics.
 
+`LoadModule` accepts one script source per call: `Code`, `Filename`, or `Filenames` with `FileCount`. Passing more than one source returns `ANGELSCRIPT_STATUS_INVALID_ARGUMENT`. If no source is provided, the manager loads the default `<ModuleName>.as` file through the configured Virtools script path.
+
 ```cpp
 #include "AngelScriptManager.h"
 
@@ -303,6 +305,20 @@ void RunPublicApiExample(CKContext *context) {
 ```
 
 `AngelScriptResult::ErrorMessage` and `StackTrace` are borrowed strings. `GetLastResult()` strings remain valid until the next manager API call that updates the last result. `GetExecutionResult()` strings remain valid until the execution handle is released or started, resumed, or cancelled again.
+
+Typed async aggregate results should use the out-parameter overloads:
+
+```angelscript
+array<AsyncTask<int>@> tasks;
+AsyncTask<array<int>@>@ allInts;
+Async::All(tasks, @allInts);
+
+AsyncTask<int>@ firstInt;
+Async::Race(tasks, @firstInt);
+Async::Any(tasks, @firstInt);
+```
+
+The direct typed-return aggregate overloads are intentionally not exposed because they can make AngelScript module compilation hang inside the Virtools Player host.
 
 ---
 
