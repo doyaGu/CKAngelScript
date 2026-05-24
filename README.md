@@ -234,6 +234,78 @@ By following these steps, you can fully utilize AngelScript within Virtools Dev 
 
 ---
 
+## Public Manager API
+
+External Virtools plugins can retrieve the public manager with `AngelScriptManager::GetManager(context)`. The public API focuses on module loading, function lookup, task-style execution, and result diagnostics.
+
+```cpp
+#include "AngelScriptManager.h"
+
+struct AddData {
+    int Input = 0;
+    int Output = 0;
+};
+
+void ConfigureAdd(asIScriptContext *ctx, void *userData) {
+    AddData *data = static_cast<AddData *>(userData);
+    ctx->SetArgDWord(0, static_cast<asDWORD>(data->Input));
+}
+
+void ReadAddResult(asIScriptContext *ctx, void *userData) {
+    AddData *data = static_cast<AddData *>(userData);
+    data->Output = static_cast<int>(ctx->GetReturnDWord());
+}
+
+void RunPublicApiExample(CKContext *context) {
+    AngelScriptManager *manager = AngelScriptManager::GetManager(context);
+    if (!manager) {
+        return;
+    }
+
+    AngelScriptResult result = {};
+    manager->CompileModule("example_api",
+                           "int add_five(int value) { return value + 5; }",
+                           true,
+                           &result);
+    if (result.Status != ANGELSCRIPT_STATUS_OK) {
+        context->OutputToConsoleEx("Compile failed: %s", result.ErrorMessage ? result.ErrorMessage : "");
+        return;
+    }
+
+    AddData data;
+    data.Input = 37;
+
+    AngelScriptExecuteOptions options = {};
+    options.ModuleName = "example_api";
+    options.FunctionDecl = "int add_five(int)";
+    options.ConfigureContext = ConfigureAdd;
+    options.ReadResult = ReadAddResult;
+    options.UserData = &data;
+
+    AngelScriptExecution *execution = manager->CreateExecution(options, &result);
+    if (!execution) {
+        context->OutputToConsoleEx("CreateExecution failed: %s", result.ErrorMessage ? result.ErrorMessage : "");
+        return;
+    }
+
+    AngelScriptStatus status = manager->StartExecution(execution);
+    if (status == ANGELSCRIPT_STATUS_SUSPENDED) {
+        // ResumeExecution should be called on a later tick after async work advances.
+    } else if (status != ANGELSCRIPT_STATUS_OK) {
+        const AngelScriptResult *execResult = manager->GetExecutionResult(execution);
+        context->OutputToConsoleEx("Execution failed: %s",
+                                   execResult && execResult->ErrorMessage ? execResult->ErrorMessage : "");
+    }
+
+    manager->ReleaseExecution(execution);
+    manager->UnloadModule("example_api");
+}
+```
+
+`AngelScriptResult::ErrorMessage` and `StackTrace` are borrowed strings. `GetLastResult()` strings remain valid until the next manager API call that updates the last result. `GetExecutionResult()` strings remain valid until the execution handle is released or started, resumed, or cancelled again.
+
+---
+
 ## Contributing
 
 Contributions to CKAngelScript are welcome. To contribute:

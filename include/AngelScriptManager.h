@@ -55,6 +55,10 @@ struct AngelScriptExecuteOptions {
 struct AngelScriptResult {
     AngelScriptStatus Status = ANGELSCRIPT_STATUS_OK;
     int AngelScriptCode = 0;
+    // ErrorMessage and StackTrace are borrowed strings. For GetLastResult(),
+    // they remain valid until the next manager API call that updates the last
+    // result. For GetExecutionResult(), they remain valid until the execution
+    // handle is released or started/resumed/cancelled again.
     const char *ErrorMessage = nullptr;
     const char *StackTrace = nullptr;
 };
@@ -86,6 +90,10 @@ public:
     virtual asIScriptFunction *FindFunctionByDecl(const char *moduleName, const char *functionDecl) = 0;
 
     // Executions
+    // CreateExecution returns an opaque handle owned by the manager. Release it
+    // with ReleaseExecution when finished. StartExecution may return
+    // ANGELSCRIPT_STATUS_SUSPENDED for scripts that await async work; call
+    // ResumeExecution on a later tick after the async scheduler has advanced.
     virtual AngelScriptExecution *CreateExecution(const AngelScriptExecuteOptions &options,
                                                   AngelScriptResult *result = nullptr) = 0;
     virtual AngelScriptStatus StartExecution(AngelScriptExecution *execution) = 0;
