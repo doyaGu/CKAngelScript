@@ -809,6 +809,51 @@ asIScriptModule *ScriptManager::GetScript(const char *scriptName) {
     return m_ScriptEngine->GetModule(scriptName, asGM_ONLY_IF_EXISTS);
 }
 
+std::shared_ptr<CachedScript> ScriptManager::GetCachedScript(const char *scriptName) {
+    if (!scriptName || scriptName[0] == '\0') {
+        return nullptr;
+    }
+    return m_ScriptCache.GetCachedScript(scriptName);
+}
+
+std::shared_ptr<CachedScript> ScriptManager::NewCachedScript(const char *scriptName) {
+    if (!scriptName || scriptName[0] == '\0') {
+        return nullptr;
+    }
+    return m_ScriptCache.NewCachedScript(scriptName);
+}
+
+bool ScriptManager::RestoreCachedScriptFromChunk(const char *scriptName, CKStateChunk *chunk) {
+    if (!chunk) {
+        return false;
+    }
+    std::shared_ptr<CachedScript> script = NewCachedScript(scriptName);
+    if (!script) {
+        return false;
+    }
+    if (script->module) {
+        return true;
+    }
+    return script->LoadFromChunk(chunk);
+}
+
+bool ScriptManager::SaveCachedScriptToChunk(const char *scriptName, CKStateChunk *chunk) {
+    if (!chunk) {
+        return false;
+    }
+    std::shared_ptr<CachedScript> script = GetCachedScript(scriptName);
+    return script ? script->SaveToChunk(chunk) : false;
+}
+
+bool ScriptManager::ClearCachedScriptCode(const char *scriptName) {
+    std::shared_ptr<CachedScript> script = GetCachedScript(scriptName);
+    if (!script) {
+        return false;
+    }
+    script->ClearCodeCache();
+    return true;
+}
+
 CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
     CKPathManager *pm = m_Context->GetPathManager();
     if (m_ScriptPathCategoryIndex == -1) {

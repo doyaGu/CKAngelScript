@@ -171,8 +171,7 @@ void ScriptRunner::ReleaseContext() {
 }
 
 bool ScriptRunner::SetScript(const char *scriptName) {
-    auto &cache = m_ScriptManager->GetScriptCache();
-    auto cachedScript = cache.GetCachedScript(scriptName);
+    auto cachedScript = m_ScriptManager ? m_ScriptManager->GetCachedScript(scriptName) : nullptr;
     if (!cachedScript || !cachedScript->module) {
         SetErrorMessage("Script module is invalid or failed to compile.");
         return false;

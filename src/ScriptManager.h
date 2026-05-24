@@ -254,13 +254,18 @@ public:
     const AngelScriptResult *GetExecutionResult(const AngelScriptExecution *execution) const override;
     const AngelScriptResult *GetLastResult() const override;
 
+    asIScriptModule *GetScript(const char *scriptName);
+    std::shared_ptr<CachedScript> GetCachedScript(const char *scriptName);
+    std::shared_ptr<CachedScript> NewCachedScript(const char *scriptName);
+    bool RestoreCachedScriptFromChunk(const char *scriptName, CKStateChunk *chunk);
+    bool SaveCachedScriptToChunk(const char *scriptName, CKStateChunk *chunk);
+    bool ClearCachedScriptCode(const char *scriptName);
+
     // Script
     int LoadScript(const char *scriptName, const char *filename);
     int LoadScripts(const char *scriptName, const char **filenames, size_t count);
     int CompileScript(const char *scriptName, const char *scriptCode);
     bool UnloadScript(const char *scriptName);
-
-    asIScriptModule *GetScript(const char *scriptName);
 
     ScriptCache &GetScriptCache() {
         return m_ScriptCache;

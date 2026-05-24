@@ -411,8 +411,6 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
     if (!man)
         return CKBR_OWNERERROR;
 
-    auto &cache = man->GetScriptCache();
-
     ScriptRunner *runner = nullptr;
 
     switch (behcontext.CallbackMessage) {
@@ -434,13 +432,12 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
             if (!noScriptCache) {
                 const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
                 if (!scriptName.empty()) {
-                    auto script = cache.NewCachedScript(scriptName);
-                    if (!script->module) {
-                        CKStateChunk *chunk = nullptr;
-                        beh->GetLocalParameterValue(1, &chunk);
-                        if (chunk) {
-                            script->LoadFromChunk(chunk);
-                        }
+                    CKStateChunk *chunk = nullptr;
+                    beh->GetLocalParameterValue(1, &chunk);
+                    if (chunk) {
+                        man->RestoreCachedScriptFromChunk(scriptName.c_str(), chunk);
+                    } else {
+                        man->NewCachedScript(scriptName.c_str());
                     }
                 }
             }
@@ -474,13 +471,13 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
             if (!noScriptCache) {
                 const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
                 if (!scriptName.empty()) {
-                    auto script = cache.GetCachedScript(scriptName);
+                    auto script = man->GetCachedScript(scriptName.c_str());
                     if (script) {
                         ReadScriptData(beh, script);
                         CKStateChunk *chunk = nullptr;
                         beh->GetLocalParameterValue(1, &chunk);
                         if (chunk) {
-                            script->SaveToChunk(chunk);
+                            man->SaveCachedScriptToChunk(scriptName.c_str(), chunk);
                         }
                     }
                 }
@@ -523,10 +520,7 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
             if (noScriptCache) {
                 const std::string scriptName = (CKSTRING) beh->GetLocalParameterReadDataPtr(2);
                 if (!scriptName.empty()) {
-                    auto script = cache.GetCachedScript(scriptName);
-                    if (script) {
-                        script->ClearCodeCache();
-                    }
+                    man->ClearCachedScriptCode(scriptName.c_str());
                 }
 
                 CKStateChunk *chunk = nullptr;

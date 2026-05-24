@@ -821,7 +821,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
             : fmt::format("Runtime script '{}' failed to compile.", metadata.Id);
         return false;
     }
-    std::shared_ptr<CachedScript> cached = m_Manager->GetScriptCache().GetCachedScript(moduleName);
+    std::shared_ptr<CachedScript> cached = m_Manager->GetCachedScript(moduleName.c_str());
     if (!cached || !cached->module) {
         error = fmt::format("Runtime script '{}' failed to compile.", metadata.Id);
         m_Manager->UnloadModule(moduleName.c_str(), nullptr);
