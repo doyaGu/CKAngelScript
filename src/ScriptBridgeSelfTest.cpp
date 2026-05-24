@@ -46,25 +46,6 @@ static void WriteBehaviorBridgeSelfTestMarker(const std::string &status,
     }
 }
 
-struct BridgeSelfTestMessageCollector {
-    std::string Text;
-};
-
-static void BridgeSelfTestMessageCallback(const asSMessageInfo *msg, void *param) {
-    auto *collector = static_cast<BridgeSelfTestMessageCollector *>(param);
-    if (!collector || !msg) {
-        return;
-    }
-    if (!collector->Text.empty()) {
-        collector->Text += "\n";
-    }
-    collector->Text += fmt::format("{}({},{}) : {}",
-                                   msg->section ? msg->section : "<script>",
-                                   msg->row,
-                                   msg->col,
-                                   msg->message ? msg->message : "<empty>");
-}
-
 static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
                                             CKParameterManager *parameterManager,
                                             asIScriptEngine *engine,
@@ -209,39 +190,31 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    return 0;\n";
     source += "}\n";
 
-    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
-    if (!module) {
-        error = "Failed to create AngelScript self-test module.";
-        return false;
-    }
-
-    int r = module->AddScriptSection("behavior_bridge_selftest.as", source.c_str(), static_cast<unsigned int>(source.size()));
-    if (r < 0) {
-        error = fmt::format("Failed to add AngelScript self-test section ({}).", r);
-        engine->DiscardModule(moduleName);
-        return false;
-    }
-
-    BridgeSelfTestMessageCollector messageCollector;
     ScriptManager *manager = ScriptManager::GetManager(context);
-    engine->SetMessageCallback(asFUNCTION(BridgeSelfTestMessageCallback), &messageCollector, asCALL_CDECL);
-    r = module->Build();
-    if (manager) {
-        engine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), manager, asCALL_THISCALL);
+    if (!manager) {
+        error = "AngelScript manager is not available.";
+        return false;
     }
-    if (r < 0) {
-        error = fmt::format("Failed to build AngelScript self-test module ({}).{}{}",
-                            r,
-                            messageCollector.Text.empty() ? "" : "\n",
-                            messageCollector.Text);
-        engine->DiscardModule(moduleName);
+
+    AngelScriptResult compileResult = {};
+    if (manager->CompileModule(moduleName, source.c_str(), true, &compileResult) != ANGELSCRIPT_STATUS_OK) {
+        error = compileResult.ErrorMessage && compileResult.ErrorMessage[0] != '\0'
+            ? compileResult.ErrorMessage
+            : "Failed to build AngelScript self-test module.";
+        return false;
+    }
+
+    asIScriptModule *module = manager->GetModule(moduleName);
+    if (!module) {
+        manager->UnloadModule(moduleName, nullptr);
+        error = "Failed to retrieve AngelScript self-test module after compilation.";
         return false;
     }
 
     asIScriptFunction *function = module->GetFunctionByDecl("int Run(const CKBehaviorContext &in ctx)");
     if (!function) {
         error = "Failed to find AngelScript self-test Run() function.";
-        engine->DiscardModule(moduleName);
+        manager->UnloadModule(moduleName, nullptr);
         return false;
     }
 
@@ -263,11 +236,11 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     asIScriptContext *scriptContext = engine->CreateContext();
     if (!scriptContext) {
         error = "Failed to create AngelScript execution context.";
-        engine->DiscardModule(moduleName);
+        manager->UnloadModule(moduleName, nullptr);
         return false;
     }
 
-    r = scriptContext->Prepare(function);
+    int r = scriptContext->Prepare(function);
     if (r >= 0) {
         r = scriptContext->SetArgObject(0, &behaviorContext);
     }
@@ -292,7 +265,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     }
 
     scriptContext->Release();
-    engine->DiscardModule(moduleName);
+    manager->UnloadModule(moduleName, nullptr);
     return ok;
 }
 

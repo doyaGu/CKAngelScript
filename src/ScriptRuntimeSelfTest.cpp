@@ -1,9 +1,8 @@
 #include "ScriptSelfTests.h"
 
-#include <memory>
 #include <string>
 
-#include "ScriptCache.h"
+#include "AngelScriptManager.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
 #include "ScriptRuntimeDependency.h"
@@ -42,12 +41,19 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  string runtimeMetadata = Runtime::Metadata(ctx, \"ckas.runtime.smoke\", \"custom\", \"fallback\");\n"
         "  array<string>@ deps = Runtime::Dependencies(ctx, \"ckas.runtime.smoke\");\n"
         "}\n";
-    const std::string moduleName = "__CKAS_RuntimeCompileSelfTest";
-    std::shared_ptr<CachedScript> script = ScriptManager::GetManager(context)->GetScriptCache().CompileScript(engine, moduleName, source);
-    if (!script || !script->module) {
-        error = "Runtime script API compile probe failed.";
+    AngelScriptManager *manager = AngelScriptManager::GetManager(context);
+    if (!manager) {
+        error = "Runtime self-test could not retrieve AngelScriptManager.";
         return false;
     }
-    ScriptManager::GetManager(context)->GetScriptCache().UnloadScript(moduleName);
+    const char *moduleName = "__CKAS_RuntimeCompileSelfTest";
+    AngelScriptResult result = {};
+    if (manager->CompileModule(moduleName, source, true, &result) != ANGELSCRIPT_STATUS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Runtime script API compile probe failed.";
+        return false;
+    }
+    manager->UnloadModule(moduleName, nullptr);
     return true;
 }

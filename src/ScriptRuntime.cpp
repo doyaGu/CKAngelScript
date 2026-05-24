@@ -793,8 +793,7 @@ void ScriptRuntime::RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> 
 }
 
 bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> &module, std::string &error) {
-    asIScriptEngine *engine = m_Manager ? m_Manager->GetScriptEngine() : nullptr;
-    if (!engine) {
+    if (!m_Manager || !m_Manager->GetScriptEngine()) {
         error = "Script runtime cannot load modules before the AngelScript engine is initialized.";
         return false;
     }
@@ -805,9 +804,27 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     for (const std::filesystem::path &file : metadata.Files) {
         files.push_back(ScriptRuntimeMetadata::PathString(file));
     }
-    std::shared_ptr<CachedScript> cached = m_Manager->GetScriptCache().LoadScript(engine, moduleName, files);
+    std::vector<const char *> filePtrs;
+    filePtrs.reserve(files.size());
+    for (const std::string &file : files) {
+        filePtrs.push_back(file.c_str());
+    }
+    AngelScriptLoadOptions options = {};
+    options.ModuleName = moduleName.c_str();
+    options.Filenames = filePtrs.empty() ? nullptr : filePtrs.data();
+    options.FileCount = filePtrs.size();
+    options.ReplaceExisting = true;
+    AngelScriptResult loadResult = {};
+    if (m_Manager->LoadModule(options, &loadResult) != ANGELSCRIPT_STATUS_OK) {
+        error = loadResult.ErrorMessage && loadResult.ErrorMessage[0] != '\0'
+            ? loadResult.ErrorMessage
+            : fmt::format("Runtime script '{}' failed to compile.", metadata.Id);
+        return false;
+    }
+    std::shared_ptr<CachedScript> cached = m_Manager->GetScriptCache().GetCachedScript(moduleName);
     if (!cached || !cached->module) {
         error = fmt::format("Runtime script '{}' failed to compile.", metadata.Id);
+        m_Manager->UnloadModule(moduleName.c_str(), nullptr);
         return false;
     }
 
@@ -822,13 +839,13 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
         loaded->Type = cached->module->GetTypeInfoByName(metadata.ClassName.c_str());
         if (!loaded->Type) {
             error = fmt::format("Runtime script '{}' class '{}' was not found.", metadata.Id, metadata.ClassName);
-            m_Manager->GetScriptCache().UnloadScript(moduleName);
+            m_Manager->UnloadModule(moduleName.c_str(), nullptr);
             return false;
         }
-        void *object = engine->CreateScriptObject(loaded->Type);
+        void *object = m_Manager->GetScriptEngine()->CreateScriptObject(loaded->Type);
         if (!object) {
             error = fmt::format("Runtime script '{}' failed to create class '{}'.", metadata.Id, metadata.ClassName);
-            m_Manager->GetScriptCache().UnloadScript(moduleName);
+            m_Manager->UnloadModule(moduleName.c_str(), nullptr);
             return false;
         }
         loaded->Object = static_cast<asIScriptObject *>(object);
@@ -908,7 +925,7 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
         module.Object = nullptr;
     }
     if (m_Manager && !module.ModuleName.empty()) {
-        m_Manager->GetScriptCache().UnloadScript(module.ModuleName);
+        m_Manager->UnloadModule(module.ModuleName.c_str(), nullptr);
     }
     module.Cached.reset();
     module.Loaded = false;

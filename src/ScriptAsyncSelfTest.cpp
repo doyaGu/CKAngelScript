@@ -2,11 +2,10 @@
 
 #include <cstdlib>
 #include <fstream>
-#include <memory>
 #include <string>
 
+#include "AngelScriptManager.h"
 #include "ScriptAsync.h"
-#include "ScriptCache.h"
 #include "ScriptManager.h"
 
 #include "add_on/scriptarray/scriptarray.h"
@@ -32,13 +31,19 @@ bool CompileAsyncProbe(CKContext *context,
                        const char *source,
                        std::string &error) {
     WriteAsyncSelfTestStage(moduleName);
-    std::shared_ptr<CachedScript> script =
-        ScriptManager::GetManager(context)->GetScriptCache().CompileScript(engine, moduleName, source);
-    if (!script || !script->module) {
-        error = std::string("Async script API compile probe failed: ") + moduleName;
+    AngelScriptManager *manager = AngelScriptManager::GetManager(context);
+    if (!manager) {
+        error = "Async self-test could not retrieve AngelScriptManager.";
         return false;
     }
-    ScriptManager::GetManager(context)->GetScriptCache().UnloadScript(moduleName);
+    AngelScriptResult result = {};
+    if (manager->CompileModule(moduleName, source, true, &result) != ANGELSCRIPT_STATUS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : std::string("Async script API compile probe failed: ") + moduleName;
+        return false;
+    }
+    manager->UnloadModule(moduleName, nullptr);
     return true;
 }
 
