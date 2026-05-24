@@ -324,6 +324,7 @@ ScriptExecutionStatus ScriptRunner::ExecuteScriptStatus(asIScriptFunction *func,
         StartTiming();
 
     r = ctx->Execute();
+    m_LastResultCode = r;
     const ScriptExecutionStatus status = ScriptRunnerInternal::HandleExecutionResult(this, ctx, r, "Script Execution");
     if (status != ScriptExecutionStatus::Finished) {
         if (IsProfiling())
@@ -415,6 +416,7 @@ ScriptExecutionStatus ScriptRunner::ExecuteObjectMethodStatus(asIScriptObject *o
         StartTiming();
 
     r = ctx->Execute();
+    m_LastResultCode = r;
     const ScriptExecutionStatus status = ScriptRunnerInternal::HandleExecutionResult(this, ctx, r, "Script Method");
     if (status != ScriptExecutionStatus::Finished) {
         if (IsProfiling())
@@ -473,4 +475,5 @@ void ScriptRunner::Reset() {
     ResetScript();
     SetErrorMessage("");
     SetStackTrace("");
+    m_LastResultCode = 0;
 }

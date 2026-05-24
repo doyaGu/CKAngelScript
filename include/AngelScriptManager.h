@@ -3,13 +3,68 @@
 
 #include "CKBaseManager.h"
 #include "CKContext.h"
+#include "CKTypes.h"
 
 #include <angelscript.h>
 
 #define ANGEL_SCRIPT_MANAGER_GUID CKGUID(0x70955bd2,0x30684456)
 
+struct AngelScriptExecution;
+
+enum AngelScriptStatus {
+    ANGELSCRIPT_STATUS_OK = 0,
+    ANGELSCRIPT_STATUS_INVALID_ARGUMENT,
+    ANGELSCRIPT_STATUS_NOT_INITIALIZED,
+    ANGELSCRIPT_STATUS_NOT_FOUND,
+    ANGELSCRIPT_STATUS_COMPILE_ERROR,
+    ANGELSCRIPT_STATUS_EXECUTION_FAILED,
+    ANGELSCRIPT_STATUS_SUSPENDED,
+    ANGELSCRIPT_STATUS_CANCELLED
+};
+
+enum AngelScriptExecutionState {
+    ANGELSCRIPT_EXECUTION_READY = 0,
+    ANGELSCRIPT_EXECUTION_RUNNING,
+    ANGELSCRIPT_EXECUTION_SUSPENDED,
+    ANGELSCRIPT_EXECUTION_FINISHED,
+    ANGELSCRIPT_EXECUTION_FAILED,
+    ANGELSCRIPT_EXECUTION_CANCELLED
+};
+
+typedef void (*AngelScriptContextCallback)(asIScriptContext *context, void *userData);
+
+struct AngelScriptLoadOptions {
+    const char *ModuleName = nullptr;
+    const char *Filename = nullptr;
+    const char **Filenames = nullptr;
+    size_t FileCount = 0;
+    const char *Code = nullptr;
+    bool ReplaceExisting = false;
+};
+
+struct AngelScriptExecuteOptions {
+    const char *ModuleName = nullptr;
+    const char *FunctionName = nullptr;
+    const char *FunctionDecl = nullptr;
+    const CKBehaviorContext *BehaviorContext = nullptr;
+    AngelScriptContextCallback ConfigureContext = nullptr;
+    AngelScriptContextCallback ReadResult = nullptr;
+    void *UserData = nullptr;
+};
+
+struct AngelScriptResult {
+    AngelScriptStatus Status = ANGELSCRIPT_STATUS_OK;
+    int AngelScriptCode = 0;
+    const char *ErrorMessage = nullptr;
+    const char *StackTrace = nullptr;
+};
+
 class AngelScriptManager : public CKBaseManager {
 public:
+    AngelScriptManager(CKContext *context, CKGUID guid, CKSTRING name)
+        : CKBaseManager(context, guid, name) {}
+    ~AngelScriptManager() override = default;
+
     // Engine
     virtual asIScriptEngine *GetScriptEngine() = 0;
     virtual const char *GetVersion() = 0;
@@ -18,35 +73,31 @@ public:
     // Context
     virtual asIScriptContext *GetActiveContext() = 0;
 
-    // Thread support
-    virtual int PrepareMultithread(asIThreadManager *externalMgr = nullptr) = 0;
-    virtual void UnprepareMultithread() = 0;
-    virtual asIThreadManager *GetThreadManager() = 0;
-    virtual void AcquireExclusiveLock() = 0;
-    virtual void ReleaseExclusiveLock() = 0;
-    virtual void AcquireSharedLock() = 0;
-    virtual void ReleaseSharedLock() = 0;
-    virtual int AtomicInc(int &value) = 0;
-    virtual int AtomicDec(int &value) = 0;
-    virtual int ThreadCleanup() = 0;
+    // Modules
+    virtual AngelScriptStatus LoadModule(const AngelScriptLoadOptions &options, AngelScriptResult *result = nullptr) = 0;
+    virtual AngelScriptStatus CompileModule(const char *moduleName,
+                                            const char *scriptCode,
+                                            bool replaceExisting = false,
+                                            AngelScriptResult *result = nullptr) = 0;
+    virtual AngelScriptStatus UnloadModule(const char *moduleName, AngelScriptResult *result = nullptr) = 0;
+    virtual bool HasModule(const char *moduleName) = 0;
+    virtual asIScriptModule *GetModule(const char *moduleName) = 0;
+    virtual asIScriptFunction *FindFunctionByName(const char *moduleName, const char *functionName) = 0;
+    virtual asIScriptFunction *FindFunctionByDecl(const char *moduleName, const char *functionDecl) = 0;
 
-    // Memory management
-    virtual int SetGlobalMemoryFunctions(asALLOCFUNC_t allocFunc, asFREEFUNC_t freeFunc) = 0;
-    virtual int ResetGlobalMemoryFunctions() = 0;
-    virtual void *AllocMem(size_t size) = 0;
-    virtual void FreeMem(void *mem) = 0;
-
-    // Auxiliary
-    virtual asILockableSharedBool *CreateLockableSharedBool() = 0;
-
-    // Script
-    virtual int LoadScript(const char *scriptName, const char *filename) = 0;
-    virtual int LoadScripts(const char *scriptName, const char **filenames, size_t count) = 0;
-    virtual int CompileScript(const char *scriptName, const char *scriptCode) = 0;
-    virtual bool UnloadScript(const char *scriptName) = 0;
+    // Executions
+    virtual AngelScriptExecution *CreateExecution(const AngelScriptExecuteOptions &options,
+                                                  AngelScriptResult *result = nullptr) = 0;
+    virtual AngelScriptStatus StartExecution(AngelScriptExecution *execution) = 0;
+    virtual AngelScriptStatus ResumeExecution(AngelScriptExecution *execution) = 0;
+    virtual AngelScriptStatus CancelExecution(AngelScriptExecution *execution) = 0;
+    virtual void ReleaseExecution(AngelScriptExecution *execution) = 0;
+    virtual AngelScriptExecutionState GetExecutionState(const AngelScriptExecution *execution) const = 0;
+    virtual const AngelScriptResult *GetExecutionResult(const AngelScriptExecution *execution) const = 0;
+    virtual const AngelScriptResult *GetLastResult() const = 0;
 
     static AngelScriptManager *GetManager(CKContext *context) {
-        return (AngelScriptManager *)context->GetManagerByGuid(ANGEL_SCRIPT_MANAGER_GUID);
+        return context ? (AngelScriptManager *)context->GetManagerByGuid(ANGEL_SCRIPT_MANAGER_GUID) : nullptr;
     }
 };
 

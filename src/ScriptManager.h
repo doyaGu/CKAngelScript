@@ -4,12 +4,12 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <angelscript.h>
 
-#include "CKBaseManager.h"
-#include "CKContext.h"
+#include "AngelScriptManager.h"
 
 #include "ScriptCache.h"
 
@@ -162,7 +162,7 @@ struct ScriptComponentState {
     bool PendingResetRuntime = false;
 };
 
-class ScriptManager : public CKBaseManager {
+class ScriptManager : public AngelScriptManager {
 public:
     enum Flag {
         AS_INITED = 0x00000001,
@@ -204,43 +204,61 @@ public:
     }
 
     // Engine
-    virtual asIScriptEngine *GetScriptEngine();
-    virtual const char *GetVersion();
-    virtual const char *GetOptions();
+    asIScriptEngine *GetScriptEngine() override;
+    const char *GetVersion() override;
+    const char *GetOptions() override;
 
     // Context
     CKContext *GetCKContext() const {
         return m_Context;
     }
 
-    virtual asIScriptContext *GetActiveContext();
+    asIScriptContext *GetActiveContext() override;
 
-    // Thread support
-    virtual int PrepareMultithread(asIThreadManager *externalMgr = nullptr);
-    virtual void UnprepareMultithread();
-    virtual asIThreadManager *GetThreadManager();
-    virtual void AcquireExclusiveLock();
-    virtual void ReleaseExclusiveLock();
-    virtual void AcquireSharedLock();
-    virtual void ReleaseSharedLock();
-    virtual int AtomicInc(int &value);
-    virtual int AtomicDec(int &value);
-    virtual int ThreadCleanup();
+    // Internal low-level AngelScript helpers. The public AngelScriptManager
+    // interface intentionally exposes only module and execution operations.
+    int PrepareMultithread(asIThreadManager *externalMgr = nullptr);
+    void UnprepareMultithread();
+    asIThreadManager *GetThreadManager();
+    void AcquireExclusiveLock();
+    void ReleaseExclusiveLock();
+    void AcquireSharedLock();
+    void ReleaseSharedLock();
+    int AtomicInc(int &value);
+    int AtomicDec(int &value);
+    int ThreadCleanup();
+    int SetGlobalMemoryFunctions(asALLOCFUNC_t allocFunc, asFREEFUNC_t freeFunc);
+    int ResetGlobalMemoryFunctions();
+    void *AllocMem(size_t size);
+    void FreeMem(void *mem);
+    asILockableSharedBool *CreateLockableSharedBool();
 
-    // Memory management
-    virtual int SetGlobalMemoryFunctions(asALLOCFUNC_t allocFunc, asFREEFUNC_t freeFunc);
-    virtual int ResetGlobalMemoryFunctions();
-    virtual void *AllocMem(size_t size);
-    virtual void FreeMem(void *mem);
+    AngelScriptStatus LoadModule(const AngelScriptLoadOptions &options, AngelScriptResult *result = nullptr) override;
+    AngelScriptStatus CompileModule(const char *moduleName,
+                                    const char *scriptCode,
+                                    bool replaceExisting = false,
+                                    AngelScriptResult *result = nullptr) override;
+    AngelScriptStatus UnloadModule(const char *moduleName, AngelScriptResult *result = nullptr) override;
+    bool HasModule(const char *moduleName) override;
+    asIScriptModule *GetModule(const char *moduleName) override;
+    asIScriptFunction *FindFunctionByName(const char *moduleName, const char *functionName) override;
+    asIScriptFunction *FindFunctionByDecl(const char *moduleName, const char *functionDecl) override;
 
-    // Auxiliary
-    virtual asILockableSharedBool *CreateLockableSharedBool();
+    AngelScriptExecution *CreateExecution(const AngelScriptExecuteOptions &options,
+                                          AngelScriptResult *result = nullptr) override;
+    AngelScriptStatus StartExecution(AngelScriptExecution *execution) override;
+    AngelScriptStatus ResumeExecution(AngelScriptExecution *execution) override;
+    AngelScriptStatus CancelExecution(AngelScriptExecution *execution) override;
+    void ReleaseExecution(AngelScriptExecution *execution) override;
+    AngelScriptExecutionState GetExecutionState(const AngelScriptExecution *execution) const override;
+    const AngelScriptResult *GetExecutionResult(const AngelScriptExecution *execution) const override;
+    const AngelScriptResult *GetLastResult() const override;
 
     // Script
-    virtual int LoadScript(const char *scriptName, const char *filename);
-    virtual int LoadScripts(const char *scriptName, const char **filenames, size_t count);
-    virtual int CompileScript(const char *scriptName, const char *scriptCode);
-    virtual bool UnloadScript(const char *scriptName);
+    int LoadScript(const char *scriptName, const char *filename);
+    int LoadScripts(const char *scriptName, const char **filenames, size_t count);
+    int CompileScript(const char *scriptName, const char *scriptCode);
+    bool UnloadScript(const char *scriptName);
 
     asIScriptModule *GetScript(const char *scriptName);
 
@@ -306,6 +324,17 @@ protected:
     void RegisterStdAddons(asIScriptEngine *engine);
     void RegisterVirtools(asIScriptEngine *engine);
 
+    bool OwnsExecution(const AngelScriptExecution *execution) const;
+    AngelScriptResult MakeResult(AngelScriptStatus status,
+                                 int angelScriptCode = 0,
+                                 const std::string &errorMessage = std::string(),
+                                 const std::string &stackTrace = std::string());
+    AngelScriptStatus StoreResult(AngelScriptResult *out,
+                                  AngelScriptStatus status,
+                                  int angelScriptCode = 0,
+                                  const std::string &errorMessage = std::string(),
+                                  const std::string &stackTrace = std::string());
+
     int m_Flags = 0;
     int m_ScriptPathCategoryIndex = -1;
     asIScriptEngine *m_ScriptEngine = nullptr;
@@ -318,6 +347,10 @@ protected:
     std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
     std::unique_ptr<ScriptRuntime> m_Runtime;
     std::unique_ptr<ScriptAsyncScheduler> m_AsyncScheduler;
+    std::unordered_set<AngelScriptExecution *> m_Executions;
+    AngelScriptResult m_LastResult;
+    std::string m_LastErrorMessage;
+    std::string m_LastStackTrace;
 };
 
 #endif // CK_SCRIPTMANAGER_H

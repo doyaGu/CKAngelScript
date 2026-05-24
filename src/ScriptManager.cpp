@@ -44,7 +44,118 @@
 #define CKAS_BUILD_SELF_TESTS 0
 #endif
 
-ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
+struct AngelScriptExecution {
+    explicit AngelScriptExecution(ScriptManager *manager)
+        : Manager(manager), Runner(manager) {}
+
+    ~AngelScriptExecution() {
+        if (Function) {
+            Function->Release();
+            Function = nullptr;
+        }
+    }
+
+    ScriptManager *Manager = nullptr;
+    ScriptRunner Runner;
+    asIScriptFunction *Function = nullptr;
+    AngelScriptExecutionState State = ANGELSCRIPT_EXECUTION_READY;
+    AngelScriptResult Result;
+    std::string ErrorMessage;
+    std::string StackTrace;
+    std::string ModuleName;
+    std::string FunctionName;
+    std::string FunctionDecl;
+    CKBehaviorContext BehaviorContextStorage;
+    bool HasBehaviorContext = false;
+    AngelScriptContextCallback ConfigureContext = nullptr;
+    AngelScriptContextCallback ReadResult = nullptr;
+    void *UserData = nullptr;
+};
+
+namespace {
+
+AngelScriptStatus ToAngelScriptStatus(ScriptExecutionStatus status) {
+    switch (status) {
+        case ScriptExecutionStatus::Finished:
+            return ANGELSCRIPT_STATUS_OK;
+        case ScriptExecutionStatus::Suspended:
+            return ANGELSCRIPT_STATUS_SUSPENDED;
+        case ScriptExecutionStatus::Failed:
+        default:
+            return ANGELSCRIPT_STATUS_EXECUTION_FAILED;
+    }
+}
+
+AngelScriptExecutionState ToExecutionState(ScriptExecutionStatus status) {
+    switch (status) {
+        case ScriptExecutionStatus::Finished:
+            return ANGELSCRIPT_EXECUTION_FINISHED;
+        case ScriptExecutionStatus::Suspended:
+            return ANGELSCRIPT_EXECUTION_SUSPENDED;
+        case ScriptExecutionStatus::Failed:
+        default:
+            return ANGELSCRIPT_EXECUTION_FAILED;
+    }
+}
+
+AngelScriptResult MakeExecutionResult(AngelScriptExecution *execution,
+                                      AngelScriptStatus status,
+                                      int angelScriptCode = 0,
+                                      const std::string &errorMessage = std::string(),
+                                      const std::string &stackTrace = std::string()) {
+    AngelScriptResult result;
+    result.Status = status;
+    result.AngelScriptCode = angelScriptCode;
+    if (execution) {
+        execution->ErrorMessage = errorMessage;
+        execution->StackTrace = stackTrace;
+        result.ErrorMessage = execution->ErrorMessage.empty() ? nullptr : execution->ErrorMessage.c_str();
+        result.StackTrace = execution->StackTrace.empty() ? nullptr : execution->StackTrace.c_str();
+        execution->Result = result;
+    }
+    return result;
+}
+
+AngelScriptStatus RunExecution(AngelScriptExecution *execution) {
+    if (!execution) {
+        return ANGELSCRIPT_STATUS_INVALID_ARGUMENT;
+    }
+
+    execution->State = ANGELSCRIPT_EXECUTION_RUNNING;
+    const ScriptExecutionStatus scriptStatus = execution->Runner.ExecuteScriptStatus(
+        execution->Function,
+        [execution](asIScriptContext *ctx) {
+            if (execution->HasBehaviorContext && execution->Function && execution->Function->GetParamCount() > 0) {
+                ctx->SetArgObject(0, (void *)&execution->BehaviorContextStorage);
+            }
+            if (execution->ConfigureContext) {
+                execution->ConfigureContext(ctx, execution->UserData);
+            }
+        },
+        [execution](asIScriptContext *ctx) {
+            if (execution->ReadResult) {
+                execution->ReadResult(ctx, execution->UserData);
+            }
+        });
+
+    execution->State = ToExecutionState(scriptStatus);
+    const AngelScriptStatus status = ToAngelScriptStatus(scriptStatus);
+    const int resultCode = execution->Runner.GetLastResultCode();
+    if (status == ANGELSCRIPT_STATUS_EXECUTION_FAILED) {
+        MakeExecutionResult(execution,
+                            status,
+                            resultCode,
+                            execution->Runner.GetErrorMessage(),
+                            execution->Runner.GetStackTrace());
+    } else {
+        MakeExecutionResult(execution, status, resultCode);
+    }
+    return status;
+}
+
+} // namespace
+
+ScriptManager::ScriptManager(CKContext *context) : AngelScriptManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
     int r = Init();
     if (r < 0)
         return;
@@ -185,6 +296,11 @@ int ScriptManager::Shutdown() {
     if (!IsInited())
         return -2;
 
+    for (auto *execution : m_Executions) {
+        delete execution;
+    }
+    m_Executions.clear();
+
     if (m_AsyncScheduler) {
         m_AsyncScheduler->Clear();
     }
@@ -228,6 +344,257 @@ const char *ScriptManager::GetOptions() {
 
 asIScriptContext *ScriptManager::GetActiveContext() {
     return asGetActiveContext();
+}
+
+AngelScriptResult ScriptManager::MakeResult(AngelScriptStatus status,
+                                            int angelScriptCode,
+                                            const std::string &errorMessage,
+                                            const std::string &stackTrace) {
+    m_LastErrorMessage = errorMessage;
+    m_LastStackTrace = stackTrace;
+
+    AngelScriptResult result;
+    result.Status = status;
+    result.AngelScriptCode = angelScriptCode;
+    result.ErrorMessage = m_LastErrorMessage.empty() ? nullptr : m_LastErrorMessage.c_str();
+    result.StackTrace = m_LastStackTrace.empty() ? nullptr : m_LastStackTrace.c_str();
+    m_LastResult = result;
+    return m_LastResult;
+}
+
+AngelScriptStatus ScriptManager::StoreResult(AngelScriptResult *out,
+                                             AngelScriptStatus status,
+                                             int angelScriptCode,
+                                             const std::string &errorMessage,
+                                             const std::string &stackTrace) {
+    AngelScriptResult result = MakeResult(status, angelScriptCode, errorMessage, stackTrace);
+    if (out) {
+        *out = result;
+    }
+    return status;
+}
+
+const AngelScriptResult *ScriptManager::GetLastResult() const {
+    return &m_LastResult;
+}
+
+bool ScriptManager::OwnsExecution(const AngelScriptExecution *execution) const {
+    return execution && m_Executions.find(const_cast<AngelScriptExecution *>(execution)) != m_Executions.end();
+}
+
+AngelScriptStatus ScriptManager::LoadModule(const AngelScriptLoadOptions &options, AngelScriptResult *result) {
+    if (!options.ModuleName || options.ModuleName[0] == '\0') {
+        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name is required.");
+    }
+    if (!m_ScriptEngine) {
+        return StoreResult(result, ANGELSCRIPT_STATUS_NOT_INITIALIZED, 0, "AngelScript engine is not initialized.");
+    }
+    if (HasModule(options.ModuleName)) {
+        if (!options.ReplaceExisting) {
+            return StoreResult(result, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Module already exists.");
+        }
+        UnloadScript(options.ModuleName);
+    }
+    if (options.Code) {
+        return CompileModule(options.ModuleName, options.Code, true, result);
+    }
+    if (options.FileCount > 0) {
+        if (!options.Filenames) {
+            return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "File list is null.");
+        }
+        const int loadResult = LoadScripts(options.ModuleName, options.Filenames, options.FileCount);
+        if (loadResult < 0) {
+            return StoreResult(result, ANGELSCRIPT_STATUS_COMPILE_ERROR, loadResult, "Failed to load script files.");
+        }
+        return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+    }
+
+    const int loadResult = LoadScript(options.ModuleName, options.Filename);
+    if (loadResult < 0) {
+        return StoreResult(result, ANGELSCRIPT_STATUS_COMPILE_ERROR, loadResult, "Failed to load script file.");
+    }
+    return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+}
+
+AngelScriptStatus ScriptManager::CompileModule(const char *moduleName,
+                                               const char *scriptCode,
+                                               bool replaceExisting,
+                                               AngelScriptResult *result) {
+    if (!moduleName || moduleName[0] == '\0' || !scriptCode) {
+        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name and script code are required.");
+    }
+    if (!m_ScriptEngine) {
+        return StoreResult(result, ANGELSCRIPT_STATUS_NOT_INITIALIZED, 0, "AngelScript engine is not initialized.");
+    }
+    if (HasModule(moduleName)) {
+        if (!replaceExisting) {
+            return StoreResult(result, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Module already exists.");
+        }
+        UnloadScript(moduleName);
+    }
+
+    const int compileResult = CompileScript(moduleName, scriptCode);
+    if (compileResult < 0) {
+        return StoreResult(result, ANGELSCRIPT_STATUS_COMPILE_ERROR, compileResult, "Failed to compile script module.");
+    }
+    return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+}
+
+AngelScriptStatus ScriptManager::UnloadModule(const char *moduleName, AngelScriptResult *result) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name is required.");
+    }
+    if (!UnloadScript(moduleName)) {
+        return StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, "Module was not loaded.");
+    }
+    return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+}
+
+bool ScriptManager::HasModule(const char *moduleName) {
+    return GetModule(moduleName) != nullptr;
+}
+
+asIScriptModule *ScriptManager::GetModule(const char *moduleName) {
+    return GetScript(moduleName);
+}
+
+asIScriptFunction *ScriptManager::FindFunctionByName(const char *moduleName, const char *functionName) {
+    asIScriptModule *module = GetModule(moduleName);
+    if (!module || !functionName || functionName[0] == '\0') {
+        return nullptr;
+    }
+    return module->GetFunctionByName(functionName);
+}
+
+asIScriptFunction *ScriptManager::FindFunctionByDecl(const char *moduleName, const char *functionDecl) {
+    asIScriptModule *module = GetModule(moduleName);
+    if (!module || !functionDecl || functionDecl[0] == '\0') {
+        return nullptr;
+    }
+    return module->GetFunctionByDecl(functionDecl);
+}
+
+AngelScriptExecution *ScriptManager::CreateExecution(const AngelScriptExecuteOptions &options, AngelScriptResult *result) {
+    if (!options.ModuleName || options.ModuleName[0] == '\0') {
+        StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name is required.");
+        return nullptr;
+    }
+    asIScriptModule *module = GetModule(options.ModuleName);
+    if (!module) {
+        StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, "Module was not found.");
+        return nullptr;
+    }
+
+    asIScriptFunction *function = nullptr;
+    if (options.FunctionDecl && options.FunctionDecl[0] != '\0') {
+        function = module->GetFunctionByDecl(options.FunctionDecl);
+    } else if (options.FunctionName && options.FunctionName[0] != '\0') {
+        function = module->GetFunctionByName(options.FunctionName);
+    } else {
+        StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Function name or declaration is required.");
+        return nullptr;
+    }
+    if (!function) {
+        StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, "Function was not found.");
+        return nullptr;
+    }
+
+    auto *execution = new AngelScriptExecution(this);
+    execution->ModuleName = options.ModuleName;
+    execution->FunctionName = options.FunctionName ? options.FunctionName : "";
+    execution->FunctionDecl = options.FunctionDecl ? options.FunctionDecl : "";
+    execution->ConfigureContext = options.ConfigureContext;
+    execution->ReadResult = options.ReadResult;
+    execution->UserData = options.UserData;
+    if (options.BehaviorContext) {
+        execution->BehaviorContextStorage = *options.BehaviorContext;
+        execution->HasBehaviorContext = true;
+    }
+    function->AddRef();
+    execution->Function = function;
+    if (!execution->Runner.SetScript(options.ModuleName)) {
+        const std::string error = execution->Runner.GetErrorMessage();
+        delete execution;
+        StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, error.empty() ? "Module cache was not found." : error);
+        return nullptr;
+    }
+
+    MakeExecutionResult(execution, ANGELSCRIPT_STATUS_OK);
+    m_Executions.insert(execution);
+    StoreResult(result, ANGELSCRIPT_STATUS_OK);
+    return execution;
+}
+
+AngelScriptStatus ScriptManager::StartExecution(AngelScriptExecution *execution) {
+    if (!OwnsExecution(execution)) {
+        return StoreResult(nullptr, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Execution handle is invalid.");
+    }
+    if (execution->State != ANGELSCRIPT_EXECUTION_READY) {
+        MakeExecutionResult(execution, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Execution has already started.");
+        return StoreResult(nullptr, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Execution has already started.");
+    }
+    const AngelScriptStatus status = RunExecution(execution);
+    StoreResult(nullptr,
+                status,
+                execution->Result.AngelScriptCode,
+                execution->ErrorMessage,
+                execution->StackTrace);
+    return status;
+}
+
+AngelScriptStatus ScriptManager::ResumeExecution(AngelScriptExecution *execution) {
+    if (!OwnsExecution(execution)) {
+        return StoreResult(nullptr, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Execution handle is invalid.");
+    }
+    if (execution->State != ANGELSCRIPT_EXECUTION_SUSPENDED) {
+        MakeExecutionResult(execution, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Execution is not suspended.");
+        return StoreResult(nullptr, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Execution is not suspended.");
+    }
+    const AngelScriptStatus status = RunExecution(execution);
+    StoreResult(nullptr,
+                status,
+                execution->Result.AngelScriptCode,
+                execution->ErrorMessage,
+                execution->StackTrace);
+    return status;
+}
+
+AngelScriptStatus ScriptManager::CancelExecution(AngelScriptExecution *execution) {
+    if (!OwnsExecution(execution)) {
+        return StoreResult(nullptr, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Execution handle is invalid.");
+    }
+    if (execution->State == ANGELSCRIPT_EXECUTION_FINISHED ||
+        execution->State == ANGELSCRIPT_EXECUTION_FAILED ||
+        execution->State == ANGELSCRIPT_EXECUTION_CANCELLED) {
+        MakeExecutionResult(execution, ANGELSCRIPT_STATUS_CANCELLED);
+        return StoreResult(nullptr, ANGELSCRIPT_STATUS_CANCELLED);
+    }
+    execution->Runner.AbortContext();
+    execution->State = ANGELSCRIPT_EXECUTION_CANCELLED;
+    MakeExecutionResult(execution, ANGELSCRIPT_STATUS_CANCELLED);
+    return StoreResult(nullptr, ANGELSCRIPT_STATUS_CANCELLED);
+}
+
+void ScriptManager::ReleaseExecution(AngelScriptExecution *execution) {
+    if (!OwnsExecution(execution)) {
+        return;
+    }
+    m_Executions.erase(execution);
+    delete execution;
+}
+
+AngelScriptExecutionState ScriptManager::GetExecutionState(const AngelScriptExecution *execution) const {
+    if (!OwnsExecution(execution)) {
+        return ANGELSCRIPT_EXECUTION_FAILED;
+    }
+    return execution->State;
+}
+
+const AngelScriptResult *ScriptManager::GetExecutionResult(const AngelScriptExecution *execution) const {
+    if (!OwnsExecution(execution)) {
+        return nullptr;
+    }
+    return &execution->Result;
 }
 
 int ScriptManager::PrepareMultithread(asIThreadManager *externalMgr) {

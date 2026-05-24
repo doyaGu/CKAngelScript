@@ -67,6 +67,7 @@ public:
 
     const std::string &GetStackTrace() const;
     void SetStackTrace(const std::string& trace);
+    int GetLastResultCode() const { return m_LastResultCode; }
 
     void Reset();
 
@@ -80,6 +81,7 @@ private:
     bool m_Profiling = false;
     std::chrono::time_point<std::chrono::high_resolution_clock> m_StartTime;
     double m_ElapsedMs = 0.0;
+    int m_LastResultCode = 0;
     std::string m_ErrorMessage;
     std::string m_StackTrace;
     CKBehaviorContext m_BehaviorContextStorage;
