@@ -261,16 +261,6 @@ public:
     bool SaveCachedScriptToChunk(const char *scriptName, CKStateChunk *chunk);
     bool ClearCachedScriptCode(const char *scriptName);
 
-    // Script
-    int LoadScript(const char *scriptName, const char *filename);
-    int LoadScripts(const char *scriptName, const char **filenames, size_t count);
-    int CompileScript(const char *scriptName, const char *scriptCode);
-    bool UnloadScript(const char *scriptName);
-
-    ScriptCache &GetScriptCache() {
-        return m_ScriptCache;
-    }
-
     CKERROR ResolveScriptFileName(XString &filename);
 
     void *GetCKObjectData(CK_ID id) const;
@@ -331,6 +321,13 @@ protected:
 
     bool OwnsExecution(const AngelScriptExecution *execution) const;
     bool HasExecutionForModule(const char *moduleName) const;
+    // Internal low-level shims backing the public module API. Do not call these
+    // from behavior blocks or runtime helpers; use LoadModule/CompileModule/
+    // UnloadModule and the cache helper methods above.
+    int LoadScript(const char *scriptName, const char *filename);
+    int LoadScripts(const char *scriptName, const char **filenames, size_t count);
+    int CompileScript(const char *scriptName, const char *scriptCode);
+    bool UnloadScript(const char *scriptName);
     AngelScriptResult MakeResult(AngelScriptStatus status,
                                  int angelScriptCode = 0,
                                  const std::string &errorMessage = std::string(),
