@@ -324,10 +324,10 @@ protected:
     // Internal low-level shims backing the public module API. Do not call these
     // from behavior blocks or runtime helpers; use LoadModule/CompileModule/
     // UnloadModule and the cache helper methods above.
-    int LoadScript(const char *scriptName, const char *filename);
-    int LoadScripts(const char *scriptName, const char **filenames, size_t count);
-    int CompileScript(const char *scriptName, const char *scriptCode);
-    bool UnloadScript(const char *scriptName);
+    int LoadModuleFromDefaultOrFile(const char *moduleName, const char *filename);
+    int LoadModuleFromFiles(const char *moduleName, const char **filenames, size_t count);
+    int CompileModuleFromMemory(const char *moduleName, const char *scriptCode);
+    bool DiscardCachedModule(const char *moduleName);
     AngelScriptResult MakeResult(AngelScriptStatus status,
                                  int angelScriptCode = 0,
                                  const std::string &errorMessage = std::string(),

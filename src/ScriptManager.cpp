@@ -431,7 +431,7 @@ AngelScriptStatus ScriptManager::LoadModule(const AngelScriptLoadOptions &option
                                0,
                                "Module has active execution handles.");
         }
-        UnloadScript(options.ModuleName);
+        DiscardCachedModule(options.ModuleName);
     }
     if (hasCode) {
         return CompileModule(options.ModuleName, options.Code, true, result);
@@ -449,7 +449,7 @@ AngelScriptStatus ScriptManager::LoadModule(const AngelScriptLoadOptions &option
             }
         }
         BeginScriptMessageCapture();
-        const int loadResult = LoadScripts(options.ModuleName, options.Filenames, options.FileCount);
+        const int loadResult = LoadModuleFromFiles(options.ModuleName, options.Filenames, options.FileCount);
         const std::string diagnostics = EndScriptMessageCapture();
         if (loadResult < 0) {
             return StoreResult(result,
@@ -461,7 +461,7 @@ AngelScriptStatus ScriptManager::LoadModule(const AngelScriptLoadOptions &option
     }
 
     BeginScriptMessageCapture();
-    const int loadResult = LoadScript(options.ModuleName, options.Filename);
+    const int loadResult = LoadModuleFromDefaultOrFile(options.ModuleName, options.Filename);
     const std::string diagnostics = EndScriptMessageCapture();
     if (loadResult < 0) {
         return StoreResult(result,
@@ -492,11 +492,11 @@ AngelScriptStatus ScriptManager::CompileModule(const char *moduleName,
                                0,
                                "Module has active execution handles.");
         }
-        UnloadScript(moduleName);
+        DiscardCachedModule(moduleName);
     }
 
     BeginScriptMessageCapture();
-    const int compileResult = CompileScript(moduleName, scriptCode);
+    const int compileResult = CompileModuleFromMemory(moduleName, scriptCode);
     const std::string diagnostics = EndScriptMessageCapture();
     if (compileResult < 0) {
         return StoreResult(result,
@@ -517,7 +517,7 @@ AngelScriptStatus ScriptManager::UnloadModule(const char *moduleName, AngelScrip
                            0,
                            "Module has active execution handles.");
     }
-    if (!UnloadScript(moduleName)) {
+    if (!DiscardCachedModule(moduleName)) {
         return StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, "Module was not loaded.");
     }
     return StoreResult(result, ANGELSCRIPT_STATUS_OK);
@@ -738,8 +738,8 @@ asIScriptEngine *ScriptManager::GetScriptEngine() {
     return m_ScriptEngine;
 }
 
-int ScriptManager::LoadScript(const char *scriptName, const char *filename) {
-    if (!scriptName || scriptName[0] == '\0')
+int ScriptManager::LoadModuleFromDefaultOrFile(const char *moduleName, const char *filename) {
+    if (!moduleName || moduleName[0] == '\0')
         return -1;
 
     if (!m_ScriptEngine)
@@ -749,18 +749,18 @@ int ScriptManager::LoadScript(const char *scriptName, const char *filename) {
     if (filename) {
         scriptFilename = filename;
     } else {
-        scriptFilename = scriptName;
+        scriptFilename = moduleName;
         scriptFilename += ".as";
     }
 
-    auto cache = m_ScriptCache.LoadScript(m_ScriptEngine, scriptName, scriptFilename.CStr());
+    auto cache = m_ScriptCache.LoadScript(m_ScriptEngine, moduleName, scriptFilename.CStr());
     if (!cache)
         return -3;
     return 0;
 }
 
-int ScriptManager::LoadScripts(const char *scriptName, const char **filenames, size_t count) {
-    if (!scriptName || scriptName[0] == '\0')
+int ScriptManager::LoadModuleFromFiles(const char *moduleName, const char **filenames, size_t count) {
+    if (!moduleName || moduleName[0] == '\0')
         return -1;
 
     if (!m_ScriptEngine)
@@ -775,14 +775,14 @@ int ScriptManager::LoadScripts(const char *scriptName, const char **filenames, s
         files.emplace_back(scriptFilename.CStr());
     }
 
-    auto cache = m_ScriptCache.LoadScript(m_ScriptEngine, scriptName, files);
+    auto cache = m_ScriptCache.LoadScript(m_ScriptEngine, moduleName, files);
     if (!cache)
         return -3;
     return 0;
 }
 
-int ScriptManager::CompileScript(const char *scriptName, const char *scriptCode) {
-    if (!scriptName || scriptName[0] == '\0')
+int ScriptManager::CompileModuleFromMemory(const char *moduleName, const char *scriptCode) {
+    if (!moduleName || moduleName[0] == '\0')
         return -1;
 
     if (!scriptCode)
@@ -791,16 +791,16 @@ int ScriptManager::CompileScript(const char *scriptName, const char *scriptCode)
     if (!m_ScriptEngine)
         return -2;
 
-    auto cache = m_ScriptCache.CompileScript(m_ScriptEngine, scriptName, scriptCode);
+    auto cache = m_ScriptCache.CompileScript(m_ScriptEngine, moduleName, scriptCode);
     if (!cache)
         return -3;
     return 0;
 }
 
-bool ScriptManager::UnloadScript(const char *scriptName) {
-    if (!scriptName || scriptName[0] == '\0')
+bool ScriptManager::DiscardCachedModule(const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0')
         return false;
-    return m_ScriptCache.UnloadScript(scriptName);
+    return m_ScriptCache.UnloadScript(moduleName);
 }
 
 asIScriptModule *ScriptManager::GetScript(const char *scriptName) {

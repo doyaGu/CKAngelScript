@@ -109,7 +109,7 @@ static bool TriggerCallback(ScriptRunner *runner, const char *name, const CKBeha
     return success;
 }
 
-static int OnLoadScript(const CKBehaviorContext &behcontext) {
+static int OnLoadModule(const CKBehaviorContext &behcontext) {
     CKBehavior *beh = behcontext.Behavior;
     CKContext *context = behcontext.Context;
 
@@ -249,7 +249,7 @@ static int OnLoadScript(const CKBehaviorContext &behcontext) {
     return CKBR_OK;
 }
 
-static int OnUnloadScript(const CKBehaviorContext &behcontext) {
+static int OnUnloadModule(const CKBehaviorContext &behcontext) {
     CKBehavior *beh = behcontext.Behavior;
     CKContext *context = behcontext.Context;
 
@@ -392,9 +392,9 @@ int AngelScriptLoader(const CKBehaviorContext &behcontext) {
     CKBehavior *beh = behcontext.Behavior;
 
     if (beh->IsInputActive(0)) {
-        return OnLoadScript(behcontext);
+        return OnLoadModule(behcontext);
     } else if (beh->IsInputActive(1)) {
-        return OnUnloadScript(behcontext);
+        return OnUnloadModule(behcontext);
     }
 
     return CKBR_OK;
