@@ -378,6 +378,16 @@ const AngelScriptResult *ScriptManager::GetLastResult() const {
     return &m_LastResult;
 }
 
+void ScriptManager::BeginScriptMessageCapture() {
+    m_CapturedScriptMessages.clear();
+    m_CapturingScriptMessages = true;
+}
+
+std::string ScriptManager::EndScriptMessageCapture() {
+    m_CapturingScriptMessages = false;
+    return m_CapturedScriptMessages;
+}
+
 bool ScriptManager::OwnsExecution(const AngelScriptExecution *execution) const {
     return execution && m_Executions.find(const_cast<AngelScriptExecution *>(execution)) != m_Executions.end();
 }
@@ -389,29 +399,49 @@ AngelScriptStatus ScriptManager::LoadModule(const AngelScriptLoadOptions &option
     if (!m_ScriptEngine) {
         return StoreResult(result, ANGELSCRIPT_STATUS_NOT_INITIALIZED, 0, "AngelScript engine is not initialized.");
     }
+    const bool hasCode = options.Code != nullptr;
+    const bool hasFile = options.Filename && options.Filename[0] != '\0';
+    const bool hasFiles = options.FileCount > 0;
+    const int sourceCount = (hasCode ? 1 : 0) + (hasFile ? 1 : 0) + (hasFiles ? 1 : 0);
+    if (sourceCount > 1) {
+        return StoreResult(result,
+                           ANGELSCRIPT_STATUS_INVALID_ARGUMENT,
+                           0,
+                           "LoadModule accepts only one source: Code, Filename, or Filenames.");
+    }
     if (HasModule(options.ModuleName)) {
         if (!options.ReplaceExisting) {
             return StoreResult(result, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Module already exists.");
         }
         UnloadScript(options.ModuleName);
     }
-    if (options.Code) {
+    if (hasCode) {
         return CompileModule(options.ModuleName, options.Code, true, result);
     }
-    if (options.FileCount > 0) {
+    if (hasFiles) {
         if (!options.Filenames) {
             return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "File list is null.");
         }
+        BeginScriptMessageCapture();
         const int loadResult = LoadScripts(options.ModuleName, options.Filenames, options.FileCount);
+        const std::string diagnostics = EndScriptMessageCapture();
         if (loadResult < 0) {
-            return StoreResult(result, ANGELSCRIPT_STATUS_COMPILE_ERROR, loadResult, "Failed to load script files.");
+            return StoreResult(result,
+                               ANGELSCRIPT_STATUS_COMPILE_ERROR,
+                               loadResult,
+                               diagnostics.empty() ? "Failed to load script files." : diagnostics);
         }
         return StoreResult(result, ANGELSCRIPT_STATUS_OK);
     }
 
+    BeginScriptMessageCapture();
     const int loadResult = LoadScript(options.ModuleName, options.Filename);
+    const std::string diagnostics = EndScriptMessageCapture();
     if (loadResult < 0) {
-        return StoreResult(result, ANGELSCRIPT_STATUS_COMPILE_ERROR, loadResult, "Failed to load script file.");
+        return StoreResult(result,
+                           ANGELSCRIPT_STATUS_COMPILE_ERROR,
+                           loadResult,
+                           diagnostics.empty() ? "Failed to load script file." : diagnostics);
     }
     return StoreResult(result, ANGELSCRIPT_STATUS_OK);
 }
@@ -433,9 +463,14 @@ AngelScriptStatus ScriptManager::CompileModule(const char *moduleName,
         UnloadScript(moduleName);
     }
 
+    BeginScriptMessageCapture();
     const int compileResult = CompileScript(moduleName, scriptCode);
+    const std::string diagnostics = EndScriptMessageCapture();
     if (compileResult < 0) {
-        return StoreResult(result, ANGELSCRIPT_STATUS_COMPILE_ERROR, compileResult, "Failed to compile script module.");
+        return StoreResult(result,
+                           ANGELSCRIPT_STATUS_COMPILE_ERROR,
+                           compileResult,
+                           diagnostics.empty() ? "Failed to compile script module." : diagnostics);
     }
     return StoreResult(result, ANGELSCRIPT_STATUS_OK);
 }
@@ -477,6 +512,10 @@ asIScriptFunction *ScriptManager::FindFunctionByDecl(const char *moduleName, con
 AngelScriptExecution *ScriptManager::CreateExecution(const AngelScriptExecuteOptions &options, AngelScriptResult *result) {
     if (!options.ModuleName || options.ModuleName[0] == '\0') {
         StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name is required.");
+        return nullptr;
+    }
+    if (!m_ScriptEngine) {
+        StoreResult(result, ANGELSCRIPT_STATUS_NOT_INITIALIZED, 0, "AngelScript engine is not initialized.");
         return nullptr;
     }
     asIScriptModule *module = GetModule(options.ModuleName);
@@ -989,12 +1028,19 @@ void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
             type = "INFO";
             break;
     }
-    m_Context->OutputToConsoleEx(const_cast<char *>("%s(%d,%d): %s: %s"),
+    const std::string formatted = fmt::format("{}({},{}): {}: {}",
         msg.section ? msg.section : "<unknown section>",
         msg.row,
         msg.col,
         type,
         msg.message ? msg.message : "");
+    if (m_CapturingScriptMessages) {
+        if (!m_CapturedScriptMessages.empty()) {
+            m_CapturedScriptMessages += "\n";
+        }
+        m_CapturedScriptMessages += formatted;
+    }
+    m_Context->OutputToConsoleEx(const_cast<char *>("%s"), formatted.c_str());
 }
 
 void ScriptManager::ExceptionCallback(asIScriptContext *context) {

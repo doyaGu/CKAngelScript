@@ -1,5 +1,7 @@
 #include "ScriptSelfTests.h"
 
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "AngelScriptManager.h"
@@ -23,6 +25,26 @@ void ReadIntReturn(asIScriptContext *ctx, void *userData) {
     if (data) {
         data->Output = static_cast<int>(ctx->GetReturnDWord());
     }
+}
+
+bool WriteTextFile(const std::filesystem::path &path, const char *text, std::string &error) {
+    std::ofstream out(path, std::ios::out | std::ios::trunc);
+    if (!out) {
+        error = "AngelScriptManager API self-test failed to create temporary script file.";
+        return false;
+    }
+    out << (text ? text : "");
+    return true;
+}
+
+bool ContainsCompileLocation(const AngelScriptResult &result) {
+    if (!result.ErrorMessage || result.ErrorMessage[0] == '\0') {
+        return false;
+    }
+    const std::string message = result.ErrorMessage;
+    return message.find('(') != std::string::npos &&
+           message.find(')') != std::string::npos &&
+           message.find("ERROR") != std::string::npos;
 }
 
 bool ExpectStatus(AngelScriptStatus actual,
@@ -107,10 +129,77 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
     }
     manager->UnloadModule(loadModuleName, nullptr);
 
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path();
+    const std::filesystem::path singleFile = tempDir / "__ckas_manager_api_single.as";
+    const std::filesystem::path multiFileA = tempDir / "__ckas_manager_api_multi_a.as";
+    const std::filesystem::path multiFileB = tempDir / "__ckas_manager_api_multi_b.as";
+    if (!WriteTextFile(singleFile, "int __ckas_public_file_loaded() { return 11; }\n", error) ||
+        !WriteTextFile(multiFileA, "int __ckas_public_multi_a() { return 12; }\n", error) ||
+        !WriteTextFile(multiFileB, "int __ckas_public_multi_b() { return __ckas_public_multi_a() + 1; }\n", error)) {
+        return false;
+    }
+
+    constexpr const char *singleFileModuleName = "__CKAS_ManagerApiSingleFileLoadSelfTest";
+    AngelScriptLoadOptions singleFileOptions = {};
+    singleFileOptions.ModuleName = singleFileModuleName;
+    const std::string singleFilePath = singleFile.string();
+    singleFileOptions.Filename = singleFilePath.c_str();
+    singleFileOptions.ReplaceExisting = true;
+    if (!ExpectStatus(manager->LoadModule(singleFileOptions, &result),
+                      ANGELSCRIPT_STATUS_OK,
+                      "LoadModule single file",
+                      &result,
+                      error)) {
+        return false;
+    }
+    if (!manager->FindFunctionByName(singleFileModuleName, "__ckas_public_file_loaded")) {
+        error = "AngelScriptManager API self-test could not query LoadModule single-file output.";
+        return false;
+    }
+    manager->UnloadModule(singleFileModuleName, nullptr);
+
+    constexpr const char *multiFileModuleName = "__CKAS_ManagerApiMultiFileLoadSelfTest";
+    const std::string multiFilePathA = multiFileA.string();
+    const std::string multiFilePathB = multiFileB.string();
+    const char *multiFiles[] = { multiFilePathA.c_str(), multiFilePathB.c_str() };
+    AngelScriptLoadOptions multiFileOptions = {};
+    multiFileOptions.ModuleName = multiFileModuleName;
+    multiFileOptions.Filenames = multiFiles;
+    multiFileOptions.FileCount = 2;
+    multiFileOptions.ReplaceExisting = true;
+    if (!ExpectStatus(manager->LoadModule(multiFileOptions, &result),
+                      ANGELSCRIPT_STATUS_OK,
+                      "LoadModule multi file",
+                      &result,
+                      error)) {
+        return false;
+    }
+    if (!manager->FindFunctionByName(multiFileModuleName, "__ckas_public_multi_b")) {
+        error = "AngelScriptManager API self-test could not query LoadModule multi-file output.";
+        return false;
+    }
+    manager->UnloadModule(multiFileModuleName, nullptr);
+
+    AngelScriptLoadOptions conflictingOptions = {};
+    conflictingOptions.ModuleName = "__CKAS_ManagerApiConflictingLoadSelfTest";
+    conflictingOptions.Code = "int __ckas_public_conflict() { return 1; }\n";
+    conflictingOptions.Filename = singleFilePath.c_str();
+    conflictingOptions.ReplaceExisting = true;
+    if (manager->LoadModule(conflictingOptions, &result) != ANGELSCRIPT_STATUS_INVALID_ARGUMENT) {
+        error = "AngelScriptManager API self-test expected LoadModule with multiple sources to fail.";
+        manager->UnloadModule(conflictingOptions.ModuleName, nullptr);
+        return false;
+    }
+
     constexpr const char *badModuleName = "__CKAS_ManagerApiBadCompileSelfTest";
     if (manager->CompileModule(badModuleName, "int __ckas_bad_compile( {", true, &result) !=
         ANGELSCRIPT_STATUS_COMPILE_ERROR) {
         error = "AngelScriptManager API self-test expected invalid code to return CompileError.";
+        manager->UnloadModule(badModuleName, nullptr);
+        return false;
+    }
+    if (!ContainsCompileLocation(result)) {
+        error = "AngelScriptManager API self-test expected compile errors to include AngelScript diagnostics.";
         manager->UnloadModule(badModuleName, nullptr);
         return false;
     }

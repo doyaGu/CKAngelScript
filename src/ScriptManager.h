@@ -334,6 +334,8 @@ protected:
                                   int angelScriptCode = 0,
                                   const std::string &errorMessage = std::string(),
                                   const std::string &stackTrace = std::string());
+    void BeginScriptMessageCapture();
+    std::string EndScriptMessageCapture();
 
     int m_Flags = 0;
     int m_ScriptPathCategoryIndex = -1;
@@ -351,6 +353,8 @@ protected:
     AngelScriptResult m_LastResult;
     std::string m_LastErrorMessage;
     std::string m_LastStackTrace;
+    bool m_CapturingScriptMessages = false;
+    std::string m_CapturedScriptMessages;
 };
 
 #endif // CK_SCRIPTMANAGER_H
