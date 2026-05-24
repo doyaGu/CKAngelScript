@@ -187,6 +187,18 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
     }
     manager->UnloadModule(multiFileModuleName, nullptr);
 
+    const char *invalidFiles[] = { multiFilePathA.c_str(), nullptr };
+    AngelScriptLoadOptions invalidFileListOptions = {};
+    invalidFileListOptions.ModuleName = "__CKAS_ManagerApiInvalidFileListSelfTest";
+    invalidFileListOptions.Filenames = invalidFiles;
+    invalidFileListOptions.FileCount = 2;
+    invalidFileListOptions.ReplaceExisting = true;
+    if (manager->LoadModule(invalidFileListOptions, &result) != ANGELSCRIPT_STATUS_INVALID_ARGUMENT) {
+        error = "AngelScriptManager API self-test expected LoadModule with an invalid file list entry to fail.";
+        manager->UnloadModule(invalidFileListOptions.ModuleName, nullptr);
+        return false;
+    }
+
     constexpr const char *defaultFileModuleName = "__CKAS_ManagerApiDefaultFileLoadSelfTest";
     AngelScriptLoadOptions defaultFileOptions = {};
     defaultFileOptions.ModuleName = defaultFileModuleName;

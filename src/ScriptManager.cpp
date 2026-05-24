@@ -440,6 +440,14 @@ AngelScriptStatus ScriptManager::LoadModule(const AngelScriptLoadOptions &option
         if (!options.Filenames) {
             return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "File list is null.");
         }
+        for (size_t i = 0; i < options.FileCount; ++i) {
+            if (!options.Filenames[i] || options.Filenames[i][0] == '\0') {
+                return StoreResult(result,
+                                   ANGELSCRIPT_STATUS_INVALID_ARGUMENT,
+                                   0,
+                                   "File list contains an empty filename.");
+            }
+        }
         BeginScriptMessageCapture();
         const int loadResult = LoadScripts(options.ModuleName, options.Filenames, options.FileCount);
         const std::string diagnostics = EndScriptMessageCapture();
