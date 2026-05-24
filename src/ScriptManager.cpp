@@ -984,7 +984,7 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     }
 
     if (unloadPrivateModule && state->PrivateModule && !state->RuntimeModuleName.empty()) {
-        UnloadScript(state->RuntimeModuleName.c_str());
+        UnloadModule(state->RuntimeModuleName.c_str(), nullptr);
     }
 
     state->RuntimeModuleName.clear();
