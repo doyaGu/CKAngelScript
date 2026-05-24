@@ -540,12 +540,24 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
     }
 
     if (privateModule) {
-        man->UnloadScript(runtimeModuleName.c_str());
-        int r = source.empty()
-            ? man->LoadScript(runtimeModuleName.c_str(), file.c_str())
-            : man->CompileScript(runtimeModuleName.c_str(), source.c_str());
-        if (r < 0) {
-            SetErrorOutput(beh, state, "Failed to load component script module.");
+        man->UnloadModule(runtimeModuleName.c_str(), nullptr);
+        AngelScriptResult result = {};
+        AngelScriptStatus status = ANGELSCRIPT_STATUS_OK;
+        if (source.empty()) {
+            AngelScriptLoadOptions options = {};
+            options.ModuleName = runtimeModuleName.c_str();
+            options.Filename = file.c_str();
+            options.ReplaceExisting = true;
+            status = man->LoadModule(options, &result);
+        } else {
+            status = man->CompileModule(runtimeModuleName.c_str(), source.c_str(), true, &result);
+        }
+        if (status != ANGELSCRIPT_STATUS_OK) {
+            SetErrorOutput(beh,
+                           state,
+                           result.ErrorMessage && result.ErrorMessage[0] != '\0'
+                               ? result.ErrorMessage
+                               : "Failed to load component script module.");
             return false;
         }
     }

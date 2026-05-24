@@ -72,6 +72,21 @@ CKERROR CreateAngelScriptLoaderProto(CKBehaviorPrototype **pproto) {
 #define FILENAME_AS_CODE 4
 #define NO_SCRIPT_CACHE 5
 
+static void ActivateFailed(CKBehavior *beh,
+                           CKContext *context,
+                           const AngelScriptResult *result = nullptr,
+                           const char *fallback = nullptr) {
+    if (result && result->ErrorMessage && result->ErrorMessage[0] != '\0' && context) {
+        context->OutputToConsoleEx(const_cast<char *>("[AngelScript Loader] %s"), result->ErrorMessage);
+    } else if (fallback && fallback[0] != '\0' && context) {
+        context->OutputToConsoleEx(const_cast<char *>("[AngelScript Loader] %s"), fallback);
+    }
+    if (beh) {
+        beh->ActivateOutput(2);
+        beh->SetOutputParameterValue(0, nullptr);
+    }
+}
+
 static bool TriggerCallback(ScriptRunner *runner, const char *name, const CKBehaviorContext &behcontext) {
     if (!runner || !runner->IsAttached())
         return false;
@@ -120,11 +135,11 @@ static int OnLoadScript(const CKBehaviorContext &behcontext) {
             runner->Detach(beh);
         }
 
-        man->UnloadScript(previous);
+        man->UnloadModule(previous, nullptr);
         beh->SetLocalParameterValue(2, "");
     }
 
-    int r = 0;
+    AngelScriptResult result = {};
 
     CKBOOL useFileList = FALSE;
     beh->GetLocalParameterValue(USE_FILE_LIST, &useFileList);
@@ -143,32 +158,32 @@ static int OnLoadScript(const CKBehaviorContext &behcontext) {
                 filename = name;
             }
 
-            r = man->LoadScript(name, filename.CStr());
-            if (r < 0) {
-                beh->ActivateOutput(2);
-                beh->SetOutputParameterValue(0, nullptr);
-                return CKBR_OK;
+            if (!man->HasModule(name)) {
+                AngelScriptLoadOptions options = {};
+                options.ModuleName = name;
+                options.Filename = filename.CStr();
+                if (man->LoadModule(options, &result) != ANGELSCRIPT_STATUS_OK) {
+                    ActivateFailed(beh, context, &result, "Failed to load script file.");
+                    return CKBR_OK;
+                }
             }
         } else {
             CKSTRING code = (CKSTRING) beh->GetInputParameterReadDataPtr(1);
             if (!code) {
-                beh->ActivateOutput(2);
-                beh->SetOutputParameterValue(0, nullptr);
+                ActivateFailed(beh, context, nullptr, "Script code is empty.");
                 return CKBR_OK;
             }
 
-            r = man->CompileScript(name, code);
-            if (r < 0) {
-                beh->ActivateOutput(2);
-                beh->SetOutputParameterValue(0, nullptr);
+            if (!man->HasModule(name) &&
+                man->CompileModule(name, code, false, &result) != ANGELSCRIPT_STATUS_OK) {
+                ActivateFailed(beh, context, &result, "Failed to compile script code.");
                 return CKBR_OK;
             }
         }
     } else {
         CKDataArray *da = (CKDataArray *) beh->GetInputParameterReadDataPtr(1);
         if (!da) {
-            beh->ActivateOutput(2);
-            beh->SetOutputParameterValue(0, nullptr);
+            ActivateFailed(beh, context, nullptr, "Script file list is missing.");
             return CKBR_OK;
         }
 
@@ -176,15 +191,13 @@ static int OnLoadScript(const CKBehaviorContext &behcontext) {
         beh->GetInputParameterValue(2, &column);
 
         if (column < 0 || column >= da->GetColumnCount()) {
-            beh->ActivateOutput(2);
-            beh->SetOutputParameterValue(0, nullptr);
+            ActivateFailed(beh, context, nullptr, "Script file list column is out of range.");
             return CKBR_OK;
         }
 
         int count = da->GetRowCount();
         if (count == 0) {
-            beh->ActivateOutput(2);
-            beh->SetOutputParameterValue(0, nullptr);
+            ActivateFailed(beh, context, nullptr, "Script file list is empty.");
             return CKBR_OK;
         }
 
@@ -195,28 +208,32 @@ static int OnLoadScript(const CKBehaviorContext &behcontext) {
             char filename[4096] = {};
             if (!da->GetElementStringValue(i, column, filename) || filename[0] == '\0') {
                 delete[] filenames;
-                beh->ActivateOutput(2);
-                beh->SetOutputParameterValue(0, nullptr);
+                ActivateFailed(beh, context, nullptr, "Script file list contains an empty filename.");
                 return CKBR_OK;
             }
             filenameStore.emplace_back(filename);
             filenames[i] = filenameStore.back().c_str();
         }
 
-        r = man->LoadScripts(name, filenames, count);
-        delete[] filenames;
-
-        if (r < 0) {
-            beh->ActivateOutput(2);
-            beh->SetOutputParameterValue(0, nullptr);
-            return CKBR_OK;
+        if (!man->HasModule(name)) {
+            AngelScriptLoadOptions options = {};
+            options.ModuleName = name;
+            options.Filenames = filenames;
+            options.FileCount = static_cast<size_t>(count);
+            const AngelScriptStatus status = man->LoadModule(options, &result);
+            delete[] filenames;
+            if (status != ANGELSCRIPT_STATUS_OK) {
+                ActivateFailed(beh, context, &result, "Failed to load script files.");
+                return CKBR_OK;
+            }
+        } else {
+            delete[] filenames;
         }
     }
 
-    asIScriptModule *module = man->GetScript(name);
+    asIScriptModule *module = man->GetModule(name);
     if (!module) {
-        beh->ActivateOutput(2);
-        beh->SetOutputParameterValue(0, nullptr);
+        ActivateFailed(beh, context, nullptr, "Script module was not loaded.");
         return CKBR_OK;
     }
 
@@ -251,10 +268,9 @@ static int OnUnloadScript(const CKBehaviorContext &behcontext) {
     ScriptRunner *runner = nullptr;
     beh->GetLocalParameterValue(0, &runner);
 
-    asIScriptModule *module = man->GetScript(name);
+    asIScriptModule *module = man->GetModule(name);
     if (!module) {
-        beh->ActivateOutput(2);
-        beh->SetOutputParameterValue(0, nullptr);
+        ActivateFailed(beh, context, nullptr, "Script module was not loaded.");
         return CKBR_OK;
     }
 
@@ -263,7 +279,7 @@ static int OnUnloadScript(const CKBehaviorContext &behcontext) {
         runner->Detach(beh);
     }
 
-    man->UnloadScript(name);
+    man->UnloadModule(name, nullptr);
     beh->SetLocalParameterValue(2, "");
 
     beh->SetOutputParameterValue(0, nullptr);
@@ -441,7 +457,7 @@ CKERROR AngelScriptLoaderCallBack(const CKBehaviorContext &behcontext) {
                     runner->Detach(beh);
                 }
 
-                man->UnloadScript(scriptName);
+                man->UnloadModule(scriptName, nullptr);
                 beh->SetLocalParameterValue(2, "");
             }
 
