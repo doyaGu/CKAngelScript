@@ -207,6 +207,9 @@ CKERROR ScriptManager::PreProcess() {
 }
 
 CKERROR ScriptManager::PostProcess() {
+    if (m_Runtime) {
+        m_Runtime->PostProcess();
+    }
     return m_BehaviorBridge ? m_BehaviorBridge->PostProcess() : CK_OK;
 }
 

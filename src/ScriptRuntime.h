@@ -2,16 +2,91 @@
 #define CK_SCRIPTRUNTIME_H
 
 #include <memory>
+#include <cstdint>
 #include <string>
 #include <vector>
 
 #include <angelscript.h>
 
 #include "CKTypes.h"
+#include "ScriptRuntimeDependency.h"
 #include "ScriptRuntimeMetadata.h"
 
 class CKContext;
 class ScriptManager;
+
+class RuntimeDependencyInfo {
+public:
+    RuntimeDependencyInfo();
+    RuntimeDependencyInfo(ScriptRuntimeDependency dependency,
+                          bool optional,
+                          bool present,
+                          bool satisfied,
+                          std::string actualVersion);
+
+    std::string Raw() const;
+    std::string Id() const;
+    std::string Operator() const;
+    std::string Version() const;
+    std::string ActualVersion() const;
+    bool Optional() const;
+    bool Present() const;
+    bool Satisfied() const;
+
+private:
+    ScriptRuntimeDependency m_Dependency;
+    bool m_Optional = false;
+    bool m_Present = false;
+    bool m_Satisfied = false;
+    std::string m_ActualVersion;
+};
+
+class RuntimeScriptInfo {
+public:
+    RuntimeScriptInfo();
+
+    bool Exists() const;
+    std::string Id() const;
+    std::string Name() const;
+    std::string Version() const;
+    std::string Description() const;
+    std::string Author() const;
+    std::string Category() const;
+    int TagCount() const;
+    std::string Tag(int index) const;
+    bool Enabled() const;
+    bool Loaded() const;
+    bool Failed() const;
+    std::string State() const;
+    std::string Phase() const;
+    std::string Error() const;
+    std::string RootPath() const;
+    std::string ManifestPath() const;
+    std::string EntryPath() const;
+    int Generation() const;
+
+private:
+    friend class ScriptRuntime;
+
+    bool m_Exists = false;
+    std::string m_Id;
+    std::string m_Name;
+    std::string m_Version;
+    std::string m_Description;
+    std::string m_Author;
+    std::string m_Category;
+    std::vector<std::string> m_Tags;
+    bool m_Enabled = false;
+    bool m_Loaded = false;
+    bool m_Failed = false;
+    std::string m_State;
+    std::string m_Phase;
+    std::string m_Error;
+    std::string m_RootPath;
+    std::string m_ManifestPath;
+    std::string m_EntryPath;
+    int m_Generation = 0;
+};
 
 class ScriptRuntimeContext {
 public:
@@ -21,7 +96,13 @@ public:
                          std::string scriptName,
                          std::string scriptVersion,
                          std::string rootPath,
+                         std::string manifestPath,
+                         std::string entryPath,
                          std::vector<ScriptRuntimeMetadataEntry> metadata,
+                         std::string phase,
+                         std::string state,
+                         int generation,
+                         std::uint64_t frameIndex,
                          float deltaTime,
                          float timeSeconds);
 
@@ -32,6 +113,12 @@ public:
     std::string ScriptName() const;
     std::string ScriptVersion() const;
     std::string RootPath() const;
+    std::string ManifestPath() const;
+    std::string EntryPath() const;
+    std::string Phase() const;
+    std::string State() const;
+    int Generation() const;
+    std::uint64_t FrameIndex() const;
     std::string Metadata(const std::string &key, const std::string &fallback = std::string()) const;
     int MetadataCount() const;
     std::string MetadataKey(int index) const;
@@ -46,7 +133,13 @@ private:
     std::string m_ScriptName;
     std::string m_ScriptVersion;
     std::string m_RootPath;
+    std::string m_ManifestPath;
+    std::string m_EntryPath;
     std::vector<ScriptRuntimeMetadataEntry> m_Metadata;
+    std::string m_Phase;
+    std::string m_State;
+    int m_Generation = 0;
+    std::uint64_t m_FrameIndex = 0;
     float m_DeltaTime = 0.0f;
     float m_TimeSeconds = 0.0f;
 };
@@ -57,6 +150,7 @@ public:
     ~ScriptRuntime();
 
     void PreProcess();
+    void PostProcess();
     void PostLoad();
     void OnReset();
     void OnPause();
@@ -68,9 +162,13 @@ public:
     bool Reload(const std::string &id, std::string *error = nullptr);
     bool Enable(const std::string &id, bool enabled, std::string *error = nullptr);
     std::vector<std::string> List() const;
+    std::vector<RuntimeScriptInfo> ListInfo() const;
+    RuntimeScriptInfo Info(const std::string &id) const;
     std::string Version(const std::string &id) const;
     std::string Metadata(const std::string &id, const std::string &key, const std::string &fallback = std::string()) const;
     std::vector<std::string> Dependencies(const std::string &id) const;
+    std::vector<RuntimeDependencyInfo> RequiredDependencies(const std::string &id) const;
+    std::vector<RuntimeDependencyInfo> OptionalDependencies(const std::string &id) const;
 
 private:
     struct Module;
@@ -81,9 +179,11 @@ private:
     };
 
     void EnsureScanned();
-    std::vector<ScriptRuntimeManifest> Discover(std::string &error) const;
-    bool LoadDiscovered(const std::vector<ScriptRuntimeManifest> &scripts, bool reconcileModules);
+    ScriptRuntimeLoadPlan Discover(std::string &error) const;
+    bool LoadDiscovered(const ScriptRuntimeLoadPlan &plan, bool reconcileModules);
+    bool ReplaceWithFailedModule(const ScriptRuntimeManifest &metadata, const std::string &error);
     bool LoadModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> &module, std::string &error);
+    bool ValidateLifecycleSignatures(const Module &module, std::string &error) const;
     bool ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module);
     bool RemoveModuleById(const std::string &id);
     void RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts);
@@ -91,6 +191,9 @@ private:
     bool DisableModule(Module &module);
     bool PauseModule(Module &module, const ScriptRuntimeContext &context);
     bool ResetModule(Module &module, const ScriptRuntimeContext &context);
+    std::string ModuleState(const Module &module) const;
+    RuntimeScriptInfo BuildInfo(const Module &module) const;
+    std::vector<RuntimeDependencyInfo> DependencyInfo(const Module &module, bool optional) const;
     void FinalizePendingModules();
     void UpdateModule(Module &module, float deltaTime, float timeSeconds);
     InvokeStatus Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required = false);
@@ -103,6 +206,7 @@ private:
     bool m_Scanned = false;
     bool m_Paused = false;
     int m_Generation = 0;
+    std::uint64_t m_FrameIndex = 0;
     std::vector<std::unique_ptr<Module>> m_Modules;
 };
 
