@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -106,6 +105,7 @@ private:
         int TimeoutFrames = 0;
     };
 
+    int DictionaryHandleTypeId();
     CScriptDictionary *ClonePayload(CScriptDictionary *payload) const;
     ScriptMessage MakeMessage(const std::string &kind,
                               const std::string &topic,
@@ -122,10 +122,11 @@ private:
     std::uint64_t m_FrameIndex = 0;
     std::uint64_t m_NextId = 1;
     bool m_Draining = false;
+    int m_DictionaryHandleTypeId = 0;
     std::vector<ScriptMessage> m_Queue;
     std::vector<ScriptMessage> m_DrainQueue;
     std::unordered_map<std::string, SubscriptionSet> m_Subscriptions;
-    std::unordered_map<std::string, std::set<std::string>> m_TopicSubscriptions;
+    std::unordered_map<std::string, std::unordered_set<std::string>> m_TopicSubscriptions;
     std::unordered_map<std::uint64_t, PendingRequest> m_PendingRequests;
 };
 

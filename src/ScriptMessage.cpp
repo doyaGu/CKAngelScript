@@ -31,11 +31,13 @@ ScriptManager *ManagerFromBehaviorContext(const CKBehaviorContext &ctx) {
 }
 
 std::string SourceFromRuntimeContext(const ScriptContext &ctx) {
-    return ScriptMessageBus::RuntimeTarget(ctx.ScriptId());
+    return ctx.Target();
 }
 
 std::string SourceFromBehaviorContext(const CKBehaviorContext &ctx) {
-    return ctx.Behavior ? ScriptMessageBus::ComponentTarget(ctx.Behavior->GetID()) : std::string();
+    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
+    ScriptComponentState *state = manager && ctx.Behavior ? manager->GetComponentState(ctx.Behavior->GetID()) : nullptr;
+    return state ? state->MessageTarget : (ctx.Behavior ? ScriptMessageBus::ComponentTarget(ctx.Behavior->GetID()) : std::string());
 }
 
 void RaiseRuntimeError(const ScriptContext &ctx, const std::string &error) {
@@ -373,7 +375,11 @@ ScriptAsyncTaskBase *ScriptMessageBus::Request(const std::string &source,
         error = "Message topic is empty.";
         return nullptr;
     }
-    const int dictionaryType = m_Manager->GetScriptEngine()->GetTypeIdByDecl("dictionary@");
+    const int dictionaryType = DictionaryHandleTypeId();
+    if (dictionaryType <= 0) {
+        error = "Message bus could not resolve dictionary@.";
+        return nullptr;
+    }
     ScriptAsyncTaskBase *task = m_Manager->GetAsyncScheduler()->CreateManualTask(dictionaryType);
     ScriptMessage message = MakeMessage("request", cleanTopic, source, target, true, payload);
     PendingRequest pending;
@@ -551,6 +557,13 @@ CScriptDictionary *ScriptMessageBus::ClonePayload(CScriptDictionary *payload) co
     return copy;
 }
 
+int ScriptMessageBus::DictionaryHandleTypeId() {
+    if (m_DictionaryHandleTypeId == 0 && m_Manager && m_Manager->GetScriptEngine()) {
+        m_DictionaryHandleTypeId = m_Manager->GetScriptEngine()->GetTypeIdByDecl("dictionary@");
+    }
+    return m_DictionaryHandleTypeId;
+}
+
 ScriptMessage ScriptMessageBus::MakeMessage(const std::string &kind,
                                             const std::string &topic,
                                             const std::string &source,
@@ -577,7 +590,12 @@ bool ScriptMessageBus::Deliver(const ScriptMessage &message, bool immediate, std
         return message.Kind() == "event";
     }
     bool ok = true;
+    std::vector<std::string> targets;
+    targets.reserve(it->second.size());
     for (const std::string &target : it->second) {
+        targets.push_back(target);
+    }
+    for (const std::string &target : targets) {
         std::string targetError;
         if (!DeliverTarget(target, message, immediate, targetError)) {
             ok = false;

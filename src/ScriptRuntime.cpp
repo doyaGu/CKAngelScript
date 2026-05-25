@@ -75,13 +75,7 @@ ScriptContext MakeRuntimeContext(CKContext *context,
                                         float deltaTime,
                                         float timeSeconds) {
     return ScriptContext(context,
-                                metadata.Id,
-                                metadata.Name,
-                                metadata.VersionText,
-                                ScriptRuntimeMetadata::PathString(metadata.RootPath),
-                                ScriptRuntimeMetadata::PathString(metadata.ManifestPath),
-                                ScriptRuntimeMetadata::PathString(metadata.EntryPath),
-                                &metadata.CustomMetadata,
+                                &metadata,
                                 phase,
                                 state,
                                 generation,
@@ -365,6 +359,7 @@ CScriptArray *RuntimeOptionalDependencies(const ScriptContext &ctx, const std::s
 struct ScriptRuntime::Module {
     ScriptRuntimeManifest Meta;
     std::string ModuleName;
+    std::string MessageTarget;
     int Generation = 0;
     std::shared_ptr<CachedScript> Cached;
     asIScriptObject *Object = nullptr;
@@ -510,15 +505,15 @@ std::string RuntimeScriptInfo::Error() const {
     return m_Error;
 }
 
-std::string RuntimeScriptInfo::RootPath() const {
+std::string RuntimeScriptInfo::Root() const {
     return m_RootPath;
 }
 
-std::string RuntimeScriptInfo::ManifestPath() const {
+std::string RuntimeScriptInfo::Manifest() const {
     return m_ManifestPath;
 }
 
-std::string RuntimeScriptInfo::EntryPath() const {
+std::string RuntimeScriptInfo::Entry() const {
     return m_EntryPath;
 }
 
@@ -529,13 +524,7 @@ int RuntimeScriptInfo::Generation() const {
 ScriptContext::ScriptContext() = default;
 
 ScriptContext::ScriptContext(CKContext *context,
-                             std::string scriptId,
-                             std::string scriptName,
-                             std::string scriptVersion,
-                             std::string rootPath,
-                             std::string manifestPath,
-                             std::string entryPath,
-                             const std::vector<ScriptRuntimeMetadataEntry> *metadata,
+                             const ScriptRuntimeManifest *metadata,
                              std::string phase,
                              std::string state,
                              int generation,
@@ -543,12 +532,6 @@ ScriptContext::ScriptContext(CKContext *context,
                              float deltaTime,
                              float timeSeconds)
     : m_Context(context),
-      m_ScriptId(std::move(scriptId)),
-      m_ScriptName(std::move(scriptName)),
-      m_ScriptVersion(std::move(scriptVersion)),
-      m_RootPath(std::move(rootPath)),
-      m_ManifestPath(std::move(manifestPath)),
-      m_EntryPath(std::move(entryPath)),
       m_Metadata(metadata),
       m_Phase(std::move(phase)),
       m_State(std::move(state)),
@@ -569,28 +552,32 @@ float ScriptContext::TimeSeconds() const {
     return m_TimeSeconds;
 }
 
-std::string ScriptContext::ScriptId() const {
-    return m_ScriptId;
+std::string ScriptContext::Id() const {
+    return m_Metadata ? m_Metadata->Id : std::string();
 }
 
-std::string ScriptContext::ScriptName() const {
-    return m_ScriptName;
+std::string ScriptContext::Name() const {
+    return m_Metadata ? m_Metadata->Name : std::string();
 }
 
-std::string ScriptContext::ScriptVersion() const {
-    return m_ScriptVersion;
+std::string ScriptContext::Version() const {
+    return m_Metadata ? m_Metadata->VersionText : std::string();
 }
 
-std::string ScriptContext::RootPath() const {
-    return m_RootPath;
+std::string ScriptContext::Root() const {
+    return m_Metadata ? ScriptRuntimeMetadata::PathString(m_Metadata->RootPath) : std::string();
 }
 
-std::string ScriptContext::ManifestPath() const {
-    return m_ManifestPath;
+std::string ScriptContext::Manifest() const {
+    return m_Metadata ? ScriptRuntimeMetadata::PathString(m_Metadata->ManifestPath) : std::string();
 }
 
-std::string ScriptContext::EntryPath() const {
-    return m_EntryPath;
+std::string ScriptContext::Entry() const {
+    return m_Metadata ? ScriptRuntimeMetadata::PathString(m_Metadata->EntryPath) : std::string();
+}
+
+std::string ScriptContext::Target() const {
+    return m_Metadata ? ScriptMessageBus::RuntimeTarget(m_Metadata->Id) : std::string();
 }
 
 std::string ScriptContext::Phase() const {
@@ -610,25 +597,25 @@ std::uint64_t ScriptContext::FrameIndex() const {
 }
 
 std::string ScriptContext::Metadata(const std::string &key, const std::string &fallback) const {
-    return m_Metadata ? ScriptRuntimeMetadata::MetadataValue(*m_Metadata, key, fallback) : fallback;
+    return m_Metadata ? ScriptRuntimeMetadata::MetadataValue(m_Metadata->CustomMetadata, key, fallback) : fallback;
 }
 
 int ScriptContext::MetadataCount() const {
-    return m_Metadata ? static_cast<int>(m_Metadata->size()) : 0;
+    return m_Metadata ? static_cast<int>(m_Metadata->CustomMetadata.size()) : 0;
 }
 
 std::string ScriptContext::MetadataKey(int index) const {
-    return m_Metadata && index >= 0 && index < static_cast<int>(m_Metadata->size()) ? (*m_Metadata)[index].Key : std::string();
+    return m_Metadata && index >= 0 && index < static_cast<int>(m_Metadata->CustomMetadata.size()) ? m_Metadata->CustomMetadata[index].Key : std::string();
 }
 
 std::string ScriptContext::MetadataValue(int index) const {
-    return m_Metadata && index >= 0 && index < static_cast<int>(m_Metadata->size()) ? (*m_Metadata)[index].Value : std::string();
+    return m_Metadata && index >= 0 && index < static_cast<int>(m_Metadata->CustomMetadata.size()) ? m_Metadata->CustomMetadata[index].Value : std::string();
 }
 
 void ScriptContext::Raise(const std::string &message) const {
     if (m_Context) {
         m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript Runtime:%s] %s"),
-                                     m_ScriptId.c_str(),
+                                     Id().c_str(),
                                      message.c_str());
     }
 }
@@ -814,7 +801,7 @@ void ScriptRuntime::Clear() {
     if (m_Manager && m_Manager->GetMessageBus()) {
         for (const std::unique_ptr<Module> &module : m_Modules) {
             if (module) {
-                m_Manager->GetMessageBus()->ClearTarget(ScriptMessageBus::RuntimeTarget(module->Meta.Id), "Runtime was cleared.");
+                m_Manager->GetMessageBus()->ClearTarget(module->MessageTarget, "Runtime was cleared.");
             }
         }
     }
@@ -824,6 +811,7 @@ void ScriptRuntime::Clear() {
         }
     }
     m_Modules.clear();
+    m_ModulesById.clear();
     m_Scanned = false;
     m_Paused = false;
 }
@@ -998,38 +986,40 @@ std::vector<RuntimeDependencyInfo> ScriptRuntime::OptionalDependencies(const std
 
 bool ScriptRuntime::DeliverMessage(const std::string &id, const ScriptMessage &message, bool immediate, std::string &error) {
     const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
-    for (std::unique_ptr<Module> &module : m_Modules) {
-        if (!module || (module->Meta.Id != canonical && module->Meta.Id != id)) {
-            continue;
-        }
-        if (!module->Loaded || module->Failed || !module->Enabled || !module->EnableCalled) {
-            error = "Runtime message target is not ready.";
-            return false;
-        }
-        if (module->ActiveContext) {
-            error = "Runtime message target is busy.";
-            return false;
-        }
-        ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                                                             module->Meta,
-                                                                             "OnMessage",
-                                                                             ModuleState(*module),
-                                                                             module->Generation,
-                                                                             m_FrameIndex,
-                                                                             0.0f,
-                                                                             0.0f);
-        const InvokeStatus status = InvokeMessage(*module, message, ctx);
-        if (status == InvokeStatus::Suspended) {
-            return true;
-        }
-        if (status == InvokeStatus::Failed) {
-            error = module->Error.empty() ? "Runtime message handler failed." : module->Error;
-            return false;
-        }
+    auto it = m_ModulesById.find(canonical);
+    if (it == m_ModulesById.end() && id != canonical) {
+        it = m_ModulesById.find(id);
+    }
+    Module *module = it != m_ModulesById.end() ? it->second : nullptr;
+    if (!module) {
+        error = "Runtime message target was not found.";
+        return false;
+    }
+    if (!module->Loaded || module->Failed || !module->Enabled || !module->EnableCalled) {
+        error = "Runtime message target is not ready.";
+        return false;
+    }
+    if (module->ActiveContext) {
+        error = "Runtime message target is busy.";
+        return false;
+    }
+    ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                                         module->Meta,
+                                                                         "OnMessage",
+                                                                         ModuleState(*module),
+                                                                         module->Generation,
+                                                                         m_FrameIndex,
+                                                                         0.0f,
+                                                                         0.0f);
+    const InvokeStatus status = InvokeMessage(*module, message, ctx);
+    if (status == InvokeStatus::Suspended) {
         return true;
     }
-    error = "Runtime message target was not found.";
-    return false;
+    if (status == InvokeStatus::Failed) {
+        error = module->Error.empty() ? "Runtime message handler failed." : module->Error;
+        return false;
+    }
+    return true;
 }
 
 void ScriptRuntime::EnsureScanned() {
@@ -1211,6 +1201,7 @@ bool ScriptRuntime::LoadDiscovered(const ScriptRuntimeLoadPlan &plan, bool recon
 bool ScriptRuntime::ReplaceWithFailedModule(const ScriptRuntimeManifest &metadata, const std::string &error) {
     std::unique_ptr<Module> failed = std::make_unique<Module>();
     failed->Meta = metadata;
+    failed->MessageTarget = ScriptMessageBus::RuntimeTarget(metadata.Id);
     failed->Enabled = metadata.Enabled;
     failed->Loaded = false;
     failed->Failed = true;
@@ -1226,6 +1217,7 @@ bool ScriptRuntime::RemoveModuleById(const std::string &id) {
             continue;
         }
         if (DestroyModule(*module)) {
+            m_ModulesById.erase(module->Meta.Id);
             m_Modules.erase(it);
         } else {
             module->PendingErase = true;
@@ -1241,11 +1233,13 @@ void ScriptRuntime::RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> 
         allowedIds.insert(script.Id);
     }
 
+    bool changed = false;
     for (auto it = m_Modules.begin(); it != m_Modules.end();) {
         Module *module = it->get();
         if (module && allowedIds.find(module->Meta.Id) == allowedIds.end()) {
             if (DestroyModule(*module)) {
                 it = m_Modules.erase(it);
+                changed = true;
             } else {
                 module->PendingErase = true;
                 ++it;
@@ -1253,6 +1247,9 @@ void ScriptRuntime::RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> 
         } else {
             ++it;
         }
+    }
+    if (changed) {
+        RebuildModuleIndex();
     }
 }
 
@@ -1295,6 +1292,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
 
     std::unique_ptr<Module> loaded = std::make_unique<Module>();
     loaded->Meta = metadata;
+    loaded->MessageTarget = ScriptMessageBus::RuntimeTarget(metadata.Id);
     loaded->ModuleName = moduleName;
     loaded->Generation = generation;
     loaded->Cached = cached;
@@ -1332,7 +1330,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     }
 
     ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                                                         metadata,
+                                                                         loaded->Meta,
                                                                          "OnLoad",
                                                                          "loading",
                                                                          loaded->Generation,
@@ -1348,7 +1346,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     if (status == InvokeStatus::Finished) {
         loaded->LoadCalled = true;
         ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                                        metadata,
+                                                        loaded->Meta,
                                                         "Awake",
                                                         "loading",
                                                         loaded->Generation,
@@ -1365,14 +1363,13 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
             loaded->AwakeCalled = true;
         }
     }
-    module = std::move(loaded);
     if (m_Manager && m_Manager->GetMessageBus()) {
         std::string subscribeError;
-        const std::string target = ScriptMessageBus::RuntimeTarget(metadata.Id);
         for (const std::string &topic : metadata.MessageTopics) {
-            m_Manager->GetMessageBus()->Subscribe(target, topic, true, subscribeError);
+            m_Manager->GetMessageBus()->Subscribe(loaded->MessageTarget, topic, true, subscribeError);
         }
     }
+    module = std::move(loaded);
     return true;
 }
 
@@ -1451,6 +1448,7 @@ bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::un
         if (existing && existing->Meta.Id == metadata.Id) {
             if (DestroyModule(*existing)) {
                 existing = std::move(module);
+                m_ModulesById[metadata.Id] = existing.get();
             } else {
                 existing->PendingReplacement = std::move(module);
             }
@@ -1458,12 +1456,13 @@ bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::un
         }
     }
     m_Modules.push_back(std::move(module));
+    m_ModulesById[metadata.Id] = m_Modules.back().get();
     return true;
 }
 
 bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
     if (m_Manager && m_Manager->GetMessageBus()) {
-        m_Manager->GetMessageBus()->ClearTarget(ScriptMessageBus::RuntimeTarget(module.Meta.Id), "Runtime script was destroyed.");
+        m_Manager->GetMessageBus()->ClearTarget(module.MessageTarget, "Runtime script was destroyed.");
     }
     if (hard) {
         CancelActiveInvocation(module);
@@ -1522,9 +1521,8 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
 
 bool ScriptRuntime::DisableModule(Module &module) {
     if (m_Manager && m_Manager->GetMessageBus()) {
-        const std::string target = ScriptMessageBus::RuntimeTarget(module.Meta.Id);
-        m_Manager->GetMessageBus()->ClearDynamicSubscriptions(target);
-        m_Manager->GetMessageBus()->FailPendingForTarget(target, "Runtime script was disabled.");
+        m_Manager->GetMessageBus()->ClearDynamicSubscriptions(module.MessageTarget);
+        m_Manager->GetMessageBus()->FailPendingForTarget(module.MessageTarget, "Runtime script was disabled.");
     }
     if (!module.PendingDisable) {
         CancelActiveInvocation(module);
@@ -1671,23 +1669,40 @@ std::vector<RuntimeDependencyInfo> ScriptRuntime::DependencyInfo(const Module &m
     return result;
 }
 
+void ScriptRuntime::RebuildModuleIndex() {
+    m_ModulesById.clear();
+    m_ModulesById.reserve(m_Modules.size());
+    for (const std::unique_ptr<Module> &module : m_Modules) {
+        if (module) {
+            m_ModulesById[module->Meta.Id] = module.get();
+        }
+    }
+}
+
 void ScriptRuntime::FinalizePendingModules() {
+    bool changed = false;
     for (auto it = m_Modules.begin(); it != m_Modules.end();) {
         Module *module = it->get();
         if (!module) {
             it = m_Modules.erase(it);
+            changed = true;
             continue;
         }
         if (module->PendingReplacement && !module->PendingDestroy && !module->ActiveContext) {
             *it = std::move(module->PendingReplacement);
+            changed = true;
             ++it;
             continue;
         }
         if (module->PendingErase && !module->PendingDestroy && !module->ActiveContext) {
             it = m_Modules.erase(it);
+            changed = true;
             continue;
         }
         ++it;
+    }
+    if (changed) {
+        RebuildModuleIndex();
     }
 }
 
@@ -2059,9 +2074,9 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string State() const", asMETHOD(RuntimeScriptInfo, State), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Phase() const", asMETHOD(RuntimeScriptInfo, Phase), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Error() const", asMETHOD(RuntimeScriptInfo, Error), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string RootPath() const", asMETHOD(RuntimeScriptInfo, RootPath), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string ManifestPath() const", asMETHOD(RuntimeScriptInfo, ManifestPath), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string EntryPath() const", asMETHOD(RuntimeScriptInfo, EntryPath), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Root() const", asMETHOD(RuntimeScriptInfo, Root), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Manifest() const", asMETHOD(RuntimeScriptInfo, Manifest), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Entry() const", asMETHOD(RuntimeScriptInfo, Entry), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "int Generation() const", asMETHOD(RuntimeScriptInfo, Generation), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectType("ScriptContext",
@@ -2087,12 +2102,13 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ScriptContext", "CKContext@ Context() const", asMETHOD(ScriptContext, Context), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptContext", "float DeltaTime() const", asMETHOD(ScriptContext, DeltaTime), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptContext", "float TimeSeconds() const", asMETHOD(ScriptContext, TimeSeconds), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string ScriptId() const", asMETHOD(ScriptContext, ScriptId), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string ScriptName() const", asMETHOD(ScriptContext, ScriptName), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string ScriptVersion() const", asMETHOD(ScriptContext, ScriptVersion), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string RootPath() const", asMETHOD(ScriptContext, RootPath), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string ManifestPath() const", asMETHOD(ScriptContext, ManifestPath), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string EntryPath() const", asMETHOD(ScriptContext, EntryPath), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Id() const", asMETHOD(ScriptContext, Id), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Name() const", asMETHOD(ScriptContext, Name), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Version() const", asMETHOD(ScriptContext, Version), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Root() const", asMETHOD(ScriptContext, Root), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Manifest() const", asMETHOD(ScriptContext, Manifest), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Entry() const", asMETHOD(ScriptContext, Entry), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Target() const", asMETHOD(ScriptContext, Target), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptContext", "string Phase() const", asMETHOD(ScriptContext, Phase), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptContext", "string State() const", asMETHOD(ScriptContext, State), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptContext", "int Generation() const", asMETHOD(ScriptContext, Generation), asCALL_THISCALL); assert(r >= 0);

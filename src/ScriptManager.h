@@ -147,6 +147,7 @@ struct ScriptComponentState {
     std::string File;
     std::string Manifest;
     std::string RuntimeModuleName;
+    std::string MessageTarget;
     std::vector<ScriptComponentBinding> Bindings;
     std::vector<std::string> MessageTopics;
     std::vector<std::string> ManagedInputParameterNames;

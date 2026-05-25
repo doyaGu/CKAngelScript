@@ -1012,6 +1012,7 @@ ScriptComponentState *ScriptManager::GetOrCreateComponentState(CKBehavior *behav
     auto state = std::make_unique<ScriptComponentState>();
     state->BehaviorId = id;
     state->Behavior = behavior;
+    state->MessageTarget = ScriptMessageBus::ComponentTarget(id);
 
     ScriptComponentState *raw = state.get();
     m_ComponentStates[id] = std::move(state);
@@ -1066,7 +1067,7 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->RuntimeModuleName.clear();
     state->Bindings.clear();
     if (m_MessageBus) {
-        m_MessageBus->ClearTarget(ScriptMessageBus::ComponentTarget(state->BehaviorId), "Component runtime was reset.");
+        m_MessageBus->ClearTarget(state->MessageTarget, "Component runtime was reset.");
     }
     state->MessageTopics.clear();
     state->StaticMessageSubscriptionsRegistered = false;

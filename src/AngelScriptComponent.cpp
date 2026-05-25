@@ -477,9 +477,8 @@ void EnsureComponentMessageSubscriptions(ScriptManager *man, ScriptComponentStat
     state->MessageTopics = BuildComponentMessageTopics(state, type);
     if (man->GetMessageBus()) {
         std::string subscribeError;
-        const std::string target = ScriptMessageBus::ComponentTarget(state->BehaviorId);
         for (const std::string &topic : state->MessageTopics) {
-            man->GetMessageBus()->Subscribe(target, topic, true, subscribeError);
+            man->GetMessageBus()->Subscribe(state->MessageTarget, topic, true, subscribeError);
         }
     }
     state->StaticMessageSubscriptionsRegistered = true;

@@ -4,6 +4,7 @@
 #include <memory>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <angelscript.h>
@@ -61,9 +62,9 @@ public:
     std::string State() const;
     std::string Phase() const;
     std::string Error() const;
-    std::string RootPath() const;
-    std::string ManifestPath() const;
-    std::string EntryPath() const;
+    std::string Root() const;
+    std::string Manifest() const;
+    std::string Entry() const;
     int Generation() const;
 
 private:
@@ -93,13 +94,7 @@ class ScriptContext {
 public:
     ScriptContext();
     ScriptContext(CKContext *context,
-                  std::string scriptId,
-                  std::string scriptName,
-                  std::string scriptVersion,
-                  std::string rootPath,
-                  std::string manifestPath,
-                  std::string entryPath,
-                  const std::vector<ScriptRuntimeMetadataEntry> *metadata,
+                  const ScriptRuntimeManifest *metadata,
                   std::string phase,
                   std::string state,
                   int generation,
@@ -110,12 +105,13 @@ public:
     CKContext *Context() const;
     float DeltaTime() const;
     float TimeSeconds() const;
-    std::string ScriptId() const;
-    std::string ScriptName() const;
-    std::string ScriptVersion() const;
-    std::string RootPath() const;
-    std::string ManifestPath() const;
-    std::string EntryPath() const;
+    std::string Id() const;
+    std::string Name() const;
+    std::string Version() const;
+    std::string Root() const;
+    std::string Manifest() const;
+    std::string Entry() const;
+    std::string Target() const;
     std::string Phase() const;
     std::string State() const;
     int Generation() const;
@@ -130,13 +126,7 @@ public:
 
 private:
     CKContext *m_Context = nullptr;
-    std::string m_ScriptId;
-    std::string m_ScriptName;
-    std::string m_ScriptVersion;
-    std::string m_RootPath;
-    std::string m_ManifestPath;
-    std::string m_EntryPath;
-    const std::vector<ScriptRuntimeMetadataEntry> *m_Metadata = nullptr;
+    const ScriptRuntimeManifest *m_Metadata = nullptr;
     std::string m_Phase;
     std::string m_State;
     int m_Generation = 0;
@@ -196,6 +186,7 @@ private:
     std::string ModuleState(const Module &module) const;
     RuntimeScriptInfo BuildInfo(const Module &module) const;
     std::vector<RuntimeDependencyInfo> DependencyInfo(const Module &module, bool optional) const;
+    void RebuildModuleIndex();
     void FinalizePendingModules();
     void UpdateModule(Module &module, float deltaTime, float timeSeconds);
     InvokeStatus InvokeMessage(Module &module, const ScriptMessage &message, const ScriptContext &context);
@@ -211,6 +202,7 @@ private:
     int m_Generation = 0;
     std::uint64_t m_FrameIndex = 0;
     std::vector<std::unique_ptr<Module>> m_Modules;
+    std::unordered_map<std::string, Module *> m_ModulesById;
 };
 
 void RegisterScriptRuntime(asIScriptEngine *engine);

@@ -330,7 +330,7 @@ Runtime scripts are long-lived modules discovered from `DATA_PATH/Scripts` and `
 
 Runtime lifecycle callbacks keep the existing naming style but must use the explicit context signature, for example `void OnLoad(const ScriptContext &in ctx)` and `void Update(const ScriptContext &in ctx)`. v2 also adds `OnPostLoad(ctx)` and `OnPostProcess(ctx)`.
 
-See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for metadata, lifecycle, structured `RuntimeScriptInfo` / `RuntimeDependencyInfo` APIs, validation, and templates.
+See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for metadata, lifecycle, concise `ScriptContext` accessors, structured `RuntimeScriptInfo` / `RuntimeDependencyInfo` APIs, validation, and templates.
 
 Generic script messaging is exposed through the `Message` namespace for runtime scripts and AngelScript Components. Runtime targets use `runtime:<script-id>` and component targets use `component:<CK_ID>`.
 

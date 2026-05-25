@@ -26,15 +26,16 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "void __ckas_runtime_compile_probe(const ScriptContext &in ctx) {\n"
         "  CKContext@ c = ctx.Context();\n"
         "  float dt = ctx.DeltaTime();\n"
-        "  string id = ctx.ScriptId();\n"
-        "  string name = ctx.ScriptName();\n"
-        "  string version = ctx.ScriptVersion();\n"
+        "  string id = ctx.Id();\n"
+        "  string name = ctx.Name();\n"
+        "  string version = ctx.Version();\n"
+        "  string target = ctx.Target();\n"
         "  string phase = ctx.Phase();\n"
         "  string state = ctx.State();\n"
         "  int generation = ctx.Generation();\n"
         "  uint64 frame = ctx.FrameIndex();\n"
-        "  string manifestPath = ctx.ManifestPath();\n"
-        "  string entryPath = ctx.EntryPath();\n"
+        "  string manifestPath = ctx.Manifest();\n"
+        "  string entryPath = ctx.Entry();\n"
         "  string custom = ctx.Metadata(\"custom\", \"fallback\");\n"
         "  int metadataCount = ctx.MetadataCount();\n"
         "  string metadataKey = ctx.MetadataKey(0);\n"
@@ -48,6 +49,9 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  array<string>@ scripts = Runtime::List(ctx);\n"
         "  array<RuntimeScriptInfo>@ infos = Runtime::ListInfo(ctx);\n"
         "  RuntimeScriptInfo info = Runtime::Info(ctx, \"ckas.runtime.smoke\");\n"
+        "  string root = info.Root();\n"
+        "  string manifest = info.Manifest();\n"
+        "  string entry = info.Entry();\n"
         "  bool exists = info.Exists();\n"
         "  string infoId = info.Id();\n"
         "  string infoState = info.State();\n"
@@ -87,5 +91,17 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         return false;
     }
     manager->UnloadModule(moduleName, nullptr);
+    const char *oldApiSource =
+        "void __ckas_runtime_old_api_probe(const ScriptContext &in ctx) {\n"
+        "  string id = ctx.ScriptId();\n"
+        "}\n";
+    const char *oldApiModuleName = "__CKAS_RuntimeOldApiNegativeSelfTest";
+    result = {};
+    if (manager->CompileModule(oldApiModuleName, oldApiSource, true, &result) == ANGELSCRIPT_STATUS_OK) {
+        manager->UnloadModule(oldApiModuleName, nullptr);
+        error = "Runtime script old ScriptContext API unexpectedly compiled.";
+        return false;
+    }
+    manager->UnloadModule(oldApiModuleName, nullptr);
     return true;
 }

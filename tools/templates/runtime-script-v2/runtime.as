@@ -1,6 +1,6 @@
 class ExampleRuntime {
   void OnLoad(const ScriptContext &in ctx) {
-    ctx.Raise("loaded " + ctx.ScriptId());
+    ctx.Raise("loaded " + ctx.Id());
   }
 
   void Awake(const ScriptContext &in ctx) {}

@@ -39,9 +39,9 @@ Parameterless lifecycle functions are invalid in v2. Async callbacks are seriali
 
 ## Runtime Inspection
 
-`ScriptContext` exposes script identity, root/manifest/entry paths, current phase/state, generation, frame index, metadata, and CK context conversion.
+`ScriptContext` exposes concise accessors for the current script: `Id()`, `Name()`, `Version()`, `Target()`, `Root()`, `Manifest()`, `Entry()`, `Phase()`, `State()`, `Generation()`, `FrameIndex()`, metadata, and CK context conversion.
 
-Use `Runtime::ListInfo(ctx)` and `Runtime::Info(ctx, id)` for structured status. `RuntimeScriptInfo` reports identity, first-class metadata, enabled/loaded/failed state, active phase, error text, paths, and generation. `Runtime::RequiredDependencies(ctx, id)` and `Runtime::OptionalDependencies(ctx, id)` return structured dependency status.
+Use `Runtime::ListInfo(ctx)` and `Runtime::Info(ctx, id)` for structured status. `RuntimeScriptInfo` reports identity, first-class metadata, enabled/loaded/failed state, active phase, error text, `Root()`, `Manifest()`, `Entry()`, and generation. `Runtime::RequiredDependencies(ctx, id)` and `Runtime::OptionalDependencies(ctx, id)` return structured dependency status.
 
 Use the generic `Message` namespace for script communication. Runtime scripts can subscribe with `[script.messages]` or `Message::Subscribe(ctx, topic)`, publish with `Message::Publish(ctx, topic, payload)`, send directly with `Message::Send(ctx, "runtime:other", topic, payload)`, and reply to requests with `Message::Reply(ctx, msg, payload)`. AngelScript Components use the same `ScriptMessage` type with `CKBehaviorContext`.
 
