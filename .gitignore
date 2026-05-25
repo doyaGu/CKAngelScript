@@ -15,3 +15,8 @@ build/
 build*/
 cmake-*/
 deps/angelscript
+deps/DynCall/
+deps/_build/
+deps/_downloads/
+__pycache__/
+*.py[cod]
