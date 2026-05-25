@@ -15,6 +15,7 @@
 #include "ScriptCK2.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptParameterRegistry.h"
+#include "ScriptScene.h"
 #include "ScriptRuntime.h"
 #include "ScriptMessage.h"
 #include "ScriptAsync.h"
@@ -1382,6 +1383,7 @@ void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
     RegisterCK2(m_ScriptEngine);
     RegisterScriptParameterRegistry(m_ScriptEngine);
     RegisterScriptBehaviorBridge(m_ScriptEngine);
+    RegisterScriptSceneCore(m_ScriptEngine);
     RegisterScriptRuntime(m_ScriptEngine);
     RegisterScriptAsync(m_ScriptEngine);
     RegisterScriptMessage(m_ScriptEngine);

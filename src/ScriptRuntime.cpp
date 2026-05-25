@@ -18,6 +18,7 @@
 #include "ScriptAsync.h"
 #include "ScriptManager.h"
 #include "ScriptMessage.h"
+#include "ScriptScene.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptRuntimeDependency.h"
 #include "ScriptRuntimeMetadata.h"
@@ -2139,6 +2140,8 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ScriptContext", "string MetadataValue(int index) const", asMETHOD(ScriptContext, MetadataValue), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptContext", "void Raise(const string &in message) const", asMETHOD(ScriptContext, Raise), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ScriptContext", "CKBehaviorContext ToBehaviorContext() const", asMETHOD(ScriptContext, ToBehaviorContext), asCALL_THISCALL); assert(r >= 0);
+
+    RegisterScriptSceneRuntime(engine);
 
     const char *previousNamespace = engine->GetDefaultNamespace();
     const std::string previous = previousNamespace ? previousNamespace : "";

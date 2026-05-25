@@ -45,6 +45,8 @@ Use `Runtime::ListInfo(ctx)` and `Runtime::Info(ctx, id)` for structured status.
 
 Use the generic `Message` namespace for script communication. Runtime scripts can subscribe with `[script.messages]` or `Message::Subscribe(ctx, topic)`, publish with `Message::Publish(ctx, topic, payload)`, send directly with `Message::Send(ctx, "runtime:other", topic, payload)`, and reply to requests with `Message::Reply(ctx, msg, payload)`. AngelScript Components use the same `ScriptMessage` type with `CKBehaviorContext`.
 
+Use the `Scene` namespace for high-level Virtools object interop. `ObjectRef@` and precise typed refs revalidate object ids before each access, and `Scene::*` overloads accept `ScriptContext`, `CKBehaviorContext`, or `CKContext@`. See [scene-interop.md](scene-interop.md) for lookup, creation, scene membership, selection, and guarded destruction helpers.
+
 ## Validation
 
 Run static validation with:

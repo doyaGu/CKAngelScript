@@ -11,6 +11,7 @@
 #include "ScriptCKContext.h"
 #include "ScriptCKManagers.h"
 #include "ScriptCKObjects.h"
+#include "ScriptObjectRef.h"
 
 void RegisterCK2(asIScriptEngine *engine) {
     assert(engine != nullptr);
@@ -205,4 +206,6 @@ void RegisterCK2(asIScriptEngine *engine) {
     RegisterCKBodyPart(engine);
     RegisterCKCurve(engine);
     RegisterCKGrid(engine);
+
+    RegisterScriptObjectRefCore(engine);
 }

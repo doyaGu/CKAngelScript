@@ -5,7 +5,12 @@ class ExampleRuntime {
 
   void Awake(const ScriptContext &in ctx) {}
   void OnEnable(const ScriptContext &in ctx) {}
-  void Start(const ScriptContext &in ctx) {}
+  void Start(const ScriptContext &in ctx) {
+    SceneRef@ scene = Scene::CurrentScene(ctx);
+    if (scene !is null && scene.valid) {
+      ctx.Raise("current scene: " + scene.Name());
+    }
+  }
   void Update(const ScriptContext &in ctx) {}
   void OnPostLoad(const ScriptContext &in ctx) {}
   void OnPostProcess(const ScriptContext &in ctx) {}

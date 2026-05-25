@@ -111,6 +111,14 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
         return CKERR_INVALIDOPERATION;
     }
 
+    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "scene", std::string());
+    if (!RunScriptSceneSelfTest(manager ? manager->GetCKContext() : nullptr,
+                                manager ? manager->GetScriptEngine() : nullptr,
+                                error)) {
+        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager, "scene", "Scene API", error);
+        return CKERR_INVALIDOPERATION;
+    }
+
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "runtime", std::string());
     if (!RunScriptRuntimeSelfTest(manager ? manager->GetCKContext() : nullptr,
                                   manager ? manager->GetScriptEngine() : nullptr,

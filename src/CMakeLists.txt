@@ -28,6 +28,8 @@ set(CKAS_HEADERS
         ScriptRuntimeMetadata.h
         ScriptRuntimeDependency.h
         ScriptMessage.h
+        ScriptObjectRef.h
+        ScriptScene.h
         ScriptAsync.h
         ScriptSelfTests.h
         ScriptRefCounted.h
@@ -72,6 +74,8 @@ set(CKAS_SOURCES
         ScriptRuntimeMetadata.cpp
         ScriptRuntimeDependency.cpp
         ScriptMessage.cpp
+        ScriptObjectRef.cpp
+        ScriptScene.cpp
         ScriptAsync.cpp
         ScriptBehaviorBridge.cpp
         ScriptBridgeRuntime.cpp
@@ -99,6 +103,7 @@ if (CKAS_BUILD_SELF_TESTS)
             ScriptRuntimeMetadataSelfTest.cpp
             ScriptRuntimeDependencySelfTest.cpp
             ScriptMessageSelfTest.cpp
+            ScriptSceneSelfTest.cpp
             ScriptRuntimeSelfTest.cpp
             ScriptAsyncSelfTest.cpp
             ScriptBridgeSelfTest.cpp

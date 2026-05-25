@@ -12,6 +12,7 @@ CKAngelScript integrates the AngelScript scripting language into Virtools, provi
 - **Building Blocks**:
   - **AngelScript Component**: Attach AngelScript classes to Virtools behaviors with lifecycle callbacks, parameter injection, and generic script messaging.
 - **Runtime Script Manager**: Discover long-lived scripts from script roots, validate manifests, run lifecycle phases, and expose structured runtime state.
+- **Scene Interop API**: Use safe `ObjectRef@` handles and typed refs through `Scene::*` helpers for object lookup, creation, scene membership, selection, and guarded destruction.
 - **Extensibility**: Expand Virtools' capabilities by integrating custom AngelScript modules.
 - **Compatibility**: Supports Virtools 2.1 and higher.
 
@@ -32,6 +33,12 @@ See [docs/component-metadata-manifest.md](docs/component-metadata-manifest.md) f
 Runtime scripts are managed by the `ScriptManager` directly rather than by legacy script execution building blocks. They are discovered from `DATA_PATH/Scripts` and `CKAS_SCRIPT_ROOTS`, use `script.as` metadata manifests, and run through the runtime lifecycle.
 
 See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for runtime script metadata, lifecycle, dependencies, validation, templates, and messaging.
+
+### Scene Interop
+
+Runtime scripts and AngelScript Components can use the `Scene` namespace as the preferred high-level Virtools interop layer. It wraps `CKObject` ids in revalidating `ObjectRef@` handles, returns precise typed refs such as `Entity3DRef@` and `BehaviorRef@`, creates dynamic scene objects by default, and guards persistent-object destruction.
+
+See [docs/scene-interop.md](docs/scene-interop.md) for the API surface and examples.
 
 ---
 
@@ -133,8 +140,10 @@ void OnLoad(const ScriptContext &in ctx) {
 
 void Update(const ScriptContext &in ctx) {
     if (ctx.FrameIndex() == 1) {
+        SceneRef@ scene = Scene::CurrentScene(ctx);
         dictionary payload;
         payload["source"] = ctx.Id();
+        payload["scene"] = scene !is null && scene.valid ? scene.Name() : "";
         Message::Publish(ctx, "example.ready", payload);
     }
 }
@@ -259,7 +268,7 @@ Runtime scripts are long-lived modules discovered from `DATA_PATH/Scripts` and `
 
 Runtime lifecycle callbacks keep the existing naming style but must use the explicit context signature, for example `void OnLoad(const ScriptContext &in ctx)` and `void Update(const ScriptContext &in ctx)`. v2 also adds `OnPostLoad(ctx)` and `OnPostProcess(ctx)`.
 
-See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for metadata, lifecycle, concise `ScriptContext` accessors, structured `RuntimeScriptInfo` / `RuntimeDependencyInfo` APIs, validation, and templates.
+See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for metadata, lifecycle, concise `ScriptContext` accessors, structured `RuntimeScriptInfo` / `RuntimeDependencyInfo` APIs, validation, and templates. See [docs/scene-interop.md](docs/scene-interop.md) for the high-level scene/object helper API.
 
 Generic script messaging is exposed through the `Message` namespace for runtime scripts and AngelScript Components. Runtime targets use `runtime:<script-id>` and component targets use `component:<CK_ID>`.
 
