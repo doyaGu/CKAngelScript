@@ -24,7 +24,7 @@ class ScriptMessage;
 class ScriptMessageBus;
 class ScriptParameterRegistry;
 class ScriptRuntime;
-class ScriptRunner;
+class ScriptInvoker;
 
 enum class ScriptComponentBindingKind {
     Auto,
@@ -126,7 +126,7 @@ struct ScriptComponentBinding {
 struct ScriptComponentState {
     CK_ID BehaviorId = 0;
     CKBehavior *Behavior = nullptr;
-    ScriptRunner *Runner = nullptr;
+    ScriptInvoker *Invoker = nullptr;
     asIScriptObject *Object = nullptr;
 
     asIScriptFunction *OnLoad = nullptr;

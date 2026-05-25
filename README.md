@@ -10,8 +10,8 @@ CKAngelScript integrates the AngelScript scripting language into Virtools, provi
 - **AngelScript Integration**: Leverage the AngelScript scripting language to achieve greater flexibility and control in your 3D projects.
 - **Foreign Function Interface (FFI)**: Call native C functions directly from AngelScript using FFI, powered by DynCall, enabling seamless interaction with external libraries and APIs.
 - **Building Blocks**:
-  - **AngelScript Loader**: Load and unload AngelScript modules dynamically.
-  - **AngelScript Runner**: Execute specific functions within AngelScript modules with precision.
+  - **AngelScript Component**: Attach AngelScript classes to Virtools behaviors with lifecycle callbacks, parameter injection, and generic script messaging.
+- **Runtime Script Manager**: Discover long-lived scripts from script roots, validate manifests, run lifecycle phases, and expose structured runtime state.
 - **Extensibility**: Expand Virtools' capabilities by integrating custom AngelScript modules.
 - **Compatibility**: Supports Virtools 2.1 and higher.
 
@@ -19,47 +19,19 @@ CKAngelScript integrates the AngelScript scripting language into Virtools, provi
 
 ## Building Blocks
 
-### AngelScript Loader
+### AngelScript Component
 
-The **AngelScript Loader** manages AngelScript modules, providing functionality to load and unload them dynamically.
+The **AngelScript Component** attaches an AngelScript class instance to a Virtools behavior. It supports lifecycle callbacks such as `OnLoad`, `Awake`, `OnEnable`, `Start`, `Update`, `OnDisable`, `OnDestroy`, and `OnReset`, plus `OnMessage` for the generic script message bus.
 
-#### Inputs
-- **Load**: Activates the script loading process.
-- **Unload**: Activates the script unloading process.
+Component scripts can be loaded from a shared module, inline source, a file, or a component manifest. Component metadata can declare injected inputs, defaults, BB bridge bindings, and static message subscriptions.
 
-#### Outputs
-- **Loaded**: Signals successful loading of a module.
-- **Unloaded**: Signals successful unloading of a module.
-- **Failed**: Signals a failure during the loading or unloading process.
+See [docs/component-metadata-manifest.md](docs/component-metadata-manifest.md) for component manifests and metadata.
 
-#### Parameters
-- **Name**: The name of the AngelScript module to load or unload.
-- **Filename**: The file path of the AngelScript file.
+### Runtime Scripts
 
-#### Settings
-- **Use File List**: Enable loading from a list of files.
-- **Filename As Code**: Treat the filename parameter as code instead of a file path.
-- **No Script Cache**: Disable caching for the loaded scripts (useful for debugging and development).
+Runtime scripts are managed by the `ScriptManager` directly rather than by legacy script execution building blocks. They are discovered from `DATA_PATH/Scripts` and `CKAS_SCRIPT_ROOTS`, use `script.as` metadata manifests, and run through the runtime lifecycle.
 
----
-
-### AngelScript Runner
-
-The **AngelScript Runner** executes specific functions within loaded AngelScript modules.
-
-#### Inputs
-- **In**: Activates the script function execution process.
-
-#### Outputs
-- **Out**: Signals successful execution of a function.
-- **Error**: Signals that an error occurred during execution.
-
-#### Parameters
-- **Script**: The name of the loaded AngelScript module.
-- **Function**: The name of the function to execute.
-
-#### Settings
-- **Output Error Message**: Outputs detailed error messages and stack traces when enabled.
+See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for runtime script metadata, lifecycle, dependencies, validation, templates, and messaging.
 
 ---
 
@@ -143,94 +115,51 @@ Before you begin, ensure the following:
 
 ## Usage
 
-### Step 1: Write an AngelScript File
+### Runtime Script Example
 
-Create an AngelScript file (`example.as`) with your desired functionality. Below is an example demonstrating lifecycle events and interactions with the Virtools SDK:
-
-#### Example Script: `example.as`
+Create a runtime script directory under one of the configured script roots and add a `script.as` manifest:
 
 ```cpp
-void OnLoad() {
-    print("OnLoad!");
+[script id="example.runtime" name="Example Runtime" version="1.0.0" entry="main.as" enabled=true]
+[script.meta category="Example" author="CKAngelScript"]
+```
+
+Then implement the entry file:
+
+```cpp
+void OnLoad(const ScriptContext &in ctx) {
+    print("Loaded " + ctx.Id());
 }
 
-void OnUnload() {
-    print("OnUnload!");
-}
-
-void OnPause() {
-    print("OnPause!");
-}
-
-void OnResume() {
-    print("OnResume!");
-}
-
-void OnReset() {
-    print("OnReset!");
-}
-
-int main(const CKBehaviorContext &in behContext) {
-    print("Hello from AngelScript!");
-
-    CKContext@ context = behContext.Context;
-
-    print("3D entities:");
-    XObjectPointerArray objects = context.GetObjectListByType(CKCID_3DENTITY, true);
-    for (int i = 0; i < objects.Size(); i++) {
-        CK3dEntity@ entity = cast<CK3dEntity>(objects[i]);
-        print(entity.GetName());
+void Update(const ScriptContext &in ctx) {
+    if (ctx.FrameIndex() == 1) {
+        dictionary payload;
+        payload["source"] = ctx.Id();
+        Message::Publish(ctx, "example.ready", payload);
     }
-    print("3D entities end.");
-
-    return CKBR_OK;
 }
 ```
 
----
+For a complete starter, use `tools/templates/runtime-script-v2`.
 
-### Step 2: Load the Script in Virtools Dev
+### Component Example
 
-1. Open **Virtools Dev** and create a new Behavior or edit an existing one.
-2. Drag the **AngelScript Loader** building block into your Behavior from the **Building Blocks** palette.
-3. Configure the **Name** parameter with a unique identifier (e.g., `example_script`) and provide the **Filename** parameter with the path to your script file (`example.as`).
-4. Connect a trigger to the **Load** input to activate the loading process.
-5. Verify successful loading by checking for the `OnLoad!` message in the Virtools console.
+Use the **AngelScript Component** building block when a script should live on a behavior instance. The component script declares a class and lifecycle methods that receive `CKBehaviorContext`.
 
----
+```cpp
+class Spinner {
+    void Update(const CKBehaviorContext &in ctx) {
+        // Component update logic.
+    }
+}
+```
 
-### Step 3: Execute a Function
-
-1. Drag the **AngelScript Runner** building block into your Behavior.
-2. Set the **Script** parameter to the module name specified in the Loader (`example_script`).
-3. Set the **Function** parameter to the function you wish to execute, e.g., `main`.
-4. Connect a trigger to the **In** input to activate the function.
-5. Observe the console for outputs from your script.
-
----
-
-### Step 4: Unload the Script
-
-1. Use the **Unload** input on the **AngelScript Loader** to deactivate the module.
-2. Verify that the `OnUnload` function is called, and the module is unloaded.
-
----
+Use the Component `Output Error Message` setting to expose script errors and stack traces through output parameters.
 
 ### Debugging and Testing
 
-- **Console Output**: Use `print` statements in your AngelScript code for logging and debugging.
-- **Error Messages**: Enable the **Output Error Message** setting in the Runner block to get detailed stack traces and error messages.
-
----
-
-## Example Workflow in Virtools Dev
-
-1. **Create and Save a Script**: Write your AngelScript code in a `.as` file and save it to your project directory.
-2. **Load the Script**: Use the **AngelScript Loader** to load the script file.
-3. **Run Script Functions**: Use the **AngelScript Runner** to execute specific functions from the loaded module.
-4. **Unload the Script**: Use the **Unload** input of the Loader to clean up resources.
-
-By following these steps, you can fully utilize AngelScript within Virtools Dev to enhance your projects.
+- **Console Output**: Use `print` statements in AngelScript code for logging and debugging.
+- **Runtime Validation**: Run `tools\Validate-RuntimeScripts.ps1` against a script root to catch manifest, dependency, lifecycle, and compile errors before launching Virtools.
 
 ---
 

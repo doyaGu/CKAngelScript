@@ -5,8 +5,6 @@
 
 #define ANGELSCRIPT_BEHAVIOR CKGUID(0x2d9c2922,0x29a5c30)
 
-CKObjectDeclaration *FillBehaviorAngelScriptLoaderDecl();
-CKObjectDeclaration *FillBehaviorAngelScriptRunnerDecl();
 CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl();
 
 CKERROR InitInstance(CKContext *context) {
@@ -61,7 +59,5 @@ void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg) {
 //     Logger::Get().Init("Script.log");
 // #endif
 
-    RegisterBehavior(reg, FillBehaviorAngelScriptLoaderDecl);
-    RegisterBehavior(reg, FillBehaviorAngelScriptRunnerDecl);
     RegisterBehavior(reg, FillBehaviorAngelScriptComponentDecl);
 }

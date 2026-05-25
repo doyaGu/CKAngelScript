@@ -3,7 +3,7 @@ configure_file(Version.h.in "${CMAKE_CURRENT_SOURCE_DIR}/Version.h")
 set(CKAS_HEADERS
         ScriptManager.h
         ScriptCache.h
-        ScriptRunner.h
+        ScriptInvoker.h
         ScriptInfo.h
         ScriptFormat.h
         ScriptNativePointer.h
@@ -45,9 +45,7 @@ set(CKAS_SOURCES
         Plugin.cpp
         ScriptManager.cpp
         ScriptCache.cpp
-        ScriptRunner.cpp
-        AngelScriptLoader.cpp
-        AngelScriptRunner.cpp
+        ScriptInvoker.cpp
         AngelScriptComponent.cpp
         ScriptComponentMetadata.cpp
         ScriptComponentInjection.cpp

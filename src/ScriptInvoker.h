@@ -1,5 +1,5 @@
-#ifndef CK_SCRIPTRUNNER_H
-#define CK_SCRIPTRUNNER_H
+#ifndef CK_SCRIPTINVOKER_H
+#define CK_SCRIPTINVOKER_H
 
 #include <string>
 #include <chrono>
@@ -16,23 +16,19 @@ struct CachedScript;
 
 using ScriptFunctionArgumentHandler = std::function<void(asIScriptContext *)>;
 
-enum class ScriptExecutionStatus {
+enum class ScriptInvocationStatus {
     Finished,
     Suspended,
     Failed
 };
 
-class ScriptRunner {
+class ScriptInvoker {
 public:
-    explicit ScriptRunner(ScriptManager *man);
-    ~ScriptRunner();
+    explicit ScriptInvoker(ScriptManager *man);
+    ~ScriptInvoker();
 
-    ScriptRunner(const ScriptRunner&) = delete;
-    ScriptRunner& operator=(const ScriptRunner&) = delete;
-
-    bool IsAttached() const { return m_Attached; }
-    bool Attach(CKBehavior *behavior, bool runner = false);
-    void Detach(CKBehavior *behavior, bool runner = false);
+    ScriptInvoker(const ScriptInvoker&) = delete;
+    ScriptInvoker& operator=(const ScriptInvoker&) = delete;
 
     asIScriptContext *GetContext() const;
     void SetContext(asIScriptContext *ctx);
@@ -49,10 +45,10 @@ public:
     asIScriptFunction *GetFunctionByDecl(const char *decl) const;
 
     bool ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
-    ScriptExecutionStatus ExecuteScriptStatus(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
+    ScriptInvocationStatus ExecuteScriptStatus(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
     bool ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
-    ScriptExecutionStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
-    ScriptExecutionStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const ScriptMessage &message, const CKBehaviorContext &behcontext);
+    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
+    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const ScriptMessage &message, const CKBehaviorContext &behcontext);
     bool IsContextSuspended() const;
     void AbortContext();
 
@@ -79,7 +75,6 @@ private:
     ScriptManager *m_ScriptManager = nullptr;
     asIScriptContext *m_Context = nullptr;
     std::shared_ptr<CachedScript> m_CachedScript;
-    bool m_Attached = false;
     bool m_Profiling = false;
     std::chrono::time_point<std::chrono::high_resolution_clock> m_StartTime;
     double m_ElapsedMs = 0.0;
@@ -90,4 +85,4 @@ private:
     ScriptMessage m_MessageStorage;
 };
 
-#endif // CK_SCRIPTRUNNER_H
+#endif // CK_SCRIPTINVOKER_H

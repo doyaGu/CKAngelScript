@@ -8,7 +8,7 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptComponentMetadata.h"
 #include "ScriptParameterConversion.h"
-#include "ScriptRunner.h"
+#include "ScriptInvoker.h"
 
 namespace AngelScriptComponentInternal {
 
@@ -945,7 +945,7 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
     if (man) {
         bridge = man->GetBehaviorBridge();
     }
-    asIScriptEngine *engine = state->Runner && state->Runner->GetModule() ? state->Runner->GetModule()->GetEngine() : nullptr;
+    asIScriptEngine *engine = state->Invoker && state->Invoker->GetModule() ? state->Invoker->GetModule()->GetEngine() : nullptr;
 
     for (ScriptComponentBinding &binding : state->Bindings) {
         if (!initial && !binding.InjectEveryFrame) {

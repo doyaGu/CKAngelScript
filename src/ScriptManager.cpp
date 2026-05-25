@@ -3,7 +3,7 @@
 #include <fmt/format.h>
 
 #include "CKPathManager.h"
-#include "ScriptRunner.h"
+#include "ScriptInvoker.h"
 
 #include "ScriptInfo.h"
 #include "ScriptFormat.h"
@@ -47,7 +47,7 @@
 
 struct AngelScriptExecution {
     explicit AngelScriptExecution(ScriptManager *manager)
-        : Manager(manager), Runner(manager) {}
+        : Manager(manager), Invoker(manager) {}
 
     ~AngelScriptExecution() {
         if (Function) {
@@ -57,7 +57,7 @@ struct AngelScriptExecution {
     }
 
     ScriptManager *Manager = nullptr;
-    ScriptRunner Runner;
+    ScriptInvoker Invoker;
     asIScriptFunction *Function = nullptr;
     AngelScriptExecutionState State = ANGELSCRIPT_EXECUTION_READY;
     AngelScriptResult Result;
@@ -75,25 +75,25 @@ struct AngelScriptExecution {
 
 namespace {
 
-AngelScriptStatus ToAngelScriptStatus(ScriptExecutionStatus status) {
+AngelScriptStatus ToAngelScriptStatus(ScriptInvocationStatus status) {
     switch (status) {
-        case ScriptExecutionStatus::Finished:
+        case ScriptInvocationStatus::Finished:
             return ANGELSCRIPT_STATUS_OK;
-        case ScriptExecutionStatus::Suspended:
+        case ScriptInvocationStatus::Suspended:
             return ANGELSCRIPT_STATUS_SUSPENDED;
-        case ScriptExecutionStatus::Failed:
+        case ScriptInvocationStatus::Failed:
         default:
             return ANGELSCRIPT_STATUS_EXECUTION_FAILED;
     }
 }
 
-AngelScriptExecutionState ToExecutionState(ScriptExecutionStatus status) {
+AngelScriptExecutionState ToExecutionState(ScriptInvocationStatus status) {
     switch (status) {
-        case ScriptExecutionStatus::Finished:
+        case ScriptInvocationStatus::Finished:
             return ANGELSCRIPT_EXECUTION_FINISHED;
-        case ScriptExecutionStatus::Suspended:
+        case ScriptInvocationStatus::Suspended:
             return ANGELSCRIPT_EXECUTION_SUSPENDED;
-        case ScriptExecutionStatus::Failed:
+        case ScriptInvocationStatus::Failed:
         default:
             return ANGELSCRIPT_EXECUTION_FAILED;
     }
@@ -123,7 +123,7 @@ AngelScriptStatus RunExecution(AngelScriptExecution *execution) {
     }
 
     execution->State = ANGELSCRIPT_EXECUTION_RUNNING;
-    const ScriptExecutionStatus scriptStatus = execution->Runner.ExecuteScriptStatus(
+    const ScriptInvocationStatus scriptStatus = execution->Invoker.ExecuteScriptStatus(
         execution->Function,
         [execution](asIScriptContext *ctx) {
             if (execution->HasBehaviorContext && execution->Function && execution->Function->GetParamCount() > 0) {
@@ -141,13 +141,13 @@ AngelScriptStatus RunExecution(AngelScriptExecution *execution) {
 
     execution->State = ToExecutionState(scriptStatus);
     const AngelScriptStatus status = ToAngelScriptStatus(scriptStatus);
-    const int resultCode = execution->Runner.GetLastResultCode();
+    const int resultCode = execution->Invoker.GetLastResultCode();
     if (status == ANGELSCRIPT_STATUS_EXECUTION_FAILED) {
         MakeExecutionResult(execution,
                             status,
                             resultCode,
-                            execution->Runner.GetErrorMessage(),
-                            execution->Runner.GetStackTrace());
+                            execution->Invoker.GetErrorMessage(),
+                            execution->Invoker.GetStackTrace());
     } else {
         MakeExecutionResult(execution, status, resultCode);
     }
@@ -611,8 +611,8 @@ AngelScriptExecution *ScriptManager::CreateExecution(const AngelScriptExecuteOpt
     }
     function->AddRef();
     execution->Function = function;
-    if (!execution->Runner.SetScript(options.ModuleName)) {
-        const std::string error = execution->Runner.GetErrorMessage();
+    if (!execution->Invoker.SetScript(options.ModuleName)) {
+        const std::string error = execution->Invoker.GetErrorMessage();
         delete execution;
         StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, error.empty() ? "Module cache was not found." : error);
         return nullptr;
@@ -668,7 +668,7 @@ AngelScriptStatus ScriptManager::CancelExecution(AngelScriptExecution *execution
         MakeExecutionResult(execution, ANGELSCRIPT_STATUS_CANCELLED);
         return StoreResult(nullptr, ANGELSCRIPT_STATUS_CANCELLED);
     }
-    execution->Runner.AbortContext();
+    execution->Invoker.AbortContext();
     execution->State = ANGELSCRIPT_EXECUTION_CANCELLED;
     MakeExecutionResult(execution, ANGELSCRIPT_STATUS_CANCELLED);
     return StoreResult(nullptr, ANGELSCRIPT_STATUS_CANCELLED);
@@ -1054,10 +1054,10 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
         state->Object = nullptr;
     }
 
-    if (state->Runner) {
-        state->Runner->Reset();
-        delete state->Runner;
-        state->Runner = nullptr;
+    if (state->Invoker) {
+        state->Invoker->Reset();
+        delete state->Invoker;
+        state->Invoker = nullptr;
     }
 
     if (unloadPrivateModule && state->PrivateModule && !state->RuntimeModuleName.empty()) {
@@ -1122,23 +1122,23 @@ void ScriptManager::ClearComponentStates() {
 
 bool ScriptManager::DeliverComponentMessage(CK_ID id, const ScriptMessage &message, bool immediate, std::string &error) {
     ScriptComponentState *state = GetComponentState(id);
-    if (!state || !state->Loaded || state->Failed || !state->InstanceEnabled || !state->Object || !state->Runner || !state->OnMessage) {
+    if (!state || !state->Loaded || state->Failed || !state->InstanceEnabled || !state->Object || !state->Invoker || !state->OnMessage) {
         error = "Component message target is not ready.";
         return false;
     }
-    if (state->Runner->IsContextSuspended()) {
+    if (state->Invoker->IsContextSuspended()) {
         error = "Component message target is busy.";
         return false;
     }
     CKBehaviorContext ctx = {};
     ctx.Context = m_Context;
     ctx.Behavior = state->Behavior;
-    const ScriptExecutionStatus status = state->Runner->ExecuteObjectMethodStatus(state->Object, state->OnMessage, message, ctx);
-    if (status == ScriptExecutionStatus::Suspended) {
+    const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(state->Object, state->OnMessage, message, ctx);
+    if (status == ScriptInvocationStatus::Suspended) {
         return true;
     }
-    if (status == ScriptExecutionStatus::Failed) {
-        error = state->Runner->GetErrorMessage();
+    if (status == ScriptInvocationStatus::Failed) {
+        error = state->Invoker->GetErrorMessage();
         if (error.empty()) {
             error = "Component message handler failed.";
         }

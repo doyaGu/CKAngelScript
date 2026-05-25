@@ -8,7 +8,7 @@
 #include "ScriptBridgeCommon.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
-#include "ScriptRunner.h"
+#include "ScriptInvoker.h"
 
 namespace AngelScriptComponentInternal {
 
@@ -1382,11 +1382,11 @@ void MergeOrAppendMetadataBinding(std::vector<ScriptComponentBinding> &bindings,
 
 std::vector<ScriptComponentBinding> BuildComponentBindingSpecs(ScriptComponentState *state, asITypeInfo *type) {
     std::vector<ScriptComponentBinding> bindings;
-    if (!state || !state->Runner || !type) {
+    if (!state || !state->Invoker || !type) {
         return bindings;
     }
 
-    std::shared_ptr<CachedScript> cached = state->Runner->GetCachedScript();
+    std::shared_ptr<CachedScript> cached = state->Invoker->GetCachedScript();
     if (cached) {
         const int typeId = type->GetTypeId();
         for (asUINT i = 0; i < type->GetPropertyCount(); ++i) {

@@ -1,7 +1,6 @@
 #include "ScriptBridgeHandles.h"
 
 #include <fmt/format.h>
-#include "ScriptRunner.h"
 
 #include "add_on/scriptarray/scriptarray.h"
 
@@ -1778,129 +1777,6 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     return true;
 }
 
-static int ReadSelfTestGlobalInt(asIScriptModule *module,
-                                 const char *name,
-                                 std::string &error) {
-    if (!module || !name || name[0] == '\0') {
-        error = "Invalid module or global name.";
-        return 0;
-    }
-
-    const int index = module->GetGlobalVarIndexByName(name);
-    if (index < 0) {
-        error = fmt::format("Global variable '{}' was not found.", name);
-        return 0;
-    }
-
-    void *address = module->GetAddressOfGlobalVar(static_cast<asUINT>(index));
-    if (!address) {
-        error = fmt::format("Global variable '{}' has no address.", name);
-        return 0;
-    }
-
-    return *static_cast<int *>(address);
-}
-
-static bool ProbeRuntimeRunnerInputBinding(CKContext *context,
-                                           const ScriptBridgeBBInvocationSpec &request,
-                                           const char *expectedScript,
-                                           const char *expectedFunction,
-                                           std::string &error) {
-    if (!context) {
-        error = "Runtime Runner input probe requires CKContext.";
-        return false;
-    }
-
-    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, "__CKAS_RuntimeBBInputProbe", CK_OBJECTCREATION_DYNAMIC));
-    if (!behavior) {
-        error = "Runtime Runner input probe failed to create behavior.";
-        return false;
-    }
-
-    bool createCallbackSent = false;
-    auto cleanup = [&]() {
-        if (!behavior) {
-            return;
-        }
-        if (createCallbackSent) {
-            CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE);
-        }
-        context->DestroyObject(behavior);
-        behavior = nullptr;
-    };
-
-    behavior->UseFunction();
-    CKERROR err = behavior->InitFromGuid(CKGUID(0x53295cee, 0x1a795bb8));
-    if (err != CK_OK) {
-        error = fmt::format("Runtime Runner input probe InitFromGuid failed with CKERROR {}.", err);
-        cleanup();
-        return false;
-    }
-
-    err = behavior->SetOwner(nullptr, FALSE);
-    if (err != CK_OK) {
-        error = fmt::format("Runtime Runner input probe SetOwner failed with CKERROR {}.", err);
-        cleanup();
-        return false;
-    }
-
-    err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE);
-    if (err != CK_OK) {
-        error = fmt::format("Runtime Runner input probe CREATE failed with CKERROR {}.", err);
-        cleanup();
-        return false;
-    }
-    createCallbackSent = true;
-
-    ScriptBridgeInputSourceBindings inputSources;
-    if (!ApplyIndexedInputParameters(behavior, request.IndexedParameters, error, &inputSources)) {
-        error = "Runtime Runner input probe failed to apply inputs: " + error;
-        cleanup();
-        return false;
-    }
-
-    const char *script = static_cast<const char *>(behavior->GetInputParameterReadDataPtr(0));
-    const char *function = static_cast<const char *>(behavior->GetInputParameterReadDataPtr(1));
-    const std::string scriptText = script ? std::string(script) : std::string();
-    const std::string functionText = function ? std::string(function) : std::string();
-    if (scriptText != expectedScript || functionText != expectedFunction) {
-        error = fmt::format("Runtime Runner input probe read mismatch: script='{}' function='{}'.",
-                            scriptText,
-                            functionText);
-        cleanup();
-        return false;
-    }
-
-    ScriptRunner *runner = nullptr;
-    behavior->GetLocalParameterValue(0, &runner);
-    if (!runner) {
-        CKBehaviorPrototype *prototype = behavior->GetPrototype();
-        error = fmt::format("Runtime Runner input probe CREATE did not install ScriptRunner local state (locals={}, prototype='{}', callback={}).",
-                            behavior->GetLocalParameterCount(),
-                            SafeString(prototype ? prototype->GetName() : nullptr),
-                            prototype && prototype->GetBehaviorCallbackFct() ? "present" : "missing");
-        cleanup();
-        return false;
-    }
-
-    if (!runner->Attach(behavior, true)) {
-        error = "Runtime Runner input probe Attach failed: " + runner->GetErrorMessage();
-        cleanup();
-        return false;
-    }
-
-    asIScriptFunction *func = nullptr;
-    behavior->GetLocalParameterValue(1, &func);
-    if (!func) {
-        error = "Runtime Runner input probe Attach did not cache the function.";
-        cleanup();
-        return false;
-    }
-
-    cleanup();
-    return true;
-}
-
 static bool RunInitialSettingsEditedSelfTest(CKContext *context,
                                              ScriptBehaviorBridge *bridge,
                                              const CKBehaviorContext &behaviorContext,
@@ -2237,37 +2113,12 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
     return true;
 }
 
-static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
+static bool RunBehaviorBridgeNativeBBInvocationSelfTest(CKContext *context,
                                                      std::string &error) {
     ScriptManager *manager = ScriptManager::GetManager(context);
     ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
     if (!context || !manager || !bridge) {
-        error = "Runtime BB self-test requires CKContext, ScriptManager, and ScriptBehaviorBridge.";
-        return false;
-    }
-
-    constexpr const char *scriptName = "__CKAS_RuntimeBBSelfTest";
-    manager->UnloadModule(scriptName, nullptr);
-
-    const char *source =
-        "int g_BridgeRunnerCount = 0;\n"
-        "int BridgeRunnerEntry(const CKBehaviorContext &in ctx) {\n"
-        "    g_BridgeRunnerCount += 1;\n"
-        "    return 0;\n"
-        "}\n";
-
-    AngelScriptResult compileResult = {};
-    if (manager->CompileModule(scriptName, source, true, &compileResult) != ANGELSCRIPT_STATUS_OK) {
-        error = compileResult.ErrorMessage && compileResult.ErrorMessage[0] != '\0'
-            ? compileResult.ErrorMessage
-            : "Failed to compile runtime BB self-test script.";
-        return false;
-    }
-
-    asIScriptModule *module = manager->GetModule(scriptName);
-    if (!module) {
-        manager->UnloadModule(scriptName, nullptr);
-        error = "Runtime BB self-test script module was not found after compilation.";
+        error = "BB invocation self-test requires CKContext, ScriptManager, and ScriptBehaviorBridge.";
         return false;
     }
 
@@ -2287,113 +2138,86 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     behaviorContext.CallbackArg = nullptr;
 
     if (!RunInitialSettingsEditedSelfTest(context, bridge, behaviorContext, error)) {
-        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
 
     ScriptBridgeBBInvocationSpec request = MakeDefaultRequest(behaviorContext);
-    request.PrototypeName = "AngelScript Runner";
-    ScriptBridgeSetIndexedValue(request.IndexedParameters, 0, MakeScriptParamString(scriptName));
-    ScriptBridgeSetIndexedValue(request.IndexedParameters, 1, MakeScriptParamString("BridgeRunnerEntry"));
-
-    if (!ProbeRuntimeRunnerInputBinding(context, request, scriptName, "BridgeRunnerEntry", error)) {
-        manager->UnloadModule(scriptName, nullptr);
-        return false;
-    }
+    request.PrototypeName = "Logics/Calculator/Identity";
+    ScriptBridgeSetIndexedValue(request.IndexedParameters, 0, MakeScriptParamInt(7));
 
     BBResult *result = bridge->RunCall(request, behaviorContext, 0);
     if (!result) {
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BB.Call runtime self-test did not return a result.";
+        error = "BB.Call Identity self-test did not return a result.";
         return false;
     }
 
     const bool callStateOk = result->Ok();
     const int callReturnCode = result->ReturnCode();
     const bool callOutActive = result->OutputActive(0);
-    const bool callErrorActive = result->OutputActive(1);
     const bool callOk = callStateOk && callReturnCode == CKBR_OK && callOutActive;
     std::string callError = result->Error();
     result->Release();
     if (!callOk) {
-        manager->UnloadModule(scriptName, nullptr);
-        error = fmt::format("BB.Call runtime self-test failed: ok={} rc={} out={} errorOut={} error={}",
+        error = fmt::format("BB.Call Identity self-test failed: ok={} rc={} out={} error={}",
                             callStateOk ? "true" : "false",
                             callReturnCode,
                             callOutActive ? "true" : "false",
-                            callErrorActive ? "true" : "false",
                             callError.empty() ? "<empty>" : callError);
         return false;
     }
 
-    int count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
-    if (!error.empty() || count != 1) {
-        manager->UnloadModule(scriptName, nullptr);
-        if (error.empty()) {
-            error = fmt::format("BB.Call runtime self-test expected count 1, got {}.", count);
-        }
-        return false;
-    }
-
-    CKParameterLocal *wrongScriptSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_WrongScriptSource"), CKPGUID_STRING, TRUE);
     BBConfig *replacementConfig = new BBConfig(bridge, behaviorContext, request);
-    BBSlot *replacementScriptSlot = replacementConfig ? replacementConfig->Pin("Script") : nullptr;
-    BBSlot *replacementFunctionSlot = replacementConfig ? replacementConfig->Pin("Function") : nullptr;
-    ParamRef *wrongScriptRef = wrongScriptSource ? new ParamRef(bridge, wrongScriptSource->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
-    if (!wrongScriptSource ||
-        wrongScriptSource->SetStringValue(const_cast<CKSTRING>("__CKAS_MissingScript")) != CK_OK ||
-        !replacementConfig ||
-        !replacementScriptSlot ||
-        !replacementFunctionSlot ||
-        !wrongScriptRef) {
-        if (replacementScriptSlot) replacementScriptSlot->Release();
-        if (replacementFunctionSlot) replacementFunctionSlot->Release();
-        if (wrongScriptRef) wrongScriptRef->Release();
-        if (replacementConfig) replacementConfig->Release();
-        DestroySelfTestObject(context, wrongScriptSource);
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BBConfig replacement precedence self-test setup failed.";
-        return false;
-    }
-
-    BBConfig *returnedConfig = replacementConfig->SourceSlot(replacementScriptSlot, wrongScriptRef);
-    if (returnedConfig) returnedConfig->Release();
-    returnedConfig = replacementConfig->SetSlotString(replacementScriptSlot, scriptName);
-    if (returnedConfig) returnedConfig->Release();
-    returnedConfig = replacementConfig->SetSlotString(replacementFunctionSlot, "BridgeRunnerEntry");
-    if (returnedConfig) returnedConfig->Release();
-    BBInstance *replacementInstance = replacementConfig->SpawnStarted(behaviorContext);
-    count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
-    if (!replacementInstance || !error.empty() || count != 2) {
-        const std::string replacementError = replacementInstance ? replacementInstance->Error() : replacementConfig->Error();
-        if (replacementInstance) replacementInstance->Release();
-        replacementScriptSlot->Release();
-        replacementFunctionSlot->Release();
-        wrongScriptRef->Release();
-        replacementConfig->Release();
-        DestroySelfTestObject(context, wrongScriptSource);
-        manager->UnloadModule(scriptName, nullptr);
-        if (error.empty()) {
-            error = fmt::format("BBConfig replacement precedence self-test expected count 2, got {}. {}",
-                                count,
-                                replacementError.empty() ? std::string() : replacementError);
+    BBSlot *replacementPin = replacementConfig ? replacementConfig->Pin("pIn 0") : nullptr;
+    CKParameterLocal *wrongSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_WrongIdentitySource"), CKPGUID_STRING, TRUE);
+    ParamRef *wrongSourceRef = wrongSource ? new ParamRef(bridge, wrongSource->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
+    auto cleanupReplacement = [&]() {
+        if (wrongSourceRef) {
+            wrongSourceRef->Release();
+            wrongSourceRef = nullptr;
         }
+        if (replacementPin) {
+            replacementPin->Release();
+            replacementPin = nullptr;
+        }
+        if (replacementConfig) {
+            replacementConfig->Release();
+            replacementConfig = nullptr;
+        }
+        DestroySelfTestObject(context, wrongSource);
+        wrongSource = nullptr;
+    };
+    if (!replacementConfig || !replacementConfig->IsValid() || !replacementPin || !replacementPin->IsValid() || !wrongSourceRef) {
+        error = replacementConfig ? replacementConfig->Error() : "BBConfig replacement precedence self-test setup failed.";
+        cleanupReplacement();
         return false;
     }
-    replacementInstance->Destroy();
-    replacementInstance->Release();
-    replacementScriptSlot->Release();
-    replacementFunctionSlot->Release();
-    wrongScriptRef->Release();
-    replacementConfig->Release();
-    DestroySelfTestObject(context, wrongScriptSource);
+    BBConfig *returnedConfig = replacementConfig->SourceSlot(replacementPin, wrongSourceRef);
+    const bool wrongSourceAccepted = returnedConfig != nullptr;
+    if (returnedConfig) returnedConfig->Release();
+    returnedConfig = replacementConfig->SetSlotInt(replacementPin, 12);
+    const bool valueAccepted = returnedConfig != nullptr;
+    if (returnedConfig) returnedConfig->Release();
+    BBInstance *replacementInstance = valueAccepted ? replacementConfig->SpawnStarted(behaviorContext) : nullptr;
+    const bool replacementOk = !wrongSourceAccepted && replacementInstance && replacementInstance->IsValid();
+    const std::string replacementError = replacementInstance ? replacementInstance->Error() : replacementConfig->Error();
+    if (replacementInstance) {
+        replacementInstance->Destroy();
+        replacementInstance->Release();
+    }
+    cleanupReplacement();
+    if (!replacementOk) {
+        error = fmt::format("BBConfig Identity replacement precedence self-test failed: wrongSourceAccepted={} valueAccepted={} error={}",
+                            wrongSourceAccepted ? "true" : "false",
+                            valueAccepted ? "true" : "false",
+                            replacementError.empty() ? "<empty>" : replacementError);
+        return false;
+    }
 
-    CKParameterLocal *configInitialSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigInitialSource"), CKPGUID_STRING, TRUE);
-    CKParameterLocal *configLiveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigLiveSource"), CKPGUID_STRING, TRUE);
-    CKParameterLocal *configBadSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigBadSource"), CKPGUID_INT, TRUE);
+    CKParameterLocal *configInitialSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigInitialSource"), CKPGUID_INT, TRUE);
+    CKParameterLocal *configLiveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigLiveSource"), CKPGUID_INT, TRUE);
+    CKParameterLocal *configBadSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigBadSource"), CKPGUID_STRING, TRUE);
     BBConfig *liveConfig = new BBConfig(bridge, behaviorContext, request);
-    BBSlot *liveConfigScriptSlot = liveConfig ? liveConfig->Pin("Script") : nullptr;
-    BBSlot *liveConfigFunctionSlot = liveConfig ? liveConfig->Pin("Function") : nullptr;
+    BBSlot *liveConfigPin = liveConfig ? liveConfig->Pin("pIn 0") : nullptr;
     ParamRef *configInitialRef = configInitialSource ? new ParamRef(bridge, configInitialSource->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
     ParamRef *configLiveRef = configLiveSource ? new ParamRef(bridge, configLiveSource->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
     ParamRef *configBadRef = configBadSource ? new ParamRef(bridge, configBadSource->GetID(), ScriptBridgeSlotKind::Standalone, -1) : nullptr;
@@ -2404,13 +2228,9 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
             liveConfigInstance->Release();
             liveConfigInstance = nullptr;
         }
-        if (liveConfigScriptSlot) {
-            liveConfigScriptSlot->Release();
-            liveConfigScriptSlot = nullptr;
-        }
-        if (liveConfigFunctionSlot) {
-            liveConfigFunctionSlot->Release();
-            liveConfigFunctionSlot = nullptr;
+        if (liveConfigPin) {
+            liveConfigPin->Release();
+            liveConfigPin = nullptr;
         }
         if (configInitialRef) {
             configInitialRef->Release();
@@ -2432,128 +2252,90 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
         DestroySelfTestObject(context, configLiveSource);
         DestroySelfTestObject(context, configInitialSource);
     };
-
-    if (!configInitialSource ||
-        !configLiveSource ||
-        !configBadSource ||
-        configInitialSource->SetStringValue(const_cast<CKSTRING>(scriptName)) != CK_OK ||
-        configLiveSource->SetStringValue(const_cast<CKSTRING>(scriptName)) != CK_OK ||
-        !liveConfig ||
-        !liveConfigScriptSlot ||
-        !liveConfigFunctionSlot ||
-        !configInitialRef ||
-        !configLiveRef ||
-        !configBadRef) {
+    if (!configInitialSource || !configLiveSource || !configBadSource || !liveConfig || !liveConfigPin || !configInitialRef || !configLiveRef || !configBadRef) {
         cleanupLiveConfig();
-        manager->UnloadModule(scriptName, nullptr);
         error = "BBConfig live source replacement self-test setup failed.";
         return false;
     }
-
-    returnedConfig = liveConfig->SourceSlot(liveConfigScriptSlot, configInitialRef);
+    returnedConfig = liveConfig->SourceSlot(liveConfigPin, configInitialRef);
+    const bool initialSourceAccepted = returnedConfig != nullptr;
     if (returnedConfig) returnedConfig->Release();
-    returnedConfig = liveConfig->SetSlotString(liveConfigFunctionSlot, "BridgeRunnerEntry");
-    if (returnedConfig) returnedConfig->Release();
-    liveConfigInstance = liveConfig->SpawnInstance(behaviorContext);
+    liveConfigInstance = initialSourceAccepted ? liveConfig->SpawnInstance(behaviorContext) : nullptr;
     CKBehavior *liveConfigBehavior = liveConfigInstance ? bridge->GetInstanceBehavior(liveConfigInstance->BridgeInstanceId(), liveConfigInstance->BridgeGeneration()) : nullptr;
-    CKParameterIn *liveConfigScriptPin = liveConfigBehavior ? liveConfigBehavior->GetInputParameter(0) : nullptr;
-    if (!liveConfigInstance || !liveConfigBehavior || !liveConfigScriptPin || liveConfigScriptPin->GetDirectSource() != configInitialSource) {
+    CKParameterIn *liveConfigInput = liveConfigBehavior && liveConfigPin->Index() >= 0 && liveConfigPin->Index() < liveConfigBehavior->GetInputParameterCount()
+        ? liveConfigBehavior->GetInputParameter(liveConfigPin->Index())
+        : nullptr;
+    if (!liveConfigInstance || !liveConfigBehavior || !liveConfigInput || liveConfigInput->GetDirectSource() != configInitialSource) {
         const std::string configError = liveConfigInstance ? liveConfigInstance->Error() : liveConfig->Error();
         cleanupLiveConfig();
-        manager->UnloadModule(scriptName, nullptr);
         error = configError.empty() ? "BBConfig live source replacement self-test failed to install initial source." : configError;
         return false;
     }
-
-    returnedConfig = liveConfig->SourceSlot(liveConfigScriptSlot, configLiveRef);
+    returnedConfig = liveConfig->SourceSlot(liveConfigPin, configLiveRef);
     const bool liveSourceAccepted = returnedConfig != nullptr;
     if (returnedConfig) returnedConfig->Release();
-    if (!liveSourceAccepted || liveConfigScriptPin->GetDirectSource() != configLiveSource) {
+    if (!liveSourceAccepted || liveConfigInput->GetDirectSource() != configLiveSource) {
         cleanupLiveConfig();
-        manager->UnloadModule(scriptName, nullptr);
         error = "BBConfig live source replacement self-test failed to install live source.";
         return false;
     }
-
-    returnedConfig = liveConfig->SourceSlot(liveConfigScriptSlot, configBadRef);
+    returnedConfig = liveConfig->SourceSlot(liveConfigPin, configBadRef);
     const bool badConfigSourceAccepted = returnedConfig != nullptr;
     if (returnedConfig) returnedConfig->Release();
-    if (badConfigSourceAccepted || liveConfigScriptPin->GetDirectSource() != configLiveSource) {
+    if (badConfigSourceAccepted || liveConfigInput->GetDirectSource() != configLiveSource) {
         cleanupLiveConfig();
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BBConfig runtime self-test did not preserve live source after failed source replacement.";
+        error = "BBConfig Identity self-test did not preserve live source after failed source replacement.";
         return false;
     }
-    returnedConfig = liveConfig->SetSlotObject(liveConfigScriptSlot, liveConfigBehavior);
+    returnedConfig = liveConfig->SetSlotObject(liveConfigPin, liveConfigBehavior);
     const bool badConfigValueAccepted = returnedConfig != nullptr;
     if (returnedConfig) returnedConfig->Release();
-    if (badConfigValueAccepted || liveConfigScriptPin->GetDirectSource() != configLiveSource) {
+    if (badConfigValueAccepted || liveConfigInput->GetDirectSource() != configLiveSource) {
         cleanupLiveConfig();
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BBConfig runtime self-test did not preserve live source after failed value replacement.";
+        error = "BBConfig Identity self-test did not preserve live source after failed value replacement.";
         return false;
     }
     cleanupLiveConfig();
 
     if (!RunLiveOperationReplacementSelfTest(context, bridge, behaviorContext, true, error)) {
-        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
-
     if (!RunLiveOperationReplacementSelfTest(context, bridge, behaviorContext, false, error)) {
-        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
-
     if (!RunLiveMixedLinkReplacementSelfTest(context, bridge, behaviorContext, true, error)) {
-        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
-
     if (!RunLiveMixedLinkReplacementSelfTest(context, bridge, behaviorContext, false, error)) {
-        manager->UnloadModule(scriptName, nullptr);
         return false;
     }
 
     BBTask *task = bridge->StartTask(request, behaviorContext, 0);
     if (!task) {
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BB.Spawn runtime self-test did not return a task.";
+        error = "BB.Spawn Identity self-test did not return a task.";
         return false;
     }
-
-    const bool taskValid = task->IsValid();
-    const bool taskAlive = task->IsAlive();
-    const int taskReturnCode = task->ReturnCode();
-    const bool taskOutActive = task->OutputActive(0);
-    const bool taskErrorActive = task->OutputActive(1);
-    const bool taskOk = taskValid && taskAlive && taskReturnCode == CKBR_OK && taskOutActive;
-    std::string taskError = task->Error();
     const bool taskStepOk = task->Step(behaviorContext, 0);
     const int taskStepReturnCode = task->ReturnCode();
     const bool taskStepOutActive = task->OutputActive(0);
-    const bool taskStepErrorActive = task->OutputActive(1);
     if (!taskStepOk || taskStepReturnCode != CKBR_OK || !taskStepOutActive) {
-        taskError = task->Error();
+        std::string taskError = task->Error();
         task->Destroy();
         task->Release();
-        manager->UnloadModule(scriptName, nullptr);
-        error = fmt::format("BB.Spawn runtime self-test Step failed: ok={} rc={} out={} errorOut={} error={}",
+        error = fmt::format("BB.Spawn Identity self-test Step failed: ok={} rc={} out={} error={}",
                             taskStepOk ? "true" : "false",
                             taskStepReturnCode,
                             taskStepOutActive ? "true" : "false",
-                            taskStepErrorActive ? "true" : "false",
                             taskError.empty() ? "<empty>" : taskError);
         return false;
     }
     const bool taskIdleStepOk = task->Step(behaviorContext, -1);
     const bool taskIdleOutActive = task->OutputActive(0);
     if (!taskIdleStepOk || taskIdleOutActive) {
-        taskError = task->Error();
+        std::string taskError = task->Error();
         task->Destroy();
         task->Release();
-        manager->UnloadModule(scriptName, nullptr);
-        error = fmt::format("BB.Spawn runtime self-test kept output active after inactive idle Step: ok={} out={} error={}",
+        error = fmt::format("BB.Spawn Identity self-test kept output active after inactive idle Step: ok={} out={} error={}",
                             taskIdleStepOk ? "true" : "false",
                             taskIdleOutActive ? "true" : "false",
                             taskError.empty() ? "<empty>" : taskError);
@@ -2561,123 +2343,97 @@ static bool RunBehaviorBridgeNativeRuntimeBBSelfTest(CKContext *context,
     }
     if (!task->Destroy() || task->IsValid()) {
         task->Release();
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BB.Spawn runtime self-test task did not destroy cleanly.";
+        error = "BB.Spawn Identity self-test task did not destroy cleanly.";
         return false;
     }
     task->Release();
-
-    if (!taskOk) {
-        manager->UnloadModule(scriptName, nullptr);
-        error = fmt::format("BB.Spawn runtime self-test failed: valid={} alive={} rc={} out={} errorOut={} error={}",
-                            taskValid ? "true" : "false",
-                            taskAlive ? "true" : "false",
-                            taskReturnCode,
-                            taskOutActive ? "true" : "false",
-                            taskErrorActive ? "true" : "false",
-                            taskError.empty() ? "<empty>" : taskError);
-        return false;
-    }
 
     int instanceGeneration = 0;
     std::string instanceError;
     CK_ID instanceId = bridge->CreateInstance(request, behaviorContext, instanceGeneration, instanceError);
     CKBehavior *instanceBehavior = instanceId ? bridge->GetInstanceBehavior(instanceId, instanceGeneration) : nullptr;
-    CKParameterIn *scriptPin = instanceBehavior ? instanceBehavior->GetInputParameter(0) : nullptr;
-    CKParameter *previousSource = scriptPin ? scriptPin->GetDirectSource() : nullptr;
-    CKParameterLocal *liveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_InstanceLiveSource"), CKPGUID_STRING, TRUE);
-    CKParameterLocal *badSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_InstanceBadSource"), CKPGUID_INT, TRUE);
-    if (!instanceId || !instanceBehavior || !scriptPin || !previousSource || !liveSource ||
-        !badSource ||
-        liveSource->SetStringValue(const_cast<CKSTRING>(scriptName)) != CK_OK) {
+    BBInstance liveInstance(bridge, behaviorContext, request, instanceId, instanceGeneration, std::string(), 0, std::string(), 0);
+    BBSlot *livePin = instanceId ? liveInstance.PinSlot("pIn 0") : nullptr;
+    CKParameterIn *valuePin = instanceBehavior && livePin && livePin->Index() >= 0 && livePin->Index() < instanceBehavior->GetInputParameterCount()
+        ? instanceBehavior->GetInputParameter(livePin->Index())
+        : nullptr;
+    CKParameter *previousSource = valuePin ? valuePin->GetDirectSource() : nullptr;
+    CKParameterLocal *liveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_InstanceLiveSource"), CKPGUID_INT, TRUE);
+    CKParameterLocal *badSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_InstanceBadSource"), CKPGUID_STRING, TRUE);
+    if (!instanceId || !instanceBehavior || !livePin || !valuePin || !previousSource || !liveSource || !badSource) {
+        if (livePin) livePin->Release();
         if (instanceId) {
             bridge->DestroyInstance(instanceId, instanceGeneration);
         }
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadModule(scriptName, nullptr);
-        error = instanceError.empty() ? "BBInstance runtime self-test setup failed." : instanceError;
+        error = instanceError.empty() ? "BBInstance Identity self-test setup failed." : instanceError;
         return false;
     }
 
-    ParamRef *targetRef = new ParamRef(bridge, scriptPin->GetID(), ScriptBridgeSlotKind::Pin, 0, instanceBehavior->GetID());
+    ParamRef *targetRef = new ParamRef(bridge, valuePin->GetID(), ScriptBridgeSlotKind::Pin, livePin->Index(), instanceBehavior->GetID());
     ParamRef *sourceRef = new ParamRef(bridge, liveSource->GetID(), ScriptBridgeSlotKind::Standalone, -1);
     ParamSourceLinkRef *link = targetRef->SetSourceScoped(sourceRef);
-    const bool linkStored = link && link->IsValid() && bridge->StoreInstanceSourceLink(instanceId, instanceGeneration, 0, link);
-    if (!linkStored || scriptPin->GetDirectSource() != liveSource) {
+    const bool linkStored = link && link->IsValid() && bridge->StoreInstanceSourceLink(instanceId, instanceGeneration, livePin->Index(), link);
+    if (!linkStored || valuePin->GetDirectSource() != liveSource) {
         if (link) {
             link->Restore();
             link->Release();
         }
+        livePin->Release();
         targetRef->Release();
         sourceRef->Release();
         bridge->DestroyInstance(instanceId, instanceGeneration);
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BBInstance runtime self-test failed to install owned source link.";
+        error = "BBInstance Identity self-test failed to install owned source link.";
         return false;
     }
+    if (link) {
+        link->Release();
+    }
 
-    BBInstance liveInstance(bridge, behaviorContext, request, instanceId, instanceGeneration, std::string(), 0, std::string(), 0);
-    BBSlot *liveScriptSlot = liveInstance.PinSlot("Script");
     ParamRef *badSourceRef = new ParamRef(bridge, badSource->GetID(), ScriptBridgeSlotKind::Standalone, -1);
-    const bool badSourceAccepted = liveInstance.SourceSlot(liveScriptSlot, badSourceRef);
-    if (badSourceAccepted || scriptPin->GetDirectSource() != liveSource) {
-        if (liveScriptSlot) liveScriptSlot->Release();
+    const bool badSourceAccepted = liveInstance.SourceSlot(livePin, badSourceRef);
+    if (badSourceAccepted || valuePin->GetDirectSource() != liveSource) {
         badSourceRef->Release();
+        livePin->Release();
         targetRef->Release();
         sourceRef->Release();
         bridge->DestroyInstance(instanceId, instanceGeneration);
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BBInstance runtime self-test did not preserve live source after failed source replacement.";
+        error = "BBInstance Identity self-test did not preserve live source after failed source replacement.";
         return false;
     }
-    const bool badValueAccepted = liveInstance.SetSlotObject(liveScriptSlot, instanceBehavior);
-    if (badValueAccepted || scriptPin->GetDirectSource() != liveSource) {
-        if (liveScriptSlot) liveScriptSlot->Release();
+    const bool badValueAccepted = liveInstance.SetSlotObject(livePin, instanceBehavior);
+    if (badValueAccepted || valuePin->GetDirectSource() != liveSource) {
         badSourceRef->Release();
+        livePin->Release();
         targetRef->Release();
         sourceRef->Release();
         bridge->DestroyInstance(instanceId, instanceGeneration);
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BBInstance runtime self-test did not preserve live source after failed value replacement.";
+        error = "BBInstance Identity self-test did not preserve live source after failed value replacement.";
         return false;
     }
-    if (liveScriptSlot) liveScriptSlot->Release();
     badSourceRef->Release();
-
+    livePin->Release();
     targetRef->Release();
     sourceRef->Release();
-    if (!bridge->DestroyInstance(instanceId, instanceGeneration) || scriptPin->GetDirectSource() != previousSource) {
+    if (!bridge->DestroyInstance(instanceId, instanceGeneration) || valuePin->GetDirectSource() != previousSource) {
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        manager->UnloadModule(scriptName, nullptr);
-        error = "BBInstance runtime self-test did not restore owned source link on Destroy.";
+        error = "BBInstance Identity self-test did not restore owned source link on Destroy.";
         return false;
     }
     DestroySelfTestObject(context, badSource);
     DestroySelfTestObject(context, liveSource);
 
     error.clear();
-    count = ReadSelfTestGlobalInt(module, "g_BridgeRunnerCount", error);
-    if (!error.empty() || count != 4) {
-        manager->UnloadModule(scriptName, nullptr);
-        if (error.empty()) {
-            error = fmt::format("BB.Spawn runtime self-test expected count 4, got {}.", count);
-        }
-        return false;
-    }
-
-    manager->UnloadModule(scriptName, nullptr);
-    error.clear();
     return true;
 }
-
 bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context) {
         error = "CKContext is not available.";
@@ -2793,7 +2549,7 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     }
 
     WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-runtime-bb", std::string());
-    if (!RunBehaviorBridgeNativeRuntimeBBSelfTest(context, error)) {
+    if (!RunBehaviorBridgeNativeBBInvocationSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-runtime-bb", error);
         return false;
     }

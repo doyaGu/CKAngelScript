@@ -260,7 +260,7 @@ All helpers also accept `CKContext@` in place of `CKBehaviorContext`. The type a
 
 ## Injection Rules
 
-- Metadata is read from `CachedScript`, so it works for Loader-managed shared modules and for private `Source`/`File` modules.
+- Metadata is read from the manager module cache, so it works for shared modules, runtime-managed modules, and private `Source`/`File` component modules.
 - The Component creates missing input parameters and default local sources on first script object creation.
 - On script identity or manifest change, the old script object is released, Component-created input parameters no longer declared are removed, and the object is rebuilt.
 - Field injection runs before `OnLoad` and `Awake`.
