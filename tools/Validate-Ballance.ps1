@@ -32,7 +32,6 @@ $bin = Join-Path $BallanceRoot "Bin"
 $player = Join-Path $bin "Player.exe"
 $exporter = Join-Path $bin "VirtoolsDataExporter.exe"
 $targetDll = Join-Path $buildingBlocks "AngelScript.dll"
-$crashDir = Join-Path $BallanceRoot "CrashDumps"
 
 if (-not (Test-Path -LiteralPath $BuildDll)) {
     throw "Built AngelScript.dll was not found: $BuildDll"
@@ -88,7 +87,6 @@ if (-not $SkipPlayer) {
         throw "Player.exe was not found: $player"
     }
 
-    $start = Get-Date
     Remove-Item -LiteralPath $selfTestMarker -ErrorAction SilentlyContinue
     $oldSelfTestMarker = $env:CKAS_SELFTEST_MARKER
     $env:CKAS_SELFTEST_MARKER = $selfTestMarker
@@ -126,20 +124,12 @@ if (-not $SkipPlayer) {
         throw "AngelScript behavior bridge script self-test failed: $selfTestText"
     }
 
-    $newDumps = @()
-    if (Test-Path -LiteralPath $crashDir) {
-        $newDumps = @(Get-ChildItem -LiteralPath $crashDir |
-            Where-Object { $_.LastWriteTime -ge $start.AddSeconds(-2) } |
-            Select-Object -ExpandProperty Name)
-    }
-
     $playerResult = [pscustomobject]@{
         ProcessId = $process.Id
         HasExitedAfterWait = $hasExitedAfterWait
         ExitCode = if ($process.HasExited) { $process.ExitCode } else { $null }
         ClosedByTest = $closedByTest
         KilledByTest = $killedByTest
-        NewCrashDumps = if ($newDumps.Count -gt 0) { $newDumps -join "; " } else { "" }
         ScriptSelfTest = ($selfTestText.Trim() -replace "`r?`n", "; ")
     }
 }
