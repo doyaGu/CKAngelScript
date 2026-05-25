@@ -11,6 +11,7 @@
 #include "ScriptRefCounted.h"
 
 class ScriptBehaviorBridge;
+class CScriptArray;
 
 class ObjectRef : public RefCounted {
 public:
@@ -68,12 +69,45 @@ class Entity3DRef : public SceneObjectRef {
 public:
     using SceneObjectRef::SceneObjectRef;
     CK3dEntity *Entity3D() const;
+
+    bool SetPosition(const VxVector &pos, Entity3DRef *reference = nullptr, bool keepChildren = false);
+    bool SetPosition(float x, float y, float z, Entity3DRef *reference = nullptr, bool keepChildren = false);
+    bool GetPosition(VxVector &pos, Entity3DRef *reference = nullptr) const;
+    bool Translate(const VxVector &delta, Entity3DRef *reference = nullptr, bool keepChildren = false);
+    bool Translate(float x, float y, float z, Entity3DRef *reference = nullptr, bool keepChildren = false);
+    bool SetQuaternion(const VxQuaternion &quat,
+                       Entity3DRef *reference = nullptr,
+                       bool keepChildren = false,
+                       bool keepScale = false);
+    bool GetQuaternion(VxQuaternion &quat, Entity3DRef *reference = nullptr) const;
+    bool SetScale(const VxVector &scale, bool keepChildren = false, bool local = true);
+    bool SetScale(float x, float y, float z, bool keepChildren = false, bool local = true);
+    bool GetScale(VxVector &scale, bool local = true) const;
+    bool LookAt(const VxVector &pos, Entity3DRef *reference = nullptr, bool keepChildren = false);
+
+    Entity3DRef *Parent() const;
+    Entity3DRef *Child(int index) const;
+    CScriptArray *Children() const;
+    int ChildCount() const;
+    bool SetParent(Entity3DRef *parent = nullptr, bool keepWorldPos = true);
+    bool AddChild(Entity3DRef *child, bool keepWorldPos = true);
+    bool RemoveChild(Entity3DRef *child);
+    bool IsAncestorOf(Entity3DRef *other) const;
+    bool IsDescendantOf(Entity3DRef *other) const;
 };
 
 class Entity2DRef : public SceneObjectRef {
 public:
     using SceneObjectRef::SceneObjectRef;
     CK2dEntity *Entity2D() const;
+
+    Entity2DRef *Parent() const;
+    Entity2DRef *Child(int index) const;
+    CScriptArray *Children() const;
+    int ChildCount() const;
+    bool SetParent(Entity2DRef *parent = nullptr);
+    bool IsAncestorOf(Entity2DRef *other) const;
+    bool IsDescendantOf(Entity2DRef *other) const;
 };
 
 class MaterialRef : public ObjectRef {

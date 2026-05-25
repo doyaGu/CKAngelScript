@@ -4,6 +4,7 @@
 
 #include <fmt/format.h>
 
+#include "add_on/scriptarray/scriptarray.h"
 #include "ScriptBridgeCommon.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
@@ -151,6 +152,108 @@ ObjectRefIdentityOptions WithoutIsValidValidAndDescribe() {
     return options;
 }
 
+template <typename RefT>
+RefT *MakeInvalidTypedRef(CKContext *context, const std::string &error) {
+    return new RefT(context, 0, ScriptBridgeObjectStamp(), error);
+}
+
+template <typename RefT, typename ObjectT>
+RefT *MakeTypedObjectRef(CKContext *context, ObjectT *object, const std::string &error) {
+    if (!object) {
+        return MakeInvalidTypedRef<RefT>(context, error);
+    }
+    return new RefT(object->GetCKContext(), object);
+}
+
+template <typename RefT>
+CScriptArray *CreateTypedRefArray(const char *decl) {
+    asIScriptContext *active = asGetActiveContext();
+    asIScriptEngine *engine = active ? active->GetEngine() : nullptr;
+    asITypeInfo *arrayType = engine ? engine->GetTypeInfoByDecl(decl) : nullptr;
+    if (!arrayType) {
+        SetScriptException(fmt::format("{} is not registered.", decl));
+        return nullptr;
+    }
+    return CScriptArray::Create(arrayType, asUINT(0));
+}
+
+template <typename RefT>
+void AppendTypedRef(CScriptArray *array, RefT *ref) {
+    if (!array || !ref) {
+        return;
+    }
+    const asUINT index = array->GetSize();
+    array->Resize(index + 1);
+    array->SetValue(index, &ref);
+    ref->Release();
+}
+
+CK3dEntity *ResolveEntity3D(const Entity3DRef *ref, const char *method) {
+    CK3dEntity *entity = ref ? ref->Entity3D() : nullptr;
+    if (!entity && ref) {
+        ref->SetError(fmt::format("Entity3DRef::{} requires a valid CK3dEntity.", method));
+    }
+    return entity;
+}
+
+CK2dEntity *ResolveEntity2D(const Entity2DRef *ref, const char *method) {
+    CK2dEntity *entity = ref ? ref->Entity2D() : nullptr;
+    if (!entity && ref) {
+        ref->SetError(fmt::format("Entity2DRef::{} requires a valid CK2dEntity.", method));
+    }
+    return entity;
+}
+
+bool ResolveEntity3DReference(const ObjectRef *owner,
+                              Entity3DRef *reference,
+                              CKContext *expectedContext,
+                              const char *method,
+                              CK3dEntity *&out) {
+    out = nullptr;
+    if (!reference) {
+        return true;
+    }
+    out = reference->Entity3D();
+    if (!out) {
+        if (owner) {
+            owner->SetError(fmt::format("Entity3DRef::{} reference entity is invalid.", method));
+        }
+        return false;
+    }
+    if (expectedContext && out->GetCKContext() != expectedContext) {
+        if (owner) {
+            owner->SetError(fmt::format("Entity3DRef::{} reference belongs to another CKContext.", method));
+        }
+        out = nullptr;
+        return false;
+    }
+    return true;
+}
+
+bool IsAncestor3D(CK3dEntity *ancestor, CK3dEntity *entity) {
+    if (!ancestor || !entity || ancestor == entity) {
+        return false;
+    }
+    for (CK3dEntity *current = entity->GetParent(); current; current = current->GetParent()) {
+        if (current == ancestor) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool IsAncestor2D(CK2dEntity *ancestor, CK2dEntity *entity) {
+    if (!ancestor || !entity || ancestor == entity) {
+        return false;
+    }
+    for (CK2dEntity *current = entity->GetParent(); current; current = current->GetParent()) {
+        if (current == ancestor) {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 ObjectRef::ObjectRef(CKContext *context, CKObject *object) {
@@ -276,6 +379,321 @@ CKMesh *MeshRef::Mesh() const { return CKMesh::Cast(Resolve()); }
 CKScene *SceneRef::Scene() const { return CKScene::Cast(Resolve()); }
 CKLevel *LevelRef::Level() const { return CKLevel::Cast(Resolve()); }
 
+bool Entity3DRef::SetPosition(const VxVector &pos, Entity3DRef *reference, bool keepChildren) {
+    CK3dEntity *entity = ResolveEntity3D(this, "SetPosition");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity3DReference(this, reference, entity->GetCKContext(), "SetPosition", referenceEntity)) {
+        return false;
+    }
+    entity->SetPosition(const_cast<VxVector *>(&pos), referenceEntity, keepChildren);
+    return true;
+}
+
+bool Entity3DRef::SetPosition(float x, float y, float z, Entity3DRef *reference, bool keepChildren) {
+    return SetPosition(VxVector(x, y, z), reference, keepChildren);
+}
+
+bool Entity3DRef::GetPosition(VxVector &pos, Entity3DRef *reference) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "GetPosition");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity3DReference(this, reference, entity->GetCKContext(), "GetPosition", referenceEntity)) {
+        return false;
+    }
+    entity->GetPosition(&pos, referenceEntity);
+    return true;
+}
+
+bool Entity3DRef::Translate(const VxVector &delta, Entity3DRef *reference, bool keepChildren) {
+    CK3dEntity *entity = ResolveEntity3D(this, "Translate");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity3DReference(this, reference, entity->GetCKContext(), "Translate", referenceEntity)) {
+        return false;
+    }
+    entity->Translate(const_cast<VxVector *>(&delta), referenceEntity, keepChildren);
+    return true;
+}
+
+bool Entity3DRef::Translate(float x, float y, float z, Entity3DRef *reference, bool keepChildren) {
+    return Translate(VxVector(x, y, z), reference, keepChildren);
+}
+
+bool Entity3DRef::SetQuaternion(const VxQuaternion &quat,
+                                Entity3DRef *reference,
+                                bool keepChildren,
+                                bool keepScale) {
+    CK3dEntity *entity = ResolveEntity3D(this, "SetQuaternion");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity3DReference(this, reference, entity->GetCKContext(), "SetQuaternion", referenceEntity)) {
+        return false;
+    }
+    entity->SetQuaternion(const_cast<VxQuaternion *>(&quat), referenceEntity, keepChildren, keepScale);
+    return true;
+}
+
+bool Entity3DRef::GetQuaternion(VxQuaternion &quat, Entity3DRef *reference) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "GetQuaternion");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity3DReference(this, reference, entity->GetCKContext(), "GetQuaternion", referenceEntity)) {
+        return false;
+    }
+    entity->GetQuaternion(&quat, referenceEntity);
+    return true;
+}
+
+bool Entity3DRef::SetScale(const VxVector &scale, bool keepChildren, bool local) {
+    CK3dEntity *entity = ResolveEntity3D(this, "SetScale");
+    if (!entity) {
+        return false;
+    }
+    entity->SetScale(const_cast<VxVector *>(&scale), keepChildren, local);
+    return true;
+}
+
+bool Entity3DRef::SetScale(float x, float y, float z, bool keepChildren, bool local) {
+    return SetScale(VxVector(x, y, z), keepChildren, local);
+}
+
+bool Entity3DRef::GetScale(VxVector &scale, bool local) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "GetScale");
+    if (!entity) {
+        return false;
+    }
+    entity->GetScale(&scale, local);
+    return true;
+}
+
+bool Entity3DRef::LookAt(const VxVector &pos, Entity3DRef *reference, bool keepChildren) {
+    CK3dEntity *entity = ResolveEntity3D(this, "LookAt");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity3DReference(this, reference, entity->GetCKContext(), "LookAt", referenceEntity)) {
+        return false;
+    }
+    entity->LookAt(const_cast<VxVector *>(&pos), referenceEntity, keepChildren);
+    return true;
+}
+
+Entity3DRef *Entity3DRef::Parent() const {
+    CK3dEntity *entity = ResolveEntity3D(this, "Parent");
+    if (!entity) {
+        return MakeInvalidTypedRef<Entity3DRef>(Context(), "Entity3DRef::Parent requires a valid CK3dEntity.");
+    }
+    return MakeTypedObjectRef<Entity3DRef>(entity->GetCKContext(),
+                                           entity->GetParent(),
+                                           "Entity3DRef has no parent.");
+}
+
+Entity3DRef *Entity3DRef::Child(int index) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "Child");
+    if (!entity) {
+        return MakeInvalidTypedRef<Entity3DRef>(Context(), "Entity3DRef::Child requires a valid CK3dEntity.");
+    }
+    if (index < 0 || index >= entity->GetChildrenCount()) {
+        return MakeInvalidTypedRef<Entity3DRef>(entity->GetCKContext(), "Entity3DRef child index is out of range.");
+    }
+    return MakeTypedObjectRef<Entity3DRef>(entity->GetCKContext(), entity->GetChild(index), "Entity3DRef child is null.");
+}
+
+CScriptArray *Entity3DRef::Children() const {
+    CScriptArray *array = CreateTypedRefArray<Entity3DRef>("array<Entity3DRef@>");
+    if (!array) {
+        return nullptr;
+    }
+    CK3dEntity *entity = ResolveEntity3D(this, "Children");
+    if (!entity) {
+        return array;
+    }
+    const int count = entity->GetChildrenCount();
+    for (int i = 0; i < count; ++i) {
+        CK3dEntity *child = entity->GetChild(i);
+        if (child) {
+            AppendTypedRef(array, new Entity3DRef(child->GetCKContext(), child));
+        }
+    }
+    return array;
+}
+
+int Entity3DRef::ChildCount() const {
+    CK3dEntity *entity = ResolveEntity3D(this, "ChildCount");
+    return entity ? entity->GetChildrenCount() : 0;
+}
+
+bool Entity3DRef::SetParent(Entity3DRef *parent, bool keepWorldPos) {
+    CK3dEntity *entity = ResolveEntity3D(this, "SetParent");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *parentEntity = nullptr;
+    if (!ResolveEntity3DReference(this, parent, entity->GetCKContext(), "SetParent", parentEntity)) {
+        return false;
+    }
+    if (parentEntity == entity || IsAncestor3D(entity, parentEntity)) {
+        SetError("Entity3DRef::SetParent would create a hierarchy cycle.");
+        return false;
+    }
+    return entity->SetParent(parentEntity, keepWorldPos) != FALSE;
+}
+
+bool Entity3DRef::AddChild(Entity3DRef *child, bool keepWorldPos) {
+    CK3dEntity *entity = ResolveEntity3D(this, "AddChild");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *childEntity = nullptr;
+    if (!ResolveEntity3DReference(this, child, entity->GetCKContext(), "AddChild", childEntity) || !childEntity) {
+        SetError("Entity3DRef::AddChild requires a valid child.");
+        return false;
+    }
+    if (childEntity == entity || IsAncestor3D(childEntity, entity)) {
+        SetError("Entity3DRef::AddChild would create a hierarchy cycle.");
+        return false;
+    }
+    return entity->AddChild(childEntity, keepWorldPos) != FALSE;
+}
+
+bool Entity3DRef::RemoveChild(Entity3DRef *child) {
+    CK3dEntity *entity = ResolveEntity3D(this, "RemoveChild");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *childEntity = nullptr;
+    if (!ResolveEntity3DReference(this, child, entity->GetCKContext(), "RemoveChild", childEntity) || !childEntity) {
+        SetError("Entity3DRef::RemoveChild requires a valid child.");
+        return false;
+    }
+    return entity->RemoveChild(childEntity) != FALSE;
+}
+
+bool Entity3DRef::IsAncestorOf(Entity3DRef *other) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "IsAncestorOf");
+    CK3dEntity *otherEntity = nullptr;
+    if (!entity || !ResolveEntity3DReference(this, other, entity->GetCKContext(), "IsAncestorOf", otherEntity)) {
+        return false;
+    }
+    return IsAncestor3D(entity, otherEntity);
+}
+
+bool Entity3DRef::IsDescendantOf(Entity3DRef *other) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "IsDescendantOf");
+    CK3dEntity *otherEntity = nullptr;
+    if (!entity || !ResolveEntity3DReference(this, other, entity->GetCKContext(), "IsDescendantOf", otherEntity)) {
+        return false;
+    }
+    return IsAncestor3D(otherEntity, entity);
+}
+
+Entity2DRef *Entity2DRef::Parent() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "Parent");
+    if (!entity) {
+        return MakeInvalidTypedRef<Entity2DRef>(Context(), "Entity2DRef::Parent requires a valid CK2dEntity.");
+    }
+    return MakeTypedObjectRef<Entity2DRef>(entity->GetCKContext(),
+                                           entity->GetParent(),
+                                           "Entity2DRef has no parent.");
+}
+
+Entity2DRef *Entity2DRef::Child(int index) const {
+    CK2dEntity *entity = ResolveEntity2D(this, "Child");
+    if (!entity) {
+        return MakeInvalidTypedRef<Entity2DRef>(Context(), "Entity2DRef::Child requires a valid CK2dEntity.");
+    }
+    if (index < 0 || index >= entity->GetChildrenCount()) {
+        return MakeInvalidTypedRef<Entity2DRef>(entity->GetCKContext(), "Entity2DRef child index is out of range.");
+    }
+    return MakeTypedObjectRef<Entity2DRef>(entity->GetCKContext(), entity->GetChild(index), "Entity2DRef child is null.");
+}
+
+CScriptArray *Entity2DRef::Children() const {
+    CScriptArray *array = CreateTypedRefArray<Entity2DRef>("array<Entity2DRef@>");
+    if (!array) {
+        return nullptr;
+    }
+    CK2dEntity *entity = ResolveEntity2D(this, "Children");
+    if (!entity) {
+        return array;
+    }
+    const int count = entity->GetChildrenCount();
+    for (int i = 0; i < count; ++i) {
+        CK2dEntity *child = entity->GetChild(i);
+        if (child) {
+            AppendTypedRef(array, new Entity2DRef(child->GetCKContext(), child));
+        }
+    }
+    return array;
+}
+
+int Entity2DRef::ChildCount() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "ChildCount");
+    return entity ? entity->GetChildrenCount() : 0;
+}
+
+bool Entity2DRef::SetParent(Entity2DRef *parent) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetParent");
+    if (!entity) {
+        return false;
+    }
+    CK2dEntity *parentEntity = nullptr;
+    if (parent) {
+        parentEntity = parent->Entity2D();
+        if (!parentEntity) {
+            SetError("Entity2DRef::SetParent parent entity is invalid.");
+            return false;
+        }
+        if (parentEntity->GetCKContext() != entity->GetCKContext()) {
+            SetError("Entity2DRef::SetParent parent belongs to another CKContext.");
+            return false;
+        }
+    }
+    if (parentEntity == entity || IsAncestor2D(entity, parentEntity)) {
+        SetError("Entity2DRef::SetParent would create a hierarchy cycle.");
+        return false;
+    }
+    return entity->SetParent(parentEntity) != FALSE;
+}
+
+bool Entity2DRef::IsAncestorOf(Entity2DRef *other) const {
+    CK2dEntity *entity = ResolveEntity2D(this, "IsAncestorOf");
+    CK2dEntity *otherEntity = other ? other->Entity2D() : nullptr;
+    if (!entity || !otherEntity) {
+        return false;
+    }
+    if (otherEntity->GetCKContext() != entity->GetCKContext()) {
+        SetError("Entity2DRef::IsAncestorOf target belongs to another CKContext.");
+        return false;
+    }
+    return IsAncestor2D(entity, otherEntity);
+}
+
+bool Entity2DRef::IsDescendantOf(Entity2DRef *other) const {
+    CK2dEntity *entity = ResolveEntity2D(this, "IsDescendantOf");
+    CK2dEntity *otherEntity = other ? other->Entity2D() : nullptr;
+    if (!entity || !otherEntity) {
+        return false;
+    }
+    if (otherEntity->GetCKContext() != entity->GetCKContext()) {
+        SetError("Entity2DRef::IsDescendantOf target belongs to another CKContext.");
+        return false;
+    }
+    return IsAncestor2D(otherEntity, entity);
+}
+
 ObjectRef *MakeScriptObjectRef(CKContext *context,
                                CKObject *object,
                                ScriptBehaviorBridge *bridge,
@@ -343,6 +761,7 @@ ObjectRef *MakeInvalidObjectRef(CKContext *context, const std::string &error) {
 
 void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     assert(engine != nullptr);
+    int r = 0;
     // Core refs are registered with the raw CK object bindings. Bridge refs are
     // added later after their classes are visible, and Scene::* is registered last
     // because it returns both core and bridge refs.
@@ -376,6 +795,35 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     RegisterObjectRefAccessor(engine, "MeshRef", "CKMesh@ Mesh() const", &MeshRef::Mesh);
     RegisterObjectRefAccessor(engine, "SceneRef", "CKScene@ Scene() const", &SceneRef::Scene);
     RegisterObjectRefAccessor(engine, "LevelRef", "CKLevel@ Level() const", &LevelRef::Level);
+
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetPosition(const VxVector &in pos, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity3DRef, SetPosition, (const VxVector &, Entity3DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetPosition(float x, float y, float z, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity3DRef, SetPosition, (float, float, float, Entity3DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool GetPosition(VxVector &out pos, Entity3DRef@ reference = null) const", asMETHODPR(Entity3DRef, GetPosition, (VxVector &, Entity3DRef *) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool Translate(const VxVector &in delta, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity3DRef, Translate, (const VxVector &, Entity3DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool Translate(float x, float y, float z, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity3DRef, Translate, (float, float, float, Entity3DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetQuaternion(const VxQuaternion &in quat, Entity3DRef@ reference = null, bool keepChildren = false, bool keepScale = false)", asMETHODPR(Entity3DRef, SetQuaternion, (const VxQuaternion &, Entity3DRef *, bool, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool GetQuaternion(VxQuaternion &out quat, Entity3DRef@ reference = null) const", asMETHODPR(Entity3DRef, GetQuaternion, (VxQuaternion &, Entity3DRef *) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetScale(const VxVector &in scale, bool keepChildren = false, bool local = true)", asMETHODPR(Entity3DRef, SetScale, (const VxVector &, bool, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetScale(float x, float y, float z, bool keepChildren = false, bool local = true)", asMETHODPR(Entity3DRef, SetScale, (float, float, float, bool, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool GetScale(VxVector &out scale, bool local = true) const", asMETHODPR(Entity3DRef, GetScale, (VxVector &, bool) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool LookAt(const VxVector &in pos, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity3DRef, LookAt, (const VxVector &, Entity3DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "Entity3DRef@ Parent() const", asMETHOD(Entity3DRef, Parent), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "Entity3DRef@ Child(int index) const", asMETHOD(Entity3DRef, Child), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "array<Entity3DRef@>@ Children() const", asMETHOD(Entity3DRef, Children), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "int ChildCount() const", asMETHOD(Entity3DRef, ChildCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetParent(Entity3DRef@ parent = null, bool keepWorldPos = true)", asMETHOD(Entity3DRef, SetParent), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool AddChild(Entity3DRef@ child, bool keepWorldPos = true)", asMETHOD(Entity3DRef, AddChild), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool RemoveChild(Entity3DRef@ child)", asMETHOD(Entity3DRef, RemoveChild), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool IsAncestorOf(Entity3DRef@ other) const", asMETHOD(Entity3DRef, IsAncestorOf), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool IsDescendantOf(Entity3DRef@ other) const", asMETHOD(Entity3DRef, IsDescendantOf), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("Entity2DRef", "Entity2DRef@ Parent() const", asMETHOD(Entity2DRef, Parent), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "Entity2DRef@ Child(int index) const", asMETHOD(Entity2DRef, Child), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "array<Entity2DRef@>@ Children() const", asMETHOD(Entity2DRef, Children), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "int ChildCount() const", asMETHOD(Entity2DRef, ChildCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetParent(Entity2DRef@ parent = null)", asMETHOD(Entity2DRef, SetParent), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool IsAncestorOf(Entity2DRef@ other) const", asMETHOD(Entity2DRef, IsAncestorOf), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool IsDescendantOf(Entity2DRef@ other) const", asMETHOD(Entity2DRef, IsDescendantOf), asCALL_THISCALL); assert(r >= 0);
 }
 
 void RegisterScriptObjectRefBridge(asIScriptEngine *engine) {
