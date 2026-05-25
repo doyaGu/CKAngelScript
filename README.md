@@ -169,6 +169,7 @@ Use the Component `Output Error Message` setting to expose script errors and sta
 
 - **Console Output**: Use `print` statements in AngelScript code for logging and debugging.
 - **Runtime Validation**: Run `tools\Validate-RuntimeScripts.ps1` against a script root to catch manifest, dependency, lifecycle, and compile errors before launching Virtools.
+- **Ballance FPS sample**: After `tools\Validate-Ballance.ps1` has exported BB metadata, `tools\Run-BallanceFpsSample.ps1` can generate a temporary `base.cmo` with an injected AngelScript Component FPS overlay. Use `-StressComponents <n>` to mount multiple components for a heavier smoke run, and `-Restore` with the reported backup directory if a run is interrupted.
 
 ---
 
