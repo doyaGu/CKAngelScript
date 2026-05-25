@@ -267,7 +267,7 @@ void ScriptBehaviorBridge::PauseComponentTasks(CK_ID componentId, bool paused) {
 }
 
 BehaviorRef *ScriptBehaviorBridge::WrapBehavior(CKBehavior *behavior, CK_ID componentId) {
-    return behavior ? new BehaviorRef(this, behavior->GetID(), componentId) : nullptr;
+    return behavior ? new BehaviorRef(this, behavior->GetID(), componentId, behavior->GetCKContext()) : nullptr;
 }
 
 void ScriptBehaviorBridge::ReleaseBehaviorRef(BehaviorRef *ref) {
@@ -277,14 +277,27 @@ void ScriptBehaviorBridge::ReleaseBehaviorRef(BehaviorRef *ref) {
 }
 
 ParamRef *ScriptBehaviorBridge::WrapParameter(CKObject *parameter, ScriptBridgeSlotKind kind, int index) {
-    return parameter ? new ParamRef(this, parameter->GetID(), kind, index) : nullptr;
+    if (!parameter) {
+        return nullptr;
+    }
+    CKContext *context = parameter->GetCKContext();
+    if (CKParameterIn::Cast(parameter)) {
+        return new ParamInRef(this, parameter->GetID(), kind, index, 0, context);
+    }
+    if (CKParameterOut::Cast(parameter)) {
+        return new ParamOutRef(this, parameter->GetID(), kind, index, 0, context);
+    }
+    if (CKParameterLocal::Cast(parameter)) {
+        return new ParamLocalRef(this, parameter->GetID(), kind, index, 0, context);
+    }
+    return new ParamRef(this, parameter->GetID(), kind, index, 0, context);
 }
 
 ParamOperationRef *ScriptBehaviorBridge::WrapParameterOperation(CKParameterOperation *operation,
                                                                 CKParameterIn *targetInput,
                                                                 CKParameter *previousSource,
                                                                 const std::vector<CK_ID> &ownedLocalSourceIds) {
-    return operation ? new ParamOperationRef(this, operation->GetID(), targetInput, previousSource, ownedLocalSourceIds) : nullptr;
+    return operation ? new ParamOperationRef(this, operation->GetID(), targetInput, previousSource, ownedLocalSourceIds, operation->GetCKContext()) : nullptr;
 }
 
 BehaviorBridge *ScriptBehaviorBridge::CreateBehaviorBridge(const CKBehaviorContext &ctx) {

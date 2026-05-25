@@ -2469,10 +2469,12 @@ BehaviorLinkRef *BehaviorNode::AdjacentLinkFirst(bool next, int ioIndex, Behavio
 BehaviorLinkRef::BehaviorLinkRef(ScriptBehaviorBridge *bridge,
                                  CK_ID rootBehaviorId,
                                  CK_ID linkId,
-                                 CK_ID componentId)
-    : m_Bridge(bridge), m_RootBehaviorId(rootBehaviorId), m_LinkId(linkId), m_ComponentId(componentId) {
-    m_LinkStamp = CaptureBridgeObjectStamp(Get());
-}
+                                 CK_ID componentId,
+                                 CKContext *context)
+    : ObjectRef(context ? context : (bridge && bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr), linkId),
+      m_Bridge(bridge),
+      m_RootBehaviorId(rootBehaviorId),
+      m_ComponentId(componentId) {}
 
 bool BehaviorLinkRef::IsValid() const {
     return Get() != nullptr;
@@ -2480,7 +2482,11 @@ bool BehaviorLinkRef::IsValid() const {
 
 BehaviorRef *BehaviorLinkRef::SourceBehavior() const {
     CKBehavior *behavior = ScriptBridgeGraphInternal::SourceBehavior(Get());
-    return m_Bridge ? m_Bridge->WrapBehavior(behavior, m_ComponentId) : nullptr;
+    if (!behavior) {
+        return nullptr;
+    }
+    return m_Bridge ? m_Bridge->WrapBehavior(behavior, m_ComponentId)
+                    : new BehaviorRef(nullptr, behavior->GetID(), m_ComponentId, behavior->GetCKContext());
 }
 
 int BehaviorLinkRef::SourceOutputIndex() const {
@@ -2489,7 +2495,11 @@ int BehaviorLinkRef::SourceOutputIndex() const {
 
 BehaviorRef *BehaviorLinkRef::TargetBehavior() const {
     CKBehavior *behavior = ScriptBridgeGraphInternal::TargetBehavior(Get());
-    return m_Bridge ? m_Bridge->WrapBehavior(behavior, m_ComponentId) : nullptr;
+    if (!behavior) {
+        return nullptr;
+    }
+    return m_Bridge ? m_Bridge->WrapBehavior(behavior, m_ComponentId)
+                    : new BehaviorRef(nullptr, behavior->GetID(), m_ComponentId, behavior->GetCKContext());
 }
 
 int BehaviorLinkRef::TargetInputIndex() const {
@@ -2516,8 +2526,8 @@ std::string BehaviorLinkRef::Describe() const {
 }
 
 CKBehaviorLink *BehaviorLinkRef::Get() const {
-    return ScriptBridgeGraphInternal::StampedLinkById(m_Bridge, m_LinkId, m_LinkStamp);
+    return CKBehaviorLink::Cast(Object());
 }
 
 CK_ID BehaviorLinkRef::RootId() const { return m_RootBehaviorId; }
-CK_ID BehaviorLinkRef::LinkId() const { return m_LinkId; }
+CK_ID BehaviorLinkRef::LinkId() const { return Id(); }

@@ -4,6 +4,14 @@
 
 #include <fmt/format.h>
 
+namespace {
+
+CKContext *BridgeContext(ScriptBehaviorBridge *bridge, CKContext *fallback = nullptr) {
+    return bridge && bridge->GetManager() ? bridge->GetManager()->GetCKContext() : fallback;
+}
+
+} // namespace
+
 ParamInfo::ParamInfo(ScriptBridgeSlotKind kind,
                      int index,
                      const std::string &name,
@@ -193,39 +201,37 @@ std::string ParamStructValue::Describe() const {
                        m_Value.StructMembers().size());
 }
 
-ParamStructRef::ParamStructRef(ScriptBehaviorBridge *bridge, CK_ID parameterId)
-    : m_Bridge(bridge), m_ParameterId(parameterId) {
-    m_Stamp = CaptureBridgeObjectStamp(RawGet());
-}
-
-CKParameter *ParamStructRef::Get() const {
-    return CKParameter::Cast(RawGetStamped());
-}
+ParamStructRef::ParamStructRef(ScriptBehaviorBridge *bridge, CK_ID parameterId, CKContext *context)
+    : ParamRef(bridge, parameterId, ScriptBridgeSlotKind::Standalone, -1, 0, context) {}
 
 bool ParamStructRef::IsValid() const {
-    CKParameter *param = Get();
+    CKParameter *param = CKParameter::Cast(Get());
     ScriptParameterRegistry *registry = param ? ScriptParameterRegistry::FromContext(param->GetCKContext()) : nullptr;
     const ScriptParamTypeRecord *record = registry ? registry->GetType(param) : nullptr;
     return record && record->Has(ScriptParamTypeCaps::StructLike);
 }
 
 int ParamStructRef::Count() const {
-    CKParameter *param = Get();
+    CKParameter *param = CKParameter::Cast(Get());
     ScriptParameterRegistry *registry = param ? ScriptParameterRegistry::FromContext(param->GetCKContext()) : nullptr;
     const ScriptParamTypeRecord *record = registry ? registry->GetType(param) : nullptr;
     return record && record->Has(ScriptParamTypeCaps::StructLike) ? static_cast<int>(record->StructMembers.size()) : 0;
 }
 
 ParamStructInfo *ParamStructRef::Info() const {
-    CKParameter *param = Get();
+    CKParameter *param = CKParameter::Cast(Get());
     ScriptParameterRegistry *registry = param ? ScriptParameterRegistry::FromContext(param->GetCKContext()) : nullptr;
     const ScriptParamTypeRecord *record = registry ? registry->GetType(param) : nullptr;
     return record && record->Has(ScriptParamTypeCaps::StructLike) ? new ParamStructInfo(registry, record->Type) : nullptr;
 }
 
 ParamRef *ParamStructRef::Member(int index) const {
-    CKParameter *member = GetStructMemberParameter(Get(), index);
-    return m_Bridge && member ? m_Bridge->WrapParameter(member, ScriptBridgeSlotKind::Standalone, index) : nullptr;
+    CKParameter *member = GetStructMemberParameter(CKParameter::Cast(Get()), index);
+    if (!member) {
+        return nullptr;
+    }
+    return m_Bridge ? m_Bridge->WrapParameter(member, ScriptBridgeSlotKind::Standalone, index)
+                    : new ParamRef(nullptr, member->GetID(), ScriptBridgeSlotKind::Standalone, index, 0, member->GetCKContext());
 }
 
 int ParamStructRef::FindMember(const std::string &name, int occurrence) const {
@@ -246,16 +252,6 @@ std::string ParamStructRef::Describe() const {
     std::string result = info->Describe();
     info->Release();
     return result;
-}
-
-CKObject *ParamStructRef::RawGet() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    return GetCKObjectById(context, m_ParameterId);
-}
-
-CKObject *ParamStructRef::RawGetStamped() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    return GetStampedCKObjectById(context, m_ParameterId, m_Stamp);
 }
 
 ParamSourceLinkRef::ParamSourceLinkRef(ScriptBehaviorBridge *bridge,
@@ -279,11 +275,15 @@ bool ParamSourceLinkRef::IsValid() const {
     return Target() != nullptr && (m_InstalledSourceId == 0 || InstalledSource() != nullptr);
 }
 
-bool ParamSourceLinkRef::IsCommitted() const { return m_Committed; }
-bool ParamSourceLinkRef::IsRestored() const { return m_Restored; }
+bool ParamSourceLinkRef::IsCommitted() const { return m_State == OwnershipState::Committed; }
+bool ParamSourceLinkRef::IsRestored() const {
+    return m_State == OwnershipState::Restored || m_State == OwnershipState::DetachedCleanup;
+}
 
 bool ParamSourceLinkRef::Commit() {
-    m_Committed = true;
+    if (m_State == OwnershipState::Scoped) {
+        m_State = OwnershipState::Committed;
+    }
     return true;
 }
 
@@ -297,18 +297,24 @@ bool ParamSourceLinkRef::Restore() {
 }
 
 bool ParamSourceLinkRef::DestroyDetached() {
-    m_Restored = true;
+    m_State = OwnershipState::DetachedCleanup;
     return true;
 }
 
 std::string ParamSourceLinkRef::Describe() const {
     CKParameterIn *target = Target();
-    return fmt::format("ParamSourceLink target={} previous={} installed={} committed={} restored={}",
+    const char *state = "Scoped";
+    switch (m_State) {
+        case OwnershipState::Scoped: state = "Scoped"; break;
+        case OwnershipState::Committed: state = "Committed"; break;
+        case OwnershipState::Restored: state = "Restored"; break;
+        case OwnershipState::DetachedCleanup: state = "DetachedCleanup"; break;
+    }
+    return fmt::format("ParamSourceLink target={} previous={} installed={} state={}",
                        target ? SafeString(target->GetName()) : std::string("<invalid>"),
                        m_PreviousSourceId,
                        m_InstalledSourceId,
-                       m_Committed ? "true" : "false",
-                       m_Restored ? "true" : "false");
+                       state);
 }
 
 CKContext *ParamSourceLinkRef::Context() const {
@@ -334,7 +340,7 @@ CKParameter *ParamSourceLinkRef::InstalledSource() const {
 }
 
 bool ParamSourceLinkRef::RestoreInternal(std::string &error, bool explicitCall) {
-    if (m_Committed || m_Restored) {
+    if (m_State != OwnershipState::Scoped) {
         return true;
     }
 
@@ -344,7 +350,7 @@ bool ParamSourceLinkRef::RestoreInternal(std::string &error, bool explicitCall) 
             error = fmt::format("Parameter source link target id={} is no longer valid.", m_TargetId);
             return false;
         }
-        m_Restored = true;
+        m_State = OwnershipState::Restored;
         return true;
     }
 
@@ -356,7 +362,7 @@ bool ParamSourceLinkRef::RestoreInternal(std::string &error, bool explicitCall) 
                                 SafeString(target->GetName()));
             return false;
         }
-        m_Restored = true;
+        m_State = OwnershipState::Restored;
         return true;
     }
 
@@ -368,7 +374,7 @@ bool ParamSourceLinkRef::RestoreInternal(std::string &error, bool explicitCall) 
                                 SafeString(target->GetName()));
             return false;
         }
-        m_Restored = true;
+        m_State = OwnershipState::Restored;
         return true;
     }
 
@@ -380,7 +386,7 @@ bool ParamSourceLinkRef::RestoreInternal(std::string &error, bool explicitCall) 
         return false;
     }
 
-    m_Restored = true;
+    m_State = OwnershipState::Restored;
     return true;
 }
 
@@ -388,20 +394,19 @@ ParamRef::ParamRef(ScriptBehaviorBridge *bridge,
                    CK_ID parameterId,
                    ScriptBridgeSlotKind kind,
                    int index,
-                   CK_ID ownerBehaviorId)
-    : m_Bridge(bridge),
-      m_ParameterId(parameterId),
+                   CK_ID ownerBehaviorId,
+                   CKContext *context)
+    : ObjectRef(BridgeContext(bridge, context), parameterId),
+      m_Bridge(bridge),
       m_Kind(kind),
       m_Index(index),
-      m_OwnerBehaviorId(ownerBehaviorId) {
-    m_Stamp = CaptureBridgeObjectStamp(RawGet());
-}
+      m_OwnerBehaviorId(ownerBehaviorId) {}
 
 CKObject *ParamRef::Get() const {
-    return RawGetStamped();
+    return Object();
 }
 
-const ScriptBridgeObjectStamp &ParamRef::Stamp() const { return m_Stamp; }
+const ScriptBridgeObjectStamp &ParamRef::Stamp() const { return ObjectRef::Stamp(); }
 CKParameter *ParamRef::Source() const { return ParameterSourceForConnection(Get()); }
 
 bool ParamRef::IsValid() const {
@@ -409,7 +414,7 @@ bool ParamRef::IsValid() const {
     return CKParameterIn::Cast(parameter) != nullptr || CKParameter::Cast(parameter) != nullptr;
 }
 
-CK_ID ParamRef::GetID() const { return m_ParameterId; }
+CK_ID ParamRef::GetID() const { return Id(); }
 int ParamRef::GetIndex() const { return m_Index; }
 int ParamRef::GetKind() const { return static_cast<int>(m_Kind); }
 
@@ -442,13 +447,21 @@ int ParamRef::DataSize() const {
 
 ParamRef *ParamRef::RealSource() const {
     CKParameter *source = Source();
-    return m_Bridge && source ? m_Bridge->WrapParameter(source, ScriptBridgeSlotKind::Standalone, -1) : nullptr;
+    if (!source) {
+        return nullptr;
+    }
+    return m_Bridge ? m_Bridge->WrapParameter(source, ScriptBridgeSlotKind::Standalone, -1)
+                    : new ParamRef(nullptr, source->GetID(), ScriptBridgeSlotKind::Standalone, -1, 0, source->GetCKContext());
 }
 
 ParamRef *ParamRef::DirectSource() const {
     CKParameterIn *input = CKParameterIn::Cast(Get());
     CKParameter *source = input ? input->GetDirectSource() : nullptr;
-    return m_Bridge && source ? m_Bridge->WrapParameter(source, ScriptBridgeSlotKind::Standalone, -1) : nullptr;
+    if (!source) {
+        return nullptr;
+    }
+    return m_Bridge ? m_Bridge->WrapParameter(source, ScriptBridgeSlotKind::Standalone, -1)
+                    : new ParamRef(nullptr, source->GetID(), ScriptBridgeSlotKind::Standalone, -1, 0, source->GetCKContext());
 }
 
 ParamSourceLinkRef *ParamRef::SetSourceScoped(ParamRef *sourceRef) {
@@ -646,7 +659,7 @@ ParamStructRef *ParamRef::Struct() {
         SetScriptException(fmt::format("Parameter '{}' is not a CK struct.", SafeString(target->GetName())));
         return nullptr;
     }
-    return new ParamStructRef(m_Bridge, target->GetID());
+    return new ParamStructRef(m_Bridge, target->GetID(), target->GetCKContext());
 }
 
 bool ParamRef::SetText(const std::string &text) {
@@ -710,24 +723,14 @@ std::string ParamRef::Describe() const {
     return fmt::format("{} '{}' id={} index={} type={} size={}",
         KindName(),
         GetName(),
-        m_ParameterId,
+        Id(),
         m_Index,
         TypeName(),
         DataSize());
 }
 
-CKObject *ParamRef::RawGet() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    return GetCKObjectById(context, m_ParameterId);
-}
-
-CKObject *ParamRef::RawGetStamped() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    return GetStampedCKObjectById(context, m_ParameterId, m_Stamp);
-}
-
 CKBehavior *ParamRef::OwnerBehavior() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    CKContext *context = BridgeContext(m_Bridge, Context());
     return CKBehavior::Cast(GetCKObjectById(context, m_OwnerBehaviorId));
 }
 
@@ -786,22 +789,22 @@ ParamOperationRef::ParamOperationRef(ScriptBehaviorBridge *bridge,
                                      CK_ID operationId,
                                      CKParameterIn *targetInput,
                                      CKParameter *previousSource,
-                                     const std::vector<CK_ID> &ownedLocalSourceIds)
-    : m_Bridge(bridge),
-      m_OperationId(operationId),
+                                     const std::vector<CK_ID> &ownedLocalSourceIds,
+                                     CKContext *context)
+    : ObjectRef(BridgeContext(bridge, context), operationId),
+      m_Bridge(bridge),
       m_TargetInputId(targetInput ? targetInput->GetID() : 0),
       m_PreviousSourceId(previousSource ? previousSource->GetID() : 0),
       m_TargetInputStamp(CaptureBridgeObjectStamp(targetInput)),
       m_PreviousSourceStamp(CaptureBridgeObjectStamp(previousSource)) {
-    m_Stamp = CaptureBridgeObjectStamp(RawGet());
     CKParameterOperation *operation = Get();
     CKParameterOut *out = operation ? operation->GetOutParameter() : nullptr;
     m_InstalledSourceId = out ? out->GetID() : 0;
     m_InstalledSourceStamp = CaptureBridgeObjectStamp(out);
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    CKContext *resolvedContext = BridgeContext(m_Bridge, Context());
     m_OwnedLocalSources.reserve(ownedLocalSourceIds.size());
     for (CK_ID id : ownedLocalSourceIds) {
-        CKObject *object = GetCKObjectById(context, id);
+        CKObject *object = GetCKObjectById(resolvedContext, id);
         if (CKParameterLocal::Cast(object)) {
             m_OwnedLocalSources.push_back(ScriptBridgeStampedObjectId{id, CaptureBridgeObjectStamp(object)});
         }
@@ -809,25 +812,40 @@ ParamOperationRef::ParamOperationRef(ScriptBehaviorBridge *bridge,
 }
 
 CKParameterOperation *ParamOperationRef::Get() const {
-    return CKParameterOperation::Cast(RawGetStamped());
+    return CKParameterOperation::Cast(Object());
 }
 
 bool ParamOperationRef::IsValid() const { return Get() != nullptr; }
-CK_ID ParamOperationRef::GetID() const { return m_OperationId; }
+CK_ID ParamOperationRef::GetID() const { return Id(); }
 
 ParamRef *ParamOperationRef::Out() const {
     CKParameterOperation *op = Get();
-    return m_Bridge && op ? m_Bridge->WrapParameter(op->GetOutParameter(), ScriptBridgeSlotKind::OperationOut, 0) : nullptr;
+    CKObject *param = op ? op->GetOutParameter() : nullptr;
+    if (!param) {
+        return nullptr;
+    }
+    return m_Bridge ? m_Bridge->WrapParameter(param, ScriptBridgeSlotKind::OperationOut, 0)
+                    : new ParamRef(nullptr, param->GetID(), ScriptBridgeSlotKind::OperationOut, 0, 0, param->GetCKContext());
 }
 
 ParamRef *ParamOperationRef::In1() const {
     CKParameterOperation *op = Get();
-    return m_Bridge && op ? m_Bridge->WrapParameter(op->GetInParameter1(), ScriptBridgeSlotKind::OperationIn, 0) : nullptr;
+    CKObject *param = op ? op->GetInParameter1() : nullptr;
+    if (!param) {
+        return nullptr;
+    }
+    return m_Bridge ? m_Bridge->WrapParameter(param, ScriptBridgeSlotKind::OperationIn, 0)
+                    : new ParamRef(nullptr, param->GetID(), ScriptBridgeSlotKind::OperationIn, 0, 0, param->GetCKContext());
 }
 
 ParamRef *ParamOperationRef::In2() const {
     CKParameterOperation *op = Get();
-    return m_Bridge && op ? m_Bridge->WrapParameter(op->GetInParameter2(), ScriptBridgeSlotKind::OperationIn, 1) : nullptr;
+    CKObject *param = op ? op->GetInParameter2() : nullptr;
+    if (!param) {
+        return nullptr;
+    }
+    return m_Bridge ? m_Bridge->WrapParameter(param, ScriptBridgeSlotKind::OperationIn, 1)
+                    : new ParamRef(nullptr, param->GetID(), ScriptBridgeSlotKind::OperationIn, 1, 0, param->GetCKContext());
 }
 
 CKERROR ParamOperationRef::Do() const {
@@ -836,6 +854,10 @@ CKERROR ParamOperationRef::Do() const {
 }
 
 bool ParamOperationRef::Restore() {
+    if (!m_Bridge) {
+        SetScriptException("ParamOperationRef.Restore requires a bridge-owned operation.");
+        return false;
+    }
     std::string error;
     if (!RestoreTargetSource(error)) {
         SetScriptException(error.empty() ? "Failed to restore operation target source." : error);
@@ -847,6 +869,9 @@ bool ParamOperationRef::Restore() {
 bool ParamOperationRef::Destroy() {
     CKParameterOperation *op = Get();
     if (!op || !m_Bridge || !m_Bridge->GetManager() || !m_Bridge->GetManager()->GetCKContext()) {
+        if (!m_Bridge) {
+            SetScriptException("ParamOperationRef.Destroy requires a bridge-owned operation.");
+        }
         return false;
     }
     std::string error;
@@ -860,8 +885,8 @@ bool ParamOperationRef::Destroy() {
     }
     m_Bridge->GetManager()->GetCKContext()->DestroyObject(op);
     DestroyOwnedLocalSources(owner);
-    m_OperationId = 0;
-    m_Stamp = ScriptBridgeObjectStamp();
+    m_State = OwnershipState::Invalid;
+    ClearObject("Parameter operation was destroyed.");
     return true;
 }
 
@@ -877,35 +902,32 @@ bool ParamOperationRef::DestroyDetached() {
     }
     m_Bridge->GetManager()->GetCKContext()->DestroyObject(op);
     DestroyOwnedLocalSources(owner);
-    m_TargetRestored = true;
-    m_OperationId = 0;
-    m_Stamp = ScriptBridgeObjectStamp();
+    m_State = OwnershipState::DetachedDestroyed;
+    ClearObject("Parameter operation was destroyed.");
     return true;
 }
 
 std::string ParamOperationRef::Describe() const {
     CKParameterOperation *op = Get();
     if (!op) return "ParamOperationRef is not valid.";
+    const char *state = "BridgeOwned";
+    switch (m_State) {
+        case OwnershipState::BridgeOwned: state = "BridgeOwned"; break;
+        case OwnershipState::TargetRestored: state = "TargetRestored"; break;
+        case OwnershipState::DetachedDestroyed: state = "DetachedDestroyed"; break;
+        case OwnershipState::Invalid: state = "Invalid"; break;
+    }
     CKParameterManager *pm = op->GetCKContext() ? op->GetCKContext()->GetParameterManager() : nullptr;
     CKSTRING name = pm ? pm->OperationGuidToName(op->GetOperationGuid()) : nullptr;
-    return fmt::format("Parameter operation '{}' id={} guid={}",
+    return fmt::format("Parameter operation '{}' id={} guid={} state={}",
         name && name[0] ? name : SafeString(op->GetName()),
         op->GetID(),
-        GuidToString(op->GetOperationGuid()));
-}
-
-CKObject *ParamOperationRef::RawGet() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    return GetCKObjectById(context, m_OperationId);
-}
-
-CKObject *ParamOperationRef::RawGetStamped() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    return GetStampedCKObjectById(context, m_OperationId, m_Stamp);
+        GuidToString(op->GetOperationGuid()),
+        state);
 }
 
 CKParameterIn *ParamOperationRef::TargetInput() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    CKContext *context = BridgeContext(m_Bridge, Context());
     return CKParameterIn::Cast(GetStampedCKObjectById(context, m_TargetInputId, m_TargetInputStamp));
 }
 
@@ -913,7 +935,7 @@ CKParameter *ParamOperationRef::PreviousSource() const {
     if (!m_PreviousSourceId) {
         return nullptr;
     }
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    CKContext *context = BridgeContext(m_Bridge, Context());
     return ParameterSourceForConnection(GetStampedCKObjectById(context, m_PreviousSourceId, m_PreviousSourceStamp));
 }
 
@@ -921,12 +943,12 @@ CKParameter *ParamOperationRef::InstalledSource() const {
     if (!m_InstalledSourceId) {
         return nullptr;
     }
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    CKContext *context = BridgeContext(m_Bridge, Context());
     return ParameterSourceForConnection(GetStampedCKObjectById(context, m_InstalledSourceId, m_InstalledSourceStamp));
 }
 
 void ParamOperationRef::DestroyOwnedLocalSources(CKBehavior *owner) {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    CKContext *context = BridgeContext(m_Bridge, Context());
     if (!context) {
         m_OwnedLocalSources.clear();
         return;
@@ -953,7 +975,10 @@ void ParamOperationRef::DestroyOwnedLocalSources(CKBehavior *owner) {
 }
 
 bool ParamOperationRef::RestoreTargetSource(std::string &error) {
-    if (m_TargetRestored || !m_TargetInputId) {
+    if (m_State == OwnershipState::TargetRestored ||
+        m_State == OwnershipState::DetachedDestroyed ||
+        m_State == OwnershipState::Invalid ||
+        !m_TargetInputId) {
         return true;
     }
 
@@ -987,7 +1012,7 @@ bool ParamOperationRef::RestoreTargetSource(std::string &error) {
         return false;
     }
 
-    m_TargetRestored = true;
+    m_State = OwnershipState::TargetRestored;
     return true;
 }
 

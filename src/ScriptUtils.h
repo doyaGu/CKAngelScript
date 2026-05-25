@@ -30,6 +30,9 @@ static void RegisterClassValueCast(asIScriptEngine *engine, const char *derived,
 
 template <typename D, typename B>
 static void RegisterClassRefCast(asIScriptEngine *engine, const char *derived, const char *base) {
+    // This is only for raw CK SDK wrapper inheritance where the native object
+    // layout is guaranteed by CK. High-level ObjectRef handles use checked
+    // dynamic casts in ScriptObjectRef.cpp instead.
     int r = 0;
 
     std::string decl = derived;

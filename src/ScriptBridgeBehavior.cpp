@@ -76,6 +76,14 @@ CKBehavior *FindContainingBehaviorInContext(CKBehavior *behavior) {
 
 } // namespace ScriptBridgeBehaviorInternal
 
+namespace {
+
+CKContext *BridgeContext(ScriptBehaviorBridge *bridge, CKContext *fallback = nullptr) {
+    return bridge && bridge->GetManager() ? bridge->GetManager()->GetCKContext() : fallback;
+}
+
+} // namespace
+
 BehaviorLayout::BehaviorLayout(ScriptBehaviorBridge *bridge, CK_ID behaviorId)
     : m_Bridge(bridge), m_BehaviorId(behaviorId), m_IsPrototype(false) {
     m_BehaviorStamp = CaptureBridgeObjectStamp(RawBehavior());
@@ -251,23 +259,23 @@ int BehaviorLayout::FindParameter(ScriptBridgeSlotKind kind, const std::string &
     return -1;
 }
 
-BehaviorRef::BehaviorRef(ScriptBehaviorBridge *bridge, CK_ID behaviorId, CK_ID componentId)
-    : m_Bridge(bridge), m_BehaviorId(behaviorId), m_ComponentId(componentId) {
-    m_Stamp = CaptureBridgeObjectStamp(RawGet());
-}
+BehaviorRef::BehaviorRef(ScriptBehaviorBridge *bridge, CK_ID behaviorId, CK_ID componentId, CKContext *context)
+    : ObjectRef(BridgeContext(bridge, context), behaviorId),
+      m_Bridge(bridge),
+      m_ComponentId(componentId) {}
 
 CKBehavior *BehaviorRef::Get() const {
-    return CKBehavior::Cast(RawGetStamped());
+    return CKBehavior::Cast(Object());
 }
 
 bool BehaviorRef::IsValid() const { return Get() != nullptr; }
-CK_ID BehaviorRef::GetID() const { return m_BehaviorId; }
+CK_ID BehaviorRef::GetID() const { return Id(); }
 std::string BehaviorRef::GetName() const { CKBehavior *b = Get(); return b ? SafeString(b->GetName()) : std::string(); }
 bool BehaviorRef::IsActive() const { CKBehavior *b = Get(); return b && b->IsActive(); }
 CKGUID BehaviorRef::GetPrototypeGuid() const { CKBehavior *b = Get(); return b ? b->GetPrototypeGuid() : CKGUID(); }
 std::string BehaviorRef::GetPrototypeName() const { CKBehavior *b = Get(); return b ? SafeString(b->GetPrototypeName()) : std::string(); }
 
-BehaviorLayout *BehaviorRef::Layout() const { return m_Bridge ? new BehaviorLayout(m_Bridge, m_BehaviorId) : nullptr; }
+BehaviorLayout *BehaviorRef::Layout() const { return m_Bridge ? new BehaviorLayout(m_Bridge, Id()) : nullptr; }
 
 BehaviorGraph *BehaviorRef::AsGraph() const {
     CKBehavior *behavior = Get();
@@ -366,7 +374,7 @@ bool BehaviorRef::OutputActiveSlot(BBSlot *output) const {
 ParamRef *BehaviorRef::Pin(int index) const {
     CKBehavior *behavior = Get();
     CKParameterIn *pin = behavior && index >= 0 && index < behavior->GetInputParameterCount() ? behavior->GetInputParameter(index) : nullptr;
-    return m_Bridge && pin ? new ParamRef(m_Bridge, pin->GetID(), ScriptBridgeSlotKind::Pin, index, m_BehaviorId) : nullptr;
+    return m_Bridge && pin ? new ParamRef(m_Bridge, pin->GetID(), ScriptBridgeSlotKind::Pin, index, Id(), pin->GetCKContext()) : nullptr;
 }
 
 ParamRef *BehaviorRef::PinSlot(BBSlot *slot) const {
@@ -382,7 +390,7 @@ ParamRef *BehaviorRef::PinSlot(BBSlot *slot) const {
 ParamRef *BehaviorRef::Pout(int index) const {
     CKBehavior *behavior = Get();
     CKParameterOut *pout = behavior && index >= 0 && index < behavior->GetOutputParameterCount() ? behavior->GetOutputParameter(index) : nullptr;
-    return m_Bridge && pout ? new ParamRef(m_Bridge, pout->GetID(), ScriptBridgeSlotKind::Pout, index, m_BehaviorId) : nullptr;
+    return m_Bridge && pout ? new ParamRef(m_Bridge, pout->GetID(), ScriptBridgeSlotKind::Pout, index, Id(), pout->GetCKContext()) : nullptr;
 }
 
 ParamRef *BehaviorRef::PoutSlot(BBSlot *slot) const {
@@ -398,7 +406,7 @@ ParamRef *BehaviorRef::PoutSlot(BBSlot *slot) const {
 ParamRef *BehaviorRef::Local(int index) const {
     CKBehavior *behavior = Get();
     CKParameterLocal *local = behavior && index >= 0 && index < behavior->GetLocalParameterCount() ? behavior->GetLocalParameter(index) : nullptr;
-    return m_Bridge && local ? new ParamRef(m_Bridge, local->GetID(), ScriptBridgeSlotKind::Local, index, m_BehaviorId) : nullptr;
+    return m_Bridge && local ? new ParamRef(m_Bridge, local->GetID(), ScriptBridgeSlotKind::Local, index, Id(), local->GetCKContext()) : nullptr;
 }
 
 ParamRef *BehaviorRef::LocalSlot(BBSlot *slot) const {
@@ -437,22 +445,12 @@ ParamOperationRef *BehaviorRef::ConnectOperationSlot(BBSlot *slot, ParamOp *oper
 
 std::string BehaviorRef::Describe() const {
     BehaviorLayout *layout = Layout();
-    std::string result = fmt::format("Behavior '{}' id={} prototype={}", GetName(), m_BehaviorId, GetPrototypeName());
+    std::string result = fmt::format("Behavior '{}' id={} prototype={}", GetName(), Id(), GetPrototypeName());
     if (layout) {
         result += "\n" + layout->Describe();
         layout->Release();
     }
     return result;
-}
-
-CKObject *BehaviorRef::RawGet() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    return GetCKObjectById(context, m_BehaviorId);
-}
-
-CKObject *BehaviorRef::RawGetStamped() const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    return GetStampedCKObjectById(context, m_BehaviorId, m_Stamp);
 }
 
 BehaviorBridge::BehaviorBridge(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx)

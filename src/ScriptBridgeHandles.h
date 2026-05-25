@@ -3,6 +3,7 @@
 
 #include "ScriptBridgeCommon.h"
 #include "ScriptBridgeParameterIO.h"
+#include "ScriptObjectRef.h"
 #include "ScriptNativeBuffer.h"
 #include "ScriptParameterRegistry.h"
 
@@ -18,6 +19,8 @@ class BehaviorQuery;
 class GraphEditLink;
 class GraphEditNode;
 class GraphEditResult;
+class ParamRef;
+class ParamStructRef;
 
 class ParamInfo final : public RefCounted {
 public:
@@ -92,27 +95,6 @@ private:
     ScriptParamValue m_Value;
 };
 
-class ParamStructRef final : public RefCounted {
-public:
-    ParamStructRef(ScriptBehaviorBridge *bridge, CK_ID parameterId);
-
-    CKParameter *Get() const;
-    bool IsValid() const;
-    int Count() const;
-    ParamStructInfo *Info() const;
-    ParamRef *Member(int index) const;
-    int FindMember(const std::string &name, int occurrence = 0) const;
-    std::string Describe() const;
-
-private:
-    CKObject *RawGet() const;
-    CKObject *RawGetStamped() const;
-
-    ScriptBehaviorBridge *m_Bridge = nullptr;
-    CK_ID m_ParameterId = 0;
-    ScriptBridgeObjectStamp m_Stamp;
-};
-
 class ParamSourceLinkRef final : public RefCounted {
 public:
     ParamSourceLinkRef(ScriptBehaviorBridge *bridge,
@@ -136,6 +118,13 @@ private:
     CKParameter *InstalledSource() const;
     bool RestoreInternal(std::string &error, bool explicitCall);
 
+    enum class OwnershipState {
+        Scoped,
+        Committed,
+        Restored,
+        DetachedCleanup,
+    };
+
     ScriptBehaviorBridge *m_Bridge = nullptr;
     CK_ID m_TargetId = 0;
     CK_ID m_PreviousSourceId = 0;
@@ -143,8 +132,7 @@ private:
     ScriptBridgeObjectStamp m_TargetStamp;
     ScriptBridgeObjectStamp m_PreviousSourceStamp;
     ScriptBridgeObjectStamp m_InstalledSourceStamp;
-    bool m_Committed = false;
-    bool m_Restored = false;
+    OwnershipState m_State = OwnershipState::Scoped;
 };
 
 class BehaviorLayout final : public RefCounted {
@@ -190,13 +178,14 @@ private:
     bool m_IsPrototype = false;
 };
 
-class ParamRef final : public RefCounted {
+class ParamRef : public ObjectRef {
 public:
     ParamRef(ScriptBehaviorBridge *bridge,
              CK_ID parameterId,
              ScriptBridgeSlotKind kind = ScriptBridgeSlotKind::Standalone,
              int index = -1,
-             CK_ID ownerBehaviorId = 0);
+             CK_ID ownerBehaviorId = 0,
+             CKContext *context = nullptr);
 
     CKObject *Get() const;
     const ScriptBridgeObjectStamp &Stamp() const;
@@ -235,29 +224,53 @@ public:
     bool SetRaw(NativeBuffer *buffer);
     std::string Describe() const;
 
-private:
-    CKObject *RawGet() const;
-    CKObject *RawGetStamped() const;
+protected:
     CKBehavior *OwnerBehavior() const;
     CKParameter *WritableParameter(std::string &error) const;
     bool SetDirectValue(const ScriptParamValue &value);
     const char *KindName() const;
 
     ScriptBehaviorBridge *m_Bridge = nullptr;
-    CK_ID m_ParameterId = 0;
     ScriptBridgeSlotKind m_Kind = ScriptBridgeSlotKind::Standalone;
     int m_Index = -1;
     CK_ID m_OwnerBehaviorId = 0;
-    ScriptBridgeObjectStamp m_Stamp;
 };
 
-class ParamOperationRef final : public RefCounted {
+class ParamInRef final : public ParamRef {
+public:
+    using ParamRef::ParamRef;
+};
+
+class ParamOutRef final : public ParamRef {
+public:
+    using ParamRef::ParamRef;
+};
+
+class ParamLocalRef final : public ParamRef {
+public:
+    using ParamRef::ParamRef;
+};
+
+class ParamStructRef final : public ParamRef {
+public:
+    ParamStructRef(ScriptBehaviorBridge *bridge, CK_ID parameterId, CKContext *context = nullptr);
+
+    bool IsValid() const;
+    int Count() const;
+    ParamStructInfo *Info() const;
+    ParamRef *Member(int index) const;
+    int FindMember(const std::string &name, int occurrence = 0) const;
+    std::string Describe() const;
+};
+
+class ParamOperationRef : public ObjectRef {
 public:
     ParamOperationRef(ScriptBehaviorBridge *bridge,
                       CK_ID operationId,
                       CKParameterIn *targetInput = nullptr,
                       CKParameter *previousSource = nullptr,
-                      const std::vector<CK_ID> &ownedLocalSourceIds = {});
+                      const std::vector<CK_ID> &ownedLocalSourceIds = {},
+                      CKContext *context = nullptr);
 
     CKParameterOperation *Get() const;
     bool IsValid() const;
@@ -272,25 +285,28 @@ public:
     std::string Describe() const;
 
 private:
-    CKObject *RawGet() const;
-    CKObject *RawGetStamped() const;
     CKParameterIn *TargetInput() const;
     CKParameter *PreviousSource() const;
     CKParameter *InstalledSource() const;
     void DestroyOwnedLocalSources(CKBehavior *owner);
     bool RestoreTargetSource(std::string &error);
 
+    enum class OwnershipState {
+        BridgeOwned,
+        TargetRestored,
+        DetachedDestroyed,
+        Invalid,
+    };
+
     ScriptBehaviorBridge *m_Bridge = nullptr;
-    CK_ID m_OperationId = 0;
     CK_ID m_TargetInputId = 0;
     CK_ID m_PreviousSourceId = 0;
     CK_ID m_InstalledSourceId = 0;
-    ScriptBridgeObjectStamp m_Stamp;
     ScriptBridgeObjectStamp m_TargetInputStamp;
     ScriptBridgeObjectStamp m_PreviousSourceStamp;
     ScriptBridgeObjectStamp m_InstalledSourceStamp;
     std::vector<ScriptBridgeStampedObjectId> m_OwnedLocalSources;
-    bool m_TargetRestored = false;
+    OwnershipState m_State = OwnershipState::BridgeOwned;
 };
 
 class ParamOp final : public RefCounted {
@@ -313,9 +329,9 @@ private:
     ScriptBridgeOperationSpec m_Request;
 };
 
-class BehaviorRef final : public RefCounted {
+class BehaviorRef : public ObjectRef {
 public:
-    BehaviorRef(ScriptBehaviorBridge *bridge, CK_ID behaviorId, CK_ID componentId);
+    BehaviorRef(ScriptBehaviorBridge *bridge, CK_ID behaviorId, CK_ID componentId, CKContext *context = nullptr);
 
     CKBehavior *Get() const;
     bool IsValid() const;
@@ -346,13 +362,8 @@ public:
     std::string Describe() const;
 
 private:
-    CKObject *RawGet() const;
-    CKObject *RawGetStamped() const;
-
     ScriptBehaviorBridge *m_Bridge = nullptr;
-    CK_ID m_BehaviorId = 0;
     CK_ID m_ComponentId = 0;
-    ScriptBridgeObjectStamp m_Stamp;
 };
 
 class BehaviorQuery final : public RefCounted {
@@ -708,12 +719,13 @@ private:
     std::string m_Error;
 };
 
-class BehaviorLinkRef final : public RefCounted {
+class BehaviorLinkRef final : public ObjectRef {
 public:
     BehaviorLinkRef(ScriptBehaviorBridge *bridge,
                     CK_ID rootBehaviorId,
                     CK_ID linkId,
-                    CK_ID componentId);
+                    CK_ID componentId,
+                    CKContext *context = nullptr);
 
     bool IsValid() const;
     BehaviorRef *SourceBehavior() const;
@@ -730,9 +742,7 @@ private:
 
     ScriptBehaviorBridge *m_Bridge = nullptr;
     CK_ID m_RootBehaviorId = 0;
-    CK_ID m_LinkId = 0;
     CK_ID m_ComponentId = 0;
-    ScriptBridgeObjectStamp m_LinkStamp;
 };
 
 class BehaviorBridge final : public RefCounted {

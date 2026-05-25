@@ -417,6 +417,39 @@ void RegisterParamValueFactories(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("ParamOp@ Operation(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(ParamOperationByGuid), asCALL_CDECL); assert(r >= 0);
 }
 
+template <typename T>
+void RegisterParamRefSpecificMethods(asIScriptEngine *engine, int &r, const char *typeName) {
+    r = engine->RegisterObjectMethod(typeName, "int get_index() const", asMETHOD(T, GetIndex), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "ParamKind get_kind() const", asMETHOD(T, GetKind), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "CKGUID TypeGuid() const", asMETHOD(T, TypeGuid), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "string TypeName() const", asMETHOD(T, TypeName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "int DataSize() const", asMETHOD(T, DataSize), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "ParamRef@ RealSource() const", asMETHOD(T, RealSource), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "ParamRef@ DirectSource() const", asMETHOD(T, DirectSource), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "ParamSourceLinkRef@ SetSourceScoped(ParamRef@ source)", asMETHOD(T, SetSourceScoped), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetSource(ParamRef@ source)", asMETHOD(T, SetSource), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool Set(ParamValue@ value)", asMETHOD(T, Set), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetInt(int value)", asMETHOD(T, SetInt), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetFloat(float value)", asMETHOD(T, SetFloat), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetBool(bool value)", asMETHOD(T, SetBool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetString(const string &in value)", asMETHOD(T, SetString), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetObject(CKObject@ value)", asMETHOD(T, SetObject), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetEnum(const string &in nameOrValue)", asMETHOD(T, SetEnum), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetEnum(int value)", asMETHOD(T, SetEnumInt), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetFlags(const string &in namesOrMask)", asMETHOD(T, SetFlags), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetFlags(uint mask)", asMETHOD(T, SetFlagsMask), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetStruct(ParamStructValue@ value)", asMETHOD(T, SetStruct), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "ParamValue@ Get() const", asMETHOD(T, GetValue), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool CopyFrom(ParamRef@ source)", asMETHOD(T, CopyFrom), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "string GetText() const", asMETHOD(T, GetText), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "string GetEnumText() const", asMETHOD(T, GetEnumText), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "string GetFlagsText() const", asMETHOD(T, GetFlagsText), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetText(const string &in text)", asMETHOD(T, SetText), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "NativeBuffer@ GetRaw() const", asMETHOD(T, GetRaw), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetRaw(NativeBuffer@ data)", asMETHOD(T, SetRaw), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "ParamStructRef@ Struct()", asMETHOD(T, Struct), asCALL_THISCALL); assert(r >= 0);
+}
+
 void RegisterParamKindEnum(asIScriptEngine *engine, int &r) {
     r = engine->RegisterEnum("ParamKind"); assert(r >= 0);
     r = engine->RegisterEnumValue("ParamKind", "Input", static_cast<int>(ScriptBridgeSlotKind::Input)); assert(r >= 0);
@@ -434,14 +467,10 @@ void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
     RegisterObjectTypeAndRefCount<ParamInfo>(engine, "ParamInfo");
     RegisterObjectTypeAndRefCount<ParamValue>(engine, "ParamValue");
     RegisterObjectTypeAndRefCount<ParamStructValue>(engine, "ParamStructValue");
-    RegisterObjectTypeAndRefCount<ParamRef>(engine, "ParamRef");
     RegisterObjectTypeAndRefCount<ParamSourceLinkRef>(engine, "ParamSourceLinkRef");
-    RegisterObjectTypeAndRefCount<ParamStructRef>(engine, "ParamStructRef");
     RegisterObjectTypeAndRefCount<ParamOp>(engine, "ParamOp");
-    RegisterObjectTypeAndRefCount<ParamOperationRef>(engine, "ParamOperationRef");
     RegisterObjectTypeAndRefCount<BehaviorLayout>(engine, "BehaviorLayout");
     RegisterObjectTypeAndRefCount<BehaviorLayout>(engine, "BBLayout");
-    RegisterObjectTypeAndRefCount<BehaviorRef>(engine, "BehaviorRef");
     RegisterObjectTypeAndRefCount<BehaviorQuery>(engine, "BehaviorQuery");
     RegisterObjectTypeAndRefCount<BehaviorGraph>(engine, "BehaviorGraph");
     RegisterObjectTypeAndRefCount<BehaviorGraphEdit>(engine, "BehaviorGraphEdit");
@@ -449,7 +478,6 @@ void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
     RegisterObjectTypeAndRefCount<GraphEditNode>(engine, "GraphEditNode");
     RegisterObjectTypeAndRefCount<GraphEditLink>(engine, "GraphEditLink");
     RegisterObjectTypeAndRefCount<BehaviorNode>(engine, "BehaviorNode");
-    RegisterObjectTypeAndRefCount<BehaviorLinkRef>(engine, "BehaviorLinkRef");
     RegisterObjectTypeAndRefCount<BehaviorBridge>(engine, "BehaviorBridge");
     RegisterObjectTypeAndRefCount<BBSlot>(engine, "BBSlot");
     RegisterObjectTypeAndRefCount<BBDecl>(engine, "BBDecl");
@@ -530,6 +558,11 @@ void RegisterParamHandleMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("ParamRef", "bool SetRaw(NativeBuffer@ data)", asMETHOD(ParamRef, SetRaw), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamRef", "ParamStructRef@ Struct()", asMETHOD(ParamRef, Struct), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamRef", "string Describe() const", asMETHOD(ParamRef, Describe), asCALL_THISCALL); assert(r >= 0);
+
+    RegisterParamRefSpecificMethods<ParamInRef>(engine, r, "ParamInRef");
+    RegisterParamRefSpecificMethods<ParamOutRef>(engine, r, "ParamOutRef");
+    RegisterParamRefSpecificMethods<ParamLocalRef>(engine, r, "ParamLocalRef");
+    RegisterParamRefSpecificMethods<ParamStructRef>(engine, r, "ParamStructRef");
 
     r = engine->RegisterObjectMethod("ParamSourceLinkRef", "bool IsValid() const", asMETHOD(ParamSourceLinkRef, IsValid), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("ParamSourceLinkRef", "bool IsCommitted() const", asMETHOD(ParamSourceLinkRef, IsCommitted), asCALL_THISCALL); assert(r >= 0);
@@ -1003,6 +1036,7 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
 
     RegisterParamKindEnum(engine, r);
     RegisterBridgeObjectTypes(engine);
+    RegisterScriptObjectRefBridge(engine);
     RegisterParamHandleMethods(engine, r);
     RegisterLayoutMethods(engine, r);
     RegisterBehaviorMethods(engine, r);
