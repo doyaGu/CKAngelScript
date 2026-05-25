@@ -4,6 +4,7 @@
 
 #include "AngelScriptManager.h"
 #include "ScriptMessage.h"
+#include "ScriptManager.h"
 
 namespace ScriptMessageSelfTest {
 
@@ -16,6 +17,47 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
     ScriptMessage message;
     if (message.Id() != 0 || message.RequiresReply()) {
         error = "Default ScriptMessage has invalid state.";
+        return false;
+    }
+
+    ScriptMessageBus bus(nullptr);
+    std::string busError;
+    bus.ResetPerfStats();
+    if (bus.Send("runtime:source", "runtime:missing", "topic.direct", nullptr, busError)) {
+        error = "Message performance self-test expected direct send without manager to fail.";
+        return false;
+    }
+    ScriptMessageBusPerfStats stats = bus.PerfStats();
+    if (stats.TargetParses != 1 || stats.PendingRequestFullScans != 0) {
+        error = "Message performance self-test detected unexpected direct target parsing or pending scans.";
+        return false;
+    }
+    busError.clear();
+    if (!bus.Subscribe("runtime:subscriber", "topic.broadcast", true, busError)) {
+        error = "Message performance self-test failed to subscribe broadcast target: " + busError;
+        return false;
+    }
+    bus.ResetPerfStats();
+    if (!bus.Publish("runtime:source", "topic.broadcast", nullptr, "", busError)) {
+        error = "Message performance self-test failed to publish broadcast: " + busError;
+        return false;
+    }
+    bus.Tick();
+    stats = bus.PerfStats();
+    if (stats.BroadcastSnapshotBuilds != 1 || stats.PendingRequestFullScans != 0) {
+        error = "Message performance self-test expected one broadcast snapshot build and no pending scans.";
+        return false;
+    }
+    bus.ResetPerfStats();
+    busError.clear();
+    if (!bus.Publish("runtime:source", "topic.broadcast", nullptr, "", busError)) {
+        error = "Message performance self-test failed to publish cached broadcast: " + busError;
+        return false;
+    }
+    bus.Tick();
+    stats = bus.PerfStats();
+    if (stats.BroadcastSnapshotBuilds != 0 || stats.PendingRequestFullScans != 0) {
+        error = "Message performance self-test rebuilt an unchanged broadcast snapshot or scanned pending requests.";
         return false;
     }
 

@@ -2,7 +2,9 @@
 #define CK_SCRIPTMESSAGE_H
 
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <queue>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -18,14 +20,41 @@ class ScriptAsyncTaskBase;
 class ScriptManager;
 class ScriptContext;
 
+enum class ScriptMessageKind {
+    Event,
+    Direct,
+    Request
+};
+
+enum class ScriptMessageTargetKind {
+    None,
+    Runtime,
+    Component,
+    Invalid
+};
+
+struct ScriptMessageTarget {
+    ScriptMessageTargetKind Kind = ScriptMessageTargetKind::None;
+    std::string Text;
+    std::string RuntimeId;
+    CK_ID ComponentId = 0;
+};
+
+struct ScriptMessageBusPerfStats {
+    std::uint64_t TargetParses = 0;
+    std::uint64_t BroadcastSnapshotBuilds = 0;
+    std::uint64_t PendingTimeoutChecks = 0;
+    std::uint64_t PendingRequestFullScans = 0;
+};
+
 class ScriptMessage {
 public:
     ScriptMessage();
     ScriptMessage(std::uint64_t id,
-                  std::string kind,
+                  ScriptMessageKind kind,
                   std::string topic,
                   std::string source,
-                  std::string target,
+                  ScriptMessageTarget target,
                   std::uint64_t frameIndex,
                   bool requiresReply,
                   CScriptDictionary *payload);
@@ -37,6 +66,7 @@ public:
 
     std::uint64_t Id() const;
     std::string Kind() const;
+    ScriptMessageKind KindValue() const;
     std::string Topic() const;
     std::string Source() const;
     std::string Target() const;
@@ -45,13 +75,15 @@ public:
     CScriptDictionary *Payload() const;
 
 private:
+    friend class ScriptMessageBus;
+
     void SetPayload(CScriptDictionary *payload);
 
     std::uint64_t m_Id = 0;
-    std::string m_Kind;
+    ScriptMessageKind m_Kind = ScriptMessageKind::Event;
     std::string m_Topic;
     std::string m_Source;
-    std::string m_Target;
+    ScriptMessageTarget m_Target;
     std::uint64_t m_FrameIndex = 0;
     bool m_RequiresReply = false;
     CScriptDictionary *m_Payload = nullptr;
@@ -88,6 +120,8 @@ public:
     void ClearTarget(const std::string &target, const std::string &error = std::string());
     void Clear();
     void Tick();
+    ScriptMessageBusPerfStats PerfStats() const;
+    void ResetPerfStats();
 
     static std::string RuntimeTarget(const std::string &scriptId);
     static std::string ComponentTarget(CK_ID id);
@@ -102,20 +136,40 @@ private:
         std::string Source;
         std::string Target;
         std::uint64_t StartedFrame = 0;
+        std::uint64_t DueFrame = 0;
         int TimeoutFrames = 0;
     };
+    struct TimeoutEntry {
+        std::uint64_t DueFrame = 0;
+        std::uint64_t Id = 0;
 
+        bool operator>(const TimeoutEntry &other) const {
+            if (DueFrame != other.DueFrame) {
+                return DueFrame > other.DueFrame;
+            }
+            return Id > other.Id;
+        }
+    };
+    struct TopicTargets {
+        std::vector<ScriptMessageTarget> Targets;
+        std::shared_ptr<std::vector<ScriptMessageTarget>> Snapshot;
+        bool Dirty = true;
+    };
+
+    ScriptMessageTarget ParseTarget(const std::string &target, bool allowEmpty, std::string &error);
     int DictionaryHandleTypeId();
     CScriptDictionary *ClonePayload(CScriptDictionary *payload) const;
-    ScriptMessage MakeMessage(const std::string &kind,
+    ScriptMessage MakeMessage(ScriptMessageKind kind,
                               const std::string &topic,
                               const std::string &source,
-                              const std::string &target,
+                              ScriptMessageTarget target,
                               bool requiresReply,
                               CScriptDictionary *payload);
     bool Deliver(const ScriptMessage &message, bool immediate, std::string &error);
-    bool DeliverTarget(const std::string &target, const ScriptMessage &message, bool immediate, std::string &error);
+    bool DeliverTarget(const ScriptMessageTarget &target, const ScriptMessage &message, bool immediate, std::string &error);
     void RemoveTopicTarget(const std::string &topic, const std::string &target);
+    void IndexPendingRequest(std::uint64_t id, const PendingRequest &pending);
+    void UnindexPendingRequest(std::uint64_t id, const PendingRequest &pending);
     void ReleasePending(PendingRequest &pending);
 
     ScriptManager *m_Manager = nullptr;
@@ -126,8 +180,11 @@ private:
     std::vector<ScriptMessage> m_Queue;
     std::vector<ScriptMessage> m_DrainQueue;
     std::unordered_map<std::string, SubscriptionSet> m_Subscriptions;
-    std::unordered_map<std::string, std::unordered_set<std::string>> m_TopicSubscriptions;
+    std::unordered_map<std::string, TopicTargets> m_TopicSubscriptions;
     std::unordered_map<std::uint64_t, PendingRequest> m_PendingRequests;
+    std::unordered_map<std::string, std::unordered_set<std::uint64_t>> m_PendingByTarget;
+    std::priority_queue<TimeoutEntry, std::vector<TimeoutEntry>, std::greater<TimeoutEntry>> m_Timeouts;
+    ScriptMessageBusPerfStats m_PerfStats;
 };
 
 void RegisterScriptMessage(asIScriptEngine *engine);

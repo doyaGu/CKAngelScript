@@ -211,15 +211,15 @@ bool UnsubscribeBehavior(const CKBehaviorContext &ctx, const std::string &topic)
 ScriptMessage::ScriptMessage() = default;
 
 ScriptMessage::ScriptMessage(std::uint64_t id,
-                             std::string kind,
+                             ScriptMessageKind kind,
                              std::string topic,
                              std::string source,
-                             std::string target,
+                             ScriptMessageTarget target,
                              std::uint64_t frameIndex,
                              bool requiresReply,
                              CScriptDictionary *payload)
     : m_Id(id),
-      m_Kind(std::move(kind)),
+      m_Kind(kind),
       m_Topic(std::move(topic)),
       m_Source(std::move(source)),
       m_Target(std::move(target)),
@@ -294,10 +294,21 @@ ScriptMessage::~ScriptMessage() {
 }
 
 std::uint64_t ScriptMessage::Id() const { return m_Id; }
-std::string ScriptMessage::Kind() const { return m_Kind; }
+std::string ScriptMessage::Kind() const {
+    switch (m_Kind) {
+    case ScriptMessageKind::Direct:
+        return "direct";
+    case ScriptMessageKind::Request:
+        return "request";
+    case ScriptMessageKind::Event:
+    default:
+        return "event";
+    }
+}
+ScriptMessageKind ScriptMessage::KindValue() const { return m_Kind; }
 std::string ScriptMessage::Topic() const { return m_Topic; }
 std::string ScriptMessage::Source() const { return m_Source; }
-std::string ScriptMessage::Target() const { return m_Target; }
+std::string ScriptMessage::Target() const { return m_Target.Text; }
 std::uint64_t ScriptMessage::FrameIndex() const { return m_FrameIndex; }
 bool ScriptMessage::RequiresReply() const { return m_RequiresReply; }
 
@@ -334,7 +345,11 @@ bool ScriptMessageBus::Publish(const std::string &source,
         error = "Message topic is empty.";
         return false;
     }
-    m_Queue.push_back(MakeMessage("event", cleanTopic, source, target, false, payload));
+    ScriptMessageTarget parsedTarget = ParseTarget(target, true, error);
+    if (parsedTarget.Kind == ScriptMessageTargetKind::Invalid) {
+        return false;
+    }
+    m_Queue.push_back(MakeMessage(ScriptMessageKind::Event, cleanTopic, source, std::move(parsedTarget), false, payload));
     return true;
 }
 
@@ -352,7 +367,11 @@ bool ScriptMessageBus::Send(const std::string &source,
         error = "Message topic is empty.";
         return false;
     }
-    ScriptMessage message = MakeMessage("direct", cleanTopic, source, target, false, payload);
+    ScriptMessageTarget parsedTarget = ParseTarget(target, false, error);
+    if (parsedTarget.Kind == ScriptMessageTargetKind::Invalid) {
+        return false;
+    }
+    ScriptMessage message = MakeMessage(ScriptMessageKind::Direct, cleanTopic, source, std::move(parsedTarget), false, payload);
     return Deliver(message, true, error);
 }
 
@@ -375,24 +394,36 @@ ScriptAsyncTaskBase *ScriptMessageBus::Request(const std::string &source,
         error = "Message topic is empty.";
         return nullptr;
     }
+    ScriptMessageTarget parsedTarget = ParseTarget(target, false, error);
+    if (parsedTarget.Kind == ScriptMessageTargetKind::Invalid) {
+        return nullptr;
+    }
     const int dictionaryType = DictionaryHandleTypeId();
     if (dictionaryType <= 0) {
         error = "Message bus could not resolve dictionary@.";
         return nullptr;
     }
     ScriptAsyncTaskBase *task = m_Manager->GetAsyncScheduler()->CreateManualTask(dictionaryType);
-    ScriptMessage message = MakeMessage("request", cleanTopic, source, target, true, payload);
+    ScriptMessage message = MakeMessage(ScriptMessageKind::Request, cleanTopic, source, std::move(parsedTarget), true, payload);
     PendingRequest pending;
     pending.Task = task;
     pending.Task->AddRef();
     pending.Source = source;
-    pending.Target = target;
+    pending.Target = message.Target();
     pending.StartedFrame = m_FrameIndex;
     pending.TimeoutFrames = timeoutFrames;
+    pending.DueFrame = timeoutFrames > 0
+        ? m_FrameIndex + static_cast<std::uint64_t>(timeoutFrames)
+        : 0;
     m_PendingRequests[message.Id()] = pending;
+    IndexPendingRequest(message.Id(), pending);
+    if (pending.DueFrame > 0) {
+        m_Timeouts.push(TimeoutEntry{pending.DueFrame, message.Id()});
+    }
     if (!Deliver(message, true, error)) {
         auto it = m_PendingRequests.find(message.Id());
         if (it != m_PendingRequests.end()) {
+            UnindexPendingRequest(it->first, it->second);
             ReleasePending(it->second);
             m_PendingRequests.erase(it);
         }
@@ -417,6 +448,7 @@ bool ScriptMessageBus::Reply(const std::string &source, const ScriptMessage &req
     if (copy) {
         copy->Release();
     }
+    UnindexPendingRequest(it->first, it->second);
     ReleasePending(it->second);
     m_PendingRequests.erase(it);
     return true;
@@ -433,6 +465,7 @@ bool ScriptMessageBus::Reject(const std::string &source, const ScriptMessage &re
         return false;
     }
     it->second.Task->Fail(message.empty() ? "Message request rejected." : message);
+    UnindexPendingRequest(it->first, it->second);
     ReleasePending(it->second);
     m_PendingRequests.erase(it);
     return true;
@@ -448,9 +481,20 @@ bool ScriptMessageBus::Subscribe(const std::string &target, const std::string &t
         error = "Message topic is empty.";
         return false;
     }
+    ScriptMessageTarget parsedTarget = ParseTarget(target, false, error);
+    if (parsedTarget.Kind == ScriptMessageTargetKind::Invalid) {
+        return false;
+    }
     SubscriptionSet &set = m_Subscriptions[target];
     (isStatic ? set.StaticTopics : set.DynamicTopics).insert(cleanTopic);
-    m_TopicSubscriptions[cleanTopic].insert(target);
+    TopicTargets &topicTargets = m_TopicSubscriptions[cleanTopic];
+    const auto exists = std::find_if(topicTargets.Targets.begin(), topicTargets.Targets.end(), [&](const ScriptMessageTarget &candidate) {
+        return candidate.Text == target;
+    });
+    if (exists == topicTargets.Targets.end()) {
+        topicTargets.Targets.push_back(std::move(parsedTarget));
+        topicTargets.Dirty = true;
+    }
     return true;
 }
 
@@ -501,24 +545,22 @@ void ScriptMessageBus::Clear() {
         ReleasePending(entry.second);
     }
     m_PendingRequests.clear();
+    m_PendingByTarget.clear();
+    m_Timeouts = {};
     m_Subscriptions.clear();
     m_TopicSubscriptions.clear();
 }
 
 void ScriptMessageBus::Tick() {
     ++m_FrameIndex;
-    std::vector<std::uint64_t> timedOut;
-    for (const auto &entry : m_PendingRequests) {
-        const PendingRequest &pending = entry.second;
-        if (pending.TimeoutFrames > 0 &&
-            m_FrameIndex >= pending.StartedFrame + static_cast<std::uint64_t>(pending.TimeoutFrames)) {
-            timedOut.push_back(entry.first);
-        }
-    }
-    for (std::uint64_t id : timedOut) {
-        auto it = m_PendingRequests.find(id);
-        if (it != m_PendingRequests.end()) {
+    while (!m_Timeouts.empty() && m_Timeouts.top().DueFrame <= m_FrameIndex) {
+        const TimeoutEntry entry = m_Timeouts.top();
+        m_Timeouts.pop();
+        m_PerfStats.PendingTimeoutChecks++;
+        auto it = m_PendingRequests.find(entry.Id);
+        if (it != m_PendingRequests.end() && it->second.DueFrame == entry.DueFrame) {
             it->second.Task->Fail("Message request timed out.");
+            UnindexPendingRequest(it->first, it->second);
             ReleasePending(it->second);
             m_PendingRequests.erase(it);
         }
@@ -557,6 +599,46 @@ CScriptDictionary *ScriptMessageBus::ClonePayload(CScriptDictionary *payload) co
     return copy;
 }
 
+ScriptMessageTarget ScriptMessageBus::ParseTarget(const std::string &target, bool allowEmpty, std::string &error) {
+    m_PerfStats.TargetParses++;
+    ScriptMessageTarget parsed;
+    parsed.Text = target;
+    if (target.empty()) {
+        if (allowEmpty) {
+            return parsed;
+        }
+        parsed.Kind = ScriptMessageTargetKind::Invalid;
+        error = "Message target is empty.";
+        return parsed;
+    }
+    if (target.rfind("runtime:", 0) == 0) {
+        parsed.RuntimeId = target.substr(8);
+        if (parsed.RuntimeId.empty()) {
+            parsed.Kind = ScriptMessageTargetKind::Invalid;
+            error = "Runtime message target is missing a script id.";
+            return parsed;
+        }
+        parsed.Kind = ScriptMessageTargetKind::Runtime;
+        return parsed;
+    }
+    if (target.rfind("component:", 0) == 0) {
+        const char *begin = target.c_str() + 10;
+        char *end = nullptr;
+        const unsigned long id = std::strtoul(begin, &end, 10);
+        if (begin == end || (end && *end != '\0')) {
+            parsed.Kind = ScriptMessageTargetKind::Invalid;
+            error = "Component message target has an invalid CK_ID.";
+            return parsed;
+        }
+        parsed.ComponentId = static_cast<CK_ID>(id);
+        parsed.Kind = ScriptMessageTargetKind::Component;
+        return parsed;
+    }
+    parsed.Kind = ScriptMessageTargetKind::Invalid;
+    error = "Unsupported message target: " + target;
+    return parsed;
+}
+
 int ScriptMessageBus::DictionaryHandleTypeId() {
     if (m_DictionaryHandleTypeId == 0 && m_Manager && m_Manager->GetScriptEngine()) {
         m_DictionaryHandleTypeId = m_Manager->GetScriptEngine()->GetTypeIdByDecl("dictionary@");
@@ -564,14 +646,14 @@ int ScriptMessageBus::DictionaryHandleTypeId() {
     return m_DictionaryHandleTypeId;
 }
 
-ScriptMessage ScriptMessageBus::MakeMessage(const std::string &kind,
+ScriptMessage ScriptMessageBus::MakeMessage(ScriptMessageKind kind,
                                             const std::string &topic,
                                             const std::string &source,
-                                            const std::string &target,
+                                            ScriptMessageTarget target,
                                             bool requiresReply,
                                             CScriptDictionary *payload) {
     CScriptDictionary *copy = ClonePayload(payload);
-    ScriptMessage message(m_NextId++, kind, topic, source, target, m_FrameIndex, requiresReply, copy);
+    ScriptMessage message(m_NextId++, kind, topic, source, std::move(target), m_FrameIndex, requiresReply, copy);
     if (copy) {
         copy->Release();
     }
@@ -580,22 +662,24 @@ ScriptMessage ScriptMessageBus::MakeMessage(const std::string &kind,
 
 bool ScriptMessageBus::Deliver(const ScriptMessage &message, bool immediate, std::string &error) {
     if (!message.Target().empty()) {
-        return DeliverTarget(message.Target(), message, immediate, error);
+        return DeliverTarget(message.m_Target, message, immediate, error);
     }
     auto it = m_TopicSubscriptions.find(message.Topic());
-    if (it == m_TopicSubscriptions.end() || it->second.empty()) {
+    if (it == m_TopicSubscriptions.end() || it->second.Targets.empty()) {
         error = message.Target().empty()
             ? fmt::format("No subscribers for message topic '{}'.", message.Topic())
             : fmt::format("Message target '{}' is not available.", message.Target());
-        return message.Kind() == "event";
+        return message.KindValue() == ScriptMessageKind::Event;
     }
+    TopicTargets &topicTargets = it->second;
+    if (topicTargets.Dirty || !topicTargets.Snapshot) {
+        topicTargets.Snapshot = std::make_shared<std::vector<ScriptMessageTarget>>(topicTargets.Targets);
+        topicTargets.Dirty = false;
+        m_PerfStats.BroadcastSnapshotBuilds++;
+    }
+    std::shared_ptr<std::vector<ScriptMessageTarget>> snapshot = topicTargets.Snapshot;
     bool ok = true;
-    std::vector<std::string> targets;
-    targets.reserve(it->second.size());
-    for (const std::string &target : it->second) {
-        targets.push_back(target);
-    }
-    for (const std::string &target : targets) {
+    for (const ScriptMessageTarget &target : *snapshot) {
         std::string targetError;
         if (!DeliverTarget(target, message, immediate, targetError)) {
             ok = false;
@@ -607,16 +691,15 @@ bool ScriptMessageBus::Deliver(const ScriptMessage &message, bool immediate, std
     return ok;
 }
 
-bool ScriptMessageBus::DeliverTarget(const std::string &target, const ScriptMessage &message, bool immediate, std::string &error) {
-    if (target.rfind("runtime:", 0) == 0) {
+bool ScriptMessageBus::DeliverTarget(const ScriptMessageTarget &target, const ScriptMessage &message, bool immediate, std::string &error) {
+    if (target.Kind == ScriptMessageTargetKind::Runtime) {
         return m_Manager && m_Manager->GetRuntime() &&
-            m_Manager->GetRuntime()->DeliverMessage(target.substr(8), message, immediate, error);
+            m_Manager->GetRuntime()->DeliverMessage(target.RuntimeId, message, immediate, error);
     }
-    if (target.rfind("component:", 0) == 0) {
-        CK_ID id = static_cast<CK_ID>(std::strtoul(target.c_str() + 10, nullptr, 10));
-        return m_Manager && m_Manager->DeliverComponentMessage(id, message, immediate, error);
+    if (target.Kind == ScriptMessageTargetKind::Component) {
+        return m_Manager && m_Manager->DeliverComponentMessage(target.ComponentId, message, immediate, error);
     }
-    error = "Unsupported message target: " + target;
+    error = "Unsupported message target: " + target.Text;
     return false;
 }
 
@@ -625,26 +708,69 @@ void ScriptMessageBus::RemoveTopicTarget(const std::string &topic, const std::st
     if (it == m_TopicSubscriptions.end()) {
         return;
     }
-    it->second.erase(target);
-    if (it->second.empty()) {
+    TopicTargets &topicTargets = it->second;
+    const auto oldSize = topicTargets.Targets.size();
+    topicTargets.Targets.erase(std::remove_if(topicTargets.Targets.begin(), topicTargets.Targets.end(), [&](const ScriptMessageTarget &candidate) {
+        return candidate.Text == target;
+    }), topicTargets.Targets.end());
+    if (topicTargets.Targets.size() != oldSize) {
+        topicTargets.Dirty = true;
+    }
+    if (topicTargets.Targets.empty()) {
         m_TopicSubscriptions.erase(it);
     }
 }
 
 void ScriptMessageBus::FailPendingForTarget(const std::string &target, const std::string &error) {
-    std::vector<std::uint64_t> ids;
-    for (const auto &entry : m_PendingRequests) {
-        if (entry.second.Source == target || entry.second.Target == target) {
-            ids.push_back(entry.first);
-        }
+    auto targetIt = m_PendingByTarget.find(target);
+    if (targetIt == m_PendingByTarget.end()) {
+        return;
     }
+    std::vector<std::uint64_t> ids(targetIt->second.begin(), targetIt->second.end());
     for (std::uint64_t id : ids) {
         auto it = m_PendingRequests.find(id);
         if (it != m_PendingRequests.end()) {
             it->second.Task->Fail(error);
+            UnindexPendingRequest(it->first, it->second);
             ReleasePending(it->second);
             m_PendingRequests.erase(it);
         }
+    }
+}
+
+ScriptMessageBusPerfStats ScriptMessageBus::PerfStats() const {
+    return m_PerfStats;
+}
+
+void ScriptMessageBus::ResetPerfStats() {
+    m_PerfStats = {};
+}
+
+void ScriptMessageBus::IndexPendingRequest(std::uint64_t id, const PendingRequest &pending) {
+    if (!pending.Source.empty()) {
+        m_PendingByTarget[pending.Source].insert(id);
+    }
+    if (!pending.Target.empty()) {
+        m_PendingByTarget[pending.Target].insert(id);
+    }
+}
+
+void ScriptMessageBus::UnindexPendingRequest(std::uint64_t id, const PendingRequest &pending) {
+    auto remove = [&](const std::string &target) {
+        auto it = m_PendingByTarget.find(target);
+        if (it == m_PendingByTarget.end()) {
+            return;
+        }
+        it->second.erase(id);
+        if (it->second.empty()) {
+            m_PendingByTarget.erase(it);
+        }
+    };
+    if (!pending.Source.empty()) {
+        remove(pending.Source);
+    }
+    if (!pending.Target.empty()) {
+        remove(pending.Target);
     }
 }
 

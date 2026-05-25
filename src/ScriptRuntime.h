@@ -95,8 +95,8 @@ public:
     ScriptContext();
     ScriptContext(CKContext *context,
                   const ScriptRuntimeManifest *metadata,
-                  std::string phase,
-                  std::string state,
+                  const char *phase,
+                  const char *state,
                   int generation,
                   std::uint64_t frameIndex,
                   float deltaTime,
@@ -127,8 +127,8 @@ public:
 private:
     CKContext *m_Context = nullptr;
     const ScriptRuntimeManifest *m_Metadata = nullptr;
-    std::string m_Phase;
-    std::string m_State;
+    const char *m_Phase = "";
+    const char *m_State = "";
     int m_Generation = 0;
     std::uint64_t m_FrameIndex = 0;
     float m_DeltaTime = 0.0f;
@@ -175,7 +175,8 @@ private:
     bool LoadDiscovered(const ScriptRuntimeLoadPlan &plan, bool reconcileModules);
     bool ReplaceWithFailedModule(const ScriptRuntimeManifest &metadata, const std::string &error);
     bool LoadModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> &module, std::string &error);
-    bool ValidateLifecycleSignatures(const Module &module, std::string &error) const;
+    bool CacheLifecycleFunctions(Module &module, std::string &error) const;
+    void ReleaseCachedFunctions(Module &module) const;
     bool ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module);
     bool RemoveModuleById(const std::string &id);
     void RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts);
@@ -183,7 +184,8 @@ private:
     bool DisableModule(Module &module);
     bool PauseModule(Module &module, const ScriptContext &context);
     bool ResetModule(Module &module, const ScriptContext &context);
-    std::string ModuleState(const Module &module) const;
+    const char *ModuleState(const Module &module) const;
+    Module *FindModule(const std::string &id) const;
     RuntimeScriptInfo BuildInfo(const Module &module) const;
     std::vector<RuntimeDependencyInfo> DependencyInfo(const Module &module, bool optional) const;
     void RebuildModuleIndex();

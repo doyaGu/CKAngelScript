@@ -1,6 +1,7 @@
 #include "ScriptRuntime.h"
 
 #include <algorithm>
+#include <cstring>
 #include <cstdlib>
 #include <filesystem>
 #include <set>
@@ -27,6 +28,22 @@ namespace ScriptRuntimeInternal {
 
 constexpr const char *kModulePrefix = "__CKASRuntime_";
 
+enum RuntimeLifecycleIndex {
+    LifecycleOnLoad = 0,
+    LifecycleAwake,
+    LifecycleOnEnable,
+    LifecycleStart,
+    LifecycleUpdate,
+    LifecycleOnPostLoad,
+    LifecycleOnPostProcess,
+    LifecycleOnDisable,
+    LifecycleOnDestroy,
+    LifecycleOnReset,
+    LifecycleOnPause,
+    LifecycleOnResume,
+    LifecycleCount
+};
+
 constexpr const char *kLifecycleNames[] = {
     "OnLoad",
     "Awake",
@@ -41,6 +58,21 @@ constexpr const char *kLifecycleNames[] = {
     "OnPause",
     "OnResume",
 };
+
+static_assert(sizeof(kLifecycleNames) / sizeof(kLifecycleNames[0]) == LifecycleCount,
+              "runtime lifecycle name table must match RuntimeLifecycleIndex");
+
+constexpr const char *kLoadingState = "loading";
+constexpr const char *kStateFailed = "failed";
+constexpr const char *kStateDestroying = "destroying";
+constexpr const char *kStateDisabling = "disabling";
+constexpr const char *kStateSuspended = "suspended";
+constexpr const char *kStatePaused = "paused";
+constexpr const char *kStateResetting = "resetting";
+constexpr const char *kStateUnloaded = "unloaded";
+constexpr const char *kStateDisabled = "disabled";
+constexpr const char *kStateEnabled = "enabled";
+constexpr const char *kStateLoaded = "loaded";
 
 bool RuntimeValidateOnly() {
     const char *value = std::getenv("CKAS_RUNTIME_VALIDATE_ONLY");
@@ -68,8 +100,8 @@ CKBehaviorContext MakeBehaviorContext(const ScriptContext &ctx, CKBehavior *beha
 
 ScriptContext MakeRuntimeContext(CKContext *context,
                                         const ScriptRuntimeManifest &metadata,
-                                        const std::string &phase,
-                                        const std::string &state,
+                                        const char *phase,
+                                        const char *state,
                                         int generation,
                                         std::uint64_t frameIndex,
                                         float deltaTime,
@@ -88,7 +120,26 @@ ScriptContext MakeRuntimeContext(CKContext *context,
                                         const ScriptRuntimeManifest &metadata,
                                         float deltaTime,
                                         float timeSeconds) {
-    return MakeRuntimeContext(context, metadata, std::string(), std::string(), 0, 0, deltaTime, timeSeconds);
+    return MakeRuntimeContext(context, metadata, "", "", 0, 0, deltaTime, timeSeconds);
+}
+
+int LifecycleIndexByName(const char *name) {
+    if (!name) {
+        return -1;
+    }
+    for (int i = 0; i < LifecycleCount; ++i) {
+        if (std::strcmp(name, kLifecycleNames[i]) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void ReleaseScriptFunction(asIScriptFunction *&func) {
+    if (func) {
+        func->Release();
+        func = nullptr;
+    }
 }
 
 ScriptManager *ManagerFromRuntimeContext(const ScriptContext &ctx) {
@@ -364,6 +415,8 @@ struct ScriptRuntime::Module {
     std::shared_ptr<CachedScript> Cached;
     asIScriptObject *Object = nullptr;
     asITypeInfo *Type = nullptr;
+    asIScriptFunction *Lifecycle[ScriptRuntimeInternal::LifecycleCount] = {};
+    asIScriptFunction *OnMessage = nullptr;
     bool Enabled = true;
     bool Loaded = false;
     bool LoadCalled = false;
@@ -525,16 +578,16 @@ ScriptContext::ScriptContext() = default;
 
 ScriptContext::ScriptContext(CKContext *context,
                              const ScriptRuntimeManifest *metadata,
-                             std::string phase,
-                             std::string state,
+                             const char *phase,
+                             const char *state,
                              int generation,
                              std::uint64_t frameIndex,
                              float deltaTime,
                              float timeSeconds)
     : m_Context(context),
       m_Metadata(metadata),
-      m_Phase(std::move(phase)),
-      m_State(std::move(state)),
+      m_Phase(phase ? phase : ""),
+      m_State(state ? state : ""),
       m_Generation(generation),
       m_FrameIndex(frameIndex),
       m_DeltaTime(deltaTime),
@@ -581,11 +634,11 @@ std::string ScriptContext::Target() const {
 }
 
 std::string ScriptContext::Phase() const {
-    return m_Phase;
+    return m_Phase ? m_Phase : "";
 }
 
 std::string ScriptContext::State() const {
-    return m_State;
+    return m_State ? m_State : "";
 }
 
 int ScriptContext::Generation() const {
@@ -881,15 +934,14 @@ bool ScriptRuntime::Reload(const std::string &id, std::string *error) {
 
 bool ScriptRuntime::Enable(const std::string &id, bool enabled, std::string *error) {
     EnsureScanned();
-    for (std::unique_ptr<Module> &module : m_Modules) {
-        if (module && module->Meta.Id == id) {
-            module->Enabled = enabled;
-            module->Meta.Enabled = enabled;
-            if (!enabled) {
-                DisableModule(*module);
-            }
-            return true;
+    Module *module = FindModule(id);
+    if (module) {
+        module->Enabled = enabled;
+        module->Meta.Enabled = enabled;
+        if (!enabled) {
+            DisableModule(*module);
         }
+        return true;
     }
     if (error) {
         *error = fmt::format("Runtime script '{}' is not loaded.", id);
@@ -919,41 +971,23 @@ std::vector<RuntimeScriptInfo> ScriptRuntime::ListInfo() const {
 }
 
 RuntimeScriptInfo ScriptRuntime::Info(const std::string &id) const {
-    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
-    for (const std::unique_ptr<Module> &module : m_Modules) {
-        if (module && (module->Meta.Id == canonical || module->Meta.Id == id)) {
-            return BuildInfo(*module);
-        }
-    }
-    return RuntimeScriptInfo();
+    Module *module = FindModule(id);
+    return module ? BuildInfo(*module) : RuntimeScriptInfo();
 }
 
 std::string ScriptRuntime::Version(const std::string &id) const {
-    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
-    for (const std::unique_ptr<Module> &module : m_Modules) {
-        if (module && (module->Meta.Id == canonical || module->Meta.Id == id)) {
-            return module->Meta.VersionText;
-        }
-    }
-    return std::string();
+    Module *module = FindModule(id);
+    return module ? module->Meta.VersionText : std::string();
 }
 
 std::string ScriptRuntime::Metadata(const std::string &id, const std::string &key, const std::string &fallback) const {
-    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
-    for (const std::unique_ptr<Module> &module : m_Modules) {
-        if (module && (module->Meta.Id == canonical || module->Meta.Id == id)) {
-            return ScriptRuntimeMetadata::MetadataValue(module->Meta.CustomMetadata, key, fallback);
-        }
-    }
-    return fallback;
+    Module *module = FindModule(id);
+    return module ? ScriptRuntimeMetadata::MetadataValue(module->Meta.CustomMetadata, key, fallback) : fallback;
 }
 
 std::vector<std::string> ScriptRuntime::Dependencies(const std::string &id) const {
-    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
-    for (const std::unique_ptr<Module> &module : m_Modules) {
-        if (!module || (module->Meta.Id != canonical && module->Meta.Id != id)) {
-            continue;
-        }
+    Module *module = FindModule(id);
+    if (module) {
         std::vector<std::string> result;
         result.reserve(module->Meta.RequiredDependencies.size());
         for (const ScriptRuntimeDependency &dependency : module->Meta.RequiredDependencies) {
@@ -965,32 +999,17 @@ std::vector<std::string> ScriptRuntime::Dependencies(const std::string &id) cons
 }
 
 std::vector<RuntimeDependencyInfo> ScriptRuntime::RequiredDependencies(const std::string &id) const {
-    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
-    for (const std::unique_ptr<Module> &module : m_Modules) {
-        if (module && (module->Meta.Id == canonical || module->Meta.Id == id)) {
-            return DependencyInfo(*module, false);
-        }
-    }
-    return {};
+    Module *module = FindModule(id);
+    return module ? DependencyInfo(*module, false) : std::vector<RuntimeDependencyInfo>();
 }
 
 std::vector<RuntimeDependencyInfo> ScriptRuntime::OptionalDependencies(const std::string &id) const {
-    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
-    for (const std::unique_ptr<Module> &module : m_Modules) {
-        if (module && (module->Meta.Id == canonical || module->Meta.Id == id)) {
-            return DependencyInfo(*module, true);
-        }
-    }
-    return {};
+    Module *module = FindModule(id);
+    return module ? DependencyInfo(*module, true) : std::vector<RuntimeDependencyInfo>();
 }
 
 bool ScriptRuntime::DeliverMessage(const std::string &id, const ScriptMessage &message, bool immediate, std::string &error) {
-    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
-    auto it = m_ModulesById.find(canonical);
-    if (it == m_ModulesById.end() && id != canonical) {
-        it = m_ModulesById.find(id);
-    }
-    Module *module = it != m_ModulesById.end() ? it->second : nullptr;
+    Module *module = FindModule(id);
     if (!module) {
         error = "Runtime message target was not found.";
         return false;
@@ -1315,7 +1334,8 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
         loaded->Object = static_cast<asIScriptObject *>(object);
     }
 
-    if (!ValidateLifecycleSignatures(*loaded, error)) {
+    if (!CacheLifecycleFunctions(*loaded, error)) {
+        ReleaseCachedFunctions(*loaded);
         if (loaded->Object) {
             loaded->Object->Release();
             loaded->Object = nullptr;
@@ -1332,7 +1352,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                          loaded->Meta,
                                                                          "OnLoad",
-                                                                         "loading",
+                                                                         ScriptRuntimeInternal::kLoadingState,
                                                                          loaded->Generation,
                                                                          m_FrameIndex,
                                                                          0.0f,
@@ -1348,7 +1368,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
         ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                         loaded->Meta,
                                                         "Awake",
-                                                        "loading",
+                                                        ScriptRuntimeInternal::kLoadingState,
                                                         loaded->Generation,
                                                         m_FrameIndex,
                                                         0.0f,
@@ -1373,16 +1393,22 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     return true;
 }
 
-bool ScriptRuntime::ValidateLifecycleSignatures(const Module &module, std::string &error) const {
+bool ScriptRuntime::CacheLifecycleFunctions(Module &module, std::string &error) const {
     asIScriptModule *scriptModule = module.Cached ? module.Cached->module : nullptr;
     if (!scriptModule) {
         return true;
     }
-    for (const char *name : ScriptRuntimeInternal::kLifecycleNames) {
+    ReleaseCachedFunctions(module);
+    for (int i = 0; i < ScriptRuntimeInternal::LifecycleCount; ++i) {
+        const char *name = ScriptRuntimeInternal::kLifecycleNames[i];
         const std::string expected = fmt::format("void {}(const ScriptContext &in ctx)", name);
         asIScriptFunction *expectedFunc = module.Type
             ? module.Type->GetMethodByDecl(expected.c_str())
             : scriptModule->GetFunctionByDecl(expected.c_str());
+        if (expectedFunc) {
+            expectedFunc->AddRef();
+            module.Lifecycle[i] = expectedFunc;
+        }
         if (module.Type) {
             const asUINT count = module.Type->GetMethodCount();
             for (asUINT i = 0; i < count; ++i) {
@@ -1415,6 +1441,10 @@ bool ScriptRuntime::ValidateLifecycleSignatures(const Module &module, std::strin
     asIScriptFunction *expectedMessageFunc = module.Type
         ? module.Type->GetMethodByDecl(expectedMessage.c_str())
         : scriptModule->GetFunctionByDecl(expectedMessage.c_str());
+    if (expectedMessageFunc) {
+        expectedMessageFunc->AddRef();
+        module.OnMessage = expectedMessageFunc;
+    }
     if (module.Type) {
         const asUINT count = module.Type->GetMethodCount();
         for (asUINT i = 0; i < count; ++i) {
@@ -1441,6 +1471,13 @@ bool ScriptRuntime::ValidateLifecycleSignatures(const Module &module, std::strin
         }
     }
     return true;
+}
+
+void ScriptRuntime::ReleaseCachedFunctions(Module &module) const {
+    for (int i = 0; i < ScriptRuntimeInternal::LifecycleCount; ++i) {
+        ScriptRuntimeInternal::ReleaseScriptFunction(module.Lifecycle[i]);
+    }
+    ScriptRuntimeInternal::ReleaseScriptFunction(module.OnMessage);
 }
 
 bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module) {
@@ -1503,6 +1540,7 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
             CancelActiveInvocation(module);
         }
     }
+    ReleaseCachedFunctions(module);
     if (module.Object) {
         module.Object->Release();
         module.Object = nullptr;
@@ -1591,35 +1629,44 @@ bool ScriptRuntime::ResetModule(Module &module, const ScriptContext &context) {
     return true;
 }
 
-std::string ScriptRuntime::ModuleState(const Module &module) const {
+const char *ScriptRuntime::ModuleState(const Module &module) const {
     if (module.Failed) {
-        return "failed";
+        return ScriptRuntimeInternal::kStateFailed;
     }
     if (module.PendingDestroy) {
-        return "destroying";
+        return ScriptRuntimeInternal::kStateDestroying;
     }
     if (module.PendingDisable) {
-        return "disabling";
+        return ScriptRuntimeInternal::kStateDisabling;
     }
     if (module.PendingPause || m_Paused) {
-        return "paused";
+        return ScriptRuntimeInternal::kStatePaused;
     }
     if (module.PendingReset) {
-        return "resetting";
+        return ScriptRuntimeInternal::kStateResetting;
     }
     if (module.ActiveContext) {
-        return "suspended";
+        return ScriptRuntimeInternal::kStateSuspended;
     }
     if (!module.Loaded) {
-        return "unloaded";
+        return ScriptRuntimeInternal::kStateUnloaded;
     }
     if (!module.Enabled) {
-        return "disabled";
+        return ScriptRuntimeInternal::kStateDisabled;
     }
     if (module.EnableCalled) {
-        return "enabled";
+        return ScriptRuntimeInternal::kStateEnabled;
     }
-    return "loaded";
+    return ScriptRuntimeInternal::kStateLoaded;
+}
+
+ScriptRuntime::Module *ScriptRuntime::FindModule(const std::string &id) const {
+    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
+    auto it = m_ModulesById.find(canonical);
+    if (it == m_ModulesById.end() && id != canonical) {
+        it = m_ModulesById.find(id);
+    }
+    return it != m_ModulesById.end() ? it->second : nullptr;
 }
 
 RuntimeScriptInfo ScriptRuntime::BuildInfo(const Module &module) const {
@@ -1778,19 +1825,10 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
 }
 
 ScriptRuntime::InvokeStatus ScriptRuntime::InvokeMessage(Module &module, const ScriptMessage &message, const ScriptContext &context) {
-    if (!module.Cached || !module.Cached->module) {
+    if (!module.OnMessage) {
         return InvokeStatus::Finished;
     }
-    asIScriptFunction *func = nullptr;
-    if (!module.ActiveContext) {
-        const std::string decl = "void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx)";
-        func = module.Type
-            ? module.Type->GetMethodByDecl(decl.c_str())
-            : module.Cached->module->GetFunctionByDecl(decl.c_str());
-        if (!func) {
-            return InvokeStatus::Finished;
-        }
-    }
+    asIScriptFunction *func = module.OnMessage;
     asIScriptEngine *engine = module.ActiveContext ? module.ActiveContext->GetEngine() : (func ? func->GetEngine() : nullptr);
     asIScriptContext *ctx = module.ActiveContext;
     if (!ctx) {
@@ -1854,7 +1892,8 @@ ScriptRuntime::InvokeStatus ScriptRuntime::InvokeMessage(Module &module, const S
 }
 
 ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *name, const ScriptContext &context, bool required) {
-    if (!module.Cached || !module.Cached->module || !name || name[0] == '\0') {
+    const int lifecycleIndex = ScriptRuntimeInternal::LifecycleIndexByName(name);
+    if (lifecycleIndex < 0) {
         return required ? InvokeStatus::Failed : InvokeStatus::Finished;
     }
 
@@ -1869,28 +1908,9 @@ ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *na
         }
     }
 
-    asIScriptFunction *func = nullptr;
-    if (!module.ActiveContext) {
-        std::string decl = fmt::format("void {}(const ScriptContext &in ctx)", name);
-        if (module.Type) {
-            func = module.Type->GetMethodByDecl(decl.c_str());
-        } else {
-            func = module.Cached->module->GetFunctionByDecl(decl.c_str());
-        }
-        if (!func) {
-            asIScriptFunction *wrongSignature = module.Type
-                ? module.Type->GetMethodByName(name)
-                : module.Cached->module->GetFunctionByName(name);
-            if (wrongSignature) {
-                SetModuleError(module,
-                               fmt::format("{} has invalid runtime lifecycle signature '{}'; expected '{}'.",
-                                           name,
-                                           wrongSignature->GetDeclaration(),
-                                           decl));
-                return InvokeStatus::Failed;
-            }
-            return required ? InvokeStatus::Failed : InvokeStatus::Finished;
-        }
+    asIScriptFunction *func = module.Lifecycle[lifecycleIndex];
+    if (!func) {
+        return required ? InvokeStatus::Failed : InvokeStatus::Finished;
     }
 
     asIScriptEngine *engine = module.ActiveContext ? module.ActiveContext->GetEngine() : (func ? func->GetEngine() : nullptr);
