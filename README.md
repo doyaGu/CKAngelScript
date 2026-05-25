@@ -332,6 +332,8 @@ Runtime lifecycle callbacks keep the existing naming style but must use the expl
 
 See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for metadata, lifecycle, structured `RuntimeScriptInfo` / `RuntimeDependencyInfo` APIs, validation, and templates.
 
+Generic script messaging is exposed through the `Message` namespace for runtime scripts and AngelScript Components. Runtime targets use `runtime:<script-id>` and component targets use `component:<CK_ID>`.
+
 ---
 
 ## Contributing

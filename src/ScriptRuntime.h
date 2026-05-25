@@ -13,6 +13,7 @@
 #include "ScriptRuntimeMetadata.h"
 
 class CKContext;
+class ScriptMessage;
 class ScriptManager;
 
 class RuntimeDependencyInfo {
@@ -169,6 +170,7 @@ public:
     std::vector<std::string> Dependencies(const std::string &id) const;
     std::vector<RuntimeDependencyInfo> RequiredDependencies(const std::string &id) const;
     std::vector<RuntimeDependencyInfo> OptionalDependencies(const std::string &id) const;
+    bool DeliverMessage(const std::string &id, const ScriptMessage &message, bool immediate, std::string &error);
 
 private:
     struct Module;
@@ -196,6 +198,7 @@ private:
     std::vector<RuntimeDependencyInfo> DependencyInfo(const Module &module, bool optional) const;
     void FinalizePendingModules();
     void UpdateModule(Module &module, float deltaTime, float timeSeconds);
+    InvokeStatus InvokeMessage(Module &module, const ScriptMessage &message, const ScriptRuntimeContext &context);
     InvokeStatus Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required = false);
     bool InvokeFinished(Module &module, const char *name, const ScriptRuntimeContext &context, bool required = false);
     void CancelActiveInvocation(Module &module);

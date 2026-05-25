@@ -208,7 +208,7 @@ bool ScanMetadataBlocks(const std::string &source, std::vector<MetadataBlock> &b
             ++tagEnd;
         }
         std::string kind = ScriptRuntimeMetadata::ToLower(source.substr(pos + 1, tagEnd - (pos + 1)));
-        if (kind != "script" && kind != "script.meta" && kind != "script.depends") {
+        if (kind != "script" && kind != "script.meta" && kind != "script.depends" && kind != "script.messages") {
             pos = tagEnd;
             continue;
         }
@@ -503,6 +503,7 @@ bool ParseManifestSource(const std::string &source,
     std::vector<std::string> tags;
     std::vector<std::string> before;
     std::vector<std::string> after;
+    std::vector<std::string> messageTopics;
     std::vector<ScriptRuntimeDependency> required;
     std::vector<ScriptRuntimeDependency> optional;
     std::vector<ScriptRuntimeMetadataEntry> custom;
@@ -541,6 +542,14 @@ bool ParseManifestSource(const std::string &source,
                     ScriptRuntimeMetadataInternal::AppendList(before, pair.Value);
                 } else if (pair.Key == "after") {
                     ScriptRuntimeMetadataInternal::AppendList(after, pair.Value);
+                } else {
+                    ScriptRuntimeMetadataInternal::SetMetadata(custom, pair.Key, pair.Value);
+                }
+                continue;
+            }
+            if (block.Kind == "script.messages") {
+                if (pair.Key == "topics") {
+                    ScriptRuntimeMetadataInternal::AppendList(messageTopics, pair.Value);
                 } else {
                     ScriptRuntimeMetadataInternal::SetMetadata(custom, pair.Key, pair.Value);
                 }
@@ -647,6 +656,7 @@ bool ParseManifestSource(const std::string &source,
     }
     manifest.Before = std::move(before);
     manifest.After = std::move(after);
+    manifest.MessageTopics = std::move(messageTopics);
     manifest.CustomMetadata = std::move(custom);
     manifest.Id = SanitizeId(manifest.Id);
     if (manifest.Name.empty()) {

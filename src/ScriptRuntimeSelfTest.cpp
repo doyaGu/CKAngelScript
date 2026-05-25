@@ -19,6 +19,9 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     if (!ScriptRuntimeDependencyResolver::RunScriptRuntimeDependencySelfTest(error)) {
         return false;
     }
+    if (!ScriptMessageSelfTest::RunScriptMessageSelfTest(context, engine, error)) {
+        return false;
+    }
     const char *source =
         "void __ckas_runtime_compile_probe(const ScriptRuntimeContext &in ctx) {\n"
         "  CKContext@ c = ctx.Context();\n"

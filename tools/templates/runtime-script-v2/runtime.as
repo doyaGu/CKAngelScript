@@ -14,4 +14,10 @@ class ExampleRuntime {
   void OnReset(const ScriptRuntimeContext &in ctx) {}
   void OnPause(const ScriptRuntimeContext &in ctx) {}
   void OnResume(const ScriptRuntimeContext &in ctx) {}
+
+  void OnMessage(const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx) {
+    if (msg.RequiresReply()) {
+      Message::Reply(ctx, msg, msg.Payload());
+    }
+  }
 }

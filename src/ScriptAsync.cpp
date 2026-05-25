@@ -779,6 +779,8 @@ void ScriptAsyncTaskBase::Advance() {
     }
 
     switch (m_Kind) {
+        case ScriptAsyncTaskKind::Manual:
+            break;
         case ScriptAsyncTaskKind::Delay:
             AdvanceDelay();
             break;
@@ -1184,6 +1186,12 @@ asIScriptEngine *ScriptAsyncScheduler::GetEngine() const {
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateDelay(int frames) {
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::Delay, asTYPEID_VOID);
     task->SetDelayFrames(frames);
+    Track(task);
+    return task;
+}
+
+ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateManualTask(int subtypeId) {
+    ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::Manual, subtypeId);
     Track(task);
     return task;
 }

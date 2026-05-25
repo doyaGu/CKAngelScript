@@ -16,6 +16,7 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptAsync.h"
 #include "ScriptManager.h"
+#include "ScriptMessage.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptRuntimeDependency.h"
 #include "ScriptRuntimeMetadata.h"
@@ -379,6 +380,7 @@ struct ScriptRuntime::Module {
     asIScriptContext *ActiveContext = nullptr;
     std::string ActiveInvocation;
     ScriptRuntimeContext ContextStorage;
+    ScriptMessage MessageStorage;
     bool PendingDisable = false;
     bool PendingDestroy = false;
     bool PendingErase = false;
@@ -809,6 +811,13 @@ void ScriptRuntime::OnEnd() {
 }
 
 void ScriptRuntime::Clear() {
+    if (m_Manager && m_Manager->GetMessageBus()) {
+        for (const std::unique_ptr<Module> &module : m_Modules) {
+            if (module) {
+                m_Manager->GetMessageBus()->ClearTarget(ScriptMessageBus::RuntimeTarget(module->Meta.Id), "Runtime was cleared.");
+            }
+        }
+    }
     for (std::unique_ptr<Module> &module : m_Modules) {
         if (module) {
             DestroyModule(*module, true);
@@ -985,6 +994,42 @@ std::vector<RuntimeDependencyInfo> ScriptRuntime::OptionalDependencies(const std
         }
     }
     return {};
+}
+
+bool ScriptRuntime::DeliverMessage(const std::string &id, const ScriptMessage &message, bool immediate, std::string &error) {
+    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
+    for (std::unique_ptr<Module> &module : m_Modules) {
+        if (!module || (module->Meta.Id != canonical && module->Meta.Id != id)) {
+            continue;
+        }
+        if (!module->Loaded || module->Failed || !module->Enabled || !module->EnableCalled) {
+            error = "Runtime message target is not ready.";
+            return false;
+        }
+        if (module->ActiveContext) {
+            error = "Runtime message target is busy.";
+            return false;
+        }
+        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                                             module->Meta,
+                                                                             "OnMessage",
+                                                                             ModuleState(*module),
+                                                                             module->Generation,
+                                                                             m_FrameIndex,
+                                                                             0.0f,
+                                                                             0.0f);
+        const InvokeStatus status = InvokeMessage(*module, message, ctx);
+        if (status == InvokeStatus::Suspended) {
+            return true;
+        }
+        if (status == InvokeStatus::Failed) {
+            error = module->Error.empty() ? "Runtime message handler failed." : module->Error;
+            return false;
+        }
+        return true;
+    }
+    error = "Runtime message target was not found.";
+    return false;
 }
 
 void ScriptRuntime::EnsureScanned() {
@@ -1321,6 +1366,13 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
         }
     }
     module = std::move(loaded);
+    if (m_Manager && m_Manager->GetMessageBus()) {
+        std::string subscribeError;
+        const std::string target = ScriptMessageBus::RuntimeTarget(metadata.Id);
+        for (const std::string &topic : metadata.MessageTopics) {
+            m_Manager->GetMessageBus()->Subscribe(target, topic, true, subscribeError);
+        }
+    }
     return true;
 }
 
@@ -1362,6 +1414,35 @@ bool ScriptRuntime::ValidateLifecycleSignatures(const Module &module, std::strin
             }
         }
     }
+    const std::string expectedMessage = "void OnMessage(const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx)";
+    asIScriptFunction *expectedMessageFunc = module.Type
+        ? module.Type->GetMethodByDecl(expectedMessage.c_str())
+        : scriptModule->GetFunctionByDecl(expectedMessage.c_str());
+    if (module.Type) {
+        const asUINT count = module.Type->GetMethodCount();
+        for (asUINT i = 0; i < count; ++i) {
+            asIScriptFunction *method = module.Type->GetMethodByIndex(i);
+            if (method && std::string(method->GetName()) == "OnMessage" && method != expectedMessageFunc) {
+                error = fmt::format("Runtime script '{}' message handler has invalid signature '{}'; expected '{}'.",
+                                    module.Meta.Id,
+                                    method->GetDeclaration(),
+                                    expectedMessage);
+                return false;
+            }
+        }
+    } else {
+        const asUINT count = scriptModule->GetFunctionCount();
+        for (asUINT i = 0; i < count; ++i) {
+            asIScriptFunction *function = scriptModule->GetFunctionByIndex(i);
+            if (function && std::string(function->GetName()) == "OnMessage" && function != expectedMessageFunc) {
+                error = fmt::format("Runtime script '{}' message handler has invalid signature '{}'; expected '{}'.",
+                                    module.Meta.Id,
+                                    function->GetDeclaration(),
+                                    expectedMessage);
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -1381,6 +1462,9 @@ bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::un
 }
 
 bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
+    if (m_Manager && m_Manager->GetMessageBus()) {
+        m_Manager->GetMessageBus()->ClearTarget(ScriptMessageBus::RuntimeTarget(module.Meta.Id), "Runtime script was destroyed.");
+    }
     if (hard) {
         CancelActiveInvocation(module);
     }
@@ -1437,6 +1521,11 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
 }
 
 bool ScriptRuntime::DisableModule(Module &module) {
+    if (m_Manager && m_Manager->GetMessageBus()) {
+        const std::string target = ScriptMessageBus::RuntimeTarget(module.Meta.Id);
+        m_Manager->GetMessageBus()->ClearDynamicSubscriptions(target);
+        m_Manager->GetMessageBus()->FailPendingForTarget(target, "Runtime script was disabled.");
+    }
     if (!module.PendingDisable) {
         CancelActiveInvocation(module);
     }
@@ -1673,6 +1762,82 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
     Invoke(module, "Update", ctx);
 }
 
+ScriptRuntime::InvokeStatus ScriptRuntime::InvokeMessage(Module &module, const ScriptMessage &message, const ScriptRuntimeContext &context) {
+    if (!module.Cached || !module.Cached->module) {
+        return InvokeStatus::Finished;
+    }
+    asIScriptFunction *func = nullptr;
+    if (!module.ActiveContext) {
+        const std::string decl = "void OnMessage(const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx)";
+        func = module.Type
+            ? module.Type->GetMethodByDecl(decl.c_str())
+            : module.Cached->module->GetFunctionByDecl(decl.c_str());
+        if (!func) {
+            return InvokeStatus::Finished;
+        }
+    }
+    asIScriptEngine *engine = module.ActiveContext ? module.ActiveContext->GetEngine() : (func ? func->GetEngine() : nullptr);
+    asIScriptContext *ctx = module.ActiveContext;
+    if (!ctx) {
+        ctx = engine ? engine->RequestContext() : nullptr;
+        if (!ctx) {
+            SetModuleError(module, "OnMessage: failed to request AngelScript context");
+            return InvokeStatus::Failed;
+        }
+        module.ActiveContext = ctx;
+        module.ActiveInvocation = "OnMessage";
+        module.MessageStorage = message;
+    }
+    module.ContextStorage = context;
+    int r = 0;
+    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
+        std::string waitError;
+        ScriptAsyncScheduler *scheduler = m_Manager ? m_Manager->GetAsyncScheduler() : nullptr;
+        const ScriptAsyncScheduler::ResumeState resume = scheduler
+            ? scheduler->PrepareContextResume(ctx, waitError)
+            : ScriptAsyncScheduler::ResumeState::Ready;
+        if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
+            return InvokeStatus::Suspended;
+        }
+        if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
+            CancelActiveInvocation(module);
+            SetModuleError(module, waitError.empty() ? "Awaited async task failed." : waitError);
+            return InvokeStatus::Failed;
+        }
+    } else {
+        r = ctx->Prepare(func);
+        if (r >= 0 && module.Object) {
+            r = ctx->SetObject(module.Object);
+        }
+        if (r >= 0) {
+            r = ctx->SetArgObject(0, &module.MessageStorage);
+        }
+        if (r >= 0) {
+            r = ctx->SetArgObject(1, &module.ContextStorage);
+        }
+        if (r < 0) {
+            CancelActiveInvocation(module);
+            SetModuleError(module, "OnMessage: failed to prepare AngelScript context");
+            return InvokeStatus::Failed;
+        }
+    }
+    r = ctx->Execute();
+    if (r == asEXECUTION_SUSPENDED) {
+        return InvokeStatus::Suspended;
+    }
+    if (r != asEXECUTION_FINISHED) {
+        std::string messageText = fmt::format("OnMessage failed with AngelScript result {}", r);
+        if (r == asEXECUTION_EXCEPTION && ctx->GetExceptionString()) {
+            messageText = ctx->GetExceptionString();
+        }
+        CancelActiveInvocation(module);
+        SetModuleError(module, messageText);
+        return InvokeStatus::Failed;
+    }
+    CancelActiveInvocation(module);
+    return InvokeStatus::Finished;
+}
+
 ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required) {
     if (!module.Cached || !module.Cached->module || !name || name[0] == '\0') {
         return required ? InvokeStatus::Failed : InvokeStatus::Finished;
@@ -1681,7 +1846,9 @@ ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *na
     if (module.ActiveContext && module.ActiveInvocation != name) {
         const std::string active = module.ActiveInvocation;
         const ScriptRuntimeContext activeContext = module.ContextStorage;
-        const InvokeStatus activeStatus = Invoke(module, active.c_str(), activeContext, false);
+        const InvokeStatus activeStatus = active == "OnMessage"
+            ? InvokeMessage(module, module.MessageStorage, activeContext)
+            : Invoke(module, active.c_str(), activeContext, false);
         if (activeStatus != InvokeStatus::Finished) {
             return activeStatus;
         }

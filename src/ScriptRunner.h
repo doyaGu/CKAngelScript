@@ -9,6 +9,7 @@
 #include <angelscript.h>
 
 #include "CKBehavior.h"
+#include "ScriptMessage.h"
 
 class ScriptManager;
 struct CachedScript;
@@ -51,6 +52,7 @@ public:
     ScriptExecutionStatus ExecuteScriptStatus(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
     bool ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
     ScriptExecutionStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
+    ScriptExecutionStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const ScriptMessage &message, const CKBehaviorContext &behcontext);
     bool IsContextSuspended() const;
     void AbortContext();
 
@@ -85,6 +87,7 @@ private:
     std::string m_ErrorMessage;
     std::string m_StackTrace;
     CKBehaviorContext m_BehaviorContextStorage;
+    ScriptMessage m_MessageStorage;
 };
 
 #endif // CK_SCRIPTRUNNER_H

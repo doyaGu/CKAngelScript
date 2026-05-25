@@ -23,7 +23,9 @@
 #include "ScriptComponentInjection.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
+#include "ScriptMessage.h"
 #include "ScriptParameterConversion.h"
+#include "ScriptRuntimeMetadata.h"
 #include "ScriptRunner.h"
 
 CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl();
@@ -326,6 +328,29 @@ bool IsContextLifecycleMethod(asIScriptFunction *func) {
     return typeId == contextTypeId && refFlags == asTM_INREF && (flags & asTM_CONST) != 0;
 }
 
+bool IsComponentMessageMethod(asIScriptFunction *func) {
+    if (!func || func->GetReturnTypeId() != asTYPEID_VOID || func->GetParamCount() != 2) {
+        return false;
+    }
+    int messageTypeId = 0;
+    asDWORD messageFlags = 0;
+    int contextTypeId = 0;
+    asDWORD contextFlags = 0;
+    if (func->GetParam(0, &messageTypeId, &messageFlags) < 0 ||
+        func->GetParam(1, &contextTypeId, &contextFlags) < 0) {
+        return false;
+    }
+    asIScriptEngine *engine = func->GetEngine();
+    const int expectedMessage = engine ? engine->GetTypeIdByDecl("ScriptMessage") : 0;
+    const int expectedContext = engine ? engine->GetTypeIdByDecl("CKBehaviorContext") : 0;
+    return messageTypeId == expectedMessage &&
+           contextTypeId == expectedContext &&
+           (messageFlags & asTM_INOUTREF) == asTM_INREF &&
+           (contextFlags & asTM_INOUTREF) == asTM_INREF &&
+           (messageFlags & asTM_CONST) != 0 &&
+           (contextFlags & asTM_CONST) != 0;
+}
+
 bool CacheLifecycleMethod(asITypeInfo *type, const char *name, bool required, asIScriptFunction *&out, ScriptRunner *runner) {
     out = nullptr;
     bool sawName = false;
@@ -367,6 +392,99 @@ bool CacheLifecycleMethod(asITypeInfo *type, const char *name, bool required, as
     return true;
 }
 
+bool CacheMessageMethod(asITypeInfo *type, ScriptComponentState *state) {
+    if (!type || !state) {
+        return false;
+    }
+    if (state->OnMessage) {
+        state->OnMessage->Release();
+        state->OnMessage = nullptr;
+    }
+    bool sawName = false;
+    std::string invalidDecl;
+    for (asUINT i = 0; i < type->GetMethodCount(); ++i) {
+        asIScriptFunction *method = type->GetMethodByIndex(i);
+        if (!method || std::strcmp(method->GetName(), "OnMessage") != 0) {
+            continue;
+        }
+        sawName = true;
+        if (invalidDecl.empty()) {
+            invalidDecl = method->GetDeclaration(false, false, true);
+        }
+        if (IsComponentMessageMethod(method)) {
+            method->AddRef();
+            state->OnMessage = method;
+        }
+    }
+    if (sawName && !state->OnMessage) {
+        if (state->Runner) {
+            state->Runner->SetErrorMessage("Invalid message method: void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) (found " + invalidDecl + ")");
+        }
+        return false;
+    }
+    return true;
+}
+
+void AddComponentMessageTopics(std::vector<std::string> &topics, const std::string &metadata) {
+    const std::string text = ScriptRuntimeMetadata::Trim(metadata);
+    if (text.rfind("component.messages", 0) != 0) {
+        return;
+    }
+    const std::string key = "topics";
+    std::size_t pos = text.find(key);
+    if (pos == std::string::npos) {
+        return;
+    }
+    pos = text.find('=', pos + key.size());
+    if (pos == std::string::npos) {
+        return;
+    }
+    std::string value = ScriptRuntimeMetadata::StripQuotes(ScriptRuntimeMetadata::Trim(text.substr(pos + 1)));
+    for (const std::string &topic : ScriptRuntimeMetadata::SplitList(value)) {
+        if (std::find(topics.begin(), topics.end(), topic) == topics.end()) {
+            topics.push_back(topic);
+        }
+    }
+}
+
+std::vector<std::string> BuildComponentMessageTopics(ScriptComponentState *state, asITypeInfo *type) {
+    std::vector<std::string> topics;
+    if (!state || !state->Runner || !type) {
+        return topics;
+    }
+    if (std::shared_ptr<CachedScript> cached = state->Runner->GetCachedScript()) {
+        const int typeId = type->GetTypeId();
+        const int count = cached->GetTypeMetadataCount(typeId);
+        for (int i = 0; i < count; ++i) {
+            const char *metadata = cached->GetTypeMetadata(typeId, i);
+            if (metadata) {
+                AddComponentMessageTopics(topics, metadata);
+            }
+        }
+    }
+    std::istringstream manifest(state->Manifest);
+    std::string line;
+    while (std::getline(manifest, line)) {
+        AddComponentMessageTopics(topics, line);
+    }
+    return topics;
+}
+
+void EnsureComponentMessageSubscriptions(ScriptManager *man, ScriptComponentState *state, asITypeInfo *type) {
+    if (!man || !state || state->StaticMessageSubscriptionsRegistered) {
+        return;
+    }
+    state->MessageTopics = BuildComponentMessageTopics(state, type);
+    if (man->GetMessageBus()) {
+        std::string subscribeError;
+        const std::string target = ScriptMessageBus::ComponentTarget(state->BehaviorId);
+        for (const std::string &topic : state->MessageTopics) {
+            man->GetMessageBus()->Subscribe(target, topic, true, subscribeError);
+        }
+    }
+    state->StaticMessageSubscriptionsRegistered = true;
+}
+
 bool CacheComponentMethods(ScriptComponentState *state, asITypeInfo *type) {
     if (!state || !state->Runner || !type) {
         return false;
@@ -379,7 +497,8 @@ bool CacheComponentMethods(ScriptComponentState *state, asITypeInfo *type) {
            CacheLifecycleMethod(type, "Update", true, state->Update, state->Runner) &&
            CacheLifecycleMethod(type, "OnDisable", false, state->OnDisable, state->Runner) &&
            CacheLifecycleMethod(type, "OnDestroy", false, state->OnDestroy, state->Runner) &&
-           CacheLifecycleMethod(type, "OnReset", false, state->OnReset, state->Runner);
+           CacheLifecycleMethod(type, "OnReset", false, state->OnReset, state->Runner) &&
+           CacheMessageMethod(type, state);
 }
 
 enum class LifecycleInvokeStatus {
@@ -536,7 +655,12 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
             SetErrorOutput(beh, state, injectError);
             return false;
         }
-        return CompleteInitialLifecycles(beh, state, behcontext);
+        if (!CompleteInitialLifecycles(beh, state, behcontext)) {
+            return false;
+        }
+        asITypeInfo *type = state->Runner ? state->Runner->GetTypeInfoByName(className.c_str()) : nullptr;
+        EnsureComponentMessageSubscriptions(man, state, type);
+        return true;
     }
 
     if (privateModule) {
@@ -612,7 +736,13 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
 
     state->Loaded = true;
 
-    return CompleteInitialLifecycles(beh, state, behcontext);
+    if (!CompleteInitialLifecycles(beh, state, behcontext)) {
+        return false;
+    }
+
+    EnsureComponentMessageSubscriptions(man, state, type);
+
+    return true;
 }
 
 bool EnableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
@@ -651,6 +781,13 @@ bool DisableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *
     }
 
     StopComponentLifetimeBBConfigs(behcontext, state);
+    if (ScriptManager *man = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr) {
+        if (man->GetMessageBus()) {
+            const std::string target = ScriptMessageBus::ComponentTarget(state->BehaviorId);
+            man->GetMessageBus()->ClearDynamicSubscriptions(target);
+            man->GetMessageBus()->FailPendingForTarget(target, "Component was disabled.");
+        }
+    }
     state->InstanceEnabled = false;
     return true;
 }

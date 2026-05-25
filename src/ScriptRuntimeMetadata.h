@@ -52,6 +52,7 @@ struct ScriptRuntimeManifest {
     std::vector<ScriptRuntimeDependency> OptionalDependencies;
     std::vector<std::string> Before;
     std::vector<std::string> After;
+    std::vector<std::string> MessageTopics;
     std::vector<ScriptRuntimeMetadataEntry> CustomMetadata;
     bool Enabled = true;
     int Order = 1000;

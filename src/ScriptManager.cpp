@@ -16,6 +16,7 @@
 #include "ScriptBehaviorBridge.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptRuntime.h"
+#include "ScriptMessage.h"
 #include "ScriptAsync.h"
 
 #if CKAS_BUILD_SELF_TESTS
@@ -182,6 +183,9 @@ CKERROR ScriptManager::PostClearAll() {
     if (m_Runtime) {
         m_Runtime->Clear();
     }
+    if (m_MessageBus) {
+        m_MessageBus->Clear();
+    }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
@@ -199,6 +203,9 @@ CKERROR ScriptManager::PreProcess() {
 #endif
     if (m_AsyncScheduler) {
         m_AsyncScheduler->Tick();
+    }
+    if (m_MessageBus) {
+        m_MessageBus->Tick();
     }
     if (m_Runtime) {
         m_Runtime->PreProcess();
@@ -224,6 +231,9 @@ CKERROR ScriptManager::OnCKEnd() {
     if (m_Runtime) {
         m_Runtime->OnEnd();
     }
+    if (m_MessageBus) {
+        m_MessageBus->Clear();
+    }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
@@ -237,6 +247,9 @@ CKERROR ScriptManager::OnCKReset() {
     }
     if (m_Runtime) {
         m_Runtime->OnReset();
+    }
+    if (m_MessageBus) {
+        m_MessageBus->Clear();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
@@ -290,6 +303,9 @@ int ScriptManager::Init() {
     if (!m_AsyncScheduler) {
         m_AsyncScheduler = std::make_unique<ScriptAsyncScheduler>(this);
     }
+    if (!m_MessageBus) {
+        m_MessageBus = std::make_unique<ScriptMessageBus>(this);
+    }
 
     m_Flags |= AS_INITED;
     return r;
@@ -306,6 +322,9 @@ int ScriptManager::Shutdown() {
 
     if (m_AsyncScheduler) {
         m_AsyncScheduler->Clear();
+    }
+    if (m_MessageBus) {
+        m_MessageBus->Clear();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
@@ -1025,6 +1044,7 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     ReleaseScriptFunction(state->OnDisable);
     ReleaseScriptFunction(state->OnDestroy);
     ReleaseScriptFunction(state->OnReset);
+    ReleaseScriptFunction(state->OnMessage);
     state->ActiveLifecycle = nullptr;
     state->ActiveLifecycleName.clear();
 
@@ -1045,6 +1065,11 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
 
     state->RuntimeModuleName.clear();
     state->Bindings.clear();
+    if (m_MessageBus) {
+        m_MessageBus->ClearTarget(ScriptMessageBus::ComponentTarget(state->BehaviorId), "Component runtime was reset.");
+    }
+    state->MessageTopics.clear();
+    state->StaticMessageSubscriptionsRegistered = false;
     state->PrivateModule = false;
     state->Loaded = false;
     state->OnLoadCalled = false;
@@ -1092,6 +1117,34 @@ void ScriptManager::ClearComponentStates() {
         ResetComponentStateRuntime(entry.second.get(), true);
     }
     m_ComponentStates.clear();
+}
+
+bool ScriptManager::DeliverComponentMessage(CK_ID id, const ScriptMessage &message, bool immediate, std::string &error) {
+    ScriptComponentState *state = GetComponentState(id);
+    if (!state || !state->Loaded || state->Failed || !state->InstanceEnabled || !state->Object || !state->Runner || !state->OnMessage) {
+        error = "Component message target is not ready.";
+        return false;
+    }
+    if (state->Runner->IsContextSuspended()) {
+        error = "Component message target is busy.";
+        return false;
+    }
+    CKBehaviorContext ctx = {};
+    ctx.Context = m_Context;
+    ctx.Behavior = state->Behavior;
+    const ScriptExecutionStatus status = state->Runner->ExecuteObjectMethodStatus(state->Object, state->OnMessage, message, ctx);
+    if (status == ScriptExecutionStatus::Suspended) {
+        return true;
+    }
+    if (status == ScriptExecutionStatus::Failed) {
+        error = state->Runner->GetErrorMessage();
+        if (error.empty()) {
+            error = "Component message handler failed.";
+        }
+        state->Failed = true;
+        return false;
+    }
+    return true;
 }
 
 ScriptBehaviorBridge *ScriptManager::GetBehaviorBridge() {
@@ -1330,4 +1383,5 @@ void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
     RegisterScriptBehaviorBridge(m_ScriptEngine);
     RegisterScriptRuntime(m_ScriptEngine);
     RegisterScriptAsync(m_ScriptEngine);
+    RegisterScriptMessage(m_ScriptEngine);
 }

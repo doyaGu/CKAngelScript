@@ -10,3 +10,4 @@
   tags="template;runtime"
 ]
 [script.depends optional="debug.tools"]
+[script.messages topics="example.ready;example.ping"]

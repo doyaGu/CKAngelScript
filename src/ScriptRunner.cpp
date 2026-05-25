@@ -429,6 +429,89 @@ ScriptExecutionStatus ScriptRunner::ExecuteObjectMethodStatus(asIScriptObject *o
     return ScriptExecutionStatus::Finished;
 }
 
+ScriptExecutionStatus ScriptRunner::ExecuteObjectMethodStatus(asIScriptObject *object,
+                                                              asIScriptFunction *func,
+                                                              const ScriptMessage &message,
+                                                              const CKBehaviorContext &behcontext) {
+    if (!m_CachedScript) {
+        SetErrorMessage("No script to execute.");
+        return ScriptExecutionStatus::Failed;
+    }
+    if (!object) {
+        SetErrorMessage("No script object to execute.");
+        return ScriptExecutionStatus::Failed;
+    }
+    if (!func) {
+        SetErrorMessage("No object method to execute.");
+        return ScriptExecutionStatus::Failed;
+    }
+    asIScriptEngine *engine = func->GetEngine();
+    if (!engine) {
+        SetErrorMessage("Script engine is null.");
+        return ScriptExecutionStatus::Failed;
+    }
+    asIScriptContext *ctx = GetContext();
+    if (!ctx) {
+        ctx = engine->RequestContext();
+        if (!ctx) {
+            SetErrorMessage("Failed to create AngelScript context.");
+            return ScriptExecutionStatus::Failed;
+        }
+        SetContext(ctx);
+    }
+
+    int r = 0;
+    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
+        std::string waitError;
+        ScriptAsyncScheduler *scheduler = m_ScriptManager ? m_ScriptManager->GetAsyncScheduler() : nullptr;
+        const ScriptAsyncScheduler::ResumeState resume = scheduler
+            ? scheduler->PrepareContextResume(ctx, waitError)
+            : ScriptAsyncScheduler::ResumeState::Ready;
+        if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
+            return ScriptExecutionStatus::Suspended;
+        }
+        if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
+            SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
+            ctx->Abort();
+            return ScriptExecutionStatus::Failed;
+        }
+    } else {
+        m_MessageStorage = message;
+        m_BehaviorContextStorage = behcontext;
+        r = ctx->Prepare(func);
+        if (r >= 0) {
+            r = ctx->SetObject(object);
+        }
+        if (r >= 0) {
+            r = ctx->SetArgObject(0, &m_MessageStorage);
+        }
+        if (r >= 0) {
+            r = ctx->SetArgObject(1, &m_BehaviorContextStorage);
+        }
+        if (r < 0) {
+            SetErrorMessage("Failed to prepare script message method.");
+            return ScriptExecutionStatus::Failed;
+        }
+    }
+
+    if (IsProfiling())
+        StartTiming();
+
+    r = ctx->Execute();
+    m_LastResultCode = r;
+    const ScriptExecutionStatus status = ScriptRunnerInternal::HandleExecutionResult(this, ctx, r, "Script Message");
+    if (status != ScriptExecutionStatus::Finished) {
+        if (IsProfiling())
+            EndTiming();
+        return status;
+    }
+
+    if (IsProfiling())
+        EndTiming();
+
+    return ScriptExecutionStatus::Finished;
+}
+
 bool ScriptRunner::IsContextSuspended() const {
     return m_Context && m_Context->GetState() == asEXECUTION_SUSPENDED;
 }

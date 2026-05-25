@@ -20,6 +20,8 @@
 class CKBehavior;
 class ScriptAsyncScheduler;
 class ScriptBehaviorBridge;
+class ScriptMessage;
+class ScriptMessageBus;
 class ScriptParameterRegistry;
 class ScriptRuntime;
 class ScriptRunner;
@@ -135,6 +137,7 @@ struct ScriptComponentState {
     asIScriptFunction *OnDisable = nullptr;
     asIScriptFunction *OnDestroy = nullptr;
     asIScriptFunction *OnReset = nullptr;
+    asIScriptFunction *OnMessage = nullptr;
     asIScriptFunction *ActiveLifecycle = nullptr;
     std::string ActiveLifecycleName;
 
@@ -145,10 +148,12 @@ struct ScriptComponentState {
     std::string Manifest;
     std::string RuntimeModuleName;
     std::vector<ScriptComponentBinding> Bindings;
+    std::vector<std::string> MessageTopics;
     std::vector<std::string> ManagedInputParameterNames;
 
     bool PrivateModule = false;
     bool Loaded = false;
+    bool StaticMessageSubscriptionsRegistered = false;
     bool OnLoadCalled = false;
     bool AwakeCalled = false;
     bool StartCalled = false;
@@ -277,6 +282,7 @@ public:
     void ReleaseComponentState(CKBehavior *behavior);
     void ReleaseComponentState(CK_ID id);
     void ClearComponentStates();
+    bool DeliverComponentMessage(CK_ID id, const ScriptMessage &message, bool immediate, std::string &error);
 
     ScriptBehaviorBridge *GetBehaviorBridge();
     ScriptRuntime *GetRuntime() const {
@@ -284,6 +290,9 @@ public:
     }
     ScriptAsyncScheduler *GetAsyncScheduler() const {
         return m_AsyncScheduler.get();
+    }
+    ScriptMessageBus *GetMessageBus() const {
+        return m_MessageBus.get();
     }
     ScriptParameterRegistry *GetParameterRegistry() const {
         return m_ParameterRegistry.get();
@@ -352,6 +361,7 @@ protected:
     std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
     std::unique_ptr<ScriptRuntime> m_Runtime;
     std::unique_ptr<ScriptAsyncScheduler> m_AsyncScheduler;
+    std::unique_ptr<ScriptMessageBus> m_MessageBus;
     std::unordered_set<AngelScriptExecution *> m_Executions;
     AngelScriptResult m_LastResult;
     std::string m_LastErrorMessage;

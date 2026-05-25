@@ -27,4 +27,8 @@ namespace ScriptRuntimeDependencyResolver {
 bool RunScriptRuntimeDependencySelfTest(std::string &error);
 }
 
+namespace ScriptMessageSelfTest {
+bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
+}
+
 #endif // CK_SCRIPTSELFTESTS_H

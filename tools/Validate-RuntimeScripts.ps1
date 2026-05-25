@@ -104,6 +104,12 @@ function Test-LifecycleSignatures {
                 }
             }
         }
+        foreach ($match in [regex]::Matches($text, "void\s+OnMessage\s*\((?<args>[^)]*)\)")) {
+            $args = $match.Groups["args"].Value.Trim()
+            if ($args -ne "const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx") {
+                $errors += "[$ScriptId] $file has invalid OnMessage signature. Expected: void OnMessage(const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx)"
+            }
+        }
     }
     return $errors
 }
@@ -166,6 +172,13 @@ foreach ($root in $roots) {
                     if ($dep -notmatch "^[A-Za-z0-9_.-]+(\s*(==|=|>=|<=|>|<)\s*[0-9][A-Za-z0-9_.-]*)?$") {
                         $errors += "[$id] invalid dependency spec '$dep'"
                     }
+                }
+            }
+        }
+        if ($meta.ContainsKey("topics")) {
+            foreach ($topic in Split-ListText $meta["topics"]) {
+                if ($topic -notmatch "^[A-Za-z0-9_.:-]+$") {
+                    $errors += "[$id] invalid message topic '$topic'"
                 }
             }
         }

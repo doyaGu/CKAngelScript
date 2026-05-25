@@ -23,6 +23,7 @@ enum class ScriptAsyncTaskState {
 };
 
 enum class ScriptAsyncTaskKind {
+    Manual,
     Delay,
     Script,
     All,
@@ -150,6 +151,7 @@ public:
     asIScriptEngine *GetEngine() const;
 
     ScriptAsyncTaskBase *CreateDelay(int frames);
+    ScriptAsyncTaskBase *CreateManualTask(int subtypeId);
     ScriptAsyncTaskBase *CreateScriptTask(asIScriptFunction *function, int subtypeId);
     ScriptAsyncTaskBase *CreateAggregate(ScriptAsyncTaskKind kind,
                                          int subtypeId,
