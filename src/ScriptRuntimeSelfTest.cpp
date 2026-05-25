@@ -23,7 +23,7 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         return false;
     }
     const char *source =
-        "void __ckas_runtime_compile_probe(const ScriptRuntimeContext &in ctx) {\n"
+        "void __ckas_runtime_compile_probe(const ScriptContext &in ctx) {\n"
         "  CKContext@ c = ctx.Context();\n"
         "  float dt = ctx.DeltaTime();\n"
         "  string id = ctx.ScriptId();\n"
@@ -60,18 +60,18 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  array<RuntimeDependencyInfo>@ optionalDeps = Runtime::OptionalDependencies(ctx, \"ckas.runtime.smoke\");\n"
         "}\n"
         "class __CKAS_RuntimeLifecycleProbe {\n"
-        "  void OnLoad(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void Awake(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void OnEnable(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void Start(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void Update(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void OnPostLoad(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void OnPostProcess(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void OnDisable(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void OnDestroy(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void OnReset(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void OnPause(const ScriptRuntimeContext &in ctx) {}\n"
-        "  void OnResume(const ScriptRuntimeContext &in ctx) {}\n"
+        "  void OnLoad(const ScriptContext &in ctx) {}\n"
+        "  void Awake(const ScriptContext &in ctx) {}\n"
+        "  void OnEnable(const ScriptContext &in ctx) {}\n"
+        "  void Start(const ScriptContext &in ctx) {}\n"
+        "  void Update(const ScriptContext &in ctx) {}\n"
+        "  void OnPostLoad(const ScriptContext &in ctx) {}\n"
+        "  void OnPostProcess(const ScriptContext &in ctx) {}\n"
+        "  void OnDisable(const ScriptContext &in ctx) {}\n"
+        "  void OnDestroy(const ScriptContext &in ctx) {}\n"
+        "  void OnReset(const ScriptContext &in ctx) {}\n"
+        "  void OnPause(const ScriptContext &in ctx) {}\n"
+        "  void OnResume(const ScriptContext &in ctx) {}\n"
         "}\n";
     AngelScriptManager *manager = AngelScriptManager::GetManager(context);
     if (!manager) {

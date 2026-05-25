@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -16,7 +17,7 @@ struct CKBehaviorContext;
 class CScriptDictionary;
 class ScriptAsyncTaskBase;
 class ScriptManager;
-class ScriptRuntimeContext;
+class ScriptContext;
 
 class ScriptMessage {
 public:
@@ -31,6 +32,8 @@ public:
                   CScriptDictionary *payload);
     ScriptMessage(const ScriptMessage &other);
     ScriptMessage &operator=(const ScriptMessage &other);
+    ScriptMessage(ScriptMessage &&other) noexcept;
+    ScriptMessage &operator=(ScriptMessage &&other) noexcept;
     ~ScriptMessage();
 
     std::uint64_t Id() const;
@@ -111,7 +114,8 @@ private:
                               bool requiresReply,
                               CScriptDictionary *payload);
     bool Deliver(const ScriptMessage &message, bool immediate, std::string &error);
-    std::vector<std::string> ResolveTargets(const ScriptMessage &message) const;
+    bool DeliverTarget(const std::string &target, const ScriptMessage &message, bool immediate, std::string &error);
+    void RemoveTopicTarget(const std::string &topic, const std::string &target);
     void ReleasePending(PendingRequest &pending);
 
     ScriptManager *m_Manager = nullptr;
@@ -119,7 +123,9 @@ private:
     std::uint64_t m_NextId = 1;
     bool m_Draining = false;
     std::vector<ScriptMessage> m_Queue;
+    std::vector<ScriptMessage> m_DrainQueue;
     std::unordered_map<std::string, SubscriptionSet> m_Subscriptions;
+    std::unordered_map<std::string, std::set<std::string>> m_TopicSubscriptions;
     std::unordered_map<std::uint64_t, PendingRequest> m_PendingRequests;
 };
 

@@ -99,15 +99,15 @@ function Test-LifecycleSignatures {
         foreach ($name in $lifecycleNames) {
             foreach ($match in [regex]::Matches($text, "void\s+$name\s*\((?<args>[^)]*)\)")) {
                 $args = $match.Groups["args"].Value.Trim()
-                if ($args -ne "const ScriptRuntimeContext &in ctx") {
-                    $errors += "[$ScriptId] $file has invalid $name signature. Expected: void $name(const ScriptRuntimeContext &in ctx)"
+                if ($args -ne "const ScriptContext &in ctx") {
+                    $errors += "[$ScriptId] $file has invalid $name signature. Expected: void $name(const ScriptContext &in ctx)"
                 }
             }
         }
         foreach ($match in [regex]::Matches($text, "void\s+OnMessage\s*\((?<args>[^)]*)\)")) {
             $args = $match.Groups["args"].Value.Trim()
-            if ($args -ne "const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx") {
-                $errors += "[$ScriptId] $file has invalid OnMessage signature. Expected: void OnMessage(const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx)"
+            if ($args -ne "const ScriptMessage &in msg, const ScriptContext &in ctx") {
+                $errors += "[$ScriptId] $file has invalid OnMessage signature. Expected: void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx)"
             }
         }
     }

@@ -20,7 +20,7 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
     }
 
     const char *source =
-        "void __ckas_message_runtime_probe(const ScriptRuntimeContext &in ctx) {\n"
+        "void __ckas_message_runtime_probe(const ScriptContext &in ctx) {\n"
         "  dictionary payload;\n"
         "  payload.set(\"value\", int64(7));\n"
         "  bool published = Message::Publish(ctx, \"topic.runtime\", payload);\n"
@@ -38,7 +38,7 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  Message::Unsubscribe(ctx, \"topic.component\");\n"
         "}\n"
         "class __CKAS_MessageRuntimeReceiver {\n"
-        "  void OnMessage(const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx) {\n"
+        "  void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx) {\n"
         "    Await(Async::Delay(1));\n"
         "    uint64 id = msg.Id();\n"
         "    string kind = msg.Kind();\n"

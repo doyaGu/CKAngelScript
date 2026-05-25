@@ -89,23 +89,23 @@ private:
     int m_Generation = 0;
 };
 
-class ScriptRuntimeContext {
+class ScriptContext {
 public:
-    ScriptRuntimeContext();
-    ScriptRuntimeContext(CKContext *context,
-                         std::string scriptId,
-                         std::string scriptName,
-                         std::string scriptVersion,
-                         std::string rootPath,
-                         std::string manifestPath,
-                         std::string entryPath,
-                         std::vector<ScriptRuntimeMetadataEntry> metadata,
-                         std::string phase,
-                         std::string state,
-                         int generation,
-                         std::uint64_t frameIndex,
-                         float deltaTime,
-                         float timeSeconds);
+    ScriptContext();
+    ScriptContext(CKContext *context,
+                  std::string scriptId,
+                  std::string scriptName,
+                  std::string scriptVersion,
+                  std::string rootPath,
+                  std::string manifestPath,
+                  std::string entryPath,
+                  const std::vector<ScriptRuntimeMetadataEntry> *metadata,
+                  std::string phase,
+                  std::string state,
+                  int generation,
+                  std::uint64_t frameIndex,
+                  float deltaTime,
+                  float timeSeconds);
 
     CKContext *Context() const;
     float DeltaTime() const;
@@ -136,7 +136,7 @@ private:
     std::string m_RootPath;
     std::string m_ManifestPath;
     std::string m_EntryPath;
-    std::vector<ScriptRuntimeMetadataEntry> m_Metadata;
+    const std::vector<ScriptRuntimeMetadataEntry> *m_Metadata = nullptr;
     std::string m_Phase;
     std::string m_State;
     int m_Generation = 0;
@@ -191,16 +191,16 @@ private:
     void RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts);
     bool DestroyModule(Module &module, bool hard = false);
     bool DisableModule(Module &module);
-    bool PauseModule(Module &module, const ScriptRuntimeContext &context);
-    bool ResetModule(Module &module, const ScriptRuntimeContext &context);
+    bool PauseModule(Module &module, const ScriptContext &context);
+    bool ResetModule(Module &module, const ScriptContext &context);
     std::string ModuleState(const Module &module) const;
     RuntimeScriptInfo BuildInfo(const Module &module) const;
     std::vector<RuntimeDependencyInfo> DependencyInfo(const Module &module, bool optional) const;
     void FinalizePendingModules();
     void UpdateModule(Module &module, float deltaTime, float timeSeconds);
-    InvokeStatus InvokeMessage(Module &module, const ScriptMessage &message, const ScriptRuntimeContext &context);
-    InvokeStatus Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required = false);
-    bool InvokeFinished(Module &module, const char *name, const ScriptRuntimeContext &context, bool required = false);
+    InvokeStatus InvokeMessage(Module &module, const ScriptMessage &message, const ScriptContext &context);
+    InvokeStatus Invoke(Module &module, const char *name, const ScriptContext &context, bool required = false);
+    bool InvokeFinished(Module &module, const char *name, const ScriptContext &context, bool required = false);
     void CancelActiveInvocation(Module &module);
     void SetModuleError(Module &module, const std::string &error);
     void OutputDiagnostic(const std::string &message) const;

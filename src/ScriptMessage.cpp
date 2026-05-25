@@ -22,7 +22,7 @@ std::string TrimTopic(const std::string &topic) {
     return first < last ? std::string(first, last) : std::string();
 }
 
-ScriptManager *ManagerFromRuntimeContext(const ScriptRuntimeContext &ctx) {
+ScriptManager *ManagerFromRuntimeContext(const ScriptContext &ctx) {
     return ctx.Context() ? ScriptManager::GetManager(ctx.Context()) : nullptr;
 }
 
@@ -30,7 +30,7 @@ ScriptManager *ManagerFromBehaviorContext(const CKBehaviorContext &ctx) {
     return ctx.Context ? ScriptManager::GetManager(ctx.Context) : nullptr;
 }
 
-std::string SourceFromRuntimeContext(const ScriptRuntimeContext &ctx) {
+std::string SourceFromRuntimeContext(const ScriptContext &ctx) {
     return ScriptMessageBus::RuntimeTarget(ctx.ScriptId());
 }
 
@@ -38,7 +38,7 @@ std::string SourceFromBehaviorContext(const CKBehaviorContext &ctx) {
     return ctx.Behavior ? ScriptMessageBus::ComponentTarget(ctx.Behavior->GetID()) : std::string();
 }
 
-void RaiseRuntimeError(const ScriptRuntimeContext &ctx, const std::string &error) {
+void RaiseRuntimeError(const ScriptContext &ctx, const std::string &error) {
     if (!error.empty()) {
         ctx.Raise(error);
     }
@@ -50,7 +50,7 @@ void RaiseBehaviorError(const CKBehaviorContext &ctx, const std::string &error) 
     }
 }
 
-bool PublishRuntime(const ScriptRuntimeContext &ctx, const std::string &topic, CScriptDictionary *payload, const std::string &target) {
+bool PublishRuntime(const ScriptContext &ctx, const std::string &topic, CScriptDictionary *payload, const std::string &target) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -72,7 +72,7 @@ bool PublishBehavior(const CKBehaviorContext &ctx, const std::string &topic, CSc
     return ok;
 }
 
-bool SendRuntime(const ScriptRuntimeContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
+bool SendRuntime(const ScriptContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -94,7 +94,7 @@ bool SendBehavior(const CKBehaviorContext &ctx, const std::string &target, const
     return ok;
 }
 
-ScriptAsyncTaskBase *RequestRuntime(const ScriptRuntimeContext &ctx,
+ScriptAsyncTaskBase *RequestRuntime(const ScriptContext &ctx,
                                     const std::string &target,
                                     const std::string &topic,
                                     CScriptDictionary *payload,
@@ -126,7 +126,7 @@ ScriptAsyncTaskBase *RequestBehavior(const CKBehaviorContext &ctx,
     return task;
 }
 
-bool ReplyRuntime(const ScriptRuntimeContext &ctx, const ScriptMessage &request, CScriptDictionary *payload) {
+bool ReplyRuntime(const ScriptContext &ctx, const ScriptMessage &request, CScriptDictionary *payload) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -148,7 +148,7 @@ bool ReplyBehavior(const CKBehaviorContext &ctx, const ScriptMessage &request, C
     return ok;
 }
 
-bool RejectRuntime(const ScriptRuntimeContext &ctx, const ScriptMessage &request, const std::string &message) {
+bool RejectRuntime(const ScriptContext &ctx, const ScriptMessage &request, const std::string &message) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -170,7 +170,7 @@ bool RejectBehavior(const CKBehaviorContext &ctx, const ScriptMessage &request, 
     return ok;
 }
 
-bool SubscribeRuntime(const ScriptRuntimeContext &ctx, const std::string &topic) {
+bool SubscribeRuntime(const ScriptContext &ctx, const std::string &topic) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -192,7 +192,7 @@ bool SubscribeBehavior(const CKBehaviorContext &ctx, const std::string &topic) {
     return ok;
 }
 
-bool UnsubscribeRuntime(const ScriptRuntimeContext &ctx, const std::string &topic) {
+bool UnsubscribeRuntime(const ScriptContext &ctx, const std::string &topic) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     return manager && manager->GetMessageBus() &&
         manager->GetMessageBus()->Unsubscribe(SourceFromRuntimeContext(ctx), topic);
@@ -249,6 +249,41 @@ ScriptMessage &ScriptMessage::operator=(const ScriptMessage &other) {
     m_FrameIndex = other.m_FrameIndex;
     m_RequiresReply = other.m_RequiresReply;
     SetPayload(other.m_Payload);
+    return *this;
+}
+
+ScriptMessage::ScriptMessage(ScriptMessage &&other) noexcept
+    : m_Id(other.m_Id),
+      m_Kind(std::move(other.m_Kind)),
+      m_Topic(std::move(other.m_Topic)),
+      m_Source(std::move(other.m_Source)),
+      m_Target(std::move(other.m_Target)),
+      m_FrameIndex(other.m_FrameIndex),
+      m_RequiresReply(other.m_RequiresReply),
+      m_Payload(other.m_Payload) {
+    other.m_Id = 0;
+    other.m_FrameIndex = 0;
+    other.m_RequiresReply = false;
+    other.m_Payload = nullptr;
+}
+
+ScriptMessage &ScriptMessage::operator=(ScriptMessage &&other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+    SetPayload(nullptr);
+    m_Id = other.m_Id;
+    m_Kind = std::move(other.m_Kind);
+    m_Topic = std::move(other.m_Topic);
+    m_Source = std::move(other.m_Source);
+    m_Target = std::move(other.m_Target);
+    m_FrameIndex = other.m_FrameIndex;
+    m_RequiresReply = other.m_RequiresReply;
+    m_Payload = other.m_Payload;
+    other.m_Id = 0;
+    other.m_FrameIndex = 0;
+    other.m_RequiresReply = false;
+    other.m_Payload = nullptr;
     return *this;
 }
 
@@ -409,6 +444,7 @@ bool ScriptMessageBus::Subscribe(const std::string &target, const std::string &t
     }
     SubscriptionSet &set = m_Subscriptions[target];
     (isStatic ? set.StaticTopics : set.DynamicTopics).insert(cleanTopic);
+    m_TopicSubscriptions[cleanTopic].insert(target);
     return true;
 }
 
@@ -418,29 +454,49 @@ bool ScriptMessageBus::Unsubscribe(const std::string &target, const std::string 
     if (it == m_Subscriptions.end()) {
         return false;
     }
-    return it->second.DynamicTopics.erase(cleanTopic) > 0;
+    const bool removed = it->second.DynamicTopics.erase(cleanTopic) > 0;
+    if (removed && it->second.StaticTopics.find(cleanTopic) == it->second.StaticTopics.end()) {
+        RemoveTopicTarget(cleanTopic, target);
+    }
+    return removed;
 }
 
 void ScriptMessageBus::ClearDynamicSubscriptions(const std::string &target) {
     auto it = m_Subscriptions.find(target);
     if (it != m_Subscriptions.end()) {
+        for (const std::string &topic : it->second.DynamicTopics) {
+            if (it->second.StaticTopics.find(topic) == it->second.StaticTopics.end()) {
+                RemoveTopicTarget(topic, target);
+            }
+        }
         it->second.DynamicTopics.clear();
     }
 }
 
 void ScriptMessageBus::ClearTarget(const std::string &target, const std::string &error) {
-    m_Subscriptions.erase(target);
+    auto it = m_Subscriptions.find(target);
+    if (it != m_Subscriptions.end()) {
+        for (const std::string &topic : it->second.StaticTopics) {
+            RemoveTopicTarget(topic, target);
+        }
+        for (const std::string &topic : it->second.DynamicTopics) {
+            RemoveTopicTarget(topic, target);
+        }
+        m_Subscriptions.erase(it);
+    }
     FailPendingForTarget(target, error.empty() ? "Message target was removed." : error);
 }
 
 void ScriptMessageBus::Clear() {
     m_Queue.clear();
+    m_DrainQueue.clear();
     for (auto &entry : m_PendingRequests) {
         entry.second.Task->Fail("Message bus was cleared.");
         ReleasePending(entry.second);
     }
     m_PendingRequests.clear();
     m_Subscriptions.clear();
+    m_TopicSubscriptions.clear();
 }
 
 void ScriptMessageBus::Tick() {
@@ -466,12 +522,13 @@ void ScriptMessageBus::Tick() {
         return;
     }
     m_Draining = true;
-    std::vector<ScriptMessage> current;
-    current.swap(m_Queue);
-    for (const ScriptMessage &message : current) {
+    m_DrainQueue.clear();
+    m_DrainQueue.swap(m_Queue);
+    for (const ScriptMessage &message : m_DrainQueue) {
         std::string error;
         Deliver(message, false, error);
     }
+    m_DrainQueue.clear();
     m_Draining = false;
 }
 
@@ -509,27 +566,20 @@ ScriptMessage ScriptMessageBus::MakeMessage(const std::string &kind,
 }
 
 bool ScriptMessageBus::Deliver(const ScriptMessage &message, bool immediate, std::string &error) {
-    const std::vector<std::string> targets = ResolveTargets(message);
-    if (targets.empty()) {
+    if (!message.Target().empty()) {
+        return DeliverTarget(message.Target(), message, immediate, error);
+    }
+    auto it = m_TopicSubscriptions.find(message.Topic());
+    if (it == m_TopicSubscriptions.end() || it->second.empty()) {
         error = message.Target().empty()
             ? fmt::format("No subscribers for message topic '{}'.", message.Topic())
             : fmt::format("Message target '{}' is not available.", message.Target());
-        return message.Kind() == "event" && message.Target().empty();
+        return message.Kind() == "event";
     }
     bool ok = true;
-    for (const std::string &target : targets) {
+    for (const std::string &target : it->second) {
         std::string targetError;
-        bool delivered = false;
-        if (target.rfind("runtime:", 0) == 0) {
-            delivered = m_Manager && m_Manager->GetRuntime() &&
-                m_Manager->GetRuntime()->DeliverMessage(target.substr(8), message, immediate, targetError);
-        } else if (target.rfind("component:", 0) == 0) {
-            CK_ID id = static_cast<CK_ID>(std::strtoul(target.c_str() + 10, nullptr, 10));
-            delivered = m_Manager && m_Manager->DeliverComponentMessage(id, message, immediate, targetError);
-        } else {
-            targetError = "Unsupported message target: " + target;
-        }
-        if (!delivered) {
+        if (!DeliverTarget(target, message, immediate, targetError)) {
             ok = false;
             if (error.empty()) {
                 error = targetError;
@@ -539,20 +589,28 @@ bool ScriptMessageBus::Deliver(const ScriptMessage &message, bool immediate, std
     return ok;
 }
 
-std::vector<std::string> ScriptMessageBus::ResolveTargets(const ScriptMessage &message) const {
-    if (!message.Target().empty()) {
-        return {message.Target()};
+bool ScriptMessageBus::DeliverTarget(const std::string &target, const ScriptMessage &message, bool immediate, std::string &error) {
+    if (target.rfind("runtime:", 0) == 0) {
+        return m_Manager && m_Manager->GetRuntime() &&
+            m_Manager->GetRuntime()->DeliverMessage(target.substr(8), message, immediate, error);
     }
-    std::vector<std::string> targets;
-    for (const auto &entry : m_Subscriptions) {
-        const SubscriptionSet &set = entry.second;
-        if (set.StaticTopics.find(message.Topic()) != set.StaticTopics.end() ||
-            set.DynamicTopics.find(message.Topic()) != set.DynamicTopics.end()) {
-            targets.push_back(entry.first);
-        }
+    if (target.rfind("component:", 0) == 0) {
+        CK_ID id = static_cast<CK_ID>(std::strtoul(target.c_str() + 10, nullptr, 10));
+        return m_Manager && m_Manager->DeliverComponentMessage(id, message, immediate, error);
     }
-    std::sort(targets.begin(), targets.end());
-    return targets;
+    error = "Unsupported message target: " + target;
+    return false;
+}
+
+void ScriptMessageBus::RemoveTopicTarget(const std::string &topic, const std::string &target) {
+    auto it = m_TopicSubscriptions.find(topic);
+    if (it == m_TopicSubscriptions.end()) {
+        return;
+    }
+    it->second.erase(target);
+    if (it->second.empty()) {
+        m_TopicSubscriptions.erase(it);
+    }
 }
 
 void ScriptMessageBus::FailPendingForTarget(const std::string &target, const std::string &error) {
@@ -608,19 +666,19 @@ void RegisterScriptMessage(asIScriptEngine *engine) {
     const char *previousNamespace = engine->GetDefaultNamespace();
     const std::string previous = previousNamespace ? previousNamespace : "";
     r = engine->SetDefaultNamespace("Message"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Publish(const ScriptRuntimeContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = \"\")", asFUNCTION(PublishRuntime), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = \"\")", asFUNCTION(PublishRuntime), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = \"\")", asFUNCTION(PublishBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Send(const ScriptRuntimeContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendRuntime), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool Send(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendRuntime), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool Send(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptRuntimeContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestRuntime), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestRuntime), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Reply(const ScriptRuntimeContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyRuntime), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool Reply(const ScriptContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyRuntime), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool Reply(const CKBehaviorContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Reject(const ScriptRuntimeContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectRuntime), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool Reject(const ScriptContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectRuntime), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool Reject(const CKBehaviorContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Subscribe(const ScriptRuntimeContext &in ctx, const string &in topic)", asFUNCTION(SubscribeRuntime), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool Subscribe(const ScriptContext &in ctx, const string &in topic)", asFUNCTION(SubscribeRuntime), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool Subscribe(const CKBehaviorContext &in ctx, const string &in topic)", asFUNCTION(SubscribeBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Unsubscribe(const ScriptRuntimeContext &in ctx, const string &in topic)", asFUNCTION(UnsubscribeRuntime), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool Unsubscribe(const ScriptContext &in ctx, const string &in topic)", asFUNCTION(UnsubscribeRuntime), asCALL_CDECL); assert(r >= 0);
     r = engine->RegisterGlobalFunction("bool Unsubscribe(const CKBehaviorContext &in ctx, const string &in topic)", asFUNCTION(UnsubscribeBehavior), asCALL_CDECL); assert(r >= 0);
     r = engine->SetDefaultNamespace(previous.c_str()); assert(r >= 0);
 }

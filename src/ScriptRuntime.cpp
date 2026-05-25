@@ -51,7 +51,7 @@ bool RuntimeValidateOnly() {
     return lowered != "0" && lowered != "false" && lowered != "off" && lowered != "no";
 }
 
-BehaviorGraph *RuntimeBehaviorGraphByRoot(const ScriptRuntimeContext &ctx, const std::string &rootBehaviorName);
+BehaviorGraph *RuntimeBehaviorGraphByRoot(const ScriptContext &ctx, const std::string &rootBehaviorName);
 
 CKBehavior *FindBehaviorByName(CKContext *context, const std::string &name) {
     if (!context || name.empty()) {
@@ -60,13 +60,13 @@ CKBehavior *FindBehaviorByName(CKContext *context, const std::string &name) {
     return CKBehavior::Cast(context->GetObjectByName(const_cast<CKSTRING>(name.c_str())));
 }
 
-CKBehaviorContext MakeBehaviorContext(const ScriptRuntimeContext &ctx, CKBehavior *behavior = nullptr) {
+CKBehaviorContext MakeBehaviorContext(const ScriptContext &ctx, CKBehavior *behavior = nullptr) {
     CKBehaviorContext behaviorContext = ctx.ToBehaviorContext();
     behaviorContext.Behavior = behavior;
     return behaviorContext;
 }
 
-ScriptRuntimeContext MakeRuntimeContext(CKContext *context,
+ScriptContext MakeRuntimeContext(CKContext *context,
                                         const ScriptRuntimeManifest &metadata,
                                         const std::string &phase,
                                         const std::string &state,
@@ -74,14 +74,14 @@ ScriptRuntimeContext MakeRuntimeContext(CKContext *context,
                                         std::uint64_t frameIndex,
                                         float deltaTime,
                                         float timeSeconds) {
-    return ScriptRuntimeContext(context,
+    return ScriptContext(context,
                                 metadata.Id,
                                 metadata.Name,
                                 metadata.VersionText,
                                 ScriptRuntimeMetadata::PathString(metadata.RootPath),
                                 ScriptRuntimeMetadata::PathString(metadata.ManifestPath),
                                 ScriptRuntimeMetadata::PathString(metadata.EntryPath),
-                                metadata.CustomMetadata,
+                                &metadata.CustomMetadata,
                                 phase,
                                 state,
                                 generation,
@@ -90,32 +90,32 @@ ScriptRuntimeContext MakeRuntimeContext(CKContext *context,
                                 timeSeconds);
 }
 
-ScriptRuntimeContext MakeRuntimeContext(CKContext *context,
+ScriptContext MakeRuntimeContext(CKContext *context,
                                         const ScriptRuntimeManifest &metadata,
                                         float deltaTime,
                                         float timeSeconds) {
     return MakeRuntimeContext(context, metadata, std::string(), std::string(), 0, 0, deltaTime, timeSeconds);
 }
 
-ScriptManager *ManagerFromRuntimeContext(const ScriptRuntimeContext &ctx) {
+ScriptManager *ManagerFromRuntimeContext(const ScriptContext &ctx) {
     return ctx.Context() ? ScriptManager::GetManager(ctx.Context()) : nullptr;
 }
 
-ScriptBehaviorBridge *BridgeFromRuntimeContext(const ScriptRuntimeContext &ctx) {
+ScriptBehaviorBridge *BridgeFromRuntimeContext(const ScriptContext &ctx) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     return manager ? manager->GetBehaviorBridge() : nullptr;
 }
 
-BehaviorBridge *RuntimeBehaviorFrom(const ScriptRuntimeContext &ctx) {
+BehaviorBridge *RuntimeBehaviorFrom(const ScriptContext &ctx) {
     ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
     return bridge ? new BehaviorBridge(bridge, MakeBehaviorContext(ctx)) : nullptr;
 }
 
-BehaviorGraph *RuntimeBehaviorGraph(const ScriptRuntimeContext &ctx) {
+BehaviorGraph *RuntimeBehaviorGraph(const ScriptContext &ctx) {
     return RuntimeBehaviorGraphByRoot(ctx, std::string());
 }
 
-BehaviorGraph *RuntimeBehaviorGraphByRoot(const ScriptRuntimeContext &ctx, const std::string &rootBehaviorName) {
+BehaviorGraph *RuntimeBehaviorGraphByRoot(const ScriptContext &ctx, const std::string &rootBehaviorName) {
     ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
     if (!bridge) {
         return nullptr;
@@ -131,24 +131,24 @@ BehaviorQuery *RuntimeBehaviorQuery() {
     return new BehaviorQuery();
 }
 
-BehaviorRef *RuntimeBehaviorFind(const ScriptRuntimeContext &ctx, const std::string &name) {
+BehaviorRef *RuntimeBehaviorFind(const ScriptContext &ctx, const std::string &name) {
     ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
     CKBehavior *behavior = FindBehaviorByName(ctx.Context(), name);
     return bridge ? bridge->WrapBehavior(behavior, 0) : nullptr;
 }
 
-BehaviorRef *RuntimeBehaviorFindById(const ScriptRuntimeContext &ctx, CK_ID id) {
+BehaviorRef *RuntimeBehaviorFindById(const ScriptContext &ctx, CK_ID id) {
     ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
     CKObject *object = ctx.Context() ? CKGetObject(ctx.Context(), id) : nullptr;
     return bridge ? bridge->WrapBehavior(CKBehavior::Cast(object), 0) : nullptr;
 }
 
-BBBridge *RuntimeBBFrom(const ScriptRuntimeContext &ctx) {
+BBBridge *RuntimeBBFrom(const ScriptContext &ctx) {
     ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
     return bridge ? new BBBridge(bridge, MakeBehaviorContext(ctx)) : nullptr;
 }
 
-BBDecl *RuntimeBBRequireByName(const ScriptRuntimeContext &ctx, const std::string &query) {
+BBDecl *RuntimeBBRequireByName(const ScriptContext &ctx, const std::string &query) {
     BBBridge *bridge = RuntimeBBFrom(ctx);
     if (!bridge) {
         return nullptr;
@@ -158,7 +158,7 @@ BBDecl *RuntimeBBRequireByName(const ScriptRuntimeContext &ctx, const std::strin
     return decl;
 }
 
-BBDecl *RuntimeBBRequireByGuid(const ScriptRuntimeContext &ctx, CKGUID guid) {
+BBDecl *RuntimeBBRequireByGuid(const ScriptContext &ctx, CKGUID guid) {
     BBBridge *bridge = RuntimeBBFrom(ctx);
     if (!bridge) {
         return nullptr;
@@ -168,7 +168,7 @@ BBDecl *RuntimeBBRequireByGuid(const ScriptRuntimeContext &ctx, CKGUID guid) {
     return decl;
 }
 
-int RuntimeBBCount(const ScriptRuntimeContext &ctx) {
+int RuntimeBBCount(const ScriptContext &ctx) {
     BBBridge *bridge = RuntimeBBFrom(ctx);
     if (!bridge) {
         return 0;
@@ -178,7 +178,7 @@ int RuntimeBBCount(const ScriptRuntimeContext &ctx) {
     return count;
 }
 
-BBPrototype *RuntimeBBAt(const ScriptRuntimeContext &ctx, int index) {
+BBPrototype *RuntimeBBAt(const ScriptContext &ctx, int index) {
     BBBridge *bridge = RuntimeBBFrom(ctx);
     if (!bridge) {
         return nullptr;
@@ -188,7 +188,7 @@ BBPrototype *RuntimeBBAt(const ScriptRuntimeContext &ctx, int index) {
     return prototype;
 }
 
-BBPrototype *RuntimeBBFind(const ScriptRuntimeContext &ctx, const std::string &query, int occurrence) {
+BBPrototype *RuntimeBBFind(const ScriptContext &ctx, const std::string &query, int occurrence) {
     BBBridge *bridge = RuntimeBBFrom(ctx);
     if (!bridge) {
         return nullptr;
@@ -198,7 +198,7 @@ BBPrototype *RuntimeBBFind(const ScriptRuntimeContext &ctx, const std::string &q
     return prototype;
 }
 
-CScriptArray *RuntimeBBFindAll(const ScriptRuntimeContext &ctx, const std::string &query) {
+CScriptArray *RuntimeBBFindAll(const ScriptContext &ctx, const std::string &query) {
     BBBridge *bridge = RuntimeBBFrom(ctx);
     if (!bridge) {
         return nullptr;
@@ -208,41 +208,41 @@ CScriptArray *RuntimeBBFindAll(const ScriptRuntimeContext &ctx, const std::strin
     return array;
 }
 
-ParamTypeInfo *RuntimeParamAt(const ScriptRuntimeContext &ctx, int index) {
+ParamTypeInfo *RuntimeParamAt(const ScriptContext &ctx, int index) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
     const ScriptParamTypeRecord *record = registry ? registry->At(index) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
-ParamTypeInfo *RuntimeParamFind(const ScriptRuntimeContext &ctx, const std::string &query, int occurrence) {
+ParamTypeInfo *RuntimeParamFind(const ScriptContext &ctx, const std::string &query, int occurrence) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
     const ScriptParamTypeRecord *record = registry ? registry->Find(query, occurrence) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
-ParamTypeInfo *RuntimeParamTypeByName(const ScriptRuntimeContext &ctx, const std::string &typeName) {
+ParamTypeInfo *RuntimeParamTypeByName(const ScriptContext &ctx, const std::string &typeName) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
-ParamTypeInfo *RuntimeParamTypeByGuid(const ScriptRuntimeContext &ctx, CKGUID guid) {
+ParamTypeInfo *RuntimeParamTypeByGuid(const ScriptContext &ctx, CKGUID guid) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
-int RuntimeParamCount(const ScriptRuntimeContext &ctx) {
+int RuntimeParamCount(const ScriptContext &ctx) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
     return registry ? registry->Count() : 0;
 }
 
-bool RuntimeReloadAll(const ScriptRuntimeContext &ctx) {
+bool RuntimeReloadAll(const ScriptContext &ctx) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetRuntime() && manager->GetRuntime()->ReloadAll(&error);
@@ -252,7 +252,7 @@ bool RuntimeReloadAll(const ScriptRuntimeContext &ctx) {
     return ok;
 }
 
-bool RuntimeReload(const ScriptRuntimeContext &ctx, const std::string &id) {
+bool RuntimeReload(const ScriptContext &ctx, const std::string &id) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetRuntime() && manager->GetRuntime()->Reload(id, &error);
@@ -262,7 +262,7 @@ bool RuntimeReload(const ScriptRuntimeContext &ctx, const std::string &id) {
     return ok;
 }
 
-bool RuntimeEnable(const ScriptRuntimeContext &ctx, const std::string &id, bool enabled) {
+bool RuntimeEnable(const ScriptContext &ctx, const std::string &id, bool enabled) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetRuntime() && manager->GetRuntime()->Enable(id, enabled, &error);
@@ -272,7 +272,7 @@ bool RuntimeEnable(const ScriptRuntimeContext &ctx, const std::string &id, bool 
     return ok;
 }
 
-CScriptArray *RuntimeList(const ScriptRuntimeContext &ctx) {
+CScriptArray *RuntimeList(const ScriptContext &ctx) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     asIScriptEngine *engine = manager ? manager->GetScriptEngine() : nullptr;
     asITypeInfo *arrayType = engine ? engine->GetTypeInfoByDecl("array<string>") : nullptr;
@@ -287,7 +287,7 @@ CScriptArray *RuntimeList(const ScriptRuntimeContext &ctx) {
     return array;
 }
 
-CScriptArray *RuntimeListInfo(const ScriptRuntimeContext &ctx) {
+CScriptArray *RuntimeListInfo(const ScriptContext &ctx) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     asIScriptEngine *engine = manager ? manager->GetScriptEngine() : nullptr;
     asITypeInfo *arrayType = engine ? engine->GetTypeInfoByDecl("array<RuntimeScriptInfo>") : nullptr;
@@ -302,17 +302,17 @@ CScriptArray *RuntimeListInfo(const ScriptRuntimeContext &ctx) {
     return array;
 }
 
-RuntimeScriptInfo RuntimeInfo(const ScriptRuntimeContext &ctx, const std::string &id) {
+RuntimeScriptInfo RuntimeInfo(const ScriptContext &ctx, const std::string &id) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     return manager && manager->GetRuntime() ? manager->GetRuntime()->Info(id) : RuntimeScriptInfo();
 }
 
-std::string RuntimeVersion(const ScriptRuntimeContext &ctx, const std::string &id) {
+std::string RuntimeVersion(const ScriptContext &ctx, const std::string &id) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     return manager && manager->GetRuntime() ? manager->GetRuntime()->Version(id) : std::string();
 }
 
-std::string RuntimeMetadata(const ScriptRuntimeContext &ctx,
+std::string RuntimeMetadata(const ScriptContext &ctx,
                             const std::string &id,
                             const std::string &key,
                             const std::string &fallback) {
@@ -320,7 +320,7 @@ std::string RuntimeMetadata(const ScriptRuntimeContext &ctx,
     return manager && manager->GetRuntime() ? manager->GetRuntime()->Metadata(id, key, fallback) : fallback;
 }
 
-CScriptArray *RuntimeDependencies(const ScriptRuntimeContext &ctx, const std::string &id) {
+CScriptArray *RuntimeDependencies(const ScriptContext &ctx, const std::string &id) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     asIScriptEngine *engine = manager ? manager->GetScriptEngine() : nullptr;
     asITypeInfo *arrayType = engine ? engine->GetTypeInfoByDecl("array<string>") : nullptr;
@@ -335,7 +335,7 @@ CScriptArray *RuntimeDependencies(const ScriptRuntimeContext &ctx, const std::st
     return array;
 }
 
-CScriptArray *RuntimeDependencyInfos(const ScriptRuntimeContext &ctx, const std::string &id, bool optional) {
+CScriptArray *RuntimeDependencyInfos(const ScriptContext &ctx, const std::string &id, bool optional) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     asIScriptEngine *engine = manager ? manager->GetScriptEngine() : nullptr;
     asITypeInfo *arrayType = engine ? engine->GetTypeInfoByDecl("array<RuntimeDependencyInfo>") : nullptr;
@@ -352,11 +352,11 @@ CScriptArray *RuntimeDependencyInfos(const ScriptRuntimeContext &ctx, const std:
     return array;
 }
 
-CScriptArray *RuntimeRequiredDependencies(const ScriptRuntimeContext &ctx, const std::string &id) {
+CScriptArray *RuntimeRequiredDependencies(const ScriptContext &ctx, const std::string &id) {
     return RuntimeDependencyInfos(ctx, id, false);
 }
 
-CScriptArray *RuntimeOptionalDependencies(const ScriptRuntimeContext &ctx, const std::string &id) {
+CScriptArray *RuntimeOptionalDependencies(const ScriptContext &ctx, const std::string &id) {
     return RuntimeDependencyInfos(ctx, id, true);
 }
 
@@ -379,7 +379,7 @@ struct ScriptRuntime::Module {
     std::string Error;
     asIScriptContext *ActiveContext = nullptr;
     std::string ActiveInvocation;
-    ScriptRuntimeContext ContextStorage;
+    ScriptContext ContextStorage;
     ScriptMessage MessageStorage;
     bool PendingDisable = false;
     bool PendingDestroy = false;
@@ -526,22 +526,22 @@ int RuntimeScriptInfo::Generation() const {
     return m_Generation;
 }
 
-ScriptRuntimeContext::ScriptRuntimeContext() = default;
+ScriptContext::ScriptContext() = default;
 
-ScriptRuntimeContext::ScriptRuntimeContext(CKContext *context,
-                                           std::string scriptId,
-                                           std::string scriptName,
-                                           std::string scriptVersion,
-                                           std::string rootPath,
-                                           std::string manifestPath,
-                                           std::string entryPath,
-                                           std::vector<ScriptRuntimeMetadataEntry> metadata,
-                                           std::string phase,
-                                           std::string state,
-                                           int generation,
-                                           std::uint64_t frameIndex,
-                                           float deltaTime,
-                                           float timeSeconds)
+ScriptContext::ScriptContext(CKContext *context,
+                             std::string scriptId,
+                             std::string scriptName,
+                             std::string scriptVersion,
+                             std::string rootPath,
+                             std::string manifestPath,
+                             std::string entryPath,
+                             const std::vector<ScriptRuntimeMetadataEntry> *metadata,
+                             std::string phase,
+                             std::string state,
+                             int generation,
+                             std::uint64_t frameIndex,
+                             float deltaTime,
+                             float timeSeconds)
     : m_Context(context),
       m_ScriptId(std::move(scriptId)),
       m_ScriptName(std::move(scriptName)),
@@ -549,7 +549,7 @@ ScriptRuntimeContext::ScriptRuntimeContext(CKContext *context,
       m_RootPath(std::move(rootPath)),
       m_ManifestPath(std::move(manifestPath)),
       m_EntryPath(std::move(entryPath)),
-      m_Metadata(std::move(metadata)),
+      m_Metadata(metadata),
       m_Phase(std::move(phase)),
       m_State(std::move(state)),
       m_Generation(generation),
@@ -557,75 +557,75 @@ ScriptRuntimeContext::ScriptRuntimeContext(CKContext *context,
       m_DeltaTime(deltaTime),
       m_TimeSeconds(timeSeconds) {}
 
-CKContext *ScriptRuntimeContext::Context() const {
+CKContext *ScriptContext::Context() const {
     return m_Context;
 }
 
-float ScriptRuntimeContext::DeltaTime() const {
+float ScriptContext::DeltaTime() const {
     return m_DeltaTime;
 }
 
-float ScriptRuntimeContext::TimeSeconds() const {
+float ScriptContext::TimeSeconds() const {
     return m_TimeSeconds;
 }
 
-std::string ScriptRuntimeContext::ScriptId() const {
+std::string ScriptContext::ScriptId() const {
     return m_ScriptId;
 }
 
-std::string ScriptRuntimeContext::ScriptName() const {
+std::string ScriptContext::ScriptName() const {
     return m_ScriptName;
 }
 
-std::string ScriptRuntimeContext::ScriptVersion() const {
+std::string ScriptContext::ScriptVersion() const {
     return m_ScriptVersion;
 }
 
-std::string ScriptRuntimeContext::RootPath() const {
+std::string ScriptContext::RootPath() const {
     return m_RootPath;
 }
 
-std::string ScriptRuntimeContext::ManifestPath() const {
+std::string ScriptContext::ManifestPath() const {
     return m_ManifestPath;
 }
 
-std::string ScriptRuntimeContext::EntryPath() const {
+std::string ScriptContext::EntryPath() const {
     return m_EntryPath;
 }
 
-std::string ScriptRuntimeContext::Phase() const {
+std::string ScriptContext::Phase() const {
     return m_Phase;
 }
 
-std::string ScriptRuntimeContext::State() const {
+std::string ScriptContext::State() const {
     return m_State;
 }
 
-int ScriptRuntimeContext::Generation() const {
+int ScriptContext::Generation() const {
     return m_Generation;
 }
 
-std::uint64_t ScriptRuntimeContext::FrameIndex() const {
+std::uint64_t ScriptContext::FrameIndex() const {
     return m_FrameIndex;
 }
 
-std::string ScriptRuntimeContext::Metadata(const std::string &key, const std::string &fallback) const {
-    return ScriptRuntimeMetadata::MetadataValue(m_Metadata, key, fallback);
+std::string ScriptContext::Metadata(const std::string &key, const std::string &fallback) const {
+    return m_Metadata ? ScriptRuntimeMetadata::MetadataValue(*m_Metadata, key, fallback) : fallback;
 }
 
-int ScriptRuntimeContext::MetadataCount() const {
-    return static_cast<int>(m_Metadata.size());
+int ScriptContext::MetadataCount() const {
+    return m_Metadata ? static_cast<int>(m_Metadata->size()) : 0;
 }
 
-std::string ScriptRuntimeContext::MetadataKey(int index) const {
-    return index >= 0 && index < static_cast<int>(m_Metadata.size()) ? m_Metadata[index].Key : std::string();
+std::string ScriptContext::MetadataKey(int index) const {
+    return m_Metadata && index >= 0 && index < static_cast<int>(m_Metadata->size()) ? (*m_Metadata)[index].Key : std::string();
 }
 
-std::string ScriptRuntimeContext::MetadataValue(int index) const {
-    return index >= 0 && index < static_cast<int>(m_Metadata.size()) ? m_Metadata[index].Value : std::string();
+std::string ScriptContext::MetadataValue(int index) const {
+    return m_Metadata && index >= 0 && index < static_cast<int>(m_Metadata->size()) ? (*m_Metadata)[index].Value : std::string();
 }
 
-void ScriptRuntimeContext::Raise(const std::string &message) const {
+void ScriptContext::Raise(const std::string &message) const {
     if (m_Context) {
         m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript Runtime:%s] %s"),
                                      m_ScriptId.c_str(),
@@ -633,7 +633,7 @@ void ScriptRuntimeContext::Raise(const std::string &message) const {
     }
 }
 
-CKBehaviorContext ScriptRuntimeContext::ToBehaviorContext() const {
+CKBehaviorContext ScriptContext::ToBehaviorContext() const {
     CKBehaviorContext ctx = m_Context ? m_Context->m_BehaviorContext : CKBehaviorContext();
     ctx.Context = m_Context;
     ctx.DeltaTime = m_DeltaTime;
@@ -694,7 +694,7 @@ void ScriptRuntime::PostProcess() {
         if (!module || !module->Loaded || module->Failed || !module->Enabled || !module->EnableCalled) {
             continue;
         }
-        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(context,
+        ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(context,
                                                                              module->Meta,
                                                                              "OnPostProcess",
                                                                              ModuleState(*module),
@@ -718,7 +718,7 @@ void ScriptRuntime::PostLoad() {
         if (!module || !module->Loaded || module->Failed) {
             continue;
         }
-        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(context,
+        ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(context,
                                                                              module->Meta,
                                                                              "OnPostLoad",
                                                                              ModuleState(*module),
@@ -736,7 +736,7 @@ void ScriptRuntime::OnReset() {
         if (!module || !module->Loaded || module->Failed) {
             continue;
         }
-        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+        ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                              module->Meta,
                                                                              "OnReset",
                                                                              ModuleState(*module),
@@ -757,7 +757,7 @@ void ScriptRuntime::OnPause() {
         if (!module || !module->Loaded || module->Failed) {
             continue;
         }
-        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+        ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                              module->Meta,
                                                                              "OnPause",
                                                                              ModuleState(*module),
@@ -778,7 +778,7 @@ void ScriptRuntime::OnResume() {
         if (!module || !module->Loaded || module->Failed || !module->Enabled) {
             continue;
         }
-        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+        ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                              module->Meta,
                                                                              "OnResume",
                                                                              ModuleState(*module),
@@ -791,7 +791,7 @@ void ScriptRuntime::OnResume() {
         }
         InvokeFinished(*module, "OnResume", ctx);
         if (!module->EnableCalled) {
-            ScriptRuntimeContext enableCtx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+            ScriptContext enableCtx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                                        module->Meta,
                                                                                        "OnEnable",
                                                                                        ModuleState(*module),
@@ -1010,7 +1010,7 @@ bool ScriptRuntime::DeliverMessage(const std::string &id, const ScriptMessage &m
             error = "Runtime message target is busy.";
             return false;
         }
-        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+        ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                              module->Meta,
                                                                              "OnMessage",
                                                                              ModuleState(*module),
@@ -1331,7 +1331,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
         return true;
     }
 
-    ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+    ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                          metadata,
                                                                          "OnLoad",
                                                                          "loading",
@@ -1382,7 +1382,7 @@ bool ScriptRuntime::ValidateLifecycleSignatures(const Module &module, std::strin
         return true;
     }
     for (const char *name : ScriptRuntimeInternal::kLifecycleNames) {
-        const std::string expected = fmt::format("void {}(const ScriptRuntimeContext &in ctx)", name);
+        const std::string expected = fmt::format("void {}(const ScriptContext &in ctx)", name);
         asIScriptFunction *expectedFunc = module.Type
             ? module.Type->GetMethodByDecl(expected.c_str())
             : scriptModule->GetFunctionByDecl(expected.c_str());
@@ -1414,7 +1414,7 @@ bool ScriptRuntime::ValidateLifecycleSignatures(const Module &module, std::strin
             }
         }
     }
-    const std::string expectedMessage = "void OnMessage(const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx)";
+    const std::string expectedMessage = "void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx)";
     asIScriptFunction *expectedMessageFunc = module.Type
         ? module.Type->GetMethodByDecl(expectedMessage.c_str())
         : scriptModule->GetFunctionByDecl(expectedMessage.c_str());
@@ -1470,7 +1470,7 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
     }
     module.PendingDestroy = !hard;
     if (module.Loaded && !module.Failed) {
-        ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+        ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                              module.Meta,
                                                                              "OnDisable",
                                                                              ModuleState(module),
@@ -1534,7 +1534,7 @@ bool ScriptRuntime::DisableModule(Module &module) {
         module.PendingDisable = false;
         return true;
     }
-    ScriptRuntimeContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+    ScriptContext ctx = ScriptRuntimeInternal::MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                          module.Meta,
                                                                          "OnDisable",
                                                                          ModuleState(module),
@@ -1551,7 +1551,7 @@ bool ScriptRuntime::DisableModule(Module &module) {
     return true;
 }
 
-bool ScriptRuntime::PauseModule(Module &module, const ScriptRuntimeContext &context) {
+bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
     if (!module.PendingPause) {
         CancelActiveInvocation(module);
     }
@@ -1579,7 +1579,7 @@ bool ScriptRuntime::PauseModule(Module &module, const ScriptRuntimeContext &cont
     return true;
 }
 
-bool ScriptRuntime::ResetModule(Module &module, const ScriptRuntimeContext &context) {
+bool ScriptRuntime::ResetModule(Module &module, const ScriptContext &context) {
     if (!module.PendingReset) {
         CancelActiveInvocation(module);
     }
@@ -1714,17 +1714,17 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         return;
     }
     if (module.PendingPause) {
-        ScriptRuntimeContext ctx = makeContext("OnPause");
+        ScriptContext ctx = makeContext("OnPause");
         PauseModule(module, ctx);
         return;
     }
     if (module.PendingReset) {
-        ScriptRuntimeContext ctx = makeContext("OnReset");
+        ScriptContext ctx = makeContext("OnReset");
         ResetModule(module, ctx);
         return;
     }
     if (!module.LoadCalled) {
-        ScriptRuntimeContext ctx = makeContext("OnLoad");
+        ScriptContext ctx = makeContext("OnLoad");
         const InvokeStatus status = Invoke(module, "OnLoad", ctx);
         if (status != InvokeStatus::Finished) {
             return;
@@ -1732,7 +1732,7 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         module.LoadCalled = true;
     }
     if (!module.AwakeCalled) {
-        ScriptRuntimeContext ctx = makeContext("Awake");
+        ScriptContext ctx = makeContext("Awake");
         const InvokeStatus status = Invoke(module, "Awake", ctx);
         if (status != InvokeStatus::Finished) {
             return;
@@ -1743,7 +1743,7 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         return;
     }
     if (!module.EnableCalled) {
-        ScriptRuntimeContext ctx = makeContext("OnEnable");
+        ScriptContext ctx = makeContext("OnEnable");
         const InvokeStatus status = Invoke(module, "OnEnable", ctx);
         if (status != InvokeStatus::Finished) {
             return;
@@ -1751,24 +1751,24 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         module.EnableCalled = true;
     }
     if (!module.StartCalled) {
-        ScriptRuntimeContext ctx = makeContext("Start");
+        ScriptContext ctx = makeContext("Start");
         const InvokeStatus status = Invoke(module, "Start", ctx);
         if (status != InvokeStatus::Finished) {
             return;
         }
         module.StartCalled = true;
     }
-    ScriptRuntimeContext ctx = makeContext("Update");
+    ScriptContext ctx = makeContext("Update");
     Invoke(module, "Update", ctx);
 }
 
-ScriptRuntime::InvokeStatus ScriptRuntime::InvokeMessage(Module &module, const ScriptMessage &message, const ScriptRuntimeContext &context) {
+ScriptRuntime::InvokeStatus ScriptRuntime::InvokeMessage(Module &module, const ScriptMessage &message, const ScriptContext &context) {
     if (!module.Cached || !module.Cached->module) {
         return InvokeStatus::Finished;
     }
     asIScriptFunction *func = nullptr;
     if (!module.ActiveContext) {
-        const std::string decl = "void OnMessage(const ScriptMessage &in msg, const ScriptRuntimeContext &in ctx)";
+        const std::string decl = "void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx)";
         func = module.Type
             ? module.Type->GetMethodByDecl(decl.c_str())
             : module.Cached->module->GetFunctionByDecl(decl.c_str());
@@ -1838,14 +1838,14 @@ ScriptRuntime::InvokeStatus ScriptRuntime::InvokeMessage(Module &module, const S
     return InvokeStatus::Finished;
 }
 
-ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *name, const ScriptRuntimeContext &context, bool required) {
+ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *name, const ScriptContext &context, bool required) {
     if (!module.Cached || !module.Cached->module || !name || name[0] == '\0') {
         return required ? InvokeStatus::Failed : InvokeStatus::Finished;
     }
 
     if (module.ActiveContext && module.ActiveInvocation != name) {
         const std::string active = module.ActiveInvocation;
-        const ScriptRuntimeContext activeContext = module.ContextStorage;
+        const ScriptContext activeContext = module.ContextStorage;
         const InvokeStatus activeStatus = active == "OnMessage"
             ? InvokeMessage(module, module.MessageStorage, activeContext)
             : Invoke(module, active.c_str(), activeContext, false);
@@ -1856,7 +1856,7 @@ ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *na
 
     asIScriptFunction *func = nullptr;
     if (!module.ActiveContext) {
-        std::string decl = fmt::format("void {}(const ScriptRuntimeContext &in ctx)", name);
+        std::string decl = fmt::format("void {}(const ScriptContext &in ctx)", name);
         if (module.Type) {
             func = module.Type->GetMethodByDecl(decl.c_str());
         } else {
@@ -1953,7 +1953,7 @@ ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *na
     return InvokeStatus::Finished;
 }
 
-bool ScriptRuntime::InvokeFinished(Module &module, const char *name, const ScriptRuntimeContext &context, bool required) {
+bool ScriptRuntime::InvokeFinished(Module &module, const char *name, const ScriptContext &context, bool required) {
     return Invoke(module, name, context, required) == InvokeStatus::Finished;
 }
 
@@ -2064,84 +2064,84 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string EntryPath() const", asMETHOD(RuntimeScriptInfo, EntryPath), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "int Generation() const", asMETHOD(RuntimeScriptInfo, Generation), asCALL_THISCALL); assert(r >= 0);
 
-    r = engine->RegisterObjectType("ScriptRuntimeContext",
-                                   sizeof(ScriptRuntimeContext),
+    r = engine->RegisterObjectType("ScriptContext",
+                                   sizeof(ScriptContext),
                                    asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("ScriptRuntimeContext", asBEHAVE_CONSTRUCT, "void f()",
-                                        asFUNCTIONPR([](ScriptRuntimeContext *self) { new(self) ScriptRuntimeContext(); },
-                                                     (ScriptRuntimeContext *), void),
+    r = engine->RegisterObjectBehaviour("ScriptContext", asBEHAVE_CONSTRUCT, "void f()",
+                                        asFUNCTIONPR([](ScriptContext *self) { new(self) ScriptContext(); },
+                                                     (ScriptContext *), void),
                                         asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("ScriptRuntimeContext", asBEHAVE_CONSTRUCT, "void f(const ScriptRuntimeContext &in other)",
-                                        asFUNCTIONPR([](const ScriptRuntimeContext &other, ScriptRuntimeContext *self) {
-                                                         new(self) ScriptRuntimeContext(other);
+    r = engine->RegisterObjectBehaviour("ScriptContext", asBEHAVE_CONSTRUCT, "void f(const ScriptContext &in other)",
+                                        asFUNCTIONPR([](const ScriptContext &other, ScriptContext *self) {
+                                                         new(self) ScriptContext(other);
                                                      },
-                                                     (const ScriptRuntimeContext &, ScriptRuntimeContext *), void),
+                                                     (const ScriptContext &, ScriptContext *), void),
                                         asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectBehaviour("ScriptRuntimeContext", asBEHAVE_DESTRUCT, "void f()",
-                                        asFUNCTIONPR([](ScriptRuntimeContext *self) { self->~ScriptRuntimeContext(); },
-                                                     (ScriptRuntimeContext *), void),
+    r = engine->RegisterObjectBehaviour("ScriptContext", asBEHAVE_DESTRUCT, "void f()",
+                                        asFUNCTIONPR([](ScriptContext *self) { self->~ScriptContext(); },
+                                                     (ScriptContext *), void),
                                         asCALL_CDECL_OBJLAST); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "ScriptRuntimeContext &opAssign(const ScriptRuntimeContext &in other)",
-                                     asMETHODPR(ScriptRuntimeContext, operator=, (const ScriptRuntimeContext &), ScriptRuntimeContext &),
+    r = engine->RegisterObjectMethod("ScriptContext", "ScriptContext &opAssign(const ScriptContext &in other)",
+                                     asMETHODPR(ScriptContext, operator=, (const ScriptContext &), ScriptContext &),
                                      asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "CKContext@ Context() const", asMETHOD(ScriptRuntimeContext, Context), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "float DeltaTime() const", asMETHOD(ScriptRuntimeContext, DeltaTime), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "float TimeSeconds() const", asMETHOD(ScriptRuntimeContext, TimeSeconds), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string ScriptId() const", asMETHOD(ScriptRuntimeContext, ScriptId), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string ScriptName() const", asMETHOD(ScriptRuntimeContext, ScriptName), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string ScriptVersion() const", asMETHOD(ScriptRuntimeContext, ScriptVersion), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string RootPath() const", asMETHOD(ScriptRuntimeContext, RootPath), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string ManifestPath() const", asMETHOD(ScriptRuntimeContext, ManifestPath), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string EntryPath() const", asMETHOD(ScriptRuntimeContext, EntryPath), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string Phase() const", asMETHOD(ScriptRuntimeContext, Phase), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string State() const", asMETHOD(ScriptRuntimeContext, State), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "int Generation() const", asMETHOD(ScriptRuntimeContext, Generation), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "uint64 FrameIndex() const", asMETHOD(ScriptRuntimeContext, FrameIndex), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string Metadata(const string &in key, const string &in fallback = \"\") const", asMETHOD(ScriptRuntimeContext, Metadata), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "int MetadataCount() const", asMETHOD(ScriptRuntimeContext, MetadataCount), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string MetadataKey(int index) const", asMETHOD(ScriptRuntimeContext, MetadataKey), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "string MetadataValue(int index) const", asMETHOD(ScriptRuntimeContext, MetadataValue), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "void Raise(const string &in message) const", asMETHOD(ScriptRuntimeContext, Raise), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptRuntimeContext", "CKBehaviorContext ToBehaviorContext() const", asMETHOD(ScriptRuntimeContext, ToBehaviorContext), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "CKContext@ Context() const", asMETHOD(ScriptContext, Context), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "float DeltaTime() const", asMETHOD(ScriptContext, DeltaTime), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "float TimeSeconds() const", asMETHOD(ScriptContext, TimeSeconds), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string ScriptId() const", asMETHOD(ScriptContext, ScriptId), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string ScriptName() const", asMETHOD(ScriptContext, ScriptName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string ScriptVersion() const", asMETHOD(ScriptContext, ScriptVersion), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string RootPath() const", asMETHOD(ScriptContext, RootPath), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string ManifestPath() const", asMETHOD(ScriptContext, ManifestPath), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string EntryPath() const", asMETHOD(ScriptContext, EntryPath), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Phase() const", asMETHOD(ScriptContext, Phase), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string State() const", asMETHOD(ScriptContext, State), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "int Generation() const", asMETHOD(ScriptContext, Generation), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "uint64 FrameIndex() const", asMETHOD(ScriptContext, FrameIndex), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Metadata(const string &in key, const string &in fallback = \"\") const", asMETHOD(ScriptContext, Metadata), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "int MetadataCount() const", asMETHOD(ScriptContext, MetadataCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string MetadataKey(int index) const", asMETHOD(ScriptContext, MetadataKey), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "string MetadataValue(int index) const", asMETHOD(ScriptContext, MetadataValue), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "void Raise(const string &in message) const", asMETHOD(ScriptContext, Raise), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("ScriptContext", "CKBehaviorContext ToBehaviorContext() const", asMETHOD(ScriptContext, ToBehaviorContext), asCALL_THISCALL); assert(r >= 0);
 
     const char *previousNamespace = engine->GetDefaultNamespace();
     const std::string previous = previousNamespace ? previousNamespace : "";
 
     r = engine->SetDefaultNamespace("Behavior"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorBridge@ From(const ScriptRuntimeContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFrom), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const ScriptRuntimeContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorGraph), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const ScriptRuntimeContext &in ctx, const string &in rootBehaviorName)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorGraphByRoot), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorRef@ Find(const ScriptRuntimeContext &in ctx, const string &in name)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFind), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorRef@ FindByID(const ScriptRuntimeContext &in ctx, CK_ID id)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFindById), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BehaviorBridge@ From(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFrom), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorGraph), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const ScriptContext &in ctx, const string &in rootBehaviorName)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorGraphByRoot), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BehaviorRef@ Find(const ScriptContext &in ctx, const string &in name)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFind), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BehaviorRef@ FindByID(const ScriptContext &in ctx, CK_ID id)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFindById), asCALL_CDECL); assert(r >= 0);
 
     r = engine->SetDefaultNamespace("BB"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBBridge@ From(const ScriptRuntimeContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFrom), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBDecl@ Require(const ScriptRuntimeContext &in ctx, const string &in query)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBRequireByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBDecl@ Require(const ScriptRuntimeContext &in ctx, CKGUID guid)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBRequireByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("int Count(const ScriptRuntimeContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBCount), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBPrototype@ At(const ScriptRuntimeContext &in ctx, int index)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBAt), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBPrototype@ Find(const ScriptRuntimeContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFind), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<BBPrototype@>@ FindAll(const ScriptRuntimeContext &in ctx, const string &in query = \"\")", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFindAll), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BBBridge@ From(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFrom), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BBDecl@ Require(const ScriptContext &in ctx, const string &in query)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBRequireByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BBDecl@ Require(const ScriptContext &in ctx, CKGUID guid)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBRequireByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int Count(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBCount), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BBPrototype@ At(const ScriptContext &in ctx, int index)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBAt), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("BBPrototype@ Find(const ScriptContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFind), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("array<BBPrototype@>@ FindAll(const ScriptContext &in ctx, const string &in query = \"\")", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFindAll), asCALL_CDECL); assert(r >= 0);
 
     r = engine->SetDefaultNamespace("Param"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("int Count(const ScriptRuntimeContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamCount), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamTypeInfo@ At(const ScriptRuntimeContext &in ctx, int index)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamAt), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Find(const ScriptRuntimeContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamFind), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const ScriptRuntimeContext &in ctx, const string &in typeName)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamTypeByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const ScriptRuntimeContext &in ctx, CKGUID guid)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamTypeByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("int Count(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamCount), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ At(const ScriptContext &in ctx, int index)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamAt), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Find(const ScriptContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamFind), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const ScriptContext &in ctx, const string &in typeName)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamTypeByName), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const ScriptContext &in ctx, CKGUID guid)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamTypeByGuid), asCALL_CDECL); assert(r >= 0);
 
     r = engine->SetDefaultNamespace("Runtime"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool ReloadAll(const ScriptRuntimeContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeReloadAll), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Reload(const ScriptRuntimeContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeReload), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Enable(const ScriptRuntimeContext &in ctx, const string &in id, bool enabled)", asFUNCTION(ScriptRuntimeInternal::RuntimeEnable), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<string>@ List(const ScriptRuntimeContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeList), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<RuntimeScriptInfo>@ ListInfo(const ScriptRuntimeContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeListInfo), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("RuntimeScriptInfo Info(const ScriptRuntimeContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeInfo), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("string Version(const ScriptRuntimeContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeVersion), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("string Metadata(const ScriptRuntimeContext &in ctx, const string &in id, const string &in key, const string &in fallback = \"\")", asFUNCTION(ScriptRuntimeInternal::RuntimeMetadata), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<string>@ Dependencies(const ScriptRuntimeContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeDependencies), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<RuntimeDependencyInfo>@ RequiredDependencies(const ScriptRuntimeContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeRequiredDependencies), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<RuntimeDependencyInfo>@ OptionalDependencies(const ScriptRuntimeContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeOptionalDependencies), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool ReloadAll(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeReloadAll), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool Reload(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeReload), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("bool Enable(const ScriptContext &in ctx, const string &in id, bool enabled)", asFUNCTION(ScriptRuntimeInternal::RuntimeEnable), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("array<string>@ List(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeList), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("array<RuntimeScriptInfo>@ ListInfo(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeListInfo), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("RuntimeScriptInfo Info(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeInfo), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Version(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeVersion), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string Metadata(const ScriptContext &in ctx, const string &in id, const string &in key, const string &in fallback = \"\")", asFUNCTION(ScriptRuntimeInternal::RuntimeMetadata), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("array<string>@ Dependencies(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeDependencies), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("array<RuntimeDependencyInfo>@ RequiredDependencies(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeRequiredDependencies), asCALL_CDECL); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("array<RuntimeDependencyInfo>@ OptionalDependencies(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeOptionalDependencies), asCALL_CDECL); assert(r >= 0);
 
     r = engine->SetDefaultNamespace(previous.c_str()); assert(r >= 0);
 }

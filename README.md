@@ -328,7 +328,7 @@ The direct typed-return aggregate overloads are intentionally not exposed becaus
 
 Runtime scripts are long-lived modules discovered from `DATA_PATH/Scripts` and `CKAS_SCRIPT_ROOTS`. Directory modules use `script.as` metadata with an optional `entry` file; single-file `.as` modules remain supported.
 
-Runtime lifecycle callbacks keep the existing naming style but must use the explicit context signature, for example `void OnLoad(const ScriptRuntimeContext &in ctx)` and `void Update(const ScriptRuntimeContext &in ctx)`. v2 also adds `OnPostLoad(ctx)` and `OnPostProcess(ctx)`.
+Runtime lifecycle callbacks keep the existing naming style but must use the explicit context signature, for example `void OnLoad(const ScriptContext &in ctx)` and `void Update(const ScriptContext &in ctx)`. v2 also adds `OnPostLoad(ctx)` and `OnPostProcess(ctx)`.
 
 See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for metadata, lifecycle, structured `RuntimeScriptInfo` / `RuntimeDependencyInfo` APIs, validation, and templates.
 
