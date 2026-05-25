@@ -102,6 +102,157 @@ bool WriteLivePinValue(CKBehavior *behavior,
     return false;
 }
 
+class RuntimePinMutation {
+public:
+    RuntimePinMutation(ScriptBehaviorBridge *bridge, CK_ID instanceId, int generation, int pinIndex, const char *method)
+        : m_Bridge(bridge),
+          m_InstanceId(instanceId),
+          m_Generation(generation),
+          m_PinIndex(pinIndex),
+          m_Method(method ? method : "BB runtime pin mutation") {
+        if (m_Bridge) {
+            m_OldSource = m_Bridge->TakeInstanceSourceLink(m_InstanceId, m_Generation, m_PinIndex);
+            m_OldOperation = m_Bridge->TakeInstanceOperation(m_InstanceId, m_Generation, m_PinIndex);
+        }
+    }
+
+    ~RuntimePinMutation() {
+        if (!m_Finished) {
+            CleanupDetached(m_OldSource);
+            CleanupDetached(m_OldOperation);
+        }
+    }
+
+    void ClearExisting() {
+        CleanupDetached(m_OldSource);
+        CleanupDetached(m_OldOperation);
+        m_Finished = true;
+    }
+
+    bool StoreSource(ParamSourceLinkRef *link, std::string &error) {
+        if (!m_Bridge || !link || !m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, m_PinIndex, link)) {
+            RollbackNew(link);
+            RestorePrevious(error);
+            error = WithRestoreError("failed to store live source link", error);
+            m_Finished = true;
+            return false;
+        }
+        CleanupDetached(m_OldSource);
+        CleanupDetached(m_OldOperation);
+        m_Finished = true;
+        return true;
+    }
+
+    bool StoreOperation(ParamOperationRef *operation, std::string &error) {
+        if (!m_Bridge || !operation || !m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, m_PinIndex, operation)) {
+            RollbackNew(operation);
+            RestorePrevious(error);
+            error = WithRestoreError("failed to store live operation", error);
+            m_Finished = true;
+            return false;
+        }
+        CleanupDetached(m_OldSource);
+        CleanupDetached(m_OldOperation);
+        m_Finished = true;
+        return true;
+    }
+
+private:
+    template <typename T>
+    static void CleanupDetached(T *&handle) {
+        if (!handle) {
+            return;
+        }
+        handle->DestroyDetached();
+        handle->Release();
+        handle = nullptr;
+    }
+
+    static void RollbackNew(ParamSourceLinkRef *link) {
+        if (!link) {
+            return;
+        }
+        link->Restore();
+        link->Release();
+    }
+
+    static void RollbackNew(ParamOperationRef *operation) {
+        if (!operation) {
+            return;
+        }
+        operation->Destroy();
+        operation->Release();
+    }
+
+    bool RestorePrevious(std::string &error) {
+        bool ok = true;
+        if (m_OldSource) {
+            if (m_Bridge && m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, m_PinIndex, m_OldSource)) {
+                m_OldSource = nullptr;
+            } else {
+                CleanupDetached(m_OldSource);
+                AppendRestoreError(error, "lost previous live source ownership");
+                ok = false;
+            }
+        }
+        if (m_OldOperation) {
+            if (m_Bridge && m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, m_PinIndex, m_OldOperation)) {
+                m_OldOperation = nullptr;
+            } else {
+                CleanupDetached(m_OldOperation);
+                AppendRestoreError(error, "lost previous live operation ownership");
+                ok = false;
+            }
+        }
+        return ok;
+    }
+
+    static void AppendRestoreError(std::string &error, const char *message) {
+        if (!error.empty()) {
+            error += " ";
+        }
+        error += message;
+        error += ".";
+    }
+
+    std::string WithRestoreError(const char *action, const std::string &restoreError) const {
+        return fmt::format("{} {} for pin #{}.{}{}",
+                           m_Method,
+                           action,
+                           m_PinIndex,
+                           restoreError.empty() ? "" : " ",
+                           restoreError);
+    }
+
+    ScriptBehaviorBridge *m_Bridge = nullptr;
+    CK_ID m_InstanceId = 0;
+    int m_Generation = 0;
+    int m_PinIndex = -1;
+    const char *m_Method = "";
+    ParamSourceLinkRef *m_OldSource = nullptr;
+    ParamOperationRef *m_OldOperation = nullptr;
+    bool m_Finished = false;
+};
+
+bool IsInputSourceTypeCompatible(CKContext *context, CKGUID targetGuid, CKParameter *source) {
+    if (!context && source) {
+        context = source->GetCKContext();
+    }
+    if (!context || !source) {
+        return false;
+    }
+    const CKGUID sourceGuid = source->GetGUID();
+    if (targetGuid == sourceGuid) {
+        return true;
+    }
+    if (ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context)) {
+        return registry->IsTypeCompatible(targetGuid, sourceGuid);
+    }
+    CKParameterManager *pm = context->GetParameterManager();
+    return pm && (pm->IsTypeCompatible(targetGuid, sourceGuid) != FALSE ||
+                  pm->IsTypeCompatible(sourceGuid, targetGuid) != FALSE);
+}
+
 std::string PrototypeCandidateList(const std::vector<CKObjectDeclaration *> &matches) {
     std::string text;
     for (CKObjectDeclaration *decl : matches) {
@@ -1070,7 +1221,6 @@ bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
         }
     }
 
-    CKParameterManager *pm = context->GetParameterManager();
     for (const ScriptBridgeInputSource &source : m_Request.SourceParameters) {
         const ScriptBridgeLayoutParamSlot *slot = findSlot(layout->Pins, source.PinIndex);
         if (!slot) {
@@ -1088,8 +1238,7 @@ bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
             SetScriptException(m_Error);
             return false;
         }
-        if (pm && pm->IsTypeCompatible(slot->TypeGuid, sourceParam->GetGUID()) == FALSE &&
-            pm->IsTypeCompatible(sourceParam->GetGUID(), slot->TypeGuid) == FALSE) {
+        if (!ScriptBridgeBBInternal::IsInputSourceTypeCompatible(context, slot->TypeGuid, sourceParam)) {
             SetError(fmt::format("BBConfig.Validate source type mismatch for pin #{} '{}' expected {}, got {}.",
                                  slot->Index,
                                  slot->Name,
@@ -1390,16 +1539,7 @@ bool BBConfig::SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const
             return false;
         }
 
-        ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-        ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-        if (oldSource) {
-            oldSource->DestroyDetached();
-            oldSource->Release();
-        }
-        if (oldOperation) {
-            oldOperation->DestroyDetached();
-            oldOperation->Release();
-        }
+        ScriptBridgeBBInternal::RuntimePinMutation(m_Bridge, m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, method).ClearExisting();
     }
     RemovePendingSource(pinIndex);
     RemovePendingOperation(pinIndex);
@@ -1482,6 +1622,26 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         SetScriptException(m_Error);
         return false;
     }
+    CKParameter *sourceParam = source->Source();
+    CKContext *context = m_Context.Context ? m_Context.Context : (sourceParam ? sourceParam->GetCKContext() : nullptr);
+    if (!sourceParam) {
+        SetError(fmt::format("{} source for pin #{} '{}' is not valid.",
+                             method,
+                             pinIndex,
+                             slot ? slot->Name() : std::string("<null>")));
+        SetScriptException(m_Error);
+        return false;
+    }
+    if (!ScriptBridgeBBInternal::IsInputSourceTypeCompatible(context, slot->TypeGuid(), sourceParam)) {
+        SetError(fmt::format("{} source type mismatch for pin #{} '{}' expected {}, got {}.",
+                             method,
+                             pinIndex,
+                             slot ? slot->Name() : std::string("<null>"),
+                             slot ? slot->TypeName() : std::string("<unknown>"),
+                             ParameterTypeLabel(context, sourceParam)));
+        SetScriptException(m_Error);
+        return false;
+    }
 
     ScriptBridgeInputSource request;
     request.PinIndex = pinIndex;
@@ -1507,30 +1667,12 @@ bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) 
         SetScriptException(m_Error);
         return false;
     }
-    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-    if (!m_Bridge->StoreInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, link)) {
-        link->Restore();
-        link->Release();
-        if (oldSource && !m_Bridge->StoreInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, oldSource)) {
-            oldSource->DestroyDetached();
-            oldSource->Release();
-        }
-        if (oldOperation && !m_Bridge->StoreInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, oldOperation)) {
-            oldOperation->DestroyDetached();
-            oldOperation->Release();
-        }
-        SetError(fmt::format("{} failed to store live source link.", method));
+    ScriptBridgeBBInternal::RuntimePinMutation mutation(m_Bridge, m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, method);
+    std::string ownershipError;
+    if (!mutation.StoreSource(link, ownershipError)) {
+        SetError(ownershipError);
         SetScriptException(m_Error);
         return false;
-    }
-    if (oldSource) {
-        oldSource->DestroyDetached();
-        oldSource->Release();
-    }
-    if (oldOperation) {
-        oldOperation->DestroyDetached();
-        oldOperation->Release();
     }
     RemovePendingValue(pinIndex);
     RemovePendingOperation(pinIndex);
@@ -1572,34 +1714,12 @@ bool BBConfig::OperationForPin(BBSlot *slot, ParamOp *operation, const char *met
         SetScriptException(m_Error);
         return false;
     }
-    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex);
-    if (!m_Bridge->StoreInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, op)) {
-        op->Destroy();
-        op->Release();
-        if (oldSource) {
-            if (!m_Bridge->StoreInstanceSourceLink(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, oldSource)) {
-                oldSource->DestroyDetached();
-                oldSource->Release();
-            }
-        }
-        if (oldOperation) {
-            if (!m_Bridge->StoreInstanceOperation(m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, oldOperation)) {
-                oldOperation->DestroyDetached();
-                oldOperation->Release();
-            }
-        }
-        SetError(fmt::format("{} failed to store live operation.", method));
+    ScriptBridgeBBInternal::RuntimePinMutation mutation(m_Bridge, m_Instance->BridgeInstanceId(), m_Instance->BridgeGeneration(), pinIndex, method);
+    std::string ownershipError;
+    if (!mutation.StoreOperation(op, ownershipError)) {
+        SetError(ownershipError);
         SetScriptException(m_Error);
         return false;
-    }
-    if (oldSource) {
-        oldSource->DestroyDetached();
-        oldSource->Release();
-    }
-    if (oldOperation) {
-        oldOperation->DestroyDetached();
-        oldOperation->Release();
     }
     RemovePendingValue(pinIndex);
     RemovePendingSource(pinIndex);
@@ -2129,16 +2249,7 @@ bool BBInstance::SetValueForPin(BBSlot *pin, const ScriptParamValue &value, cons
         return false;
     }
 
-    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
-    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_InstanceId, m_Generation, pinIndex);
-    if (oldSource) {
-        oldSource->DestroyDetached();
-        oldSource->Release();
-    }
-    if (oldOperation) {
-        oldOperation->DestroyDetached();
-        oldOperation->Release();
-    }
+    ScriptBridgeBBInternal::RuntimePinMutation(m_Bridge, m_InstanceId, m_Generation, pinIndex, method).ClearExisting();
     ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value);
     return true;
 }
@@ -2157,6 +2268,23 @@ bool BBInstance::SourceForPin(BBSlot *pin, ParamRef *source, const char *method)
         SetScriptException(m_Error);
         return false;
     }
+    CKParameterIn *targetPin = behavior && pinIndex >= 0 && pinIndex < behavior->GetInputParameterCount()
+        ? behavior->GetInputParameter(pinIndex)
+        : nullptr;
+    CKParameter *sourceParam = source->Source();
+    if (!targetPin || !sourceParam ||
+        !ScriptBridgeBBInternal::IsInputSourceTypeCompatible(behavior ? behavior->GetCKContext() : nullptr,
+                                                             targetPin->GetGUID(),
+                                                             sourceParam)) {
+        SetError(fmt::format("{} source type mismatch for pin #{} '{}' expected {}, got {}.",
+                             method,
+                             pinIndex,
+                             pin ? pin->Name() : std::string("<null>"),
+                             ParameterTypeLabel(behavior ? behavior->GetCKContext() : nullptr, targetPin),
+                             ParameterTypeLabel(behavior ? behavior->GetCKContext() : nullptr, sourceParam)));
+        SetScriptException(m_Error);
+        return false;
+    }
 
     ParamRef *target = Pin(pin);
     ParamSourceLinkRef *link = target ? target->SetSourceScoped(source) : nullptr;
@@ -2171,30 +2299,12 @@ bool BBInstance::SourceForPin(BBSlot *pin, ParamRef *source, const char *method)
         SetScriptException(m_Error);
         return false;
     }
-    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
-    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_InstanceId, m_Generation, pinIndex);
-    if (!m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, pinIndex, link)) {
-        link->Restore();
-        link->Release();
-        if (oldSource && !m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, pinIndex, oldSource)) {
-            oldSource->DestroyDetached();
-            oldSource->Release();
-        }
-        if (oldOperation && !m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, pinIndex, oldOperation)) {
-            oldOperation->DestroyDetached();
-            oldOperation->Release();
-        }
-        SetError(fmt::format("{} failed to store live source link.", method));
+    ScriptBridgeBBInternal::RuntimePinMutation mutation(m_Bridge, m_InstanceId, m_Generation, pinIndex, method);
+    std::string ownershipError;
+    if (!mutation.StoreSource(link, ownershipError)) {
+        SetError(ownershipError);
         SetScriptException(m_Error);
         return false;
-    }
-    if (oldSource) {
-        oldSource->DestroyDetached();
-        oldSource->Release();
-    }
-    if (oldOperation) {
-        oldOperation->DestroyDetached();
-        oldOperation->Release();
     }
     return true;
 }
@@ -2228,34 +2338,12 @@ bool BBInstance::OperationForPin(BBSlot *pin, ParamOp *operation, const char *me
         SetScriptException(m_Error);
         return false;
     }
-    ParamSourceLinkRef *oldSource = m_Bridge->TakeInstanceSourceLink(m_InstanceId, m_Generation, pinIndex);
-    ParamOperationRef *oldOperation = m_Bridge->TakeInstanceOperation(m_InstanceId, m_Generation, pinIndex);
-    if (!m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, pinIndex, op)) {
-        op->Destroy();
-        op->Release();
-        if (oldSource) {
-            if (!m_Bridge->StoreInstanceSourceLink(m_InstanceId, m_Generation, pinIndex, oldSource)) {
-                oldSource->DestroyDetached();
-                oldSource->Release();
-            }
-        }
-        if (oldOperation) {
-            if (!m_Bridge->StoreInstanceOperation(m_InstanceId, m_Generation, pinIndex, oldOperation)) {
-                oldOperation->DestroyDetached();
-                oldOperation->Release();
-            }
-        }
-        SetError(fmt::format("{} failed to store live operation.", method));
+    ScriptBridgeBBInternal::RuntimePinMutation mutation(m_Bridge, m_InstanceId, m_Generation, pinIndex, method);
+    std::string ownershipError;
+    if (!mutation.StoreOperation(op, ownershipError)) {
+        SetError(ownershipError);
         SetScriptException(m_Error);
         return false;
-    }
-    if (oldSource) {
-        oldSource->DestroyDetached();
-        oldSource->Release();
-    }
-    if (oldOperation) {
-        oldOperation->DestroyDetached();
-        oldOperation->Release();
     }
     return true;
 }

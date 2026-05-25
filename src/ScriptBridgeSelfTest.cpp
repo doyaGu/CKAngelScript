@@ -68,6 +68,32 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    param.SetEnum(\"0\"); param.SetEnum(0); param.SetFlags(\"0\"); param.SetFlags(0); param.SetStruct(structValue); param.Get(); param.CopyFrom(param);\n";
     source += "    param.GetText(); param.GetEnumText(); param.GetFlagsText(); param.SetText(\"0\"); NativeBuffer@ raw = param.GetRaw(); param.SetRaw(raw); ParamStructRef@ s = param.Struct(); param.Describe();\n";
     source += "    if (s !is null) { s.IsValid(); s.Count(); s.Info(); s.Member(0); s.FindMember(\"x\"); s.Describe(); }\n";
+    source += "    ObjectRef@ paramObject = param;\n";
+    source += "    ParamInRef@ paramIn = cast<ParamInRef>(param); if (paramIn !is null) { paramIn.IsValid(); paramIn.valid; paramIn.Error(); paramIn.Describe(); paramIn.Id(); paramIn.Name(); paramIn.ClassId(); paramIn.IsDynamic(); paramIn.Object(); paramIn.TypeGuid(); paramIn.SetInt(1); ParamRef@ base = paramIn; ObjectRef@ object = paramIn; }\n";
+    source += "    ParamOutRef@ paramOut = cast<ParamOutRef>(param); if (paramOut !is null) { paramOut.Id(); paramOut.Get(); ParamRef@ base = paramOut; ObjectRef@ object = paramOut; }\n";
+    source += "    ParamLocalRef@ paramLocal = cast<ParamLocalRef>(param); if (paramLocal !is null) { paramLocal.Id(); paramLocal.Set(value); ParamRef@ base = paramLocal; ObjectRef@ object = paramLocal; }\n";
+    source += "    if (s !is null) { ObjectRef@ structObject = s; ParamRef@ structParam = s; s.Id(); s.Name(); s.ClassId(); s.IsDynamic(); s.Object(); }\n";
+    source += "}\n";
+    source += "void ProbeSceneApi(const CKBehaviorContext &in ctx) {\n";
+    source += "    LevelRef@ currentLevel = Scene::CurrentLevel(ctx);\n";
+    source += "    SceneRef@ currentScene = Scene::CurrentScene(ctx);\n";
+    source += "    ObjectRef@ targetRef = Scene::Target(ctx);\n";
+    source += "    ObjectRef@ ownerRef = Scene::Owner(ctx);\n";
+    source += "    ObjectRef@ byId = Scene::ById(ctx, 1);\n";
+    source += "    ObjectRef@ found = Scene::Find(ctx, \"__missing__\");\n";
+    source += "    array<ObjectRef@>@ sceneObjects = Scene::FindAll(ctx, \"\", CKCID_OBJECT, true, false);\n";
+    source += "    Entity3DRef@ e3d = Scene::FindEntity3D(ctx, \"__missing__\");\n";
+    source += "    Entity2DRef@ e2d = Scene::FindEntity2D(ctx, \"__missing__\");\n";
+    source += "    MaterialRef@ material = Scene::FindMaterial(ctx, \"__missing__\");\n";
+    source += "    TextureRef@ texture = Scene::FindTexture(ctx, \"__missing__\");\n";
+    source += "    MeshRef@ mesh = Scene::FindMesh(ctx, \"__missing__\");\n";
+    source += "    BehaviorRef@ behaviorSceneRef = Scene::FindBehavior(ctx, \"__missing__\");\n";
+    source += "    if (found !is null) { found.IsValid(); bool valid = found.valid; found.Error(); found.Describe(); found.Id(); found.Name(); found.ClassId(); found.IsDynamic(); found.Object(); BehaviorRef@ castBehavior = cast<BehaviorRef>(found); ParamRef@ castParam = cast<ParamRef>(found); SceneObjectRef@ castSceneObject = cast<SceneObjectRef>(found); }\n";
+    source += "    SceneObjectRef@ sceneAsObject = currentScene;\n";
+    source += "    ObjectRef@ behaviorAsObject = behaviorSceneRef;\n";
+    source += "    array<ObjectRef@> selectRefs;\n";
+    source += "    selectRefs.insertLast(behaviorAsObject);\n";
+    source += "    Scene::Select(ctx, selectRefs, true);\n";
     source += "}\n";
     source += "void ProbeBBApi(const CKBehaviorContext &in ctx, ParamValue@ value, ParamRef@ source, ParamOp@ operation) {\n";
     source += "    BBBridge@ bridge = BB::From(ctx); BBPrototype@ missing = BB::Prototype(ctx, \"__missing__\"); CKGUID emptyGuid; BBPrototype@ missingGuid = BB::Prototype(ctx, emptyGuid);\n";
@@ -744,11 +770,16 @@ static bool RunBehaviorBridgeNativeMutationSelfTest(CKContext *context,
         return false;
     }
 
-    ParamRef *inputRef = new ParamRef(bridge, input->GetID(), ScriptBridgeSlotKind::Pin, 0);
-    ParamRef *sourceRef = new ParamRef(bridge, sourceB->GetID(), ScriptBridgeSlotKind::Standalone, -1);
-    ParamSourceLinkRef *link = inputRef->SetSourceScoped(sourceRef);
-    sourceRef->Release();
-    inputRef->Release();
+    auto installScopedSource = [&]() -> ParamSourceLinkRef * {
+        ParamRef *inputRef = new ParamRef(bridge, input->GetID(), ScriptBridgeSlotKind::Pin, 0);
+        ParamRef *sourceRef = new ParamRef(bridge, sourceB->GetID(), ScriptBridgeSlotKind::Standalone, -1);
+        ParamSourceLinkRef *link = inputRef->SetSourceScoped(sourceRef);
+        sourceRef->Release();
+        inputRef->Release();
+        return link;
+    };
+
+    ParamSourceLinkRef *link = installScopedSource();
     if (!link || input->GetDirectSource() != sourceB) {
         if (link) {
             link->Release();
@@ -759,9 +790,62 @@ static bool RunBehaviorBridgeNativeMutationSelfTest(CKContext *context,
         error = "SetSourceScoped did not install the new source.";
         return false;
     }
+    link->Release();
+    if (input->GetDirectSource() != sourceA) {
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "ParamSourceLinkRef destructor did not restore an uncommitted source link.";
+        return false;
+    }
 
-    if (!link->Restore() || input->GetDirectSource() != sourceA) {
-        link->Release();
+    link = installScopedSource();
+    if (!link || !link->Commit()) {
+        if (link) {
+            link->Release();
+        }
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "ParamSourceLinkRef.Commit failed.";
+        return false;
+    }
+    link->Release();
+    if (input->GetDirectSource() != sourceB) {
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "ParamSourceLinkRef.Commit did not keep the installed source.";
+        return false;
+    }
+    input->SetDirectSource(sourceA);
+
+    link = installScopedSource();
+    if (!link || !link->DestroyDetached()) {
+        if (link) {
+            link->Release();
+        }
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "ParamSourceLinkRef.DestroyDetached failed.";
+        return false;
+    }
+    link->Release();
+    if (input->GetDirectSource() != sourceB) {
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "ParamSourceLinkRef.DestroyDetached restored the target source.";
+        return false;
+    }
+    input->SetDirectSource(sourceA);
+
+    link = installScopedSource();
+    if (!link || !link->Restore() || input->GetDirectSource() != sourceA) {
+        if (link) {
+            link->Release();
+        }
         DestroySelfTestObject(context, input);
         DestroySelfTestObject(context, sourceA);
         DestroySelfTestObject(context, sourceB);
@@ -824,6 +908,40 @@ static bool RunBehaviorBridgeNativeMutationSelfTest(CKContext *context,
         return false;
     }
     operationRef->Release();
+
+    operation = context->CreateCKParameterOperation(
+        const_cast<CKSTRING>("__CKAS_DetachedOperation"),
+        operationGuid,
+        CKPGUID_INT,
+        CKPGUID_INT,
+        CKPGUID_INT);
+    if (!operation || !operation->GetOutParameter() ||
+        input->SetDirectSource(operation->GetOutParameter()) != CK_OK ||
+        input->GetDirectSource() != operation->GetOutParameter()) {
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "Operation detached-destroy self-test failed to install operation output.";
+        return false;
+    }
+    operationRef = new ParamOperationRef(bridge, operation->GetID(), input, sourceA);
+    const bool detachedOk = operationRef->DestroyDetached();
+    const bool detachedStillValid = operationRef->IsValid();
+    const bool detachedRestoredPrevious = input->GetDirectSource() == sourceA;
+    if (!detachedOk || detachedRestoredPrevious || detachedStillValid) {
+        operationRef->Release();
+        if (detachedStillValid) {
+            DestroySelfTestObject(context, operation);
+        }
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "ParamOperationRef.DestroyDetached restored the previous source or kept the operation valid.";
+        return false;
+    }
+    operationRef->Release();
+    input->SetDirectSource(sourceA);
 
     CKBehavior *graphBehavior = CKBehavior::Cast(context->CreateObject(
         CKCID_BEHAVIOR,
@@ -2213,8 +2331,8 @@ static bool RunBehaviorBridgeNativeBBInvocationSelfTest(CKContext *context,
         return false;
     }
 
-    CKParameterLocal *configInitialSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigInitialSource"), CKPGUID_INT, TRUE);
-    CKParameterLocal *configLiveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigLiveSource"), CKPGUID_INT, TRUE);
+    CKParameterLocal *configInitialSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigInitialSource"), CKPGUID_FLOAT, TRUE);
+    CKParameterLocal *configLiveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigLiveSource"), CKPGUID_FLOAT, TRUE);
     CKParameterLocal *configBadSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ConfigBadSource"), CKPGUID_STRING, TRUE);
     BBConfig *liveConfig = new BBConfig(bridge, behaviorContext, request);
     BBSlot *liveConfigPin = liveConfig ? liveConfig->Pin("pIn 0") : nullptr;
@@ -2358,7 +2476,7 @@ static bool RunBehaviorBridgeNativeBBInvocationSelfTest(CKContext *context,
         ? instanceBehavior->GetInputParameter(livePin->Index())
         : nullptr;
     CKParameter *previousSource = valuePin ? valuePin->GetDirectSource() : nullptr;
-    CKParameterLocal *liveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_InstanceLiveSource"), CKPGUID_INT, TRUE);
+    CKParameterLocal *liveSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_InstanceLiveSource"), CKPGUID_FLOAT, TRUE);
     CKParameterLocal *badSource = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_InstanceBadSource"), CKPGUID_STRING, TRUE);
     if (!instanceId || !instanceBehavior || !livePin || !valuePin || !previousSource || !liveSource || !badSource) {
         if (livePin) livePin->Release();
@@ -2389,13 +2507,13 @@ static bool RunBehaviorBridgeNativeBBInvocationSelfTest(CKContext *context,
         error = "BBInstance Identity self-test failed to install owned source link.";
         return false;
     }
-    if (link) {
-        link->Release();
-    }
+    link = nullptr;
 
     ParamRef *badSourceRef = new ParamRef(bridge, badSource->GetID(), ScriptBridgeSlotKind::Standalone, -1);
     const bool badSourceAccepted = liveInstance.SourceSlot(livePin, badSourceRef);
     if (badSourceAccepted || valuePin->GetDirectSource() != liveSource) {
+        const CK_ID directId = valuePin->GetDirectSource() ? valuePin->GetDirectSource()->GetID() : 0;
+        const CK_ID liveId = liveSource ? liveSource->GetID() : 0;
         badSourceRef->Release();
         livePin->Release();
         targetRef->Release();
@@ -2403,7 +2521,10 @@ static bool RunBehaviorBridgeNativeBBInvocationSelfTest(CKContext *context,
         bridge->DestroyInstance(instanceId, instanceGeneration);
         DestroySelfTestObject(context, badSource);
         DestroySelfTestObject(context, liveSource);
-        error = "BBInstance Identity self-test did not preserve live source after failed source replacement.";
+        error = fmt::format("BBInstance Identity self-test did not preserve live source after failed source replacement: accepted={} direct={} live={}.",
+                            badSourceAccepted ? "true" : "false",
+                            directId,
+                            liveId);
         return false;
     }
     const bool badValueAccepted = liveInstance.SetSlotObject(livePin, instanceBehavior);

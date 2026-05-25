@@ -6,6 +6,8 @@ Bridge v3 follows the CK2 behavior model directly. `CKBehavior` input/output IO 
 
 The bridge no longer creates a full output snapshot map. `BBResult`, `BBTask`, and `GraphTask` only keep lightweight execution state: return code, error text, current active output indices, and sticky seen output indices. Output parameter values are read lazily through `ParamRef`.
 
+`BehaviorRef@`, `ParamRef@`, `ParamStructRef@`, `ParamOperationRef@`, and `BehaviorLinkRef@` are CKObject identity handles and participate in the shared `ObjectRef@` hierarchy. They can be stored in `array<ObjectRef@>` and downcast with checked `cast<TRef>()`; wrong casts return `null`. Transaction handles, value carriers, tasks, builders, and graph cursors such as `ParamSourceLinkRef@`, `ParamValue@`, `BBTask@`, `GraphTask@`, and `BehaviorNode@` are intentionally outside this hierarchy, though graph cursors can return object refs.
+
 ## Layout First
 
 ```angelscript
@@ -155,6 +157,8 @@ Live pin replacement has transaction semantics:
 - `BBInstance.Source(slot, source)` and `BBInstance.Operation(slot, op)` install the new link first, then clean up the old bridge-owned source or operation.
 - If a live source/operation replacement fails, the previous direct source remains active and owned cleanup is not run.
 - Replaced operations are destroyed with an internal detached cleanup path so they do not restore over the newly installed source. This `DestroyDetached` behavior is internal only and is not a script API.
+
+Runtime-owned source and operation links are tracked per live BB instance. Value writes, source installs, and operation installs use the same internal pin mutation transaction: the new source/operation is installed first, ownership is recorded on the instance, and only then is the previous bridge-owned source/operation detached and destroyed. If ownership recording fails, the new mutation is rolled back and the previous owned entry is restored to the instance registry when possible. `ParamSourceLinkRef@` remains a scoped transaction handle, not an `ObjectRef@`: releasing an uncommitted link restores the previous source, `Commit()` keeps the installed source, and internal detached cleanup prevents restore during successful replacement. `ParamOperationRef.Destroy()` restores the target source before destroying the operation; internal detached cleanup destroys the operation and its literal locals without restoring over a newer source. Manual `BehaviorRef.ConnectOperation()` still mutates the graph directly and is not enrolled in runtime instance ownership.
 
 ```angelscript
 BBDecl@ textDecl = BB::Require(ctx, "Interface/Text/2D Text");
