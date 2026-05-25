@@ -38,6 +38,17 @@ std::string JoinIds(const std::vector<std::string> &ids) {
     return result;
 }
 
+void AddSkipped(ScriptRuntimeLoadPlan &plan,
+                const ScriptRuntimeManifest &script,
+                const std::string &diagnostic) {
+    for (const ScriptRuntimeSkippedScript &skipped : plan.SkippedScripts) {
+        if (skipped.Manifest.Id == script.Id) {
+            return;
+        }
+    }
+    plan.SkippedScripts.push_back({script, diagnostic});
+}
+
 bool HasId(const std::vector<std::string> &ids, const std::string &id) {
     return std::find(ids.begin(), ids.end(), id) != ids.end();
 }
@@ -82,20 +93,24 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
         for (const ScriptRuntimeDependency &dependency : script.RequiredDependencies) {
             const auto depIt = indexById.find(dependency.Id);
             if (depIt == indexById.end()) {
-                diagnostics += fmt::format("Skipping runtime script '{}': required dependency '{}' is missing.\n",
-                                           script.Id,
-                                           ScriptRuntimeMetadata::VersionRequirementText(dependency));
+                const std::string message = fmt::format("Skipping runtime script '{}': required dependency '{}' is missing.",
+                                                        script.Id,
+                                                        ScriptRuntimeMetadata::VersionRequirementText(dependency));
+                diagnostics += message + "\n";
                 skipped[i] = true;
+                ScriptRuntimeDependencyInternal::AddSkipped(plan, script, message);
                 continue;
             }
             const ScriptRuntimeManifest &actual = enabled[depIt->second];
             if (!ScriptRuntimeMetadata::SatisfiesVersion(actual.Version, dependency)) {
-                diagnostics += fmt::format("Skipping runtime script '{}': dependency '{}' has version '{}', expected '{}'.\n",
-                                           script.Id,
-                                           dependency.Id,
-                                           actual.VersionText,
-                                           ScriptRuntimeMetadata::VersionRequirementText(dependency));
+                const std::string message = fmt::format("Skipping runtime script '{}': dependency '{}' has version '{}', expected '{}'.",
+                                                        script.Id,
+                                                        dependency.Id,
+                                                        actual.VersionText,
+                                                        ScriptRuntimeMetadata::VersionRequirementText(dependency));
+                diagnostics += message + "\n";
                 skipped[i] = true;
+                ScriptRuntimeDependencyInternal::AddSkipped(plan, script, message);
             }
         }
         for (const ScriptRuntimeDependency &dependency : script.OptionalDependencies) {
@@ -224,6 +239,13 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
         for (int i = 0; i < static_cast<int>(activeToOriginal.size()); ++i) {
             if (indegree[i] > 0) {
                 cycleActive.insert(i);
+                const ScriptRuntimeManifest &script = enabled[activeToOriginal[i]];
+                ScriptRuntimeDependencyInternal::AddSkipped(
+                    plan,
+                    script,
+                    fmt::format("Skipping runtime script '{}' because it is part of a dependency cycle: {}.",
+                                script.Id,
+                                ScriptRuntimeDependencyInternal::JoinIds(cycleIds)));
             }
         }
         for (const int activeIndex : sortedActive) {

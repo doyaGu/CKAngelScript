@@ -26,12 +26,13 @@ struct MetadataBlock {
 
 bool IsScalarKey(const std::string &key) {
     return key == "id" || key == "name" || key == "version" || key == "class" ||
-           key == "entry" || key == "enabled" || key == "order" || key == "reload";
+           key == "entry" || key == "enabled" || key == "order" || key == "reload" ||
+           key == "description" || key == "author" || key == "category";
 }
 
 bool IsListKey(const std::string &key) {
     return key == "files" || key == "depends" || key == "required" || key == "optional" ||
-           key == "before" || key == "after";
+           key == "before" || key == "after" || key == "tags";
 }
 
 void SetMetadata(std::vector<ScriptRuntimeMetadataEntry> &metadata,
@@ -499,6 +500,7 @@ bool ParseManifestSource(const std::string &source,
 
     std::map<std::string, std::string> scalars;
     std::vector<std::string> files;
+    std::vector<std::string> tags;
     std::vector<std::string> before;
     std::vector<std::string> after;
     std::vector<ScriptRuntimeDependency> required;
@@ -553,6 +555,8 @@ bool ParseManifestSource(const std::string &source,
                 ScriptRuntimeMetadataInternal::AppendDependencies(required, pair.Value, dependencyErrors);
             } else if (pair.Key == "optional") {
                 ScriptRuntimeMetadataInternal::AppendDependencies(optional, pair.Value, dependencyErrors);
+            } else if (pair.Key == "tags") {
+                ScriptRuntimeMetadataInternal::AppendList(tags, pair.Value);
             } else if (pair.Key == "before") {
                 ScriptRuntimeMetadataInternal::AppendList(before, pair.Value);
             } else if (pair.Key == "after") {
@@ -597,6 +601,15 @@ bool ParseManifestSource(const std::string &source,
     if (const auto it = scalars.find("reload"); it != scalars.end()) {
         manifest.Reloadable = ParseBool(it->second, true);
     }
+    if (const auto it = scalars.find("description"); it != scalars.end()) {
+        manifest.Description = it->second;
+    }
+    if (const auto it = scalars.find("author"); it != scalars.end()) {
+        manifest.Author = it->second;
+    }
+    if (const auto it = scalars.find("category"); it != scalars.end()) {
+        manifest.Category = it->second;
+    }
     if (const auto it = scalars.find("entry"); it != scalars.end() && !Trim(it->second).empty()) {
         manifest.EntryPath = manifest.RootPath / StripQuotes(it->second);
     } else {
@@ -604,6 +617,26 @@ bool ParseManifestSource(const std::string &source,
     }
 
     manifest.FileSpecs = std::move(files);
+    manifest.Tags = std::move(tags);
+    if (!manifest.Description.empty()) {
+        ScriptRuntimeMetadataInternal::SetMetadata(custom, "description", manifest.Description);
+    }
+    if (!manifest.Author.empty()) {
+        ScriptRuntimeMetadataInternal::SetMetadata(custom, "author", manifest.Author);
+    }
+    if (!manifest.Category.empty()) {
+        ScriptRuntimeMetadataInternal::SetMetadata(custom, "category", manifest.Category);
+    }
+    if (!manifest.Tags.empty()) {
+        std::string tagText;
+        for (const std::string &tag : manifest.Tags) {
+            if (!tagText.empty()) {
+                tagText += ";";
+            }
+            tagText += tag;
+        }
+        ScriptRuntimeMetadataInternal::SetMetadata(custom, "tags", tagText);
+    }
     manifest.RequiredDependencies = std::move(required);
     manifest.OptionalDependencies = std::move(optional);
     for (std::string &value : before) {

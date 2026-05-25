@@ -44,6 +44,10 @@ struct ScriptRuntimeManifest {
     std::filesystem::path EntryPath;
     std::vector<std::filesystem::path> Files;
     std::vector<std::string> FileSpecs;
+    std::string Description;
+    std::string Author;
+    std::string Category;
+    std::vector<std::string> Tags;
     std::vector<ScriptRuntimeDependency> RequiredDependencies;
     std::vector<ScriptRuntimeDependency> OptionalDependencies;
     std::vector<std::string> Before;

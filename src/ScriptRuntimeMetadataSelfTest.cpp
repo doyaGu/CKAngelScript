@@ -14,7 +14,8 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
         "  name=\"Test Script\"\n"
         "  version=\"1.2\"\n"
         "]\n"
-        "[script class=\"TestClass\" files=\"a.as;'b;c.as'\" custom=\"first\"]\n"
+        "[script class=\"TestClass\" entry=\"runtime.as\" files=\"a.as;'b;c.as'\" custom=\"first\"]\n"
+        "[script description=\"Runtime smoke\" author=\"CKAS\" category=\"Diagnostics\" tags=\"debug;smoke\"]\n"
         "[script.meta custom=\"second\" key=\"display\" value=\"Runtime Test\"]\n"
         "[script.depends required=\"core>=1.0.0\" optional=\"debug\" before=\"late\" after=\"boot\"]\n"
         "class TestClass {}\n";
@@ -32,6 +33,16 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
         error = "Runtime metadata parser did not merge scalar fragments.";
         return false;
     }
+    if (manifest.EntryPath.filename().string() != "runtime.as" ||
+        manifest.Description != "Runtime smoke" ||
+        manifest.Author != "CKAS" ||
+        manifest.Category != "Diagnostics" ||
+        manifest.Tags.size() != 2 ||
+        manifest.Tags[0] != "debug" ||
+        manifest.Tags[1] != "smoke") {
+        error = "Runtime metadata parser did not parse v2 first-class fields.";
+        return false;
+    }
     if (manifest.Version.Major != 1 || manifest.Version.Minor != 2 || manifest.Version.Patch != 0) {
         error = "Runtime metadata parser did not parse version fields.";
         return false;
@@ -41,7 +52,9 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
         return false;
     }
     if (MetadataValue(manifest.CustomMetadata, "custom") != "second" ||
-        MetadataValue(manifest.CustomMetadata, "display") != "Runtime Test") {
+        MetadataValue(manifest.CustomMetadata, "display") != "Runtime Test" ||
+        MetadataValue(manifest.CustomMetadata, "description") != "Runtime smoke" ||
+        MetadataValue(manifest.CustomMetadata, "tags") != "debug;smoke") {
         error = "Runtime metadata parser did not merge custom metadata.";
         return false;
     }

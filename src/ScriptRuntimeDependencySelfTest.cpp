@@ -43,6 +43,11 @@ bool RunScriptRuntimeDependencySelfTest(std::string &error) {
         error = "Runtime dependency resolver did not reject missing required dependencies.";
         return false;
     }
+    if (plan.SkippedScripts.size() != 1 || plan.SkippedScripts[0].Manifest.Id != "missing" ||
+        plan.SkippedScripts[0].Error.find("required dependency") == std::string::npos) {
+        error = "Runtime dependency resolver did not preserve skipped script diagnostics.";
+        return false;
+    }
 
     ScriptRuntimeManifest a;
     a.Id = "a";
@@ -62,6 +67,10 @@ bool RunScriptRuntimeDependencySelfTest(std::string &error) {
     plan = Resolve({a, b});
     if (!plan.Scripts.empty() || plan.Diagnostics.find("cycle") == std::string::npos) {
         error = "Runtime dependency resolver did not reject dependency cycles.";
+        return false;
+    }
+    if (plan.SkippedScripts.size() != 2) {
+        error = "Runtime dependency resolver did not preserve cycle skipped scripts.";
         return false;
     }
     return true;

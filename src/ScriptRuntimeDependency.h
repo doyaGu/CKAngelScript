@@ -6,8 +6,14 @@
 
 #include "ScriptRuntimeMetadata.h"
 
+struct ScriptRuntimeSkippedScript {
+    ScriptRuntimeManifest Manifest;
+    std::string Error;
+};
+
 struct ScriptRuntimeLoadPlan {
     std::vector<ScriptRuntimeManifest> Scripts;
+    std::vector<ScriptRuntimeSkippedScript> SkippedScripts;
     std::string Diagnostics;
 };
 
