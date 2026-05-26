@@ -58,7 +58,7 @@ class Component {
 
 ## Lookup And Creation
 
-`Scene::ById` and `Scene::Ref` create safe refs from existing objects. `Scene::Find` / `FindAll` search by name and class id, with derived-class matching enabled by default. Pass `currentSceneOnly=true` when global duplicate names are possible and the script only wants objects already in the current scene. The generic helpers return `ObjectRef@` / `array<ObjectRef@>@` and preserve the most specific wrapper internally, so `cast<TRef>(obj)` is checked and returns `null` for the wrong type.
+`Scene::ById` and `Scene::Ref` create safe refs from existing objects. `Scene::Find` / `FindAll` search by name and class id, with derived-class matching enabled by default. Pass `currentSceneOnly=true` when global duplicate names are possible and the script only wants objects visible to the current scene. Scene objects use explicit scene membership; asset refs such as materials, textures, and meshes are also found when they are used by objects in the scene. The generic helpers return `ObjectRef@` / `array<ObjectRef@>@` and preserve the most specific wrapper internally, so `cast<TRef>(obj)` is checked and returns `null` for the wrong type.
 
 Use `Find` with `occurrence` when selecting from a known duplicate set. Use `FindOne` when duplicates are a configuration error: it returns an invalid ref unless exactly one object matches, and `Error()` includes the match count, class id, and lookup scope.
 
@@ -69,7 +69,7 @@ Typed strict and batch helpers avoid manual casts:
 ```angelscript
 Entity3DRef@ player = Scene::FindOneEntity3D(ctx, "Player", true);
 if (!player.valid) {
-  ctx.Raise(player.Error());
+  string reason = player.Error();
 }
 
 array<Entity3DRef@>@ markers = Scene::FindAllEntity3D(ctx, "DebugMarker", true);
@@ -87,7 +87,7 @@ Pass `dynamic=false` only when a persistent object is explicitly required.
 
 ## Scene Membership, Selection, And Destruction
 
-`AddToCurrentScene` and `RemoveFromCurrentScene` accept `ObjectRef@` but require the resolved object to be a `CKSceneObject`. Use `AddToScene` / `RemoveFromScene` with a `SceneRef@` when working with a scene that is not necessarily current. `IsInCurrentScene` and `IsInScene` expose the same membership checks used by scoped lookup. `Select` accepts `array<ObjectRef@>@`.
+`AddToCurrentScene` and `RemoveFromCurrentScene` accept `ObjectRef@` but require an addable scene object. Use `AddToScene` / `RemoveFromScene` with a `SceneRef@` when working with a scene that is not necessarily current. Asset refs are observed through the scene objects that use them; add or remove the owning entity instead of adding materials, textures, or meshes directly. `IsInCurrentScene` and `IsInScene` expose the same checks used by scoped lookup and can be used with asset refs. `Select` accepts `array<ObjectRef@>@`.
 
 ```angelscript
 SceneRef@ scene = Scene::CurrentScene(ctx);
@@ -102,7 +102,7 @@ Scene::RemoveFromScene(ctx, scene, marker);
 
 ```angelscript
 if (!Scene::Destroy(ctx, marker)) {
-  ctx.Raise(marker.Error());
+  string reason = marker.Error();
 }
 ```
 
