@@ -7,5 +7,6 @@
 
 void RegisterScriptSceneCore(asIScriptEngine *engine);
 void RegisterScriptSceneRuntime(asIScriptEngine *engine);
+bool ScriptSceneIsObjectInScene(CKObject *object, CKScene *scene);
 
 #endif // CK_SCRIPTSCENE_H

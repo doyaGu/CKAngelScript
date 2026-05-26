@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <fmt/format.h>
@@ -62,68 +63,58 @@ T *MakeTypedRef(CKContext *context, CKObject *object, const std::string &error =
     return new T(resolvedContext, object);
 }
 
+template <typename T>
+CKObject *CastTypedTarget(CKObject *object) {
+    return object;
+}
+
+template <>
+CKObject *CastTypedTarget<SceneObjectRef>(CKObject *object) { return CKSceneObject::Cast(object); }
+template <>
+CKObject *CastTypedTarget<Entity3DRef>(CKObject *object) { return CK3dEntity::Cast(object); }
+template <>
+CKObject *CastTypedTarget<Entity2DRef>(CKObject *object) { return CK2dEntity::Cast(object); }
+template <>
+CKObject *CastTypedTarget<MaterialRef>(CKObject *object) { return CKMaterial::Cast(object); }
+template <>
+CKObject *CastTypedTarget<TextureRef>(CKObject *object) { return CKTexture::Cast(object); }
+template <>
+CKObject *CastTypedTarget<MeshRef>(CKObject *object) { return CKMesh::Cast(object); }
+template <>
+CKObject *CastTypedTarget<SceneRef>(CKObject *object) { return CKScene::Cast(object); }
+template <>
+CKObject *CastTypedTarget<LevelRef>(CKObject *object) { return CKLevel::Cast(object); }
+
+std::string TypeMismatchError(const char *label, CKObject *object) {
+    return fmt::format("Expected {}, got object '{}' id={} class={}.",
+                       label ? label : "typed object",
+                       object ? SafeString(object->GetName()) : "<null>",
+                       object ? object->GetID() : 0,
+                       object ? static_cast<int>(object->GetClassID()) : 0);
+}
+
+template <typename T>
+T *MakeCheckedTypedRef(CKContext *context,
+                      CKObject *object,
+                      const char *label,
+                      const std::string &error = std::string()) {
+    CKContext *resolvedContext = object ? object->GetCKContext() : context;
+    if (!object) {
+        return new T(resolvedContext, 0, ScriptBridgeObjectStamp(), error.empty() ? "Object is null." : error);
+    }
+    CKObject *typed = CastTypedTarget<T>(object);
+    if (!typed) {
+        return new T(resolvedContext, 0, ScriptBridgeObjectStamp(), TypeMismatchError(label, object));
+    }
+    return new T(resolvedContext, typed);
+}
+
 bool NameMatches(CKObject *object, const std::string &name) {
     return name.empty() || NameEquals(object ? object->GetName() : nullptr, name);
 }
 
 bool SameObject(CKObject *lhs, CKObject *rhs) {
     return lhs && rhs && lhs->GetID() == rhs->GetID() && lhs->GetCKContext() == rhs->GetCKContext();
-}
-
-bool MaterialDependsOn(CKMaterial *material, CKObject *object) {
-    if (!material || !object) {
-        return false;
-    }
-    if (SameObject(material, object)) {
-        return true;
-    }
-    for (int i = 0; i < 4; ++i) {
-        if (SameObject(material->GetTexture(i), object)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool MeshDependsOn(CKMesh *mesh, CKObject *object) {
-    if (!mesh || !object) {
-        return false;
-    }
-    if (SameObject(mesh, object)) {
-        return true;
-    }
-    const int materialCount = mesh->GetMaterialCount();
-    for (int i = 0; i < materialCount; ++i) {
-        if (MaterialDependsOn(mesh->GetMaterial(i), object)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool SceneObjectDependsOn(CKSceneObject *sceneObject, CKObject *object) {
-    if (!sceneObject || !object || sceneObject->GetCKContext() != object->GetCKContext()) {
-        return false;
-    }
-    if (SameObject(sceneObject, object)) {
-        return true;
-    }
-    if (CKSprite3D *sprite = CKSprite3D::Cast(sceneObject)) {
-        if (MaterialDependsOn(sprite->GetMaterial(), object)) {
-            return true;
-        }
-    }
-    if (CK2dEntity *entity2D = CK2dEntity::Cast(sceneObject)) {
-        if (MaterialDependsOn(entity2D->GetMaterial(), object)) {
-            return true;
-        }
-    }
-    if (CK3dEntity *entity3D = CK3dEntity::Cast(sceneObject)) {
-        if (MeshDependsOn(entity3D->GetCurrentMesh(), object)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 bool IsSceneMembershipAsset(CKObject *object) {
@@ -143,53 +134,134 @@ bool IsDirectSceneMember(CKSceneObject *object, CKScene *scene) {
     return false;
 }
 
-bool IsObjectInScene(CKObject *object, CKScene *scene) {
-    if (!object || !scene || object->IsToBeDeleted()) {
-        return false;
+class SceneScopeIndex {
+public:
+    SceneScopeIndex(CKContext *context, CKScene *scene) : m_Context(context), m_Scene(scene) {
+        Build();
     }
-    if (object->GetCKContext() != scene->GetCKContext()) {
-        return false;
-    }
-    if (!IsSceneMembershipAsset(object)) {
-        if (CKSceneObject *sceneObject = CKSceneObject::Cast(object)) {
-            return IsDirectSceneMember(sceneObject, scene);
+
+    bool Contains(CKObject *object) const {
+        if (!object || object->IsToBeDeleted() || !m_Context || !m_Scene || object->GetCKContext() != m_Context) {
+            return false;
         }
-    }
-    if (scene->IsObjectHere(object) != FALSE) {
-        return true;
-    }
-    if (!IsSceneMembershipAsset(object)) {
-        return false;
-    }
-    const XObjectPointerArray &objects = scene->ComputeObjectList(object->GetClassID(), TRUE);
-    const CK_ID id = object->GetID();
-    const int count = objects.Size();
-    for (int i = 0; i < count; ++i) {
-        CKObject *candidate = objects[i];
-        if (candidate && candidate->GetID() == id && !candidate->IsToBeDeleted()) {
+        const CK_ID id = object->GetID();
+        if (m_DirectSceneObjects.find(id) != m_DirectSceneObjects.end()) {
             return true;
         }
-    }
-    if (object->GetClassID() != CKCID_OBJECT) {
-        const XObjectPointerArray &allObjects = scene->ComputeObjectList(CKCID_OBJECT, TRUE);
-        const int allCount = allObjects.Size();
-        for (int i = 0; i < allCount; ++i) {
-            CKObject *candidate = allObjects[i];
-            if (candidate && candidate->GetID() == id && !candidate->IsToBeDeleted()) {
+        if (CKBehavior *behavior = CKBehavior::Cast(object)) {
+            if (BehaviorOwnerInScene(behavior)) {
                 return true;
             }
         }
-    }
-    const XObjectPointerArray &sceneObjects = scene->ComputeObjectList(CKCID_SCENEOBJECT, TRUE);
-    const int sceneObjectCount = sceneObjects.Size();
-    for (int i = 0; i < sceneObjectCount; ++i) {
-        CKSceneObject *sceneObject = CKSceneObject::Cast(sceneObjects[i]);
-        if (sceneObject && SceneObjectDependsOn(sceneObject, object)) {
+        if (!IsSceneMembershipAsset(object)) {
+            return false;
+        }
+        if (m_Scene->IsObjectHere(object) != FALSE) {
             return true;
         }
+        return m_Assets.find(id) != m_Assets.end();
     }
-    return false;
-}
+
+private:
+    void AddObject(CKObject *object, std::unordered_set<CK_ID> &set) {
+        if (object && !object->IsToBeDeleted() && object->GetCKContext() == m_Context) {
+            set.insert(object->GetID());
+        }
+    }
+
+    void AddTexture(CKTexture *texture) {
+        AddObject(texture, m_Assets);
+    }
+
+    void AddMaterial(CKMaterial *material) {
+        if (!material) {
+            return;
+        }
+        AddObject(material, m_Assets);
+        for (int i = 0; i < 4; ++i) {
+            AddTexture(material->GetTexture(i));
+        }
+    }
+
+    void AddMesh(CKMesh *mesh) {
+        if (!mesh) {
+            return;
+        }
+        AddObject(mesh, m_Assets);
+        const int materialCount = mesh->GetMaterialCount();
+        for (int i = 0; i < materialCount; ++i) {
+            AddMaterial(mesh->GetMaterial(i));
+        }
+    }
+
+    void AddSceneObjectDependencies(CKSceneObject *sceneObject) {
+        if (CKSprite3D *sprite = CKSprite3D::Cast(sceneObject)) {
+            AddMaterial(sprite->GetMaterial());
+        }
+        if (CK2dEntity *entity2D = CK2dEntity::Cast(sceneObject)) {
+            AddMaterial(entity2D->GetMaterial());
+        }
+        if (CK3dEntity *entity3D = CK3dEntity::Cast(sceneObject)) {
+            AddMesh(entity3D->GetCurrentMesh());
+            const int meshCount = entity3D->GetMeshCount();
+            for (int i = 0; i < meshCount; ++i) {
+                AddMesh(entity3D->GetMesh(i));
+            }
+        }
+    }
+
+    void AddComputedObjects(CK_CLASSID cid) {
+        if (!m_Scene) {
+            return;
+        }
+        const XObjectPointerArray &objects = m_Scene->ComputeObjectList(cid, TRUE);
+        const int count = objects.Size();
+        for (int i = 0; i < count; ++i) {
+            CKObject *object = objects[i];
+            if (IsSceneMembershipAsset(object)) {
+                AddObject(object, m_Assets);
+            }
+        }
+    }
+
+    bool BehaviorOwnerInScene(CKBehavior *behavior) const {
+        for (CKBehavior *current = behavior; current; current = current->GetParent()) {
+            CKBeObject *owner = current->GetOwner();
+            if (owner && m_DirectSceneObjects.find(owner->GetID()) != m_DirectSceneObjects.end()) {
+                return true;
+            }
+            CKBehavior *ownerScript = current->GetOwnerScript();
+            if (ownerScript && ownerScript != current &&
+                m_DirectSceneObjects.find(ownerScript->GetID()) != m_DirectSceneObjects.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void Build() {
+        if (!m_Context || !m_Scene) {
+            return;
+        }
+        const XObjectPointerArray &sceneObjects = m_Context->GetObjectListByType(CKCID_SCENEOBJECT, TRUE);
+        const int sceneObjectCount = sceneObjects.Size();
+        for (int i = 0; i < sceneObjectCount; ++i) {
+            CKSceneObject *sceneObject = CKSceneObject::Cast(sceneObjects[i]);
+            if (sceneObject && IsDirectSceneMember(sceneObject, m_Scene)) {
+                AddObject(sceneObject, m_DirectSceneObjects);
+                AddSceneObjectDependencies(sceneObject);
+            }
+        }
+        AddComputedObjects(CKCID_MATERIAL);
+        AddComputedObjects(CKCID_TEXTURE);
+        AddComputedObjects(CKCID_MESH);
+    }
+
+    CKContext *m_Context = nullptr;
+    CKScene *m_Scene = nullptr;
+    std::unordered_set<CK_ID> m_DirectSceneObjects;
+    std::unordered_set<CK_ID> m_Assets;
+};
 
 std::vector<CKObject *> CollectObjects(CKContext *context,
                                        const std::string &name,
@@ -201,6 +273,10 @@ std::vector<CKObject *> CollectObjects(CKContext *context,
         return objects;
     }
     CKScene *scene = currentSceneOnly ? context->GetCurrentScene() : nullptr;
+    if (currentSceneOnly && !scene) {
+        return objects;
+    }
+    SceneScopeIndex scope(context, scene);
     const XObjectPointerArray &raw = context->GetObjectListByType(cid, derived);
     const int size = raw.Size();
     objects.reserve(static_cast<std::size_t>(size));
@@ -209,7 +285,7 @@ std::vector<CKObject *> CollectObjects(CKContext *context,
         if (!object || object->IsToBeDeleted() || !NameMatches(object, name)) {
             continue;
         }
-        if (currentSceneOnly && !IsObjectInScene(object, scene)) {
+        if (currentSceneOnly && !scope.Contains(object)) {
             continue;
         }
         objects.push_back(object);
@@ -352,7 +428,7 @@ T *FindTypedImpl(CKContext *context,
                      ScriptBridgeObjectStamp(),
                      fmt::format("{} '{}' was not found.", label, name.empty() ? "<any>" : name));
     }
-    return MakeTypedRef<T>(context, objects[static_cast<std::size_t>(occurrence)]);
+    return MakeCheckedTypedRef<T>(context, objects[static_cast<std::size_t>(occurrence)], label);
 }
 
 template <typename T>
@@ -371,7 +447,7 @@ T *FindOneTypedImpl(CKContext *context,
                      ScriptBridgeObjectStamp(),
                      FindOneError(label, name, cid, currentSceneOnly, objects.size()));
     }
-    return MakeTypedRef<T>(context, objects.front());
+    return MakeCheckedTypedRef<T>(context, objects.front(), label);
 }
 
 template <typename T>
@@ -385,7 +461,12 @@ CScriptArray *FindAllTypedImpl(CKContext *context,
         return nullptr;
     }
     for (CKObject *object : CollectObjects(context, name, cid, true, currentSceneOnly)) {
-        AppendTypedRef(array, MakeTypedRef<T>(context, object));
+        T *ref = MakeCheckedTypedRef<T>(context, object, arrayDecl);
+        if (ref && ref->valid()) {
+            AppendTypedRef(array, ref);
+        } else if (ref) {
+            ref->Release();
+        }
     }
     return array;
 }
@@ -510,7 +591,7 @@ ObjectRef *CreateImpl(CKContext *context, CK_CLASSID cid, const std::string &nam
 }
 
 template <typename T>
-T *CreateTypedImpl(CKContext *context, CK_CLASSID cid, const std::string &name, bool dynamic) {
+T *CreateTypedImpl(CKContext *context, CK_CLASSID cid, const std::string &name, bool dynamic, const char *label) {
     if (!context) {
         return new T(nullptr, 0, ScriptBridgeObjectStamp(), "CKContext is not available.");
     }
@@ -520,7 +601,7 @@ T *CreateTypedImpl(CKContext *context, CK_CLASSID cid, const std::string &name, 
     if (!object) {
         return new T(context, 0, ScriptBridgeObjectStamp(), fmt::format("Scene::Create failed for class {}.", static_cast<int>(cid)));
     }
-    return MakeTypedRef<T>(context, object);
+    return MakeCheckedTypedRef<T>(context, object, label);
 }
 
 bool AddToCurrentSceneImpl(CKContext *context, ObjectRef *ref, bool dependencies) {
@@ -563,7 +644,7 @@ bool IsInSceneImpl(CKContext *context, SceneRef *sceneRef, ObjectRef *ref) {
         ref->SetError("Scene::IsInScene requires scene and object from the same CKContext.");
         return false;
     }
-    return IsObjectInScene(object, scene);
+    return ScriptSceneIsObjectInScene(object, scene);
 }
 
 bool IsInCurrentSceneImpl(CKContext *context, ObjectRef *ref) {
@@ -584,7 +665,7 @@ bool IsInCurrentSceneImpl(CKContext *context, ObjectRef *ref) {
         ref->SetError("Scene::IsInCurrentScene requires an object from the current CKContext.");
         return false;
     }
-    return IsObjectInScene(object, scene);
+    return ScriptSceneIsObjectInScene(object, scene);
 }
 
 bool AddToSceneImpl(CKContext *context, SceneRef *sceneRef, ObjectRef *ref, bool dependencies) {
@@ -734,11 +815,11 @@ CScriptArray *FindAllTextureCtx(CKContext *context, const std::string &name, boo
 CScriptArray *FindAllMeshCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedImpl<MeshRef>(context, name, CKCID_MESH, currentSceneOnly, "array<MeshRef@>"); }
 CScriptArray *FindAllBehaviorCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllBehaviorImpl(context, name, currentSceneOnly, BridgeFrom(context), 0); }
 ObjectRef *CreateCtx(CKContext *context, CK_CLASSID cid, const std::string &name, bool dynamic) { return CreateImpl(context, cid, name, dynamic); }
-Entity3DRef *CreateEntity3DCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<Entity3DRef>(context, CKCID_3DENTITY, name, dynamic); }
-Entity2DRef *CreateEntity2DCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<Entity2DRef>(context, CKCID_2DENTITY, name, dynamic); }
-MaterialRef *CreateMaterialCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<MaterialRef>(context, CKCID_MATERIAL, name, dynamic); }
-TextureRef *CreateTextureCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<TextureRef>(context, CKCID_TEXTURE, name, dynamic); }
-MeshRef *CreateMeshCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<MeshRef>(context, CKCID_MESH, name, dynamic); }
+Entity3DRef *CreateEntity3DCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<Entity3DRef>(context, CKCID_3DENTITY, name, dynamic, "CK3dEntity"); }
+Entity2DRef *CreateEntity2DCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<Entity2DRef>(context, CKCID_2DENTITY, name, dynamic, "CK2dEntity"); }
+MaterialRef *CreateMaterialCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<MaterialRef>(context, CKCID_MATERIAL, name, dynamic, "CKMaterial"); }
+TextureRef *CreateTextureCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<TextureRef>(context, CKCID_TEXTURE, name, dynamic, "CKTexture"); }
+MeshRef *CreateMeshCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<MeshRef>(context, CKCID_MESH, name, dynamic, "CKMesh"); }
 bool AddToCurrentSceneCtx(CKContext *context, ObjectRef *ref, bool dependencies) { return AddToCurrentSceneImpl(context, ref, dependencies); }
 bool RemoveFromCurrentSceneCtx(CKContext *context, ObjectRef *ref, bool dependencies) { return RemoveFromCurrentSceneImpl(context, ref, dependencies); }
 bool IsInCurrentSceneCtx(CKContext *context, ObjectRef *ref) { return IsInCurrentSceneImpl(context, ref); }
@@ -835,6 +916,14 @@ bool DestroyScript(const ScriptContext &ctx, ObjectRef *ref, bool allowPersisten
 bool SelectScript(const ScriptContext &ctx, CScriptArray *objects, bool clearSelection) { return SelectImpl(ContextFrom(ctx), objects, clearSelection); }
 
 } // namespace
+
+bool ScriptSceneIsObjectInScene(CKObject *object, CKScene *scene) {
+    if (!object || !scene || object->GetCKContext() != scene->GetCKContext()) {
+        return false;
+    }
+    SceneScopeIndex scope(object->GetCKContext(), scene);
+    return scope.Contains(object);
+}
 
 void RegisterScriptSceneCore(asIScriptEngine *engine) {
     assert(engine != nullptr);
