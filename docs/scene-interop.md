@@ -33,11 +33,11 @@ marker.Translate(VxVector(1.0f, 0.0f, 0.0f));
 array<Entity3DRef@>@ children = parent.Children();
 ```
 
-`Entity3DRef` covers common transform operations: `SetPosition`, `GetPosition`, `Translate`, `SetQuaternion`, `GetQuaternion`, `SetScale`, `GetScale`, `LookAt`, `SetOrientation`, `GetOrientation`, `SetDirection`, `GetDirection`, `SetUp`, `GetUp`, `SetRight`, and `GetRight`. It also exposes hierarchy helpers: `Parent`, `Child`, `Children`, `ChildCount`, `SetParent`, `AddChild`, `RemoveChild`, `IsAncestorOf`, and `IsDescendantOf`, plus `SetPickable`, `IsPickable`, `GetBoundingBox`, `SetBoundingBox`, `Radius`, `CurrentMesh`, `SetCurrentMesh`, `MeshCount`, `Mesh`, `AddMesh`, and `Material`.
+`Entity3DRef` covers common transform operations: `SetPosition`, `GetPosition`, `Translate`, `SetQuaternion`, `GetQuaternion`, `SetScale`, `GetScale`, and `LookAt`. It also exposes hierarchy helpers: `Parent`, `Child`, `Children`, `ChildCount`, `SetParent`, `AddChild`, `RemoveChild`, `IsAncestorOf`, and `IsDescendantOf`, plus `SetPickable`, `IsPickable`, `CurrentMesh`, `SetCurrentMesh`, `MeshCount`, `Mesh`, and `AddMesh`.
 
-`Entity2DRef` covers hierarchy helpers plus common 2D layout helpers: `SetPosition`, `GetPosition`, `SetSize`, `GetSize`, `SetRect`, `GetRect`, `SetSourceRect`, `GetSourceRect`, `UseSourceRect`, `IsUsingSourceRect`, `SetExtents`, `GetExtents`, `SetMaterial`, `Material`, `SetPickable`, `IsPickable`, `SetClipToParent`, `IsClipToParent`, `SetBackground`, `IsBackground`, `EnableRatioOffset`, `IsRatioOffset`, `EnableClipToCamera`, `IsClippedToCamera`, `Flags`, `SetFlags`, and `ModifyFlags`.
+`Entity2DRef` covers hierarchy helpers plus common 2D layout helpers: `SetPosition`, `GetPosition`, `SetSize`, `GetSize`, `SetRect`, `GetRect`, `SetSourceRect`, `GetSourceRect`, `UseSourceRect`, `IsUsingSourceRect`, `SetMaterial`, `Material`, `SetPickable`, `IsPickable`, `SetClipToParent`, and `IsClipToParent`.
 
-`MaterialRef` provides safe practical material helpers: `Texture(slot)`, `SetTexture(texture, slot)`, `Ambient`, `SetAmbient`, `Diffuse`, `SetDiffuse`, `Specular`, `SetSpecular`, `Emissive`, `SetEmissive`, `Power`, `SetPower`, `TextureBlendMode`, `SetTextureBlendMode`, `SourceBlend`, `SetSourceBlend`, `DestBlend`, `SetDestBlend`, `AlphaBlendEnabled`, `EnableAlphaBlend`, `AlphaFunc`, `SetAlphaFunc`, `AlphaRef`, and `SetAlphaRef`.
+`MaterialRef` provides the minimum safe texture helpers: `Texture(slot)` and `SetTexture(texture, slot)`.
 
 Raw `CK3dEntity@` / `CK2dEntity@` methods remain available through `Entity3D()` and `Entity2D()` for lower-level SDK work. Avoid storing those raw pointers long-term; keep `ObjectRef@`-derived handles as the durable script-side identity.
 
