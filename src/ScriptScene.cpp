@@ -66,13 +66,125 @@ bool NameMatches(CKObject *object, const std::string &name) {
     return name.empty() || NameEquals(object ? object->GetName() : nullptr, name);
 }
 
-bool IsInScene(CKSceneObject *object, CKScene *scene) {
+bool SameObject(CKObject *lhs, CKObject *rhs) {
+    return lhs && rhs && lhs->GetID() == rhs->GetID() && lhs->GetCKContext() == rhs->GetCKContext();
+}
+
+bool MaterialDependsOn(CKMaterial *material, CKObject *object) {
+    if (!material || !object) {
+        return false;
+    }
+    if (SameObject(material, object)) {
+        return true;
+    }
+    for (int i = 0; i < 4; ++i) {
+        if (SameObject(material->GetTexture(i), object)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool MeshDependsOn(CKMesh *mesh, CKObject *object) {
+    if (!mesh || !object) {
+        return false;
+    }
+    if (SameObject(mesh, object)) {
+        return true;
+    }
+    const int materialCount = mesh->GetMaterialCount();
+    for (int i = 0; i < materialCount; ++i) {
+        if (MaterialDependsOn(mesh->GetMaterial(i), object)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SceneObjectDependsOn(CKSceneObject *sceneObject, CKObject *object) {
+    if (!sceneObject || !object || sceneObject->GetCKContext() != object->GetCKContext()) {
+        return false;
+    }
+    if (SameObject(sceneObject, object)) {
+        return true;
+    }
+    if (CKSprite3D *sprite = CKSprite3D::Cast(sceneObject)) {
+        if (MaterialDependsOn(sprite->GetMaterial(), object)) {
+            return true;
+        }
+    }
+    if (CK2dEntity *entity2D = CK2dEntity::Cast(sceneObject)) {
+        if (MaterialDependsOn(entity2D->GetMaterial(), object)) {
+            return true;
+        }
+    }
+    if (CK3dEntity *entity3D = CK3dEntity::Cast(sceneObject)) {
+        if (MeshDependsOn(entity3D->GetCurrentMesh(), object)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool IsSceneMembershipAsset(CKObject *object) {
+    return CKMaterial::Cast(object) || CKTexture::Cast(object) || CKMesh::Cast(object);
+}
+
+bool IsDirectSceneMember(CKSceneObject *object, CKScene *scene) {
     if (!object || !scene) {
         return false;
     }
     const int count = object->GetSceneInCount();
     for (int i = 0; i < count; ++i) {
         if (object->GetSceneIn(i) == scene) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool IsObjectInScene(CKObject *object, CKScene *scene) {
+    if (!object || !scene || object->IsToBeDeleted()) {
+        return false;
+    }
+    if (object->GetCKContext() != scene->GetCKContext()) {
+        return false;
+    }
+    if (!IsSceneMembershipAsset(object)) {
+        if (CKSceneObject *sceneObject = CKSceneObject::Cast(object)) {
+            return IsDirectSceneMember(sceneObject, scene);
+        }
+    }
+    if (scene->IsObjectHere(object) != FALSE) {
+        return true;
+    }
+    if (!IsSceneMembershipAsset(object)) {
+        return false;
+    }
+    const XObjectPointerArray &objects = scene->ComputeObjectList(object->GetClassID(), TRUE);
+    const CK_ID id = object->GetID();
+    const int count = objects.Size();
+    for (int i = 0; i < count; ++i) {
+        CKObject *candidate = objects[i];
+        if (candidate && candidate->GetID() == id && !candidate->IsToBeDeleted()) {
+            return true;
+        }
+    }
+    if (object->GetClassID() != CKCID_OBJECT) {
+        const XObjectPointerArray &allObjects = scene->ComputeObjectList(CKCID_OBJECT, TRUE);
+        const int allCount = allObjects.Size();
+        for (int i = 0; i < allCount; ++i) {
+            CKObject *candidate = allObjects[i];
+            if (candidate && candidate->GetID() == id && !candidate->IsToBeDeleted()) {
+                return true;
+            }
+        }
+    }
+    const XObjectPointerArray &sceneObjects = scene->ComputeObjectList(CKCID_SCENEOBJECT, TRUE);
+    const int sceneObjectCount = sceneObjects.Size();
+    for (int i = 0; i < sceneObjectCount; ++i) {
+        CKSceneObject *sceneObject = CKSceneObject::Cast(sceneObjects[i]);
+        if (sceneObject && SceneObjectDependsOn(sceneObject, object)) {
             return true;
         }
     }
@@ -97,7 +209,7 @@ std::vector<CKObject *> CollectObjects(CKContext *context,
         if (!object || object->IsToBeDeleted() || !NameMatches(object, name)) {
             continue;
         }
-        if (currentSceneOnly && !IsInScene(CKSceneObject::Cast(object), scene)) {
+        if (currentSceneOnly && !IsObjectInScene(object, scene)) {
             continue;
         }
         objects.push_back(object);
@@ -425,6 +537,10 @@ bool AddToCurrentSceneImpl(CKContext *context, ObjectRef *ref, bool dependencies
         ref->SetError("Scene::AddToCurrentScene requires a CKSceneObject.");
         return false;
     }
+    if (IsSceneMembershipAsset(object)) {
+        ref->SetError("Scene::AddToCurrentScene requires a CKSceneObject.");
+        return false;
+    }
     scene->AddObjectToScene(object, dependencies);
     return true;
 }
@@ -438,16 +554,16 @@ bool IsInSceneImpl(CKContext *context, SceneRef *sceneRef, ObjectRef *ref) {
         ref->SetError("Scene::IsInScene requires a valid SceneRef.");
         return false;
     }
-    CKSceneObject *object = CKSceneObject::Cast(ref->Object());
+    CKObject *object = ref->Object();
     if (!object) {
-        ref->SetError("Scene::IsInScene requires a CKSceneObject.");
+        ref->SetError("Scene::IsInScene requires a valid object.");
         return false;
     }
     if (scene->GetCKContext() != object->GetCKContext() || object->GetCKContext() != context) {
         ref->SetError("Scene::IsInScene requires scene and object from the same CKContext.");
         return false;
     }
-    return IsInScene(object, scene);
+    return IsObjectInScene(object, scene);
 }
 
 bool IsInCurrentSceneImpl(CKContext *context, ObjectRef *ref) {
@@ -459,16 +575,16 @@ bool IsInCurrentSceneImpl(CKContext *context, ObjectRef *ref) {
         ref->SetError("Current scene is not available.");
         return false;
     }
-    CKSceneObject *object = CKSceneObject::Cast(ref->Object());
+    CKObject *object = ref->Object();
     if (!object) {
-        ref->SetError("Scene::IsInCurrentScene requires a CKSceneObject.");
+        ref->SetError("Scene::IsInCurrentScene requires a valid object.");
         return false;
     }
     if (object->GetCKContext() != context) {
         ref->SetError("Scene::IsInCurrentScene requires an object from the current CKContext.");
         return false;
     }
-    return IsInScene(object, scene);
+    return IsObjectInScene(object, scene);
 }
 
 bool AddToSceneImpl(CKContext *context, SceneRef *sceneRef, ObjectRef *ref, bool dependencies) {
@@ -482,6 +598,10 @@ bool AddToSceneImpl(CKContext *context, SceneRef *sceneRef, ObjectRef *ref, bool
     }
     CKSceneObject *object = CKSceneObject::Cast(ref->Object());
     if (!object) {
+        ref->SetError("Scene::AddToScene requires a CKSceneObject.");
+        return false;
+    }
+    if (IsSceneMembershipAsset(object)) {
         ref->SetError("Scene::AddToScene requires a CKSceneObject.");
         return false;
     }
@@ -507,6 +627,10 @@ bool RemoveFromCurrentSceneImpl(CKContext *context, ObjectRef *ref, bool depende
         ref->SetError("Scene::RemoveFromCurrentScene requires a CKSceneObject.");
         return false;
     }
+    if (IsSceneMembershipAsset(object)) {
+        ref->SetError("Scene::RemoveFromCurrentScene requires a CKSceneObject.");
+        return false;
+    }
     scene->RemoveObjectFromScene(object, dependencies);
     return true;
 }
@@ -522,6 +646,10 @@ bool RemoveFromSceneImpl(CKContext *context, SceneRef *sceneRef, ObjectRef *ref,
     }
     CKSceneObject *object = CKSceneObject::Cast(ref->Object());
     if (!object) {
+        ref->SetError("Scene::RemoveFromScene requires a CKSceneObject.");
+        return false;
+    }
+    if (IsSceneMembershipAsset(object)) {
         ref->SetError("Scene::RemoveFromScene requires a CKSceneObject.");
         return false;
     }
