@@ -113,6 +113,25 @@ public:
     int MeshCount() const;
     MeshRef *Mesh(int index) const;
     bool AddMesh(MeshRef *mesh);
+    bool SetOrientation(const VxVector &direction,
+                        const VxVector &up,
+                        const VxVector &right,
+                        Entity3DRef *reference = nullptr,
+                        bool keepChildren = false);
+    bool GetOrientation(VxVector &direction,
+                        VxVector &up,
+                        VxVector &right,
+                        Entity3DRef *reference = nullptr) const;
+    bool SetDirection(const VxVector &direction, Entity3DRef *reference = nullptr, bool keepChildren = false);
+    bool GetDirection(VxVector &direction, Entity3DRef *reference = nullptr) const;
+    bool SetUp(const VxVector &up, Entity3DRef *reference = nullptr, bool keepChildren = false);
+    bool GetUp(VxVector &up, Entity3DRef *reference = nullptr) const;
+    bool SetRight(const VxVector &right, Entity3DRef *reference = nullptr, bool keepChildren = false);
+    bool GetRight(VxVector &right, Entity3DRef *reference = nullptr) const;
+    bool GetBoundingBox(VxBbox &bbox, bool local = false) const;
+    bool SetBoundingBox(const VxBbox &bbox, bool local = false);
+    float Radius() const;
+    MaterialRef *Material(int meshIndex = 0, int materialIndex = 0) const;
 };
 
 class Entity2DRef : public SceneObjectRef {
@@ -152,6 +171,17 @@ public:
     bool IsPickable() const;
     bool SetClipToParent(bool clip = true);
     bool IsClipToParent() const;
+    bool SetBackground(bool background = true);
+    bool IsBackground() const;
+    bool EnableRatioOffset(bool ratio = true);
+    bool IsRatioOffset() const;
+    bool EnableClipToCamera(bool clip = true);
+    bool IsClippedToCamera() const;
+    CKDWORD Flags() const;
+    bool SetFlags(CKDWORD flags);
+    bool ModifyFlags(CKDWORD add, CKDWORD remove = 0);
+    bool SetExtents(const VxRect &sourceRect, const VxRect &rect);
+    bool GetExtents(VxRect &sourceRect, VxRect &rect) const;
 };
 
 class MaterialRef : public ObjectRef {
@@ -160,6 +190,28 @@ public:
     CKMaterial *Material() const;
     TextureRef *Texture(int slot = 0) const;
     bool SetTexture(TextureRef *texture, int slot = 0);
+    VxColor Ambient() const;
+    bool SetAmbient(const VxColor &color);
+    VxColor Diffuse() const;
+    bool SetDiffuse(const VxColor &color);
+    VxColor Specular() const;
+    bool SetSpecular(const VxColor &color);
+    VxColor Emissive() const;
+    bool SetEmissive(const VxColor &color);
+    float Power() const;
+    bool SetPower(float power);
+    VXTEXTURE_BLENDMODE TextureBlendMode() const;
+    bool SetTextureBlendMode(VXTEXTURE_BLENDMODE mode);
+    VXBLEND_MODE SourceBlend() const;
+    bool SetSourceBlend(VXBLEND_MODE mode);
+    VXBLEND_MODE DestBlend() const;
+    bool SetDestBlend(VXBLEND_MODE mode);
+    bool AlphaBlendEnabled() const;
+    bool EnableAlphaBlend(bool blend = true);
+    VXCMPFUNC AlphaFunc() const;
+    bool SetAlphaFunc(VXCMPFUNC func = VXCMP_ALWAYS);
+    CKBYTE AlphaRef() const;
+    bool SetAlphaRef(CKBYTE alphaRef = 0);
 };
 
 class TextureRef : public ObjectRef {

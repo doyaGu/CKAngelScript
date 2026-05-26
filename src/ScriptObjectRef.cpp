@@ -788,6 +788,129 @@ bool Entity3DRef::AddMesh(MeshRef *mesh) {
     return entity->AddMesh(resolvedMesh) == CK_OK;
 }
 
+bool Entity3DRef::SetOrientation(const VxVector &direction,
+                                 const VxVector &up,
+                                 const VxVector &right,
+                                 Entity3DRef *reference,
+                                 bool keepChildren) {
+    CK3dEntity *entity = ResolveEntity3D(this, "SetOrientation");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity3DReference(this, reference, entity->GetCKContext(), "SetOrientation", referenceEntity)) {
+        return false;
+    }
+    entity->SetOrientation(&direction, &up, &right, referenceEntity, keepChildren);
+    return true;
+}
+
+bool Entity3DRef::GetOrientation(VxVector &direction,
+                                 VxVector &up,
+                                 VxVector &right,
+                                 Entity3DRef *reference) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "GetOrientation");
+    if (!entity) {
+        return false;
+    }
+    CK3dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity3DReference(this, reference, entity->GetCKContext(), "GetOrientation", referenceEntity)) {
+        return false;
+    }
+    entity->GetOrientation(&direction, &up, &right, referenceEntity);
+    return true;
+}
+
+bool Entity3DRef::SetDirection(const VxVector &direction, Entity3DRef *reference, bool keepChildren) {
+    VxVector currentDirection;
+    VxVector up;
+    VxVector right;
+    if (!GetOrientation(currentDirection, up, right, reference)) {
+        return false;
+    }
+    return SetOrientation(direction, up, right, reference, keepChildren);
+}
+
+bool Entity3DRef::GetDirection(VxVector &direction, Entity3DRef *reference) const {
+    VxVector up;
+    VxVector right;
+    return GetOrientation(direction, up, right, reference);
+}
+
+bool Entity3DRef::SetUp(const VxVector &up, Entity3DRef *reference, bool keepChildren) {
+    VxVector direction;
+    VxVector currentUp;
+    VxVector right;
+    if (!GetOrientation(direction, currentUp, right, reference)) {
+        return false;
+    }
+    return SetOrientation(direction, up, right, reference, keepChildren);
+}
+
+bool Entity3DRef::GetUp(VxVector &up, Entity3DRef *reference) const {
+    VxVector direction;
+    VxVector right;
+    return GetOrientation(direction, up, right, reference);
+}
+
+bool Entity3DRef::SetRight(const VxVector &right, Entity3DRef *reference, bool keepChildren) {
+    VxVector direction;
+    VxVector up;
+    VxVector currentRight;
+    if (!GetOrientation(direction, up, currentRight, reference)) {
+        return false;
+    }
+    return SetOrientation(direction, up, right, reference, keepChildren);
+}
+
+bool Entity3DRef::GetRight(VxVector &right, Entity3DRef *reference) const {
+    VxVector direction;
+    VxVector up;
+    return GetOrientation(direction, up, right, reference);
+}
+
+bool Entity3DRef::GetBoundingBox(VxBbox &bbox, bool local) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "GetBoundingBox");
+    if (!entity) {
+        return false;
+    }
+    bbox = entity->GetBoundingBox(local);
+    return true;
+}
+
+bool Entity3DRef::SetBoundingBox(const VxBbox &bbox, bool local) {
+    CK3dEntity *entity = ResolveEntity3D(this, "SetBoundingBox");
+    if (!entity) {
+        return false;
+    }
+    return entity->SetBoundingBox(&bbox, local) != FALSE;
+}
+
+float Entity3DRef::Radius() const {
+    CK3dEntity *entity = ResolveEntity3D(this, "Radius");
+    return entity ? entity->GetRadius() : 0.0f;
+}
+
+MaterialRef *Entity3DRef::Material(int meshIndex, int materialIndex) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "Material");
+    if (!entity) {
+        return MakeInvalidTypedRef<MaterialRef>(Context(), "Entity3DRef::Material requires a valid CK3dEntity.");
+    }
+    if (meshIndex < 0 || meshIndex >= entity->GetMeshCount()) {
+        return MakeInvalidTypedRef<MaterialRef>(entity->GetCKContext(), "Entity3DRef material mesh index is out of range.");
+    }
+    CKMesh *mesh = entity->GetMesh(meshIndex);
+    if (!mesh) {
+        return MakeInvalidTypedRef<MaterialRef>(entity->GetCKContext(), "Entity3DRef mesh is null.");
+    }
+    if (materialIndex < 0 || materialIndex >= mesh->GetMaterialCount()) {
+        return MakeInvalidTypedRef<MaterialRef>(entity->GetCKContext(), "Entity3DRef material index is out of range.");
+    }
+    return MakeTypedObjectRef<MaterialRef>(entity->GetCKContext(),
+                                           mesh->GetMaterial(materialIndex),
+                                           "Entity3DRef mesh material is null.");
+}
+
 Entity2DRef *Entity2DRef::Parent() const {
     CK2dEntity *entity = ResolveEntity2D(this, "Parent");
     if (!entity) {
@@ -1042,6 +1165,89 @@ bool Entity2DRef::IsClipToParent() const {
     return entity && entity->IsClipToParent();
 }
 
+bool Entity2DRef::SetBackground(bool background) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetBackground");
+    if (!entity) {
+        return false;
+    }
+    entity->SetBackground(background);
+    return true;
+}
+
+bool Entity2DRef::IsBackground() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "IsBackground");
+    return entity && entity->IsBackground();
+}
+
+bool Entity2DRef::EnableRatioOffset(bool ratio) {
+    CK2dEntity *entity = ResolveEntity2D(this, "EnableRatioOffset");
+    if (!entity) {
+        return false;
+    }
+    entity->EnableRatioOffset(ratio);
+    return true;
+}
+
+bool Entity2DRef::IsRatioOffset() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "IsRatioOffset");
+    return entity && entity->IsRatioOffset();
+}
+
+bool Entity2DRef::EnableClipToCamera(bool clip) {
+    CK2dEntity *entity = ResolveEntity2D(this, "EnableClipToCamera");
+    if (!entity) {
+        return false;
+    }
+    entity->EnableClipToCamera(clip);
+    return true;
+}
+
+bool Entity2DRef::IsClippedToCamera() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "IsClippedToCamera");
+    return entity && entity->IsClippedToCamera();
+}
+
+CKDWORD Entity2DRef::Flags() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "Flags");
+    return entity ? entity->GetFlags() : 0;
+}
+
+bool Entity2DRef::SetFlags(CKDWORD flags) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetFlags");
+    if (!entity) {
+        return false;
+    }
+    entity->SetFlags(flags);
+    return true;
+}
+
+bool Entity2DRef::ModifyFlags(CKDWORD add, CKDWORD remove) {
+    CK2dEntity *entity = ResolveEntity2D(this, "ModifyFlags");
+    if (!entity) {
+        return false;
+    }
+    entity->ModifyFlags(add, remove);
+    return true;
+}
+
+bool Entity2DRef::SetExtents(const VxRect &sourceRect, const VxRect &rect) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetExtents");
+    if (!entity) {
+        return false;
+    }
+    entity->SetExtents(sourceRect, rect);
+    return true;
+}
+
+bool Entity2DRef::GetExtents(VxRect &sourceRect, VxRect &rect) const {
+    CK2dEntity *entity = ResolveEntity2D(this, "GetExtents");
+    if (!entity) {
+        return false;
+    }
+    entity->GetExtents(sourceRect, rect);
+    return true;
+}
+
 TextureRef *MaterialRef::Texture(int slot) const {
     CKMaterial *material = Material();
     if (!material) {
@@ -1075,6 +1281,171 @@ bool MaterialRef::SetTexture(TextureRef *texture, int slot) {
         return false;
     }
     material->SetTexture(slot, resolvedTexture);
+    return true;
+}
+
+VxColor MaterialRef::Ambient() const {
+    CKMaterial *material = Material();
+    return material ? material->GetAmbient() : VxColor();
+}
+
+bool MaterialRef::SetAmbient(const VxColor &color) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetAmbient requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetAmbient(color);
+    return true;
+}
+
+VxColor MaterialRef::Diffuse() const {
+    CKMaterial *material = Material();
+    return material ? material->GetDiffuse() : VxColor();
+}
+
+bool MaterialRef::SetDiffuse(const VxColor &color) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetDiffuse requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetDiffuse(color);
+    return true;
+}
+
+VxColor MaterialRef::Specular() const {
+    CKMaterial *material = Material();
+    return material ? material->GetSpecular() : VxColor();
+}
+
+bool MaterialRef::SetSpecular(const VxColor &color) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetSpecular requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetSpecular(color);
+    return true;
+}
+
+VxColor MaterialRef::Emissive() const {
+    CKMaterial *material = Material();
+    return material ? material->GetEmissive() : VxColor();
+}
+
+bool MaterialRef::SetEmissive(const VxColor &color) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetEmissive requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetEmissive(color);
+    return true;
+}
+
+float MaterialRef::Power() const {
+    CKMaterial *material = Material();
+    return material ? material->GetPower() : 0.0f;
+}
+
+bool MaterialRef::SetPower(float power) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetPower requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetPower(power);
+    return true;
+}
+
+VXTEXTURE_BLENDMODE MaterialRef::TextureBlendMode() const {
+    CKMaterial *material = Material();
+    return material ? material->GetTextureBlendMode() : static_cast<VXTEXTURE_BLENDMODE>(0);
+}
+
+bool MaterialRef::SetTextureBlendMode(VXTEXTURE_BLENDMODE mode) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetTextureBlendMode requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetTextureBlendMode(mode);
+    return true;
+}
+
+VXBLEND_MODE MaterialRef::SourceBlend() const {
+    CKMaterial *material = Material();
+    return material ? material->GetSourceBlend() : VXBLEND_ZERO;
+}
+
+bool MaterialRef::SetSourceBlend(VXBLEND_MODE mode) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetSourceBlend requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetSourceBlend(mode);
+    return true;
+}
+
+VXBLEND_MODE MaterialRef::DestBlend() const {
+    CKMaterial *material = Material();
+    return material ? material->GetDestBlend() : VXBLEND_ZERO;
+}
+
+bool MaterialRef::SetDestBlend(VXBLEND_MODE mode) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetDestBlend requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetDestBlend(mode);
+    return true;
+}
+
+bool MaterialRef::AlphaBlendEnabled() const {
+    CKMaterial *material = Material();
+    return material && material->AlphaBlendEnabled();
+}
+
+bool MaterialRef::EnableAlphaBlend(bool blend) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::EnableAlphaBlend requires a valid CKMaterial.");
+        return false;
+    }
+    material->EnableAlphaBlend(blend);
+    return true;
+}
+
+VXCMPFUNC MaterialRef::AlphaFunc() const {
+    CKMaterial *material = Material();
+    return material ? material->GetAlphaFunc() : VXCMP_ALWAYS;
+}
+
+bool MaterialRef::SetAlphaFunc(VXCMPFUNC func) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetAlphaFunc requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetAlphaFunc(func);
+    return true;
+}
+
+CKBYTE MaterialRef::AlphaRef() const {
+    CKMaterial *material = Material();
+    return material ? material->GetAlphaRef() : 0;
+}
+
+bool MaterialRef::SetAlphaRef(CKBYTE alphaRef) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetAlphaRef requires a valid CKMaterial.");
+        return false;
+    }
+    material->SetAlphaRef(alphaRef);
     return true;
 }
 
@@ -1210,6 +1581,18 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("Entity3DRef", "int MeshCount() const", asMETHOD(Entity3DRef, MeshCount), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity3DRef", "MeshRef@ Mesh(int index) const", asMETHOD(Entity3DRef, Mesh), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity3DRef", "bool AddMesh(MeshRef@ mesh)", asMETHOD(Entity3DRef, AddMesh), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetOrientation(const VxVector &in direction, const VxVector &in up, const VxVector &in right, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHOD(Entity3DRef, SetOrientation), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool GetOrientation(VxVector &out direction, VxVector &out up, VxVector &out right, Entity3DRef@ reference = null) const", asMETHOD(Entity3DRef, GetOrientation), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetDirection(const VxVector &in direction, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHOD(Entity3DRef, SetDirection), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool GetDirection(VxVector &out direction, Entity3DRef@ reference = null) const", asMETHOD(Entity3DRef, GetDirection), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetUp(const VxVector &in up, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHOD(Entity3DRef, SetUp), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool GetUp(VxVector &out up, Entity3DRef@ reference = null) const", asMETHOD(Entity3DRef, GetUp), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetRight(const VxVector &in right, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHOD(Entity3DRef, SetRight), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool GetRight(VxVector &out right, Entity3DRef@ reference = null) const", asMETHOD(Entity3DRef, GetRight), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool GetBoundingBox(VxBbox &out bbox, bool local = false) const", asMETHOD(Entity3DRef, GetBoundingBox), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetBoundingBox(const VxBbox &in bbox, bool local = false)", asMETHOD(Entity3DRef, SetBoundingBox), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "float Radius() const", asMETHOD(Entity3DRef, Radius), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "MaterialRef@ Material(int meshIndex = 0, int materialIndex = 0) const", asMETHOD(Entity3DRef, Material), asCALL_THISCALL); assert(r >= 0);
 
     r = engine->RegisterObjectMethod("Entity2DRef", "bool SetPosition(const Vx2DVector &in pos, bool homogeneous = false, Entity2DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity2DRef, SetPosition, (const Vx2DVector &, bool, Entity2DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "bool SetPosition(float x, float y, bool homogeneous = false, Entity2DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity2DRef, SetPosition, (float, float, bool, Entity2DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
@@ -1229,6 +1612,17 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("Entity2DRef", "bool IsPickable() const", asMETHOD(Entity2DRef, IsPickable), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "bool SetClipToParent(bool clip = true)", asMETHOD(Entity2DRef, SetClipToParent), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "bool IsClipToParent() const", asMETHOD(Entity2DRef, IsClipToParent), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetBackground(bool background = true)", asMETHOD(Entity2DRef, SetBackground), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool IsBackground() const", asMETHOD(Entity2DRef, IsBackground), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool EnableRatioOffset(bool ratio = true)", asMETHOD(Entity2DRef, EnableRatioOffset), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool IsRatioOffset() const", asMETHOD(Entity2DRef, IsRatioOffset), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool EnableClipToCamera(bool clip = true)", asMETHOD(Entity2DRef, EnableClipToCamera), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool IsClippedToCamera() const", asMETHOD(Entity2DRef, IsClippedToCamera), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "CKDWORD Flags() const", asMETHOD(Entity2DRef, Flags), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetFlags(CKDWORD flags)", asMETHOD(Entity2DRef, SetFlags), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool ModifyFlags(CKDWORD add, CKDWORD remove = 0)", asMETHOD(Entity2DRef, ModifyFlags), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetExtents(const VxRect &in sourceRect, const VxRect &in rect)", asMETHOD(Entity2DRef, SetExtents), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool GetExtents(VxRect &out sourceRect, VxRect &out rect) const", asMETHOD(Entity2DRef, GetExtents), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "Entity2DRef@ Parent() const", asMETHOD(Entity2DRef, Parent), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "Entity2DRef@ Child(int index) const", asMETHOD(Entity2DRef, Child), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "array<Entity2DRef@>@ Children() const", asMETHOD(Entity2DRef, Children), asCALL_THISCALL); assert(r >= 0);
@@ -1239,6 +1633,28 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("MaterialRef", "TextureRef@ Texture(int slot = 0) const", asMETHOD(MaterialRef, Texture), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("MaterialRef", "bool SetTexture(TextureRef@ texture, int slot = 0)", asMETHOD(MaterialRef, SetTexture), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "VxColor Ambient() const", asMETHOD(MaterialRef, Ambient), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetAmbient(const VxColor &in color)", asMETHOD(MaterialRef, SetAmbient), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "VxColor Diffuse() const", asMETHOD(MaterialRef, Diffuse), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetDiffuse(const VxColor &in color)", asMETHOD(MaterialRef, SetDiffuse), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "VxColor Specular() const", asMETHOD(MaterialRef, Specular), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetSpecular(const VxColor &in color)", asMETHOD(MaterialRef, SetSpecular), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "VxColor Emissive() const", asMETHOD(MaterialRef, Emissive), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetEmissive(const VxColor &in color)", asMETHOD(MaterialRef, SetEmissive), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "float Power() const", asMETHOD(MaterialRef, Power), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetPower(float power)", asMETHOD(MaterialRef, SetPower), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "VXTEXTURE_BLENDMODE TextureBlendMode() const", asMETHOD(MaterialRef, TextureBlendMode), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetTextureBlendMode(VXTEXTURE_BLENDMODE mode)", asMETHOD(MaterialRef, SetTextureBlendMode), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "VXBLEND_MODE SourceBlend() const", asMETHOD(MaterialRef, SourceBlend), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetSourceBlend(VXBLEND_MODE mode)", asMETHOD(MaterialRef, SetSourceBlend), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "VXBLEND_MODE DestBlend() const", asMETHOD(MaterialRef, DestBlend), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetDestBlend(VXBLEND_MODE mode)", asMETHOD(MaterialRef, SetDestBlend), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool AlphaBlendEnabled() const", asMETHOD(MaterialRef, AlphaBlendEnabled), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool EnableAlphaBlend(bool blend = true)", asMETHOD(MaterialRef, EnableAlphaBlend), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "VXCMPFUNC AlphaFunc() const", asMETHOD(MaterialRef, AlphaFunc), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetAlphaFunc(VXCMPFUNC func = VXCMP_ALWAYS)", asMETHOD(MaterialRef, SetAlphaFunc), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "CKBYTE AlphaRef() const", asMETHOD(MaterialRef, AlphaRef), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetAlphaRef(CKBYTE alphaRef = 0)", asMETHOD(MaterialRef, SetAlphaRef), asCALL_THISCALL); assert(r >= 0);
 }
 
 void RegisterScriptObjectRefBridge(asIScriptEngine *engine) {
