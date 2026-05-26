@@ -14,32 +14,28 @@ if (ball !is null && ball.valid) {
 }
 ```
 
-All object refs support `IsValid()`, `valid`, `Error()`, `Describe()`, `Id()`, `Name()`, `ClassId()`, `IsDynamic()`, and `Object()`. They also expose safe common mutators for frequent SDK operations: `SetName`, `SetDynamic`, `Show`, `IsVisible`, `ObjectFlags`, and `ModifyObjectFlags`.
+All object refs support `IsValid()`, `valid`, `Error()`, `Describe()`, `Id()`, `Name()`, `ClassId()`, `IsDynamic()`, and `Object()`. They deliberately do not mirror the full CK SDK editing surface; use typed accessors when you need raw SDK methods.
 
 Precise ref types add typed accessors: `SceneObjectRef.SceneObject()`, `Entity3DRef.Entity3D()`, `Entity2DRef.Entity2D()`, `MaterialRef.Material()`, `TextureRef.Texture()`, `MeshRef.Mesh()`, `SceneRef.Scene()`, and `LevelRef.Level()`. Bridge refs such as `BehaviorRef@`, `ParamRef@`, `ParamStructRef@`, `ParamOperationRef@`, and `BehaviorLinkRef@` are also `ObjectRef@`-compatible. Transaction handles, values, builders, tasks, and graph cursors stay outside the ref hierarchy; use their methods to obtain `ObjectRef@`-derived handles when needed.
 
-## Entity Helpers
+## Editing With Raw SDK Accessors
 
-Prefer `Entity3DRef@` / `Entity2DRef@` helpers when a script needs safe scene object manipulation. These helpers revalidate the ref before every operation and return `false` or an invalid typed ref instead of exposing stale SDK pointers.
+Prefer `ObjectRef@`-derived handles for lookup, identity, stale-id protection, and typed narrowing. For actual scene editing, resolve a short-lived raw SDK pointer from the typed accessor and call the registered SDK API directly.
 
 ```angelscript
 Entity3DRef@ marker = Scene::CreateEntity3D(ctx, "DebugMarker");
 Entity3DRef@ parent = Scene::FindEntity3D(ctx, "Level");
 
-marker.SetParent(parent);
-marker.SetPosition(0.0f, 2.0f, 0.0f, parent);
-marker.Translate(VxVector(1.0f, 0.0f, 0.0f));
-
-array<Entity3DRef@>@ children = parent.Children();
+CK3dEntity@ markerEntity = marker !is null ? marker.Entity3D() : null;
+CK3dEntity@ parentEntity = parent !is null ? parent.Entity3D() : null;
+if (markerEntity !is null) {
+  markerEntity.SetParent(parentEntity);
+  markerEntity.SetPosition(0.0f, 2.0f, 0.0f, parentEntity);
+  markerEntity.Translate(VxVector(1.0f, 0.0f, 0.0f));
+}
 ```
 
-`Entity3DRef` covers common transform operations: `SetPosition`, `GetPosition`, `Translate`, `SetQuaternion`, `GetQuaternion`, `SetScale`, `GetScale`, and `LookAt`. It also exposes hierarchy helpers: `Parent`, `Child`, `Children`, `ChildCount`, `SetParent`, `AddChild`, `RemoveChild`, `IsAncestorOf`, and `IsDescendantOf`, plus `SetPickable`, `IsPickable`, `CurrentMesh`, `SetCurrentMesh`, `MeshCount`, `Mesh`, and `AddMesh`.
-
-`Entity2DRef` covers hierarchy helpers plus common 2D layout helpers: `SetPosition`, `GetPosition`, `SetSize`, `GetSize`, `SetRect`, `GetRect`, `SetSourceRect`, `GetSourceRect`, `UseSourceRect`, `IsUsingSourceRect`, `SetMaterial`, `Material`, `SetPickable`, `IsPickable`, `SetClipToParent`, and `IsClipToParent`.
-
-`MaterialRef` provides the minimum safe texture helpers: `Texture(slot)` and `SetTexture(texture, slot)`.
-
-Raw `CK3dEntity@` / `CK2dEntity@` methods remain available through `Entity3D()` and `Entity2D()` for lower-level SDK work. Avoid storing those raw pointers long-term; keep `ObjectRef@`-derived handles as the durable script-side identity.
+The same pattern applies to `Entity2DRef.Entity2D()`, `MaterialRef.Material()`, `TextureRef.Texture()`, `MeshRef.Mesh()`, and other precise refs. Avoid storing raw pointers long-term; keep `ObjectRef@`-derived handles as the durable script-side identity and reacquire raw SDK pointers near the operation.
 
 ## Context Overloads
 
@@ -89,7 +85,7 @@ Pass `dynamic=false` only when a persistent object is explicitly required.
 
 ## Scene Membership, Selection, And Destruction
 
-`AddToCurrentScene` and `RemoveFromCurrentScene` accept `ObjectRef@` but require an addable scene object. Use `AddToScene` / `RemoveFromScene` with a `SceneRef@` when working with a scene that is not necessarily current. Asset refs are observed through the scene objects that use them; add or remove the owning entity instead of adding materials, textures, or meshes directly. `IsInCurrentScene` and `IsInScene` expose the same checks used by scoped lookup and can be used with asset refs. `SceneObjectRef` also has `IsInCurrentScene()` and `IsInScene(scene)` convenience methods. `Select` accepts `array<ObjectRef@>@`.
+`AddToCurrentScene` and `RemoveFromCurrentScene` accept `ObjectRef@` but require an addable scene object. Use `AddToScene` / `RemoveFromScene` with a `SceneRef@` when working with a scene that is not necessarily current. Asset refs are observed through the scene objects that use them; add or remove the owning entity instead of adding materials, textures, or meshes directly. `IsInCurrentScene` and `IsInScene` expose the same checks used by scoped lookup and can be used with asset refs. `Select` accepts `array<ObjectRef@>@`.
 
 ```angelscript
 SceneRef@ scene = Scene::CurrentScene(ctx);
