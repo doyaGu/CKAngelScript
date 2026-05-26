@@ -44,6 +44,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     constexpr const char *parent2DName = "__CKAS_SceneInteropParent2D";
     constexpr const char *child2DName = "__CKAS_SceneInteropChild2D";
     constexpr const char *duplicateName = "__CKAS_SceneInteropDuplicate";
+    constexpr const char *scopedMaterialName = "__CKAS_SceneInteropScopedMaterial";
+    constexpr const char *scopedSpriteName = "__CKAS_SceneInteropScopedSprite";
     CleanupNamedObject(context, objectName);
     CleanupNamedObject(context, persistentName);
     CleanupNamedObject(context, parent3DName);
@@ -51,6 +53,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     CleanupNamedObject(context, parent2DName);
     CleanupNamedObject(context, child2DName);
     CleanupNamedObject(context, duplicateName);
+    CleanupNamedObject(context, scopedMaterialName);
+    CleanupNamedObject(context, scopedSpriteName);
 
     AngelScriptManager *manager = AngelScriptManager::GetManager(context);
     if (!manager) {
@@ -68,6 +72,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         "  const string parent2DName = \"__CKAS_SceneInteropParent2D\";\n"
         "  const string child2DName = \"__CKAS_SceneInteropChild2D\";\n"
         "  const string duplicateName = \"__CKAS_SceneInteropDuplicate\";\n"
+        "  const string scopedMaterialName = \"__CKAS_SceneInteropScopedMaterial\";\n"
+        "  const string scopedSpriteName = \"__CKAS_SceneInteropScopedSprite\";\n"
         "  Entity3DRef@ created = Scene::CreateEntity3D(ctx, objectName, true);\n"
         "  if (created is null || !created.valid || created.Entity3D() is null) return 10;\n"
         "  if (!created.IsDynamic() || created.Name() != objectName || created.ClassId() != CKCID_3DENTITY) return 11;\n"
@@ -123,7 +129,25 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         "    if (scopedUnique is null || !scopedUnique.valid || scopedUnique.Id() != dupA.Id()) return 72;\n"
         "    array<Entity3DRef@>@ scopedAll = Scene::FindAllEntity3D(ctx, duplicateName, true);\n"
         "    if (scopedAll is null || scopedAll.length() != 1 || scopedAll[0].Id() != dupA.Id()) return 73;\n"
-        "    if (!Scene::RemoveFromScene(ctx, scene, dupA, true)) return 74;\n"
+        "    MaterialRef@ scopedMaterial = Scene::CreateMaterial(ctx, scopedMaterialName, true);\n"
+        "    Entity3DRef@ scopedSprite = cast<Entity3DRef>(Scene::Create(ctx, CKCID_SPRITE3D, scopedSpriteName, true));\n"
+        "    if (scopedMaterial is null || scopedSprite is null || !scopedMaterial.valid || !scopedSprite.valid) return 76;\n"
+        "    CKSprite3D@ scopedSpriteRaw = cast<CKSprite3D>(scopedSprite.Object());\n"
+        "    if (scopedMaterial.Material() is null || scopedSpriteRaw is null) return 77;\n"
+        "    scopedSpriteRaw.SetMaterial(scopedMaterial.Material());\n"
+        "    if (!Scene::AddToScene(ctx, scene, scopedSprite, true)) return 78;\n"
+        "    if (!Scene::IsInScene(ctx, scene, scopedMaterial)) return 79;\n"
+        "    MaterialRef@ scopedMaterialOne = Scene::FindOneMaterial(ctx, scopedMaterialName, true);\n"
+        "    if (scopedMaterialOne is null || !scopedMaterialOne.valid || scopedMaterialOne.Id() != scopedMaterial.Id()) return 80;\n"
+        "    array<MaterialRef@>@ scopedMaterials = Scene::FindAllMaterial(ctx, scopedMaterialName, true);\n"
+        "    if (scopedMaterials is null || scopedMaterials.length() != 1 || scopedMaterials[0].Id() != scopedMaterial.Id()) return 81;\n"
+        "    if (Scene::AddToScene(ctx, scene, scopedMaterial, true)) return 82;\n"
+        "    if (scopedMaterial.Error().findFirst(\"requires a CKSceneObject\") < 0) return 85;\n"
+        "    if (!Scene::RemoveFromScene(ctx, scene, scopedSprite, true)) return 74;\n"
+        "    if (Scene::IsInScene(ctx, scene, scopedMaterial)) return 83;\n"
+        "    MaterialRef@ scopedMaterialMissing = Scene::FindOneMaterial(ctx, scopedMaterialName, true);\n"
+        "    if (scopedMaterialMissing is null || scopedMaterialMissing.valid || scopedMaterialMissing.Error().findFirst(\"match count=0\") < 0) return 84;\n"
+        "    if (!Scene::RemoveFromScene(ctx, scene, dupA, true)) return 86;\n"
         "    if (Scene::IsInScene(ctx, scene, dupA) || Scene::IsInCurrentScene(ctx, dupA)) return 75;\n"
         "  }\n"
         "  Entity3DRef@ parent3D = Scene::CreateEntity3D(ctx, parent3DName, true);\n"
@@ -207,6 +231,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         CleanupNamedObject(context, parent2DName);
         CleanupNamedObject(context, child2DName);
         CleanupNamedObject(context, duplicateName);
+        CleanupNamedObject(context, scopedMaterialName);
+        CleanupNamedObject(context, scopedSpriteName);
         return false;
     }
 
@@ -222,6 +248,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         CleanupNamedObject(context, parent2DName);
         CleanupNamedObject(context, child2DName);
         CleanupNamedObject(context, duplicateName);
+        CleanupNamedObject(context, scopedMaterialName);
+        CleanupNamedObject(context, scopedSpriteName);
         return false;
     }
 
@@ -241,6 +269,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         CleanupNamedObject(context, parent2DName);
         CleanupNamedObject(context, child2DName);
         CleanupNamedObject(context, duplicateName);
+        CleanupNamedObject(context, scopedMaterialName);
+        CleanupNamedObject(context, scopedSpriteName);
         return false;
     }
 
@@ -277,5 +307,7 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     CleanupNamedObject(context, parent2DName);
     CleanupNamedObject(context, child2DName);
     CleanupNamedObject(context, duplicateName);
+    CleanupNamedObject(context, scopedMaterialName);
+    CleanupNamedObject(context, scopedSpriteName);
     return ok;
 }
