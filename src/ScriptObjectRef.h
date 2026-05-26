@@ -12,6 +12,10 @@
 
 class ScriptBehaviorBridge;
 class CScriptArray;
+class SceneRef;
+class MaterialRef;
+class TextureRef;
+class MeshRef;
 
 class ObjectRef : public RefCounted {
 public:
@@ -35,6 +39,12 @@ public:
     CK_CLASSID ClassId() const;
     bool IsDynamic() const;
     CKObject *Object() const;
+    bool SetName(const std::string &name, bool shared = false);
+    bool SetDynamic(bool dynamic = true);
+    bool Show(CK_OBJECT_SHOWOPTION show = CKSHOW);
+    bool IsVisible() const;
+    CKDWORD ObjectFlags() const;
+    bool ModifyObjectFlags(CKDWORD add, CKDWORD remove = 0);
 
     CKContext *Context() const;
     const ScriptBridgeObjectStamp &Stamp() const;
@@ -63,6 +73,8 @@ class SceneObjectRef : public ObjectRef {
 public:
     using ObjectRef::ObjectRef;
     CKSceneObject *SceneObject() const;
+    bool IsInScene(SceneRef *scene) const;
+    bool IsInCurrentScene() const;
 };
 
 class Entity3DRef : public SceneObjectRef {
@@ -94,6 +106,13 @@ public:
     bool RemoveChild(Entity3DRef *child);
     bool IsAncestorOf(Entity3DRef *other) const;
     bool IsDescendantOf(Entity3DRef *other) const;
+    bool SetPickable(bool pick = true);
+    bool IsPickable() const;
+    MeshRef *CurrentMesh() const;
+    bool SetCurrentMesh(MeshRef *mesh, bool addIfNotHere = true);
+    int MeshCount() const;
+    MeshRef *Mesh(int index) const;
+    bool AddMesh(MeshRef *mesh);
 };
 
 class Entity2DRef : public SceneObjectRef {
@@ -108,12 +127,39 @@ public:
     bool SetParent(Entity2DRef *parent = nullptr);
     bool IsAncestorOf(Entity2DRef *other) const;
     bool IsDescendantOf(Entity2DRef *other) const;
+    bool SetPosition(const Vx2DVector &pos,
+                     bool homogeneous = false,
+                     Entity2DRef *reference = nullptr,
+                     bool keepChildren = false);
+    bool SetPosition(float x,
+                     float y,
+                     bool homogeneous = false,
+                     Entity2DRef *reference = nullptr,
+                     bool keepChildren = false);
+    bool GetPosition(Vx2DVector &pos, bool homogeneous = false, Entity2DRef *reference = nullptr) const;
+    bool SetSize(const Vx2DVector &size, bool homogeneous = false, bool keepChildren = false);
+    bool SetSize(float x, float y, bool homogeneous = false, bool keepChildren = false);
+    bool GetSize(Vx2DVector &size, bool homogeneous = false) const;
+    bool SetRect(const VxRect &rect, bool keepChildren = false);
+    bool GetRect(VxRect &rect) const;
+    bool SetSourceRect(const VxRect &rect);
+    bool GetSourceRect(VxRect &rect) const;
+    bool UseSourceRect(bool use = true);
+    bool IsUsingSourceRect() const;
+    bool SetMaterial(MaterialRef *material);
+    MaterialRef *Material() const;
+    bool SetPickable(bool pick = true);
+    bool IsPickable() const;
+    bool SetClipToParent(bool clip = true);
+    bool IsClipToParent() const;
 };
 
 class MaterialRef : public ObjectRef {
 public:
     using ObjectRef::ObjectRef;
     CKMaterial *Material() const;
+    TextureRef *Texture(int slot = 0) const;
+    bool SetTexture(TextureRef *texture, int slot = 0);
 };
 
 class TextureRef : public ObjectRef {

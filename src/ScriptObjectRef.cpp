@@ -9,6 +9,8 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
 
+bool ScriptSceneIsObjectInScene(CKObject *object, CKScene *scene);
+
 namespace {
 
 std::uintptr_t ObjectAddress(CKObject *object) {
@@ -61,6 +63,12 @@ void RegisterObjectRefIdentityMethods(asIScriptEngine *engine,
     r = engine->RegisterObjectMethod(typeName, "CK_CLASSID ClassId() const", asMETHOD(T, ClassId), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(typeName, "bool IsDynamic() const", asMETHOD(T, IsDynamic), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod(typeName, "CKObject@ Object() const", asMETHOD(T, Object), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetName(const string &in name, bool shared = false)", asMETHOD(T, SetName), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool SetDynamic(bool dynamic = true)", asMETHOD(T, SetDynamic), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool Show(CK_OBJECT_SHOWOPTION show = CKSHOW)", asMETHOD(T, Show), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool IsVisible() const", asMETHOD(T, IsVisible), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "CKDWORD ObjectFlags() const", asMETHOD(T, ObjectFlags), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "bool ModifyObjectFlags(CKDWORD add, CKDWORD remove = 0)", asMETHOD(T, ModifyObjectFlags), asCALL_THISCALL); assert(r >= 0);
 }
 
 template <typename T>
@@ -230,6 +238,32 @@ bool ResolveEntity3DReference(const ObjectRef *owner,
     return true;
 }
 
+bool ResolveEntity2DReference(const ObjectRef *owner,
+                              Entity2DRef *reference,
+                              CKContext *expectedContext,
+                              const char *method,
+                              CK2dEntity *&out) {
+    out = nullptr;
+    if (!reference) {
+        return true;
+    }
+    out = reference->Entity2D();
+    if (!out) {
+        if (owner) {
+            owner->SetError(fmt::format("Entity2DRef::{} reference entity is invalid.", method));
+        }
+        return false;
+    }
+    if (expectedContext && out->GetCKContext() != expectedContext) {
+        if (owner) {
+            owner->SetError(fmt::format("Entity2DRef::{} reference belongs to another CKContext.", method));
+        }
+        out = nullptr;
+        return false;
+    }
+    return true;
+}
+
 bool IsAncestor3D(CK3dEntity *ancestor, CK3dEntity *entity) {
     if (!ancestor || !entity || ancestor == entity) {
         return false;
@@ -310,6 +344,58 @@ bool ObjectRef::IsDynamic() const {
 }
 
 CKObject *ObjectRef::Object() const { return Resolve(); }
+
+bool ObjectRef::SetName(const std::string &name, bool shared) {
+    CKObject *object = Resolve();
+    if (!object) {
+        return false;
+    }
+    object->SetName(const_cast<CKSTRING>(name.c_str()), shared);
+    return true;
+}
+
+bool ObjectRef::SetDynamic(bool dynamic) {
+    CKObject *object = Resolve();
+    if (!object) {
+        return false;
+    }
+    CKContext *context = object->GetCKContext();
+    if (!context) {
+        SetError("ObjectRef::SetDynamic requires a CKContext.");
+        return false;
+    }
+    context->ChangeObjectDynamic(object, dynamic);
+    return true;
+}
+
+bool ObjectRef::Show(CK_OBJECT_SHOWOPTION show) {
+    CKObject *object = Resolve();
+    if (!object) {
+        return false;
+    }
+    object->Show(show);
+    return true;
+}
+
+bool ObjectRef::IsVisible() const {
+    CKObject *object = Resolve();
+    return object && object->IsVisible();
+}
+
+CKDWORD ObjectRef::ObjectFlags() const {
+    CKObject *object = Resolve();
+    return object ? object->GetObjectFlags() : 0;
+}
+
+bool ObjectRef::ModifyObjectFlags(CKDWORD add, CKDWORD remove) {
+    CKObject *object = Resolve();
+    if (!object) {
+        return false;
+    }
+    object->ModifyObjectFlags(add, remove);
+    return true;
+}
+
 CKContext *ObjectRef::Context() const { return m_Context; }
 const ScriptBridgeObjectStamp &ObjectRef::Stamp() const { return m_Stamp; }
 
@@ -378,6 +464,37 @@ CKTexture *TextureRef::Texture() const { return CKTexture::Cast(Resolve()); }
 CKMesh *MeshRef::Mesh() const { return CKMesh::Cast(Resolve()); }
 CKScene *SceneRef::Scene() const { return CKScene::Cast(Resolve()); }
 CKLevel *LevelRef::Level() const { return CKLevel::Cast(Resolve()); }
+
+bool SceneObjectRef::IsInScene(SceneRef *scene) const {
+    CKObject *object = Object();
+    CKScene *resolvedScene = scene ? scene->Scene() : nullptr;
+    if (!object) {
+        return false;
+    }
+    if (!resolvedScene) {
+        SetError("SceneObjectRef::IsInScene requires a valid SceneRef.");
+        return false;
+    }
+    if (object->GetCKContext() != resolvedScene->GetCKContext()) {
+        SetError("SceneObjectRef::IsInScene requires scene and object from the same CKContext.");
+        return false;
+    }
+    return ScriptSceneIsObjectInScene(object, resolvedScene);
+}
+
+bool SceneObjectRef::IsInCurrentScene() const {
+    CKObject *object = Object();
+    if (!object) {
+        return false;
+    }
+    CKContext *context = object->GetCKContext();
+    CKScene *scene = context ? context->GetCurrentScene() : nullptr;
+    if (!scene) {
+        SetError("Current scene is not available.");
+        return false;
+    }
+    return ScriptSceneIsObjectInScene(object, scene);
+}
 
 bool Entity3DRef::SetPosition(const VxVector &pos, Entity3DRef *reference, bool keepChildren) {
     CK3dEntity *entity = ResolveEntity3D(this, "SetPosition");
@@ -599,6 +716,78 @@ bool Entity3DRef::IsDescendantOf(Entity3DRef *other) const {
     return IsAncestor3D(otherEntity, entity);
 }
 
+bool Entity3DRef::SetPickable(bool pick) {
+    CK3dEntity *entity = ResolveEntity3D(this, "SetPickable");
+    if (!entity) {
+        return false;
+    }
+    entity->SetPickable(pick);
+    return true;
+}
+
+bool Entity3DRef::IsPickable() const {
+    CK3dEntity *entity = ResolveEntity3D(this, "IsPickable");
+    return entity && entity->IsPickable();
+}
+
+MeshRef *Entity3DRef::CurrentMesh() const {
+    CK3dEntity *entity = ResolveEntity3D(this, "CurrentMesh");
+    if (!entity) {
+        return MakeInvalidTypedRef<MeshRef>(Context(), "Entity3DRef::CurrentMesh requires a valid CK3dEntity.");
+    }
+    return MakeTypedObjectRef<MeshRef>(entity->GetCKContext(), entity->GetCurrentMesh(), "Entity3DRef has no current mesh.");
+}
+
+bool Entity3DRef::SetCurrentMesh(MeshRef *mesh, bool addIfNotHere) {
+    CK3dEntity *entity = ResolveEntity3D(this, "SetCurrentMesh");
+    if (!entity) {
+        return false;
+    }
+    CKMesh *resolvedMesh = mesh ? mesh->Mesh() : nullptr;
+    if (!resolvedMesh) {
+        SetError("Entity3DRef::SetCurrentMesh requires a valid MeshRef.");
+        return false;
+    }
+    if (resolvedMesh->GetCKContext() != entity->GetCKContext()) {
+        SetError("Entity3DRef::SetCurrentMesh mesh belongs to another CKContext.");
+        return false;
+    }
+    return entity->SetCurrentMesh(resolvedMesh, addIfNotHere) != nullptr;
+}
+
+int Entity3DRef::MeshCount() const {
+    CK3dEntity *entity = ResolveEntity3D(this, "MeshCount");
+    return entity ? entity->GetMeshCount() : 0;
+}
+
+MeshRef *Entity3DRef::Mesh(int index) const {
+    CK3dEntity *entity = ResolveEntity3D(this, "Mesh");
+    if (!entity) {
+        return MakeInvalidTypedRef<MeshRef>(Context(), "Entity3DRef::Mesh requires a valid CK3dEntity.");
+    }
+    if (index < 0 || index >= entity->GetMeshCount()) {
+        return MakeInvalidTypedRef<MeshRef>(entity->GetCKContext(), "Entity3DRef mesh index is out of range.");
+    }
+    return MakeTypedObjectRef<MeshRef>(entity->GetCKContext(), entity->GetMesh(index), "Entity3DRef mesh is null.");
+}
+
+bool Entity3DRef::AddMesh(MeshRef *mesh) {
+    CK3dEntity *entity = ResolveEntity3D(this, "AddMesh");
+    if (!entity) {
+        return false;
+    }
+    CKMesh *resolvedMesh = mesh ? mesh->Mesh() : nullptr;
+    if (!resolvedMesh) {
+        SetError("Entity3DRef::AddMesh requires a valid MeshRef.");
+        return false;
+    }
+    if (resolvedMesh->GetCKContext() != entity->GetCKContext()) {
+        SetError("Entity3DRef::AddMesh mesh belongs to another CKContext.");
+        return false;
+    }
+    return entity->AddMesh(resolvedMesh) == CK_OK;
+}
+
 Entity2DRef *Entity2DRef::Parent() const {
     CK2dEntity *entity = ResolveEntity2D(this, "Parent");
     if (!entity) {
@@ -692,6 +881,201 @@ bool Entity2DRef::IsDescendantOf(Entity2DRef *other) const {
         return false;
     }
     return IsAncestor2D(otherEntity, entity);
+}
+
+bool Entity2DRef::SetPosition(const Vx2DVector &pos,
+                              bool homogeneous,
+                              Entity2DRef *reference,
+                              bool keepChildren) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetPosition");
+    if (!entity) {
+        return false;
+    }
+    CK2dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity2DReference(this, reference, entity->GetCKContext(), "SetPosition", referenceEntity)) {
+        return false;
+    }
+    entity->SetPosition(pos, homogeneous, keepChildren, referenceEntity);
+    return true;
+}
+
+bool Entity2DRef::SetPosition(float x,
+                              float y,
+                              bool homogeneous,
+                              Entity2DRef *reference,
+                              bool keepChildren) {
+    return SetPosition(Vx2DVector(x, y), homogeneous, reference, keepChildren);
+}
+
+bool Entity2DRef::GetPosition(Vx2DVector &pos, bool homogeneous, Entity2DRef *reference) const {
+    CK2dEntity *entity = ResolveEntity2D(this, "GetPosition");
+    if (!entity) {
+        return false;
+    }
+    CK2dEntity *referenceEntity = nullptr;
+    if (!ResolveEntity2DReference(this, reference, entity->GetCKContext(), "GetPosition", referenceEntity)) {
+        return false;
+    }
+    return entity->GetPosition(pos, homogeneous, referenceEntity) >= 0;
+}
+
+bool Entity2DRef::SetSize(const Vx2DVector &size, bool homogeneous, bool keepChildren) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetSize");
+    if (!entity) {
+        return false;
+    }
+    entity->SetSize(size, homogeneous, keepChildren);
+    return true;
+}
+
+bool Entity2DRef::SetSize(float x, float y, bool homogeneous, bool keepChildren) {
+    return SetSize(Vx2DVector(x, y), homogeneous, keepChildren);
+}
+
+bool Entity2DRef::GetSize(Vx2DVector &size, bool homogeneous) const {
+    CK2dEntity *entity = ResolveEntity2D(this, "GetSize");
+    return entity && entity->GetSize(size, homogeneous) >= 0;
+}
+
+bool Entity2DRef::SetRect(const VxRect &rect, bool keepChildren) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetRect");
+    if (!entity) {
+        return false;
+    }
+    entity->SetRect(rect, keepChildren);
+    return true;
+}
+
+bool Entity2DRef::GetRect(VxRect &rect) const {
+    CK2dEntity *entity = ResolveEntity2D(this, "GetRect");
+    if (!entity) {
+        return false;
+    }
+    entity->GetRect(rect);
+    return true;
+}
+
+bool Entity2DRef::SetSourceRect(const VxRect &rect) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetSourceRect");
+    if (!entity) {
+        return false;
+    }
+    VxRect copy = rect;
+    entity->SetSourceRect(copy);
+    return true;
+}
+
+bool Entity2DRef::GetSourceRect(VxRect &rect) const {
+    CK2dEntity *entity = ResolveEntity2D(this, "GetSourceRect");
+    if (!entity) {
+        return false;
+    }
+    entity->GetSourceRect(rect);
+    return true;
+}
+
+bool Entity2DRef::UseSourceRect(bool use) {
+    CK2dEntity *entity = ResolveEntity2D(this, "UseSourceRect");
+    if (!entity) {
+        return false;
+    }
+    entity->UseSourceRect(use);
+    return true;
+}
+
+bool Entity2DRef::IsUsingSourceRect() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "IsUsingSourceRect");
+    return entity && entity->IsUsingSourceRect();
+}
+
+bool Entity2DRef::SetMaterial(MaterialRef *material) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetMaterial");
+    if (!entity) {
+        return false;
+    }
+    CKMaterial *resolvedMaterial = material ? material->Material() : nullptr;
+    if (material && !resolvedMaterial) {
+        SetError("Entity2DRef::SetMaterial material is invalid.");
+        return false;
+    }
+    if (resolvedMaterial && resolvedMaterial->GetCKContext() != entity->GetCKContext()) {
+        SetError("Entity2DRef::SetMaterial material belongs to another CKContext.");
+        return false;
+    }
+    entity->SetMaterial(resolvedMaterial);
+    return true;
+}
+
+MaterialRef *Entity2DRef::Material() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "Material");
+    if (!entity) {
+        return MakeInvalidTypedRef<MaterialRef>(Context(), "Entity2DRef::Material requires a valid CK2dEntity.");
+    }
+    return MakeTypedObjectRef<MaterialRef>(entity->GetCKContext(), entity->GetMaterial(), "Entity2DRef has no material.");
+}
+
+bool Entity2DRef::SetPickable(bool pick) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetPickable");
+    if (!entity) {
+        return false;
+    }
+    entity->SetPickable(pick);
+    return true;
+}
+
+bool Entity2DRef::IsPickable() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "IsPickable");
+    return entity && entity->IsPickable();
+}
+
+bool Entity2DRef::SetClipToParent(bool clip) {
+    CK2dEntity *entity = ResolveEntity2D(this, "SetClipToParent");
+    if (!entity) {
+        return false;
+    }
+    entity->SetClipToParent(clip);
+    return true;
+}
+
+bool Entity2DRef::IsClipToParent() const {
+    CK2dEntity *entity = ResolveEntity2D(this, "IsClipToParent");
+    return entity && entity->IsClipToParent();
+}
+
+TextureRef *MaterialRef::Texture(int slot) const {
+    CKMaterial *material = Material();
+    if (!material) {
+        return MakeInvalidTypedRef<TextureRef>(Context(), "MaterialRef::Texture requires a valid CKMaterial.");
+    }
+    if (slot < 0 || slot >= 4) {
+        return MakeInvalidTypedRef<TextureRef>(material->GetCKContext(), "MaterialRef texture slot is out of range.");
+    }
+    return MakeTypedObjectRef<TextureRef>(material->GetCKContext(),
+                                          material->GetTexture(slot),
+                                          "MaterialRef texture slot is empty.");
+}
+
+bool MaterialRef::SetTexture(TextureRef *texture, int slot) {
+    CKMaterial *material = Material();
+    if (!material) {
+        SetError("MaterialRef::SetTexture requires a valid CKMaterial.");
+        return false;
+    }
+    if (slot < 0 || slot >= 4) {
+        SetError("MaterialRef texture slot is out of range.");
+        return false;
+    }
+    CKTexture *resolvedTexture = texture ? texture->Texture() : nullptr;
+    if (texture && !resolvedTexture) {
+        SetError("MaterialRef::SetTexture texture is invalid.");
+        return false;
+    }
+    if (resolvedTexture && resolvedTexture->GetCKContext() != material->GetCKContext()) {
+        SetError("MaterialRef::SetTexture texture belongs to another CKContext.");
+        return false;
+    }
+    material->SetTexture(slot, resolvedTexture);
+    return true;
 }
 
 ObjectRef *MakeScriptObjectRef(CKContext *context,
@@ -796,6 +1180,9 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     RegisterObjectRefAccessor(engine, "SceneRef", "CKScene@ Scene() const", &SceneRef::Scene);
     RegisterObjectRefAccessor(engine, "LevelRef", "CKLevel@ Level() const", &LevelRef::Level);
 
+    r = engine->RegisterObjectMethod("SceneObjectRef", "bool IsInScene(SceneRef@ scene) const", asMETHOD(SceneObjectRef, IsInScene), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("SceneObjectRef", "bool IsInCurrentScene() const", asMETHOD(SceneObjectRef, IsInCurrentScene), asCALL_THISCALL); assert(r >= 0);
+
     r = engine->RegisterObjectMethod("Entity3DRef", "bool SetPosition(const VxVector &in pos, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity3DRef, SetPosition, (const VxVector &, Entity3DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity3DRef", "bool SetPosition(float x, float y, float z, Entity3DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity3DRef, SetPosition, (float, float, float, Entity3DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity3DRef", "bool GetPosition(VxVector &out pos, Entity3DRef@ reference = null) const", asMETHODPR(Entity3DRef, GetPosition, (VxVector &, Entity3DRef *) const, bool), asCALL_THISCALL); assert(r >= 0);
@@ -816,7 +1203,32 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("Entity3DRef", "bool RemoveChild(Entity3DRef@ child)", asMETHOD(Entity3DRef, RemoveChild), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity3DRef", "bool IsAncestorOf(Entity3DRef@ other) const", asMETHOD(Entity3DRef, IsAncestorOf), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity3DRef", "bool IsDescendantOf(Entity3DRef@ other) const", asMETHOD(Entity3DRef, IsDescendantOf), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetPickable(bool pick = true)", asMETHOD(Entity3DRef, SetPickable), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool IsPickable() const", asMETHOD(Entity3DRef, IsPickable), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "MeshRef@ CurrentMesh() const", asMETHOD(Entity3DRef, CurrentMesh), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool SetCurrentMesh(MeshRef@ mesh, bool addIfNotHere = true)", asMETHOD(Entity3DRef, SetCurrentMesh), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "int MeshCount() const", asMETHOD(Entity3DRef, MeshCount), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "MeshRef@ Mesh(int index) const", asMETHOD(Entity3DRef, Mesh), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity3DRef", "bool AddMesh(MeshRef@ mesh)", asMETHOD(Entity3DRef, AddMesh), asCALL_THISCALL); assert(r >= 0);
 
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetPosition(const Vx2DVector &in pos, bool homogeneous = false, Entity2DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity2DRef, SetPosition, (const Vx2DVector &, bool, Entity2DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetPosition(float x, float y, bool homogeneous = false, Entity2DRef@ reference = null, bool keepChildren = false)", asMETHODPR(Entity2DRef, SetPosition, (float, float, bool, Entity2DRef *, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool GetPosition(Vx2DVector &out pos, bool homogeneous = false, Entity2DRef@ reference = null) const", asMETHODPR(Entity2DRef, GetPosition, (Vx2DVector &, bool, Entity2DRef *) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetSize(const Vx2DVector &in size, bool homogeneous = false, bool keepChildren = false)", asMETHODPR(Entity2DRef, SetSize, (const Vx2DVector &, bool, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetSize(float x, float y, bool homogeneous = false, bool keepChildren = false)", asMETHODPR(Entity2DRef, SetSize, (float, float, bool, bool), bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool GetSize(Vx2DVector &out size, bool homogeneous = false) const", asMETHODPR(Entity2DRef, GetSize, (Vx2DVector &, bool) const, bool), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetRect(const VxRect &in rect, bool keepChildren = false)", asMETHOD(Entity2DRef, SetRect), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool GetRect(VxRect &out rect) const", asMETHOD(Entity2DRef, GetRect), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetSourceRect(const VxRect &in rect)", asMETHOD(Entity2DRef, SetSourceRect), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool GetSourceRect(VxRect &out rect) const", asMETHOD(Entity2DRef, GetSourceRect), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool UseSourceRect(bool use = true)", asMETHOD(Entity2DRef, UseSourceRect), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool IsUsingSourceRect() const", asMETHOD(Entity2DRef, IsUsingSourceRect), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetMaterial(MaterialRef@ material)", asMETHOD(Entity2DRef, SetMaterial), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "MaterialRef@ Material() const", asMETHOD(Entity2DRef, Material), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetPickable(bool pick = true)", asMETHOD(Entity2DRef, SetPickable), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool IsPickable() const", asMETHOD(Entity2DRef, IsPickable), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool SetClipToParent(bool clip = true)", asMETHOD(Entity2DRef, SetClipToParent), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("Entity2DRef", "bool IsClipToParent() const", asMETHOD(Entity2DRef, IsClipToParent), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "Entity2DRef@ Parent() const", asMETHOD(Entity2DRef, Parent), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "Entity2DRef@ Child(int index) const", asMETHOD(Entity2DRef, Child), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "array<Entity2DRef@>@ Children() const", asMETHOD(Entity2DRef, Children), asCALL_THISCALL); assert(r >= 0);
@@ -824,6 +1236,9 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("Entity2DRef", "bool SetParent(Entity2DRef@ parent = null)", asMETHOD(Entity2DRef, SetParent), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "bool IsAncestorOf(Entity2DRef@ other) const", asMETHOD(Entity2DRef, IsAncestorOf), asCALL_THISCALL); assert(r >= 0);
     r = engine->RegisterObjectMethod("Entity2DRef", "bool IsDescendantOf(Entity2DRef@ other) const", asMETHOD(Entity2DRef, IsDescendantOf), asCALL_THISCALL); assert(r >= 0);
+
+    r = engine->RegisterObjectMethod("MaterialRef", "TextureRef@ Texture(int slot = 0) const", asMETHOD(MaterialRef, Texture), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod("MaterialRef", "bool SetTexture(TextureRef@ texture, int slot = 0)", asMETHOD(MaterialRef, SetTexture), asCALL_THISCALL); assert(r >= 0);
 }
 
 void RegisterScriptObjectRefBridge(asIScriptEngine *engine) {
