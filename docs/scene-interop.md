@@ -14,7 +14,7 @@ if (ball !is null && ball.valid) {
 }
 ```
 
-All object refs support `IsValid()`, `valid`, `Error()`, `Describe()`, `Id()`, `Name()`, `ClassId()`, `IsDynamic()`, and `Object()`.
+All object refs support `IsValid()`, `valid`, `Error()`, `Describe()`, `Id()`, `Name()`, `ClassId()`, `IsDynamic()`, and `Object()`. They also expose safe common mutators for frequent SDK operations: `SetName`, `SetDynamic`, `Show`, `IsVisible`, `ObjectFlags`, and `ModifyObjectFlags`.
 
 Precise ref types add typed accessors: `SceneObjectRef.SceneObject()`, `Entity3DRef.Entity3D()`, `Entity2DRef.Entity2D()`, `MaterialRef.Material()`, `TextureRef.Texture()`, `MeshRef.Mesh()`, `SceneRef.Scene()`, and `LevelRef.Level()`. Bridge refs such as `BehaviorRef@`, `ParamRef@`, `ParamStructRef@`, `ParamOperationRef@`, and `BehaviorLinkRef@` are also `ObjectRef@`-compatible. Transaction handles, values, builders, tasks, and graph cursors stay outside the ref hierarchy; use their methods to obtain `ObjectRef@`-derived handles when needed.
 
@@ -33,9 +33,11 @@ marker.Translate(VxVector(1.0f, 0.0f, 0.0f));
 array<Entity3DRef@>@ children = parent.Children();
 ```
 
-`Entity3DRef` covers common transform operations: `SetPosition`, `GetPosition`, `Translate`, `SetQuaternion`, `GetQuaternion`, `SetScale`, `GetScale`, and `LookAt`. It also exposes hierarchy helpers: `Parent`, `Child`, `Children`, `ChildCount`, `SetParent`, `AddChild`, `RemoveChild`, `IsAncestorOf`, and `IsDescendantOf`.
+`Entity3DRef` covers common transform operations: `SetPosition`, `GetPosition`, `Translate`, `SetQuaternion`, `GetQuaternion`, `SetScale`, `GetScale`, and `LookAt`. It also exposes hierarchy helpers: `Parent`, `Child`, `Children`, `ChildCount`, `SetParent`, `AddChild`, `RemoveChild`, `IsAncestorOf`, and `IsDescendantOf`, plus `SetPickable`, `IsPickable`, `CurrentMesh`, `SetCurrentMesh`, `MeshCount`, `Mesh`, and `AddMesh`.
 
-`Entity2DRef` currently focuses on hierarchy helpers: `Parent`, `Child`, `Children`, `ChildCount`, `SetParent`, `IsAncestorOf`, and `IsDescendantOf`.
+`Entity2DRef` covers hierarchy helpers plus common 2D layout helpers: `SetPosition`, `GetPosition`, `SetSize`, `GetSize`, `SetRect`, `GetRect`, `SetSourceRect`, `GetSourceRect`, `UseSourceRect`, `IsUsingSourceRect`, `SetMaterial`, `Material`, `SetPickable`, `IsPickable`, `SetClipToParent`, and `IsClipToParent`.
+
+`MaterialRef` provides the minimum safe texture helpers: `Texture(slot)` and `SetTexture(texture, slot)`.
 
 Raw `CK3dEntity@` / `CK2dEntity@` methods remain available through `Entity3D()` and `Entity2D()` for lower-level SDK work. Avoid storing those raw pointers long-term; keep `ObjectRef@`-derived handles as the durable script-side identity.
 
@@ -58,7 +60,7 @@ class Component {
 
 ## Lookup And Creation
 
-`Scene::ById` and `Scene::Ref` create safe refs from existing objects. `Scene::Find` / `FindAll` search by name and class id, with derived-class matching enabled by default. Pass `currentSceneOnly=true` when global duplicate names are possible and the script only wants objects visible to the current scene. Scene objects use explicit scene membership; asset refs such as materials, textures, and meshes are also found when they are used by objects in the scene. The generic helpers return `ObjectRef@` / `array<ObjectRef@>@` and preserve the most specific wrapper internally, so `cast<TRef>(obj)` is checked and returns `null` for the wrong type.
+`Scene::ById` and `Scene::Ref` create safe refs from existing objects. `Scene::Find` / `FindAll` search by name and class id, with derived-class matching enabled by default. Pass `currentSceneOnly=true` when global duplicate names are possible and the script only wants objects visible to the current scene. Scene objects use direct scene membership. Asset refs are resolved with a query-local known dependency index covering sprite, 2D material, 3D mesh/material, and texture paths; this is not a full CK dependency graph traversal. Behavior scoped lookup also considers the owner/root-owner scene object. The generic helpers return `ObjectRef@` / `array<ObjectRef@>@` and preserve the most specific wrapper internally, so `cast<TRef>(obj)` is checked and returns `null` for the wrong type.
 
 Use `Find` with `occurrence` when selecting from a known duplicate set. Use `FindOne` when duplicates are a configuration error: it returns an invalid ref unless exactly one object matches, and `Error()` includes the match count, class id, and lookup scope.
 
@@ -87,7 +89,7 @@ Pass `dynamic=false` only when a persistent object is explicitly required.
 
 ## Scene Membership, Selection, And Destruction
 
-`AddToCurrentScene` and `RemoveFromCurrentScene` accept `ObjectRef@` but require an addable scene object. Use `AddToScene` / `RemoveFromScene` with a `SceneRef@` when working with a scene that is not necessarily current. Asset refs are observed through the scene objects that use them; add or remove the owning entity instead of adding materials, textures, or meshes directly. `IsInCurrentScene` and `IsInScene` expose the same checks used by scoped lookup and can be used with asset refs. `Select` accepts `array<ObjectRef@>@`.
+`AddToCurrentScene` and `RemoveFromCurrentScene` accept `ObjectRef@` but require an addable scene object. Use `AddToScene` / `RemoveFromScene` with a `SceneRef@` when working with a scene that is not necessarily current. Asset refs are observed through the scene objects that use them; add or remove the owning entity instead of adding materials, textures, or meshes directly. `IsInCurrentScene` and `IsInScene` expose the same checks used by scoped lookup and can be used with asset refs. `SceneObjectRef` also has `IsInCurrentScene()` and `IsInScene(scene)` convenience methods. `Select` accepts `array<ObjectRef@>@`.
 
 ```angelscript
 SceneRef@ scene = Scene::CurrentScene(ctx);
