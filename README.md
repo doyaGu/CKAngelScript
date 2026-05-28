@@ -1,305 +1,124 @@
 # CKAngelScript
 
-CKAngelScript integrates the AngelScript scripting language into Virtools, providing developers with a flexible and powerful scripting environment for creating advanced and interactive 3D applications.
+CKAngelScript integrates AngelScript into the Virtools/CK2 runtime. It builds as `AngelScript.dll`, installs into `BuildingBlocks`, and provides:
 
----
+- Full low-level CK/Vx SDK bindings for scripts that need direct engine access.
+- `AngelScript Component`, a Building Block that attaches a script class to a behavior instance.
+- Runtime Script Manager v2 for long-lived scripts discovered from data/script roots.
+- High-level `Scene`, `Behavior`/`BB`, `Param`, `Message`, and `Async` APIs.
+- DynCall-backed native FFI helpers for advanced integrations.
 
-## Features
+## Documentation Map
 
-- **Full Bindings of the Virtools SDK**: Access and utilize the entire Virtools SDK through AngelScript for seamless integration of custom scripting with Virtools' extensive API.
-- **AngelScript Integration**: Leverage the AngelScript scripting language to achieve greater flexibility and control in your 3D projects.
-- **Foreign Function Interface (FFI)**: Call native C functions directly from AngelScript using FFI, powered by DynCall, enabling seamless interaction with external libraries and APIs.
-- **Building Blocks**:
-  - **AngelScript Component**: Attach AngelScript classes to Virtools behaviors with lifecycle callbacks, parameter injection, and generic script messaging.
-- **Runtime Script Manager**: Discover long-lived scripts from script roots, validate manifests, run lifecycle phases, and expose structured runtime state.
-- **Scene Interop API**: Use safe `ObjectRef@` handles and typed refs through `Scene::*` helpers for object lookup, creation, scene membership, selection, and guarded destruction.
-- **Extensibility**: Expand Virtools' capabilities by integrating custom AngelScript modules.
-- **Compatibility**: Supports Virtools 2.1 and higher.
+| Topic | Start here |
+| --- | --- |
+| First setup and validation | [docs/getting-started.md](docs/getting-started.md) |
+| Choose the right guide | [docs/index.md](docs/index.md) |
+| Runtime scripts | [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) |
+| AngelScript Component metadata | [docs/component-metadata-manifest.md](docs/component-metadata-manifest.md) |
+| Scene lookup and safe object refs | [docs/scene-interop.md](docs/scene-interop.md) |
+| Behavior Bridge and runtime BBs | [docs/behavior-bridge-design.md](docs/behavior-bridge-design.md) |
+| Script messaging | [docs/messaging.md](docs/messaging.md) |
+| Async tasks | [docs/async.md](docs/async.md) |
+| Native buffers and DynCall | [docs/native-ffi.md](docs/native-ffi.md) |
+| C++ manager API | [docs/public-manager-api.md](docs/public-manager-api.md) |
+| Raw SDK bindings | [docs/sdk-bindings.md](docs/sdk-bindings.md) |
+| Ballance catalog snapshot | [docs/catalog-ballance.md](docs/catalog-ballance.md) |
+| Examples | [docs/examples.md](docs/examples.md) |
+| Troubleshooting | [docs/validation-and-troubleshooting.md](docs/validation-and-troubleshooting.md) |
 
----
+## Quick Build
 
-## Building Blocks
+Prerequisites:
 
-### AngelScript Component
+- Windows with Visual Studio 2022.
+- Virtools SDK 2.1 or newer.
+- DynCall libraries.
+- AngelScript source placed under `deps/angelscript`.
 
-The **AngelScript Component** attaches an AngelScript class instance to a Virtools behavior. It supports lifecycle callbacks such as `OnLoad`, `Awake`, `OnEnable`, `Start`, `Update`, `OnDisable`, `OnDestroy`, and `OnReset`, plus `OnMessage` for the generic script message bus.
+```powershell
+git submodule update --init --recursive
 
-Component scripts can be loaded from a shared module, inline source, a file, or a component manifest. Component metadata can declare injected inputs, defaults, BB bridge bindings, and static message subscriptions.
+cmake -B build -G "Visual Studio 17 2022" -A Win32 `
+  -DVIRTOOLS_SDK_PATH=C:\Path\To\VirtoolsSDK `
+  -DDYNCALL_ROOT=C:\Path\To\dyncall `
+  -DDYNCALLBACK_ROOT=C:\Path\To\dyncall `
+  -DDYNLOAD_ROOT=C:\Path\To\dyncall `
+  -DCKAS_BUILD_SELF_TESTS=ON
 
-See [docs/component-metadata-manifest.md](docs/component-metadata-manifest.md) for component manifests and metadata.
+cmake --build build --config Release
+Copy-Item build\src\Release\AngelScript.dll C:\Path\To\Virtools\BuildingBlocks\
+```
 
-### Runtime Scripts
+For the repeatable local path:
 
-Runtime scripts are managed by the `ScriptManager` directly rather than by legacy script execution building blocks. They are discovered from `DATA_PATH/Scripts` and `CKAS_SCRIPT_ROOTS`, use `script.as` metadata manifests, and run through the runtime lifecycle.
+```powershell
+tools\Validate-Local.ps1 -BuildDir build -Configuration Release
+```
 
-See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for runtime script metadata, lifecycle, dependencies, validation, templates, and messaging.
-
-### Scene Interop
-
-Runtime scripts and AngelScript Components can use the `Scene` namespace as the preferred high-level Virtools interop layer. It wraps `CKObject` ids in revalidating `ObjectRef@` handles, returns precise typed refs such as `Entity3DRef@` and `BehaviorRef@`, creates dynamic scene objects by default, and guards persistent-object destruction.
-
-See [docs/scene-interop.md](docs/scene-interop.md) for the API surface and examples.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-Before you begin, ensure the following:
-
-1. **Virtools SDK (2.1 or higher)**: Required to access the APIs and resources for building this project.
-2. **DynCall Library**: Required to enable Foreign Function Interface (FFI).
-3. **AngelScript SDK**: Required to compile the AngelScript integration.
-4. **Microsoft Visual Studio**: This project can only be compiled using Visual Studio.
-
----
-
-### Preparing the Dependencies
-
-#### 1. Preparing Virtools SDK
-
-- Ensure the Virtools SDK is installed and accessible.
-- Use the appropriate path when configuring CMake (see below).
-
-#### 2. Preparing DynCall
-
-- Download the DynCall suite from its [official website](http://www.dyncall.org/).
-- Extract and install the library.
-
-#### 3. Preparing AngelScript SDK
-
-1. Download the AngelScript SDK from its [official website](http://www.angelcode.com/angelscript/).
-2. Extract the downloaded SDK package.
-3. Place the extracted contents into the `deps` directory under a folder named `angelscript`. Your directory structure should look like this:
-
----
-
-### Building with CMake
-
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/doyaGu/CKAngelScript.git
-   ```
-
-2. **Initialize Submodules**:
-   ```bash
-   git submodule update --init --recursive
-   ```
-
-3. **Prepare the Dependencies**:
-   Complete the preparation steps outlined in the "Preparing the Dependencies" section.
-
-4. **Configure with CMake**:
-   Provide paths to your Virtools SDK, DynCall, and AngelScript SDK, and then run the following command.
-
-   ```powershell
-   cmake -B build -G "Visual Studio 17 2022" -A Win32 `
-            -DVIRTOOLS_SDK_PATH=C:\Path\To\VirtoolsSDK `
-            -DDYNCALL_ROOT=C:\Path\To\dyncall `
-            -DDYNCALLBACK_ROOT=C:\Path\To\dyncall `
-            -DDYNLOAD_ROOT=C:\Path\To\dyncall
-   ```
-
-5. **Build the Project**:
-   ```powershell
-   cmake --build build --config Release
-   ```
-
-6. **Integrate with Virtools**:
-   After the build completes, copy the generated `AngelScript.dll` to the `BuildingBlocks` directory of your Virtools installation:
-   ```powershell
-   Copy-Item build\src\Release\AngelScript.dll C:\Path\To\Virtools\BuildingBlocks\
-   ```
-
-### Local Validation
-
-Use `tools\Validate-Local.ps1` for the repeatable local path. It configures the project, builds it, and optionally runs runtime script and Ballance/Player checks:
+With a Ballance install:
 
 ```powershell
 tools\Validate-Local.ps1 `
-  -VirtoolsSdkPath C:\Path\To\VirtoolsSDK `
-  -DynCallRoot C:\Path\To\dyncall `
-  -ScriptRoot C:\Game\Data
+  -BuildDir build `
+  -Configuration Release `
+  -RunBallance `
+  -BallanceRoot C:\Users\kakut\Games\Ballance
 ```
 
-Without a Virtools/Ballance runtime this only proves CMake, compilation, and static runtime script validation. When a full host is available, add `-RunBallance -BallanceRoot C:\Path\To\Ballance`; this delegates to `tools\Validate-Ballance.ps1`, runs the data exporter, starts Player with `CKAS_SELFTEST_MARKER`, and verifies the startup self-test marker reaches `status=ok`.
+## First Runtime Script
 
----
+Create `Data\Scripts\hello.runtime\script.as`:
 
-## Usage
-
-### Runtime Script Example
-
-Create a runtime script directory under one of the configured script roots and add a `script.as` manifest:
-
-```cpp
-[script id="example.runtime" name="Example Runtime" version="1.0.0" entry="main.as" enabled=true]
-[script.meta category="Example" author="CKAngelScript"]
+```angelscript
+[script id="hello.runtime" name="Hello Runtime" version="1.0.0" entry="runtime.as"]
 ```
 
-Then implement the entry file:
+Create `Data\Scripts\hello.runtime\runtime.as`:
 
-```cpp
+```angelscript
 void OnLoad(const ScriptContext &in ctx) {
     print("Loaded " + ctx.Id());
 }
 
 void Update(const ScriptContext &in ctx) {
     if (ctx.FrameIndex() == 1) {
-        SceneRef@ scene = Scene::CurrentScene(ctx);
         dictionary payload;
         payload["source"] = ctx.Id();
-        payload["scene"] = scene !is null && scene.valid ? scene.Name() : "";
-        Message::Publish(ctx, "example.ready", payload);
+        Message::Publish(ctx, "hello.ready", payload);
     }
 }
 ```
 
-For a complete starter, use `tools/templates/runtime-script-v2`.
+Validate the root before launching the host:
 
-### Component Example
-
-Use the **AngelScript Component** building block when a script should live on a behavior instance. The component script declares a class and lifecycle methods that receive `CKBehaviorContext`.
-
-```cpp
-class Spinner {
-    void Update(const CKBehaviorContext &in ctx) {
-        // Component update logic.
-    }
-}
+```powershell
+tools\Validate-RuntimeScripts.ps1 -ScriptRoot C:\Path\To\Game\Data
 ```
 
-Use the Component `Output Error Message` setting to expose script errors and stack traces through output parameters.
+## First Component
 
-### Debugging and Testing
-
-- **Console Output**: Use `print` statements in AngelScript code for logging and debugging.
-- **Runtime Validation**: Run `tools\Validate-RuntimeScripts.ps1` against a script root to catch manifest, dependency, lifecycle, and compile errors before launching Virtools.
-- **Ballance FPS sample**: After `tools\Validate-Ballance.ps1` has exported BB metadata, `tools\Run-BallanceFpsSample.ps1` can generate a temporary `base.cmo` with an injected AngelScript Component FPS overlay. Use `-StressComponents <n>` to mount multiple components for a heavier smoke run, and `-Restore` with the reported backup directory if a run is interrupted.
-
----
-
-## Public Manager API
-
-External Virtools plugins can retrieve the public manager with `AngelScriptManager::GetManager(context)`. The public API focuses on module loading, function lookup, task-style execution, and result diagnostics.
-
-`LoadModule` accepts one script source per call: `Code`, `Filename`, or `Filenames` with `FileCount`. Passing more than one source returns `ANGELSCRIPT_STATUS_INVALID_ARGUMENT`. If no source is provided, the manager loads the default `<ModuleName>.as` file through the configured Virtools script path.
-
-```cpp
-#include "AngelScriptManager.h"
-
-struct AddData {
-    int Input = 0;
-    int Output = 0;
-};
-
-void ConfigureAdd(asIScriptContext *ctx, void *userData) {
-    AddData *data = static_cast<AddData *>(userData);
-    ctx->SetArgDWord(0, static_cast<asDWORD>(data->Input));
-}
-
-void ReadAddResult(asIScriptContext *ctx, void *userData) {
-    AddData *data = static_cast<AddData *>(userData);
-    data->Output = static_cast<int>(ctx->GetReturnDWord());
-}
-
-void RunPublicApiExample(CKContext *context) {
-    AngelScriptManager *manager = AngelScriptManager::GetManager(context);
-    if (!manager) {
-        return;
-    }
-
-    AngelScriptResult result = {};
-    manager->CompileModule("example_api",
-                           "int add_five(int value) { return value + 5; }",
-                           true,
-                           &result);
-    if (result.Status != ANGELSCRIPT_STATUS_OK) {
-        context->OutputToConsoleEx("Compile failed: %s", result.ErrorMessage ? result.ErrorMessage : "");
-        return;
-    }
-
-    AddData data;
-    data.Input = 37;
-
-    AngelScriptExecuteOptions options = {};
-    options.ModuleName = "example_api";
-    options.FunctionDecl = "int add_five(int)";
-    options.ConfigureContext = ConfigureAdd;
-    options.ReadResult = ReadAddResult;
-    options.UserData = &data;
-
-    AngelScriptExecution *execution = manager->CreateExecution(options, &result);
-    if (!execution) {
-        context->OutputToConsoleEx("CreateExecution failed: %s", result.ErrorMessage ? result.ErrorMessage : "");
-        return;
-    }
-
-    AngelScriptStatus status = manager->StartExecution(execution);
-    if (status == ANGELSCRIPT_STATUS_SUSPENDED) {
-        // ResumeExecution should be called on a later tick after async work advances.
-    } else if (status != ANGELSCRIPT_STATUS_OK) {
-        const AngelScriptResult *execResult = manager->GetExecutionResult(execution);
-        context->OutputToConsoleEx("Execution failed: %s",
-                                   execResult && execResult->ErrorMessage ? execResult->ErrorMessage : "");
-    }
-
-    manager->ReleaseExecution(execution);
-    manager->UnloadModule("example_api");
-}
-```
-
-`AngelScriptResult::ErrorMessage` and `StackTrace` are borrowed strings. Results returned through API output parameters and `GetLastResult()` remain valid until the next manager API call that updates the last result. `GetExecutionResult()` strings remain valid until the execution handle is released or started, resumed, or cancelled again.
-
-Execution handles keep their module alive from the public API perspective. `UnloadModule` and replacing an existing module fail with `ANGELSCRIPT_STATUS_EXECUTION_FAILED` while any `AngelScriptExecution` for that module is still unreleased. Call `CancelExecution` if needed, then `ReleaseExecution`, before unloading or replacing the module.
-
-Typed async aggregate results should use the out-parameter overloads:
+Use the `AngelScript Component` Building Block when a script should live on a behavior instance:
 
 ```angelscript
-array<AsyncTask<int>@> tasks;
-AsyncTask<array<int>@>@ allInts;
-Async::All(tasks, @allInts);
+class Spinner {
+    [param type="float" default="1.0"]
+    float Speed;
 
-AsyncTask<int>@ firstInt;
-Async::Race(tasks, @firstInt);
-Async::Any(tasks, @firstInt);
+    void Update(const CKBehaviorContext &in ctx) {
+        Entity3DRef@ target = Scene::FindEntity3D(ctx, "Ball", 0, true);
+        if (target !is null && target.valid) {
+            CK3dEntity@ entity = target.Entity3D();
+            if (entity !is null) {
+                entity.Rotate(0.0f, 1.0f, 0.0f, Speed);
+            }
+        }
+    }
+}
 ```
 
-The direct typed-return aggregate overloads are intentionally not exposed because they can make AngelScript module compilation hang inside the Virtools Player host.
-
----
-
-## Runtime Script Manager
-
-Runtime scripts are long-lived modules discovered from `DATA_PATH/Scripts` and `CKAS_SCRIPT_ROOTS`. Directory modules use `script.as` metadata with an optional `entry` file; single-file `.as` modules remain supported.
-
-Runtime lifecycle callbacks keep the existing naming style but must use the explicit context signature, for example `void OnLoad(const ScriptContext &in ctx)` and `void Update(const ScriptContext &in ctx)`. v2 also adds `OnPostLoad(ctx)` and `OnPostProcess(ctx)`.
-
-See [docs/runtime-script-manager-v2.md](docs/runtime-script-manager-v2.md) for metadata, lifecycle, concise `ScriptContext` accessors, structured `RuntimeScriptInfo` / `RuntimeDependencyInfo` APIs, validation, and templates. See [docs/scene-interop.md](docs/scene-interop.md) for the high-level scene/object helper API.
-
-Generic script messaging is exposed through the `Message` namespace for runtime scripts and AngelScript Components. Runtime targets use `runtime:<script-id>` and component targets use `component:<CK_ID>`.
-
----
-
-## Contributing
-
-Contributions to CKAngelScript are welcome. To contribute:
-
-1. Fork this repository on GitHub.
-2. Make your changes.
-3. Submit a pull request with a detailed explanation of your modifications.
-
----
+Set the component `Class` parameter to `Spinner`, then provide either inline source, a script file, or a shared module. Component metadata can create editor inputs and inject them into script fields.
 
 ## License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-
-- **[AngelScript](http://www.angelcode.com/angelscript/)**: The scripting language integrated into this project.
-- **[DynCall](http://www.dyncall.org/)**: The dynamic call library powering FFI.
-- **[Virtools](https://en.wikipedia.org/wiki/Virtools/)**: The 3D engine platform extended by CKAngelScript.
+CKAngelScript is licensed under the MIT License. See [LICENSE](LICENSE).
