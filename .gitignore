@@ -19,5 +19,7 @@ deps/angelscript
 deps/DynCall/
 deps/_build/
 deps/_downloads/
+AngelScript.log
+src/Version.h
 __pycache__/
 *.py[cod]
