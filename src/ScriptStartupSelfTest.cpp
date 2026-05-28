@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 
+#include "Logger.h"
 #include "ScriptManager.h"
 
 namespace ScriptStartupSelfTestInternal {
@@ -46,6 +47,7 @@ bool ReportSelfTestFailure(ScriptManager *manager,
                                                    label,
                                                    error.c_str());
     }
+    LOG_ERROR("%s self-test failed: %s", label, error.c_str());
     WriteStartupSelfTestMarker("failed", stage, error);
     return false;
 }
@@ -100,6 +102,24 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
         return CKERR_INVALIDOPERATION;
     }
 
+    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "runtime-metadata", std::string());
+    if (!ScriptRuntimeMetadata::RunScriptRuntimeMetadataSelfTest(error)) {
+        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+                                                             "runtime-metadata",
+                                                             "Runtime metadata",
+                                                             error);
+        return CKERR_INVALIDOPERATION;
+    }
+
+    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "runtime-dependency", std::string());
+    if (!ScriptRuntimeDependencyResolver::RunScriptRuntimeDependencySelfTest(error)) {
+        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+                                                             "runtime-dependency",
+                                                             "Runtime dependency",
+                                                             error);
+        return CKERR_INVALIDOPERATION;
+    }
+
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "behavior-bridge", std::string());
     if (!RunScriptBehaviorBridgeSelfTest(manager ? manager->GetCKContext() : nullptr,
                                          manager ? manager->GetScriptEngine() : nullptr,
@@ -116,6 +136,14 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
                                 manager ? manager->GetScriptEngine() : nullptr,
                                 error)) {
         ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager, "scene", "Scene API", error);
+        return CKERR_INVALIDOPERATION;
+    }
+
+    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "message", std::string());
+    if (!ScriptMessageSelfTest::RunScriptMessageSelfTest(manager ? manager->GetCKContext() : nullptr,
+                                                         manager ? manager->GetScriptEngine() : nullptr,
+                                                         error)) {
+        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager, "message", "Message", error);
         return CKERR_INVALIDOPERATION;
     }
 

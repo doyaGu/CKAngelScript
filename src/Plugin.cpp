@@ -1,13 +1,30 @@
 ﻿#include "CKAll.h"
 
+#include "Logger.h"
 #include "ScriptManager.h"
-// #include "Logger.h"
+#include "Version.h"
 
 #define ANGELSCRIPT_BEHAVIOR CKGUID(0x2d9c2922,0x29a5c30)
+#define CKAS_PLUGIN_VERSION ((CKDWORD) ((CKAS_VERSION_MAJOR << 24) | (CKAS_VERSION_MINOR << 16) | (CKAS_VERSION_PATCH << 8) | CKAS_VERSION_TWEAK))
+
+static bool InitAngelScriptLogger() {
+    static bool initialized = false;
+    if (initialized) {
+        return true;
+    }
+
+#ifndef NDEBUG
+    initialized = Logger::Get().Init("AngelScript.log", LOG_LEVEL_DEBUG);
+#else
+    initialized = Logger::Get().Init("AngelScript.log", LOG_LEVEL_INFO);
+#endif
+    return initialized;
+}
 
 CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl();
 
 CKERROR InitInstance(CKContext *context) {
+    InitAngelScriptLogger();
     new ScriptManager(context);
 
     return CK_OK;
@@ -29,7 +46,8 @@ PLUGIN_EXPORT CKPluginInfo *CKGetPluginInfo(int Index) {
     g_PluginInfo[0].m_Description = "AngelScript Building Blocks";
     g_PluginInfo[0].m_Extension = "";
     g_PluginInfo[0].m_Type = CKPLUGIN_BEHAVIOR_DLL;
-    g_PluginInfo[0].m_Version = 0x000001;
+    // Packed as major.minor.patch.tweak across four bytes, sourced from CMake project(VERSION).
+    g_PluginInfo[0].m_Version = CKAS_PLUGIN_VERSION;
     g_PluginInfo[0].m_InitInstanceFct = NULL;
     g_PluginInfo[0].m_ExitInstanceFct = NULL;
     g_PluginInfo[0].m_GUID = ANGELSCRIPT_BEHAVIOR;
@@ -39,7 +57,7 @@ PLUGIN_EXPORT CKPluginInfo *CKGetPluginInfo(int Index) {
     g_PluginInfo[1].m_Description = "AngelScript Manager";
     g_PluginInfo[1].m_Extension = "";
     g_PluginInfo[1].m_Type = CKPLUGIN_MANAGER_DLL;
-    g_PluginInfo[1].m_Version = 0x000001;
+    g_PluginInfo[1].m_Version = CKAS_PLUGIN_VERSION;
     g_PluginInfo[1].m_InitInstanceFct = InitInstance;
     g_PluginInfo[1].m_ExitInstanceFct = ExitInstance;
     g_PluginInfo[1].m_GUID = SCRIPT_MANAGER_GUID;
@@ -53,11 +71,6 @@ PLUGIN_EXPORT CKPluginInfo *CKGetPluginInfo(int Index) {
 PLUGIN_EXPORT void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg);
 
 void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg) {
-// #ifndef NDEBUG
-//     Logger::Get().Init("AngelScript.log", LOG_LEVEL_DEBUG);
-// #else
-//     Logger::Get().Init("Script.log");
-// #endif
-
+    InitAngelScriptLogger();
     RegisterBehavior(reg, FillBehaviorAngelScriptComponentDecl);
 }

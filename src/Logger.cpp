@@ -36,6 +36,11 @@ bool Logger::Init(const char *filename, LogLevel level) {
     if (!filename || filename[0] == '\0')
         return false;
 
+    if (m_File) {
+        fclose(m_File);
+        m_File = nullptr;
+    }
+
     FILE *fp = fopen(filename, "a");
     if (!fp)
         return false;
@@ -51,11 +56,14 @@ Logger &Logger::Get() {
 }
 
 Logger::~Logger() {
-    fclose(m_File);
+    if (m_File) {
+        fclose(m_File);
+        m_File = nullptr;
+    }
 }
 
 void Logger::Log(LogLevel level, const char *format, va_list args) {
-    if (level >= m_Level && level < LOG_LEVEL_OFF) {
+    if (m_File && level >= m_Level && level < LOG_LEVEL_OFF) {
         LogInfo info = {args, format, nullptr, nullptr, level};
         LogInfo::Init(info, m_File);
         FileCallback(info);
