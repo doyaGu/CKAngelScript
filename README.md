@@ -90,33 +90,40 @@ Before you begin, ensure the following:
 3. **Prepare the Dependencies**:
    Complete the preparation steps outlined in the "Preparing the Dependencies" section.
 
-4. **Run CMake**:
+4. **Configure with CMake**:
    Provide paths to your Virtools SDK, DynCall, and AngelScript SDK, and then run the following command.
 
-   ```bash
-   cmake -B build -G "Visual Studio 16 2022" -A Win32 \
-            -DVIRTOOLS_SDK_PATH=/path/to/virtools/sdk \
-            -DDYNCALL_ROOT=/path/to/dyncall \
-            -DDYNCALLBACK_ROOT=/path/to/dyncall \
-            -DDYNLOAD_ROOT=/path/to/dyncall
-   ```
-
-4. **Build the Project**:
-   Open the project in **Microsoft Visual Studio**, configure the build settings to match your Virtools SDK installation, and build the project. The process will generate the following file:
-   ```
-   AngelScript.dll
+   ```powershell
+   cmake -B build -G "Visual Studio 17 2022" -A Win32 `
+            -DVIRTOOLS_SDK_PATH=C:\Path\To\VirtoolsSDK `
+            -DDYNCALL_ROOT=C:\Path\To\dyncall `
+            -DDYNCALLBACK_ROOT=C:\Path\To\dyncall `
+            -DDYNLOAD_ROOT=C:\Path\To\dyncall
    ```
 
 5. **Build the Project**:
-   ```bash
-   cmake --build .
+   ```powershell
+   cmake --build build --config Release
    ```
 
 6. **Integrate with Virtools**:
    After the build completes, copy the generated `AngelScript.dll` to the `BuildingBlocks` directory of your Virtools installation:
-   ```bash
-   cp AngelScript.dll /path/to/virtools/BuildingBlocks/
+   ```powershell
+   Copy-Item build\src\Release\AngelScript.dll C:\Path\To\Virtools\BuildingBlocks\
    ```
+
+### Local Validation
+
+Use `tools\Validate-Local.ps1` for the repeatable local path. It configures the project, builds it, and optionally runs runtime script and Ballance/Player checks:
+
+```powershell
+tools\Validate-Local.ps1 `
+  -VirtoolsSdkPath C:\Path\To\VirtoolsSDK `
+  -DynCallRoot C:\Path\To\dyncall `
+  -ScriptRoot C:\Game\Data
+```
+
+Without a Virtools/Ballance runtime this only proves CMake, compilation, and static runtime script validation. When a full host is available, add `-RunBallance -BallanceRoot C:\Path\To\Ballance`; this delegates to `tools\Validate-Ballance.ps1`, runs the data exporter, starts Player with `CKAS_SELFTEST_MARKER`, and verifies the startup self-test marker reaches `status=ok`.
 
 ---
 
