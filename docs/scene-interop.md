@@ -18,6 +18,21 @@ All object refs support `IsValid()`, `valid`, `Error()`, `Describe()`, `Id()`, `
 
 Precise ref types add typed accessors: `SceneObjectRef.SceneObject()`, `Entity3DRef.Entity3D()`, `Entity2DRef.Entity2D()`, `MaterialRef.Material()`, `TextureRef.Texture()`, `MeshRef.Mesh()`, `SceneRef.Scene()`, and `LevelRef.Level()`. Bridge refs such as `BehaviorRef@`, `ParamRef@`, `ParamStructRef@`, `ParamOperationRef@`, and `BehaviorLinkRef@` are also `ObjectRef@`-compatible. Transaction handles, values, builders, tasks, and graph cursors stay outside the ref hierarchy; use their methods to obtain `ObjectRef@`-derived handles when needed.
 
+## Typed Ref Matrix
+
+| Ref type | Raw accessor | Typical source |
+| --- | --- | --- |
+| `ObjectRef@` | `Object()` | `Scene::Find`, `Scene::ById`, `Scene::Ref` |
+| `SceneObjectRef@` | `SceneObject()` | Scene-membership helpers |
+| `Entity3DRef@` | `Entity3D()` | `FindEntity3D`, `CreateEntity3D` |
+| `Entity2DRef@` | `Entity2D()` | `FindEntity2D`, `CreateEntity2D` |
+| `MaterialRef@` | `Material()` | `FindMaterial`, `CreateMaterial` |
+| `TextureRef@` | `Texture()` | `FindTexture`, `CreateTexture` |
+| `MeshRef@` | `Mesh()` | `FindMesh`, `CreateMesh` |
+| `BehaviorRef@` | bridge behavior accessors | `Scene::FindBehavior`, `Behavior::Find` |
+| `SceneRef@` | `Scene()` | `CurrentScene`, `AddToScene` |
+| `LevelRef@` | `Level()` | `CurrentLevel` |
+
 ## Editing With Raw SDK Accessors
 
 Prefer `ObjectRef@`-derived handles for lookup, identity, stale-id protection, and typed narrowing. For actual scene editing, resolve a short-lived raw SDK pointer from the typed accessor and call the registered SDK API directly.
@@ -58,6 +73,16 @@ class Component {
 
 `Scene::ById` and `Scene::Ref` create safe refs from existing objects. `Scene::Find` / `FindAll` search by name and class id, with derived-class matching enabled by default. Pass `currentSceneOnly=true` when global duplicate names are possible and the script only wants objects visible to the current scene. Scene objects use direct scene membership. Asset refs are resolved with a query-local known dependency index covering sprite, 2D material, 3D mesh/material, and texture paths; this is not a full CK dependency graph traversal. Behavior scoped lookup also considers the owner/root-owner scene object. The generic helpers return `ObjectRef@` / `array<ObjectRef@>@` and preserve the most specific wrapper internally, so `cast<TRef>(obj)` is checked and returns `null` for the wrong type.
 
+Lookup behavior:
+
+| Helper | Missing result | Duplicate result |
+| --- | --- | --- |
+| `Find*` | Invalid/null ref depending on helper | Uses `occurrence`. |
+| `FindOne*` | Invalid ref with diagnostics | Invalid ref with match-count diagnostics. |
+| `FindAll*` | Empty array | All matching refs. |
+| `ById` | Invalid ref | Not applicable. |
+| `Ref` | Invalid ref when object/context is missing | Not applicable. |
+
 Lookup failures do not throw. Single-result helpers return an invalid ref when the target is missing or ambiguous; batch helpers return an empty array when no matches exist. Prefer `FindOne*` for configuration objects where duplicates indicate bad scene data, and prefer `FindAll*` for repeated gameplay objects.
 
 Use `Find` with `occurrence` when selecting from a known duplicate set. Use `FindOne` when duplicates are a configuration error: it returns an invalid ref unless exactly one object matches, and `Error()` includes the match count, class id, and lookup scope.
@@ -85,6 +110,10 @@ Scene::AddToCurrentScene(ctx, marker);
 
 Pass `dynamic=false` only when a persistent object is explicitly required. Creation helpers return invalid refs when the CK context cannot create the requested class; check `valid` before mutating or adding the object to a scene.
 
+## Assets vs Scene Objects
+
+Scene objects have direct membership in scenes. Assets such as textures, materials, and meshes are usually observed through the entities that reference them. Add or remove the owning scene object when you want visibility changes; do not expect adding a material or texture ref to a scene to make it visible by itself.
+
 ## Scene Membership, Selection, And Destruction
 
 `AddToCurrentScene` and `RemoveFromCurrentScene` accept `ObjectRef@` but require an addable scene object. Use `AddToScene` / `RemoveFromScene` with a `SceneRef@` when working with a scene that is not necessarily current. Asset refs are observed through the scene objects that use them; add or remove the owning entity instead of adding materials, textures, or meshes directly. `IsInCurrentScene` and `IsInScene` expose the same checks used by scoped lookup and can be used with asset refs. `Select` accepts `array<ObjectRef@>@`.
@@ -109,3 +138,15 @@ if (!Scene::Destroy(ctx, marker)) {
 Use `allowPersistent=true` only for deliberate cleanup of non-dynamic objects. Stale refs remain usable as diagnostics: after a successful destruction, `ref.valid` becomes `false` and typed accessors return `null`.
 
 Destruction does not make previously copied raw CK pointers safe. If a script needs to perform several operations, keep the durable `ObjectRef@`, reacquire the raw pointer immediately before each SDK call, and stop using any raw pointer after `Destroy`, scene reset, or level clear.
+
+## Runtime vs Component Contexts
+
+Use the overload matching your script:
+
+```angelscript
+Scene::FindEntity3D(const ScriptContext &in ctx, const string &in name = "", int occurrence = 0, bool currentSceneOnly = false)
+Scene::FindEntity3D(const CKBehaviorContext &in ctx, const string &in name = "", int occurrence = 0, bool currentSceneOnly = false)
+Scene::FindEntity3D(CKContext@ ctx, const string &in name = "", int occurrence = 0, bool currentSceneOnly = false)
+```
+
+Runtime scripts should pass `ScriptContext`; components should pass `CKBehaviorContext`; shared utility code can pass `CKContext@` only when it is deliberately detached from runtime/component ownership.

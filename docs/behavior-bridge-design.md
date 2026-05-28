@@ -1,5 +1,46 @@
 # AngelScript Behavior Bridge v3
 
+## Practical Guide
+
+Most scripts use the bridge in one of four ways:
+
+| Goal | Preferred API |
+| --- | --- |
+| Find an existing behavior in the current graph | `Behavior::Graph(ctx)`, `BehaviorQuery`, `BehaviorNode` |
+| Read or write CK parameters | `ParamRef@`, `ParamValue@`, `Param::*` |
+| Spawn and step a runtime Building Block | `BB::Require`, `BBDecl@`, `BBConfig@`, `BBInstance@` |
+| Configure a BB from component metadata | `[bbconfig]`, `[bbslot]`, `lifetime="component"` |
+
+Start with layout and slot handles during setup, then cache indices/slots:
+
+```angelscript
+void Start(const CKBehaviorContext &in ctx) {
+    BehaviorRef@ behavior = Behavior::Find(ctx, "OpenDoor");
+    if (behavior is null || !behavior.valid) {
+        return;
+    }
+
+    BehaviorLayout@ layout = behavior.Layout();
+    int input = layout.FindInput("In");
+    int speed = layout.FindPin("Speed");
+
+    behavior.Pin(speed).Set(Param::Float(2.0f));
+    behavior.Trigger(input);
+}
+```
+
+For new runtime BB instances, prefer `BBConfig@`:
+
+```angelscript
+BBDecl@ decl = BB::Require(ctx, "Interface/Text/2D Text");
+BBSlot@ text = decl.Pin("Text");
+
+BBConfig@ config = decl.Configure().Set(text, "Ready");
+BBInstance@ instance = config.SpawnStarted(ctx);
+```
+
+Use the deeper sections below when you need graph traversal, persistent graph edits, transaction semantics, or catalog generation.
+
 ## Core Model
 
 Bridge v3 follows the CK2 behavior model directly. `CKBehavior` input/output IO and `pIn/pOut/pLocal` arrays have stable order, so script code uses index as the canonical identity. Names are only for initialization-time lookup and diagnostics.

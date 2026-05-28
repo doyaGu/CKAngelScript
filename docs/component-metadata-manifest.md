@@ -152,6 +152,32 @@ ExistingDelayPrototype behavior "Existing Delay"
 
 Manifest declarations override metadata declarations by field name.
 
+## Field and Key Reference
+
+| Script field type | Recommended metadata | Injected value |
+| --- | --- | --- |
+| `int`, `uint`, `float`, `bool`, `string` | `[param type="..."]` | Scalar editor input value. |
+| `CKGUID` | `[param type="guid"]` | Parsed GUID text. |
+| `VxVector`, `Vx2DVector`, `VxColor`, `VxQuaternion`, `VxMatrix` | `[param type="vector|color|matrix|..."]` | Parsed math value. |
+| `CKObject@` and subclasses | `[param type="3dentity|mesh|material|..."]` | Native CK object pointer. |
+| `BehaviorRef@` | `[behavior param="..."]` | Safe behavior identity handle. |
+| `BBPrototype@` | `[bb param="..."]` | Building Block prototype query or behavior-derived prototype. |
+| `BBDecl@` | `[bbdecl param="..."]` or `[param type="bbdecl"]` | Prototype declaration and layout metadata. |
+| `BBConfig@` | `[bbconfig prototype="..."]` | Runtime BB configuration facade. |
+| `BBSlot@` | `[bbslot from="Config" pin="..."]` | Slot handle bound to a config or prototype. |
+| `ParamTypeInfo@` | `[param type="..."]` | SDK parameter type metadata. |
+
+| Key group | Keys |
+| --- | --- |
+| Field identity | `field`, `member`, `property` |
+| Editor naming | `name`, `param`, `parameter` |
+| Type selection | `type`, `kind`, `prototype`, `bbquery` |
+| Defaults | `default`, `value` |
+| Refresh | `update`, `sync` |
+| BB slot selection | `from`, `slot`, `pin`, `pout`, `setting`, `input`, `output`, `local`, `occurrence` |
+| BB lifecycle | `lifetime`, `autostart`, `step`, `start`, `stop` |
+| BB wiring | `owner`, `target`, `required`, `sources`, `inputs`, `outputs`, `pins`, `pouts`, `locals`, `requiredSettings` |
+
 ## Supported Field Types
 
 Current supported field types:
@@ -196,6 +222,18 @@ Object metadata can use editor type aliases such as `object`, `behavior`, `3dent
 `BBDecl@` uses the same string/GUID/behavior source rules as `BBPrototype@`, but exposes real prototype metadata and the v3 layout API. `BBSlot@` binds a setup-time slot from a `BBConfig@` through `from="ConfigField"` or from a standalone prototype query. Prefer `from` because the slot can register `start`, `stop`, `default`, and `value` metadata with the owning config automatically.
 
 `BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, receives declarative metadata, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(ctx)`, `SpawnStarted(ctx)`, `EnsureSpawned(ctx)`, or `EnsureStarted(ctx)`. Parameters not mentioned by metadata or `BBSlot@` keep the SDK/prototype defaults.
+
+## Injection Timing
+
+The component resolves metadata when the script is loaded or rebuilt. Scalar/object values are injected before lifecycle code runs. Fields marked with `update`/`sync` can be refreshed before later lifecycle/update calls; use this for editor-facing parameters that designers may change while the component is active.
+
+BB metadata is setup-oriented:
+
+- `BBConfig@` resolves the prototype and stores pending values/sources.
+- `BBSlot@` binds to a layout slot and can register defaults with its owning config.
+- `autostart=true` calls `EnsureStarted(ctx)` before the first `Update`.
+- `lifetime="component"` lets the component stop/destroy owned runtime BB instances during disable/reset/delete/rebuild.
+- `lifetime="manual"` leaves cleanup to script code.
 
 ```angelscript
 class HudText {
@@ -257,6 +295,56 @@ Available helpers:
 - `Param::Describe(ctx, typeName)`
 
 All helpers also accept `CKContext@` in place of `CKBehaviorContext`. The type argument can be a type name or a parameter type `CKGUID`.
+
+## Common Recipes
+
+Create one string input and use it every update:
+
+```angelscript
+class Label {
+    [param type="string" default="Ready" update=true]
+    string Text;
+
+    void Update(const CKBehaviorContext &in ctx) {
+        print(Text);
+    }
+}
+```
+
+Configure a runtime BB and update one pin:
+
+```angelscript
+class Overlay {
+    [bbconfig prototype="Interface/Text/2D Text" lifetime="component"]
+    [bbpin "Text"="Ready"]
+    BBConfig@ TextConfig;
+
+    [bbslot from="TextConfig" pin="Text"]
+    BBSlot@ TextPin;
+
+    BBInstance@ Instance;
+
+    void Start(const CKBehaviorContext &in ctx) {
+        @Instance = TextConfig.EnsureStarted(ctx);
+    }
+
+    void Update(const CKBehaviorContext &in ctx) {
+        if (Instance !is null) {
+            Instance.StepSet(ctx, TextPin, "Running");
+        }
+    }
+}
+```
+
+## Common Mistakes
+
+| Mistake | Result | Fix |
+| --- | --- | --- |
+| Field name conflicts with `Script`, `Class`, `Source`, `File`, or `Manifest` | Component input cannot be created correctly | Rename the field or use `name=` for editor text. |
+| `BBSlot@` omits `from` when it belongs to a config | Defaults and lifecycle metadata are not attached to the config | Prefer `from="ConfigField"`. |
+| Runtime BB uses `lifetime="manual"` without cleanup | Runtime behavior can remain after disable/reset | Use `lifetime="component"` or call `Destroy()`. |
+| Enum/flags text does not match the SDK parameter type | Conversion fails during injection or validation | Validate with `Validate-Ballance.ps1` and inspect `Explain()`. |
+| Parameterless lifecycle callbacks | Component conventions are not met | Use `const CKBehaviorContext &in ctx`. |
 
 ## Injection Rules
 
