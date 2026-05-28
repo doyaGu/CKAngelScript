@@ -13,6 +13,7 @@
 
 struct AngelScriptExecution;
 struct CKBehaviorContext;
+class AngelScriptManager;
 
 enum AngelScriptStatus {
     ANGELSCRIPT_STATUS_OK = 0,
@@ -35,6 +36,10 @@ enum AngelScriptExecutionState {
 };
 
 typedef void (*AngelScriptContextCallback)(asIScriptContext *context, void *userData);
+typedef int (*AngelScriptEngineExtensionCallback)(asIScriptEngine *engine,
+                                                  AngelScriptManager *manager,
+                                                  void *userData,
+                                                  const char **errorMessage);
 
 struct AngelScriptLoadOptions {
     const char *ModuleName = nullptr;
@@ -65,6 +70,16 @@ struct AngelScriptResult {
     // resumed, or cancelled again.
     const char *ErrorMessage = nullptr;
     const char *StackTrace = nullptr;
+};
+
+struct AngelScriptEngineExtension {
+    const char *Name = nullptr;
+    AngelScriptEngineExtensionCallback Register = nullptr;
+    void *UserData = nullptr;
+    // When true, RegisterEngineExtension invokes the callback immediately if
+    // the engine is already initialized. The extension is still retained for
+    // the next engine rebuild.
+    bool InvokeImmediately = true;
 };
 
 class AngelScriptManager : public CKBaseManager {
@@ -107,6 +122,17 @@ public:
     virtual AngelScriptExecutionState GetExecutionState(const AngelScriptExecution *execution) const = 0;
     virtual const AngelScriptResult *GetExecutionResult(const AngelScriptExecution *execution) const = 0;
     virtual const AngelScriptResult *GetLastResult() const = 0;
+
+    // Engine extensions let host plugins register additional application
+    // types/functions, e.g. a Ballance-specific BML namespace, without making
+    // CKAngelScript depend on that host. Callbacks must return >= 0 on success
+    // and < 0 on registration failure. If errorMessage is set, CKAngelScript
+    // copies it into diagnostics before the callback returns.
+    virtual AngelScriptStatus RegisterEngineExtension(const AngelScriptEngineExtension &extension,
+                                                      AngelScriptResult *result = nullptr) = 0;
+    virtual AngelScriptStatus UnregisterEngineExtension(const char *name,
+                                                        void *userData = nullptr,
+                                                        AngelScriptResult *result = nullptr) = 0;
 
     static AngelScriptManager *GetManager(CKContext *context) {
         return context ? (AngelScriptManager *)context->GetManagerByGuid(ANGEL_SCRIPT_MANAGER_GUID) : nullptr;

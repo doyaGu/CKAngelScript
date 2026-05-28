@@ -15,7 +15,8 @@ void ScriptRegistrationContext::RecordFailure(const char *file,
                                               int line,
                                               const char *function,
                                               const char *expression,
-                                              int code) {
+                                              int code,
+                                              const char *detail) {
     ++m_FailureCount;
     if (m_FirstFailure.empty()) {
         m_FirstFailure = fmt::format("{}:{} in {}: {} returned {}",
@@ -24,6 +25,10 @@ void ScriptRegistrationContext::RecordFailure(const char *file,
                                      function ? function : "<unknown>",
                                      expression ? expression : "<unknown>",
                                      code);
+        if (detail && detail[0] != '\0') {
+            m_FirstFailure += ": ";
+            m_FirstFailure += detail;
+        }
     }
 }
 

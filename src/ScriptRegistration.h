@@ -12,7 +12,8 @@ public:
                        int line,
                        const char *function,
                        const char *expression,
-                       int code);
+                       int code,
+                       const char *detail = nullptr);
 
     const std::string &GetModuleName() const {
         return m_ModuleName;

@@ -25,6 +25,7 @@ class ScriptMessageBus;
 class ScriptParameterRegistry;
 class ScriptRuntime;
 class ScriptInvoker;
+class ScriptRegistrationContext;
 
 enum class ScriptComponentBindingKind {
     Auto,
@@ -259,6 +260,11 @@ public:
     AngelScriptExecutionState GetExecutionState(const AngelScriptExecution *execution) const override;
     const AngelScriptResult *GetExecutionResult(const AngelScriptExecution *execution) const override;
     const AngelScriptResult *GetLastResult() const override;
+    AngelScriptStatus RegisterEngineExtension(const AngelScriptEngineExtension &extension,
+                                              AngelScriptResult *result = nullptr) override;
+    AngelScriptStatus UnregisterEngineExtension(const char *name,
+                                                void *userData = nullptr,
+                                                AngelScriptResult *result = nullptr) override;
 
     asIScriptModule *GetScript(const char *scriptName);
     std::shared_ptr<CachedScript> GetCachedScript(const char *scriptName);
@@ -328,6 +334,7 @@ protected:
     void RegisterStdTypes(asIScriptEngine *engine);
     void RegisterStdAddons(asIScriptEngine *engine);
     void RegisterVirtools(asIScriptEngine *engine);
+    int RegisterEngineExtensions(asIScriptEngine *engine, ScriptRegistrationContext *registration = nullptr);
 
     bool OwnsExecution(const AngelScriptExecution *execution) const;
     bool HasExecutionForModule(const char *moduleName) const;
@@ -364,6 +371,7 @@ protected:
     std::unique_ptr<ScriptAsyncScheduler> m_AsyncScheduler;
     std::unique_ptr<ScriptMessageBus> m_MessageBus;
     std::unordered_set<AngelScriptExecution *> m_Executions;
+    std::vector<AngelScriptEngineExtension> m_EngineExtensions;
     AngelScriptResult m_LastResult;
     std::string m_LastErrorMessage;
     std::string m_LastStackTrace;

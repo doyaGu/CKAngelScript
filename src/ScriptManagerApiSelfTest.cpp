@@ -8,6 +8,43 @@
 #include "ScriptAsync.h"
 #include "ScriptManager.h"
 
+static int CkasSelfTestExtensionValue() {
+    return 77;
+}
+
+static int RegisterCkasSelfTestExtension(asIScriptEngine *engine,
+                                         AngelScriptManager *,
+                                         void *,
+                                         const char **errorMessage) {
+    if (!engine) {
+        if (errorMessage) {
+            *errorMessage = "Self-test extension received a null engine.";
+        }
+        return -1;
+    }
+
+    int r = engine->SetDefaultNamespace("CKASExtensionSelfTest");
+    if (r < 0) {
+        return r;
+    }
+    r = engine->RegisterGlobalFunction("int Value()", asFUNCTION(CkasSelfTestExtensionValue), asCALL_CDECL);
+    const int reset = engine->SetDefaultNamespace("");
+    if (r < 0) {
+        return r;
+    }
+    return reset < 0 ? reset : 0;
+}
+
+static int RegisterCkasFailingSelfTestExtension(asIScriptEngine *,
+                                                AngelScriptManager *,
+                                                void *,
+                                                const char **errorMessage) {
+    if (errorMessage) {
+        *errorMessage = "Expected self-test extension failure.";
+    }
+    return -77;
+}
+
 namespace {
 
 struct IntExecutionData {
@@ -82,13 +119,41 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    AngelScriptResult result = {};
+    AngelScriptEngineExtension failingExtension = {};
+    failingExtension.Name = "__ckas_failing_extension";
+    failingExtension.Register = RegisterCkasFailingSelfTestExtension;
+    if (manager->RegisterEngineExtension(failingExtension, &result) != ANGELSCRIPT_STATUS_EXECUTION_FAILED) {
+        error = "AngelScriptManager API self-test expected failing extension registration to fail.";
+        return false;
+    }
+    if (!result.ErrorMessage || std::string(result.ErrorMessage).find("Expected self-test extension failure") == std::string::npos) {
+        error = "AngelScriptManager API self-test expected extension failure diagnostics.";
+        return false;
+    }
+
+    AngelScriptEngineExtension extension = {};
+    extension.Name = "__ckas_manager_api_extension";
+    extension.Register = RegisterCkasSelfTestExtension;
+    if (!ExpectStatus(manager->RegisterEngineExtension(extension, &result),
+                      ANGELSCRIPT_STATUS_OK,
+                      "RegisterEngineExtension",
+                      &result,
+                      error)) {
+        return false;
+    }
+    if (manager->RegisterEngineExtension(extension, &result) != ANGELSCRIPT_STATUS_INVALID_ARGUMENT) {
+        error = "AngelScriptManager API self-test expected duplicate extension registration to fail.";
+        return false;
+    }
+
     constexpr const char *moduleName = "__CKAS_ManagerApiSelfTest";
     const char *source =
         "int __ckas_public_add(int value) { return value + 5; }\n"
+        "int __ckas_public_extension() { return CKASExtensionSelfTest::Value(); }\n"
         "int __ckas_public_async() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 9; }\n"
         "int __ckas_public_exception() { array<int> values; return values[1]; }\n";
 
-    AngelScriptResult result = {};
     if (!ExpectStatus(manager->CompileModule(moduleName, source, true, &result),
                       ANGELSCRIPT_STATUS_OK,
                       "CompileModule",
@@ -102,6 +167,7 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     if (!manager->FindFunctionByName(moduleName, "__ckas_public_add") ||
+        !manager->FindFunctionByName(moduleName, "__ckas_public_extension") ||
         !manager->FindFunctionByDecl(moduleName, "int __ckas_public_add(int)")) {
         error = "AngelScriptManager API self-test could not query compiled functions.";
         return false;
@@ -296,6 +362,32 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
     }
     manager->ReleaseExecution(execution);
 
+    data.Output = 0;
+    AngelScriptExecuteOptions extensionOptions = {};
+    extensionOptions.ModuleName = moduleName;
+    extensionOptions.FunctionName = "__ckas_public_extension";
+    extensionOptions.ReadResult = ReadIntReturn;
+    extensionOptions.UserData = &data;
+    execution = manager->CreateExecution(extensionOptions, &result);
+    if (!execution) {
+        error = "AngelScriptManager API self-test failed to create an extension execution handle.";
+        return false;
+    }
+    if (!ExpectStatus(manager->StartExecution(execution),
+                      ANGELSCRIPT_STATUS_OK,
+                      "StartExecution extension",
+                      manager->GetExecutionResult(execution),
+                      error)) {
+        manager->ReleaseExecution(execution);
+        return false;
+    }
+    if (manager->GetExecutionState(execution) != ANGELSCRIPT_EXECUTION_FINISHED || data.Output != 77) {
+        error = "AngelScriptManager API self-test returned the wrong extension result.";
+        manager->ReleaseExecution(execution);
+        return false;
+    }
+    manager->ReleaseExecution(execution);
+
     AngelScriptExecuteOptions exceptionOptions = {};
     exceptionOptions.ModuleName = moduleName;
     exceptionOptions.FunctionName = "__ckas_public_exception";
@@ -430,6 +522,13 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
     }
     if (manager->HasModule(moduleName)) {
         error = "AngelScriptManager API self-test expected unloaded module to be absent.";
+        return false;
+    }
+    if (!ExpectStatus(manager->UnregisterEngineExtension("__ckas_manager_api_extension", nullptr, &result),
+                      ANGELSCRIPT_STATUS_OK,
+                      "UnregisterEngineExtension",
+                      &result,
+                      error)) {
         return false;
     }
     return true;

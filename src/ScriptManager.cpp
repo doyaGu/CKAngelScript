@@ -403,6 +403,68 @@ const AngelScriptResult *ScriptManager::GetLastResult() const {
     return &m_LastResult;
 }
 
+AngelScriptStatus ScriptManager::RegisterEngineExtension(const AngelScriptEngineExtension &extension,
+                                                         AngelScriptResult *result) {
+    if (!extension.Name || extension.Name[0] == '\0') {
+        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Engine extension name is required.");
+    }
+    if (!extension.Register) {
+        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Engine extension callback is required.");
+    }
+    for (const AngelScriptEngineExtension &existing : m_EngineExtensions) {
+        if (existing.Name && std::string(existing.Name) == extension.Name) {
+            return StoreResult(result,
+                               ANGELSCRIPT_STATUS_INVALID_ARGUMENT,
+                               0,
+                               fmt::format("Engine extension '{}' is already registered.", extension.Name));
+        }
+    }
+
+    if (m_ScriptEngine && IsInited() && extension.InvokeImmediately) {
+        const std::string moduleName = fmt::format("AngelScript extension '{}'", extension.Name);
+        ScriptRegistrationContext registration(moduleName.c_str());
+        {
+            ScriptRegistrationScope registrationScope(registration);
+            const char *extensionError = nullptr;
+            const int code = extension.Register(m_ScriptEngine, this, extension.UserData, &extensionError);
+            if (code < 0) {
+                registration.RecordFailure(__FILE__, __LINE__, __func__, extension.Name, code, extensionError);
+            }
+        }
+        if (registration.HasFailures()) {
+            const std::string summary = registration.GetSummary();
+            if (m_Context) {
+                m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+            }
+            LOG_ERROR("%s", summary.c_str());
+            return StoreResult(result, ANGELSCRIPT_STATUS_EXECUTION_FAILED, -1, summary);
+        }
+    }
+
+    m_EngineExtensions.push_back(extension);
+    return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+}
+
+AngelScriptStatus ScriptManager::UnregisterEngineExtension(const char *name,
+                                                           void *userData,
+                                                           AngelScriptResult *result) {
+    if (!name || name[0] == '\0') {
+        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Engine extension name is required.");
+    }
+    for (auto it = m_EngineExtensions.begin(); it != m_EngineExtensions.end(); ++it) {
+        const bool nameMatches = it->Name && std::string(it->Name) == name;
+        const bool userDataMatches = !userData || it->UserData == userData;
+        if (nameMatches && userDataMatches) {
+            m_EngineExtensions.erase(it);
+            return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+        }
+    }
+    return StoreResult(result,
+                       ANGELSCRIPT_STATUS_NOT_FOUND,
+                       0,
+                       fmt::format("Engine extension '{}' is not registered.", name));
+}
+
 void ScriptManager::BeginScriptMessageCapture() {
     m_CapturedScriptMessages.clear();
     m_CapturingScriptMessages = true;
@@ -1346,6 +1408,10 @@ int ScriptManager::SetupScriptEngine() {
 
         // Register the Virtools API
         RegisterVirtools(m_ScriptEngine);
+
+        // Register host-provided namespaces/types after CKAngelScript's own
+        // public API is available.
+        RegisterEngineExtensions(m_ScriptEngine, &registration);
     }
 
     if (registration.HasFailures()) {
@@ -1408,4 +1474,31 @@ void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
     RegisterScriptRuntime(m_ScriptEngine);
     RegisterScriptAsync(m_ScriptEngine);
     RegisterScriptMessage(m_ScriptEngine);
+}
+
+int ScriptManager::RegisterEngineExtensions(asIScriptEngine *engine, ScriptRegistrationContext *registration) {
+    assert(engine != nullptr);
+
+    int firstFailure = 0;
+    for (const AngelScriptEngineExtension &extension : m_EngineExtensions) {
+        if (!extension.Register) {
+            continue;
+        }
+        const char *extensionError = nullptr;
+        const int code = extension.Register(engine, this, extension.UserData, &extensionError);
+        if (code < 0) {
+            if (registration) {
+                registration->RecordFailure(__FILE__,
+                                            __LINE__,
+                                            __func__,
+                                            extension.Name ? extension.Name : "<unnamed extension>",
+                                            code,
+                                            extensionError);
+            }
+            if (firstFailure == 0) {
+                firstFailure = code;
+            }
+        }
+    }
+    return firstFailure;
 }
