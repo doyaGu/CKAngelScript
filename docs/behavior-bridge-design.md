@@ -10,6 +10,7 @@ Most scripts use the bridge in one of four ways:
 | Read or write CK parameters | `ParamRef@`, `ParamValue@`, `Param::*` |
 | Spawn and step a runtime Building Block | `BB::Require`, `BBDecl@`, `BBConfig@`, `BBInstance@` |
 | Configure a BB from component metadata | `[bbconfig]`, `[bbslot]`, `lifetime="component"` |
+| Turn a graph execution point into a script message | `AngelScript/Event Hook` BB |
 
 Start with layout and slot handles during setup, then cache indices/slots:
 
@@ -38,6 +39,16 @@ BBSlot@ text = decl.Pin("Text");
 BBConfig@ config = decl.Configure().Set(text, "Ready");
 BBInstance@ instance = config.SpawnStarted(ctx);
 ```
+
+`AngelScript/Event Hook` is the bridge point for persistent graph edits that need to notify runtime scripts. It has one input, `Out` and `Error` outputs, and three input parameters:
+
+| Parameter | Meaning |
+| --- | --- |
+| `Topic` | Message topic to publish. Required. |
+| `Target` | Optional message target such as `runtime:bml.sr_timer`; empty means topic subscribers. |
+| `Payload` | Optional string stored in the message payload under `text`. |
+
+When triggered, the BB publishes through the `Message` bus with source text `behavior:event_hook:<CK_ID>`, then activates `Out`. If publishing fails, it writes `Error Message` and activates `Error`. The BB is host-neutral; Ballance/BML integrations should insert it from scripts and register BML-specific services through the public manager extension API.
 
 Use the deeper sections below when you need graph traversal, persistent graph edits, transaction semantics, or catalog generation.
 

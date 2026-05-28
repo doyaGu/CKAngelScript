@@ -37,6 +37,41 @@ manager->CompileModule("example_api",
 
 Passing multiple source kinds at once returns `ANGELSCRIPT_STATUS_INVALID_ARGUMENT`.
 
+## Engine Extensions
+
+Host plugins can register additional AngelScript APIs without adding host-specific code to CKAngelScript itself. Register an extension before runtime scripts are loaded:
+
+```cpp
+static int RegisterBmlApi(asIScriptEngine *engine,
+                          AngelScriptManager *manager,
+                          void *userData,
+                          const char **errorMessage) {
+    int r = engine->SetDefaultNamespace("BML");
+    if (r < 0) return r;
+
+    r = engine->RegisterGlobalFunction("float GetLastDeltaTime()",
+                                       asFUNCTION(BmlGetLastDeltaTime),
+                                       asCALL_CDECL);
+    int reset = engine->SetDefaultNamespace("");
+    if (r < 0) return r;
+    return reset < 0 ? reset : 0;
+}
+
+AngelScriptEngineExtension extension = {};
+extension.Name = "BML";
+extension.Register = RegisterBmlApi;
+extension.UserData = bridge;
+
+AngelScriptResult result = {};
+manager->RegisterEngineExtension(extension, &result);
+```
+
+Callbacks return `>= 0` on success and `< 0` on failure. If `errorMessage` is set, CKAngelScript copies it into registration diagnostics. The extension is retained and invoked again after the script engine is rebuilt.
+
+If the engine is already initialized and `InvokeImmediately` is true, registration is attempted immediately. This is useful for host plugins that discover CKAngelScript after startup, but the safest path is still to register before user modules compile.
+
+Call `UnregisterEngineExtension(name, userData)` before unloading the host DLL. This removes the retained callback; it does not remove functions already registered into the current AngelScript engine.
+
 ## Execution Handles
 
 Create, start, and release an execution:

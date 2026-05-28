@@ -14,7 +14,7 @@ It is environment-specific. Treat it as a practical Ballance snapshot, not a uni
 | --- | ---: |
 | Parameter types | 88 |
 | Operations | 0 |
-| Building Blocks exported from `AngelScript.dll` | 1 |
+| Building Blocks exported from `AngelScript.dll` | 2 |
 
 Parameter categories:
 
@@ -36,6 +36,16 @@ Parameter categories:
 | Outputs | `Enabled`, `Disabled`, `Error` |
 | Input parameters | `Script`, `Class`, `Source`, `File`, `Manifest` |
 | Setting | `Output Error Message` |
+
+| Field | Value |
+| --- | --- |
+| Name | `Event Hook` |
+| Category | `AngelScript` |
+| GUID | `0x12E4F2A0-0x4B7D4E21` |
+| Inputs | `In` |
+| Outputs | `Out`, `Error` |
+| Input parameters | `Topic`, `Target`, `Payload` |
+| Output parameters | `Error Message` |
 
 ## Common Parameter Types
 
