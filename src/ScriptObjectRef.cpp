@@ -7,6 +7,7 @@
 #include "ScriptBridgeCommon.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
+#include "ScriptRegistration.h"
 
 namespace {
 
@@ -29,9 +30,9 @@ struct ObjectRefIdentityOptions {
 template <typename T>
 void RegisterRefCounted(asIScriptEngine *engine, const char *typeName) {
     int r = engine->RegisterObjectBehaviour(typeName, asBEHAVE_ADDREF, "void f()", asMETHOD(T, AddRef), asCALL_THISCALL);
-    assert(r >= 0);
+    CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour(typeName, asBEHAVE_RELEASE, "void f()", asMETHOD(T, Release), asCALL_THISCALL);
-    assert(r >= 0);
+    CKAS_CHECK_REGISTER(r);
 }
 
 template <typename T>
@@ -40,26 +41,26 @@ void RegisterObjectRefIdentityMethods(asIScriptEngine *engine,
                                       const ObjectRefIdentityOptions &options = {}) {
     int r = 0;
     if (options.isValid) {
-        r = engine->RegisterObjectMethod(typeName, "bool IsValid() const", asMETHOD(T, IsValid), asCALL_THISCALL); assert(r >= 0);
+        r = engine->RegisterObjectMethod(typeName, "bool IsValid() const", asMETHOD(T, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     }
     if (options.validProperty) {
-        r = engine->RegisterObjectMethod(typeName, "bool get_valid() const", asMETHOD(T, valid), asCALL_THISCALL); assert(r >= 0);
+        r = engine->RegisterObjectMethod(typeName, "bool get_valid() const", asMETHOD(T, valid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     }
-    r = engine->RegisterObjectMethod(typeName, "string Error() const", asMETHOD(T, Error), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "string Error() const", asMETHOD(T, Error), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     if (options.describe) {
-        r = engine->RegisterObjectMethod(typeName, "string Describe() const", asMETHOD(T, Describe), asCALL_THISCALL); assert(r >= 0);
+        r = engine->RegisterObjectMethod(typeName, "string Describe() const", asMETHOD(T, Describe), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     }
-    r = engine->RegisterObjectMethod(typeName, "CK_ID Id() const", asMETHOD(T, Id), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "CK_ID Id() const", asMETHOD(T, Id), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     if (options.idProperty) {
-        r = engine->RegisterObjectMethod(typeName, "CK_ID get_id() const", asMETHOD(T, Id), asCALL_THISCALL); assert(r >= 0);
+        r = engine->RegisterObjectMethod(typeName, "CK_ID get_id() const", asMETHOD(T, Id), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     }
-    r = engine->RegisterObjectMethod(typeName, "string Name() const", asMETHOD(T, Name), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "string Name() const", asMETHOD(T, Name), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     if (options.nameProperty) {
-        r = engine->RegisterObjectMethod(typeName, "string get_name() const", asMETHOD(T, Name), asCALL_THISCALL); assert(r >= 0);
+        r = engine->RegisterObjectMethod(typeName, "string get_name() const", asMETHOD(T, Name), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     }
-    r = engine->RegisterObjectMethod(typeName, "CK_CLASSID ClassId() const", asMETHOD(T, ClassId), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(typeName, "bool IsDynamic() const", asMETHOD(T, IsDynamic), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod(typeName, "CKObject@ Object() const", asMETHOD(T, Object), asCALL_THISCALL); assert(r >= 0);
+    r = engine->RegisterObjectMethod(typeName, "CK_CLASSID ClassId() const", asMETHOD(T, ClassId), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(typeName, "bool IsDynamic() const", asMETHOD(T, IsDynamic), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(typeName, "CKObject@ Object() const", asMETHOD(T, Object), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
 template <typename T>
@@ -85,19 +86,19 @@ void RegisterObjectRefCast(asIScriptEngine *engine, const char *derived, const c
     int r = 0;
     std::string decl = derived;
     decl.append("@ opCast()");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CheckedObjectRefDowncast<Derived, Base>), (Base *), Derived *), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CheckedObjectRefDowncast<Derived, Base>), (Base *), Derived *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     decl = base;
     decl.append("@ opImplCast()");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ObjectRefUpcast<Derived, Base>), (Derived *), Base *), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ObjectRefUpcast<Derived, Base>), (Derived *), Base *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     decl = "const ";
     decl.append(derived).append("@ opCast() const");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CheckedObjectRefDowncast<Derived, Base>), (Base *), Derived *), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CheckedObjectRefDowncast<Derived, Base>), (Base *), Derived *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     decl = "const ";
     decl.append(base).append("@ opImplCast() const");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ObjectRefUpcast<Derived, Base>), (Derived *), Base *), asCALL_CDECL_OBJLAST); assert(r >= 0);
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ObjectRefUpcast<Derived, Base>), (Derived *), Base *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 }
 
 template <typename T>
@@ -105,7 +106,7 @@ void RegisterObjectRefType(asIScriptEngine *engine,
                            const char *typeName,
                            const ObjectRefIdentityOptions &options = {}) {
     int r = engine->RegisterObjectType(typeName, 0, asOBJ_REF);
-    assert(r >= 0);
+    CKAS_CHECK_REGISTER(r);
     RegisterObjectRefCommon<T>(engine, typeName, options);
 }
 
@@ -118,7 +119,7 @@ void RegisterObjectRefAccessor(asIScriptEngine *engine,
                                          decl,
                                          asSMethodPtr<sizeof(void (T::*)())>::Convert((void (T::*)())method),
                                          asCALL_THISCALL);
-    assert(r >= 0);
+    CKAS_CHECK_REGISTER(r);
 }
 
 ScriptBehaviorBridge *BridgeFromContext(CKContext *context) {

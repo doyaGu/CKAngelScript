@@ -4,6 +4,7 @@
 #include <fstream>
 
 #include <fmt/format.h>
+#include "ScriptRegistration.h"
 
 void PrintEnumList(asIScriptEngine *engine, std::ofstream &file) {
     for (asUINT i = 0; i < engine->GetEnumCount(); i++) {
@@ -126,5 +127,5 @@ void DumpAngelScriptDefinitions(const std::string &filename) {
 }
 
 void RegisterScriptInfo(asIScriptEngine *engine) {
-    int r = engine->RegisterGlobalFunction("void DumpAngelScriptDefinitions(const string &in filename)", asFUNCTION(DumpAngelScriptDefinitions), asCALL_CDECL); assert(r >= 0);
+    int r = engine->RegisterGlobalFunction("void DumpAngelScriptDefinitions(const string &in filename)", asFUNCTION(DumpAngelScriptDefinitions), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 }

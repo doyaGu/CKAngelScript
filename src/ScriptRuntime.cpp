@@ -24,6 +24,7 @@
 #include "ScriptRuntimeMetadata.h"
 #include "ScriptUtils.h"
 #include "add_on/scriptarray/scriptarray.h"
+#include "ScriptRegistration.h"
 
 namespace ScriptRuntimeInternal {
 
@@ -2033,154 +2034,154 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     int r = 0;
     r = engine->RegisterObjectType("RuntimeDependencyInfo",
                                    sizeof(RuntimeDependencyInfo),
-                                   asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); assert(r >= 0);
+                                   asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("RuntimeDependencyInfo", asBEHAVE_CONSTRUCT, "void f()",
                                         asFUNCTIONPR([](RuntimeDependencyInfo *self) { new(self) RuntimeDependencyInfo(); },
                                                      (RuntimeDependencyInfo *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("RuntimeDependencyInfo", asBEHAVE_CONSTRUCT, "void f(const RuntimeDependencyInfo &in other)",
                                         asFUNCTIONPR([](const RuntimeDependencyInfo &other, RuntimeDependencyInfo *self) {
                                                          new(self) RuntimeDependencyInfo(other);
                                                      },
                                                      (const RuntimeDependencyInfo &, RuntimeDependencyInfo *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("RuntimeDependencyInfo", asBEHAVE_DESTRUCT, "void f()",
                                         asFUNCTIONPR([](RuntimeDependencyInfo *self) { self->~RuntimeDependencyInfo(); },
                                                      (RuntimeDependencyInfo *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "RuntimeDependencyInfo &opAssign(const RuntimeDependencyInfo &in other)",
                                      asMETHODPR(RuntimeDependencyInfo, operator=, (const RuntimeDependencyInfo &), RuntimeDependencyInfo &),
-                                     asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string Raw() const", asMETHOD(RuntimeDependencyInfo, Raw), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string Id() const", asMETHOD(RuntimeDependencyInfo, Id), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string Operator() const", asMETHOD(RuntimeDependencyInfo, Operator), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string Version() const", asMETHOD(RuntimeDependencyInfo, Version), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string ActualVersion() const", asMETHOD(RuntimeDependencyInfo, ActualVersion), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "bool Optional() const", asMETHOD(RuntimeDependencyInfo, Optional), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "bool Present() const", asMETHOD(RuntimeDependencyInfo, Present), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "bool Satisfied() const", asMETHOD(RuntimeDependencyInfo, Satisfied), asCALL_THISCALL); assert(r >= 0);
+                                     asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string Raw() const", asMETHOD(RuntimeDependencyInfo, Raw), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string Id() const", asMETHOD(RuntimeDependencyInfo, Id), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string Operator() const", asMETHOD(RuntimeDependencyInfo, Operator), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string Version() const", asMETHOD(RuntimeDependencyInfo, Version), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "string ActualVersion() const", asMETHOD(RuntimeDependencyInfo, ActualVersion), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "bool Optional() const", asMETHOD(RuntimeDependencyInfo, Optional), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "bool Present() const", asMETHOD(RuntimeDependencyInfo, Present), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeDependencyInfo", "bool Satisfied() const", asMETHOD(RuntimeDependencyInfo, Satisfied), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectType("RuntimeScriptInfo",
                                    sizeof(RuntimeScriptInfo),
-                                   asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); assert(r >= 0);
+                                   asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("RuntimeScriptInfo", asBEHAVE_CONSTRUCT, "void f()",
                                         asFUNCTIONPR([](RuntimeScriptInfo *self) { new(self) RuntimeScriptInfo(); },
                                                      (RuntimeScriptInfo *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("RuntimeScriptInfo", asBEHAVE_CONSTRUCT, "void f(const RuntimeScriptInfo &in other)",
                                         asFUNCTIONPR([](const RuntimeScriptInfo &other, RuntimeScriptInfo *self) {
                                                          new(self) RuntimeScriptInfo(other);
                                                      },
                                                      (const RuntimeScriptInfo &, RuntimeScriptInfo *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("RuntimeScriptInfo", asBEHAVE_DESTRUCT, "void f()",
                                         asFUNCTIONPR([](RuntimeScriptInfo *self) { self->~RuntimeScriptInfo(); },
                                                      (RuntimeScriptInfo *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "RuntimeScriptInfo &opAssign(const RuntimeScriptInfo &in other)",
                                      asMETHODPR(RuntimeScriptInfo, operator=, (const RuntimeScriptInfo &), RuntimeScriptInfo &),
-                                     asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "bool Exists() const", asMETHOD(RuntimeScriptInfo, Exists), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Id() const", asMETHOD(RuntimeScriptInfo, Id), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Name() const", asMETHOD(RuntimeScriptInfo, Name), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Version() const", asMETHOD(RuntimeScriptInfo, Version), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Description() const", asMETHOD(RuntimeScriptInfo, Description), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Author() const", asMETHOD(RuntimeScriptInfo, Author), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Category() const", asMETHOD(RuntimeScriptInfo, Category), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "int TagCount() const", asMETHOD(RuntimeScriptInfo, TagCount), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Tag(int index) const", asMETHOD(RuntimeScriptInfo, Tag), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "bool Enabled() const", asMETHOD(RuntimeScriptInfo, Enabled), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "bool Loaded() const", asMETHOD(RuntimeScriptInfo, Loaded), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "bool Failed() const", asMETHOD(RuntimeScriptInfo, Failed), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string State() const", asMETHOD(RuntimeScriptInfo, State), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Phase() const", asMETHOD(RuntimeScriptInfo, Phase), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Error() const", asMETHOD(RuntimeScriptInfo, Error), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Root() const", asMETHOD(RuntimeScriptInfo, Root), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Manifest() const", asMETHOD(RuntimeScriptInfo, Manifest), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Entry() const", asMETHOD(RuntimeScriptInfo, Entry), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "int Generation() const", asMETHOD(RuntimeScriptInfo, Generation), asCALL_THISCALL); assert(r >= 0);
+                                     asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "bool Exists() const", asMETHOD(RuntimeScriptInfo, Exists), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Id() const", asMETHOD(RuntimeScriptInfo, Id), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Name() const", asMETHOD(RuntimeScriptInfo, Name), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Version() const", asMETHOD(RuntimeScriptInfo, Version), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Description() const", asMETHOD(RuntimeScriptInfo, Description), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Author() const", asMETHOD(RuntimeScriptInfo, Author), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Category() const", asMETHOD(RuntimeScriptInfo, Category), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "int TagCount() const", asMETHOD(RuntimeScriptInfo, TagCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Tag(int index) const", asMETHOD(RuntimeScriptInfo, Tag), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "bool Enabled() const", asMETHOD(RuntimeScriptInfo, Enabled), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "bool Loaded() const", asMETHOD(RuntimeScriptInfo, Loaded), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "bool Failed() const", asMETHOD(RuntimeScriptInfo, Failed), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string State() const", asMETHOD(RuntimeScriptInfo, State), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Phase() const", asMETHOD(RuntimeScriptInfo, Phase), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Error() const", asMETHOD(RuntimeScriptInfo, Error), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Root() const", asMETHOD(RuntimeScriptInfo, Root), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Manifest() const", asMETHOD(RuntimeScriptInfo, Manifest), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Entry() const", asMETHOD(RuntimeScriptInfo, Entry), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "int Generation() const", asMETHOD(RuntimeScriptInfo, Generation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectType("ScriptContext",
                                    sizeof(ScriptContext),
-                                   asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); assert(r >= 0);
+                                   asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("ScriptContext", asBEHAVE_CONSTRUCT, "void f()",
                                         asFUNCTIONPR([](ScriptContext *self) { new(self) ScriptContext(); },
                                                      (ScriptContext *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("ScriptContext", asBEHAVE_CONSTRUCT, "void f(const ScriptContext &in other)",
                                         asFUNCTIONPR([](const ScriptContext &other, ScriptContext *self) {
                                                          new(self) ScriptContext(other);
                                                      },
                                                      (const ScriptContext &, ScriptContext *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("ScriptContext", asBEHAVE_DESTRUCT, "void f()",
                                         asFUNCTIONPR([](ScriptContext *self) { self->~ScriptContext(); },
                                                      (ScriptContext *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptContext", "ScriptContext &opAssign(const ScriptContext &in other)",
                                      asMETHODPR(ScriptContext, operator=, (const ScriptContext &), ScriptContext &),
-                                     asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "CKContext@ Context() const", asMETHOD(ScriptContext, Context), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "float DeltaTime() const", asMETHOD(ScriptContext, DeltaTime), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "float TimeSeconds() const", asMETHOD(ScriptContext, TimeSeconds), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string Id() const", asMETHOD(ScriptContext, Id), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string Name() const", asMETHOD(ScriptContext, Name), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string Version() const", asMETHOD(ScriptContext, Version), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string Root() const", asMETHOD(ScriptContext, Root), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string Manifest() const", asMETHOD(ScriptContext, Manifest), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string Entry() const", asMETHOD(ScriptContext, Entry), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string Target() const", asMETHOD(ScriptContext, Target), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string Phase() const", asMETHOD(ScriptContext, Phase), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string State() const", asMETHOD(ScriptContext, State), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "int Generation() const", asMETHOD(ScriptContext, Generation), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "uint64 FrameIndex() const", asMETHOD(ScriptContext, FrameIndex), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string Metadata(const string &in key, const string &in fallback = \"\") const", asMETHOD(ScriptContext, Metadata), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "int MetadataCount() const", asMETHOD(ScriptContext, MetadataCount), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string MetadataKey(int index) const", asMETHOD(ScriptContext, MetadataKey), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "string MetadataValue(int index) const", asMETHOD(ScriptContext, MetadataValue), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "void Raise(const string &in message) const", asMETHOD(ScriptContext, Raise), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptContext", "CKBehaviorContext ToBehaviorContext() const", asMETHOD(ScriptContext, ToBehaviorContext), asCALL_THISCALL); assert(r >= 0);
+                                     asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "CKContext@ Context() const", asMETHOD(ScriptContext, Context), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "float DeltaTime() const", asMETHOD(ScriptContext, DeltaTime), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "float TimeSeconds() const", asMETHOD(ScriptContext, TimeSeconds), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Id() const", asMETHOD(ScriptContext, Id), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Name() const", asMETHOD(ScriptContext, Name), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Version() const", asMETHOD(ScriptContext, Version), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Root() const", asMETHOD(ScriptContext, Root), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Manifest() const", asMETHOD(ScriptContext, Manifest), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Entry() const", asMETHOD(ScriptContext, Entry), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Target() const", asMETHOD(ScriptContext, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Phase() const", asMETHOD(ScriptContext, Phase), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string State() const", asMETHOD(ScriptContext, State), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "int Generation() const", asMETHOD(ScriptContext, Generation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "uint64 FrameIndex() const", asMETHOD(ScriptContext, FrameIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string Metadata(const string &in key, const string &in fallback = \"\") const", asMETHOD(ScriptContext, Metadata), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "int MetadataCount() const", asMETHOD(ScriptContext, MetadataCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string MetadataKey(int index) const", asMETHOD(ScriptContext, MetadataKey), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "string MetadataValue(int index) const", asMETHOD(ScriptContext, MetadataValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "void Raise(const string &in message) const", asMETHOD(ScriptContext, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptContext", "CKBehaviorContext ToBehaviorContext() const", asMETHOD(ScriptContext, ToBehaviorContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     RegisterScriptSceneRuntime(engine);
 
     const char *previousNamespace = engine->GetDefaultNamespace();
     const std::string previous = previousNamespace ? previousNamespace : "";
 
-    r = engine->SetDefaultNamespace("Behavior"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorBridge@ From(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFrom), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorGraph), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const ScriptContext &in ctx, const string &in rootBehaviorName)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorGraphByRoot), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorRef@ Find(const ScriptContext &in ctx, const string &in name)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFind), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BehaviorRef@ FindByID(const ScriptContext &in ctx, CK_ID id)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFindById), asCALL_CDECL); assert(r >= 0);
+    r = engine->SetDefaultNamespace("Behavior"); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BehaviorBridge@ From(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFrom), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorGraph), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const ScriptContext &in ctx, const string &in rootBehaviorName)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorGraphByRoot), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BehaviorRef@ Find(const ScriptContext &in ctx, const string &in name)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFind), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BehaviorRef@ FindByID(const ScriptContext &in ctx, CK_ID id)", asFUNCTION(ScriptRuntimeInternal::RuntimeBehaviorFindById), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->SetDefaultNamespace("BB"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBBridge@ From(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFrom), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBDecl@ Require(const ScriptContext &in ctx, const string &in query)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBRequireByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBDecl@ Require(const ScriptContext &in ctx, CKGUID guid)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBRequireByGuid), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("int Count(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBCount), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBPrototype@ At(const ScriptContext &in ctx, int index)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBAt), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("BBPrototype@ Find(const ScriptContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFind), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<BBPrototype@>@ FindAll(const ScriptContext &in ctx, const string &in query = \"\")", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFindAll), asCALL_CDECL); assert(r >= 0);
+    r = engine->SetDefaultNamespace("BB"); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BBBridge@ From(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFrom), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BBDecl@ Require(const ScriptContext &in ctx, const string &in query)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBRequireByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BBDecl@ Require(const ScriptContext &in ctx, CKGUID guid)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBRequireByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("int Count(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBCount), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BBPrototype@ At(const ScriptContext &in ctx, int index)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBAt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BBPrototype@ Find(const ScriptContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFind), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("array<BBPrototype@>@ FindAll(const ScriptContext &in ctx, const string &in query = \"\")", asFUNCTION(ScriptRuntimeInternal::RuntimeBBFindAll), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->SetDefaultNamespace("Param"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("int Count(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamCount), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamTypeInfo@ At(const ScriptContext &in ctx, int index)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamAt), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Find(const ScriptContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamFind), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const ScriptContext &in ctx, const string &in typeName)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamTypeByName), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const ScriptContext &in ctx, CKGUID guid)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamTypeByGuid), asCALL_CDECL); assert(r >= 0);
+    r = engine->SetDefaultNamespace("Param"); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("int Count(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamCount), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ At(const ScriptContext &in ctx, int index)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamAt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Find(const ScriptContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamFind), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const ScriptContext &in ctx, const string &in typeName)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamTypeByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamTypeInfo@ Type(const ScriptContext &in ctx, CKGUID guid)", asFUNCTION(ScriptRuntimeInternal::RuntimeParamTypeByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->SetDefaultNamespace("Runtime"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool ReloadAll(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeReloadAll), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Reload(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeReload), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Enable(const ScriptContext &in ctx, const string &in id, bool enabled)", asFUNCTION(ScriptRuntimeInternal::RuntimeEnable), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<string>@ List(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeList), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<RuntimeScriptInfo>@ ListInfo(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeListInfo), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("RuntimeScriptInfo Info(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeInfo), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("string Version(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeVersion), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("string Metadata(const ScriptContext &in ctx, const string &in id, const string &in key, const string &in fallback = \"\")", asFUNCTION(ScriptRuntimeInternal::RuntimeMetadata), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<string>@ Dependencies(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeDependencies), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<RuntimeDependencyInfo>@ RequiredDependencies(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeRequiredDependencies), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("array<RuntimeDependencyInfo>@ OptionalDependencies(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeOptionalDependencies), asCALL_CDECL); assert(r >= 0);
+    r = engine->SetDefaultNamespace("Runtime"); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool ReloadAll(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeReloadAll), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Reload(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeReload), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Enable(const ScriptContext &in ctx, const string &in id, bool enabled)", asFUNCTION(ScriptRuntimeInternal::RuntimeEnable), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("array<string>@ List(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeList), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("array<RuntimeScriptInfo>@ ListInfo(const ScriptContext &in ctx)", asFUNCTION(ScriptRuntimeInternal::RuntimeListInfo), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("RuntimeScriptInfo Info(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeInfo), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("string Version(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeVersion), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("string Metadata(const ScriptContext &in ctx, const string &in id, const string &in key, const string &in fallback = \"\")", asFUNCTION(ScriptRuntimeInternal::RuntimeMetadata), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("array<string>@ Dependencies(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeDependencies), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("array<RuntimeDependencyInfo>@ RequiredDependencies(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeRequiredDependencies), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("array<RuntimeDependencyInfo>@ OptionalDependencies(const ScriptContext &in ctx, const string &in id)", asFUNCTION(ScriptRuntimeInternal::RuntimeOptionalDependencies), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->SetDefaultNamespace(previous.c_str()); assert(r >= 0);
+    r = engine->SetDefaultNamespace(previous.c_str()); CKAS_CHECK_REGISTER(r);
 }

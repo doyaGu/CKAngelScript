@@ -13,6 +13,7 @@
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
 #include "add_on/scriptdictionary/scriptdictionary.h"
+#include "ScriptRegistration.h"
 
 namespace {
 
@@ -784,45 +785,45 @@ void ScriptMessageBus::ReleasePending(PendingRequest &pending) {
 void RegisterScriptMessage(asIScriptEngine *engine) {
     assert(engine != nullptr);
     int r = 0;
-    r = engine->RegisterObjectType("ScriptMessage", sizeof(ScriptMessage), asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); assert(r >= 0);
+    r = engine->RegisterObjectType("ScriptMessage", sizeof(ScriptMessage), asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("ScriptMessage", asBEHAVE_CONSTRUCT, "void f()",
                                         asFUNCTIONPR([](ScriptMessage *self) { new(self) ScriptMessage(); }, (ScriptMessage *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("ScriptMessage", asBEHAVE_CONSTRUCT, "void f(const ScriptMessage &in other)",
                                         asFUNCTIONPR([](const ScriptMessage &other, ScriptMessage *self) { new(self) ScriptMessage(other); },
                                                      (const ScriptMessage &, ScriptMessage *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("ScriptMessage", asBEHAVE_DESTRUCT, "void f()",
                                         asFUNCTIONPR([](ScriptMessage *self) { self->~ScriptMessage(); }, (ScriptMessage *), void),
-                                        asCALL_CDECL_OBJLAST); assert(r >= 0);
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "ScriptMessage &opAssign(const ScriptMessage &in other)",
                                      asMETHODPR(ScriptMessage, operator=, (const ScriptMessage &), ScriptMessage &),
-                                     asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptMessage", "uint64 Id() const", asMETHOD(ScriptMessage, Id), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptMessage", "string Kind() const", asMETHOD(ScriptMessage, Kind), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptMessage", "string Topic() const", asMETHOD(ScriptMessage, Topic), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptMessage", "string Source() const", asMETHOD(ScriptMessage, Source), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptMessage", "string Target() const", asMETHOD(ScriptMessage, Target), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptMessage", "uint64 FrameIndex() const", asMETHOD(ScriptMessage, FrameIndex), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptMessage", "bool RequiresReply() const", asMETHOD(ScriptMessage, RequiresReply), asCALL_THISCALL); assert(r >= 0);
-    r = engine->RegisterObjectMethod("ScriptMessage", "dictionary@ Payload() const", asMETHOD(ScriptMessage, Payload), asCALL_THISCALL); assert(r >= 0);
+                                     asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "uint64 Id() const", asMETHOD(ScriptMessage, Id), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "string Kind() const", asMETHOD(ScriptMessage, Kind), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "string Topic() const", asMETHOD(ScriptMessage, Topic), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "string Source() const", asMETHOD(ScriptMessage, Source), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "string Target() const", asMETHOD(ScriptMessage, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "uint64 FrameIndex() const", asMETHOD(ScriptMessage, FrameIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "bool RequiresReply() const", asMETHOD(ScriptMessage, RequiresReply), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "dictionary@ Payload() const", asMETHOD(ScriptMessage, Payload), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     const char *previousNamespace = engine->GetDefaultNamespace();
     const std::string previous = previousNamespace ? previousNamespace : "";
-    r = engine->SetDefaultNamespace("Message"); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = \"\")", asFUNCTION(PublishRuntime), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = \"\")", asFUNCTION(PublishBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Send(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendRuntime), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Send(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestRuntime), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Reply(const ScriptContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyRuntime), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Reply(const CKBehaviorContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Reject(const ScriptContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectRuntime), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Reject(const CKBehaviorContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Subscribe(const ScriptContext &in ctx, const string &in topic)", asFUNCTION(SubscribeRuntime), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Subscribe(const CKBehaviorContext &in ctx, const string &in topic)", asFUNCTION(SubscribeBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Unsubscribe(const ScriptContext &in ctx, const string &in topic)", asFUNCTION(UnsubscribeRuntime), asCALL_CDECL); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("bool Unsubscribe(const CKBehaviorContext &in ctx, const string &in topic)", asFUNCTION(UnsubscribeBehavior), asCALL_CDECL); assert(r >= 0);
-    r = engine->SetDefaultNamespace(previous.c_str()); assert(r >= 0);
+    r = engine->SetDefaultNamespace("Message"); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = \"\")", asFUNCTION(PublishRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = \"\")", asFUNCTION(PublishBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Send(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Send(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Reply(const ScriptContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Reply(const CKBehaviorContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Reject(const ScriptContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Reject(const CKBehaviorContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Subscribe(const ScriptContext &in ctx, const string &in topic)", asFUNCTION(SubscribeRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Subscribe(const CKBehaviorContext &in ctx, const string &in topic)", asFUNCTION(SubscribeBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Unsubscribe(const ScriptContext &in ctx, const string &in topic)", asFUNCTION(UnsubscribeRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Unsubscribe(const CKBehaviorContext &in ctx, const string &in topic)", asFUNCTION(UnsubscribeBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->SetDefaultNamespace(previous.c_str()); CKAS_CHECK_REGISTER(r);
 }

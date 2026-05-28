@@ -1,6 +1,8 @@
-configure_file(Version.h.in "${CMAKE_CURRENT_SOURCE_DIR}/Version.h")
+set(CKAS_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+configure_file(Version.h.in "${CKAS_GENERATED_INCLUDE_DIR}/Version.h")
 
 set(CKAS_HEADERS
+        Logger.h
         ScriptManager.h
         ScriptCache.h
         ScriptInvoker.h
@@ -41,10 +43,12 @@ set(CKAS_HEADERS
         ScriptBridgeHandles.h
         ScriptBridgeParameterIO.h
         ScriptBridgeSnapshot.h
+        ScriptRegistration.h
 )
 
 set(CKAS_SOURCES
         Plugin.cpp
+        Logger.cpp
         ScriptManager.cpp
         ScriptCache.cpp
         ScriptInvoker.cpp
@@ -89,6 +93,7 @@ set(CKAS_SOURCES
         ScriptBridgeGraph.cpp
         ScriptBridgeBB.cpp
         ScriptBridgeTasks.cpp
+        ScriptRegistration.cpp
 
         AngelScript.rc
 )
@@ -123,6 +128,7 @@ target_include_directories(CKAngelScript
         PRIVATE
         ${PROJECT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CKAS_GENERATED_INCLUDE_DIR}
         ${DYNCALL_INCLUDE_DIR}
         ${DYNCALLBACK_INCLUDE_DIR}
         ${DYNLOAD_INCLUDE_DIR}

@@ -12,6 +12,7 @@
 #include "CKContext.h"
 
 #include "RefCount.h"
+#include "ScriptRegistration.h"
 
 #define TOSTRINGMAP_TYPE 3001
 
@@ -551,24 +552,24 @@ void RegisterScriptFormat(asIScriptEngine *engine, int argc) {
 
     int r = 0;
 
-    r = engine->RegisterGlobalFunction("string toString(?&in)", asFUNCTION(ToStringGeneric), asCALL_GENERIC); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string toString(?&in)", asFUNCTION(ToStringGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
 
     std::string decl = "string format(const string &in)";
     for (int i = 0; i <= argc; ++i) {
-        r = engine->RegisterGlobalFunction(decl.c_str(), asFUNCTION(FormatStringGeneric), asCALL_GENERIC); assert(r >= 0);
+        r = engine->RegisterGlobalFunction(decl.c_str(), asFUNCTION(FormatStringGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
         decl.pop_back();
         decl += ", ?&in)";
     }
 
-    r = engine->RegisterGlobalFunction("void print(?&in)", asFUNCTION(PrintGeneric), asCALL_GENERIC); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("void print(?&in)", asFUNCTION(PrintGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
 
     decl = "void print(const string &in)";
     for (int i = 0; i <= argc; ++i) {
-        r = engine->RegisterGlobalFunction(decl.c_str(), asFUNCTION(PrintGeneric), asCALL_GENERIC); assert(r >= 0);
+        r = engine->RegisterGlobalFunction(decl.c_str(), asFUNCTION(PrintGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
         decl.pop_back();
         decl += ", ?&in)";
     }
 
-    r = engine->RegisterGlobalFunction("string typeof(?&in)", asFUNCTION(TypeOfGeneric), asCALL_GENERIC); assert(r >= 0);
-    r = engine->RegisterGlobalFunction("uint sizeof(?&in)", asFUNCTION(SizeOfGeneric), asCALL_GENERIC); assert(r >= 0);
+    r = engine->RegisterGlobalFunction("string typeof(?&in)", asFUNCTION(TypeOfGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("uint sizeof(?&in)", asFUNCTION(SizeOfGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
 }

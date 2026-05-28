@@ -3,6 +3,7 @@
 #include <fmt/format.h>
 
 #include "CKPathManager.h"
+#include "Logger.h"
 #include "ScriptInvoker.h"
 
 #include "ScriptInfo.h"
@@ -19,6 +20,7 @@
 #include "ScriptRuntime.h"
 #include "ScriptMessage.h"
 #include "ScriptAsync.h"
+#include "ScriptRegistration.h"
 
 #if CKAS_BUILD_SELF_TESTS
 #include "ScriptSelfTests.h"
@@ -1277,6 +1279,7 @@ int ScriptManager::SetupScriptEngine() {
     m_ScriptEngine = asCreateScriptEngine();
     if (!m_ScriptEngine) {
         m_Context->OutputToConsole(const_cast<char *>("Failed to create script engine."));
+        LOG_ERROR("Failed to create script engine.");
         return -1;
     }
 
@@ -1289,8 +1292,10 @@ int ScriptManager::SetupScriptEngine() {
 
     // The script compiler will send any compiler messages to the callback
     int r = m_ScriptEngine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), this, asCALL_THISCALL);
-    if (r < 0)
+    if (r < 0) {
+        LOG_ERROR("SetMessageCallback failed with code %d.", r);
         return r;
+    }
 
     // The script handle the pool of script contexts.
     r = m_ScriptEngine->SetContextCallbacks([](asIScriptEngine *, void *param) {
@@ -1300,8 +1305,10 @@ int ScriptManager::SetupScriptEngine() {
         auto *man = static_cast<ScriptManager *>(param);
         man->ReturnContextToPool(ctx);
     }, this);
-    if (r < 0)
+    if (r < 0) {
+        LOG_ERROR("SetContextCallbacks failed with code %d.", r);
         return r;
+    }
 
     m_ScriptEngine->SetEngineUserDataCleanupCallback([](asIScriptEngine *engine) {
         engine->SetUserData(nullptr, SCRIPT_MANAGER_TYPE);
@@ -1313,28 +1320,42 @@ int ScriptManager::SetupScriptEngine() {
         func->SetUserData(nullptr, AS_RELEASED_ONCE_FLAG_TYPE);
     }, AS_RELEASED_ONCE_FLAG_TYPE);
 
-    // Register the standard types
-    RegisterStdTypes(m_ScriptEngine);
+    ScriptRegistrationContext registration("AngelScript engine registration");
+    {
+        ScriptRegistrationScope registrationScope(registration);
 
-    // Register the standard add-ons
-    RegisterStdAddons(m_ScriptEngine);
+        // Register the standard types
+        RegisterStdTypes(m_ScriptEngine);
 
-    // Register the native types
-    RegisterNativePointer(m_ScriptEngine);
-    RegisterNativeBuffer(m_ScriptEngine);
+        // Register the standard add-ons
+        RegisterStdAddons(m_ScriptEngine);
 
-    // Register the DynCall APIs
-    RegisterScriptDynCall(m_ScriptEngine);
-    RegisterScriptDynCallback(m_ScriptEngine);
-    RegisterScriptDynLoad(m_ScriptEngine);
+        // Register the native types
+        RegisterNativePointer(m_ScriptEngine);
+        RegisterNativeBuffer(m_ScriptEngine);
 
-    // Register the function that we want the scripts to call
-    RegisterScriptFormat(m_ScriptEngine);
+        // Register the DynCall APIs
+        RegisterScriptDynCall(m_ScriptEngine);
+        RegisterScriptDynCallback(m_ScriptEngine);
+        RegisterScriptDynLoad(m_ScriptEngine);
 
-    RegisterScriptInfo(m_ScriptEngine);
+        // Register the function that we want the scripts to call
+        RegisterScriptFormat(m_ScriptEngine);
 
-    // Register the Virtools API
-    RegisterVirtools(m_ScriptEngine);
+        RegisterScriptInfo(m_ScriptEngine);
+
+        // Register the Virtools API
+        RegisterVirtools(m_ScriptEngine);
+    }
+
+    if (registration.HasFailures()) {
+        const std::string summary = registration.GetSummary();
+        m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+        LOG_ERROR("%s", summary.c_str());
+        m_ScriptEngine->ShutDownAndRelease();
+        m_ScriptEngine = nullptr;
+        return -1;
+    }
 
     return r;
 }
@@ -1345,15 +1366,15 @@ void ScriptManager::RegisterStdTypes(asIScriptEngine *engine) {
     int r = 0;
 
     if constexpr (sizeof(void *) == 4) {
-        r = engine->RegisterTypedef("size_t", "uint"); assert(r >= 0);
-        r = engine->RegisterTypedef("ptrdiff_t", "int"); assert(r >= 0);
-        r = engine->RegisterTypedef("intptr_t", "int"); assert(r >= 0);
-        r = engine->RegisterTypedef("uintptr_t", "uint"); assert(r >= 0);
+        r = engine->RegisterTypedef("size_t", "uint"); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterTypedef("ptrdiff_t", "int"); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterTypedef("intptr_t", "int"); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterTypedef("uintptr_t", "uint"); CKAS_CHECK_REGISTER(r);
     } else {
-        r = engine->RegisterTypedef("size_t", "uint64"); assert(r >= 0);
-        r = engine->RegisterTypedef("ptrdiff_t", "int64"); assert(r >= 0);
-        r = engine->RegisterTypedef("intptr_t", "int64"); assert(r >= 0);
-        r = engine->RegisterTypedef("uintptr_t", "uint64"); assert(r >= 0);
+        r = engine->RegisterTypedef("size_t", "uint64"); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterTypedef("ptrdiff_t", "int64"); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterTypedef("intptr_t", "int64"); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterTypedef("uintptr_t", "uint64"); CKAS_CHECK_REGISTER(r);
     }
 }
 
