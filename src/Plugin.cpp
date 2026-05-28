@@ -1,11 +1,14 @@
 ﻿#include "CKAll.h"
 
 #include "Logger.h"
+#include "AngelScriptEventHook.h"
 #include "ScriptManager.h"
 #include "Version.h"
 
 #define ANGELSCRIPT_BEHAVIOR CKGUID(0x2d9c2922,0x29a5c30)
 #define CKAS_PLUGIN_VERSION ((CKDWORD) ((CKAS_VERSION_MAJOR << 24) | (CKAS_VERSION_MINOR << 16) | (CKAS_VERSION_PATCH << 8) | CKAS_VERSION_TWEAK))
+
+CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl();
 
 static bool InitAngelScriptLogger() {
     static bool initialized = false;
@@ -20,8 +23,6 @@ static bool InitAngelScriptLogger() {
 #endif
     return initialized;
 }
-
-CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl();
 
 CKERROR InitInstance(CKContext *context) {
     InitAngelScriptLogger();
@@ -73,4 +74,5 @@ PLUGIN_EXPORT void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg);
 void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg) {
     InitAngelScriptLogger();
     RegisterBehavior(reg, FillBehaviorAngelScriptComponentDecl);
+    RegisterBehavior(reg, FillBehaviorAngelScriptEventHookDecl);
 }

@@ -4,6 +4,7 @@ configure_file(Version.h.in "${CKAS_GENERATED_INCLUDE_DIR}/Version.h")
 set(CKAS_HEADERS
         Logger.h
         ScriptManager.h
+        AngelScriptEventHook.h
         ScriptCache.h
         ScriptInvoker.h
         ScriptInfo.h
@@ -52,6 +53,7 @@ set(CKAS_SOURCES
         ScriptManager.cpp
         ScriptCache.cpp
         ScriptInvoker.cpp
+        AngelScriptEventHook.cpp
         AngelScriptComponent.cpp
         ScriptComponentMetadata.cpp
         ScriptComponentInjection.cpp
