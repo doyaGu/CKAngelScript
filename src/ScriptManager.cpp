@@ -54,11 +54,11 @@
 #include "add_on/scriptgrid/scriptgrid.h"
 #include "add_on/datetime/datetime.h"
 
-struct AngelScriptExecution {
-    explicit AngelScriptExecution(ScriptManager *manager)
+struct CKAngelScriptExecution {
+    explicit CKAngelScriptExecution(ScriptManager *manager)
         : Manager(manager), Invoker(manager) {}
 
-    ~AngelScriptExecution() {
+    ~CKAngelScriptExecution() {
         if (Function) {
             Function->Release();
             Function = nullptr;
@@ -68,8 +68,8 @@ struct AngelScriptExecution {
     ScriptManager *Manager = nullptr;
     ScriptInvoker Invoker;
     asIScriptFunction *Function = nullptr;
-    AngelScriptExecutionState State = ANGELSCRIPT_EXECUTION_READY;
-    AngelScriptResult Result;
+    CKAS_EXECUTIONSTATE State = CKAS_EXECUTION_READY;
+    CKAngelScriptResult Result;
     std::string ErrorMessage;
     std::string StackTrace;
     std::string ModuleName;
@@ -77,43 +77,62 @@ struct AngelScriptExecution {
     std::string FunctionDecl;
     CKBehaviorContext BehaviorContextStorage;
     bool HasBehaviorContext = false;
-    AngelScriptContextCallback ConfigureContext = nullptr;
-    AngelScriptContextCallback ReadResult = nullptr;
+    CKAngelScriptContextCallback ConfigureContext = nullptr;
+    CKAngelScriptContextCallback ReadResult = nullptr;
     void *UserData = nullptr;
 };
 
 namespace {
 
-AngelScriptStatus ToAngelScriptStatus(ScriptInvocationStatus status) {
+CKAS_STATUS ToCKAS_STATUS(ScriptInvocationStatus status) {
     switch (status) {
         case ScriptInvocationStatus::Finished:
-            return ANGELSCRIPT_STATUS_OK;
+            return CKAS_OK;
         case ScriptInvocationStatus::Suspended:
-            return ANGELSCRIPT_STATUS_SUSPENDED;
+            return CKAS_SUSPENDED;
         case ScriptInvocationStatus::Failed:
         default:
-            return ANGELSCRIPT_STATUS_EXECUTION_FAILED;
+            return CKAS_EXECUTIONFAILED;
     }
 }
 
-AngelScriptExecutionState ToExecutionState(ScriptInvocationStatus status) {
+bool HasPublicFlag(CKDWORD flags, CKDWORD flag) {
+    return (flags & flag) != 0;
+}
+
+template <typename T, typename M>
+bool HasPublicField(const T &value, M T::*field) {
+    const CKDWORD size = value.Size ? value.Size : static_cast<CKDWORD>(sizeof(T));
+    const char *base = reinterpret_cast<const char *>(&value);
+    const char *member = reinterpret_cast<const char *>(&(value.*field));
+    const size_t offset = static_cast<size_t>(member - base);
+    return size >= offset + sizeof(M);
+}
+
+template <typename T, typename M>
+M PublicField(const T &value, M T::*field, M fallback = M()) {
+    return HasPublicField(value, field) ? value.*field : fallback;
+}
+
+CKAS_EXECUTIONSTATE ToExecutionState(ScriptInvocationStatus status) {
     switch (status) {
         case ScriptInvocationStatus::Finished:
-            return ANGELSCRIPT_EXECUTION_FINISHED;
+            return CKAS_EXECUTION_FINISHED;
         case ScriptInvocationStatus::Suspended:
-            return ANGELSCRIPT_EXECUTION_SUSPENDED;
+            return CKAS_EXECUTION_SUSPENDED;
         case ScriptInvocationStatus::Failed:
         default:
-            return ANGELSCRIPT_EXECUTION_FAILED;
+            return CKAS_EXECUTION_FAILED;
     }
 }
 
-AngelScriptResult MakeExecutionResult(AngelScriptExecution *execution,
-                                      AngelScriptStatus status,
+CKAngelScriptResult MakeExecutionResult(CKAngelScriptExecution *execution,
+                                      CKAS_STATUS status,
                                       int angelScriptCode = 0,
                                       const std::string &errorMessage = std::string(),
                                       const std::string &stackTrace = std::string()) {
-    AngelScriptResult result;
+    CKAngelScriptResult result;
+    result.Size = sizeof(result);
     result.Status = status;
     result.AngelScriptCode = angelScriptCode;
     if (execution) {
@@ -126,12 +145,12 @@ AngelScriptResult MakeExecutionResult(AngelScriptExecution *execution,
     return result;
 }
 
-AngelScriptStatus RunExecution(AngelScriptExecution *execution) {
+CKAS_STATUS RunExecution(CKAngelScriptExecution *execution) {
     if (!execution) {
-        return ANGELSCRIPT_STATUS_INVALID_ARGUMENT;
+        return CKAS_INVALIDARGUMENT;
     }
 
-    execution->State = ANGELSCRIPT_EXECUTION_RUNNING;
+    execution->State = CKAS_EXECUTION_RUNNING;
     const ScriptInvocationStatus scriptStatus = execution->Invoker.ExecuteScriptStatus(
         execution->Function,
         [execution](asIScriptContext *ctx) {
@@ -149,9 +168,9 @@ AngelScriptStatus RunExecution(AngelScriptExecution *execution) {
         });
 
     execution->State = ToExecutionState(scriptStatus);
-    const AngelScriptStatus status = ToAngelScriptStatus(scriptStatus);
+    const CKAS_STATUS status = ToCKAS_STATUS(scriptStatus);
     const int resultCode = execution->Invoker.GetLastResultCode();
-    if (status == ANGELSCRIPT_STATUS_EXECUTION_FAILED) {
+    if (status == CKAS_EXECUTIONFAILED) {
         MakeExecutionResult(execution,
                             status,
                             resultCode,
@@ -165,7 +184,162 @@ AngelScriptStatus RunExecution(AngelScriptExecution *execution) {
 
 } // namespace
 
-ScriptManager::ScriptManager(CKContext *context) : AngelScriptManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
+static ScriptManager *FromPublicHandle(CKAngelScript *angelScript) {
+    return reinterpret_cast<ScriptManager *>(angelScript);
+}
+
+static const ScriptManager *FromPublicHandle(const CKAngelScript *angelScript) {
+    return reinterpret_cast<const ScriptManager *>(angelScript);
+}
+
+static CKAngelScript *ToPublicHandle(ScriptManager *manager) {
+    return reinterpret_cast<CKAngelScript *>(manager);
+}
+
+extern "C" CKAS_API CKAngelScript *CKGetAngelScript(CKContext *context) {
+    return ToPublicHandle(context ? ScriptManager::GetManager(context) : nullptr);
+}
+
+extern "C" CKAS_API asIScriptEngine *CKAngelScriptGetScriptEngine(CKAngelScript *angelScript) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->GetScriptEngine() : nullptr;
+}
+
+extern "C" CKAS_API const char *CKAngelScriptGetVersion(CKAngelScript *angelScript) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->GetVersion() : nullptr;
+}
+
+extern "C" CKAS_API const char *CKAngelScriptGetOptions(CKAngelScript *angelScript) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->GetOptions() : nullptr;
+}
+
+extern "C" CKAS_API asIScriptContext *CKAngelScriptGetActiveContext(CKAngelScript *angelScript) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->GetActiveContext() : nullptr;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptLoadModule(CKAngelScript *angelScript,
+                                                             const CKAngelScriptLoadOptions *options,
+                                                             CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager && options
+               ? scriptManager->LoadModule(*options, result)
+               : CKAS_INVALIDARGUMENT;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptCompileModule(CKAngelScript *angelScript,
+                                                                const char *moduleName,
+                                                                const char *scriptCode,
+                                                                CKDWORD flags,
+                                                                CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager
+               ? scriptManager->CompileModule(moduleName, scriptCode, flags, result)
+               : CKAS_INVALIDARGUMENT;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptUnloadModule(CKAngelScript *angelScript,
+                                                               const char *moduleName,
+                                                               CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->UnloadModule(moduleName, result) : CKAS_INVALIDARGUMENT;
+}
+
+extern "C" CKAS_API CKBOOL CKAngelScriptHasModule(CKAngelScript *angelScript, const char *moduleName) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager && scriptManager->HasModule(moduleName) ? TRUE : FALSE;
+}
+
+extern "C" CKAS_API asIScriptModule *CKAngelScriptGetModule(CKAngelScript *angelScript, const char *moduleName) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->GetModule(moduleName) : nullptr;
+}
+
+extern "C" CKAS_API asIScriptFunction *CKAngelScriptFindFunctionByName(CKAngelScript *angelScript,
+                                                                      const char *moduleName,
+                                                                      const char *functionName) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->FindFunctionByName(moduleName, functionName) : nullptr;
+}
+
+extern "C" CKAS_API asIScriptFunction *CKAngelScriptFindFunctionByDecl(CKAngelScript *angelScript,
+                                                                      const char *moduleName,
+                                                                      const char *functionDecl) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->FindFunctionByDecl(moduleName, functionDecl) : nullptr;
+}
+
+extern "C" CKAS_API CKAngelScriptExecution *CKAngelScriptCreateExecution(CKAngelScript *angelScript,
+                                                                      const CKAngelScriptExecuteOptions *options,
+                                                                      CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager && options ? scriptManager->CreateExecution(*options, result) : nullptr;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptStartExecution(CKAngelScript *angelScript,
+                                                                 CKAngelScriptExecution *execution) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->StartExecution(execution) : CKAS_INVALIDARGUMENT;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptResumeExecution(CKAngelScript *angelScript,
+                                                                  CKAngelScriptExecution *execution) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->ResumeExecution(execution) : CKAS_INVALIDARGUMENT;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptCancelExecution(CKAngelScript *angelScript,
+                                                                  CKAngelScriptExecution *execution) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->CancelExecution(execution) : CKAS_INVALIDARGUMENT;
+}
+
+extern "C" CKAS_API void CKAngelScriptReleaseExecution(CKAngelScript *angelScript,
+                                                      CKAngelScriptExecution *execution) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    if (scriptManager) {
+        scriptManager->ReleaseExecution(execution);
+    }
+}
+
+extern "C" CKAS_API CKAS_EXECUTIONSTATE CKAngelScriptGetExecutionState(CKAngelScript *angelScript,
+                                                                            const CKAngelScriptExecution *execution) {
+    const ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->GetExecutionState(execution) : CKAS_EXECUTION_FAILED;
+}
+
+extern "C" CKAS_API const CKAngelScriptResult *CKAngelScriptGetExecutionResult(CKAngelScript *angelScript,
+                                                                            const CKAngelScriptExecution *execution) {
+    const ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->GetExecutionResult(execution) : nullptr;
+}
+
+extern "C" CKAS_API const CKAngelScriptResult *CKAngelScriptGetLastResult(CKAngelScript *angelScript) {
+    const ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->GetLastResult() : nullptr;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptRegisterEngineExtension(CKAngelScript *angelScript,
+                                                                          const CKAngelScriptEngineExtension *extension,
+                                                                          CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager && extension
+               ? scriptManager->RegisterEngineExtension(*extension, result)
+               : CKAS_INVALIDARGUMENT;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptUnregisterEngineExtension(CKAngelScript *angelScript,
+                                                                            const char *name,
+                                                                            void *userData,
+                                                                            CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->UnregisterEngineExtension(name, userData, result)
+                         : CKAS_INVALIDARGUMENT;
+}
+
+ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
     int r = Init();
     if (r < 0)
         return;
@@ -377,14 +551,15 @@ asIScriptContext *ScriptManager::GetActiveContext() {
     return asGetActiveContext();
 }
 
-AngelScriptResult ScriptManager::MakeResult(AngelScriptStatus status,
+CKAngelScriptResult ScriptManager::MakeResult(CKAS_STATUS status,
                                             int angelScriptCode,
                                             const std::string &errorMessage,
                                             const std::string &stackTrace) {
     m_LastErrorMessage = errorMessage;
     m_LastStackTrace = stackTrace;
 
-    AngelScriptResult result;
+    CKAngelScriptResult result;
+    result.Size = sizeof(result);
     result.Status = status;
     result.AngelScriptCode = angelScriptCode;
     result.ErrorMessage = m_LastErrorMessage.empty() ? nullptr : m_LastErrorMessage.c_str();
@@ -393,36 +568,44 @@ AngelScriptResult ScriptManager::MakeResult(AngelScriptStatus status,
     return m_LastResult;
 }
 
-AngelScriptStatus ScriptManager::StoreResult(AngelScriptResult *out,
-                                             AngelScriptStatus status,
+CKAS_STATUS ScriptManager::StoreResult(CKAngelScriptResult *out,
+                                             CKAS_STATUS status,
                                              int angelScriptCode,
                                              const std::string &errorMessage,
                                              const std::string &stackTrace) {
-    AngelScriptResult result = MakeResult(status, angelScriptCode, errorMessage, stackTrace);
+    CKAngelScriptResult result = MakeResult(status, angelScriptCode, errorMessage, stackTrace);
     if (out) {
         *out = result;
     }
     return status;
 }
 
-const AngelScriptResult *ScriptManager::GetLastResult() const {
+const CKAngelScriptResult *ScriptManager::GetLastResult() const {
     return &m_LastResult;
 }
 
-AngelScriptStatus ScriptManager::RegisterEngineExtension(const AngelScriptEngineExtension &extension,
-                                                         AngelScriptResult *result) {
-    if (!extension.Name || extension.Name[0] == '\0') {
-        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Engine extension name is required.");
+CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExtension &extension,
+                                                         CKAngelScriptResult *result) {
+    const char *name = PublicField(extension, &CKAngelScriptEngineExtension::Name, static_cast<const char *>(nullptr));
+    CKAngelScriptEngineExtensionCallback callback =
+        PublicField(extension, &CKAngelScriptEngineExtension::Register, static_cast<CKAngelScriptEngineExtensionCallback>(nullptr));
+    void *userData = PublicField(extension, &CKAngelScriptEngineExtension::UserData, static_cast<void *>(nullptr));
+    const CKDWORD flags = PublicField(extension,
+                                      &CKAngelScriptEngineExtension::Flags,
+                                      static_cast<CKDWORD>(CKAS_ENGINEEXTENSION_DEFAULT));
+
+    if (!name || name[0] == '\0') {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension name is required.");
     }
-    if (!extension.Register) {
-        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Engine extension callback is required.");
+    if (!callback) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension callback is required.");
     }
-    for (const AngelScriptEngineExtension &existing : m_EngineExtensions) {
-        if (existing.Name && std::string(existing.Name) == extension.Name) {
+    for (const CKAngelScriptEngineExtension &existing : m_EngineExtensions) {
+        if (existing.Name && std::string(existing.Name) == name) {
             return StoreResult(result,
-                               ANGELSCRIPT_STATUS_INVALID_ARGUMENT,
+                               CKAS_INVALIDARGUMENT,
                                0,
-                               fmt::format("Engine extension '{}' is already registered.", extension.Name));
+                               fmt::format("Engine extension '{}' is already registered.", name));
         }
     }
 
@@ -431,16 +614,22 @@ AngelScriptStatus ScriptManager::RegisterEngineExtension(const AngelScriptEngine
     // the registration path consistent with the setup/rebuild path, where a
     // failing extension is logged but never removes the others or tears the
     // engine down.
-    m_EngineExtensions.push_back(extension);
+    CKAngelScriptEngineExtension retained = {};
+    retained.Size = sizeof(retained);
+    retained.Name = name;
+    retained.Register = callback;
+    retained.UserData = userData;
+    retained.Flags = flags;
+    m_EngineExtensions.push_back(retained);
 
-    if (m_ScriptEngine && IsInited() && extension.InvokeImmediately) {
+    if (m_ScriptEngine && IsInited() && !HasPublicFlag(flags, CKAS_ENGINEEXTENSION_DEFERRED)) {
         const char *extensionError = nullptr;
-        const int code = extension.Register(m_ScriptEngine, this, extension.UserData, &extensionError);
+        const int code = callback(m_ScriptEngine, ToPublicHandle(this), userData, &extensionError);
         if (code < 0) {
             const std::string summary =
                 extensionError && extensionError[0] != '\0'
-                    ? fmt::format("Engine extension '{}' failed to register (code {}): {}", extension.Name, code, extensionError)
-                    : fmt::format("Engine extension '{}' failed to register (code {}).", extension.Name, code);
+                    ? fmt::format("Engine extension '{}' failed to register (code {}): {}", name, code, extensionError)
+                    : fmt::format("Engine extension '{}' failed to register (code {}).", name, code);
             if (m_Context) {
                 m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
             }
@@ -449,29 +638,29 @@ AngelScriptStatus ScriptManager::RegisterEngineExtension(const AngelScriptEngine
             // but the caller is told this immediate attempt failed. Functions
             // the callback registered before failing may remain in the current
             // engine until the next rebuild.
-            return StoreResult(result, ANGELSCRIPT_STATUS_EXECUTION_FAILED, code, summary);
+            return StoreResult(result, CKAS_EXECUTIONFAILED, code, summary);
         }
     }
 
-    return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+    return StoreResult(result, CKAS_OK);
 }
 
-AngelScriptStatus ScriptManager::UnregisterEngineExtension(const char *name,
+CKAS_STATUS ScriptManager::UnregisterEngineExtension(const char *name,
                                                            void *userData,
-                                                           AngelScriptResult *result) {
+                                                           CKAngelScriptResult *result) {
     if (!name || name[0] == '\0') {
-        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Engine extension name is required.");
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension name is required.");
     }
     for (auto it = m_EngineExtensions.begin(); it != m_EngineExtensions.end(); ++it) {
         const bool nameMatches = it->Name && std::string(it->Name) == name;
         const bool userDataMatches = !userData || it->UserData == userData;
         if (nameMatches && userDataMatches) {
             m_EngineExtensions.erase(it);
-            return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+            return StoreResult(result, CKAS_OK);
         }
     }
     return StoreResult(result,
-                       ANGELSCRIPT_STATUS_NOT_FOUND,
+                       CKAS_NOTFOUND,
                        0,
                        fmt::format("Engine extension '{}' is not registered.", name));
 }
@@ -486,15 +675,15 @@ std::string ScriptManager::EndScriptMessageCapture() {
     return m_CapturedScriptMessages;
 }
 
-bool ScriptManager::OwnsExecution(const AngelScriptExecution *execution) const {
-    return execution && m_Executions.find(const_cast<AngelScriptExecution *>(execution)) != m_Executions.end();
+bool ScriptManager::OwnsExecution(const CKAngelScriptExecution *execution) const {
+    return execution && m_Executions.find(const_cast<CKAngelScriptExecution *>(execution)) != m_Executions.end();
 }
 
 bool ScriptManager::HasExecutionForModule(const char *moduleName) const {
     if (!moduleName || moduleName[0] == '\0') {
         return false;
     }
-    for (const AngelScriptExecution *execution : m_Executions) {
+    for (const CKAngelScriptExecution *execution : m_Executions) {
         if (execution && execution->ModuleName == moduleName) {
             return true;
         }
@@ -502,91 +691,100 @@ bool ScriptManager::HasExecutionForModule(const char *moduleName) const {
     return false;
 }
 
-AngelScriptStatus ScriptManager::LoadModule(const AngelScriptLoadOptions &options, AngelScriptResult *result) {
-    if (!options.ModuleName || options.ModuleName[0] == '\0') {
-        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name is required.");
+CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result) {
+    const char *moduleName = PublicField(options, &CKAngelScriptLoadOptions::ModuleName, static_cast<const char *>(nullptr));
+    const char *filename = PublicField(options, &CKAngelScriptLoadOptions::Filename, static_cast<const char *>(nullptr));
+    const char **filenames = PublicField(options, &CKAngelScriptLoadOptions::Filenames, static_cast<const char **>(nullptr));
+    const size_t fileCount = PublicField(options, &CKAngelScriptLoadOptions::FileCount, static_cast<size_t>(0));
+    const char *code = PublicField(options, &CKAngelScriptLoadOptions::Code, static_cast<const char *>(nullptr));
+    const CKDWORD flags = PublicField(options,
+                                      &CKAngelScriptLoadOptions::Flags,
+                                      static_cast<CKDWORD>(CKAS_LOAD_DEFAULT));
+
+    if (!moduleName || moduleName[0] == '\0') {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (!m_ScriptEngine) {
-        return StoreResult(result, ANGELSCRIPT_STATUS_NOT_INITIALIZED, 0, "AngelScript engine is not initialized.");
+        return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
-    const bool hasCode = options.Code != nullptr;
-    const bool hasFile = options.Filename && options.Filename[0] != '\0';
-    const bool hasFiles = options.FileCount > 0;
+    const bool hasCode = code != nullptr;
+    const bool hasFile = filename && filename[0] != '\0';
+    const bool hasFiles = fileCount > 0;
     const int sourceCount = (hasCode ? 1 : 0) + (hasFile ? 1 : 0) + (hasFiles ? 1 : 0);
     if (sourceCount > 1) {
         return StoreResult(result,
-                           ANGELSCRIPT_STATUS_INVALID_ARGUMENT,
+                           CKAS_INVALIDARGUMENT,
                            0,
                            "LoadModule accepts only one source: Code, Filename, or Filenames.");
     }
-    if (HasModule(options.ModuleName)) {
-        if (!options.ReplaceExisting) {
-            return StoreResult(result, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Module already exists.");
+    if (HasModule(moduleName)) {
+        if (!HasPublicFlag(flags, CKAS_LOAD_REPLACEEXISTING)) {
+            return StoreResult(result, CKAS_EXECUTIONFAILED, 0, "Module already exists.");
         }
-        if (HasExecutionForModule(options.ModuleName)) {
+        if (HasExecutionForModule(moduleName)) {
             return StoreResult(result,
-                               ANGELSCRIPT_STATUS_EXECUTION_FAILED,
+                               CKAS_EXECUTIONFAILED,
                                0,
                                "Module has active execution handles.");
         }
-        DiscardCachedModule(options.ModuleName);
+        DiscardCachedModule(moduleName);
     }
     if (hasCode) {
-        return CompileModule(options.ModuleName, options.Code, true, result);
+        return CompileModule(moduleName, code, CKAS_COMPILE_REPLACEEXISTING, result);
     }
     if (hasFiles) {
-        if (!options.Filenames) {
-            return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "File list is null.");
+        if (!filenames) {
+            return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "File list is null.");
         }
-        for (size_t i = 0; i < options.FileCount; ++i) {
-            if (!options.Filenames[i] || options.Filenames[i][0] == '\0') {
+        for (size_t i = 0; i < fileCount; ++i) {
+            if (!filenames[i] || filenames[i][0] == '\0') {
                 return StoreResult(result,
-                                   ANGELSCRIPT_STATUS_INVALID_ARGUMENT,
+                                   CKAS_INVALIDARGUMENT,
                                    0,
                                    "File list contains an empty filename.");
             }
         }
         BeginScriptMessageCapture();
-        const int loadResult = LoadModuleFromFiles(options.ModuleName, options.Filenames, options.FileCount);
+        const int loadResult = LoadModuleFromFiles(moduleName, filenames, fileCount);
         const std::string diagnostics = EndScriptMessageCapture();
         if (loadResult < 0) {
             return StoreResult(result,
-                               ANGELSCRIPT_STATUS_COMPILE_ERROR,
+                               CKAS_COMPILEERROR,
                                loadResult,
                                diagnostics.empty() ? "Failed to load script files." : diagnostics);
         }
-        return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+        return StoreResult(result, CKAS_OK);
     }
 
     BeginScriptMessageCapture();
-    const int loadResult = LoadModuleFromDefaultOrFile(options.ModuleName, options.Filename);
+    const int loadResult = LoadModuleFromDefaultOrFile(moduleName, filename);
     const std::string diagnostics = EndScriptMessageCapture();
     if (loadResult < 0) {
         return StoreResult(result,
-                           ANGELSCRIPT_STATUS_COMPILE_ERROR,
+                           CKAS_COMPILEERROR,
                            loadResult,
                            diagnostics.empty() ? "Failed to load script file." : diagnostics);
     }
-    return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+    return StoreResult(result, CKAS_OK);
 }
 
-AngelScriptStatus ScriptManager::CompileModule(const char *moduleName,
+CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
                                                const char *scriptCode,
-                                               bool replaceExisting,
-                                               AngelScriptResult *result) {
+                                               CKDWORD flags,
+                                               CKAngelScriptResult *result) {
     if (!moduleName || moduleName[0] == '\0' || !scriptCode) {
-        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name and script code are required.");
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name and script code are required.");
     }
     if (!m_ScriptEngine) {
-        return StoreResult(result, ANGELSCRIPT_STATUS_NOT_INITIALIZED, 0, "AngelScript engine is not initialized.");
+        return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
     if (HasModule(moduleName)) {
-        if (!replaceExisting) {
-            return StoreResult(result, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Module already exists.");
+        if (!HasPublicFlag(flags, CKAS_COMPILE_REPLACEEXISTING)) {
+            return StoreResult(result, CKAS_EXECUTIONFAILED, 0, "Module already exists.");
         }
         if (HasExecutionForModule(moduleName)) {
             return StoreResult(result,
-                               ANGELSCRIPT_STATUS_EXECUTION_FAILED,
+                               CKAS_EXECUTIONFAILED,
                                0,
                                "Module has active execution handles.");
         }
@@ -598,27 +796,27 @@ AngelScriptStatus ScriptManager::CompileModule(const char *moduleName,
     const std::string diagnostics = EndScriptMessageCapture();
     if (compileResult < 0) {
         return StoreResult(result,
-                           ANGELSCRIPT_STATUS_COMPILE_ERROR,
+                           CKAS_COMPILEERROR,
                            compileResult,
                            diagnostics.empty() ? "Failed to compile script module." : diagnostics);
     }
-    return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+    return StoreResult(result, CKAS_OK);
 }
 
-AngelScriptStatus ScriptManager::UnloadModule(const char *moduleName, AngelScriptResult *result) {
+CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptResult *result) {
     if (!moduleName || moduleName[0] == '\0') {
-        return StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name is required.");
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (HasExecutionForModule(moduleName)) {
         return StoreResult(result,
-                           ANGELSCRIPT_STATUS_EXECUTION_FAILED,
+                           CKAS_EXECUTIONFAILED,
                            0,
                            "Module has active execution handles.");
     }
     if (!DiscardCachedModule(moduleName)) {
-        return StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, "Module was not loaded.");
+        return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }
-    return StoreResult(result, ANGELSCRIPT_STATUS_OK);
+    return StoreResult(result, CKAS_OK);
 }
 
 bool ScriptManager::HasModule(const char *moduleName) {
@@ -645,70 +843,81 @@ asIScriptFunction *ScriptManager::FindFunctionByDecl(const char *moduleName, con
     return module->GetFunctionByDecl(functionDecl);
 }
 
-AngelScriptExecution *ScriptManager::CreateExecution(const AngelScriptExecuteOptions &options, AngelScriptResult *result) {
-    if (!options.ModuleName || options.ModuleName[0] == '\0') {
-        StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Module name is required.");
+CKAngelScriptExecution *ScriptManager::CreateExecution(const CKAngelScriptExecuteOptions &options, CKAngelScriptResult *result) {
+    const char *moduleName = PublicField(options, &CKAngelScriptExecuteOptions::ModuleName, static_cast<const char *>(nullptr));
+    const char *functionName = PublicField(options, &CKAngelScriptExecuteOptions::FunctionName, static_cast<const char *>(nullptr));
+    const char *functionDecl = PublicField(options, &CKAngelScriptExecuteOptions::FunctionDecl, static_cast<const char *>(nullptr));
+    const CKBehaviorContext *behaviorContext =
+        PublicField(options, &CKAngelScriptExecuteOptions::BehaviorContext, static_cast<const CKBehaviorContext *>(nullptr));
+    CKAngelScriptContextCallback configureContext =
+        PublicField(options, &CKAngelScriptExecuteOptions::ConfigureContext, static_cast<CKAngelScriptContextCallback>(nullptr));
+    CKAngelScriptContextCallback readResult =
+        PublicField(options, &CKAngelScriptExecuteOptions::ReadResult, static_cast<CKAngelScriptContextCallback>(nullptr));
+    void *userData = PublicField(options, &CKAngelScriptExecuteOptions::UserData, static_cast<void *>(nullptr));
+
+    if (!moduleName || moduleName[0] == '\0') {
+        StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
         return nullptr;
     }
     if (!m_ScriptEngine) {
-        StoreResult(result, ANGELSCRIPT_STATUS_NOT_INITIALIZED, 0, "AngelScript engine is not initialized.");
+        StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
         return nullptr;
     }
-    asIScriptModule *module = GetModule(options.ModuleName);
+    asIScriptModule *module = GetModule(moduleName);
     if (!module) {
-        StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, "Module was not found.");
+        StoreResult(result, CKAS_NOTFOUND, 0, "Module was not found.");
         return nullptr;
     }
 
     asIScriptFunction *function = nullptr;
-    if (options.FunctionDecl && options.FunctionDecl[0] != '\0') {
-        function = module->GetFunctionByDecl(options.FunctionDecl);
-    } else if (options.FunctionName && options.FunctionName[0] != '\0') {
-        function = module->GetFunctionByName(options.FunctionName);
+    if (functionDecl && functionDecl[0] != '\0') {
+        function = module->GetFunctionByDecl(functionDecl);
+    } else if (functionName && functionName[0] != '\0') {
+        function = module->GetFunctionByName(functionName);
     } else {
-        StoreResult(result, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Function name or declaration is required.");
+        StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function name or declaration is required.");
         return nullptr;
     }
     if (!function) {
-        StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, "Function was not found.");
+        StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
         return nullptr;
     }
 
-    auto *execution = new AngelScriptExecution(this);
-    execution->ModuleName = options.ModuleName;
-    execution->FunctionName = options.FunctionName ? options.FunctionName : "";
-    execution->FunctionDecl = options.FunctionDecl ? options.FunctionDecl : "";
-    execution->ConfigureContext = options.ConfigureContext;
-    execution->ReadResult = options.ReadResult;
-    execution->UserData = options.UserData;
-    if (options.BehaviorContext) {
-        execution->BehaviorContextStorage = *options.BehaviorContext;
+    auto *execution = new CKAngelScriptExecution(this);
+    execution->ModuleName = moduleName;
+    execution->FunctionName = functionName ? functionName : "";
+    execution->FunctionDecl = functionDecl ? functionDecl : "";
+    execution->ConfigureContext = configureContext;
+    execution->ReadResult = readResult;
+    execution->UserData = userData;
+    if (behaviorContext) {
+        execution->BehaviorContextStorage = *behaviorContext;
         execution->HasBehaviorContext = true;
     }
     function->AddRef();
     execution->Function = function;
-    if (!execution->Invoker.SetScript(options.ModuleName)) {
+    if (!execution->Invoker.SetScript(moduleName)) {
         const std::string error = execution->Invoker.GetErrorMessage();
         delete execution;
-        StoreResult(result, ANGELSCRIPT_STATUS_NOT_FOUND, 0, error.empty() ? "Module cache was not found." : error);
+        StoreResult(result, CKAS_NOTFOUND, 0, error.empty() ? "Module cache was not found." : error);
         return nullptr;
     }
 
-    MakeExecutionResult(execution, ANGELSCRIPT_STATUS_OK);
+    MakeExecutionResult(execution, CKAS_OK);
     m_Executions.insert(execution);
-    StoreResult(result, ANGELSCRIPT_STATUS_OK);
+    StoreResult(result, CKAS_OK);
     return execution;
 }
 
-AngelScriptStatus ScriptManager::StartExecution(AngelScriptExecution *execution) {
+CKAS_STATUS ScriptManager::StartExecution(CKAngelScriptExecution *execution) {
     if (!OwnsExecution(execution)) {
-        return StoreResult(nullptr, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Execution handle is invalid.");
+        return StoreResult(nullptr, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
     }
-    if (execution->State != ANGELSCRIPT_EXECUTION_READY) {
-        MakeExecutionResult(execution, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Execution has already started.");
-        return StoreResult(nullptr, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Execution has already started.");
+    if (execution->State != CKAS_EXECUTION_READY) {
+        MakeExecutionResult(execution, CKAS_EXECUTIONFAILED, 0, "Execution has already started.");
+        return StoreResult(nullptr, CKAS_EXECUTIONFAILED, 0, "Execution has already started.");
     }
-    const AngelScriptStatus status = RunExecution(execution);
+    const CKAS_STATUS status = RunExecution(execution);
     StoreResult(nullptr,
                 status,
                 execution->Result.AngelScriptCode,
@@ -717,15 +926,15 @@ AngelScriptStatus ScriptManager::StartExecution(AngelScriptExecution *execution)
     return status;
 }
 
-AngelScriptStatus ScriptManager::ResumeExecution(AngelScriptExecution *execution) {
+CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution) {
     if (!OwnsExecution(execution)) {
-        return StoreResult(nullptr, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Execution handle is invalid.");
+        return StoreResult(nullptr, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
     }
-    if (execution->State != ANGELSCRIPT_EXECUTION_SUSPENDED) {
-        MakeExecutionResult(execution, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Execution is not suspended.");
-        return StoreResult(nullptr, ANGELSCRIPT_STATUS_EXECUTION_FAILED, 0, "Execution is not suspended.");
+    if (execution->State != CKAS_EXECUTION_SUSPENDED) {
+        MakeExecutionResult(execution, CKAS_EXECUTIONFAILED, 0, "Execution is not suspended.");
+        return StoreResult(nullptr, CKAS_EXECUTIONFAILED, 0, "Execution is not suspended.");
     }
-    const AngelScriptStatus status = RunExecution(execution);
+    const CKAS_STATUS status = RunExecution(execution);
     StoreResult(nullptr,
                 status,
                 execution->Result.AngelScriptCode,
@@ -734,23 +943,23 @@ AngelScriptStatus ScriptManager::ResumeExecution(AngelScriptExecution *execution
     return status;
 }
 
-AngelScriptStatus ScriptManager::CancelExecution(AngelScriptExecution *execution) {
+CKAS_STATUS ScriptManager::CancelExecution(CKAngelScriptExecution *execution) {
     if (!OwnsExecution(execution)) {
-        return StoreResult(nullptr, ANGELSCRIPT_STATUS_INVALID_ARGUMENT, 0, "Execution handle is invalid.");
+        return StoreResult(nullptr, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
     }
-    if (execution->State == ANGELSCRIPT_EXECUTION_FINISHED ||
-        execution->State == ANGELSCRIPT_EXECUTION_FAILED ||
-        execution->State == ANGELSCRIPT_EXECUTION_CANCELLED) {
-        MakeExecutionResult(execution, ANGELSCRIPT_STATUS_CANCELLED);
-        return StoreResult(nullptr, ANGELSCRIPT_STATUS_CANCELLED);
+    if (execution->State == CKAS_EXECUTION_FINISHED ||
+        execution->State == CKAS_EXECUTION_FAILED ||
+        execution->State == CKAS_EXECUTION_CANCELLED) {
+        MakeExecutionResult(execution, CKAS_CANCELLED);
+        return StoreResult(nullptr, CKAS_CANCELLED);
     }
     execution->Invoker.AbortContext();
-    execution->State = ANGELSCRIPT_EXECUTION_CANCELLED;
-    MakeExecutionResult(execution, ANGELSCRIPT_STATUS_CANCELLED);
-    return StoreResult(nullptr, ANGELSCRIPT_STATUS_CANCELLED);
+    execution->State = CKAS_EXECUTION_CANCELLED;
+    MakeExecutionResult(execution, CKAS_CANCELLED);
+    return StoreResult(nullptr, CKAS_CANCELLED);
 }
 
-void ScriptManager::ReleaseExecution(AngelScriptExecution *execution) {
+void ScriptManager::ReleaseExecution(CKAngelScriptExecution *execution) {
     if (!OwnsExecution(execution)) {
         return;
     }
@@ -758,14 +967,14 @@ void ScriptManager::ReleaseExecution(AngelScriptExecution *execution) {
     delete execution;
 }
 
-AngelScriptExecutionState ScriptManager::GetExecutionState(const AngelScriptExecution *execution) const {
+CKAS_EXECUTIONSTATE ScriptManager::GetExecutionState(const CKAngelScriptExecution *execution) const {
     if (!OwnsExecution(execution)) {
-        return ANGELSCRIPT_EXECUTION_FAILED;
+        return CKAS_EXECUTION_FAILED;
     }
     return execution->State;
 }
 
-const AngelScriptResult *ScriptManager::GetExecutionResult(const AngelScriptExecution *execution) const {
+const CKAngelScriptResult *ScriptManager::GetExecutionResult(const CKAngelScriptExecution *execution) const {
     if (!OwnsExecution(execution)) {
         return nullptr;
     }
@@ -1498,12 +1707,12 @@ int ScriptManager::RegisterEngineExtensions(asIScriptEngine *engine) {
     // failure is reported individually and the first failure code is returned
     // for callers that want to surface it.
     int firstFailure = 0;
-    for (const AngelScriptEngineExtension &extension : m_EngineExtensions) {
+    for (const CKAngelScriptEngineExtension &extension : m_EngineExtensions) {
         if (!extension.Register) {
             continue;
         }
         const char *extensionError = nullptr;
-        const int code = extension.Register(engine, this, extension.UserData, &extensionError);
+        const int code = extension.Register(engine, ToPublicHandle(this), extension.UserData, &extensionError);
         if (code < 0) {
             const char *name = extension.Name ? extension.Name : "<unnamed extension>";
             const std::string summary =

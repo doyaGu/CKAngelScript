@@ -14,7 +14,7 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager);
 bool RunScriptComponentMetadataSelfTest(std::string &error);
 bool RunScriptParameterConversionSelfTest(std::string &error);
 bool RunScriptParameterRegistrySelfTest(CKContext *context, std::string &error);
-bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error);
+bool RunScriptApiSelfTest(CKContext *context, std::string &error);
 bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);

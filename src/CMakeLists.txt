@@ -112,7 +112,7 @@ if (CKAS_BUILD_SELF_TESTS)
     list(APPEND CKAS_SOURCES
             ScriptStartupSelfTest.cpp
             ScriptComponentMetadataSelfTest.cpp
-            ScriptManagerApiSelfTest.cpp
+            ScriptApiSelfTest.cpp
             ScriptParameterConversionSelfTest.cpp
             ScriptParameterRegistrySelfTest.cpp
             ScriptRuntimeMetadataSelfTest.cpp
@@ -129,6 +129,7 @@ add_library(CKAngelScript SHARED ${CKAS_SOURCES} ${CKAS_HEADERS})
 set_target_properties(CKAngelScript PROPERTIES OUTPUT_NAME "AngelScript")
 
 target_compile_definitions(CKAngelScript PRIVATE
+        CKAS_BUILDING_DLL
         CKAS_BUILD_SELF_TESTS=$<BOOL:${CKAS_BUILD_SELF_TESTS}>
         CKAS_ENABLE_DYNCALL=$<BOOL:${CKAS_ENABLE_DYNCALL}>
 )
@@ -169,7 +170,7 @@ if (NOT SKIP_INSTALL_ALL)
 
     if (NOT SKIP_INSTALL_HEADERS)
         install(FILES
-                ${PROJECT_SOURCE_DIR}/include/AngelScriptManager.h
+                ${PROJECT_SOURCE_DIR}/include/CKAngelScript.h
                 ${PROJECT_SOURCE_DIR}/deps/angelscript/angelscript/include/angelscript.h
                 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     endif ()

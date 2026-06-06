@@ -9,7 +9,9 @@
 
 #include <angelscript.h>
 
-#include "AngelScriptManager.h"
+#include "CKBaseManager.h"
+#include "CKContext.h"
+#include "CKAngelScript.h"
 
 #include "ScriptCache.h"
 
@@ -168,7 +170,7 @@ struct ScriptComponentState {
     bool PendingResetRuntime = false;
 };
 
-class ScriptManager : public AngelScriptManager {
+class ScriptManager : public CKBaseManager {
 public:
     enum Flag {
         AS_INITED = 0x00000001,
@@ -210,19 +212,19 @@ public:
     }
 
     // Engine
-    asIScriptEngine *GetScriptEngine() override;
-    const char *GetVersion() override;
-    const char *GetOptions() override;
+    asIScriptEngine *GetScriptEngine();
+    const char *GetVersion();
+    const char *GetOptions();
 
     // Context
     CKContext *GetCKContext() const {
         return m_Context;
     }
 
-    asIScriptContext *GetActiveContext() override;
+    asIScriptContext *GetActiveContext();
 
-    // Internal low-level AngelScript helpers. The public AngelScriptManager
-    // interface intentionally exposes only module and execution operations.
+    // Internal low-level AngelScript helpers. The public AngelScript C API
+    // intentionally exposes only module and execution operations.
     int PrepareMultithread(asIThreadManager *externalMgr = nullptr);
     void UnprepareMultithread();
     asIThreadManager *GetThreadManager();
@@ -239,31 +241,31 @@ public:
     void FreeMem(void *mem);
     asILockableSharedBool *CreateLockableSharedBool();
 
-    AngelScriptStatus LoadModule(const AngelScriptLoadOptions &options, AngelScriptResult *result = nullptr) override;
-    AngelScriptStatus CompileModule(const char *moduleName,
+    CKAS_STATUS LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS CompileModule(const char *moduleName,
                                     const char *scriptCode,
-                                    bool replaceExisting = false,
-                                    AngelScriptResult *result = nullptr) override;
-    AngelScriptStatus UnloadModule(const char *moduleName, AngelScriptResult *result = nullptr) override;
-    bool HasModule(const char *moduleName) override;
-    asIScriptModule *GetModule(const char *moduleName) override;
-    asIScriptFunction *FindFunctionByName(const char *moduleName, const char *functionName) override;
-    asIScriptFunction *FindFunctionByDecl(const char *moduleName, const char *functionDecl) override;
+                                    CKDWORD flags = CKAS_COMPILE_DEFAULT,
+                                    CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS UnloadModule(const char *moduleName, CKAngelScriptResult *result = nullptr);
+    bool HasModule(const char *moduleName);
+    asIScriptModule *GetModule(const char *moduleName);
+    asIScriptFunction *FindFunctionByName(const char *moduleName, const char *functionName);
+    asIScriptFunction *FindFunctionByDecl(const char *moduleName, const char *functionDecl);
 
-    AngelScriptExecution *CreateExecution(const AngelScriptExecuteOptions &options,
-                                          AngelScriptResult *result = nullptr) override;
-    AngelScriptStatus StartExecution(AngelScriptExecution *execution) override;
-    AngelScriptStatus ResumeExecution(AngelScriptExecution *execution) override;
-    AngelScriptStatus CancelExecution(AngelScriptExecution *execution) override;
-    void ReleaseExecution(AngelScriptExecution *execution) override;
-    AngelScriptExecutionState GetExecutionState(const AngelScriptExecution *execution) const override;
-    const AngelScriptResult *GetExecutionResult(const AngelScriptExecution *execution) const override;
-    const AngelScriptResult *GetLastResult() const override;
-    AngelScriptStatus RegisterEngineExtension(const AngelScriptEngineExtension &extension,
-                                              AngelScriptResult *result = nullptr) override;
-    AngelScriptStatus UnregisterEngineExtension(const char *name,
+    CKAngelScriptExecution *CreateExecution(const CKAngelScriptExecuteOptions &options,
+                                          CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS StartExecution(CKAngelScriptExecution *execution);
+    CKAS_STATUS ResumeExecution(CKAngelScriptExecution *execution);
+    CKAS_STATUS CancelExecution(CKAngelScriptExecution *execution);
+    void ReleaseExecution(CKAngelScriptExecution *execution);
+    CKAS_EXECUTIONSTATE GetExecutionState(const CKAngelScriptExecution *execution) const;
+    const CKAngelScriptResult *GetExecutionResult(const CKAngelScriptExecution *execution) const;
+    const CKAngelScriptResult *GetLastResult() const;
+    CKAS_STATUS RegisterEngineExtension(const CKAngelScriptEngineExtension &extension,
+                                              CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS UnregisterEngineExtension(const char *name,
                                                 void *userData = nullptr,
-                                                AngelScriptResult *result = nullptr) override;
+                                                CKAngelScriptResult *result = nullptr);
 
     asIScriptModule *GetScript(const char *scriptName);
     std::shared_ptr<CachedScript> GetCachedScript(const char *scriptName);
@@ -335,7 +337,7 @@ protected:
     void RegisterVirtools(asIScriptEngine *engine);
     int RegisterEngineExtensions(asIScriptEngine *engine);
 
-    bool OwnsExecution(const AngelScriptExecution *execution) const;
+    bool OwnsExecution(const CKAngelScriptExecution *execution) const;
     bool HasExecutionForModule(const char *moduleName) const;
     // Internal low-level shims backing the public module API. Do not call these
     // from behavior blocks or runtime helpers; use LoadModule/CompileModule/
@@ -344,12 +346,12 @@ protected:
     int LoadModuleFromFiles(const char *moduleName, const char **filenames, size_t count);
     int CompileModuleFromMemory(const char *moduleName, const char *scriptCode);
     bool DiscardCachedModule(const char *moduleName);
-    AngelScriptResult MakeResult(AngelScriptStatus status,
+    CKAngelScriptResult MakeResult(CKAS_STATUS status,
                                  int angelScriptCode = 0,
                                  const std::string &errorMessage = std::string(),
                                  const std::string &stackTrace = std::string());
-    AngelScriptStatus StoreResult(AngelScriptResult *out,
-                                  AngelScriptStatus status,
+    CKAS_STATUS StoreResult(CKAngelScriptResult *out,
+                                  CKAS_STATUS status,
                                   int angelScriptCode = 0,
                                   const std::string &errorMessage = std::string(),
                                   const std::string &stackTrace = std::string());
@@ -369,9 +371,9 @@ protected:
     std::unique_ptr<ScriptRuntime> m_Runtime;
     std::unique_ptr<ScriptAsyncScheduler> m_AsyncScheduler;
     std::unique_ptr<ScriptMessageBus> m_MessageBus;
-    std::unordered_set<AngelScriptExecution *> m_Executions;
-    std::vector<AngelScriptEngineExtension> m_EngineExtensions;
-    AngelScriptResult m_LastResult;
+    std::unordered_set<CKAngelScriptExecution *> m_Executions;
+    std::vector<CKAngelScriptEngineExtension> m_EngineExtensions;
+    CKAngelScriptResult m_LastResult;
     std::string m_LastErrorMessage;
     std::string m_LastStackTrace;
     bool m_CapturingScriptMessages = false;

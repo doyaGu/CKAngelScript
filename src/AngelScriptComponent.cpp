@@ -664,18 +664,19 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
 
     if (privateModule) {
         man->UnloadModule(runtimeModuleName.c_str(), nullptr);
-        AngelScriptResult result = {};
-        AngelScriptStatus status = ANGELSCRIPT_STATUS_OK;
+        CKAngelScriptResult result = {};
+        CKAS_STATUS status = CKAS_OK;
         if (source.empty()) {
-            AngelScriptLoadOptions options = {};
+            CKAngelScriptLoadOptions options = {};
+            options.Size = sizeof(options);
             options.ModuleName = runtimeModuleName.c_str();
             options.Filename = file.c_str();
-            options.ReplaceExisting = true;
+            options.Flags = CKAS_LOAD_REPLACEEXISTING;
             status = man->LoadModule(options, &result);
         } else {
-            status = man->CompileModule(runtimeModuleName.c_str(), source.c_str(), true, &result);
+            status = man->CompileModule(runtimeModuleName.c_str(), source.c_str(), CKAS_COMPILE_REPLACEEXISTING, &result);
         }
-        if (status != ANGELSCRIPT_STATUS_OK) {
+        if (status != CKAS_OK) {
             SetErrorOutput(beh,
                            state,
                            result.ErrorMessage && result.ErrorMessage[0] != '\0'

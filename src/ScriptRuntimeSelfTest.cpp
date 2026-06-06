@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "AngelScriptManager.h"
+#include "CKAngelScript.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
 #include "ScriptRuntimeDependency.h"
@@ -126,31 +126,31 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  void OnPause(const ScriptContext &in ctx) {}\n"
         "  void OnResume(const ScriptContext &in ctx) {}\n"
         "}\n";
-    AngelScriptManager *manager = AngelScriptManager::GetManager(context);
-    if (!manager) {
-        error = "Runtime self-test could not retrieve AngelScriptManager.";
+    CKAngelScriptApi api = CKAngelScriptApi::Get(context);
+    if (!api.IsValid()) {
+        error = "Runtime self-test could not retrieve CKAngelScript.";
         return false;
     }
     const char *moduleName = "__CKAS_RuntimeCompileSelfTest";
-    AngelScriptResult result = {};
-    if (manager->CompileModule(moduleName, source, true, &result) != ANGELSCRIPT_STATUS_OK) {
+    CKAngelScriptResult result = {};
+    if (api->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_OK) {
         error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
             ? result.ErrorMessage
             : "Runtime script API compile probe failed.";
         return false;
     }
-    manager->UnloadModule(moduleName, nullptr);
+    api->UnloadModule(moduleName, nullptr);
     const char *oldApiSource =
         "void __ckas_runtime_old_api_probe(const ScriptContext &in ctx) {\n"
         "  string id = ctx.ScriptId();\n"
         "}\n";
     const char *oldApiModuleName = "__CKAS_RuntimeOldApiNegativeSelfTest";
     result = {};
-    if (manager->CompileModule(oldApiModuleName, oldApiSource, true, &result) == ANGELSCRIPT_STATUS_OK) {
-        manager->UnloadModule(oldApiModuleName, nullptr);
+    if (api->CompileModule(oldApiModuleName, oldApiSource, CKAS_COMPILE_REPLACEEXISTING, &result) == CKAS_OK) {
+        api->UnloadModule(oldApiModuleName, nullptr);
         error = "Runtime script old ScriptContext API unexpectedly compiled.";
         return false;
     }
-    manager->UnloadModule(oldApiModuleName, nullptr);
+    api->UnloadModule(oldApiModuleName, nullptr);
     return true;
 }

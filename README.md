@@ -21,7 +21,8 @@ CKAngelScript integrates AngelScript into the Virtools/CK2 runtime. It builds as
 | Script messaging | [docs/messaging.md](docs/messaging.md) |
 | Async tasks | [docs/async.md](docs/async.md) |
 | Native buffers and DynCall | [docs/native-ffi.md](docs/native-ffi.md) |
-| C++ manager API | [docs/public-manager-api.md](docs/public-manager-api.md) |
+| C API and C++ wrapper | [docs/public-api.md](docs/public-api.md) |
+| API inventory | [docs/api-inventory.md](docs/api-inventory.md) |
 | Raw SDK bindings | [docs/sdk-bindings.md](docs/sdk-bindings.md) |
 | Ballance catalog snapshot | [docs/catalog-ballance.md](docs/catalog-ballance.md) |
 | Examples | [docs/examples.md](docs/examples.md) |

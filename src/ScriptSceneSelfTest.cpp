@@ -5,7 +5,7 @@
 
 #include <fmt/format.h>
 
-#include "AngelScriptManager.h"
+#include "CKAngelScript.h"
 #include "ScriptManager.h"
 
 namespace {
@@ -66,9 +66,9 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     CleanupNamedObject(context, scopedMeshName);
     CleanupNamedObject(context, scopedBehaviorName);
 
-    AngelScriptManager *manager = AngelScriptManager::GetManager(context);
-    if (!manager) {
-        error = "Scene self-test could not retrieve AngelScriptManager.";
+    CKAngelScriptApi api = CKAngelScriptApi::Get(context);
+    if (!api.IsValid()) {
+        error = "Scene self-test could not retrieve CKAngelScript.";
         return false;
     }
 
@@ -263,8 +263,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         "  return 0;\n"
         "}\n";
 
-    AngelScriptResult compileResult = {};
-    if (manager->CompileModule(moduleName, source, true, &compileResult) != ANGELSCRIPT_STATUS_OK) {
+    CKAngelScriptResult compileResult = {};
+    if (api->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &compileResult) != CKAS_OK) {
         error = compileResult.ErrorMessage && compileResult.ErrorMessage[0] != '\0'
             ? compileResult.ErrorMessage
             : "Scene API self-test compile probe failed.";
@@ -285,11 +285,11 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
 
-    asIScriptModule *module = manager->GetModule(moduleName);
+    asIScriptModule *module = api->GetModule(moduleName);
     asIScriptFunction *function = module ? module->GetFunctionByDecl("int Run(const CKBehaviorContext &in ctx)") : nullptr;
     if (!function) {
         error = "Scene API self-test could not find Run() function.";
-        manager->UnloadModule(moduleName, nullptr);
+        api->UnloadModule(moduleName, nullptr);
         CleanupNamedObject(context, objectName);
         CleanupNamedObject(context, persistentName);
         CleanupNamedObject(context, parent3DName);
@@ -315,7 +315,7 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     asIScriptContext *scriptContext = engine->CreateContext();
     if (!scriptContext) {
         error = "Scene API self-test could not create AngelScript execution context.";
-        manager->UnloadModule(moduleName, nullptr);
+        api->UnloadModule(moduleName, nullptr);
         CleanupNamedObject(context, objectName);
         CleanupNamedObject(context, persistentName);
         CleanupNamedObject(context, parent3DName);
@@ -358,7 +358,7 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     }
 
     scriptContext->Release();
-    manager->UnloadModule(moduleName, nullptr);
+    api->UnloadModule(moduleName, nullptr);
     CleanupNamedObject(context, objectName);
     CleanupNamedObject(context, persistentName);
     CleanupNamedObject(context, parent3DName);

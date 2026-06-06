@@ -4,7 +4,7 @@
 #include <fstream>
 #include <string>
 
-#include "AngelScriptManager.h"
+#include "CKAngelScript.h"
 #include "ScriptAsync.h"
 #include "ScriptManager.h"
 
@@ -31,19 +31,19 @@ bool CompileAsyncProbe(CKContext *context,
                        const char *source,
                        std::string &error) {
     WriteAsyncSelfTestStage(moduleName);
-    AngelScriptManager *manager = AngelScriptManager::GetManager(context);
-    if (!manager) {
-        error = "Async self-test could not retrieve AngelScriptManager.";
+    CKAngelScriptApi api = CKAngelScriptApi::Get(context);
+    if (!api.IsValid()) {
+        error = "Async self-test could not retrieve CKAngelScript.";
         return false;
     }
-    AngelScriptResult result = {};
-    if (manager->CompileModule(moduleName, source, true, &result) != ANGELSCRIPT_STATUS_OK) {
+    CKAngelScriptResult result = {};
+    if (api->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_OK) {
         error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
             ? result.ErrorMessage
             : std::string("Async script API compile probe failed: ") + moduleName;
         return false;
     }
-    manager->UnloadModule(moduleName, nullptr);
+    api->UnloadModule(moduleName, nullptr);
     return true;
 }
 

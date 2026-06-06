@@ -245,8 +245,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
         return false;
     }
 
-    AngelScriptResult compileResult = {};
-    if (manager->CompileModule(moduleName, source.c_str(), true, &compileResult) != ANGELSCRIPT_STATUS_OK) {
+    CKAngelScriptResult compileResult = {};
+    if (manager->CompileModule(moduleName, source.c_str(), CKAS_COMPILE_REPLACEEXISTING, &compileResult) != CKAS_OK) {
         error = compileResult.ErrorMessage && compileResult.ErrorMessage[0] != '\0'
             ? compileResult.ErrorMessage
             : "Failed to build AngelScript self-test module.";

@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "AngelScriptManager.h"
+#include "CKAngelScript.h"
 #include "ScriptMessage.h"
 #include "ScriptManager.h"
 
@@ -100,20 +100,20 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  }\n"
         "}\n";
 
-    AngelScriptManager *manager = AngelScriptManager::GetManager(context);
-    if (!manager) {
-        error = "Message self-test could not retrieve AngelScriptManager.";
+    CKAngelScriptApi api = CKAngelScriptApi::Get(context);
+    if (!api.IsValid()) {
+        error = "Message self-test could not retrieve CKAngelScript.";
         return false;
     }
-    AngelScriptResult result = {};
+    CKAngelScriptResult result = {};
     constexpr const char *moduleName = "__CKAS_MessageCompileSelfTest";
-    if (manager->CompileModule(moduleName, source, true, &result) != ANGELSCRIPT_STATUS_OK) {
+    if (api->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_OK) {
         error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
             ? result.ErrorMessage
             : "Message script API compile probe failed.";
         return false;
     }
-    manager->UnloadModule(moduleName, nullptr);
+    api->UnloadModule(moduleName, nullptr);
     return true;
 }
 

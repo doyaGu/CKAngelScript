@@ -1292,13 +1292,14 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     for (const std::string &file : files) {
         filePtrs.push_back(file.c_str());
     }
-    AngelScriptLoadOptions options = {};
+    CKAngelScriptLoadOptions options = {};
+    options.Size = sizeof(options);
     options.ModuleName = moduleName.c_str();
     options.Filenames = filePtrs.empty() ? nullptr : filePtrs.data();
     options.FileCount = filePtrs.size();
-    options.ReplaceExisting = true;
-    AngelScriptResult loadResult = {};
-    if (m_Manager->LoadModule(options, &loadResult) != ANGELSCRIPT_STATUS_OK) {
+    options.Flags = CKAS_LOAD_REPLACEEXISTING;
+    CKAngelScriptResult loadResult = {};
+    if (m_Manager->LoadModule(options, &loadResult) != CKAS_OK) {
         error = loadResult.ErrorMessage && loadResult.ErrorMessage[0] != '\0'
             ? loadResult.ErrorMessage
             : fmt::format("Runtime script '{}' failed to compile.", metadata.Id);

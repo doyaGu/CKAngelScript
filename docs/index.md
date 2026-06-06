@@ -11,7 +11,7 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 5. [Scene Interop API](scene-interop.md): safe object refs and high-level object lookup/editing.
 6. [Behavior Bridge v3](behavior-bridge-design.md): behavior graph search, parameter handles, and runtime Building Blocks.
 7. [Messaging](messaging.md) and [Async](async.md): script-to-script communication and cooperative tasks.
-8. [Native FFI](native-ffi.md), [Public Manager API](public-manager-api.md), and [SDK Bindings](sdk-bindings.md): advanced integrations.
+8. [Native FFI](native-ffi.md), [Public API](public-api.md), and [SDK Bindings](sdk-bindings.md): advanced integrations.
 
 ## Which Doc Do I Need?
 
@@ -26,7 +26,8 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 | Send events between scripts/components | [Messaging](messaging.md) |
 | Suspend script execution until later frames | [Async](async.md) |
 | Call native libraries | [Native FFI](native-ffi.md) |
-| Use CKAngelScript from another C++ plugin | [Public Manager API](public-manager-api.md) |
+| Use CKAngelScript from another plugin | [Public API](public-api.md) |
+| Audit exposed API surface | [API Inventory](api-inventory.md) |
 | Understand raw CK/Vx bindings | [SDK Bindings](sdk-bindings.md) |
 | Use generated Ballance hints | [Ballance Catalog Snapshot](catalog-ballance.md) |
 
@@ -42,6 +43,7 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 | Async work | `Async`, `AsyncTask<T>` | Any script running through the CKAngelScript scheduler |
 | Native memory | `NativePointer`, `NativeBuffer` | Advanced SDK/FFI work |
 | Native calls | DynCall/DynLoad/DynCallback helpers | Advanced external library calls |
+| API inventory | `Scene`, `Behavior`, `BB`, `Param`, `Message`, `Async`, raw CK/Vx bindings | Maintainer-facing exposed-surface audit |
 
 ## Glossary
 

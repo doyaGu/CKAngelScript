@@ -85,10 +85,10 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     }
 
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "manager-api", std::string());
-    if (!RunScriptManagerApiSelfTest(manager ? manager->GetCKContext() : nullptr, error)) {
+    if (!RunScriptApiSelfTest(manager ? manager->GetCKContext() : nullptr, error)) {
         ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
                                                              "manager-api",
-                                                             "AngelScriptManager API",
+                                                             "CKAngelScript API",
                                                              error);
         return CKERR_INVALIDOPERATION;
     }
