@@ -131,6 +131,15 @@ bool RunScriptManagerApiSelfTest(CKContext *context, std::string &error) {
         error = "AngelScriptManager API self-test expected extension failure diagnostics.";
         return false;
     }
+    // A failing extension is retained (it replays on the next rebuild), so drop
+    // it here to avoid polluting later engine rebuilds with a known failure.
+    if (!ExpectStatus(manager->UnregisterEngineExtension("__ckas_failing_extension", nullptr, &result),
+                      ANGELSCRIPT_STATUS_OK,
+                      "UnregisterEngineExtension failing",
+                      &result,
+                      error)) {
+        return false;
+    }
 
     AngelScriptEngineExtension extension = {};
     extension.Name = "__ckas_manager_api_extension";

@@ -25,7 +25,6 @@ class ScriptMessageBus;
 class ScriptParameterRegistry;
 class ScriptRuntime;
 class ScriptInvoker;
-class ScriptRegistrationContext;
 
 enum class ScriptComponentBindingKind {
     Auto,
@@ -334,7 +333,7 @@ protected:
     void RegisterStdTypes(asIScriptEngine *engine);
     void RegisterStdAddons(asIScriptEngine *engine);
     void RegisterVirtools(asIScriptEngine *engine);
-    int RegisterEngineExtensions(asIScriptEngine *engine, ScriptRegistrationContext *registration = nullptr);
+    int RegisterEngineExtensions(asIScriptEngine *engine);
 
     bool OwnsExecution(const AngelScriptExecution *execution) const;
     bool HasExecutionForModule(const char *moduleName) const;

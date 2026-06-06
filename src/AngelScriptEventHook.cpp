@@ -88,11 +88,10 @@ CKERROR CreateAngelScriptEventHookProto(CKBehaviorPrototype **pproto) {
 
     proto->SetFlags(CK_BEHAVIORPROTOTYPE_NORMAL);
     proto->SetFunction(AngelScriptEventHook);
-    proto->SetBehaviorFlags((CK_BEHAVIOR_FLAGS) (CKBEHAVIOR_MESSAGESENDER |
-                                                 CKBEHAVIOR_INTERNALLYCREATEDINPUTS |
-                                                 CKBEHAVIOR_INTERNALLYCREATEDOUTPUTS |
-                                                 CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS |
-                                                 CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS));
+    // The hook publishes to the AngelScript message bus rather than sending CK
+    // messages, and its inputs/outputs/parameters are all declared statically
+    // above, so none of the CKBEHAVIOR_MESSAGESENDER / INTERNALLYCREATED* flags
+    // apply.
 
     *pproto = proto;
     return CK_OK;

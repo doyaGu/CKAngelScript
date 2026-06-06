@@ -68,9 +68,13 @@ manager->RegisterEngineExtension(extension, &result);
 
 Callbacks return `>= 0` on success and `< 0` on failure. If `errorMessage` is set, CKAngelScript copies it into registration diagnostics. The extension is retained and invoked again after the script engine is rebuilt.
 
+A failing extension is **non-fatal**: CKAngelScript logs it but never tears down the engine or skips the other extensions, so a bug in one host's extension cannot break core scripting or another host. The extension is retained regardless, so a callback that fails immediately may still succeed on a later engine rebuild. When `InvokeImmediately` is true and the immediate attempt fails, `RegisterEngineExtension` returns `ANGELSCRIPT_STATUS_EXECUTION_FAILED` while still keeping the extension registered.
+
+Callbacks should be **atomic**. CKAngelScript only checks the final return code: if a callback registers some functions and then fails partway through, those functions remain in the current engine until the next rebuild — there is no automatic rollback. Reset the default namespace and undo partial work yourself before returning a failure code.
+
 If the engine is already initialized and `InvokeImmediately` is true, registration is attempted immediately. This is useful for host plugins that discover CKAngelScript after startup, but the safest path is still to register before user modules compile.
 
-Call `UnregisterEngineExtension(name, userData)` before unloading the host DLL. This removes the retained callback; it does not remove functions already registered into the current AngelScript engine.
+Call `UnregisterEngineExtension(name, userData)` before unloading the host DLL. This removes the retained callback; it does not remove functions already registered into the current AngelScript engine. Passing `userData = nullptr` (the default) matches by name only; pass the same `UserData` you registered with to scope the removal to a specific instance.
 
 ## Execution Handles
 

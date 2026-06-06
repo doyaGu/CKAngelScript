@@ -128,6 +128,17 @@ public:
     // CKAngelScript depend on that host. Callbacks must return >= 0 on success
     // and < 0 on registration failure. If errorMessage is set, CKAngelScript
     // copies it into diagnostics before the callback returns.
+    //
+    // A failing extension is non-fatal: it is logged but never tears down the
+    // engine or affects other extensions. The extension is retained either way
+    // and replayed whenever the engine is rebuilt, so a callback that fails
+    // immediately may still succeed on a later rebuild.
+    //
+    // Callbacks should be atomic. CKAngelScript only checks the final return
+    // code; if a callback registers some functions and then fails, those
+    // functions remain in the current engine until the next rebuild. There is
+    // no automatic rollback. RegisterEngineExtension returns
+    // ANGELSCRIPT_STATUS_EXECUTION_FAILED when an immediate invocation fails.
     virtual AngelScriptStatus RegisterEngineExtension(const AngelScriptEngineExtension &extension,
                                                       AngelScriptResult *result = nullptr) = 0;
     virtual AngelScriptStatus UnregisterEngineExtension(const char *name,
