@@ -2,6 +2,14 @@
 
 #include <fmt/format.h>
 
+#ifndef CKAS_BUILD_SELF_TESTS
+#define CKAS_BUILD_SELF_TESTS 0
+#endif
+
+#ifndef CKAS_ENABLE_DYNCALL
+#define CKAS_ENABLE_DYNCALL 0
+#endif
+
 #include "CKPathManager.h"
 #include "Logger.h"
 #include "ScriptInvoker.h"
@@ -10,7 +18,9 @@
 #include "ScriptFormat.h"
 #include "ScriptNativePointer.h"
 #include "ScriptNativeBuffer.h"
+#if CKAS_ENABLE_DYNCALL
 #include "ScriptDynCall.h"
+#endif
 #include "ScriptUtils.h"
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
@@ -43,10 +53,6 @@
 #include "add_on/scriptmath/scriptmathcomplex.h"
 #include "add_on/scriptgrid/scriptgrid.h"
 #include "add_on/datetime/datetime.h"
-
-#ifndef CKAS_BUILD_SELF_TESTS
-#define CKAS_BUILD_SELF_TESTS 0
-#endif
 
 struct AngelScriptExecution {
     explicit AngelScriptExecution(ScriptManager *manager)
@@ -1396,10 +1402,12 @@ int ScriptManager::SetupScriptEngine() {
         RegisterNativePointer(m_ScriptEngine);
         RegisterNativeBuffer(m_ScriptEngine);
 
+#if CKAS_ENABLE_DYNCALL
         // Register the DynCall APIs
         RegisterScriptDynCall(m_ScriptEngine);
         RegisterScriptDynCallback(m_ScriptEngine);
         RegisterScriptDynLoad(m_ScriptEngine);
+#endif
 
         // Register the function that we want the scripts to call
         RegisterScriptFormat(m_ScriptEngine);

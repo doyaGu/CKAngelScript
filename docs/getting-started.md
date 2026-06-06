@@ -7,7 +7,7 @@ This guide takes a clean checkout to a validated `AngelScript.dll`.
 - Windows.
 - Visual Studio 2022 with C++ build tools.
 - Virtools SDK 2.1 or newer.
-- DynCall, DynCallback, and DynLoad libraries.
+- DynCall, DynCallback, and DynLoad libraries, only when configuring with `-DCKAS_ENABLE_DYNCALL=ON`.
 - AngelScript source placed at `deps/angelscript`.
 
 The plugin is built as 32-bit because Virtools/Ballance hosts are 32-bit.
@@ -19,6 +19,7 @@ git submodule update --init --recursive
 
 cmake -B build -G "Visual Studio 17 2022" -A Win32 `
   -DVIRTOOLS_SDK_PATH=C:\Path\To\VirtoolsSDK `
+  -DCKAS_ENABLE_DYNCALL=ON `
   -DDYNCALL_ROOT=C:\Path\To\dyncall `
   -DDYNCALLBACK_ROOT=C:\Path\To\dyncall `
   -DDYNLOAD_ROOT=C:\Path\To\dyncall `

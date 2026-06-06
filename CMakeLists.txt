@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.12)
 project(CKAngelScript VERSION 0.1.0.0)
 
 option(CKAS_BUILD_SELF_TESTS "Build optional AngelScript startup self-test support" OFF)
+option(CKAS_ENABLE_DYNCALL "Build DynCall-backed native FFI support" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED NO)
@@ -46,9 +47,11 @@ add_compile_definitions(
 )
 
 find_package(VirtoolsSDK REQUIRED)
-find_package(DynCall REQUIRED)
-find_package(DynCallback REQUIRED)
-find_package(DynLoad REQUIRED)
+if (CKAS_ENABLE_DYNCALL)
+    find_package(DynCall REQUIRED)
+    find_package(DynCallback REQUIRED)
+    find_package(DynLoad REQUIRED)
+endif ()
 
 add_subdirectory(deps)
 add_subdirectory(src)

@@ -11,7 +11,6 @@ set(CKAS_HEADERS
         ScriptFormat.h
         ScriptNativePointer.h
         ScriptNativeBuffer.h
-        ScriptDynCall.h
         ScriptXString.h
         ScriptXArray.h
         ScriptXHashTable.h
@@ -62,7 +61,6 @@ set(CKAS_SOURCES
         ScriptFormat.cpp
         ScriptNativePointer.cpp
         ScriptNativeBuffer.cpp
-        ScriptDynCall.cpp
         ScriptXString.cpp
         ScriptXBitArray.cpp
         ScriptVxMath.cpp
@@ -100,6 +98,16 @@ set(CKAS_SOURCES
         AngelScript.rc
 )
 
+if (CKAS_ENABLE_DYNCALL)
+    list(APPEND CKAS_HEADERS
+            ScriptDynCall.h
+    )
+
+    list(APPEND CKAS_SOURCES
+            ScriptDynCall.cpp
+    )
+endif ()
+
 if (CKAS_BUILD_SELF_TESTS)
     list(APPEND CKAS_SOURCES
             ScriptStartupSelfTest.cpp
@@ -122,6 +130,7 @@ set_target_properties(CKAngelScript PROPERTIES OUTPUT_NAME "AngelScript")
 
 target_compile_definitions(CKAngelScript PRIVATE
         CKAS_BUILD_SELF_TESTS=$<BOOL:${CKAS_BUILD_SELF_TESTS}>
+        CKAS_ENABLE_DYNCALL=$<BOOL:${CKAS_ENABLE_DYNCALL}>
 )
 
 target_include_directories(CKAngelScript
@@ -131,19 +140,27 @@ target_include_directories(CKAngelScript
         ${PROJECT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CKAS_GENERATED_INCLUDE_DIR}
-        ${DYNCALL_INCLUDE_DIR}
-        ${DYNCALLBACK_INCLUDE_DIR}
-        ${DYNLOAD_INCLUDE_DIR}
 )
 
 target_link_libraries(CKAngelScript PRIVATE
         CK2 VxMath
         angelscript angelscript_addon
         fmt::fmt
-        ${DYNCALL_LIBRARY}
-        ${DYNCALLBACK_LIBRARY}
-        ${DYNLOAD_LIBRARY}
 )
+
+if (CKAS_ENABLE_DYNCALL)
+    target_include_directories(CKAngelScript PRIVATE
+            ${DYNCALL_INCLUDE_DIR}
+            ${DYNCALLBACK_INCLUDE_DIR}
+            ${DYNLOAD_INCLUDE_DIR}
+    )
+
+    target_link_libraries(CKAngelScript PRIVATE
+            ${DYNCALL_LIBRARY}
+            ${DYNCALLBACK_LIBRARY}
+            ${DYNLOAD_LIBRARY}
+    )
+endif ()
 
 if (NOT SKIP_INSTALL_ALL)
     install(TARGETS CKAngelScript

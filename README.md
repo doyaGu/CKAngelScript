@@ -6,7 +6,7 @@ CKAngelScript integrates AngelScript into the Virtools/CK2 runtime. It builds as
 - `AngelScript Component`, a Building Block that attaches a script class to a behavior instance.
 - Runtime Script Manager v2 for long-lived scripts discovered from data/script roots.
 - High-level `Scene`, `Behavior`/`BB`, `Param`, `Message`, and `Async` APIs.
-- DynCall-backed native FFI helpers for advanced integrations.
+- Optional DynCall-backed native FFI helpers for advanced integrations.
 
 ## Documentation Map
 
@@ -33,7 +33,7 @@ Prerequisites:
 
 - Windows with Visual Studio 2022.
 - Virtools SDK 2.1 or newer.
-- DynCall libraries.
+- DynCall libraries, only when configuring with `-DCKAS_ENABLE_DYNCALL=ON`.
 - AngelScript source placed under `deps/angelscript`.
 
 ```powershell
@@ -41,6 +41,7 @@ git submodule update --init --recursive
 
 cmake -B build -G "Visual Studio 17 2022" -A Win32 `
   -DVIRTOOLS_SDK_PATH=C:\Path\To\VirtoolsSDK `
+  -DCKAS_ENABLE_DYNCALL=ON `
   -DDYNCALL_ROOT=C:\Path\To\dyncall `
   -DDYNCALLBACK_ROOT=C:\Path\To\dyncall `
   -DDYNLOAD_ROOT=C:\Path\To\dyncall `
