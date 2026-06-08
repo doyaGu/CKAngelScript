@@ -6,7 +6,7 @@ This page inventories the public API surface currently exposed by CKAngelScript.
 
 | Surface | Scope | Primary sources |
 | --- | --- | --- |
-| Public API | C ABI functions plus the `CKAngelScriptApi` C++ wrapper, load/compile/unload, execution handles, engine extension callbacks | `include/CKAngelScript.h`, `docs/public-api.md` |
+| Public API | C ABI functions plus the `CKAngelScriptApi` C++ wrapper, load/compile/unload, object/method handles, typed argument/result helpers, execution handles, engine extension callbacks | `include/CKAngelScript.h`, `docs/public-api.md` |
 | High-level script API | Runtime scripts, scene refs, behavior bridge, BB runtime helpers, parameter conversion/catalog, messaging, async tasks | `src/ScriptRuntime.cpp`, `src/ScriptScene.cpp`, `src/ScriptBridgeRegistration.cpp`, `src/ScriptParameterRegistry.cpp`, `src/ScriptMessage.cpp`, `src/ScriptAsync.cpp` |
 | Native memory and FFI | `NativePointer`, `NativeBuffer`, DynLoad/DynCall/DynCallback helpers | `src/ScriptNativePointer.cpp`, `src/ScriptNativeBuffer.cpp`, `src/ScriptDynCall.cpp` |
 | Raw CK/Vx SDK bindings | CK context/managers/objects, SDK enums/defines/structs, Vx math types, containers | `src/ScriptCK*.cpp`, `src/ScriptVxMath.cpp`, `src/ScriptX*.cpp` |
@@ -81,12 +81,14 @@ These bindings intentionally stay close to native SDK naming. Prefer high-level 
 
 | Group | Methods |
 | --- | --- |
-| Engine/context | `CKAngelScriptGetScriptEngine`, `CKAngelScriptGetVersion`, `CKAngelScriptGetOptions`, `CKAngelScriptGetActiveContext` |
-| Modules | `CKAngelScriptLoadModule`, `CKAngelScriptCompileModule`, `CKAngelScriptUnloadModule`, `CKAngelScriptHasModule`, `CKAngelScriptGetModule`, `CKAngelScriptFindFunctionByName`, `CKAngelScriptFindFunctionByDecl` |
+| Engine/context | `CKAngelScriptGetScriptEngine`, `CKAngelScriptGetApiVersion`, `CKAngelScriptHasCapability`, `CKAngelScriptGetVersion`, `CKAngelScriptGetOptions`, `CKAngelScriptGetActiveContext` |
+| Modules | `CKAngelScriptLoadModule`, `CKAngelScriptCompileModule`, `CKAngelScriptUnloadModule`, `CKAngelScriptHasModule`, `CKAngelScriptGetModuleGeneration`, `CKAngelScriptGetModule`, `CKAngelScriptFindFunctionByName`, `CKAngelScriptFindFunctionByDecl` |
+| Objects/methods | `CKAngelScriptCreateObject`, `CKAngelScriptReleaseObject`, `CKAngelScriptFindObjectMethod`, `CKAngelScriptReleaseMethod`, `CKAngelScriptCallObjectMethod`, `CKAngelScriptCreateObjectMethodExecution` |
+| Args/results | `CKAngelScriptArgSetBool`, `CKAngelScriptArgSetInt`, `CKAngelScriptArgSetFloat`, `CKAngelScriptArgSetString`, `CKAngelScriptArgSetBorrowedObject`, `CKAngelScriptResultGetBool`, `CKAngelScriptResultGetInt`, `CKAngelScriptResultGetFloat`, `CKAngelScriptResultGetString`, `CKAngelScriptResultGetStringView` |
 | Executions | `CKAngelScriptCreateExecution`, `CKAngelScriptStartExecution`, `CKAngelScriptResumeExecution`, `CKAngelScriptCancelExecution`, `CKAngelScriptReleaseExecution`, `CKAngelScriptGetExecutionState`, `CKAngelScriptGetExecutionResult`, `CKAngelScriptGetLastResult` |
 | Extension callbacks | `CKAngelScriptRegisterEngineExtension`, `CKAngelScriptUnregisterEngineExtension` |
 
-Supporting public structs/enums are `CKAS_STATUS`, `CKAS_EXECUTIONSTATE`, `CKAngelScriptLoadOptions`, `CKAngelScriptExecuteOptions`, `CKAngelScriptResult`, and `CKAngelScriptEngineExtension`.
+Supporting public structs/enums are `CKAS_STATUS`, `CKAS_APICAPABILITY`, `CKAS_CALLFLAGS`, `CKAS_EXECUTIONSTATE`, `CKAngelScriptLoadOptions`, `CKAngelScriptExecuteOptions`, `CKAngelScriptObjectOptions`, `CKAngelScriptMethodOptions`, `CKAngelScriptObjectMethodExecuteOptions`, `CKAngelScriptResult`, and `CKAngelScriptEngineExtension`.
 
 ## Maintenance Checklist
 

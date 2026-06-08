@@ -30,6 +30,15 @@ if (!api.IsValid()) {
 
 The handle is owned by CKAngelScript. Do not allocate, delete, or cast it to CKAngelScript internals.
 
+Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasCapability()` before consuming newer ABI surfaces from an optional soft loader. Object/method invocation requires:
+
+- `CKAS_CAP_MODULE_COMPILE`
+- `CKAS_CAP_OBJECT_CREATE`
+- `CKAS_CAP_OBJECT_METHOD_EXECUTION`
+- `CKAS_CAP_ARG_WRITER`
+- `CKAS_CAP_RESULT_READER`
+- `CKAS_CAP_STACKTRACE`
+
 ## Module Lifecycle
 
 Use one source per load call:
@@ -65,6 +74,73 @@ api.CompileModule("example_api",
 Set `Size = sizeof(CKAngelScriptLoadOptions)` when using the C ABI directly. The C++ wrapper helper `CKAngelScriptApi::LoadOptions()` does this for you.
 Set `CKAS_LOAD_REPLACEEXISTING` in `Flags` to replace an existing module.
 Passing multiple source kinds at once returns `CKAS_INVALIDARGUMENT`.
+
+`CKAngelScriptGetModuleGeneration()` returns the module generation tracked by CKAngelScript. Object and method handles capture this generation when they are created. After unload or replace, calls through old handles return `CKAS_STALEHANDLE`.
+
+## Object And Method Calls
+
+Use object and method handles when a host needs to call script class methods without touching `asIScriptObject`, `asIScriptFunction`, or `asIScriptContext` directly:
+
+```cpp
+CKAngelScriptObjectOptions objectOptions = CKAngelScriptApi::ObjectOptions();
+objectOptions.ModuleName = "example_api";
+objectOptions.ClassName = "ExampleMod";
+
+CKAngelScriptResult result = {};
+CKAngelScriptObject *object =
+    CKAngelScriptCreateObject(angelScript, &objectOptions, &result);
+
+CKAngelScriptMethodOptions methodOptions = CKAngelScriptApi::MethodOptions();
+methodOptions.Object = object;
+methodOptions.MethodDecl = "int Add(int)";
+
+CKAngelScriptMethod *method =
+    CKAngelScriptFindObjectMethod(angelScript, &methodOptions, &result);
+```
+
+Arguments and return values are written through callbacks:
+
+```cpp
+struct CallData {
+    int Input = 0;
+    int Output = 0;
+};
+
+CKAS_STATUS WriteAddArgs(CKAngelScriptArgWriter *writer, void *userData) {
+    auto *data = static_cast<CallData *>(userData);
+    return CKAngelScriptArgSetInt(writer, 0, data->Input);
+}
+
+CKAS_STATUS ReadAddResult(CKAngelScriptResultReader *reader, void *userData) {
+    auto *data = static_cast<CallData *>(userData);
+    return CKAngelScriptResultGetInt(reader, &data->Output);
+}
+
+CallData data;
+data.Input = 37;
+
+CKAngelScriptObjectMethodExecuteOptions call =
+    CKAngelScriptApi::ObjectMethodExecuteOptions();
+call.Object = object;
+call.Method = method;
+call.WriteArgs = WriteAddArgs;
+call.ReadResult = ReadAddResult;
+call.UserData = &data;
+call.Flags = CKAS_CALL_NO_SUSPEND | CKAS_CALL_HOT_PATH;
+
+CKAS_STATUS status = CKAngelScriptCallObjectMethod(angelScript, &call, &result);
+```
+
+V1 typed helpers support `bool`, `int`, `float`, `string`, and explicitly borrowed objects. `CKAngelScriptArgSetBorrowedObject` is only for short-lived host views already registered with the engine, such as callback-local context objects. Borrowed object arguments must target read-only input references; they are not persistent script handles.
+
+Release handles when the host no longer needs them:
+
+```cpp
+CKAngelScriptReleaseMethod(angelScript, method);
+CKAngelScriptReleaseObject(angelScript, object);
+```
+
+`CKAngelScriptCreateObjectMethodExecution()` creates an execution handle for the same object/method ABI. Borrowed arguments are intentionally rejected on this path; use `CKAngelScriptCallObjectMethod()` for callback-local borrowed views. Object-method execution is still no-resume in this version: if the method suspends, start returns `CKAS_UNSUPPORTED`, and `CKAS_CAP_ASYNC_RESUME` is not advertised.
 
 ## Engine Extensions
 
@@ -179,6 +255,8 @@ Copy strings if they must outlive those boundaries.
 
 Execution handles keep their module alive from the public API perspective. `UnloadModule` and replacing an existing module fail while any `CKAngelScriptExecution` for that module is still unreleased. Cancel and release active executions before unloading or replacing a module.
 
+Object and method handles do not block unload. They become stale after module unload or replacement and later calls return `CKAS_STALEHANDLE`.
+
 ## Status Values
 
 Common statuses:
@@ -193,3 +271,7 @@ Common statuses:
 | `CKAS_EXECUTIONFAILED` | Runtime execution failed. |
 | `CKAS_SUSPENDED` | Execution awaits async work. |
 | `CKAS_CANCELLED` | Execution was cancelled. |
+| `CKAS_STALEHANDLE` | Object, method, or execution handle belongs to an old module generation. |
+| `CKAS_UNSUPPORTED` | Requested ABI mode is not supported, such as borrowed args on persistent object-method execution. |
+| `CKAS_TYPEMISMATCH` | Argument writer or result reader type does not match the target declaration. |
+| `CKAS_BUFFERTOOSMALL` | String result buffer is too small; inspect the required size output. |
