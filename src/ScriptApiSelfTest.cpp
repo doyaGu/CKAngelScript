@@ -52,6 +52,18 @@ struct IntExecutionData {
     int Output = 0;
 };
 
+struct ObjectExecutionData {
+    CKBOOL BoolInput = FALSE;
+    CKBOOL BoolOutput = FALSE;
+    int IntInput = 0;
+    int IntOutput = 0;
+    float FloatInput = 0.0f;
+    float FloatOutput = 0.0f;
+    const char *StringInput = nullptr;
+    char StringOutput[64] = {};
+    size_t RequiredSize = 0;
+};
+
 void ConfigureIntArgument(asIScriptContext *ctx, void *userData) {
     auto *data = static_cast<IntExecutionData *>(userData);
     ctx->SetArgDWord(0, static_cast<asDWORD>(data ? data->Input : 0));
@@ -62,6 +74,61 @@ void ReadIntReturn(asIScriptContext *ctx, void *userData) {
     if (data) {
         data->Output = static_cast<int>(ctx->GetReturnDWord());
     }
+}
+
+CKAS_STATUS WriteObjectInt(CKAngelScriptArgWriter *writer, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    return CKAngelScriptArgSetInt(writer, 0, data ? data->IntInput : 0);
+}
+
+CKAS_STATUS ReadObjectInt(CKAngelScriptResultReader *reader, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    return CKAngelScriptResultGetInt(reader, data ? &data->IntOutput : nullptr);
+}
+
+CKAS_STATUS WriteObjectBool(CKAngelScriptArgWriter *writer, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    return CKAngelScriptArgSetBool(writer, 0, data ? data->BoolInput : FALSE);
+}
+
+CKAS_STATUS ReadObjectBool(CKAngelScriptResultReader *reader, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    return CKAngelScriptResultGetBool(reader, data ? &data->BoolOutput : nullptr);
+}
+
+CKAS_STATUS WriteObjectFloat(CKAngelScriptArgWriter *writer, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    return CKAngelScriptArgSetFloat(writer, 0, data ? data->FloatInput : 0.0f);
+}
+
+CKAS_STATUS ReadObjectFloat(CKAngelScriptResultReader *reader, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    return CKAngelScriptResultGetFloat(reader, data ? &data->FloatOutput : nullptr);
+}
+
+CKAS_STATUS WriteObjectString(CKAngelScriptArgWriter *writer, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    return CKAngelScriptArgSetString(writer, 0, data ? data->StringInput : "");
+}
+
+CKAS_STATUS ReadObjectString(CKAngelScriptResultReader *reader, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    if (!data) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    return CKAngelScriptResultGetString(reader, data->StringOutput, sizeof(data->StringOutput), &data->RequiredSize);
+}
+
+CKAS_STATUS ReadObjectStringTooSmall(CKAngelScriptResultReader *reader, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    if (!data) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    return CKAngelScriptResultGetString(reader, data->StringOutput, 4, &data->RequiredSize);
+}
+
+CKAS_STATUS WriteObjectIntAsBool(CKAngelScriptArgWriter *writer, void *) {
+    return CKAngelScriptArgSetBool(writer, 0, TRUE);
 }
 
 bool WriteTextFile(const std::filesystem::path &path, const char *text, std::string &error) {
@@ -521,6 +588,285 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         }
         return false;
     }
+
+    if (api->GetApiVersion() < CKAS_API_VERSION ||
+        !api->HasCapability(CKAS_CAP_MODULE_COMPILE) ||
+        !api->HasCapability(CKAS_CAP_OBJECT_CREATE) ||
+        !api->HasCapability(CKAS_CAP_OBJECT_METHOD_EXECUTION) ||
+        !api->HasCapability(CKAS_CAP_ARG_WRITER) ||
+        !api->HasCapability(CKAS_CAP_RESULT_READER) ||
+        !api->HasCapability(CKAS_CAP_STACKTRACE)) {
+        error = "CKAngelScript API self-test expected the object/method ABI capabilities to be available.";
+        return false;
+    }
+    if (api->HasCapability(CKAS_CAP_ASYNC_RESUME)) {
+        error = "CKAngelScript API self-test does not expect object-method async resume capability yet.";
+        return false;
+    }
+
+    constexpr const char *objectModuleName = "__CKAS_ManagerApiObjectSelfTest";
+    const char *objectSource =
+        "class __CKAS_PublicObject {\n"
+        "  int base;\n"
+        "  __CKAS_PublicObject() { base = 10; }\n"
+        "  int Add(int value) { return base + value; }\n"
+        "  bool Flip(bool value) { return !value; }\n"
+        "  float Half(float value) { return value * 0.5f; }\n"
+        "  string Echo(const string &in value) { return \"echo:\" + value; }\n"
+        "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
+        "  void Nothing() {}\n"
+        "  void Boom() { array<int> values; values[1] = 1; }\n"
+        "}\n";
+    if (!ExpectStatus(api->CompileModule(objectModuleName, objectSource, CKAS_COMPILE_REPLACEEXISTING, &result),
+                      CKAS_OK,
+                      "CompileModule object ABI",
+                      &result,
+                      error)) {
+        return false;
+    }
+    const CKDWORD objectGeneration = api->GetModuleGeneration(objectModuleName);
+    if (objectGeneration == 0) {
+        error = "CKAngelScript API self-test expected compiled object module to have a generation.";
+        return false;
+    }
+
+    CKAngelScriptObjectOptions objectOptions = CKAngelScriptApi::ObjectOptions();
+    objectOptions.ModuleName = objectModuleName;
+    objectOptions.ClassName = "__CKAS_PublicObject";
+    CKAngelScriptObject *object = api->CreateObject(objectOptions, &result);
+    if (!object) {
+        error = "CKAngelScript API self-test failed to create an object handle.";
+        return false;
+    }
+
+    CKAngelScriptMethodOptions missingOptionalOptions = CKAngelScriptApi::MethodOptions();
+    missingOptionalOptions.Object = object;
+    missingOptionalOptions.MethodDecl = "void Missing()";
+    missingOptionalOptions.Optional = TRUE;
+    CKAngelScriptMethod *missingOptional = api->FindObjectMethod(missingOptionalOptions, &result);
+    if (missingOptional || result.Status != CKAS_OK) {
+        error = "CKAngelScript API self-test expected optional missing object method lookup to return null with OK.";
+        if (missingOptional) {
+            api->ReleaseMethod(missingOptional);
+        }
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    CKAngelScriptMethodOptions missingRequiredOptions = CKAngelScriptApi::MethodOptions();
+    missingRequiredOptions.Object = object;
+    missingRequiredOptions.MethodDecl = "void Missing()";
+    if (api->FindObjectMethod(missingRequiredOptions, &result) || result.Status != CKAS_NOTFOUND) {
+        error = "CKAngelScript API self-test expected required missing object method lookup to fail.";
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    CKAngelScriptMethodOptions addOptions = CKAngelScriptApi::MethodOptions();
+    addOptions.Object = object;
+    addOptions.MethodDecl = "int Add(int)";
+    CKAngelScriptMethod *addMethod = api->FindObjectMethod(addOptions, &result);
+    if (!addMethod) {
+        error = "CKAngelScript API self-test failed to find Add object method.";
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    ObjectExecutionData objectData;
+    objectData.IntInput = 32;
+    CKAngelScriptObjectMethodExecuteOptions objectCall = CKAngelScriptApi::ObjectMethodExecuteOptions();
+    objectCall.Object = object;
+    objectCall.Method = addMethod;
+    objectCall.WriteArgs = WriteObjectInt;
+    objectCall.ReadResult = ReadObjectInt;
+    objectCall.UserData = &objectData;
+    objectCall.Flags = CKAS_CALL_NO_SUSPEND | CKAS_CALL_HOT_PATH;
+    if (!ExpectStatus(api->CallObjectMethod(objectCall, &result),
+                      CKAS_OK,
+                      "CallObjectMethod int",
+                      &result,
+                      error)) {
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    if (objectData.IntOutput != 42) {
+        error = "CKAngelScript API self-test expected object int result to be 42.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    objectCall.WriteArgs = WriteObjectIntAsBool;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_TYPEMISMATCH) {
+        error = "CKAngelScript API self-test expected object arg writer type mismatch.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.WriteArgs = WriteObjectInt;
+
+    CKAngelScriptExecution *objectExecution = api->CreateObjectMethodExecution(objectCall, &result);
+    if (!objectExecution) {
+        error = "CKAngelScript API self-test failed to create an object method execution handle.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectData.IntOutput = 0;
+    if (!ExpectStatus(api->StartExecution(objectExecution),
+                      CKAS_OK,
+                      "StartExecution object method",
+                      api->GetExecutionResult(objectExecution),
+                      error)) {
+        api->ReleaseExecution(objectExecution);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    if (objectData.IntOutput != 42) {
+        error = "CKAngelScript API self-test expected object method execution result to be 42.";
+        api->ReleaseExecution(objectExecution);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseExecution(objectExecution);
+    api->ReleaseMethod(addMethod);
+
+    CKAngelScriptMethodOptions waitOptions = CKAngelScriptApi::MethodOptions();
+    waitOptions.Object = object;
+    waitOptions.MethodDecl = "int Wait()";
+    CKAngelScriptMethod *waitMethod = api->FindObjectMethod(waitOptions, &result);
+    objectCall.Method = waitMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    objectExecution = waitMethod ? api->CreateObjectMethodExecution(objectCall, &result) : nullptr;
+    if (!waitMethod || !objectExecution || api->StartExecution(objectExecution) != CKAS_UNSUPPORTED) {
+        error = "CKAngelScript API self-test expected suspended object method execution to be unsupported.";
+        if (objectExecution) {
+            api->ReleaseExecution(objectExecution);
+        }
+        if (waitMethod) {
+            api->ReleaseMethod(waitMethod);
+        }
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseExecution(objectExecution);
+    api->ReleaseMethod(waitMethod);
+
+    CKAngelScriptMethodOptions boolOptions = CKAngelScriptApi::MethodOptions();
+    boolOptions.Object = object;
+    boolOptions.MethodDecl = "bool Flip(bool)";
+    CKAngelScriptMethod *boolMethod = api->FindObjectMethod(boolOptions, &result);
+    objectData.BoolInput = TRUE;
+    objectData.BoolOutput = TRUE;
+    objectCall.Method = boolMethod;
+    objectCall.WriteArgs = WriteObjectBool;
+    objectCall.ReadResult = ReadObjectBool;
+    if (!boolMethod || api->CallObjectMethod(objectCall, &result) != CKAS_OK || objectData.BoolOutput != FALSE) {
+        error = "CKAngelScript API self-test expected bool object method round-trip.";
+        if (boolMethod) {
+            api->ReleaseMethod(boolMethod);
+        }
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseMethod(boolMethod);
+
+    CKAngelScriptMethodOptions floatOptions = CKAngelScriptApi::MethodOptions();
+    floatOptions.Object = object;
+    floatOptions.MethodDecl = "float Half(float)";
+    CKAngelScriptMethod *floatMethod = api->FindObjectMethod(floatOptions, &result);
+    objectData.FloatInput = 5.0f;
+    objectData.FloatOutput = 0.0f;
+    objectCall.Method = floatMethod;
+    objectCall.WriteArgs = WriteObjectFloat;
+    objectCall.ReadResult = ReadObjectFloat;
+    if (!floatMethod || api->CallObjectMethod(objectCall, &result) != CKAS_OK || objectData.FloatOutput != 2.5f) {
+        error = "CKAngelScript API self-test expected float object method round-trip.";
+        if (floatMethod) {
+            api->ReleaseMethod(floatMethod);
+        }
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseMethod(floatMethod);
+
+    CKAngelScriptMethodOptions echoOptions = CKAngelScriptApi::MethodOptions();
+    echoOptions.Object = object;
+    echoOptions.MethodDecl = "string Echo(const string &in)";
+    CKAngelScriptMethod *echoMethod = api->FindObjectMethod(echoOptions, &result);
+    objectData.StringInput = "hello";
+    objectData.StringOutput[0] = '\0';
+    objectData.RequiredSize = 0;
+    objectCall.Method = echoMethod;
+    objectCall.WriteArgs = WriteObjectString;
+    objectCall.ReadResult = ReadObjectStringTooSmall;
+    if (!echoMethod || api->CallObjectMethod(objectCall, &result) != CKAS_BUFFERTOOSMALL || objectData.RequiredSize == 0) {
+        error = "CKAngelScript API self-test expected string result buffer-too-small diagnostics.";
+        if (echoMethod) {
+            api->ReleaseMethod(echoMethod);
+        }
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.ReadResult = ReadObjectString;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_OK || std::string(objectData.StringOutput) != "echo:hello") {
+        error = "CKAngelScript API self-test expected string object method round-trip.";
+        api->ReleaseMethod(echoMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseMethod(echoMethod);
+
+    CKAngelScriptMethodOptions boomOptions = CKAngelScriptApi::MethodOptions();
+    boomOptions.Object = object;
+    boomOptions.MethodDecl = "void Boom()";
+    CKAngelScriptMethod *boomMethod = api->FindObjectMethod(boomOptions, &result);
+    objectCall.Method = boomMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    if (!boomMethod || api->CallObjectMethod(objectCall, &result) != CKAS_EXECUTIONFAILED ||
+        !result.ErrorMessage || !result.StackTrace) {
+        error = "CKAngelScript API self-test expected object method exceptions to include diagnostics.";
+        if (boomMethod) {
+            api->ReleaseMethod(boomMethod);
+        }
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseMethod(boomMethod);
+
+    CKAngelScriptMethodOptions staleOptions = CKAngelScriptApi::MethodOptions();
+    staleOptions.Object = object;
+    staleOptions.MethodDecl = "int Add(int)";
+    CKAngelScriptMethod *staleMethod = api->FindObjectMethod(staleOptions, &result);
+    objectCall.Method = staleMethod;
+    objectCall.WriteArgs = WriteObjectInt;
+    objectCall.ReadResult = ReadObjectInt;
+    if (!staleMethod ||
+        !ExpectStatus(api->UnloadModule(objectModuleName, &result),
+                      CKAS_OK,
+                      "UnloadModule object ABI",
+                      &result,
+                      error)) {
+        if (staleMethod) {
+            api->ReleaseMethod(staleMethod);
+        }
+        api->ReleaseObject(object);
+        return false;
+    }
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_STALEHANDLE ||
+        api->GetModuleGeneration(objectModuleName) == objectGeneration) {
+        error = "CKAngelScript API self-test expected object/method handles to become stale after unload.";
+        api->ReleaseMethod(staleMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseMethod(staleMethod);
+    api->ReleaseObject(object);
 
     if (!ExpectStatus(api->UnloadModule(moduleName, &result),
                       CKAS_OK,
