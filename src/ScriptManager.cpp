@@ -1967,6 +1967,9 @@ CKAS_STATUS ScriptManager::FindFunction(const CKAngelScriptFunctionOptions &opti
     if (!outFunction) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function handle out pointer is required.");
     }
+    if (!HasCompletePublicStruct(options)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "FindFunction options size is invalid.");
+    }
     const char *moduleName = PublicField(options, &CKAngelScriptFunctionOptions::ModuleName, static_cast<const char *>(nullptr));
     const char *functionName = PublicField(options, &CKAngelScriptFunctionOptions::FunctionName, static_cast<const char *>(nullptr));
     const char *functionDecl = PublicField(options, &CKAngelScriptFunctionOptions::FunctionDecl, static_cast<const char *>(nullptr));
@@ -2021,6 +2024,9 @@ CKAS_STATUS ScriptManager::CreateObject(const CKAngelScriptObjectOptions &option
     }
     if (!outObject) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object out pointer is required.");
+    }
+    if (!HasCompletePublicStruct(options)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "CreateObject options size is invalid.");
     }
     const char *moduleName = PublicField(options, &CKAngelScriptObjectOptions::ModuleName, static_cast<const char *>(nullptr));
     const char *className = PublicField(options, &CKAngelScriptObjectOptions::ClassName, static_cast<const char *>(nullptr));
@@ -2081,6 +2087,9 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
     }
     if (!outMethod) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Method handle out pointer is required.");
+    }
+    if (!HasCompletePublicStruct(options)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "FindObjectMethod options size is invalid.");
     }
     CKAngelScriptObject *object = PublicField(options, &CKAngelScriptMethodOptions::Object, static_cast<CKAngelScriptObject *>(nullptr));
     const char *methodName = PublicField(options, &CKAngelScriptMethodOptions::MethodName, static_cast<const char *>(nullptr));
@@ -2229,6 +2238,9 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
     }
     if (!outExecution) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution out pointer is required.");
+    }
+    if (!HasCompletePublicStruct(options)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "CreateFunctionExecution options size is invalid.");
     }
     CKAngelScriptFunction *functionHandle =
         PublicField(options, &CKAngelScriptFunctionExecutionOptions::Function, static_cast<CKAngelScriptFunction *>(nullptr));

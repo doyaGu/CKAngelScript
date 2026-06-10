@@ -288,6 +288,27 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "int __ckas_public_async() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 9; }\n"
         "int __ckas_public_exception() { array<int> values; return values[1]; }\n";
 
+    CKAngelScriptFunctionOptions zeroSizeFunctionOptions = CKAngelScriptApi::FunctionOptions();
+    zeroSizeFunctionOptions.Size = 0;
+    zeroSizeFunctionOptions.ModuleName = moduleName;
+    zeroSizeFunctionOptions.FunctionDecl = "int __ckas_public_add(int)";
+    CKAngelScriptFunction *invalidSizedFunction = reinterpret_cast<CKAngelScriptFunction *>(static_cast<uintptr_t>(1));
+    if (api->FindFunction(zeroSizeFunctionOptions, &invalidSizedFunction, &result) != CKAS_INVALIDARGUMENT ||
+        invalidSizedFunction != nullptr) {
+        error = "CKAngelScript API self-test expected zero-sized function options to fail and clear out pointer.";
+        return false;
+    }
+
+    CKAngelScriptLoadOptions truncatedLoadOptions = CKAngelScriptApi::LoadOptions();
+    truncatedLoadOptions.Size = sizeof(CKAngelScriptLoadOptions) - 1;
+    truncatedLoadOptions.ModuleName = "__CKAS_ManagerApiTruncatedLoadSelfTest";
+    truncatedLoadOptions.Code = "int __ckas_truncated_load() { return 1; }\n";
+    truncatedLoadOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
+    if (api->LoadModule(truncatedLoadOptions, &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected truncated LoadModule options to fail.";
+        return false;
+    }
+
     if (!ExpectStatus(api->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &result),
                       CKAS_OK,
                       "CompileModule",
@@ -346,6 +367,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
     constexpr const char *loadModuleName = "__CKAS_ManagerApiLoadSelfTest";
     CKAngelScriptLoadOptions loadOptions = CKAngelScriptApi::LoadOptions();
+    loadOptions.Size = sizeof(loadOptions) + 16;
     loadOptions.ModuleName = loadModuleName;
     loadOptions.Code = "int __ckas_public_loaded() { return 3; }\n";
     loadOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
@@ -895,6 +917,16 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     objectCall.WriteArgs = WriteObjectInt;
+    objectData.BoolOutput = TRUE;
+    objectCall.ReadResult = ReadObjectBool;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_TYPEMISMATCH ||
+        objectData.BoolOutput != FALSE) {
+        error = "CKAngelScript API self-test expected result reader type mismatch to clear output.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.ReadResult = ReadObjectInt;
 
     methodOptions.MethodDecl = "bool Flip(bool)";
     CKAngelScriptMethod *boolMethod = nullptr;
