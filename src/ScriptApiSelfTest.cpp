@@ -303,6 +303,18 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         error = "CKAngelScript API self-test expected unknown CompileModule flags to fail.";
         return false;
     }
+    const CKDWORD generationBeforeFailedReplace = api->GetModuleGeneration(moduleName);
+    asIScriptFunction *stillBorrowedFunction = reinterpret_cast<asIScriptFunction *>(static_cast<uintptr_t>(1));
+    if (api->CompileModule(moduleName,
+                           "int __ckas_public_add(int value) { return value + ; }\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_COMPILEERROR ||
+        api->GetModuleGeneration(moduleName) != generationBeforeFailedReplace ||
+        api->BorrowFunctionByDecl(moduleName, "int __ckas_public_add(int)", &stillBorrowedFunction, &result) != CKAS_OK ||
+        !stillBorrowedFunction) {
+        error = "CKAngelScript API self-test expected failed module replacement to keep the old module and generation.";
+        return false;
+    }
 
     asIScriptModule *module = nullptr;
     if (!ExpectStatus(api->BorrowModule(moduleName, &module, &result), CKAS_OK, "BorrowModule", &result, error) ||
@@ -1021,7 +1033,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseMethod(addMethod);
         return false;
     }
+    const CKDWORD objectGenerationBeforeReplace = api->GetModuleGeneration(objectModuleName);
     if (api->CompileModule(objectModuleName, objectSource, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_OK ||
+        api->GetModuleGeneration(objectModuleName) != objectGenerationBeforeReplace + 1 ||
         api->CreateObject(objectOptions, &object, &result) != CKAS_OK ||
         !object) {
         error = "CKAngelScript API self-test failed to recreate object module.";

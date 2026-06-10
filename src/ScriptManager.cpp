@@ -130,7 +130,95 @@ struct CKAngelScriptResultReader {
     const CKAngelScriptMethod *Method = nullptr;
 };
 
-namespace {
+namespace ScriptManagerModuleReplacementInternal {
+
+class MemoryByteCodeStream : public asIBinaryStream {
+public:
+    explicit MemoryByteCodeStream(std::vector<unsigned char> *buffer)
+        : m_Buffer(buffer) {}
+
+    int Read(void *ptr, asUINT size) override {
+        if (!m_Buffer || !ptr || m_ReadOffset > m_Buffer->size() || size > m_Buffer->size() - m_ReadOffset) {
+            return -1;
+        }
+        if (size > 0) {
+            std::memcpy(ptr, m_Buffer->data() + m_ReadOffset, size);
+            m_ReadOffset += size;
+        }
+        return 0;
+    }
+
+    int Write(const void *ptr, asUINT size) override {
+        if (!m_Buffer || (!ptr && size > 0)) {
+            return -1;
+        }
+        const size_t offset = m_Buffer->size();
+        m_Buffer->resize(offset + size);
+        if (size > 0) {
+            std::memcpy(m_Buffer->data() + offset, ptr, size);
+        }
+        return 0;
+    }
+
+private:
+    std::vector<unsigned char> *m_Buffer = nullptr;
+    size_t m_ReadOffset = 0;
+};
+
+bool SaveModuleByteCode(asIScriptModule *module,
+                        std::vector<unsigned char> &byteCode,
+                        int &angelScriptCode) {
+    byteCode.clear();
+    if (!module) {
+        angelScriptCode = -1;
+        return false;
+    }
+    MemoryByteCodeStream stream(&byteCode);
+    angelScriptCode = module->SaveByteCode(&stream);
+    if (angelScriptCode < 0) {
+        byteCode.clear();
+        return false;
+    }
+    return true;
+}
+
+bool LoadModuleByteCode(asIScriptEngine *engine,
+                        const char *moduleName,
+                        std::vector<unsigned char> &byteCode,
+                        asIScriptModule **outModule,
+                        int &angelScriptCode) {
+    if (outModule) {
+        *outModule = nullptr;
+    }
+    if (!engine || !moduleName || moduleName[0] == '\0') {
+        angelScriptCode = -1;
+        return false;
+    }
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        angelScriptCode = -1;
+        return false;
+    }
+    MemoryByteCodeStream stream(&byteCode);
+    angelScriptCode = module->LoadByteCode(&stream);
+    if (angelScriptCode < 0) {
+        module->Discard();
+        return false;
+    }
+    if (outModule) {
+        *outModule = module;
+    }
+    return true;
+}
+
+std::string MakeTransientModuleName(const char *moduleName) {
+    static unsigned int counter = 0;
+    return fmt::format("__ckas_replace_candidate_{}_{}", moduleName ? moduleName : "module", ++counter);
+}
+
+} // namespace ScriptManagerModuleReplacementInternal
+
+namespace ScriptManagerInternal {
 
 CKAS_STATUS ToCKAS_STATUS(ScriptInvocationStatus status) {
     switch (status) {
@@ -457,7 +545,21 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution) {
     return status;
 }
 
-} // namespace
+} // namespace ScriptManagerInternal
+
+using ScriptManagerInternal::ExecutePreparedObjectMethod;
+using ScriptManagerInternal::HasCompletePublicStruct;
+using ScriptManagerInternal::HasPublicField;
+using ScriptManagerInternal::HasPublicFlag;
+using ScriptManagerInternal::IsStringType;
+using ScriptManagerInternal::IsValidBorrowedObjectParam;
+using ScriptManagerInternal::IsValidStringParam;
+using ScriptManagerInternal::MakeExecutionResult;
+using ScriptManagerInternal::ObjectCallOutcome;
+using ScriptManagerInternal::PublicField;
+using ScriptManagerInternal::RunExecution;
+using ScriptManagerInternal::StatusMessage;
+using ScriptManagerInternal::ValidateArgIndex;
 
 static ScriptManager *FromPublicHandle(CKAngelScript *angelScript) {
     return reinterpret_cast<ScriptManager *>(angelScript);
@@ -1405,7 +1507,187 @@ void ScriptManager::BumpModuleGeneration(const char *moduleName) {
     }
 }
 
+std::shared_ptr<CachedScript> ScriptManager::BuildTransientModule(
+    const char *moduleName,
+    const std::vector<std::tuple<std::string, std::string>> &sections,
+    int &angelScriptCode,
+    std::string &diagnostics) {
+    angelScriptCode = 0;
+    diagnostics.clear();
+    if (!m_ScriptEngine || !moduleName || moduleName[0] == '\0' || sections.empty()) {
+        angelScriptCode = -1;
+        return nullptr;
+    }
+
+    auto script = std::make_shared<CachedScript>();
+    script->name = moduleName;
+    for (const auto &section : sections) {
+        script->AddSection(std::get<0>(section), std::get<1>(section));
+    }
+
+    BeginScriptMessageCapture();
+    const bool built = script->Build(m_ScriptEngine);
+    diagnostics = EndScriptMessageCapture();
+    if (!built) {
+        angelScriptCode = -3;
+        if (script->module) {
+            script->Discard();
+        }
+        return nullptr;
+    }
+    return script;
+}
+
+bool ScriptManager::CaptureModuleReplacementSnapshot(const char *moduleName,
+                                                     ModuleReplacementSnapshot &snapshot,
+                                                     int &angelScriptCode,
+                                                     std::string &errorMessage) {
+    snapshot = ModuleReplacementSnapshot();
+    angelScriptCode = 0;
+    errorMessage.clear();
+    if (!moduleName || moduleName[0] == '\0') {
+        angelScriptCode = -1;
+        errorMessage = "Module name is required.";
+        return false;
+    }
+
+    snapshot.Cache = m_ScriptCache.GetCachedScript(moduleName);
+    if (snapshot.Cache) {
+        snapshot.Sections = snapshot.Cache->sections;
+        snapshot.Metadata = snapshot.Cache->metadata;
+    }
+
+    asIScriptModule *module = GetModule(moduleName);
+    if (!module) {
+        return true;
+    }
+
+    snapshot.HasModule = true;
+    if (!ScriptManagerModuleReplacementInternal::SaveModuleByteCode(module, snapshot.ByteCode, angelScriptCode)) {
+        errorMessage = "Failed to snapshot existing script module bytecode.";
+        return false;
+    }
+    return true;
+}
+
+void ScriptManager::RemoveModuleForReplacement(const char *moduleName,
+                                               ModuleReplacementSnapshot &snapshot) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return;
+    }
+
+    m_ScriptCache.Invalidate(moduleName);
+    if (snapshot.Cache && snapshot.Cache->module) {
+        snapshot.Cache->module->Discard();
+        snapshot.Cache->module = nullptr;
+        return;
+    }
+
+    asIScriptModule *module = GetModule(moduleName);
+    if (module) {
+        module->Discard();
+    }
+}
+
+bool ScriptManager::RestoreModuleReplacementSnapshot(const char *moduleName,
+                                                     ModuleReplacementSnapshot &snapshot,
+                                                     int &angelScriptCode,
+                                                     std::string &errorMessage) {
+    angelScriptCode = 0;
+    errorMessage.clear();
+    if (!snapshot.HasModule) {
+        return true;
+    }
+
+    asIScriptModule *restoredModule = nullptr;
+    if (!ScriptManagerModuleReplacementInternal::LoadModuleByteCode(m_ScriptEngine,
+                                                                    moduleName,
+                                                                    snapshot.ByteCode,
+                                                                    &restoredModule,
+                                                                    angelScriptCode)) {
+        errorMessage = "Failed to restore previous script module bytecode.";
+        return false;
+    }
+
+    std::shared_ptr<CachedScript> restoredCache = snapshot.Cache ? snapshot.Cache : std::make_shared<CachedScript>();
+    restoredCache->name = moduleName ? moduleName : "";
+    restoredCache->sections = snapshot.Sections;
+    restoredCache->metadata = snapshot.Metadata;
+    restoredCache->module = restoredModule;
+    m_ScriptCache.CacheScript(moduleName, restoredCache);
+    return true;
+}
+
+CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
+    const char *moduleName,
+    const std::vector<std::tuple<std::string, std::string>> &sections,
+    CKAngelScriptResult *result) {
+    int angelScriptCode = 0;
+    std::string diagnostics;
+    const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(moduleName);
+    std::shared_ptr<CachedScript> candidate =
+        BuildTransientModule(transientName.c_str(), sections, angelScriptCode, diagnostics);
+    if (!candidate || !candidate->module) {
+        return StoreResult(result,
+                           CKAS_COMPILEERROR,
+                           angelScriptCode,
+                           diagnostics.empty() ? "Failed to compile replacement script module." : diagnostics);
+    }
+
+    std::vector<unsigned char> candidateByteCode;
+    if (!ScriptManagerModuleReplacementInternal::SaveModuleByteCode(candidate->module,
+                                                                    candidateByteCode,
+                                                                    angelScriptCode)) {
+        candidate->Discard();
+        return StoreResult(result,
+                           CKAS_EXECUTIONFAILED,
+                           angelScriptCode,
+                           "Failed to snapshot replacement script module bytecode.");
+    }
+
+    ModuleReplacementSnapshot snapshot;
+    std::string snapshotError;
+    if (!CaptureModuleReplacementSnapshot(moduleName, snapshot, angelScriptCode, snapshotError)) {
+        candidate->Discard();
+        return StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, snapshotError);
+    }
+
+    RemoveModuleForReplacement(moduleName, snapshot);
+
+    asIScriptModule *committedModule = nullptr;
+    if (!ScriptManagerModuleReplacementInternal::LoadModuleByteCode(m_ScriptEngine,
+                                                                    moduleName,
+                                                                    candidateByteCode,
+                                                                    &committedModule,
+                                                                    angelScriptCode)) {
+        int restoreCode = 0;
+        std::string restoreError;
+        const bool restored = RestoreModuleReplacementSnapshot(moduleName, snapshot, restoreCode, restoreError);
+        candidate->Discard();
+        return StoreResult(result,
+                           CKAS_EXECUTIONFAILED,
+                           angelScriptCode,
+                           restored
+                               ? "Failed to commit replacement script module bytecode."
+                               : fmt::format("Failed to commit replacement script module bytecode; rollback also failed: {}",
+                                             restoreError));
+    }
+
+    auto committedCache = std::make_shared<CachedScript>();
+    committedCache->name = moduleName ? moduleName : "";
+    committedCache->sections = candidate->sections;
+    committedCache->metadata = candidate->metadata;
+    committedCache->module = committedModule;
+    m_ScriptCache.CacheScript(moduleName, committedCache);
+    candidate->Discard();
+    BumpModuleGeneration(moduleName);
+    return StoreResult(result, CKAS_OK);
+}
+
 CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result) {
+    if (!HasCompletePublicStruct(options)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "LoadModule options size is invalid.");
+    }
     const char *moduleName = PublicField(options, &CKAngelScriptLoadOptions::ModuleName, static_cast<const char *>(nullptr));
     const char *filename = PublicField(options, &CKAngelScriptLoadOptions::Filename, static_cast<const char *>(nullptr));
     const char **filenames = PublicField(options, &CKAngelScriptLoadOptions::Filenames, static_cast<const char **>(nullptr));
@@ -1434,21 +1716,16 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                            0,
                            "LoadModule accepts only one source: Code, Filename, or Filenames.");
     }
-    bool replacedExisting = false;
-    if (HasModule(moduleName)) {
+    const bool replacingExisting = HasModule(moduleName);
+    if (replacingExisting) {
         if (!HasPublicFlag(flags, CKAS_LOAD_REPLACEEXISTING)) {
             return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
-        if (!hasCode) {
-            if (HasRuntimeHandleForModule(moduleName)) {
-                return StoreResult(result,
-                                   CKAS_INUSE,
-                                   0,
-                                   "Module has live object or execution handles.");
-            }
-            DiscardCachedModule(moduleName);
-            BumpModuleGeneration(moduleName);
-            replacedExisting = true;
+        if (HasRuntimeHandleForModule(moduleName)) {
+            return StoreResult(result,
+                               CKAS_INUSE,
+                               0,
+                               "Module has live object or execution handles.");
         }
     }
     if (hasCode) {
@@ -1466,6 +1743,19 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                                    "File list contains an empty filename.");
             }
         }
+        if (replacingExisting) {
+            std::vector<std::tuple<std::string, std::string>> sections;
+            sections.reserve(fileCount);
+            for (size_t i = 0; i < fileCount; ++i) {
+                XString scriptFilename = filenames[i];
+                if (scriptFilename.Find(".as") == XString::NOTFOUND) {
+                    scriptFilename += ".as";
+                }
+                ResolveScriptFileName(scriptFilename);
+                sections.emplace_back(scriptFilename.CStr(), std::string());
+            }
+            return ReplaceModuleFromSections(moduleName, sections, result);
+        }
         BeginScriptMessageCapture();
         const int loadResult = LoadModuleFromFiles(moduleName, filenames, fileCount);
         const std::string diagnostics = EndScriptMessageCapture();
@@ -1475,10 +1765,21 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                                loadResult,
                                diagnostics.empty() ? "Failed to load script files." : diagnostics);
         }
-        if (!replacedExisting) {
-            BumpModuleGeneration(moduleName);
-        }
+        BumpModuleGeneration(moduleName);
         return StoreResult(result, CKAS_OK);
+    }
+
+    if (replacingExisting) {
+        std::string scriptFilename;
+        if (filename) {
+            scriptFilename = filename;
+        } else {
+            scriptFilename = moduleName;
+            scriptFilename += ".as";
+        }
+        std::vector<std::tuple<std::string, std::string>> sections;
+        sections.emplace_back(std::move(scriptFilename), std::string());
+        return ReplaceModuleFromSections(moduleName, sections, result);
     }
 
     BeginScriptMessageCapture();
@@ -1490,9 +1791,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                            loadResult,
                            diagnostics.empty() ? "Failed to load script file." : diagnostics);
     }
-    if (!replacedExisting) {
-        BumpModuleGeneration(moduleName);
-    }
+    BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK);
 }
 
@@ -1509,8 +1808,8 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
     if (!m_ScriptEngine) {
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
-    bool replacedExisting = false;
-    if (HasModule(moduleName)) {
+    const bool replacingExisting = HasModule(moduleName);
+    if (replacingExisting) {
         if (!HasPublicFlag(flags, CKAS_COMPILE_REPLACEEXISTING)) {
             return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
@@ -1520,9 +1819,9 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
                                0,
                                "Module has live object or execution handles.");
         }
-        DiscardCachedModule(moduleName);
-        BumpModuleGeneration(moduleName);
-        replacedExisting = true;
+        std::vector<std::tuple<std::string, std::string>> sections;
+        sections.emplace_back(moduleName, scriptCode);
+        return ReplaceModuleFromSections(moduleName, sections, result);
     }
 
     BeginScriptMessageCapture();
@@ -1534,9 +1833,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
                            compileResult,
                            diagnostics.empty() ? "Failed to compile script module." : diagnostics);
     }
-    if (!replacedExisting) {
-        BumpModuleGeneration(moduleName);
-    }
+    BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK);
 }
 

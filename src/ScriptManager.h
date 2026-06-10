@@ -384,6 +384,32 @@ protected:
     bool HasExecutionForModule(const char *moduleName) const;
     bool HasRuntimeHandleForModule(const char *moduleName) const;
     void BumpModuleGeneration(const char *moduleName);
+    struct ModuleReplacementSnapshot {
+        std::shared_ptr<CachedScript> Cache;
+        std::vector<std::tuple<std::string, std::string>> Sections;
+        ScriptMetadata Metadata;
+        std::vector<unsigned char> ByteCode;
+        bool HasModule = false;
+    };
+    std::shared_ptr<CachedScript> BuildTransientModule(
+        const char *moduleName,
+        const std::vector<std::tuple<std::string, std::string>> &sections,
+        int &angelScriptCode,
+        std::string &diagnostics);
+    bool CaptureModuleReplacementSnapshot(const char *moduleName,
+                                          ModuleReplacementSnapshot &snapshot,
+                                          int &angelScriptCode,
+                                          std::string &errorMessage);
+    void RemoveModuleForReplacement(const char *moduleName,
+                                    ModuleReplacementSnapshot &snapshot);
+    bool RestoreModuleReplacementSnapshot(const char *moduleName,
+                                          ModuleReplacementSnapshot &snapshot,
+                                          int &angelScriptCode,
+                                          std::string &errorMessage);
+    CKAS_STATUS ReplaceModuleFromSections(
+        const char *moduleName,
+        const std::vector<std::tuple<std::string, std::string>> &sections,
+        CKAngelScriptResult *result = nullptr);
     // Internal low-level shims backing the public module API. Do not call these
     // from behavior blocks or runtime helpers; use LoadModule/CompileModule/
     // UnloadModule and the cache helper methods above.
