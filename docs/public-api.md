@@ -26,7 +26,7 @@ if (!api.IsValid()) {
 
 The handle is owned by CKAngelScript. Do not allocate, delete, or cast it to CKAngelScript internals.
 
-Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded.
+Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. v3 feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, synchronous object method calls, typed arg/result helpers, stack traces, and engine extensions.
 
 ## Handle Model
 
@@ -38,6 +38,8 @@ The v3 API deliberately separates borrowed AngelScript pointers from CKAngelScri
 - `CKAngelScriptExecution` owns runtime execution state. It blocks unload/replace of its module until released.
 
 All out pointer APIs clear the out pointer before validation and leave it null on failure.
+
+All public options and engine-extension structs must be zero-initialized and set `Size >= sizeof(v3_struct)`. `Size == 0` or a truncated struct returns `CKAS_INVALIDARGUMENT`; larger sizes are accepted so future struct extensions can be ignored by older binaries.
 
 ## Module Lifecycle
 
@@ -52,6 +54,8 @@ CKAS_STATUS status =
 ```
 
 `CKAngelScriptLoadOptions` accepts exactly one source: `Filename`, `Filenames` plus `FileCount`, or `Code`. Unknown flags return `CKAS_INVALIDARGUMENT`. Replacing an existing module requires `CKAS_LOAD_REPLACEEXISTING` or `CKAS_COMPILE_REPLACEEXISTING`; without replace, duplicates return `CKAS_ALREADYEXISTS`.
+
+Module replacement is atomic at the public API boundary: if the replacement source fails to compile or load, the old module remains available and its generation is unchanged. Successful replacement bumps the generation once.
 
 `CKAngelScriptGetModuleGeneration()` returns the generation tracked by CKAngelScript. Symbol handles created before an unload/replace later fail with `CKAS_STALEHANDLE`.
 
@@ -157,7 +161,7 @@ call.Method = method;
 call.WriteArgs = WriteAddArgs;
 call.ReadResult = ReadAddResult;
 call.UserData = &data;
-call.Flags = CKAS_CALL_NO_SUSPEND | CKAS_CALL_HOT_PATH;
+call.Flags = CKAS_CALL_NO_SUSPEND;
 
 CKAS_STATUS status = CKAngelScriptCallObjectMethod(angelScript, &call, &result);
 ```
@@ -210,6 +214,8 @@ Callbacks return `>= 0` on success and `< 0` on failure. If `errorMessage` is se
 - `CKAngelScriptBorrowExecutionResult()` strings remain valid until the execution handle is released or started/resumed/cancelled again.
 
 Copy strings if they must outlive those boundaries.
+
+Typed result helpers clear their writable out parameters before validation. `CKAngelScriptResultGetString()` reports the required size for `CKAS_BUFFERTOOSMALL`, but clears the buffer before copying.
 
 ## Unload Constraints
 

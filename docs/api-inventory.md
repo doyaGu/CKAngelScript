@@ -88,7 +88,7 @@ These bindings intentionally stay close to native SDK naming. Prefer high-level 
 | Executions | `CKAngelScriptCreateFunctionExecution`, `CKAngelScriptStartExecution`, `CKAngelScriptResumeExecution`, `CKAngelScriptCancelExecution`, `CKAngelScriptReleaseExecution`, `CKAngelScriptGetExecutionState`, `CKAngelScriptBorrowExecutionResult`, `CKAngelScriptGetLastResult` |
 | Extension callbacks | `CKAngelScriptRegisterEngineExtension`, `CKAngelScriptUnregisterEngineExtension` |
 
-Supporting public structs/enums are `CKAS_STATUS`, `CKAS_FEATURE`, `CKAS_CALLFLAGS`, `CKAS_EXECUTIONSTATE`, `CKAngelScriptLoadOptions`, `CKAngelScriptFunctionOptions`, `CKAngelScriptFunctionExecutionOptions`, `CKAngelScriptObjectOptions`, `CKAngelScriptMethodOptions`, `CKAngelScriptObjectMethodExecuteOptions`, `CKAngelScriptResult`, and `CKAngelScriptEngineExtension`.
+Supporting public structs/enums are `CKAS_STATUS`, `CKAS_FEATURE`, `CKAS_CALLFLAGS`, `CKAS_EXECUTIONSTATE`, `CKAngelScriptLoadOptions`, `CKAngelScriptFunctionOptions`, `CKAngelScriptFunctionExecutionOptions`, `CKAngelScriptObjectOptions`, `CKAngelScriptMethodOptions`, `CKAngelScriptObjectMethodExecuteOptions`, `CKAngelScriptResult`, and `CKAngelScriptEngineExtension`. The only public call flag in v3 is `CKAS_CALL_NO_SUSPEND`; feature names are exact binary surface probes, not readiness checks.
 
 ## Maintenance Checklist
 
