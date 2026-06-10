@@ -1,12 +1,10 @@
 # Public API
 
-External plugins use the C ABI declared in `include/CKAngelScript.h`. The ABI is based on an opaque `CKAngelScript*` plus `CKAngelScript...` functions; it does not expose the internal `ScriptManager` C++ class or a virtual C++ interface.
+External plugins use the C ABI declared in `include/CKAngelScript.h`. The ABI is an opaque `CKAngelScript *` plus `CKAngelScript...` functions. It does not expose the internal `ScriptManager` C++ class or a virtual C++ interface.
 
-For C++ callers, the same header provides `CKAngelScriptApi`, a small non-owning wrapper over the C functions.
+For C++ callers, the same header provides `CKAngelScriptApi`, a small non-owning wrapper over the C functions, plus move-only RAII wrappers for object/function/method/execution handles.
 
 ## Getting CKAngelScript
-
-C ABI:
 
 ```cpp
 #include "CKAngelScript.h"
@@ -17,11 +15,9 @@ if (!angelScript) {
 }
 ```
 
-C++ wrapper:
+With the C++ wrapper:
 
 ```cpp
-#include "CKAngelScript.h"
-
 CKAngelScriptApi api = CKAngelScriptApi::Get(context);
 if (!api.IsValid()) {
     return;
@@ -30,18 +26,20 @@ if (!api.IsValid()) {
 
 The handle is owned by CKAngelScript. Do not allocate, delete, or cast it to CKAngelScript internals.
 
-Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasCapability()` before consuming newer ABI surfaces from an optional soft loader. Object/method invocation requires:
+Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded.
 
-- `CKAS_CAP_MODULE_COMPILE`
-- `CKAS_CAP_OBJECT_CREATE`
-- `CKAS_CAP_OBJECT_METHOD_EXECUTION`
-- `CKAS_CAP_ARG_WRITER`
-- `CKAS_CAP_RESULT_READER`
-- `CKAS_CAP_STACKTRACE`
+## Handle Model
+
+The v3 API deliberately separates borrowed AngelScript pointers from CKAngelScript handles:
+
+- `CKAngelScriptBorrowEngine`, `CKAngelScriptBorrowActiveContext`, `CKAngelScriptBorrowModule`, and `CKAngelScriptBorrowFunctionBy*` return borrowed `asIScript*` pointers through out parameters. CKAngelScript does not `AddRef` them. Callers must not release them.
+- `CKAngelScriptFunction` and `CKAngelScriptMethod` are symbol handles. They store owner, module/class identity, lookup key, and module generation. They do not retain `asIScriptFunction *` and do not block unload.
+- `CKAngelScriptObject` owns a live `asIScriptObject`. It blocks unload/replace of its module until released.
+- `CKAngelScriptExecution` owns runtime execution state. It blocks unload/replace of its module until released.
+
+All out pointer APIs clear the out pointer before validation and leave it null on failure.
 
 ## Module Lifecycle
-
-Use one source per load call:
 
 ```cpp
 CKAngelScriptResult result = {};
@@ -53,50 +51,86 @@ CKAS_STATUS status =
                               &result);
 ```
 
-With the C++ wrapper:
+`CKAngelScriptLoadOptions` accepts exactly one source: `Filename`, `Filenames` plus `FileCount`, or `Code`. Unknown flags return `CKAS_INVALIDARGUMENT`. Replacing an existing module requires `CKAS_LOAD_REPLACEEXISTING` or `CKAS_COMPILE_REPLACEEXISTING`; without replace, duplicates return `CKAS_ALREADYEXISTS`.
+
+`CKAngelScriptGetModuleGeneration()` returns the generation tracked by CKAngelScript. Symbol handles created before an unload/replace later fail with `CKAS_STALEHANDLE`.
+
+## Function Lookup And Execution
+
+Create a symbol handle, then create execution handles from it:
 
 ```cpp
-CKAngelScriptResult result = {};
-api.CompileModule("example_api",
-                  "int add_five(int value) { return value + 5; }",
-                  CKAS_COMPILE_REPLACEEXISTING,
-                  &result);
+CKAngelScriptFunctionOptions find = CKAngelScriptApi::FunctionOptions();
+find.ModuleName = "example_api";
+find.FunctionDecl = "int add_five(int)";
+
+CKAngelScriptFunction *function = nullptr;
+CKAS_STATUS status = CKAngelScriptFindFunction(angelScript, &find, &function, &result);
 ```
 
-`CKAngelScriptLoadOptions` accepts:
+`FunctionName` and `FunctionDecl` are exactly-one options. Name lookup returns `CKAS_AMBIGUOUS` when multiple overloads match. `FunctionDecl` lookup is preferred for overloads.
 
-- `ModuleName`
-- `Filename`
-- `Filenames` plus `FileCount`
-- `Code`
-- `Flags`
+```cpp
+struct AddData {
+    int Input = 0;
+    int Output = 0;
+};
 
-Set `Size = sizeof(CKAngelScriptLoadOptions)` when using the C ABI directly. The C++ wrapper helper `CKAngelScriptApi::LoadOptions()` does this for you.
-Set `CKAS_LOAD_REPLACEEXISTING` in `Flags` to replace an existing module.
-Passing multiple source kinds at once returns `CKAS_INVALIDARGUMENT`.
+CKAS_STATUS ConfigureAdd(asIScriptContext *ctx, void *userData) {
+    auto *data = static_cast<AddData *>(userData);
+    return ctx->SetArgDWord(0, static_cast<asDWORD>(data->Input)) >= 0
+        ? CKAS_OK
+        : CKAS_EXECUTIONFAILED;
+}
 
-`CKAngelScriptGetModuleGeneration()` returns the module generation tracked by CKAngelScript. Object and method handles capture this generation when they are created. After unload or replace, calls through old handles return `CKAS_STALEHANDLE`.
+CKAS_STATUS ReadAddResult(asIScriptContext *ctx, void *userData) {
+    auto *data = static_cast<AddData *>(userData);
+    data->Output = static_cast<int>(ctx->GetReturnDWord());
+    return CKAS_OK;
+}
+
+AddData data;
+data.Input = 37;
+
+CKAngelScriptFunctionExecutionOptions exec =
+    CKAngelScriptApi::FunctionExecutionOptions();
+exec.Function = function;
+exec.ConfigureContext = ConfigureAdd;
+exec.ReadResult = ReadAddResult;
+exec.UserData = &data;
+
+CKAngelScriptExecution *execution = nullptr;
+status = CKAngelScriptCreateFunctionExecution(angelScript, &exec, &execution, &result);
+if (status == CKAS_OK) {
+    status = CKAngelScriptStartExecution(angelScript, execution);
+    CKAngelScriptReleaseExecution(angelScript, execution);
+}
+CKAngelScriptReleaseFunction(angelScript, function);
+```
+
+`StartExecution` only accepts `CKAS_EXECUTION_READY`. `ResumeExecution` only accepts `CKAS_EXECUTION_SUSPENDED`. Invalid transitions return `CKAS_INVALIDSTATE`. `CancelExecution` returns `CKAS_OK` when accepted and stores `CKAS_CANCELLED` in the execution result. If `CKAS_CALL_NO_SUSPEND` is set and a script suspends, CKAngelScript aborts the context and returns `CKAS_UNSUPPORTED`.
 
 ## Object And Method Calls
 
-Use object and method handles when a host needs to call script class methods without touching `asIScriptObject`, `asIScriptFunction`, or `asIScriptContext` directly:
+Object/method APIs are for synchronous class method calls without exposing `asIScriptObject`, `asIScriptFunction`, or `asIScriptContext` directly:
 
 ```cpp
 CKAngelScriptObjectOptions objectOptions = CKAngelScriptApi::ObjectOptions();
 objectOptions.ModuleName = "example_api";
 objectOptions.ClassName = "ExampleMod";
 
-CKAngelScriptResult result = {};
-CKAngelScriptObject *object =
-    CKAngelScriptCreateObject(angelScript, &objectOptions, &result);
+CKAngelScriptObject *object = nullptr;
+CKAngelScriptCreateObject(angelScript, &objectOptions, &object, &result);
 
 CKAngelScriptMethodOptions methodOptions = CKAngelScriptApi::MethodOptions();
 methodOptions.Object = object;
 methodOptions.MethodDecl = "int Add(int)";
 
-CKAngelScriptMethod *method =
-    CKAngelScriptFindObjectMethod(angelScript, &methodOptions, &result);
+CKAngelScriptMethod *method = nullptr;
+CKAngelScriptFindObjectMethod(angelScript, &methodOptions, &method, &result);
 ```
+
+`MethodName` and `MethodDecl` are exactly-one options. Missing symbols return `CKAS_NOTFOUND`; overloaded name lookup returns `CKAS_AMBIGUOUS`.
 
 Arguments and return values are written through callbacks:
 
@@ -116,9 +150,6 @@ CKAS_STATUS ReadAddResult(CKAngelScriptResultReader *reader, void *userData) {
     return CKAngelScriptResultGetInt(reader, &data->Output);
 }
 
-CallData data;
-data.Input = 37;
-
 CKAngelScriptObjectMethodExecuteOptions call =
     CKAngelScriptApi::ObjectMethodExecuteOptions();
 call.Object = object;
@@ -131,7 +162,7 @@ call.Flags = CKAS_CALL_NO_SUSPEND | CKAS_CALL_HOT_PATH;
 CKAS_STATUS status = CKAngelScriptCallObjectMethod(angelScript, &call, &result);
 ```
 
-V1 typed helpers support `bool`, `int`, `float`, `string`, and explicitly borrowed objects. `CKAngelScriptArgSetBorrowedObject` is only for short-lived host views already registered with the engine, such as callback-local context objects. Borrowed object arguments must target read-only input references; they are not persistent script handles.
+Typed helpers support `bool`, `int`, `float`, `string`, and explicitly borrowed host objects. Borrowed object arguments are for callback-local views already registered with the engine and must target read-only input references.
 
 Release handles when the host no longer needs them:
 
@@ -140,138 +171,70 @@ CKAngelScriptReleaseMethod(angelScript, method);
 CKAngelScriptReleaseObject(angelScript, object);
 ```
 
-`CKAngelScriptCreateObjectMethodExecution()` creates an execution handle for the same object/method ABI. Borrowed arguments are intentionally rejected on this path; use `CKAngelScriptCallObjectMethod()` for callback-local borrowed views. Object-method execution is still no-resume in this version: if the method suspends, start returns `CKAS_UNSUPPORTED`, and `CKAS_CAP_ASYNC_RESUME` is not advertised.
+`CKAngelScriptCreateObjectMethodExecution` is intentionally not exported in v3. Object-method resume is not part of the public ABI until it is implemented honestly.
+
+## Raw Borrowing
+
+Raw access is available for plugins that intentionally want AngelScript primitives:
+
+```cpp
+asIScriptModule *module = nullptr;
+CKAS_STATUS status =
+    CKAngelScriptBorrowModule(angelScript, "example_api", &module, &result);
+```
+
+Borrowed pointers are only valid under normal AngelScript/module lifetime rules. CKAngelScript does not extend their lifetime. `BorrowActiveContext` only returns a context whose engine belongs to the same CKAngelScript manager; otherwise it returns `CKAS_NOTFOUND`.
 
 ## Engine Extensions
 
-Host plugins can register additional AngelScript APIs without adding host-specific code to CKAngelScript itself. Register an extension before runtime scripts are loaded:
+Host plugins can register additional AngelScript APIs without adding host-specific code to CKAngelScript itself:
 
 ```cpp
-static int RegisterBmlApi(asIScriptEngine *engine,
-                          CKAngelScript *angelScript,
-                          void *userData,
-                          const char **errorMessage) {
-    int r = engine->SetDefaultNamespace("BML");
-    if (r < 0) return r;
-
-    r = engine->RegisterGlobalFunction("float GetLastDeltaTime()",
-                                       asFUNCTION(BmlGetLastDeltaTime),
-                                       asCALL_CDECL);
-    int reset = engine->SetDefaultNamespace("");
-    if (r < 0) return r;
-    return reset < 0 ? reset : 0;
-}
-
 CKAngelScriptEngineExtension extension = CKAngelScriptApi::EngineExtension();
 extension.Name = "BML";
 extension.Register = RegisterBmlApi;
 extension.UserData = bridge;
 
-CKAngelScriptResult result = {};
 CKAngelScriptRegisterEngineExtension(angelScript, &extension, &result);
 ```
 
-With the C++ wrapper:
+CKAngelScript copies the extension name internally and retains the callback for future engine rebuilds. Duplicate names return `CKAS_ALREADYEXISTS`. `CKAngelScriptUnregisterEngineExtension(angelScript, name, result)` removes by name only; it does not remove functions already registered into the current AngelScript engine.
 
-```cpp
-api.RegisterEngineExtension(extension, &result);
-```
-
-Callbacks receive the same opaque `CKAngelScript*` used by the C ABI. If a callback needs CKAngelScript operations, call the `CKAngelScript...` functions directly or wrap it temporarily:
-
-```cpp
-CKAngelScriptApi api(angelScript);
-asIScriptEngine *engine = api.GetScriptEngine();
-```
-
-Callbacks return `>= 0` on success and `< 0` on failure. If `errorMessage` is set, CKAngelScript copies it into registration diagnostics. The extension is retained and invoked again after the script engine is rebuilt.
-
-A failing extension is non-fatal: CKAngelScript logs it but never tears down the engine or skips the other extensions. The extension is retained regardless, so a callback that fails immediately may still succeed on a later engine rebuild. By default registration invokes the callback immediately when the engine is ready; set `CKAS_ENGINEEXTENSION_DEFERRED` in `Flags` to defer invocation until the next engine rebuild. When the immediate attempt fails, `CKAngelScriptRegisterEngineExtension` returns `CKAS_EXECUTIONFAILED` while still keeping the extension registered.
-
-Callbacks should be atomic. CKAngelScript only checks the final return code: if a callback registers some functions and then fails partway through, those functions remain in the current engine until the next rebuild. There is no automatic rollback.
-
-Call `CKAngelScriptUnregisterEngineExtension(angelScript, name, userData, result)` before unloading the host DLL. This removes the retained callback; it does not remove functions already registered into the current AngelScript engine. Passing `userData = nullptr` matches by name only.
-
-## Execution Handles
-
-Create, start, and release an execution:
-
-```cpp
-struct AddData {
-    int Input = 0;
-    int Output = 0;
-};
-
-void ConfigureAdd(asIScriptContext *ctx, void *userData) {
-    auto *data = static_cast<AddData *>(userData);
-    ctx->SetArgDWord(0, static_cast<asDWORD>(data->Input));
-}
-
-void ReadAddResult(asIScriptContext *ctx, void *userData) {
-    auto *data = static_cast<AddData *>(userData);
-    data->Output = static_cast<int>(ctx->GetReturnDWord());
-}
-
-AddData data;
-data.Input = 37;
-
-CKAngelScriptExecuteOptions options = CKAngelScriptApi::ExecuteOptions();
-options.ModuleName = "example_api";
-options.FunctionDecl = "int add_five(int)";
-options.ConfigureContext = ConfigureAdd;
-options.ReadResult = ReadAddResult;
-options.UserData = &data;
-
-CKAngelScriptExecution *execution =
-    CKAngelScriptCreateExecution(angelScript, &options, &result);
-if (execution) {
-    CKAS_STATUS status = CKAngelScriptStartExecution(angelScript, execution);
-    CKAngelScriptReleaseExecution(angelScript, execution);
-}
-```
-
-With the C++ wrapper:
-
-```cpp
-CKAngelScriptExecution *execution = api.CreateExecution(options, &result);
-if (execution) {
-    CKAS_STATUS status = api.StartExecution(execution);
-    api.ReleaseExecution(execution);
-}
-```
-
-If `StartExecution` returns `CKAS_SUSPENDED`, call `ResumeExecution` on a later tick after async work advances.
+Callbacks return `>= 0` on success and `< 0` on failure. If `errorMessage` is set, CKAngelScript copies it into registration diagnostics. A failing immediate callback returns `CKAS_EXECUTIONFAILED` but remains registered for a later engine rebuild.
 
 ## Result Lifetime
 
 `CKAngelScriptResult::ErrorMessage` and `StackTrace` are borrowed strings.
 
 - Output-parameter results and `CKAngelScriptGetLastResult()` remain valid until the next CKAngelScript API call that updates the last result.
-- `CKAngelScriptGetExecutionResult()` strings remain valid until the execution handle is released or started/resumed/cancelled again.
+- `CKAngelScriptBorrowExecutionResult()` strings remain valid until the execution handle is released or started/resumed/cancelled again.
 
 Copy strings if they must outlive those boundaries.
 
 ## Unload Constraints
 
-Execution handles keep their module alive from the public API perspective. `UnloadModule` and replacing an existing module fail while any `CKAngelScriptExecution` for that module is still unreleased. Cancel and release active executions before unloading or replacing a module.
+`CKAngelScriptObject` and `CKAngelScriptExecution` handles block unload/replace of their module and cause `CKAS_INUSE`. Release them before unloading or replacing a module.
 
-Object and method handles do not block unload. They become stale after module unload or replacement and later calls return `CKAS_STALEHANDLE`.
+`CKAngelScriptFunction` and `CKAngelScriptMethod` symbol handles do not block unload. They become stale across unload/replace and later use returns `CKAS_STALEHANDLE`.
 
 ## Status Values
-
-Common statuses:
 
 | Status | Meaning |
 | --- | --- |
 | `CKAS_OK` | Operation succeeded. |
-| `CKAS_INVALIDARGUMENT` | Bad options or missing required fields. |
+| `CKAS_INVALIDARGUMENT` | Bad options, unknown flags, null out pointer, or missing required fields. |
 | `CKAS_NOTINITIALIZED` | CKAngelScript or the engine is not ready. |
-| `CKAS_NOTFOUND` | Module or function was not found. |
+| `CKAS_NOTFOUND` | Module or symbol was not found. |
 | `CKAS_COMPILEERROR` | Module compilation failed. |
 | `CKAS_EXECUTIONFAILED` | Runtime execution failed. |
 | `CKAS_SUSPENDED` | Execution awaits async work. |
-| `CKAS_CANCELLED` | Execution was cancelled. |
-| `CKAS_STALEHANDLE` | Object, method, or execution handle belongs to an old module generation. |
-| `CKAS_UNSUPPORTED` | Requested ABI mode is not supported, such as borrowed args on persistent object-method execution. |
+| `CKAS_CANCELLED` | Execution result was cancelled. |
+| `CKAS_STALEHANDLE` | Symbol/execution handle belongs to an old module generation. |
+| `CKAS_UNSUPPORTED` | Requested mode is not implemented, such as no-suspend on a suspending script. |
 | `CKAS_TYPEMISMATCH` | Argument writer or result reader type does not match the target declaration. |
-| `CKAS_BUFFERTOOSMALL` | String result buffer is too small; inspect the required size output. |
+| `CKAS_BUFFERTOOSMALL` | String result buffer is too small; inspect required size. |
+| `CKAS_INVALIDSTATE` | The handle state does not allow this transition. |
+| `CKAS_INUSE` | Module unload/replace is blocked by live runtime handles. |
+| `CKAS_ALREADYEXISTS` | Module or extension already exists. |
+| `CKAS_AMBIGUOUS` | Name lookup matched multiple overloads. |
+| `CKAS_FOREIGNHANDLE` | Handle belongs to another CKAngelScript manager. |
