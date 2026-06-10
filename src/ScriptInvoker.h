@@ -14,7 +14,7 @@
 class ScriptManager;
 struct CachedScript;
 
-using ScriptFunctionArgumentHandler = std::function<void(asIScriptContext *)>;
+using ScriptFunctionArgumentHandler = std::function<bool(asIScriptContext *)>;
 
 enum class ScriptInvocationStatus {
     Finished,

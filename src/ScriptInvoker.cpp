@@ -252,7 +252,11 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
         }
 
         if (argsHandler) {
-            argsHandler(ctx);
+            if (!argsHandler(ctx)) {
+                m_LastResultCode = asEXECUTION_ABORTED;
+                SetErrorMessage("Script argument handler rejected execution.");
+                return ScriptInvocationStatus::Failed;
+            }
         }
     }
 
@@ -269,7 +273,11 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
     }
 
     if (retHandler) {
-        retHandler(ctx);
+        if (!retHandler(ctx)) {
+            m_LastResultCode = asEXECUTION_ABORTED;
+            SetErrorMessage("Script result handler rejected execution.");
+            return ScriptInvocationStatus::Failed;
+        }
     }
 
     if (IsProfiling())

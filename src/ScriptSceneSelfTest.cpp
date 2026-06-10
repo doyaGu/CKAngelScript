@@ -285,7 +285,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
 
-    asIScriptModule *module = api->GetModule(moduleName);
+    asIScriptModule *module = nullptr;
+    api->BorrowModule(moduleName, &module, nullptr);
     asIScriptFunction *function = module ? module->GetFunctionByDecl("int Run(const CKBehaviorContext &in ctx)") : nullptr;
     if (!function) {
         error = "Scene API self-test could not find Run() function.";

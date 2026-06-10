@@ -170,6 +170,13 @@ struct ScriptComponentState {
     bool PendingResetRuntime = false;
 };
 
+struct ScriptEngineExtensionRegistration {
+    std::string Name;
+    CKAngelScriptEngineExtensionCallback Register = nullptr;
+    void *UserData = nullptr;
+    CKDWORD Flags = CKAS_ENGINEEXTENSION_DEFAULT;
+};
+
 class ScriptManager : public CKBaseManager {
 public:
     enum Flag {
@@ -215,6 +222,7 @@ public:
     asIScriptEngine *GetScriptEngine();
     const char *GetVersion();
     const char *GetOptions();
+    CKAS_STATUS BorrowEngine(asIScriptEngine **outEngine, CKAngelScriptResult *result = nullptr);
 
     // Context
     CKContext *GetCKContext() const {
@@ -222,6 +230,7 @@ public:
     }
 
     asIScriptContext *GetActiveContext();
+    CKAS_STATUS BorrowActiveContext(asIScriptContext **outContext, CKAngelScriptResult *result = nullptr);
 
     // Internal low-level AngelScript helpers. The public AngelScript C API
     // intentionally exposes only module and execution operations.
@@ -250,32 +259,52 @@ public:
     bool HasModule(const char *moduleName);
     CKDWORD GetModuleGeneration(const char *moduleName) const;
     asIScriptModule *GetModule(const char *moduleName);
-    asIScriptFunction *FindFunctionByName(const char *moduleName, const char *functionName);
-    asIScriptFunction *FindFunctionByDecl(const char *moduleName, const char *functionDecl);
-    CKAngelScriptObject *CreateObject(const CKAngelScriptObjectOptions &options,
-                                      CKAngelScriptResult *result = nullptr);
-    void ReleaseObject(CKAngelScriptObject *object);
-    CKAngelScriptMethod *FindObjectMethod(const CKAngelScriptMethodOptions &options,
-                                          CKAngelScriptResult *result = nullptr);
-    void ReleaseMethod(CKAngelScriptMethod *method);
-    CKAngelScriptExecution *CreateObjectMethodExecution(const CKAngelScriptObjectMethodExecuteOptions &options,
-                                                       CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS BorrowModule(const char *moduleName,
+                             asIScriptModule **outModule,
+                             CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS BorrowFunctionByName(const char *moduleName,
+                                     const char *functionName,
+                                     asIScriptFunction **outFunction,
+                                     CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS BorrowFunctionByDecl(const char *moduleName,
+                                     const char *functionDecl,
+                                     asIScriptFunction **outFunction,
+                                     CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS FindFunction(const CKAngelScriptFunctionOptions &options,
+                             CKAngelScriptFunction **outFunction,
+                             CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS ReleaseFunction(CKAngelScriptFunction *function);
+    CKAS_STATUS CreateObject(const CKAngelScriptObjectOptions &options,
+                             CKAngelScriptObject **outObject,
+                             CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS ReleaseObject(CKAngelScriptObject *object);
+    CKAS_STATUS FindObjectMethod(const CKAngelScriptMethodOptions &options,
+                                 CKAngelScriptMethod **outMethod,
+                                 CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS ReleaseMethod(CKAngelScriptMethod *method);
     CKAS_STATUS CallObjectMethod(const CKAngelScriptObjectMethodExecuteOptions &options,
                                  CKAngelScriptResult *result = nullptr);
 
-    CKAngelScriptExecution *CreateExecution(const CKAngelScriptExecuteOptions &options,
-                                          CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS CreateFunctionExecution(const CKAngelScriptFunctionExecutionOptions &options,
+                                        CKAngelScriptExecution **outExecution,
+                                        CKAngelScriptResult *result = nullptr);
     CKAS_STATUS StartExecution(CKAngelScriptExecution *execution);
     CKAS_STATUS ResumeExecution(CKAngelScriptExecution *execution);
     CKAS_STATUS CancelExecution(CKAngelScriptExecution *execution);
-    void ReleaseExecution(CKAngelScriptExecution *execution);
-    CKAS_EXECUTIONSTATE GetExecutionState(const CKAngelScriptExecution *execution) const;
-    const CKAngelScriptResult *GetExecutionResult(const CKAngelScriptExecution *execution) const;
+    CKAS_STATUS ReleaseExecution(CKAngelScriptExecution *execution);
+    CKAS_STATUS GetExecutionState(const CKAngelScriptExecution *execution,
+                                  CKAS_EXECUTIONSTATE *outState);
+    CKAS_STATUS BorrowExecutionResult(const CKAngelScriptExecution *execution,
+                                      const CKAngelScriptResult **outResult);
     const CKAngelScriptResult *GetLastResult() const;
+    CKAS_STATUS StoreApiResult(CKAngelScriptResult *out,
+                               CKAS_STATUS status,
+                               int angelScriptCode = 0,
+                               const char *errorMessage = nullptr,
+                               const char *stackTrace = nullptr);
     CKAS_STATUS RegisterEngineExtension(const CKAngelScriptEngineExtension &extension,
                                               CKAngelScriptResult *result = nullptr);
     CKAS_STATUS UnregisterEngineExtension(const char *name,
-                                                void *userData = nullptr,
                                                 CKAngelScriptResult *result = nullptr);
 
     asIScriptModule *GetScript(const char *scriptName);
@@ -349,9 +378,11 @@ protected:
     int RegisterEngineExtensions(asIScriptEngine *engine);
 
     bool OwnsExecution(const CKAngelScriptExecution *execution) const;
+    bool OwnsFunction(const CKAngelScriptFunction *function) const;
     bool OwnsObject(const CKAngelScriptObject *object) const;
     bool OwnsMethod(const CKAngelScriptMethod *method) const;
     bool HasExecutionForModule(const char *moduleName) const;
+    bool HasRuntimeHandleForModule(const char *moduleName) const;
     void BumpModuleGeneration(const char *moduleName);
     // Internal low-level shims backing the public module API. Do not call these
     // from behavior blocks or runtime helpers; use LoadModule/CompileModule/
@@ -386,11 +417,12 @@ protected:
     std::unique_ptr<ScriptAsyncScheduler> m_AsyncScheduler;
     std::unique_ptr<ScriptMessageBus> m_MessageBus;
     std::unordered_set<CKAngelScriptExecution *> m_Executions;
+    std::unordered_set<CKAngelScriptFunction *> m_Functions;
     std::unordered_set<CKAngelScriptObject *> m_Objects;
     std::unordered_set<CKAngelScriptMethod *> m_Methods;
     std::unordered_map<std::string, CKDWORD> m_ModuleGenerations;
-    std::vector<CKAngelScriptEngineExtension> m_EngineExtensions;
-    CKAngelScriptResult m_LastResult;
+    std::vector<ScriptEngineExtensionRegistration> m_EngineExtensions;
+    CKAngelScriptResult m_LastResult = {sizeof(CKAngelScriptResult), CKAS_OK, 0, nullptr, nullptr};
     std::string m_LastErrorMessage;
     std::string m_LastStackTrace;
     bool m_CapturingScriptMessages = false;
