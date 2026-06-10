@@ -339,11 +339,16 @@ bool HasPublicFlag(CKDWORD flags, CKDWORD flag) {
 
 template <typename T, typename M>
 bool HasPublicField(const T &value, M T::*field) {
-    const CKDWORD size = value.Size ? value.Size : static_cast<CKDWORD>(sizeof(T));
+    const CKDWORD size = value.Size;
     const char *base = reinterpret_cast<const char *>(&value);
     const char *member = reinterpret_cast<const char *>(&(value.*field));
     const size_t offset = static_cast<size_t>(member - base);
     return size >= offset + sizeof(M);
+}
+
+template <typename T>
+bool HasCompletePublicStruct(const T &value) {
+    return value.Size >= static_cast<CKDWORD>(sizeof(T));
 }
 
 template <typename T, typename M>
@@ -476,16 +481,17 @@ extern "C" CKAS_API CKDWORD CKAngelScriptGetApiVersion() {
 
 extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
     switch (feature) {
-        case CKAS_FEATURE_MODULE_COMPILE:
-        case CKAS_FEATURE_RAW_BORROW:
+        case CKAS_FEATURE_MODULE_LIFECYCLE:
+        case CKAS_FEATURE_RAW_ANGELSCRIPT_ACCESS:
         case CKAS_FEATURE_FUNCTION_HANDLE:
-        case CKAS_FEATURE_OBJECT_CREATE:
-        case CKAS_FEATURE_OBJECT_METHOD_CALL:
-        case CKAS_FEATURE_ARG_WRITER:
-        case CKAS_FEATURE_RESULT_READER:
-        case CKAS_FEATURE_STACKTRACE:
+        case CKAS_FEATURE_FUNCTION_EXECUTION:
+        case CKAS_FEATURE_FUNCTION_EXECUTION_RESUME:
+        case CKAS_FEATURE_OBJECT_HANDLE:
+        case CKAS_FEATURE_SYNC_OBJECT_METHOD_CALL:
+        case CKAS_FEATURE_TYPED_ARG_READER_WRITER:
+        case CKAS_FEATURE_STACK_TRACE:
+        case CKAS_FEATURE_ENGINE_EXTENSION:
             return TRUE;
-        case CKAS_FEATURE_ASYNC_RESUME:
         default:
             return FALSE;
     }
@@ -757,6 +763,9 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptArgSetBorrowedObject(CKAngelScriptA
 
 extern "C" CKAS_API CKAS_STATUS CKAngelScriptResultGetBool(CKAngelScriptResultReader *reader,
                                                            CKBOOL *value) {
+    if (value) {
+        *value = FALSE;
+    }
     if (!reader || !reader->Context || !reader->Method || !value) {
         return CKAS_INVALIDARGUMENT;
     }
@@ -769,6 +778,9 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptResultGetBool(CKAngelScriptResultRe
 
 extern "C" CKAS_API CKAS_STATUS CKAngelScriptResultGetInt(CKAngelScriptResultReader *reader,
                                                           int *value) {
+    if (value) {
+        *value = 0;
+    }
     if (!reader || !reader->Context || !reader->Method || !value) {
         return CKAS_INVALIDARGUMENT;
     }
@@ -781,6 +793,9 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptResultGetInt(CKAngelScriptResultRea
 
 extern "C" CKAS_API CKAS_STATUS CKAngelScriptResultGetFloat(CKAngelScriptResultReader *reader,
                                                             float *value) {
+    if (value) {
+        *value = 0.0f;
+    }
     if (!reader || !reader->Context || !reader->Method || !value) {
         return CKAS_INVALIDARGUMENT;
     }
@@ -794,6 +809,12 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptResultGetFloat(CKAngelScriptResultR
 extern "C" CKAS_API CKAS_STATUS CKAngelScriptResultGetStringView(CKAngelScriptResultReader *reader,
                                                                  const char **data,
                                                                  size_t *size) {
+    if (data) {
+        *data = nullptr;
+    }
+    if (size) {
+        *size = 0;
+    }
     if (!reader || !reader->Context || !reader->Method || !data || !size) {
         return CKAS_INVALIDARGUMENT;
     }
@@ -816,6 +837,12 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptResultGetString(CKAngelScriptResult
                                                              char *buffer,
                                                              size_t bufferSize,
                                                              size_t *outRequiredSize) {
+    if (outRequiredSize) {
+        *outRequiredSize = 0;
+    }
+    if (buffer && bufferSize > 0) {
+        buffer[0] = '\0';
+    }
     const char *data = nullptr;
     size_t size = 0;
     const CKAS_STATUS status = CKAngelScriptResultGetStringView(reader, &data, &size);
@@ -1232,6 +1259,9 @@ CKAS_STATUS ScriptManager::StoreApiResult(CKAngelScriptResult *out,
 
 CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExtension &extension,
                                                          CKAngelScriptResult *result) {
+    if (!HasCompletePublicStruct(extension)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension size is invalid.");
+    }
     const char *name = PublicField(extension, &CKAngelScriptEngineExtension::Name, static_cast<const char *>(nullptr));
     CKAngelScriptEngineExtensionCallback callback =
         PublicField(extension, &CKAngelScriptEngineExtension::Register, static_cast<CKAngelScriptEngineExtensionCallback>(nullptr));
@@ -1842,10 +1872,13 @@ CKAS_STATUS ScriptManager::ReleaseMethod(CKAngelScriptMethod *method) {
 
 CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecuteOptions &options,
                                             CKAngelScriptResult *result) {
+    if (!HasCompletePublicStruct(options)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "CallObjectMethod options size is invalid.");
+    }
     CKAngelScriptObject *object = PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Object, static_cast<CKAngelScriptObject *>(nullptr));
     CKAngelScriptMethod *method = PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Method, static_cast<CKAngelScriptMethod *>(nullptr));
     const CKDWORD flags = PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Flags, static_cast<CKDWORD>(CKAS_CALL_DEFAULT));
-    const CKDWORD knownFlags = CKAS_CALL_NO_SUSPEND | CKAS_CALL_BORROWED_ARGS | CKAS_CALL_HOT_PATH;
+    const CKDWORD knownFlags = CKAS_CALL_NO_SUSPEND;
     if ((flags & ~knownFlags) != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown object method call flags.");
     }
@@ -1910,7 +1943,7 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
         PublicField(options, &CKAngelScriptFunctionExecutionOptions::ReadResult, static_cast<CKAngelScriptContextCallback>(nullptr));
     void *userData = PublicField(options, &CKAngelScriptFunctionExecutionOptions::UserData, static_cast<void *>(nullptr));
     const CKDWORD flags = PublicField(options, &CKAngelScriptFunctionExecutionOptions::Flags, static_cast<CKDWORD>(CKAS_CALL_DEFAULT));
-    const CKDWORD knownFlags = CKAS_CALL_NO_SUSPEND | CKAS_CALL_BORROWED_ARGS | CKAS_CALL_HOT_PATH;
+    const CKDWORD knownFlags = CKAS_CALL_NO_SUSPEND;
 
     if ((flags & ~knownFlags) != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown function execution flags.");

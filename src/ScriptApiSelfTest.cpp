@@ -196,12 +196,46 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
     CKAngelScriptResult result = {};
     if (api->GetApiVersion() != CKAS_API_VERSION ||
-        !api->HasFeature(CKAS_FEATURE_MODULE_COMPILE) ||
-        !api->HasFeature(CKAS_FEATURE_RAW_BORROW) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_LIFECYCLE) ||
+        !api->HasFeature(CKAS_FEATURE_RAW_ANGELSCRIPT_ACCESS) ||
         !api->HasFeature(CKAS_FEATURE_FUNCTION_HANDLE) ||
-        !api->HasFeature(CKAS_FEATURE_OBJECT_METHOD_CALL) ||
-        api->HasFeature(CKAS_FEATURE_ASYNC_RESUME)) {
+        !api->HasFeature(CKAS_FEATURE_FUNCTION_EXECUTION) ||
+        !api->HasFeature(CKAS_FEATURE_FUNCTION_EXECUTION_RESUME) ||
+        !api->HasFeature(CKAS_FEATURE_OBJECT_HANDLE) ||
+        !api->HasFeature(CKAS_FEATURE_SYNC_OBJECT_METHOD_CALL) ||
+        !api->HasFeature(CKAS_FEATURE_TYPED_ARG_READER_WRITER) ||
+        !api->HasFeature(CKAS_FEATURE_STACK_TRACE) ||
+        !api->HasFeature(CKAS_FEATURE_ENGINE_EXTENSION)) {
         error = "CKAngelScript API self-test found an unexpected v3 feature set.";
+        return false;
+    }
+
+    CKBOOL clearedBool = TRUE;
+    int clearedInt = 123;
+    float clearedFloat = 4.0f;
+    const char *clearedStringView = reinterpret_cast<const char *>(static_cast<uintptr_t>(1));
+    size_t clearedStringViewSize = 99;
+    char clearedString[8] = "dirty";
+    size_t clearedRequiredSize = 99;
+    if (CKAngelScriptResultGetBool(nullptr, &clearedBool) != CKAS_INVALIDARGUMENT || clearedBool != FALSE ||
+        CKAngelScriptResultGetInt(nullptr, &clearedInt) != CKAS_INVALIDARGUMENT || clearedInt != 0 ||
+        CKAngelScriptResultGetFloat(nullptr, &clearedFloat) != CKAS_INVALIDARGUMENT || clearedFloat != 0.0f ||
+        CKAngelScriptResultGetStringView(nullptr, &clearedStringView, &clearedStringViewSize) != CKAS_INVALIDARGUMENT ||
+        clearedStringView != nullptr ||
+        clearedStringViewSize != 0 ||
+        CKAngelScriptResultGetString(nullptr, clearedString, sizeof(clearedString), &clearedRequiredSize) != CKAS_INVALIDARGUMENT ||
+        clearedString[0] != '\0' ||
+        clearedRequiredSize != 0) {
+        error = "CKAngelScript API self-test expected result helpers to clear outputs on failure.";
+        return false;
+    }
+
+    CKAngelScriptEngineExtension invalidSizeExtension = CKAngelScriptApi::EngineExtension();
+    invalidSizeExtension.Size = 0;
+    invalidSizeExtension.Name = "__ckas_invalid_size_extension";
+    invalidSizeExtension.Register = RegisterCkasSelfTestExtension;
+    if (api->RegisterEngineExtension(invalidSizeExtension, &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected zero-sized extension options to fail.";
         return false;
     }
 
@@ -451,6 +485,15 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     executeOptions.ReadResult = ReadIntReturn;
     executeOptions.UserData = &data;
     CKAngelScriptExecution *execution = nullptr;
+    executeOptions.Flags = 0x00000002u;
+    execution = reinterpret_cast<CKAngelScriptExecution *>(static_cast<uintptr_t>(1));
+    if (api->CreateFunctionExecution(executeOptions, &execution, &result) != CKAS_INVALIDARGUMENT ||
+        execution != nullptr) {
+        error = "CKAngelScript API self-test expected deleted function execution flags to be invalid.";
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    executeOptions.Flags = CKAS_CALL_DEFAULT;
     if (!ExpectStatus(api->CreateFunctionExecution(executeOptions, &execution, &result),
                       CKAS_OK,
                       "CreateFunctionExecution",
@@ -817,13 +860,21 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     objectCall.WriteArgs = WriteObjectInt;
     objectCall.ReadResult = ReadObjectInt;
     objectCall.UserData = &objectData;
-    objectCall.Flags = CKAS_CALL_NO_SUSPEND | CKAS_CALL_HOT_PATH;
+    objectCall.Flags = CKAS_CALL_NO_SUSPEND;
     if (api->CallObjectMethod(objectCall, &result) != CKAS_OK || objectData.IntOutput != 42) {
         error = "CKAngelScript API self-test expected object int result to be 42.";
         api->ReleaseMethod(addMethod);
         api->ReleaseObject(object);
         return false;
     }
+    objectCall.Flags = 0x00000004u;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected deleted object method flags to be invalid.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Flags = CKAS_CALL_NO_SUSPEND;
     objectCall.WriteArgs = WriteObjectIntAsBool;
     if (api->CallObjectMethod(objectCall, &result) != CKAS_TYPEMISMATCH) {
         error = "CKAngelScript API self-test expected object arg writer type mismatch.";
