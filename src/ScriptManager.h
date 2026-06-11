@@ -172,9 +172,11 @@ struct ScriptComponentState {
 
 struct ScriptEngineExtensionRegistration {
     std::string Name;
+    std::string ConfigGroupName;
     CKAngelScriptEngineExtensionCallback Register = nullptr;
     void *UserData = nullptr;
     CKDWORD Flags = CKAS_ENGINEEXTENSION_DEFAULT;
+    bool ActiveInCurrentEngine = false;
 };
 
 class ScriptManager : public CKBaseManager {
@@ -270,32 +272,44 @@ public:
                                      const char *functionDecl,
                                      asIScriptFunction **outFunction,
                                      CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS EnumerateMetadata(const char *moduleName,
+                                  CKAngelScriptMetadataCallback callback,
+                                  void *userData,
+                                  CKAngelScriptResult *result = nullptr);
     CKAS_STATUS FindFunction(const CKAngelScriptFunctionOptions &options,
                              CKAngelScriptFunction **outFunction,
                              CKAngelScriptResult *result = nullptr);
-    CKAS_STATUS ReleaseFunction(CKAngelScriptFunction *function);
+    CKAS_STATUS ReleaseFunction(CKAngelScriptFunction *function, CKAngelScriptResult *result = nullptr);
     CKAS_STATUS CreateObject(const CKAngelScriptObjectOptions &options,
                              CKAngelScriptObject **outObject,
                              CKAngelScriptResult *result = nullptr);
-    CKAS_STATUS ReleaseObject(CKAngelScriptObject *object);
+    CKAS_STATUS ReleaseObject(CKAngelScriptObject *object, CKAngelScriptResult *result = nullptr);
     CKAS_STATUS FindObjectMethod(const CKAngelScriptMethodOptions &options,
                                  CKAngelScriptMethod **outMethod,
                                  CKAngelScriptResult *result = nullptr);
-    CKAS_STATUS ReleaseMethod(CKAngelScriptMethod *method);
+    CKAS_STATUS ReleaseMethod(CKAngelScriptMethod *method, CKAngelScriptResult *result = nullptr);
     CKAS_STATUS CallObjectMethod(const CKAngelScriptObjectMethodExecuteOptions &options,
                                  CKAngelScriptResult *result = nullptr);
 
     CKAS_STATUS CreateFunctionExecution(const CKAngelScriptFunctionExecutionOptions &options,
                                         CKAngelScriptExecution **outExecution,
                                         CKAngelScriptResult *result = nullptr);
-    CKAS_STATUS StartExecution(CKAngelScriptExecution *execution);
-    CKAS_STATUS ResumeExecution(CKAngelScriptExecution *execution);
-    CKAS_STATUS CancelExecution(CKAngelScriptExecution *execution);
-    CKAS_STATUS ReleaseExecution(CKAngelScriptExecution *execution);
+    CKAS_STATUS StartExecution(CKAngelScriptExecution *execution,
+                               const CKAngelScriptExecutionStepOptions *options = nullptr,
+                               CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS ResumeExecution(CKAngelScriptExecution *execution,
+                                const CKAngelScriptExecutionStepOptions *options = nullptr,
+                                CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS CancelExecution(CKAngelScriptExecution *execution,
+                                CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS ReleaseExecution(CKAngelScriptExecution *execution,
+                                 CKAngelScriptResult *result = nullptr);
     CKAS_STATUS GetExecutionState(const CKAngelScriptExecution *execution,
-                                  CKAS_EXECUTIONSTATE *outState);
+                                  CKAS_EXECUTIONSTATE *outState,
+                                  CKAngelScriptResult *result = nullptr);
     CKAS_STATUS BorrowExecutionResult(const CKAngelScriptExecution *execution,
-                                      const CKAngelScriptResult **outResult);
+                                      const CKAngelScriptResult **outResult,
+                                      CKAngelScriptResult *result = nullptr);
     const CKAngelScriptResult *GetLastResult() const;
     CKAS_STATUS StoreApiResult(CKAngelScriptResult *out,
                                CKAS_STATUS status,
@@ -376,6 +390,12 @@ protected:
     void RegisterStdAddons(asIScriptEngine *engine);
     void RegisterVirtools(asIScriptEngine *engine);
     int RegisterEngineExtensions(asIScriptEngine *engine);
+    int RegisterEngineExtensionGroup(asIScriptEngine *engine,
+                                     ScriptEngineExtensionRegistration &extension,
+                                     std::string &message);
+    int RemoveEngineExtensionGroup(asIScriptEngine *engine,
+                                   ScriptEngineExtensionRegistration &extension,
+                                   std::string &message);
 
     bool OwnsExecution(const CKAngelScriptExecution *execution) const;
     bool OwnsFunction(const CKAngelScriptFunction *function) const;

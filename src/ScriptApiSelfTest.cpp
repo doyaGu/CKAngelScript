@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 #include "CKAngelScript.h"
@@ -11,6 +12,14 @@
 
 static int CkasSelfTestExtensionValue() {
     return 77;
+}
+
+static int CkasDeferredExtensionValue() {
+    return 88;
+}
+
+static int CkasPartialFailureExtensionValue() {
+    return 99;
 }
 
 static int RegisterCkasSelfTestExtension(asIScriptEngine *engine,
@@ -36,6 +45,24 @@ static int RegisterCkasSelfTestExtension(asIScriptEngine *engine,
     return reset < 0 ? reset : 0;
 }
 
+static int RegisterCkasDeferredSelfTestExtension(asIScriptEngine *engine,
+                                                 CKAngelScript *,
+                                                 void *,
+                                                 const char **errorMessage) {
+    if (!engine) {
+        if (errorMessage) {
+            *errorMessage = "Deferred self-test extension received a null engine.";
+        }
+        return -1;
+    }
+
+    int r = engine->SetDefaultNamespace("CKASDeferredExtensionSelfTest");
+    if (r < 0) {
+        return r;
+    }
+    return engine->RegisterGlobalFunction("int Value()", asFUNCTION(CkasDeferredExtensionValue), asCALL_CDECL);
+}
+
 static int RegisterCkasFailingSelfTestExtension(asIScriptEngine *,
                                                 CKAngelScript *,
                                                 void *,
@@ -44,6 +71,81 @@ static int RegisterCkasFailingSelfTestExtension(asIScriptEngine *,
         *errorMessage = "Expected self-test extension failure.";
     }
     return -77;
+}
+
+static int RegisterCkasPartialFailureSelfTestExtension(asIScriptEngine *engine,
+                                                       CKAngelScript *,
+                                                       void *,
+                                                       const char **errorMessage) {
+    if (!engine) {
+        return -1;
+    }
+    int r = engine->SetDefaultNamespace("CKASPartialFailureExtensionSelfTest");
+    if (r < 0) {
+        return r;
+    }
+    r = engine->RegisterGlobalFunction("int Value()", asFUNCTION(CkasPartialFailureExtensionValue), asCALL_CDECL);
+    if (r < 0) {
+        return r;
+    }
+    if (errorMessage) {
+        *errorMessage = "Expected partial extension registration failure.";
+    }
+    return -88;
+}
+
+static bool HasGlobalFunctionInNamespace(asIScriptEngine *engine,
+                                         const char *nameSpace,
+                                         const char *decl) {
+    if (!engine || !decl) {
+        return false;
+    }
+    const char *currentNamespace = engine->GetDefaultNamespace();
+    const std::string previousNamespace = currentNamespace ? currentNamespace : "";
+    if (engine->SetDefaultNamespace(nameSpace ? nameSpace : "") < 0) {
+        return false;
+    }
+    const bool found = engine->GetGlobalFunctionByDecl(decl) != nullptr;
+    engine->SetDefaultNamespace(previousNamespace.c_str());
+    return found;
+}
+
+static CKAngelScriptRawProc ResolveCkasSelfTestApiSymbol(void *, const char *name) {
+    if (!name) {
+        return nullptr;
+    }
+    if (std::strcmp(name, "CKGetAngelScript") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKGetAngelScript);
+    }
+    if (std::strcmp(name, "CKAngelScriptGetApiVersion") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptGetApiVersion);
+    }
+    if (std::strcmp(name, "CKAngelScriptHasFeature") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptHasFeature);
+    }
+    if (std::strcmp(name, "CKAngelScriptInitResult") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitResult);
+    }
+    if (std::strcmp(name, "CKAngelScriptInitEngineExtension") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitEngineExtension);
+    }
+    if (std::strcmp(name, "CKAngelScriptGetStatusName") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptGetStatusName);
+    }
+    if (std::strcmp(name, "CKAngelScriptGetStatusDescription") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptGetStatusDescription);
+    }
+    if (std::strcmp(name, "CKAngelScriptRegisterEngineExtension") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptRegisterEngineExtension);
+    }
+    if (std::strcmp(name, "CKAngelScriptUnregisterEngineExtension") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptUnregisterEngineExtension);
+    }
+    return nullptr;
+}
+
+static CKAngelScriptRawProc ResolveNoCkasSelfTestApiSymbol(void *, const char *) {
+    return nullptr;
 }
 
 namespace {
@@ -65,6 +167,26 @@ struct ObjectExecutionData {
     size_t RequiredSize = 0;
 };
 
+struct MetadataProbe {
+    bool Type = false;
+    bool Method = false;
+    bool Function = false;
+    bool Global = false;
+    bool TypeProperty = false;
+    bool Declaration = false;
+    int NamespacedTypes = 0;
+    int NamespacedMethods = 0;
+    CKDWORD CallbackCount = 0;
+};
+
+bool CkasStringEquals(const char *lhs, const char *rhs) {
+    return lhs && rhs && std::strcmp(lhs, rhs) == 0;
+}
+
+bool CkasStringContains(const char *text, const char *needle) {
+    return text && needle && std::strstr(text, needle) != nullptr;
+}
+
 CKAS_STATUS ConfigureIntArgument(asIScriptContext *ctx, void *userData) {
     auto *data = static_cast<IntExecutionData *>(userData);
     return ctx && ctx->SetArgDWord(0, static_cast<asDWORD>(data ? data->Input : 0)) >= 0
@@ -76,6 +198,17 @@ CKAS_STATUS ReadIntReturn(asIScriptContext *ctx, void *userData) {
     auto *data = static_cast<IntExecutionData *>(userData);
     if (data) {
         data->Output = static_cast<int>(ctx->GetReturnDWord());
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS MarkResumeHook(asIScriptContext *ctx, void *userData) {
+    if (!ctx || ctx->GetState() != asEXECUTION_SUSPENDED) {
+        return CKAS_INVALIDSTATE;
+    }
+    auto *data = static_cast<IntExecutionData *>(userData);
+    if (data) {
+        data->Input += 1;
     }
     return CKAS_OK;
 }
@@ -139,6 +272,63 @@ CKAS_STATUS WriteObjectIntAsBool(CKAngelScriptArgWriter *writer, void *) {
     return CKAngelScriptArgSetBool(writer, 0, TRUE);
 }
 
+CKAS_STATUS ProbeMetadata(const CKAngelScriptMetadataEntry *entry,
+                          CKDWORD metadataIndex,
+                          const char *metadata,
+                          void *userData) {
+    auto *probe = static_cast<MetadataProbe *>(userData);
+    if (!probe || !entry || entry->Size < sizeof(*entry) || metadataIndex >= entry->MetadataCount || !metadata) {
+        return CKAS_INVALIDARGUMENT;
+    }
+
+    ++probe->CallbackCount;
+    if (CkasStringEquals(metadata, "ckas_selftest_type") &&
+        entry->Target == CKAS_METADATA_TYPE &&
+        CkasStringEquals(entry->Name, "__CKAS_PublicMetadataType")) {
+        probe->Type = true;
+    } else if (CkasStringEquals(metadata, "ckas_selftest_method") &&
+               entry->Target == CKAS_METADATA_TYPE_METHOD &&
+               CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
+               CkasStringEquals(entry->Name, "Add")) {
+        probe->Method = true;
+        probe->Declaration = probe->Declaration ||
+                             (CkasStringContains(entry->Declaration, "int") &&
+                              CkasStringContains(entry->Declaration, "Add"));
+    } else if (CkasStringEquals(metadata, "ckas_selftest_function") &&
+               entry->Target == CKAS_METADATA_GLOBAL_FUNCTION &&
+               CkasStringEquals(entry->Name, "__ckas_public_metadata_global")) {
+        probe->Function = true;
+        probe->Declaration = probe->Declaration ||
+                             CkasStringContains(entry->Declaration, "__ckas_public_metadata_global");
+    } else if (CkasStringEquals(metadata, "ckas_selftest_global") &&
+               entry->Target == CKAS_METADATA_GLOBAL_VARIABLE &&
+               CkasStringEquals(entry->Name, "__ckas_public_metadata_value")) {
+        probe->Global = true;
+    } else if (CkasStringEquals(metadata, "ckas_selftest_property") &&
+               entry->Target == CKAS_METADATA_TYPE_PROPERTY &&
+               CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
+               CkasStringEquals(entry->Name, "Value")) {
+        probe->TypeProperty = true;
+    } else if (CkasStringEquals(metadata, "ckas_selftest_type_namespace") &&
+               entry->Target == CKAS_METADATA_TYPE &&
+               CkasStringEquals(entry->Name, "Duplicate") &&
+               CkasStringContains(entry->Namespace, "CKASMetadata")) {
+        ++probe->NamespacedTypes;
+    } else if (CkasStringEquals(metadata, "ckas_selftest_method_namespace") &&
+               entry->Target == CKAS_METADATA_TYPE_METHOD &&
+               CkasStringEquals(entry->ParentTypeName, "Duplicate") &&
+               CkasStringContains(entry->ParentTypeNamespace, "CKASMetadata") &&
+               CkasStringEquals(entry->Name, "Mark")) {
+        ++probe->NamespacedMethods;
+    }
+
+    return CKAS_OK;
+}
+
+CKAS_STATUS StopMetadata(const CKAngelScriptMetadataEntry *, CKDWORD, const char *, void *) {
+    return CKAS_CANCELLED;
+}
+
 bool WriteTextFile(const std::filesystem::path &path, const char *text, std::string &error) {
     std::ofstream out(path, std::ios::out | std::ios::trunc);
     if (!out) {
@@ -194,7 +384,178 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
-    CKAngelScriptResult result = {};
+    CKAngelScriptResult result = CKAngelScriptApi::Result();
+    if (result.Size != sizeof(result) ||
+        result.Status != CKAS_OK ||
+        result.AngelScriptCode != 0 ||
+        result.ErrorMessage ||
+        result.StackTrace) {
+        error = "CKAngelScript API self-test expected Result() to initialize a clean result.";
+        return false;
+    }
+
+    CKAngelScriptResult initResult;
+    std::memset(&initResult, 0x7f, sizeof(initResult));
+    CKAngelScriptInitResult(&initResult);
+    if (initResult.Size != sizeof(initResult) ||
+        initResult.Status != CKAS_OK ||
+        initResult.AngelScriptCode != 0 ||
+        initResult.ErrorMessage ||
+        initResult.StackTrace) {
+        error = "CKAngelScript API self-test expected Result initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptLoadOptions initLoadOptions;
+    std::memset(&initLoadOptions, 0x7f, sizeof(initLoadOptions));
+    CKAngelScriptInitLoadOptions(&initLoadOptions);
+    if (initLoadOptions.Size != sizeof(initLoadOptions) ||
+        initLoadOptions.ModuleName ||
+        initLoadOptions.Filename ||
+        initLoadOptions.Filenames ||
+        initLoadOptions.FileCount != 0 ||
+        initLoadOptions.Code ||
+        initLoadOptions.Flags != CKAS_LOAD_DEFAULT) {
+        error = "CKAngelScript API self-test expected LoadOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptFunctionOptions initFunctionOptions;
+    std::memset(&initFunctionOptions, 0x7f, sizeof(initFunctionOptions));
+    CKAngelScriptInitFunctionOptions(&initFunctionOptions);
+    if (initFunctionOptions.Size != sizeof(initFunctionOptions) ||
+        initFunctionOptions.ModuleName ||
+        initFunctionOptions.FunctionName ||
+        initFunctionOptions.FunctionDecl ||
+        initFunctionOptions.Flags != 0) {
+        error = "CKAngelScript API self-test expected FunctionOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptFunctionExecutionOptions initExecutionOptions;
+    std::memset(&initExecutionOptions, 0x7f, sizeof(initExecutionOptions));
+    CKAngelScriptInitFunctionExecutionOptions(&initExecutionOptions);
+    if (initExecutionOptions.Size != sizeof(initExecutionOptions) ||
+        initExecutionOptions.Function ||
+        initExecutionOptions.BehaviorContext ||
+        initExecutionOptions.Flags != CKAS_CALL_DEFAULT) {
+        error = "CKAngelScript API self-test expected FunctionExecutionOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptExecutionStepOptions initStepOptions;
+    std::memset(&initStepOptions, 0x7f, sizeof(initStepOptions));
+    CKAngelScriptInitExecutionStepOptions(&initStepOptions);
+    if (initStepOptions.Size != sizeof(initStepOptions) ||
+        initStepOptions.ConfigureContext ||
+        initStepOptions.ReadResult ||
+        initStepOptions.UserData) {
+        error = "CKAngelScript API self-test expected ExecutionStepOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptObjectOptions initObjectOptions;
+    std::memset(&initObjectOptions, 0x7f, sizeof(initObjectOptions));
+    CKAngelScriptInitObjectOptions(&initObjectOptions);
+    if (initObjectOptions.Size != sizeof(initObjectOptions) ||
+        initObjectOptions.ModuleName ||
+        initObjectOptions.ClassName) {
+        error = "CKAngelScript API self-test expected ObjectOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptMethodOptions initMethodOptions;
+    std::memset(&initMethodOptions, 0x7f, sizeof(initMethodOptions));
+    CKAngelScriptInitMethodOptions(&initMethodOptions);
+    if (initMethodOptions.Size != sizeof(initMethodOptions) ||
+        initMethodOptions.Object ||
+        initMethodOptions.MethodName ||
+        initMethodOptions.MethodDecl) {
+        error = "CKAngelScript API self-test expected MethodOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptObjectMethodExecuteOptions initObjectCallOptions;
+    std::memset(&initObjectCallOptions, 0x7f, sizeof(initObjectCallOptions));
+    CKAngelScriptInitObjectMethodExecuteOptions(&initObjectCallOptions);
+    if (initObjectCallOptions.Size != sizeof(initObjectCallOptions) ||
+        initObjectCallOptions.Object ||
+        initObjectCallOptions.Method ||
+        initObjectCallOptions.WriteArgs ||
+        initObjectCallOptions.ReadResult ||
+        initObjectCallOptions.UserData ||
+        initObjectCallOptions.Flags != CKAS_CALL_DEFAULT) {
+        error = "CKAngelScript API self-test expected ObjectMethodExecuteOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptEngineExtension initExtension;
+    std::memset(&initExtension, 0x7f, sizeof(initExtension));
+    CKAngelScriptInitEngineExtension(&initExtension);
+    if (initExtension.Size != sizeof(initExtension) ||
+        initExtension.Name ||
+        initExtension.Register ||
+        initExtension.UserData ||
+        initExtension.Flags != CKAS_ENGINEEXTENSION_DEFAULT) {
+        error = "CKAngelScript API self-test expected EngineExtension initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptInitResult(nullptr);
+    CKAngelScriptInitLoadOptions(nullptr);
+    CKAngelScriptInitFunctionOptions(nullptr);
+    CKAngelScriptInitFunctionExecutionOptions(nullptr);
+    CKAngelScriptInitExecutionStepOptions(nullptr);
+    CKAngelScriptInitObjectOptions(nullptr);
+    CKAngelScriptInitMethodOptions(nullptr);
+    CKAngelScriptInitObjectMethodExecuteOptions(nullptr);
+    CKAngelScriptInitEngineExtension(nullptr);
+
+    const CKAS_STATUS knownStatuses[] = {
+        CKAS_OK,
+        CKAS_INVALIDARGUMENT,
+        CKAS_NOTINITIALIZED,
+        CKAS_NOTFOUND,
+        CKAS_COMPILEERROR,
+        CKAS_EXECUTIONFAILED,
+        CKAS_SUSPENDED,
+        CKAS_CANCELLED,
+        CKAS_STALEHANDLE,
+        CKAS_UNSUPPORTED,
+        CKAS_TYPEMISMATCH,
+        CKAS_BUFFERTOOSMALL,
+        CKAS_INVALIDSTATE,
+        CKAS_INUSE,
+        CKAS_ALREADYEXISTS,
+        CKAS_AMBIGUOUS,
+        CKAS_FOREIGNHANDLE
+    };
+    for (CKAS_STATUS status : knownStatuses) {
+        const char *name = CKAngelScriptApi::StatusName(status);
+        const char *description = CKAngelScriptApi::StatusDescription(status);
+        if (!name || name[0] == '\0' || !description || description[0] == '\0') {
+            error = "CKAngelScript API self-test expected status text for every known status.";
+            return false;
+        }
+    }
+    if (std::string(CKAngelScriptApi::StatusName(static_cast<CKAS_STATUS>(9999))) != "CKAS_UNKNOWN" ||
+        !CKAngelScriptApi::StatusDescription(static_cast<CKAS_STATUS>(9999)) ||
+        CKAngelScriptApi::StatusDescription(static_cast<CKAS_STATUS>(9999))[0] == '\0') {
+        error = "CKAngelScript API self-test expected stable fallback status text.";
+        return false;
+    }
+    if (CKAS_FOREIGNHANDLE != 16 ||
+        CKAS_FEATURE_METADATA_REFLECTION != 13 ||
+        CKAS_EXECUTION_CANCELLED != 5 ||
+        CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
+        CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
+        CKAS_ENGINEEXTENSION_DEFERRED != 0x00000001 ||
+        CKAS_CALL_NO_SUSPEND != 0x00000001 ||
+        CKAS_METADATA_TYPE_PROPERTY != 5) {
+        error = "CKAngelScript API self-test expected stable explicit public enum values.";
+        return false;
+    }
+
     if (api->GetApiVersion() != CKAS_API_VERSION ||
         !api->HasFeature(CKAS_FEATURE_MODULE_LIFECYCLE) ||
         !api->HasFeature(CKAS_FEATURE_RAW_ANGELSCRIPT_ACCESS) ||
@@ -205,8 +566,60 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_SYNC_OBJECT_METHOD_CALL) ||
         !api->HasFeature(CKAS_FEATURE_TYPED_ARG_READER_WRITER) ||
         !api->HasFeature(CKAS_FEATURE_STACK_TRACE) ||
-        !api->HasFeature(CKAS_FEATURE_ENGINE_EXTENSION)) {
+        !api->HasFeature(CKAS_FEATURE_ENGINE_EXTENSION) ||
+        !api->HasFeature(CKAS_FEATURE_PUBLIC_STRUCT_INITIALIZERS) ||
+        !api->HasFeature(CKAS_FEATURE_STATUS_TEXT) ||
+        !api->HasFeature(CKAS_FEATURE_METADATA_REFLECTION)) {
         error = "CKAngelScript API self-test found an unexpected v3 feature set.";
+        return false;
+    }
+
+    CKAngelScriptExtensionApi softApi;
+    CKAngelScriptInitExtensionApi(&softApi);
+    if (softApi.Size != sizeof(softApi) ||
+        CKAngelScriptExtensionApiIsLoaded(&softApi)) {
+        error = "CKAngelScript API self-test expected an initialized extension API table to be empty.";
+        return false;
+    }
+    CKAngelScriptInitExtensionApi(nullptr);
+    if (CKAngelScriptLoadExtensionApi(nullptr, ResolveCkasSelfTestApiSymbol, nullptr) != FALSE ||
+        CKAngelScriptLoadExtensionApi(&softApi, nullptr, nullptr) != FALSE ||
+        CKAngelScriptLoadExtensionApi(&softApi, ResolveNoCkasSelfTestApiSymbol, nullptr) != FALSE ||
+        CKAngelScriptExtensionApiIsLoaded(&softApi)) {
+        error = "CKAngelScript API self-test expected extension API soft-load failures to clear the table.";
+        return false;
+    }
+    if (CKAngelScriptLoadExtensionApi(&softApi, ResolveCkasSelfTestApiSymbol, nullptr) != TRUE ||
+        !CKAngelScriptExtensionApiIsLoaded(&softApi) ||
+        softApi.GetApiVersion() != CKAS_API_VERSION) {
+        error = "CKAngelScript API self-test failed to soft-load the extension API table.";
+        return false;
+    }
+
+    CKAngelScriptResult softResult = CKAngelScriptApi::Result();
+    if (CKAngelScriptRegisterEngineExtensionWithApi(nullptr,
+                                                    context,
+                                                    "__ckas_soft_api_extension",
+                                                    RegisterCkasDeferredSelfTestExtension,
+                                                    nullptr,
+                                                    CKAS_ENGINEEXTENSION_DEFERRED,
+                                                    &softResult) != CKAS_INVALIDARGUMENT ||
+        softResult.Status != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected an unloaded extension API table to fail registration.";
+        return false;
+    }
+    if (CKAngelScriptRegisterEngineExtensionWithApi(&softApi,
+                                                    context,
+                                                    "__ckas_soft_api_extension",
+                                                    RegisterCkasDeferredSelfTestExtension,
+                                                    nullptr,
+                                                    CKAS_ENGINEEXTENSION_DEFERRED,
+                                                    &softResult) != CKAS_OK ||
+        CKAngelScriptUnregisterEngineExtensionWithApi(&softApi,
+                                                      context,
+                                                      "__ckas_soft_api_extension",
+                                                      &softResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected the soft-loaded extension API table to register and unregister.";
         return false;
     }
 
@@ -230,6 +643,16 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    asIScriptEngine *invalidEngine = reinterpret_cast<asIScriptEngine *>(static_cast<uintptr_t>(1));
+    result = {};
+    if (CKAngelScriptBorrowEngine(nullptr, &invalidEngine, &result) != CKAS_INVALIDARGUMENT ||
+        invalidEngine != nullptr ||
+        result.Status != CKAS_INVALIDARGUMENT ||
+        !result.ErrorMessage) {
+        error = "CKAngelScript API self-test expected invalid public handles to fill result diagnostics.";
+        return false;
+    }
+
     CKAngelScriptEngineExtension invalidSizeExtension = CKAngelScriptApi::EngineExtension();
     invalidSizeExtension.Size = 0;
     invalidSizeExtension.Name = "__ckas_invalid_size_extension";
@@ -248,17 +671,45 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         error = "CKAngelScript API self-test expected failing extension diagnostics.";
         return false;
     }
-    if (!ExpectStatus(api->UnregisterEngineExtension("__ckas_failing_extension", &result),
-                      CKAS_OK,
-                      "UnregisterEngineExtension failing",
-                      &result,
-                      error)) {
+    if (api->UnregisterEngineExtension("__ckas_failing_extension", &result) != CKAS_NOTFOUND) {
+        error = "CKAngelScript API self-test expected failing extension registration to avoid retaining the extension.";
         return false;
     }
 
-    CKAngelScriptEngineExtension extension = CKAngelScriptApi::EngineExtension();
-    extension.Name = "__ckas_public_api_extension";
-    extension.Register = RegisterCkasSelfTestExtension;
+    asIScriptEngine *engine = nullptr;
+    if (!ExpectStatus(api->BorrowEngine(&engine, &result), CKAS_OK, "BorrowEngine", &result, error) || !engine) {
+        return false;
+    }
+
+    CKAngelScriptEngineExtension partialFailureExtension = CKAngelScriptApi::EngineExtension();
+    partialFailureExtension.Name = "__ckas_partial_failure_extension";
+    partialFailureExtension.Register = RegisterCkasPartialFailureSelfTestExtension;
+    if (api->RegisterEngineExtension(partialFailureExtension, &result) != CKAS_EXECUTIONFAILED ||
+        HasGlobalFunctionInNamespace(engine, "CKASPartialFailureExtensionSelfTest", "int Value()")) {
+        error = "CKAngelScript API self-test expected partial extension failure to roll back registered symbols.";
+        return false;
+    }
+    partialFailureExtension.Register = RegisterCkasDeferredSelfTestExtension;
+    if (api->RegisterEngineExtension(partialFailureExtension, &result) != CKAS_OK ||
+        !HasGlobalFunctionInNamespace(engine, "CKASDeferredExtensionSelfTest", "int Value()") ||
+        api->UnregisterEngineExtension("__ckas_partial_failure_extension", &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected failed extension names to be reusable.";
+        return false;
+    }
+
+    CKAngelScriptEngineExtension deferredExtension = CKAngelScriptApi::EngineExtension();
+    deferredExtension.Name = "__ckas_deferred_extension";
+    deferredExtension.Register = RegisterCkasDeferredSelfTestExtension;
+    deferredExtension.Flags = CKAS_ENGINEEXTENSION_DEFERRED;
+    if (api->RegisterEngineExtension(deferredExtension, &result) != CKAS_OK ||
+        HasGlobalFunctionInNamespace(engine, "CKASDeferredExtensionSelfTest", "int Value()") ||
+        api->UnregisterEngineExtension("__ckas_deferred_extension", &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected deferred extension unregister before rebuild to stay inactive.";
+        return false;
+    }
+
+    CKAngelScriptEngineExtension extension =
+        CKAngelScriptApi::EngineExtension("__ckas_public_api_extension", RegisterCkasSelfTestExtension);
     if (!ExpectStatus(api->RegisterEngineExtension(extension, &result),
                       CKAS_OK,
                       "RegisterEngineExtension",
@@ -268,11 +719,6 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     if (api->RegisterEngineExtension(extension, &result) != CKAS_ALREADYEXISTS) {
         error = "CKAngelScript API self-test expected duplicate extension registration to return ALREADYEXISTS.";
-        return false;
-    }
-
-    asIScriptEngine *engine = nullptr;
-    if (!ExpectStatus(api->BorrowEngine(&engine, &result), CKAS_OK, "BorrowEngine", &result, error) || !engine) {
         return false;
     }
 
@@ -286,7 +732,20 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "int __ckas_public_side_effect() { __ckas_public_side_effect_value = 1; return 0; }\n"
         "int __ckas_public_get_side_effect() { return __ckas_public_side_effect_value; }\n"
         "int __ckas_public_async() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 9; }\n"
-        "int __ckas_public_exception() { array<int> values; return values[1]; }\n";
+        "int __ckas_public_exception() { array<int> values; return values[1]; }\n"
+        "[ckas_selftest_type]\n"
+        "class __CKAS_PublicMetadataType {\n"
+        "    [ckas_selftest_property]\n"
+        "    int Value;\n"
+        "    [ckas_selftest_method]\n"
+        "    int Add(int value) { return value + 1; }\n"
+        "}\n"
+        "[ckas_selftest_function]\n"
+        "int __ckas_public_metadata_global() { return 1; }\n"
+        "[ckas_selftest_global]\n"
+        "int __ckas_public_metadata_value = 2;\n"
+        "namespace CKASMetadataA { [ckas_selftest_type_namespace] class Duplicate { [ckas_selftest_method_namespace] void Mark() {} } }\n"
+        "namespace CKASMetadataB { [ckas_selftest_type_namespace] class Duplicate { [ckas_selftest_method_namespace] void Mark() {} } }\n";
 
     CKAngelScriptFunctionOptions zeroSizeFunctionOptions = CKAngelScriptApi::FunctionOptions();
     zeroSizeFunctionOptions.Size = 0;
@@ -314,6 +773,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                       "CompileModule",
                       &result,
                       error)) {
+        return false;
+    }
+    if (api->UnregisterEngineExtension("__ckas_public_api_extension", &result) != CKAS_INUSE) {
+        error = "CKAngelScript API self-test expected modules referencing an extension to block unregister.";
         return false;
     }
     if (api->CompileModule(moduleName, source, CKAS_COMPILE_DEFAULT, &result) != CKAS_ALREADYEXISTS) {
@@ -365,12 +828,33 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    MetadataProbe metadataProbe;
+    if (api->EnumerateMetadata(moduleName, ProbeMetadata, &metadataProbe, &result) != CKAS_OK ||
+        metadataProbe.CallbackCount < 5 ||
+        !metadataProbe.Type ||
+        !metadataProbe.Method ||
+        !metadataProbe.Function ||
+        !metadataProbe.Global ||
+        !metadataProbe.TypeProperty ||
+        !metadataProbe.Declaration ||
+        metadataProbe.NamespacedTypes != 2 ||
+        metadataProbe.NamespacedMethods != 2) {
+        error = "CKAngelScript API self-test expected metadata enumeration for type/method/function/global/property targets.";
+        return false;
+    }
+    if (api->EnumerateMetadata("__CKAS_MissingMetadataModule", ProbeMetadata, &metadataProbe, &result) != CKAS_NOTFOUND ||
+        api->EnumerateMetadata(moduleName, nullptr, nullptr, &result) != CKAS_INVALIDARGUMENT ||
+        api->EnumerateMetadata(moduleName, StopMetadata, nullptr, &result) != CKAS_CANCELLED) {
+        error = "CKAngelScript API self-test expected metadata enumeration failure statuses.";
+        return false;
+    }
+
     constexpr const char *loadModuleName = "__CKAS_ManagerApiLoadSelfTest";
-    CKAngelScriptLoadOptions loadOptions = CKAngelScriptApi::LoadOptions();
+    CKAngelScriptLoadOptions loadOptions = CKAngelScriptApi::LoadCodeOptions(
+        loadModuleName,
+        "int __ckas_public_loaded() { return 3; }\n",
+        CKAS_LOAD_REPLACEEXISTING);
     loadOptions.Size = sizeof(loadOptions) + 16;
-    loadOptions.ModuleName = loadModuleName;
-    loadOptions.Code = "int __ckas_public_loaded() { return 3; }\n";
-    loadOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
     if (!ExpectStatus(api->LoadModule(loadOptions, &result),
                       CKAS_OK,
                       "LoadModule code",
@@ -395,10 +879,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
     constexpr const char *singleFileModuleName = "__CKAS_ManagerApiSingleFileLoadSelfTest";
     const std::string singleFilePath = singleFile.string();
-    CKAngelScriptLoadOptions singleFileOptions = CKAngelScriptApi::LoadOptions();
-    singleFileOptions.ModuleName = singleFileModuleName;
-    singleFileOptions.Filename = singleFilePath.c_str();
-    singleFileOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
+    CKAngelScriptLoadOptions singleFileOptions =
+        CKAngelScriptApi::LoadFileOptions(singleFileModuleName, singleFilePath.c_str(), CKAS_LOAD_REPLACEEXISTING);
     if (api->LoadModule(singleFileOptions, &result) != CKAS_OK ||
         api->BorrowFunctionByDecl(singleFileModuleName, "int __ckas_public_file_loaded()", &borrowedFunction, &result) != CKAS_OK) {
         error = "CKAngelScript API self-test expected single-file LoadModule to expose its function.";
@@ -414,11 +896,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     const std::string multiFilePathA = multiFileA.string();
     const std::string multiFilePathB = multiFileB.string();
     const char *multiFiles[] = { multiFilePathA.c_str(), multiFilePathB.c_str() };
-    CKAngelScriptLoadOptions multiFileOptions = CKAngelScriptApi::LoadOptions();
-    multiFileOptions.ModuleName = multiFileModuleName;
-    multiFileOptions.Filenames = multiFiles;
-    multiFileOptions.FileCount = 2;
-    multiFileOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
+    CKAngelScriptLoadOptions multiFileOptions =
+        CKAngelScriptApi::LoadFilesOptions(multiFileModuleName, multiFiles, 2, CKAS_LOAD_REPLACEEXISTING);
     if (api->LoadModule(multiFileOptions, &result) != CKAS_OK ||
         api->BorrowFunctionByDecl(multiFileModuleName, "int __ckas_public_multi_b()", &borrowedFunction, &result) != CKAS_OK) {
         error = "CKAngelScript API self-test expected multi-file LoadModule to expose its function.";
@@ -497,10 +976,17 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         error = "CKAngelScript API self-test expected unknown FindFunction flags to fail.";
         return false;
     }
+    function = reinterpret_cast<CKAngelScriptFunction *>(static_cast<uintptr_t>(1));
+    if (api->FindFunction(CKAngelScriptApi::FunctionByNameOptions(moduleName, "__ckas_public_overload"),
+                          &function,
+                          &result) != CKAS_AMBIGUOUS ||
+        function != nullptr) {
+        error = "CKAngelScript API self-test expected FunctionByNameOptions to preserve ambiguous overload semantics.";
+        return false;
+    }
 
-    CKAngelScriptFunctionOptions addFunctionOptions = CKAngelScriptApi::FunctionOptions();
-    addFunctionOptions.ModuleName = moduleName;
-    addFunctionOptions.FunctionDecl = "int __ckas_public_add(int)";
+    CKAngelScriptFunctionOptions addFunctionOptions =
+        CKAngelScriptApi::FunctionByDeclOptions(moduleName, "int __ckas_public_add(int)");
     CKAngelScriptFunction *addFunction = nullptr;
     if (!ExpectStatus(api->FindFunction(addFunctionOptions, &addFunction, &result),
                       CKAS_OK,
@@ -511,13 +997,32 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    {
+        CKAngelScriptFunctionHandle addFunctionHandle;
+        if (api->FindFunction(addFunctionOptions, addFunctionHandle, &result) != CKAS_OK ||
+            !addFunctionHandle ||
+            addFunctionHandle.Owner() != api.Handle()) {
+            error = "CKAngelScript API self-test expected RAII function lookup to produce an owned handle.";
+            api->ReleaseFunction(addFunction);
+            return false;
+        }
+        if (api->FindFunctionByDecl(moduleName,
+                                    "int __ckas_missing()",
+                                    addFunctionHandle,
+                                    &result) != CKAS_NOTFOUND ||
+            addFunctionHandle) {
+            error = "CKAngelScript API self-test expected failed RAII function lookup to clear the handle.";
+            api->ReleaseFunction(addFunction);
+            return false;
+        }
+    }
+
     IntExecutionData data;
     data.Input = 37;
-    CKAngelScriptFunctionExecutionOptions executeOptions = CKAngelScriptApi::FunctionExecutionOptions();
-    executeOptions.Function = addFunction;
-    executeOptions.ConfigureContext = ConfigureIntArgument;
-    executeOptions.ReadResult = ReadIntReturn;
-    executeOptions.UserData = &data;
+    CKAngelScriptFunctionExecutionOptions executeOptions =
+        CKAngelScriptApi::FunctionExecutionOptions(addFunction);
+    CKAngelScriptExecutionStepOptions stepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(ConfigureIntArgument, ReadIntReturn, &data);
     CKAngelScriptExecution *execution = nullptr;
     executeOptions.Flags = 0x00000002u;
     execution = reinterpret_cast<CKAngelScriptExecution *>(static_cast<uintptr_t>(1));
@@ -528,6 +1033,26 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     executeOptions.Flags = CKAS_CALL_DEFAULT;
+
+    {
+        CKAngelScriptExecutionHandle executionHandle;
+        if (api->CreateFunctionExecution(executeOptions, executionHandle, &result) != CKAS_OK ||
+            !executionHandle ||
+            executionHandle.Owner() != api.Handle()) {
+            error = "CKAngelScript API self-test expected RAII execution creation to produce an owned handle.";
+            api->ReleaseFunction(addFunction);
+            return false;
+        }
+        executeOptions.Flags = 0x00000002u;
+        if (api->CreateFunctionExecution(executeOptions, executionHandle, &result) != CKAS_INVALIDARGUMENT ||
+            executionHandle) {
+            error = "CKAngelScript API self-test expected failed RAII execution creation to clear the handle.";
+            api->ReleaseFunction(addFunction);
+            return false;
+        }
+        executeOptions.Flags = CKAS_CALL_DEFAULT;
+    }
+
     if (!ExpectStatus(api->CreateFunctionExecution(executeOptions, &execution, &result),
                       CKAS_OK,
                       "CreateFunctionExecution",
@@ -537,10 +1062,19 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseFunction(addFunction);
         return false;
     }
-    if (!ExpectStatus(api->StartExecution(execution),
+    CKAngelScriptExecutionStepOptions invalidStepOptions = stepOptions;
+    invalidStepOptions.Size = 0;
+    if (api->StartExecution(execution, invalidStepOptions, &result) != CKAS_INVALIDARGUMENT ||
+        result.Status != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected zero-sized execution step options to fail.";
+        api->ReleaseExecution(execution);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    if (!ExpectStatus(api->StartExecution(execution, stepOptions, &result),
                       CKAS_OK,
                       "StartExecution",
-                      api->GetLastResult(),
+                      &result,
                       error)) {
         api->ReleaseExecution(execution);
         api->ReleaseFunction(addFunction);
@@ -548,9 +1082,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     CKAS_EXECUTIONSTATE state = CKAS_EXECUTION_FAILED;
     const CKAngelScriptResult *executionResult = nullptr;
-    if (api->GetExecutionState(execution, &state) != CKAS_OK ||
+    if (api->GetExecutionState(execution, &state, &result) != CKAS_OK ||
         state != CKAS_EXECUTION_FINISHED ||
-        api->BorrowExecutionResult(execution, &executionResult) != CKAS_OK ||
+        api->BorrowExecutionResult(execution, &executionResult, &result) != CKAS_OK ||
         !executionResult ||
         executionResult->AngelScriptCode != asEXECUTION_FINISHED ||
         data.Output != 42) {
@@ -559,8 +1093,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseFunction(addFunction);
         return false;
     }
-    if (api->StartExecution(execution) != CKAS_INVALIDSTATE ||
-        api->ResumeExecution(execution) != CKAS_INVALIDSTATE) {
+    if (api->StartExecution(execution, nullptr, &result) != CKAS_INVALIDSTATE ||
+        result.Status != CKAS_INVALIDSTATE ||
+        api->ResumeExecution(execution, nullptr, &result) != CKAS_INVALIDSTATE ||
+        result.Status != CKAS_INVALIDSTATE) {
         error = "CKAngelScript API self-test expected invalid execution transitions to return INVALIDSTATE.";
         api->ReleaseExecution(execution);
         api->ReleaseFunction(addFunction);
@@ -590,13 +1126,14 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseFunction(addFunction);
         return false;
     }
-    CKAngelScriptFunctionExecutionOptions rejectedOptions = CKAngelScriptApi::FunctionExecutionOptions();
-    rejectedOptions.Function = sideEffectFunction;
-    rejectedOptions.ConfigureContext = RejectExecutionConfigure;
+    CKAngelScriptFunctionExecutionOptions rejectedOptions = CKAngelScriptApi::FunctionExecutionOptions(sideEffectFunction);
+    CKAngelScriptExecutionStepOptions rejectedStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(RejectExecutionConfigure);
     execution = nullptr;
     if (api->CreateFunctionExecution(rejectedOptions, &execution, &result) != CKAS_OK ||
         !execution ||
-        api->StartExecution(execution) != CKAS_INVALIDARGUMENT) {
+        api->StartExecution(execution, rejectedStepOptions, &result) != CKAS_INVALIDARGUMENT ||
+        result.Status != CKAS_INVALIDARGUMENT) {
         error = "CKAngelScript API self-test expected rejected ConfigureContext to fail before script execution.";
         if (execution) {
             api->ReleaseExecution(execution);
@@ -607,15 +1144,14 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->ReleaseExecution(execution);
-    CKAngelScriptFunctionExecutionOptions getterOptions = CKAngelScriptApi::FunctionExecutionOptions();
-    getterOptions.Function = sideEffectGetter;
-    getterOptions.ReadResult = ReadIntReturn;
-    getterOptions.UserData = &data;
+    CKAngelScriptFunctionExecutionOptions getterOptions = CKAngelScriptApi::FunctionExecutionOptions(sideEffectGetter);
+    CKAngelScriptExecutionStepOptions getterStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(nullptr, ReadIntReturn, &data);
     data.Output = -1;
     execution = nullptr;
     if (api->CreateFunctionExecution(getterOptions, &execution, &result) != CKAS_OK ||
         !execution ||
-        api->StartExecution(execution) != CKAS_OK ||
+        api->StartExecution(execution, getterStepOptions, &result) != CKAS_OK ||
         data.Output != 0) {
         error = "CKAngelScript API self-test expected rejected ConfigureContext to prevent script side effects.";
         if (execution) {
@@ -643,15 +1179,15 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseFunction(addFunction);
         return false;
     }
-    CKAngelScriptFunctionExecutionOptions extensionExecutionOptions = CKAngelScriptApi::FunctionExecutionOptions();
-    extensionExecutionOptions.Function = extensionFunction;
-    extensionExecutionOptions.ReadResult = ReadIntReturn;
-    extensionExecutionOptions.UserData = &data;
+    CKAngelScriptFunctionExecutionOptions extensionExecutionOptions =
+        CKAngelScriptApi::FunctionExecutionOptions(extensionFunction);
+    CKAngelScriptExecutionStepOptions extensionStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(nullptr, ReadIntReturn, &data);
     data.Output = 0;
     execution = nullptr;
     if (api->CreateFunctionExecution(extensionExecutionOptions, &execution, &result) != CKAS_OK ||
         !execution ||
-        api->StartExecution(execution) != CKAS_OK ||
+        api->StartExecution(execution, extensionStepOptions, &result) != CKAS_OK ||
         data.Output != 77) {
         error = "CKAngelScript API self-test returned the wrong extension result.";
         if (execution) {
@@ -669,13 +1205,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     exceptionFunctionOptions.FunctionDecl = "int __ckas_public_exception()";
     CKAngelScriptFunction *exceptionFunction = nullptr;
     api->FindFunction(exceptionFunctionOptions, &exceptionFunction, &result);
-    CKAngelScriptFunctionExecutionOptions exceptionExecutionOptions = CKAngelScriptApi::FunctionExecutionOptions();
-    exceptionExecutionOptions.Function = exceptionFunction;
+    CKAngelScriptFunctionExecutionOptions exceptionExecutionOptions =
+        CKAngelScriptApi::FunctionExecutionOptions(exceptionFunction);
     execution = nullptr;
     if (!exceptionFunction ||
         api->CreateFunctionExecution(exceptionExecutionOptions, &execution, &result) != CKAS_OK ||
-        api->StartExecution(execution) != CKAS_EXECUTIONFAILED ||
-        api->BorrowExecutionResult(execution, &executionResult) != CKAS_OK ||
+        api->StartExecution(execution, nullptr, &result) != CKAS_EXECUTIONFAILED ||
+        api->BorrowExecutionResult(execution, &executionResult, &result) != CKAS_OK ||
         !executionResult ||
         !executionResult->ErrorMessage ||
         !executionResult->StackTrace ||
@@ -706,16 +1242,16 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseFunction(addFunction);
         return false;
     }
-    CKAngelScriptFunctionExecutionOptions asyncOptions = CKAngelScriptApi::FunctionExecutionOptions();
-    asyncOptions.Function = asyncFunction;
-    asyncOptions.ReadResult = ReadIntReturn;
-    asyncOptions.UserData = &data;
+    CKAngelScriptFunctionExecutionOptions asyncOptions = CKAngelScriptApi::FunctionExecutionOptions(asyncFunction);
+    CKAngelScriptExecutionStepOptions asyncStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(nullptr, ReadIntReturn, &data);
     data.Output = 0;
     execution = nullptr;
     if (api->CreateFunctionExecution(asyncOptions, &execution, &result) != CKAS_OK ||
         !execution ||
-        api->StartExecution(execution) != CKAS_SUSPENDED ||
-        api->GetExecutionState(execution, &state) != CKAS_OK ||
+        api->StartExecution(execution, asyncStepOptions, &result) != CKAS_SUSPENDED ||
+        data.Output != 0 ||
+        api->GetExecutionState(execution, &state, &result) != CKAS_OK ||
         state != CKAS_EXECUTION_SUSPENDED) {
         error = "CKAngelScript API self-test expected async execution to suspend.";
         if (execution) {
@@ -733,11 +1269,12 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseFunction(addFunction);
         return false;
     }
-    if (api->CancelExecution(execution) != CKAS_OK ||
-        api->BorrowExecutionResult(execution, &executionResult) != CKAS_OK ||
+    if (api->CancelExecution(execution, &result) != CKAS_OK ||
+        result.Status != CKAS_OK ||
+        api->BorrowExecutionResult(execution, &executionResult, &result) != CKAS_OK ||
         !executionResult ||
         executionResult->Status != CKAS_CANCELLED ||
-        api->GetExecutionState(execution, &state) != CKAS_OK ||
+        api->GetExecutionState(execution, &state, &result) != CKAS_OK ||
         state != CKAS_EXECUTION_CANCELLED) {
         error = "CKAngelScript API self-test expected cancellation to return OK and store a CANCELLED execution result.";
         api->ReleaseExecution(execution);
@@ -751,7 +1288,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     execution = nullptr;
     if (api->CreateFunctionExecution(asyncOptions, &execution, &result) != CKAS_OK ||
         !execution ||
-        api->StartExecution(execution) != CKAS_UNSUPPORTED) {
+        api->StartExecution(execution, asyncStepOptions, &result) != CKAS_UNSUPPORTED) {
         error = "CKAngelScript API self-test expected CKAS_CALL_NO_SUSPEND to reject suspended scripts.";
         if (execution) {
             api->ReleaseExecution(execution);
@@ -762,11 +1299,71 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->ReleaseExecution(execution);
 
+    constexpr const char *releaseSuspendedModuleName = "__CKAS_ReleaseSuspendedExecutionSelfTest";
+    const char *releaseSuspendedSource =
+        "int __ckas_release_suspended_async() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 11; }\n";
+    if (!ExpectStatus(api->CompileModule(releaseSuspendedModuleName,
+                                         releaseSuspendedSource,
+                                         CKAS_COMPILE_DEFAULT,
+                                         &result),
+                      CKAS_OK,
+                      "CompileModule release suspended execution self-test",
+                      &result,
+                      error)) {
+        api->ReleaseFunction(asyncFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    CKAngelScriptFunctionOptions releaseSuspendedFunctionOptions = CKAngelScriptApi::FunctionOptions();
+    releaseSuspendedFunctionOptions.ModuleName = releaseSuspendedModuleName;
+    releaseSuspendedFunctionOptions.FunctionDecl = "int __ckas_release_suspended_async()";
+    CKAngelScriptFunction *releaseSuspendedFunction = nullptr;
+    if (!ExpectStatus(api->FindFunction(releaseSuspendedFunctionOptions,
+                                        &releaseSuspendedFunction,
+                                        &result),
+                      CKAS_OK,
+                      "FindFunction release suspended execution",
+                      &result,
+                      error) ||
+        !releaseSuspendedFunction) {
+        api->UnloadModule(releaseSuspendedModuleName);
+        api->ReleaseFunction(asyncFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    CKAngelScriptFunctionExecutionOptions releaseSuspendedOptions =
+        CKAngelScriptApi::FunctionExecutionOptions(releaseSuspendedFunction);
+    execution = nullptr;
+    if (api->CreateFunctionExecution(releaseSuspendedOptions, &execution, &result) != CKAS_OK ||
+        !execution ||
+        api->StartExecution(execution, asyncStepOptions, &result) != CKAS_SUSPENDED) {
+        error = "CKAngelScript API self-test failed to create suspended execution release case.";
+        if (execution) {
+            api->ReleaseExecution(execution);
+        }
+        api->ReleaseFunction(releaseSuspendedFunction);
+        api->UnloadModule(releaseSuspendedModuleName);
+        api->ReleaseFunction(asyncFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    if (api->ReleaseExecution(execution, &result) != CKAS_OK ||
+        result.Status != CKAS_OK ||
+        api->UnloadModule(releaseSuspendedModuleName, &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected releasing a suspended execution to abort and unblock unload.";
+        api->ReleaseFunction(releaseSuspendedFunction);
+        api->ReleaseFunction(asyncFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    api->ReleaseFunction(releaseSuspendedFunction);
+
     asyncOptions.Flags = CKAS_CALL_DEFAULT;
     data.Output = 0;
     execution = nullptr;
     api->CreateFunctionExecution(asyncOptions, &execution, &result);
-    if (!execution || api->StartExecution(execution) != CKAS_SUSPENDED) {
+    if (!execution || api->StartExecution(execution, asyncStepOptions, &result) != CKAS_SUSPENDED ||
+        data.Output != 0) {
         error = "CKAngelScript API self-test failed to create a resumable async execution.";
         if (execution) {
             api->ReleaseExecution(execution);
@@ -778,10 +1375,17 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     if (ScriptAsyncScheduler *scheduler = ScriptManager::GetManager(context)->GetAsyncScheduler()) {
         scheduler->Tick();
     }
-    if (api->ResumeExecution(execution) != CKAS_OK ||
-        api->GetExecutionState(execution, &state) != CKAS_OK ||
+    IntExecutionData resumeData;
+    resumeData.Input = 0;
+    resumeData.Output = 0;
+    CKAngelScriptExecutionStepOptions resumeStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(MarkResumeHook, ReadIntReturn, &resumeData);
+    if (api->ResumeExecution(execution, resumeStepOptions, &result) != CKAS_OK ||
+        api->GetExecutionState(execution, &state, &result) != CKAS_OK ||
         state != CKAS_EXECUTION_FINISHED ||
-        data.Output != 9) {
+        data.Output != 0 ||
+        resumeData.Input != 1 ||
+        resumeData.Output != 9) {
         error = "CKAngelScript API self-test expected resumed async execution to finish.";
         api->ReleaseExecution(execution);
         api->ReleaseFunction(asyncFunction);
@@ -840,9 +1444,44 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     const CKDWORD objectGeneration = api->GetModuleGeneration(objectModuleName);
-    CKAngelScriptObjectOptions objectOptions = CKAngelScriptApi::ObjectOptions();
-    objectOptions.ModuleName = objectModuleName;
-    objectOptions.ClassName = "__CKAS_PublicObject";
+    CKAngelScriptObjectOptions objectOptions =
+        CKAngelScriptApi::ObjectOptions(objectModuleName, "__CKAS_PublicObject");
+
+    {
+        CKAngelScriptObjectHandle objectHandle;
+        if (api->CreateObject(objectOptions, objectHandle, &result) != CKAS_OK ||
+            !objectHandle ||
+            objectHandle.Owner() != api.Handle()) {
+            error = "CKAngelScript API self-test expected RAII object creation to produce an owned handle.";
+            return false;
+        }
+
+        CKAngelScriptMethodHandle methodHandle;
+        if (api->FindObjectMethod(CKAngelScriptApi::MethodByDeclOptions(objectHandle.Get(), "int Add(int)"),
+                                  methodHandle,
+                                  &result) != CKAS_OK ||
+            !methodHandle ||
+            methodHandle.Owner() != api.Handle()) {
+            error = "CKAngelScript API self-test expected RAII method lookup to produce an owned handle.";
+            return false;
+        }
+        if (api->FindObjectMethodByDecl(objectHandle.Get(),
+                                        "void Missing()",
+                                        methodHandle,
+                                        &result) != CKAS_NOTFOUND ||
+            methodHandle) {
+            error = "CKAngelScript API self-test expected failed RAII method lookup to clear the handle.";
+            return false;
+        }
+        if (api->CreateObject(CKAngelScriptApi::ObjectOptions(objectModuleName, "__CKAS_MissingObject"),
+                              objectHandle,
+                              &result) != CKAS_NOTFOUND ||
+            objectHandle) {
+            error = "CKAngelScript API self-test expected failed RAII object creation to clear the handle.";
+            return false;
+        }
+    }
+
     CKAngelScriptObject *object = nullptr;
     if (api->CreateObject(objectOptions, &object, &result) != CKAS_OK || !object) {
         error = "CKAngelScript API self-test failed to create an object handle.";
@@ -864,21 +1503,19 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseObject(object);
         return false;
     }
-    methodOptions.MethodDecl = nullptr;
-    methodOptions.MethodName = "Over";
+    methodOptions = CKAngelScriptApi::MethodByNameOptions(object, "Over");
     if (api->FindObjectMethod(methodOptions, &method, &result) != CKAS_AMBIGUOUS || method != nullptr) {
         error = "CKAngelScript API self-test expected overloaded method lookup to be ambiguous.";
         api->ReleaseObject(object);
         return false;
     }
-    methodOptions.MethodName = nullptr;
-    methodOptions.MethodDecl = "void Missing()";
+    methodOptions = CKAngelScriptApi::MethodByDeclOptions(object, "void Missing()");
     if (api->FindObjectMethod(methodOptions, &method, &result) != CKAS_NOTFOUND || method != nullptr) {
         error = "CKAngelScript API self-test expected missing method lookup to return NOTFOUND.";
         api->ReleaseObject(object);
         return false;
     }
-    methodOptions.MethodDecl = "int Add(int)";
+    methodOptions = CKAngelScriptApi::MethodByDeclOptions(object, "int Add(int)");
     CKAngelScriptMethod *addMethod = nullptr;
     if (api->FindObjectMethod(methodOptions, &addMethod, &result) != CKAS_OK || !addMethod) {
         error = "CKAngelScript API self-test failed to find Add object method.";
@@ -888,13 +1525,14 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
     ObjectExecutionData objectData;
     objectData.IntInput = 32;
-    CKAngelScriptObjectMethodExecuteOptions objectCall = CKAngelScriptApi::ObjectMethodExecuteOptions();
-    objectCall.Object = object;
-    objectCall.Method = addMethod;
-    objectCall.WriteArgs = WriteObjectInt;
-    objectCall.ReadResult = ReadObjectInt;
-    objectCall.UserData = &objectData;
-    objectCall.Flags = CKAS_CALL_NO_SUSPEND;
+    CKAngelScriptObjectMethodExecuteOptions objectCall =
+        CKAngelScriptApi::ObjectMethodExecuteOptions(
+            object,
+            addMethod,
+            WriteObjectInt,
+            ReadObjectInt,
+            &objectData,
+            CKAS_CALL_NO_SUSPEND);
     if (api->CallObjectMethod(objectCall, &result) != CKAS_OK || objectData.IntOutput != 42) {
         error = "CKAngelScript API self-test expected object int result to be 42.";
         api->ReleaseMethod(addMethod);
@@ -1086,11 +1724,19 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     api->ReleaseObject(object);
     api->UnloadModule(objectModuleName, nullptr);
 
+    if (api->UnregisterEngineExtension("__ckas_missing_extension", &result) != CKAS_NOTFOUND) {
+        error = "CKAngelScript API self-test expected missing extension unregister to return NOTFOUND.";
+        return false;
+    }
     if (!ExpectStatus(api->UnregisterEngineExtension("__ckas_public_api_extension", &result),
                       CKAS_OK,
                       "UnregisterEngineExtension",
                       &result,
                       error)) {
+        return false;
+    }
+    if (HasGlobalFunctionInNamespace(engine, "CKASExtensionSelfTest", "int Value()")) {
+        error = "CKAngelScript API self-test expected unregister to remove current engine extension symbols.";
         return false;
     }
     return true;

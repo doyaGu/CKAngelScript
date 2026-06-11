@@ -45,7 +45,10 @@ public:
     asIScriptFunction *GetFunctionByDecl(const char *decl) const;
 
     bool ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
-    ScriptInvocationStatus ExecuteScriptStatus(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler = nullptr, const ScriptFunctionArgumentHandler &retHandler = nullptr);
+    ScriptInvocationStatus ExecuteScriptStatus(asIScriptFunction *func,
+                                               const ScriptFunctionArgumentHandler &argsHandler = nullptr,
+                                               const ScriptFunctionArgumentHandler &retHandler = nullptr,
+                                               const ScriptFunctionArgumentHandler &resumeHandler = nullptr);
     bool ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
     ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
     ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const ScriptMessage &message, const CKBehaviorContext &behcontext);

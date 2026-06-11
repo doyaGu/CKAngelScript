@@ -192,7 +192,10 @@ bool ScriptInvoker::ExecuteScript(asIScriptFunction *func, const ScriptFunctionA
     return ExecuteScriptStatus(func, argsHandler, retHandler) == ScriptInvocationStatus::Finished;
 }
 
-ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler, const ScriptFunctionArgumentHandler &retHandler) {
+ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *func,
+                                                          const ScriptFunctionArgumentHandler &argsHandler,
+                                                          const ScriptFunctionArgumentHandler &retHandler,
+                                                          const ScriptFunctionArgumentHandler &resumeHandler) {
     if (!m_CachedScript) {
         SetErrorMessage("No script to execute.");
         return ScriptInvocationStatus::Failed;
@@ -234,6 +237,13 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
             SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
             ctx->Abort();
             return ScriptInvocationStatus::Failed;
+        }
+        if (resumeHandler) {
+            if (!resumeHandler(ctx)) {
+                m_LastResultCode = asEXECUTION_ABORTED;
+                SetErrorMessage("Script resume handler rejected execution.");
+                return ScriptInvocationStatus::Failed;
+            }
         }
     } else {
         if (func->GetFuncType() == asFUNC_DELEGATE) {
