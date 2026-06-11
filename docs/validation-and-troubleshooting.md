@@ -17,7 +17,10 @@ Useful options:
 | `-NoSelfTests` | Configure without startup self-test sources. |
 | `-ScriptRoot <path>` | Run static runtime script validation after the build. |
 | `-RunBallance` | Install the DLL and run Ballance/Player validation. |
-| `-BallanceRoot <path>` | Ballance root containing `BuildingBlocks` and `Bin`. |
+| `-BallanceRoot <path>` | Ballance root containing `BuildingBlocks` and `Bin`; optional when env vars or `%USERPROFILE%\Games\Ballance` are available. |
+| `-PlayerSeconds <n>` | Maximum seconds to wait for the Player startup self-test marker; defaults to 60 and returns early on success. |
+| `-IncludeLogTail` | Include current-run `AngelScript.log` and `Player.log` tails in successful output. |
+| `-LogTailLines <n>` | Number of current-run log lines to include in diagnostics; defaults to 40. |
 | `-SkipPlayer` | Run exporter validation without launching Player. |
 
 ### Runtime Script Static Validation
@@ -32,11 +35,12 @@ This validates manifest syntax, dependency text, source file existence, and life
 
 ```powershell
 tools\Validate-Ballance.ps1 `
-  -BallanceRoot C:\Users\kakut\Games\Ballance `
   -BuildDll build\src\Release\AngelScript.dll
 ```
 
-The script backs up the installed DLL when needed, copies the new DLL, runs `VirtoolsDataExporter.exe`, verifies the `AngelScript Component` BB, starts Player, and checks the self-test marker.
+The script backs up the installed DLL when needed, copies the new DLL, runs `VirtoolsDataExporter.exe`, verifies the `AngelScript Component` BB, starts Player, and actively waits for the startup self-test marker. It keeps the newly installed DLL in `BuildingBlocks`; backups are for manual rollback, not automatic restore.
+
+`BallanceRoot` is resolved from the explicit parameter, `BALLANCE_ROOT`, `CKAS_BALLANCE_ROOT`, or `%USERPROFILE%\Games\Ballance`. Player validation sets `CKAS_SELFTEST_MARKER` and `CKAS_RUN_SELFTESTS=1` only for the launched process and then restores the caller environment. The result object includes the installed/source hashes, whether they match, backup path, export JSON path, marker path, and Player close/kill status. Successful output omits log tails unless `-IncludeLogTail` is set; failures always include marker content and current-run log tails. Normal installs fail immediately if the copied DLL hash does not match the built DLL; `-SkipInstall` still validates the already installed DLL and reports whether it matches the build.
 
 ## Environment Variables
 
@@ -66,7 +70,7 @@ status=ok
 stage=complete
 ```
 
-If validation kills Player after marker success, the self-tests still passed; the script closes Player after waiting and may force-kill if the window does not exit quickly.
+If validation closes or kills Player after marker success, the self-tests still passed; the script closes Player as soon as `status=ok` is observed and may force-kill if the window does not exit quickly. If the marker reports `failed`, Player exits early, or the timeout expires, the thrown error includes marker content plus the log tails written during the current validation run.
 
 ## Registration Failures
 
