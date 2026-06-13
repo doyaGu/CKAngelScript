@@ -26,7 +26,7 @@ if (!api.IsValid()) {
 
 The handle is owned by CKAngelScript. Do not allocate, delete, or cast it to CKAngelScript internals.
 
-Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. v3 feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, and metadata reflection.
+Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. v3 feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, and metadata reflection.
 
 ## Optional Plugin Integration
 
@@ -217,7 +217,9 @@ CKAngelScriptFindObjectMethod(angelScript, &methodOptions, &method, &result);
 
 For namespaced types, use `ObjectOptionsByNamespace("module", "MyNamespace", "ExampleMod")`
 or `ObjectOptionsByDecl("module", "MyNamespace::ExampleMod")`. `ClassNamespace`
-cannot be combined with `TypeDecl`.
+cannot be combined with `TypeDecl`. Soft loaders that set `ClassNamespace` must require
+`CKAS_FEATURE_OBJECT_TYPE_NAMESPACE`; older CKAngelScript builds may accept the smaller
+v3 object options struct but ignore the namespace field.
 
 `MethodName` and `MethodDecl` are exactly-one options. Missing symbols return `CKAS_NOTFOUND`; overloaded name lookup returns `CKAS_AMBIGUOUS`.
 

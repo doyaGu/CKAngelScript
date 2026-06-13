@@ -548,6 +548,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     if (CKAS_FOREIGNHANDLE != 16 ||
         CKAS_FEATURE_METADATA_REFLECTION != 13 ||
+        CKAS_FEATURE_OBJECT_TYPE_NAMESPACE != 14 ||
         CKAS_EXECUTION_CANCELLED != 5 ||
         CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
         CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
@@ -571,7 +572,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_ENGINE_EXTENSION) ||
         !api->HasFeature(CKAS_FEATURE_PUBLIC_STRUCT_INITIALIZERS) ||
         !api->HasFeature(CKAS_FEATURE_STATUS_TEXT) ||
-        !api->HasFeature(CKAS_FEATURE_METADATA_REFLECTION)) {
+        !api->HasFeature(CKAS_FEATURE_METADATA_REFLECTION) ||
+        !api->HasFeature(CKAS_FEATURE_OBJECT_TYPE_NAMESPACE)) {
         error = "CKAngelScript API self-test found an unexpected v3 feature set.";
         return false;
     }

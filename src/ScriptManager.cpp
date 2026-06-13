@@ -711,6 +711,7 @@ extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
         case CKAS_FEATURE_PUBLIC_STRUCT_INITIALIZERS:
         case CKAS_FEATURE_STATUS_TEXT:
         case CKAS_FEATURE_METADATA_REFLECTION:
+        case CKAS_FEATURE_OBJECT_TYPE_NAMESPACE:
             return TRUE;
         default:
             return FALSE;
