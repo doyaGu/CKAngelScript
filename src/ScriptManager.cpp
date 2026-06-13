@@ -97,6 +97,7 @@ struct CKAngelScriptObject {
     asIScriptObject *Object = nullptr;
     std::string ModuleName;
     std::string ClassName;
+    std::string ClassNamespace;
     CKDWORD ModuleGeneration = 0;
 };
 
@@ -104,6 +105,7 @@ struct CKAngelScriptMethod {
     ScriptManager *Manager = nullptr;
     std::string ModuleName;
     std::string ClassName;
+    std::string ClassNamespace;
     std::string MethodName;
     std::string MethodDecl;
     CKDWORD ModuleGeneration = 0;
@@ -713,6 +715,32 @@ extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
         default:
             return FALSE;
     }
+}
+
+asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
+                                        const char *className,
+                                        const char *classNamespace) {
+    if (!module || !className || className[0] == '\0') {
+        return nullptr;
+    }
+    if (!classNamespace || classNamespace[0] == '\0') {
+        return module->GetTypeInfoByName(className);
+    }
+
+    const asUINT typeCount = module->GetObjectTypeCount();
+    for (asUINT i = 0; i < typeCount; ++i) {
+        asITypeInfo *type = module->GetObjectTypeByIndex(i);
+        if (!type) {
+            continue;
+        }
+        const char *name = type->GetName();
+        const char *nameSpace = type->GetNamespace();
+        if (name && std::strcmp(name, className) == 0 &&
+            nameSpace && std::strcmp(nameSpace, classNamespace) == 0) {
+            return type;
+        }
+    }
+    return nullptr;
 }
 
 extern "C" CKAS_API void CKAngelScriptInitResult(CKAngelScriptResult *result) {
@@ -2213,6 +2241,7 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
             static_cast<CKDWORD>(std::max(0, cached->GetTypeMetadataCount(typeId)));
         if (typeMetadataCount > 0) {
             CKAngelScriptMetadataEntry entry = {};
+            entry.Size = sizeof(entry);
             entry.Target = CKAS_METADATA_TYPE;
             entry.Name = typeName;
             entry.Namespace = typeNamespace;
@@ -2240,6 +2269,7 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
             }
             const std::string declaration = method->GetDeclaration(false, false, true);
             CKAngelScriptMetadataEntry entry = {};
+            entry.Size = sizeof(entry);
             entry.Target = CKAS_METADATA_TYPE_METHOD;
             entry.Name = method->GetName();
             entry.Namespace = typeNamespace;
@@ -2270,6 +2300,7 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
             type->GetProperty(propertyIndex, &propertyName);
             const char *declaration = type->GetPropertyDeclaration(propertyIndex, false);
             CKAngelScriptMetadataEntry entry = {};
+            entry.Size = sizeof(entry);
             entry.Target = CKAS_METADATA_TYPE_PROPERTY;
             entry.Name = propertyName;
             entry.Namespace = typeNamespace;
@@ -2302,6 +2333,7 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
         }
         const std::string declaration = function->GetDeclaration(false, true, true);
         CKAngelScriptMetadataEntry entry = {};
+        entry.Size = sizeof(entry);
         entry.Target = CKAS_METADATA_GLOBAL_FUNCTION;
         entry.Name = function->GetName();
         entry.Namespace = function->GetNamespace();
@@ -2331,6 +2363,7 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
         module->GetGlobalVar(globalIndex, &name, &nameSpace);
         const char *declaration = module->GetGlobalVarDeclaration(globalIndex, true);
         CKAngelScriptMetadataEntry entry = {};
+        entry.Size = sizeof(entry);
         entry.Target = CKAS_METADATA_GLOBAL_VARIABLE;
         entry.Name = name;
         entry.Namespace = nameSpace;
@@ -2423,8 +2456,18 @@ CKAS_STATUS ScriptManager::CreateObject(const CKAngelScriptObjectOptions &option
     }
     const char *moduleName = PublicField(options, &CKAngelScriptObjectOptions::ModuleName, static_cast<const char *>(nullptr));
     const char *className = PublicField(options, &CKAngelScriptObjectOptions::ClassName, static_cast<const char *>(nullptr));
-    if (!moduleName || moduleName[0] == '\0' || !className || className[0] == '\0') {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name and class name are required.");
+    const char *classNamespace = PublicField(options, &CKAngelScriptObjectOptions::ClassNamespace, static_cast<const char *>(nullptr));
+    const char *typeDecl = PublicField(options, &CKAngelScriptObjectOptions::TypeDecl, static_cast<const char *>(nullptr));
+    const bool hasClassName = className && className[0] != '\0';
+    const bool hasTypeDecl = typeDecl && typeDecl[0] != '\0';
+    if (!moduleName || moduleName[0] == '\0') {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
+    }
+    if (hasClassName == hasTypeDecl) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Exactly one of ClassName or TypeDecl is required.");
+    }
+    if (hasTypeDecl && classNamespace && classNamespace[0] != '\0') {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "ClassNamespace cannot be used with TypeDecl.");
     }
     if (!m_ScriptEngine) {
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
@@ -2433,7 +2476,9 @@ CKAS_STATUS ScriptManager::CreateObject(const CKAngelScriptObjectOptions &option
     if (!module) {
         return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not found.");
     }
-    asITypeInfo *type = module->GetTypeInfoByName(className);
+    asITypeInfo *type = hasTypeDecl
+                            ? module->GetTypeInfoByDecl(typeDecl)
+                            : FindTypeByNameAndNamespace(module, className, classNamespace);
     if (!type) {
         return StoreResult(result, CKAS_NOTFOUND, 0, "Script class was not found.");
     }
@@ -2446,7 +2491,8 @@ CKAS_STATUS ScriptManager::CreateObject(const CKAngelScriptObjectOptions &option
     object->Manager = this;
     object->Object = scriptObject;
     object->ModuleName = moduleName;
-    object->ClassName = className;
+    object->ClassName = type->GetName() ? type->GetName() : "";
+    object->ClassNamespace = type->GetNamespace() ? type->GetNamespace() : "";
     object->ModuleGeneration = GetModuleGeneration(moduleName);
     m_Objects.insert(object);
     *outObject = object;
@@ -2535,6 +2581,7 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
     method->Manager = this;
     method->ModuleName = object->ModuleName;
     method->ClassName = object->ClassName;
+    method->ClassNamespace = object->ClassNamespace;
     method->MethodName = function->GetName() ? function->GetName() : "";
     method->MethodDecl = function->GetDeclaration(false) ? function->GetDeclaration(false) : "";
     method->ModuleGeneration = object->ModuleGeneration;
@@ -2590,7 +2637,9 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
     if (!OwnsObject(object) || !OwnsMethod(method) || !object->Object) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object or method handle is invalid.");
     }
-    if (object->ModuleName != method->ModuleName || object->ClassName != method->ClassName) {
+    if (object->ModuleName != method->ModuleName ||
+        object->ClassName != method->ClassName ||
+        object->ClassNamespace != method->ClassNamespace) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Method handle does not belong to the object type.");
     }
     if (!HasModule(object->ModuleName.c_str()) ||

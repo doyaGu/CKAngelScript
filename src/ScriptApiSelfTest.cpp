@@ -459,7 +459,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     CKAngelScriptInitObjectOptions(&initObjectOptions);
     if (initObjectOptions.Size != sizeof(initObjectOptions) ||
         initObjectOptions.ModuleName ||
-        initObjectOptions.ClassName) {
+        initObjectOptions.ClassName ||
+        initObjectOptions.ClassNamespace ||
+        initObjectOptions.TypeDecl) {
         error = "CKAngelScript API self-test expected ObjectOptions initializer defaults.";
         return false;
     }
@@ -1435,6 +1437,11 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  string Echo(const string &in value) { return \"echo:\" + value; }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
+        "}\n"
+        "namespace __CKAS_TestNS {\n"
+        "  class __CKAS_NamespacedObject {\n"
+        "    int Value() { return 7; }\n"
+        "  }\n"
         "}\n";
     if (!ExpectStatus(api->CompileModule(objectModuleName, objectSource, CKAS_COMPILE_REPLACEEXISTING, &result),
                       CKAS_OK,
@@ -1478,6 +1485,23 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                               &result) != CKAS_NOTFOUND ||
             objectHandle) {
             error = "CKAngelScript API self-test expected failed RAII object creation to clear the handle.";
+            return false;
+        }
+        if (api->CreateObject(CKAngelScriptApi::ObjectOptionsByNamespace(objectModuleName,
+                                                                         "__CKAS_TestNS",
+                                                                         "__CKAS_NamespacedObject"),
+                              objectHandle,
+                              &result) != CKAS_OK ||
+            !objectHandle) {
+            error = "CKAngelScript API self-test failed to create a namespaced object by namespace.";
+            return false;
+        }
+        if (api->CreateObject(CKAngelScriptApi::ObjectOptionsByDecl(objectModuleName,
+                                                                    "__CKAS_TestNS::__CKAS_NamespacedObject"),
+                              objectHandle,
+                              &result) != CKAS_OK ||
+            !objectHandle) {
+            error = "CKAngelScript API self-test failed to create a namespaced object by type declaration.";
             return false;
         }
     }

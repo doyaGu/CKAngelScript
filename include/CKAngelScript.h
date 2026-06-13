@@ -188,7 +188,11 @@ typedef struct CKAngelScriptObjectOptions {
     CKDWORD Size;
     // Strings are borrowed only for the CreateObject call.
     const char *ModuleName;
+    // Use ClassName plus optional ClassNamespace, or use TypeDecl. TypeDecl is
+    // an AngelScript type declaration such as "MyNamespace::MyType".
     const char *ClassName;
+    const char *ClassNamespace;
+    const char *TypeDecl;
 } CKAngelScriptObjectOptions;
 
 typedef struct CKAngelScriptMethodOptions {
@@ -916,6 +920,21 @@ public:
         return options;
     }
 
+    static CKAngelScriptObjectOptions ObjectOptionsByNamespace(const char *moduleName,
+                                                               const char *classNamespace,
+                                                               const char *className) {
+        CKAngelScriptObjectOptions options = ObjectOptions(moduleName, className);
+        options.ClassNamespace = classNamespace;
+        return options;
+    }
+
+    static CKAngelScriptObjectOptions ObjectOptionsByDecl(const char *moduleName, const char *typeDecl) {
+        CKAngelScriptObjectOptions options = ObjectOptions();
+        options.ModuleName = moduleName;
+        options.TypeDecl = typeDecl;
+        return options;
+    }
+
     static CKAngelScriptMethodOptions MethodOptions() {
         CKAngelScriptMethodOptions options;
         CKAngelScriptInitMethodOptions(&options);
@@ -1141,6 +1160,21 @@ public:
                              CKAngelScriptObjectHandle &outObject,
                              CKAngelScriptResult *result = nullptr) const {
         return CreateObject(ObjectOptions(moduleName, className), outObject, result);
+    }
+
+    CKAS_STATUS CreateObject(const char *moduleName,
+                             const char *classNamespace,
+                             const char *className,
+                             CKAngelScriptObjectHandle &outObject,
+                             CKAngelScriptResult *result = nullptr) const {
+        return CreateObject(ObjectOptionsByNamespace(moduleName, classNamespace, className), outObject, result);
+    }
+
+    CKAS_STATUS CreateObjectByDecl(const char *moduleName,
+                                   const char *typeDecl,
+                                   CKAngelScriptObjectHandle &outObject,
+                                   CKAngelScriptResult *result = nullptr) const {
+        return CreateObject(ObjectOptionsByDecl(moduleName, typeDecl), outObject, result);
     }
 
     CKAS_STATUS ReleaseObject(CKAngelScriptObject *object,

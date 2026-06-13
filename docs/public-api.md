@@ -215,6 +215,10 @@ CKAngelScriptMethod *method = nullptr;
 CKAngelScriptFindObjectMethod(angelScript, &methodOptions, &method, &result);
 ```
 
+For namespaced types, use `ObjectOptionsByNamespace("module", "MyNamespace", "ExampleMod")`
+or `ObjectOptionsByDecl("module", "MyNamespace::ExampleMod")`. `ClassNamespace`
+cannot be combined with `TypeDecl`.
+
 `MethodName` and `MethodDecl` are exactly-one options. Missing symbols return `CKAS_NOTFOUND`; overloaded name lookup returns `CKAS_AMBIGUOUS`.
 
 Arguments and return values are written through callbacks:
