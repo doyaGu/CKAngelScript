@@ -8,7 +8,9 @@ This guide takes a clean checkout to a validated `AngelScript.dll`.
 - Visual Studio 2022 with C++ build tools.
 - Virtools SDK 2.1 or newer.
 - DynCall, DynCallback, and DynLoad libraries, only when configuring with `-DCKAS_ENABLE_DYNCALL=ON`.
-- AngelScript source placed at `deps/angelscript`.
+- AngelScript source under `deps/angelscript`; if it is missing, CMake downloads the SDK from AngelCode.
+
+For offline builds, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=C:\Path\To\angelscript_2.38.0.zip`. Use `CKAS_ANGELSCRIPT_URL` and `CKAS_ANGELSCRIPT_SHA256` when pointing CMake at a mirror or a different SDK archive.
 
 The plugin is built as 32-bit because Virtools/Ballance hosts are 32-bit.
 
