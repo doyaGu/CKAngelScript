@@ -241,6 +241,17 @@ bool IsStringType(asIScriptEngine *engine, int typeId) {
     return type && type->GetName() && std::strcmp(type->GetName(), "string") == 0;
 }
 
+bool IsIntOrEnumType(asIScriptEngine *engine, int typeId) {
+    if (typeId == asTYPEID_INT32) {
+        return true;
+    }
+    if (!engine) {
+        return false;
+    }
+    asITypeInfo *type = engine->GetTypeInfoById(typeId);
+    return type && (type->GetFlags() & asOBJ_ENUM) != 0;
+}
+
 bool IsValidStringParam(asIScriptEngine *engine, int typeId, asDWORD flags) {
     if (!IsStringType(engine, typeId)) {
         return false;
@@ -356,12 +367,29 @@ struct ObjectCallOutcome {
     std::string StackTrace;
 };
 
+void ReturnPreparedContext(asIScriptEngine *engine, asIScriptContext *&ctx) {
+    if (!engine || !ctx) {
+        ctx = nullptr;
+        return;
+    }
+
+    const int state = ctx->GetState();
+    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
+        ctx->Abort();
+    }
+    ctx->Unprepare();
+    engine->ReturnContext(ctx);
+    ctx = nullptr;
+}
+
 ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
                                               asIScriptObject *object,
                                               asIScriptFunction *function,
                                               const CKAngelScriptMethod *method,
                                               CKAngelScriptWriteArgsCallback writeArgs,
                                               CKAngelScriptReadResultCallback readResult,
+                                              CKAngelScriptContextCallback configureContext,
+                                              CKAngelScriptContextCallback readContextResult,
                                               void *userData,
                                               CKDWORD flags) {
     ObjectCallOutcome outcome = {};
@@ -390,11 +418,21 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
         r = ctx->SetObject(object);
     }
     if (r < 0) {
-        engine->ReturnContext(ctx);
+        ReturnPreparedContext(engine, ctx);
         outcome.Status = CKAS_EXECUTIONFAILED;
         outcome.AngelScriptCode = r;
         outcome.ErrorMessage = "Failed to prepare script object method.";
         return outcome;
+    }
+
+    if (configureContext) {
+        status = configureContext(ctx, userData);
+        if (status != CKAS_OK) {
+            ReturnPreparedContext(engine, ctx);
+            outcome.Status = status;
+            outcome.ErrorMessage = StatusMessage(status);
+            return outcome;
+        }
     }
 
     CKAngelScriptArgWriter writer = {};
@@ -403,7 +441,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
     if (writeArgs) {
         status = writeArgs(&writer, userData);
         if (status != CKAS_OK) {
-            engine->ReturnContext(ctx);
+            ReturnPreparedContext(engine, ctx);
             outcome.Status = status;
             outcome.ErrorMessage = StatusMessage(status);
             return outcome;
@@ -419,20 +457,29 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
         if (readResult) {
             status = readResult(&reader, userData);
             if (status != CKAS_OK) {
-                engine->ReturnContext(ctx);
+                ReturnPreparedContext(engine, ctx);
                 outcome.Status = status;
                 outcome.ErrorMessage = StatusMessage(status);
                 return outcome;
             }
         }
-        engine->ReturnContext(ctx);
+        if (readContextResult) {
+            status = readContextResult(ctx, userData);
+            if (status != CKAS_OK) {
+                ReturnPreparedContext(engine, ctx);
+                outcome.Status = status;
+                outcome.ErrorMessage = StatusMessage(status);
+                return outcome;
+            }
+        }
+        ReturnPreparedContext(engine, ctx);
         outcome.Status = CKAS_OK;
         return outcome;
     }
 
     if (r == asEXECUTION_SUSPENDED) {
         ctx->Abort();
-        engine->ReturnContext(ctx);
+        ReturnPreparedContext(engine, ctx);
         outcome.Status = CKAS_UNSUPPORTED;
         outcome.ErrorMessage = "Suspended object method executions are not supported by this ABI path.";
         return outcome;
@@ -457,7 +504,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
     } else {
         outcome.ErrorMessage = fmt::format("Script object method failed with result code: {}", r);
     }
-    engine->ReturnContext(ctx);
+    ReturnPreparedContext(engine, ctx);
     (void)flags;
     outcome.Status = CKAS_EXECUTIONFAILED;
     return outcome;
@@ -663,6 +710,7 @@ using ScriptManagerInternal::HasPublicField;
 using ScriptManagerInternal::HasPublicFlag;
 using ScriptManagerInternal::InitPublicStruct;
 using ScriptManagerInternal::DispatchMetadata;
+using ScriptManagerInternal::IsIntOrEnumType;
 using ScriptManagerInternal::IsStringType;
 using ScriptManagerInternal::IsValidBorrowedObjectParam;
 using ScriptManagerInternal::IsValidStringParam;
@@ -712,6 +760,8 @@ extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
         case CKAS_FEATURE_STATUS_TEXT:
         case CKAS_FEATURE_METADATA_REFLECTION:
         case CKAS_FEATURE_OBJECT_TYPE_NAMESPACE:
+        case CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS:
+        case CKAS_FEATURE_SCRIPT_ARRAY_ACCESS:
             return TRUE;
         default:
             return FALSE;
@@ -823,6 +873,287 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptBorrowActiveContext(CKAngelScript *
     return scriptManager
                ? scriptManager->BorrowActiveContext(outContext, result)
                : StoreStatelessPublicResult(result, CKAS_INVALIDARGUMENT, 0, "CKAngelScript handle is invalid.");
+}
+
+static CScriptArray *AsPublicArray(void *array) {
+    return static_cast<CScriptArray *>(array);
+}
+
+static const CScriptArray *AsPublicArray(const void *array) {
+    return static_cast<const CScriptArray *>(array);
+}
+
+static bool IsArrayType(asITypeInfo *type) {
+    return type && type->GetSubTypeCount() == 1 && type->GetName() &&
+           std::strcmp(type->GetName(), "array") == 0;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptAssignObjectHandle(void **handleSlot,
+                                                                 void *object,
+                                                                 asITypeInfo *type) {
+    if (!handleSlot || !type) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    asIScriptEngine *engine = type->GetEngine();
+    if (!engine) {
+        return CKAS_INVALIDARGUMENT;
+    }
+
+    if (*handleSlot) {
+        engine->ReleaseScriptObject(*handleSlot, type);
+        *handleSlot = nullptr;
+    }
+    if (object) {
+        *handleSlot = object;
+        engine->AddRefScriptObject(*handleSlot, type);
+    }
+    return CKAS_OK;
+}
+
+static CKAS_STATUS GetArrayElementAddress(CScriptArray *array, CKDWORD index, void **outAddress) {
+    if (outAddress) {
+        *outAddress = nullptr;
+    }
+    if (!array || !outAddress) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    if (index >= array->GetSize()) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    void *address = array->At(static_cast<asUINT>(index));
+    if (!address) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    *outAddress = address;
+    return CKAS_OK;
+}
+
+static CKAS_STATUS GetConstArrayElementAddress(const CScriptArray *array,
+                                               CKDWORD index,
+                                               const void **outAddress) {
+    if (outAddress) {
+        *outAddress = nullptr;
+    }
+    if (!array || !outAddress) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    if (index >= array->GetSize()) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    const void *address = array->At(static_cast<asUINT>(index));
+    if (!address) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    *outAddress = address;
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptCreateArrayByType(asITypeInfo *arrayType,
+                                                                CKDWORD count,
+                                                                void **outArray) {
+    if (outArray) {
+        *outArray = nullptr;
+    }
+    if (!outArray || !IsArrayType(arrayType)) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    CScriptArray *array = CScriptArray::Create(arrayType, static_cast<asUINT>(count));
+    if (!array) {
+        return CKAS_EXECUTIONFAILED;
+    }
+    *outArray = array;
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptCreateArray(CKAngelScript *angelScript,
+                                                          const char *arrayDecl,
+                                                          CKDWORD count,
+                                                          void **outArray) {
+    if (outArray) {
+        *outArray = nullptr;
+    }
+    if (!arrayDecl || !outArray) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    if (!scriptManager) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    asIScriptEngine *engine = scriptManager->GetScriptEngine();
+    if (!engine) {
+        return CKAS_NOTINITIALIZED;
+    }
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl(arrayDecl);
+    if (!arrayType) {
+        return CKAS_NOTFOUND;
+    }
+    return CKAngelScriptCreateArrayByType(arrayType, count, outArray);
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayAddRef(void *array) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->AddRef();
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayRelease(void *array) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->Release();
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayGetRefCount(void *array, int *outRefCount) {
+    if (outRefCount) {
+        *outRefCount = 0;
+    }
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || !outRefCount) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    *outRefCount = scriptArray->GetRefCount();
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayGetArrayType(void *array, asITypeInfo **outType) {
+    if (outType) {
+        *outType = nullptr;
+    }
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || !outType) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    *outType = scriptArray->GetArrayObjectType();
+    return *outType ? CKAS_OK : CKAS_INVALIDSTATE;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayGetArrayTypeId(void *array, int *outTypeId) {
+    if (outTypeId) {
+        *outTypeId = 0;
+    }
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || !outTypeId) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    *outTypeId = scriptArray->GetArrayTypeId();
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayGetSize(void *array, CKDWORD *outSize) {
+    if (outSize) {
+        *outSize = 0;
+    }
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || !outSize) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    *outSize = static_cast<CKDWORD>(scriptArray->GetSize());
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayResize(void *array, CKDWORD size) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->Resize(static_cast<asUINT>(size));
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayReserve(void *array, CKDWORD capacity) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->Reserve(static_cast<asUINT>(capacity));
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayGetElementTypeId(void *array, int *outTypeId) {
+    if (outTypeId) {
+        *outTypeId = 0;
+    }
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || !outTypeId) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    *outTypeId = scriptArray->GetElementTypeId();
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayGetElementAddress(void *array,
+                                                                     CKDWORD index,
+                                                                     void **outAddress) {
+    return GetArrayElementAddress(AsPublicArray(array), index, outAddress);
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayGetConstElementAddress(const void *array,
+                                                                          CKDWORD index,
+                                                                          const void **outAddress) {
+    return GetConstArrayElementAddress(AsPublicArray(array), index, outAddress);
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArraySetElementValue(void *array,
+                                                                   CKDWORD index,
+                                                                   const void *value) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || !value || index >= scriptArray->GetSize()) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->SetValue(static_cast<asUINT>(index), const_cast<void *>(value));
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayInsertAt(void *array,
+                                                            CKDWORD index,
+                                                            const void *value) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || !value || index > scriptArray->GetSize()) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->InsertAt(static_cast<asUINT>(index), const_cast<void *>(value));
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayInsertLast(void *array, const void *value) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || !value) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->InsertLast(const_cast<void *>(value));
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayRemoveAt(void *array, CKDWORD index) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || index >= scriptArray->GetSize()) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->RemoveAt(static_cast<asUINT>(index));
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayRemoveLast(void *array) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray || scriptArray->GetSize() == 0) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->RemoveLast();
+    return CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArrayClear(void *array) {
+    CScriptArray *scriptArray = AsPublicArray(array);
+    if (!scriptArray) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    scriptArray->Resize(0);
+    return CKAS_OK;
 }
 
 extern "C" CKAS_API CKAS_STATUS CKAngelScriptLoadModule(CKAngelScript *angelScript,
@@ -1016,7 +1347,8 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptArgSetInt(CKAngelScriptArgWriter *w
     if (!ValidateArgIndex(writer, index)) {
         return CKAS_INVALIDARGUMENT;
     }
-    if (writer->Method->ParamTypes[index] != asTYPEID_INT32) {
+    asIScriptEngine *engine = writer->Context->GetEngine();
+    if (!IsIntOrEnumType(engine, writer->Method->ParamTypes[index])) {
         return CKAS_TYPEMISMATCH;
     }
     const int r = writer->Context->SetArgDWord(static_cast<asUINT>(index), static_cast<asDWORD>(value));
@@ -1102,7 +1434,8 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptResultGetInt(CKAngelScriptResultRea
     if (!reader || !reader->Context || !reader->Method || !value) {
         return CKAS_INVALIDARGUMENT;
     }
-    if (reader->Method->ReturnType != asTYPEID_INT32) {
+    asIScriptEngine *engine = reader->Context->GetEngine();
+    if (!IsIntOrEnumType(engine, reader->Method->ReturnType)) {
         return CKAS_TYPEMISMATCH;
     }
     *value = static_cast<int>(reader->Context->GetReturnDWord());
@@ -2660,6 +2993,10 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
         PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::WriteArgs, static_cast<CKAngelScriptWriteArgsCallback>(nullptr));
     CKAngelScriptReadResultCallback readResult =
         PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::ReadResult, static_cast<CKAngelScriptReadResultCallback>(nullptr));
+    CKAngelScriptContextCallback configureContext =
+        PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::ConfigureContext, static_cast<CKAngelScriptContextCallback>(nullptr));
+    CKAngelScriptContextCallback readContextResult =
+        PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::ReadContextResult, static_cast<CKAngelScriptContextCallback>(nullptr));
     void *userData = PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::UserData, static_cast<void *>(nullptr));
 
     const ObjectCallOutcome outcome = ExecutePreparedObjectMethod(this,
@@ -2668,6 +3005,8 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
                                                                   method,
                                                                   writeArgs,
                                                                   readResult,
+                                                                  configureContext,
+                                                                  readContextResult,
                                                                   userData,
                                                                   flags);
     return StoreResult(result, outcome.Status, outcome.AngelScriptCode, outcome.ErrorMessage, outcome.StackTrace);

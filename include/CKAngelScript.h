@@ -70,7 +70,9 @@ typedef enum CKAS_FEATURE {
     CKAS_FEATURE_PUBLIC_STRUCT_INITIALIZERS = 11,
     CKAS_FEATURE_STATUS_TEXT = 12,
     CKAS_FEATURE_METADATA_REFLECTION = 13,
-    CKAS_FEATURE_OBJECT_TYPE_NAMESPACE = 14
+    CKAS_FEATURE_OBJECT_TYPE_NAMESPACE = 14,
+    CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS = 15,
+    CKAS_FEATURE_SCRIPT_ARRAY_ACCESS = 16
 } CKAS_FEATURE;
 
 typedef enum CKAS_EXECUTIONSTATE {
@@ -219,6 +221,12 @@ typedef struct CKAngelScriptObjectMethodExecuteOptions {
     // the call returns.
     CKAngelScriptWriteArgsCallback WriteArgs;
     CKAngelScriptReadResultCallback ReadResult;
+    // ConfigureContext and ReadContextResult are generic lower-level hooks for
+    // hosts that need direct AngelScript marshalling. They run after the method
+    // is prepared and after it finishes, respectively. They are borrowed only
+    // for the duration of CKAngelScriptCallObjectMethod.
+    CKAngelScriptContextCallback ConfigureContext;
+    CKAngelScriptContextCallback ReadContextResult;
     void *UserData;
     CKDWORD Flags;
 } CKAngelScriptObjectMethodExecuteOptions;
@@ -271,6 +279,43 @@ typedef CKAS_STATUS (*CKAngelScriptUnregisterEngineExtensionProc)(
     CKAngelScript *angelScript,
     const char *name,
     CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptAssignObjectHandleProc)(void **handleSlot,
+                                                           void *object,
+                                                           asITypeInfo *type);
+typedef CKAS_STATUS (*CKAngelScriptCreateArrayProc)(
+    CKAngelScript *angelScript,
+    const char *arrayDecl,
+    CKDWORD count,
+    void **outArray);
+typedef CKAS_STATUS (*CKAngelScriptCreateArrayByTypeProc)(
+    asITypeInfo *arrayType,
+    CKDWORD count,
+    void **outArray);
+typedef CKAS_STATUS (*CKAngelScriptArrayAddRefProc)(void *array);
+typedef CKAS_STATUS (*CKAngelScriptArrayReleaseProc)(void *array);
+typedef CKAS_STATUS (*CKAngelScriptArrayGetRefCountProc)(void *array, int *outRefCount);
+typedef CKAS_STATUS (*CKAngelScriptArrayGetArrayTypeProc)(void *array, asITypeInfo **outType);
+typedef CKAS_STATUS (*CKAngelScriptArrayGetArrayTypeIdProc)(void *array, int *outTypeId);
+typedef CKAS_STATUS (*CKAngelScriptArrayGetSizeProc)(void *array, CKDWORD *outSize);
+typedef CKAS_STATUS (*CKAngelScriptArrayResizeProc)(void *array, CKDWORD size);
+typedef CKAS_STATUS (*CKAngelScriptArrayReserveProc)(void *array, CKDWORD capacity);
+typedef CKAS_STATUS (*CKAngelScriptArrayGetElementTypeIdProc)(void *array, int *outTypeId);
+typedef CKAS_STATUS (*CKAngelScriptArrayGetElementAddressProc)(void *array,
+                                                               CKDWORD index,
+                                                               void **outAddress);
+typedef CKAS_STATUS (*CKAngelScriptArrayGetConstElementAddressProc)(const void *array,
+                                                                    CKDWORD index,
+                                                                    const void **outAddress);
+typedef CKAS_STATUS (*CKAngelScriptArraySetElementValueProc)(void *array,
+                                                             CKDWORD index,
+                                                             const void *value);
+typedef CKAS_STATUS (*CKAngelScriptArrayInsertAtProc)(void *array,
+                                                      CKDWORD index,
+                                                      const void *value);
+typedef CKAS_STATUS (*CKAngelScriptArrayInsertLastProc)(void *array, const void *value);
+typedef CKAS_STATUS (*CKAngelScriptArrayRemoveAtProc)(void *array, CKDWORD index);
+typedef CKAS_STATUS (*CKAngelScriptArrayRemoveLastProc)(void *array);
+typedef CKAS_STATUS (*CKAngelScriptArrayClearProc)(void *array);
 
 typedef struct CKAngelScriptExtensionApi {
     CKDWORD Size;
@@ -461,6 +506,50 @@ CKAS_API CKAS_STATUS CKAngelScriptBorrowEngine(CKAngelScript *angelScript,
 CKAS_API CKAS_STATUS CKAngelScriptBorrowActiveContext(CKAngelScript *angelScript,
                                                       asIScriptContext **outContext,
                                                       CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptAssignObjectHandle(void **handleSlot,
+                                                     void *object,
+                                                     asITypeInfo *type);
+
+// Generic script array object access for hosts that need to marshal values
+// through CKAngelScript-owned array objects without depending on CScriptArray.
+// Arrays created by CKAngelScriptCreateArray or CKAngelScriptCreateArrayByType
+// are returned with one reference and must be released with
+// CKAngelScriptArrayRelease. Arrays received from script are borrowed unless the
+// caller explicitly retains them with CKAngelScriptArrayAddRef. Element
+// addresses are borrowed from the array and are invalidated by resize/insert/
+// remove/clear or release. SetElementValue, InsertAt, and InsertLast follow the
+// AngelScript array add-on value convention: pass the address of the value to
+// copy; for handle arrays pass the address of the handle variable.
+CKAS_API CKAS_STATUS CKAngelScriptCreateArray(CKAngelScript *angelScript,
+                                              const char *arrayDecl,
+                                              CKDWORD count,
+                                              void **outArray);
+CKAS_API CKAS_STATUS CKAngelScriptCreateArrayByType(asITypeInfo *arrayType,
+                                                    CKDWORD count,
+                                                    void **outArray);
+CKAS_API CKAS_STATUS CKAngelScriptArrayAddRef(void *array);
+CKAS_API CKAS_STATUS CKAngelScriptArrayRelease(void *array);
+CKAS_API CKAS_STATUS CKAngelScriptArrayGetRefCount(void *array, int *outRefCount);
+CKAS_API CKAS_STATUS CKAngelScriptArrayGetArrayType(void *array, asITypeInfo **outType);
+CKAS_API CKAS_STATUS CKAngelScriptArrayGetArrayTypeId(void *array, int *outTypeId);
+CKAS_API CKAS_STATUS CKAngelScriptArrayGetSize(void *array, CKDWORD *outSize);
+CKAS_API CKAS_STATUS CKAngelScriptArrayResize(void *array, CKDWORD size);
+CKAS_API CKAS_STATUS CKAngelScriptArrayReserve(void *array, CKDWORD capacity);
+CKAS_API CKAS_STATUS CKAngelScriptArrayGetElementTypeId(void *array, int *outTypeId);
+CKAS_API CKAS_STATUS CKAngelScriptArrayGetElementAddress(void *array,
+                                                        CKDWORD index,
+                                                        void **outAddress);
+CKAS_API CKAS_STATUS CKAngelScriptArrayGetConstElementAddress(const void *array,
+                                                             CKDWORD index,
+                                                             const void **outAddress);
+CKAS_API CKAS_STATUS CKAngelScriptArraySetElementValue(void *array,
+                                                      CKDWORD index,
+                                                      const void *value);
+CKAS_API CKAS_STATUS CKAngelScriptArrayInsertAt(void *array, CKDWORD index, const void *value);
+CKAS_API CKAS_STATUS CKAngelScriptArrayInsertLast(void *array, const void *value);
+CKAS_API CKAS_STATUS CKAngelScriptArrayRemoveAt(void *array, CKDWORD index);
+CKAS_API CKAS_STATUS CKAngelScriptArrayRemoveLast(void *array);
+CKAS_API CKAS_STATUS CKAngelScriptArrayClear(void *array);
 
 CKAS_API CKAS_STATUS CKAngelScriptLoadModule(CKAngelScript *angelScript,
                                              const CKAngelScriptLoadOptions *options,
@@ -986,6 +1075,23 @@ public:
         return options;
     }
 
+    static CKAngelScriptObjectMethodExecuteOptions ObjectMethodContextExecuteOptions(
+        CKAngelScriptObject *object,
+        CKAngelScriptMethod *method,
+        CKAngelScriptContextCallback configure = nullptr,
+        CKAngelScriptContextCallback read = nullptr,
+        void *userData = nullptr,
+        CKDWORD flags = CKAS_CALL_DEFAULT) {
+        CKAngelScriptObjectMethodExecuteOptions options = ObjectMethodExecuteOptions();
+        options.Object = object;
+        options.Method = method;
+        options.ConfigureContext = configure;
+        options.ReadContextResult = read;
+        options.UserData = userData;
+        options.Flags = flags;
+        return options;
+    }
+
     static CKAngelScriptEngineExtension EngineExtension() {
         CKAngelScriptEngineExtension extension;
         CKAngelScriptInitEngineExtension(&extension);
@@ -1054,6 +1160,86 @@ public:
     CKAS_STATUS BorrowActiveContext(asIScriptContext **outContext,
                                     CKAngelScriptResult *result = nullptr) const {
         return CKAngelScriptBorrowActiveContext(m_AngelScript, outContext, result);
+    }
+
+    static CKAS_STATUS AssignObjectHandle(void **handleSlot, void *object, asITypeInfo *type) {
+        return CKAngelScriptAssignObjectHandle(handleSlot, object, type);
+    }
+
+    CKAS_STATUS CreateArray(const char *arrayDecl, CKDWORD count, void **outArray) const {
+        return CKAngelScriptCreateArray(m_AngelScript, arrayDecl, count, outArray);
+    }
+
+    static CKAS_STATUS CreateArrayByType(asITypeInfo *arrayType, CKDWORD count, void **outArray) {
+        return CKAngelScriptCreateArrayByType(arrayType, count, outArray);
+    }
+
+    static CKAS_STATUS ArrayAddRef(void *array) {
+        return CKAngelScriptArrayAddRef(array);
+    }
+
+    static CKAS_STATUS ArrayRelease(void *array) {
+        return CKAngelScriptArrayRelease(array);
+    }
+
+    static CKAS_STATUS ArrayGetRefCount(void *array, int *outRefCount) {
+        return CKAngelScriptArrayGetRefCount(array, outRefCount);
+    }
+
+    static CKAS_STATUS ArrayGetArrayType(void *array, asITypeInfo **outType) {
+        return CKAngelScriptArrayGetArrayType(array, outType);
+    }
+
+    static CKAS_STATUS ArrayGetArrayTypeId(void *array, int *outTypeId) {
+        return CKAngelScriptArrayGetArrayTypeId(array, outTypeId);
+    }
+
+    static CKAS_STATUS ArrayGetSize(void *array, CKDWORD *outSize) {
+        return CKAngelScriptArrayGetSize(array, outSize);
+    }
+
+    static CKAS_STATUS ArrayResize(void *array, CKDWORD size) {
+        return CKAngelScriptArrayResize(array, size);
+    }
+
+    static CKAS_STATUS ArrayReserve(void *array, CKDWORD capacity) {
+        return CKAngelScriptArrayReserve(array, capacity);
+    }
+
+    static CKAS_STATUS ArrayGetElementTypeId(void *array, int *outTypeId) {
+        return CKAngelScriptArrayGetElementTypeId(array, outTypeId);
+    }
+
+    static CKAS_STATUS ArrayGetElementAddress(void *array, CKDWORD index, void **outAddress) {
+        return CKAngelScriptArrayGetElementAddress(array, index, outAddress);
+    }
+
+    static CKAS_STATUS ArrayGetConstElementAddress(const void *array, CKDWORD index, const void **outAddress) {
+        return CKAngelScriptArrayGetConstElementAddress(array, index, outAddress);
+    }
+
+    static CKAS_STATUS ArraySetElementValue(void *array, CKDWORD index, const void *value) {
+        return CKAngelScriptArraySetElementValue(array, index, value);
+    }
+
+    static CKAS_STATUS ArrayInsertAt(void *array, CKDWORD index, const void *value) {
+        return CKAngelScriptArrayInsertAt(array, index, value);
+    }
+
+    static CKAS_STATUS ArrayInsertLast(void *array, const void *value) {
+        return CKAngelScriptArrayInsertLast(array, value);
+    }
+
+    static CKAS_STATUS ArrayRemoveAt(void *array, CKDWORD index) {
+        return CKAngelScriptArrayRemoveAt(array, index);
+    }
+
+    static CKAS_STATUS ArrayRemoveLast(void *array) {
+        return CKAngelScriptArrayRemoveLast(array);
+    }
+
+    static CKAS_STATUS ArrayClear(void *array) {
+        return CKAngelScriptArrayClear(array);
     }
 
     CKAS_STATUS LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result = nullptr) const {

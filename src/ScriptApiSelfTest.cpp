@@ -549,6 +549,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     if (CKAS_FOREIGNHANDLE != 16 ||
         CKAS_FEATURE_METADATA_REFLECTION != 13 ||
         CKAS_FEATURE_OBJECT_TYPE_NAMESPACE != 14 ||
+        CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS != 15 ||
+        CKAS_FEATURE_SCRIPT_ARRAY_ACCESS != 16 ||
         CKAS_EXECUTION_CANCELLED != 5 ||
         CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
         CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
@@ -573,8 +575,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_PUBLIC_STRUCT_INITIALIZERS) ||
         !api->HasFeature(CKAS_FEATURE_STATUS_TEXT) ||
         !api->HasFeature(CKAS_FEATURE_METADATA_REFLECTION) ||
-        !api->HasFeature(CKAS_FEATURE_OBJECT_TYPE_NAMESPACE)) {
-        error = "CKAngelScript API self-test found an unexpected v3 feature set.";
+        !api->HasFeature(CKAS_FEATURE_OBJECT_TYPE_NAMESPACE) ||
+        !api->HasFeature(CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS) ||
+        !api->HasFeature(CKAS_FEATURE_SCRIPT_ARRAY_ACCESS)) {
+        error = "CKAngelScript API self-test found an unexpected v4 feature set.";
         return false;
     }
 
@@ -683,6 +687,110 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     asIScriptEngine *engine = nullptr;
     if (!ExpectStatus(api->BorrowEngine(&engine, &result), CKAS_OK, "BorrowEngine", &result, error) || !engine) {
         return false;
+    }
+
+    {
+        void *intArray = nullptr;
+        if (api->CreateArray("array<int>", 2, &intArray) != CKAS_OK || !intArray) {
+            error = "CKAngelScript API self-test failed to create array<int> through public API.";
+            return false;
+        }
+
+        int refCount = 0;
+        asITypeInfo *arrayType = nullptr;
+        int arrayTypeId = 0;
+        int elementTypeId = 0;
+        CKDWORD size = 0;
+        int value0 = 11;
+        int value1 = 22;
+        int value2 = 33;
+        const void *constElement = nullptr;
+        void *element = nullptr;
+        if (CKAngelScriptApi::ArrayGetRefCount(intArray, &refCount) != CKAS_OK ||
+            refCount != 1 ||
+            CKAngelScriptApi::ArrayGetArrayType(intArray, &arrayType) != CKAS_OK ||
+            !arrayType ||
+            CKAngelScriptApi::ArrayGetArrayTypeId(intArray, &arrayTypeId) != CKAS_OK ||
+            arrayTypeId != arrayType->GetTypeId() ||
+            CKAngelScriptApi::ArrayGetElementTypeId(intArray, &elementTypeId) != CKAS_OK ||
+            elementTypeId != asTYPEID_INT32 ||
+            CKAngelScriptApi::ArrayGetSize(intArray, &size) != CKAS_OK ||
+            size != 2 ||
+            CKAngelScriptApi::ArraySetElementValue(intArray, 0, &value0) != CKAS_OK ||
+            CKAngelScriptApi::ArraySetElementValue(intArray, 1, &value1) != CKAS_OK ||
+            CKAngelScriptApi::ArrayGetConstElementAddress(intArray, 0, &constElement) != CKAS_OK ||
+            !constElement ||
+            *static_cast<const int *>(constElement) != value0 ||
+            CKAngelScriptApi::ArrayInsertLast(intArray, &value2) != CKAS_OK ||
+            CKAngelScriptApi::ArrayGetSize(intArray, &size) != CKAS_OK ||
+            size != 3 ||
+            CKAngelScriptApi::ArrayRemoveAt(intArray, 1) != CKAS_OK ||
+            CKAngelScriptApi::ArrayGetElementAddress(intArray, 1, &element) != CKAS_OK ||
+            !element ||
+            *static_cast<int *>(element) != value2 ||
+            CKAngelScriptApi::ArrayReserve(intArray, 8) != CKAS_OK ||
+            CKAngelScriptApi::ArrayResize(intArray, 4) != CKAS_OK ||
+            CKAngelScriptApi::ArrayGetSize(intArray, &size) != CKAS_OK ||
+            size != 4 ||
+            CKAngelScriptApi::ArrayClear(intArray) != CKAS_OK ||
+            CKAngelScriptApi::ArrayGetSize(intArray, &size) != CKAS_OK ||
+            size != 0 ||
+            CKAngelScriptApi::ArrayAddRef(intArray) != CKAS_OK ||
+            CKAngelScriptApi::ArrayGetRefCount(intArray, &refCount) != CKAS_OK ||
+            refCount != 2 ||
+            CKAngelScriptApi::ArrayRelease(intArray) != CKAS_OK ||
+            CKAngelScriptApi::ArrayGetRefCount(intArray, &refCount) != CKAS_OK ||
+            refCount != 1) {
+            CKAngelScriptApi::ArrayRelease(intArray);
+            error = "CKAngelScript API self-test found invalid array<int> public API behavior.";
+            return false;
+        }
+        void *handleSlot = nullptr;
+        if (CKAngelScriptApi::AssignObjectHandle(&handleSlot, intArray, arrayType) != CKAS_OK ||
+            handleSlot != intArray ||
+            CKAngelScriptApi::ArrayGetRefCount(intArray, &refCount) != CKAS_OK ||
+            refCount != 2 ||
+            CKAngelScriptApi::AssignObjectHandle(&handleSlot, nullptr, arrayType) != CKAS_OK ||
+            handleSlot != nullptr ||
+            CKAngelScriptApi::ArrayGetRefCount(intArray, &refCount) != CKAS_OK ||
+            refCount != 1) {
+            if (handleSlot) {
+                CKAngelScriptApi::ArrayRelease(handleSlot);
+            }
+            CKAngelScriptApi::ArrayRelease(intArray);
+            error = "CKAngelScript API self-test found invalid object handle assignment behavior.";
+            return false;
+        }
+        CKAngelScriptApi::ArrayRelease(intArray);
+
+        asITypeInfo *byteArrayType = engine->GetTypeInfoByDecl("array<uint8>");
+        void *byteArray = nullptr;
+        unsigned char byteValue = 42;
+        if (!byteArrayType ||
+            CKAngelScriptApi::CreateArrayByType(byteArrayType, 1, &byteArray) != CKAS_OK ||
+            !byteArray ||
+            CKAngelScriptApi::ArrayGetElementTypeId(byteArray, &elementTypeId) != CKAS_OK ||
+            elementTypeId != asTYPEID_UINT8 ||
+            CKAngelScriptApi::ArraySetElementValue(byteArray, 0, &byteValue) != CKAS_OK ||
+            CKAngelScriptApi::ArrayGetConstElementAddress(byteArray, 0, &constElement) != CKAS_OK ||
+            !constElement ||
+            *static_cast<const unsigned char *>(constElement) != byteValue) {
+            if (byteArray) {
+                CKAngelScriptApi::ArrayRelease(byteArray);
+            }
+            error = "CKAngelScript API self-test found invalid array<uint8> public API behavior.";
+            return false;
+        }
+        CKAngelScriptApi::ArrayRelease(byteArray);
+
+        void *missingArray = reinterpret_cast<void *>(static_cast<uintptr_t>(1));
+        if (api->CreateArray("__CKAS_MissingArray", 0, &missingArray) != CKAS_NOTFOUND ||
+            missingArray != nullptr ||
+            CKAngelScriptApi::ArrayGetSize(nullptr, &size) != CKAS_INVALIDARGUMENT ||
+            size != 0) {
+            error = "CKAngelScript API self-test expected array API failures to clear outputs.";
+            return false;
+        }
     }
 
     CKAngelScriptEngineExtension partialFailureExtension = CKAngelScriptApi::EngineExtension();

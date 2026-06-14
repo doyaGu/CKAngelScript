@@ -63,6 +63,12 @@ ScriptInvocationStatus HandleExecutionResult(ScriptInvoker *invoker, asIScriptCo
     return ScriptInvocationStatus::Failed;
 }
 
+void ReleaseFinishedContextState(asIScriptContext *ctx) {
+    if (ctx && ctx->GetState() == asEXECUTION_FINISHED) {
+        ctx->Unprepare();
+    }
+}
+
 } // namespace ScriptInvokerInternal
 
 ScriptInvoker::ScriptInvoker(ScriptManager *man) : m_ScriptManager(man) {}
@@ -286,6 +292,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
         if (!retHandler(ctx)) {
             m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage("Script result handler rejected execution.");
+            ScriptInvokerInternal::ReleaseFinishedContextState(ctx);
             return ScriptInvocationStatus::Failed;
         }
     }
@@ -293,6 +300,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
     if (IsProfiling())
         EndTiming();
 
+    ScriptInvokerInternal::ReleaseFinishedContextState(ctx);
     return ScriptInvocationStatus::Finished;
 }
 
@@ -381,6 +389,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
     if (IsProfiling())
         EndTiming();
 
+    ScriptInvokerInternal::ReleaseFinishedContextState(ctx);
     return ScriptInvocationStatus::Finished;
 }
 
@@ -464,6 +473,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
     if (IsProfiling())
         EndTiming();
 
+    ScriptInvokerInternal::ReleaseFinishedContextState(ctx);
     return ScriptInvocationStatus::Finished;
 }
 
