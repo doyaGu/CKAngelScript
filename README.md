@@ -61,11 +61,12 @@ tools\Validate-Local.ps1 -BuildDir build -Configuration Release
 With a Ballance install:
 
 ```powershell
+$env:BALLANCE_ROOT = "C:\Path\To\Ballance"
 tools\Validate-Local.ps1 `
   -BuildDir build `
   -Configuration Release `
   -RunBallance `
-  -BallanceRoot C:\Users\kakut\Games\Ballance
+  -BallanceRoot $env:BALLANCE_ROOT
 ```
 
 ## First Runtime Script

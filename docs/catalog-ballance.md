@@ -67,8 +67,9 @@ Parameter categories:
 Run exporter validation first:
 
 ```powershell
+$env:BALLANCE_ROOT = "C:\Path\To\Ballance"
 tools\Validate-Ballance.ps1 `
-  -BallanceRoot C:\Users\kakut\Games\Ballance `
+  -BallanceRoot $env:BALLANCE_ROOT `
   -BuildDll build\src\Release\AngelScript.dll `
   -SkipPlayer
 ```

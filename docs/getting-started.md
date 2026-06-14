@@ -51,11 +51,12 @@ tools\Validate-Local.ps1 -BuildDir build -Configuration Release
 This configures and builds the plugin. Add `-RunBallance` when a Ballance install is available:
 
 ```powershell
+$env:BALLANCE_ROOT = "C:\Path\To\Ballance"
 tools\Validate-Local.ps1 `
   -BuildDir build `
   -Configuration Release `
   -RunBallance `
-  -BallanceRoot C:\Users\kakut\Games\Ballance
+  -BallanceRoot $env:BALLANCE_ROOT
 ```
 
 The Ballance validation path installs the DLL, runs `VirtoolsDataExporter.exe`, starts Player, waits for the CKAngelScript startup self-test marker, and expects `status=ok`.
