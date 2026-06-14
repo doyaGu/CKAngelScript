@@ -165,13 +165,13 @@ endif ()
 
 if (NOT SKIP_INSTALL_ALL)
     install(TARGETS CKAngelScript
-            RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/BuildingBlocks
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 
     if (NOT SKIP_INSTALL_HEADERS)
         install(FILES
                 ${PROJECT_SOURCE_DIR}/include/CKAngelScript.h
-                ${PROJECT_SOURCE_DIR}/deps/angelscript/angelscript/include/angelscript.h
+                ${CKAS_ANGELSCRIPT_ROOT}/angelscript/include/angelscript.h
                 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     endif ()
 endif ()

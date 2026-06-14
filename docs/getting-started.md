@@ -42,6 +42,14 @@ Install it into the host:
 Copy-Item build\src\Release\AngelScript.dll C:\Path\To\Virtools\BuildingBlocks\
 ```
 
+Create a distributable ZIP:
+
+```powershell
+cmake --build build --config Release --target PACKAGE
+```
+
+The package contains `bin\AngelScript.dll`, public headers under `include\`, and project documentation under `share\doc\CKAngelScript\`.
+
 ## Validate Locally
 
 Run the repeatable local workflow:

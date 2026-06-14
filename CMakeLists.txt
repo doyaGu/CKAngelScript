@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.12)
 
+if (POLICY CMP0144)
+    cmake_policy(SET CMP0144 NEW)
+endif ()
+
 project(CKAngelScript VERSION 0.1.0.0)
 
 option(CKAS_BUILD_SELF_TESTS "Build optional AngelScript startup self-test support" OFF)
 option(CKAS_ENABLE_DYNCALL "Build DynCall-backed native FFI support" OFF)
+option(CKAS_INSTALL_DOCS "Install README, license, and Markdown documentation" ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED NO)
@@ -56,3 +61,24 @@ endif ()
 add_subdirectory(deps)
 add_subdirectory(src)
 #add_subdirectory(tools)
+
+if (NOT SKIP_INSTALL_ALL AND CKAS_INSTALL_DOCS)
+    install(FILES
+            "${PROJECT_SOURCE_DIR}/README.md"
+            "${PROJECT_SOURCE_DIR}/LICENSE"
+            DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+    install(DIRECTORY "${PROJECT_SOURCE_DIR}/docs/"
+            DESTINATION "${CMAKE_INSTALL_DOCDIR}/docs"
+            FILES_MATCHING PATTERN "*.md")
+endif ()
+
+set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_PACKAGE_VENDOR "CKAngelScript")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "AngelScript integration for Virtools/CK2")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-win32")
+set(CPACK_GENERATOR "ZIP")
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
+set(CPACK_PACKAGING_INSTALL_PREFIX "")
+set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
+include(CPack)

@@ -54,6 +54,14 @@ cmake --build build --config Release
 Copy-Item build\src\Release\AngelScript.dll C:\Path\To\Virtools\BuildingBlocks\
 ```
 
+To create a distributable ZIP:
+
+```powershell
+cmake --build build --config Release --target PACKAGE
+```
+
+The package contains `bin\AngelScript.dll`, public headers under `include\`, and project documentation under `share\doc\CKAngelScript\`.
+
 For the repeatable local path:
 
 ```powershell
