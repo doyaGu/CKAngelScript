@@ -1444,6 +1444,11 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  class __CKAS_NamespacedObject {\n"
         "    int Value() { return 7; }\n"
         "  }\n"
+        "}\n"
+        "namespace __CKAS_OtherNS {\n"
+        "  class __CKAS_NamespacedObject {\n"
+        "    int Value() { return 9; }\n"
+        "  }\n"
         "}\n";
     if (!ExpectStatus(api->CompileModule(objectModuleName, objectSource, CKAS_COMPILE_REPLACEEXISTING, &result),
                       CKAS_OK,
@@ -1506,7 +1511,127 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             error = "CKAngelScript API self-test failed to create a namespaced object by type declaration.";
             return false;
         }
+        CKAngelScriptObjectOptions invalidNamespacedDecl =
+            CKAngelScriptApi::ObjectOptionsByDecl(objectModuleName,
+                                                  "__CKAS_TestNS::__CKAS_NamespacedObject");
+        invalidNamespacedDecl.ClassNamespace = "__CKAS_TestNS";
+        if (api->CreateObject(invalidNamespacedDecl, objectHandle, &result) != CKAS_INVALIDARGUMENT ||
+            objectHandle) {
+            error = "CKAngelScript API self-test expected ClassNamespace with TypeDecl to fail.";
+            return false;
+        }
     }
+
+    ObjectExecutionData namespaceObjectData;
+    CKAngelScriptObject *namespaceObject = nullptr;
+    CKAngelScriptObject *otherNamespaceObject = nullptr;
+    CKAngelScriptMethod *namespaceValueMethod = nullptr;
+    CKAngelScriptMethod *otherNamespaceValueMethod = nullptr;
+    if (api->CreateObject(CKAngelScriptApi::ObjectOptionsByNamespace(objectModuleName,
+                                                                     "__CKAS_TestNS",
+                                                                     "__CKAS_NamespacedObject"),
+                          &namespaceObject,
+                          &result) != CKAS_OK ||
+        !namespaceObject ||
+        api->CreateObject(CKAngelScriptApi::ObjectOptionsByNamespace(objectModuleName,
+                                                                     "__CKAS_OtherNS",
+                                                                     "__CKAS_NamespacedObject"),
+                          &otherNamespaceObject,
+                          &result) != CKAS_OK ||
+        !otherNamespaceObject) {
+        error = "CKAngelScript API self-test failed to create same-name namespaced objects.";
+        if (namespaceObject)
+            api->ReleaseObject(namespaceObject);
+        if (otherNamespaceObject)
+            api->ReleaseObject(otherNamespaceObject);
+        return false;
+    }
+    if (api->FindObjectMethod(CKAngelScriptApi::MethodByDeclOptions(namespaceObject, "int Value()"),
+                              &namespaceValueMethod,
+                              &result) != CKAS_OK ||
+        !namespaceValueMethod ||
+        api->FindObjectMethod(CKAngelScriptApi::MethodByDeclOptions(otherNamespaceObject, "int Value()"),
+                              &otherNamespaceValueMethod,
+                              &result) != CKAS_OK ||
+        !otherNamespaceValueMethod) {
+        error = "CKAngelScript API self-test failed to find same-name namespaced object methods.";
+        if (namespaceValueMethod)
+            api->ReleaseMethod(namespaceValueMethod);
+        if (otherNamespaceValueMethod)
+            api->ReleaseMethod(otherNamespaceValueMethod);
+        api->ReleaseObject(namespaceObject);
+        api->ReleaseObject(otherNamespaceObject);
+        return false;
+    }
+    CKAngelScriptObjectMethodExecuteOptions namespaceCall =
+        CKAngelScriptApi::ObjectMethodExecuteOptions(namespaceObject,
+                                                    namespaceValueMethod,
+                                                    nullptr,
+                                                    ReadObjectInt,
+                                                    &namespaceObjectData,
+                                                    CKAS_CALL_NO_SUSPEND);
+    namespaceObjectData.IntOutput = 0;
+    if (api->CallObjectMethod(namespaceCall, &result) != CKAS_OK || namespaceObjectData.IntOutput != 7) {
+        error = "CKAngelScript API self-test expected first namespace object method result.";
+        api->ReleaseMethod(namespaceValueMethod);
+        api->ReleaseMethod(otherNamespaceValueMethod);
+        api->ReleaseObject(namespaceObject);
+        api->ReleaseObject(otherNamespaceObject);
+        return false;
+    }
+    namespaceCall.Object = otherNamespaceObject;
+    namespaceCall.Method = otherNamespaceValueMethod;
+    namespaceObjectData.IntOutput = 0;
+    if (api->CallObjectMethod(namespaceCall, &result) != CKAS_OK || namespaceObjectData.IntOutput != 9) {
+        error = "CKAngelScript API self-test expected second namespace object method result.";
+        api->ReleaseMethod(namespaceValueMethod);
+        api->ReleaseMethod(otherNamespaceValueMethod);
+        api->ReleaseObject(namespaceObject);
+        api->ReleaseObject(otherNamespaceObject);
+        return false;
+    }
+    namespaceCall.Object = otherNamespaceObject;
+    namespaceCall.Method = namespaceValueMethod;
+    if (api->CallObjectMethod(namespaceCall, &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected namespace-mismatched object/method handles to fail.";
+        api->ReleaseMethod(namespaceValueMethod);
+        api->ReleaseMethod(otherNamespaceValueMethod);
+        api->ReleaseObject(namespaceObject);
+        api->ReleaseObject(otherNamespaceObject);
+        return false;
+    }
+    if (api->CompileModule(objectModuleName, objectSource, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_INUSE) {
+        error = "CKAngelScript API self-test expected namespaced object handles to block module replacement.";
+        api->ReleaseMethod(namespaceValueMethod);
+        api->ReleaseMethod(otherNamespaceValueMethod);
+        api->ReleaseObject(namespaceObject);
+        api->ReleaseObject(otherNamespaceObject);
+        return false;
+    }
+    api->ReleaseMethod(otherNamespaceValueMethod);
+    api->ReleaseObject(namespaceObject);
+    api->ReleaseObject(otherNamespaceObject);
+    if (api->CompileModule(objectModuleName, objectSource, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_OK ||
+        api->CreateObject(CKAngelScriptApi::ObjectOptionsByNamespace(objectModuleName,
+                                                                     "__CKAS_TestNS",
+                                                                     "__CKAS_NamespacedObject"),
+                          &namespaceObject,
+                          &result) != CKAS_OK ||
+        !namespaceObject) {
+        error = "CKAngelScript API self-test failed to replace object module after releasing namespaced objects.";
+        api->ReleaseMethod(namespaceValueMethod);
+        return false;
+    }
+    namespaceCall.Object = namespaceObject;
+    namespaceCall.Method = namespaceValueMethod;
+    if (api->CallObjectMethod(namespaceCall, &result) != CKAS_STALEHANDLE) {
+        error = "CKAngelScript API self-test expected namespaced method handles to become stale after module replacement.";
+        api->ReleaseMethod(namespaceValueMethod);
+        api->ReleaseObject(namespaceObject);
+        return false;
+    }
+    api->ReleaseMethod(namespaceValueMethod);
+    api->ReleaseObject(namespaceObject);
 
     CKAngelScriptObject *object = nullptr;
     if (api->CreateObject(objectOptions, &object, &result) != CKAS_OK || !object) {

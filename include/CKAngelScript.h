@@ -190,7 +190,10 @@ typedef struct CKAngelScriptObjectOptions {
     // Strings are borrowed only for the CreateObject call.
     const char *ModuleName;
     // Use ClassName plus optional ClassNamespace, or use TypeDecl. TypeDecl is
-    // an AngelScript type declaration such as "MyNamespace::MyType".
+    // an AngelScript type declaration such as "MyNamespace::MyType". v3 object
+    // creation is intentionally limited to these textual identities; metadata
+    // entries and AngelScript type ids are discovery/runtime details, not public
+    // object creation handles.
     const char *ClassName;
     const char *ClassNamespace;
     const char *TypeDecl;
@@ -198,6 +201,8 @@ typedef struct CKAngelScriptObjectOptions {
 
 typedef struct CKAngelScriptMethodOptions {
     CKDWORD Size;
+    // Method lookup is scoped to an existing CKAngelScriptObject. v3 does not
+    // expose type-level method handles independent of an object instance.
     CKAngelScriptObject *Object;
     // Strings are borrowed only for the FindObjectMethod call. Method handles
     // copy the resolved symbol identity.

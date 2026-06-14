@@ -221,6 +221,13 @@ cannot be combined with `TypeDecl`. Soft loaders that set `ClassNamespace` must 
 `CKAS_FEATURE_OBJECT_TYPE_NAMESPACE`; older CKAngelScript builds may accept the smaller
 v3 object options struct but ignore the namespace field.
 
+This is the v3 baseline object identity model. CKAngelScript does not expose
+create-by-metadata-entry or create-by-AngelScript-type-id APIs; metadata
+reflection is for discovery and diagnostics, while object creation uses
+`ModuleName + ClassName + optional ClassNamespace` or `ModuleName + TypeDecl`.
+Object method lookup stays scoped to a live `CKAngelScriptObject` handle, so
+method handles inherit the object's module, type namespace, and generation.
+
 `MethodName` and `MethodDecl` are exactly-one options. Missing symbols return `CKAS_NOTFOUND`; overloaded name lookup returns `CKAS_AMBIGUOUS`.
 
 Arguments and return values are written through callbacks:
