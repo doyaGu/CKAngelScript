@@ -17,10 +17,12 @@
 #include "Logger.h"
 #include "ScriptInvoker.h"
 
-#include "ScriptInfo.h"
 #include "ScriptFormat.h"
 #include "ScriptNativePointer.h"
 #include "ScriptNativeBuffer.h"
+#if CKAS_ENABLE_API_EXPORT
+#include "ScriptInfo.h"
+#endif
 #if CKAS_ENABLE_DYNCALL
 #include "ScriptDynCall.h"
 #endif
@@ -3865,8 +3867,6 @@ int ScriptManager::SetupScriptEngine() {
         // Register the function that we want the scripts to call
         RegisterScriptFormat(m_ScriptEngine);
 
-        RegisterScriptInfo(m_ScriptEngine);
-
         // Register the Virtools API
         RegisterVirtools(m_ScriptEngine);
     }
@@ -3884,6 +3884,18 @@ int ScriptManager::SetupScriptEngine() {
     // API is available. A failing extension is logged but is non-fatal: it must
     // not take down core scripting or the other extensions.
     RegisterEngineExtensions(m_ScriptEngine);
+
+#if CKAS_ENABLE_API_EXPORT
+    std::string apiExportError;
+    if (!ExportScriptApiIfRequested(m_ScriptEngine, apiExportError)) {
+        const std::string summary = "Script API export failed: " + apiExportError;
+        m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+        LOG_ERROR("%s", summary.c_str());
+        m_ScriptEngine->ShutDownAndRelease();
+        m_ScriptEngine = nullptr;
+        return -1;
+    }
+#endif
 
     return r;
 }

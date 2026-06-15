@@ -8,7 +8,11 @@ project(CKAngelScript VERSION 0.1.0.0)
 
 option(CKAS_BUILD_SELF_TESTS "Build optional AngelScript startup self-test support" OFF)
 option(CKAS_ENABLE_DYNCALL "Build DynCall-backed native FFI support" OFF)
+option(CKAS_ENABLE_API_EXPORT "Build runtime AngelScript API JSON export support" OFF)
 option(CKAS_INSTALL_DOCS "Install README, license, and Markdown documentation" ON)
+option(CKAS_BUILD_API_DOCS "Enable the docs-api target for generated Natural Docs API reference" OFF)
+set(CKAS_NATURALDOCS_EXECUTABLE "" CACHE FILEPATH "Path to the Natural Docs executable used by docs-api")
+set(CKAS_DOCS_BALLANCE_ROOT "" CACHE PATH "Optional Ballance root used by docs-api runtime export")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED NO)
@@ -62,6 +66,60 @@ add_subdirectory(deps)
 add_subdirectory(src)
 #add_subdirectory(tools)
 
+set(CKAS_SCRIPT_API_JSON "${CMAKE_BINARY_DIR}/docs/script-api.json")
+set(CKAS_API_SOURCE_DIR "${CMAKE_BINARY_DIR}/docs/api-source")
+set(CKAS_API_OUTPUT_DIR "${CMAKE_BINARY_DIR}/docs/api")
+
+if (CKAS_BUILD_API_DOCS)
+    if (NOT CKAS_ENABLE_API_EXPORT)
+        message(FATAL_ERROR "CKAS_BUILD_API_DOCS requires CKAS_ENABLE_API_EXPORT=ON.")
+    endif ()
+    if (NOT CKAS_NATURALDOCS_EXECUTABLE)
+        message(FATAL_ERROR "CKAS_BUILD_API_DOCS requires CKAS_NATURALDOCS_EXECUTABLE to point at NaturalDocs.exe.")
+    endif ()
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+    add_custom_command(
+            OUTPUT "${CKAS_API_OUTPUT_DIR}/index.html"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/docs"
+            COMMAND powershell
+                    -NoProfile
+                    -ExecutionPolicy Bypass
+                    -File "${PROJECT_SOURCE_DIR}/tools/Validate-Ballance.ps1"
+                    -BallanceRoot "${CKAS_DOCS_BALLANCE_ROOT}"
+                    -BuildDll "$<TARGET_FILE:CKAngelScript>"
+                    -ValidationDir "${CMAKE_BINARY_DIR}/validation/ballance"
+                    -ExportScriptApi "${CKAS_SCRIPT_API_JSON}"
+            COMMAND "${Python3_EXECUTABLE}"
+                    "${PROJECT_SOURCE_DIR}/tools/generate_naturaldocs_api.py"
+                    --api-json "${CKAS_SCRIPT_API_JSON}"
+                    --out-dir "${CKAS_API_SOURCE_DIR}"
+            COMMAND "${CKAS_NATURALDOCS_EXECUTABLE}"
+                    "${PROJECT_SOURCE_DIR}/docs/naturaldocs"
+                    --rebuild
+            COMMAND "${CMAKE_COMMAND}" -E compare_files
+                    "${CKAS_API_OUTPUT_DIR}/index.html"
+                    "${CKAS_API_OUTPUT_DIR}/index.html"
+            DEPENDS
+                    CKAngelScript
+                    "${PROJECT_SOURCE_DIR}/tools/Validate-Ballance.ps1"
+                    "${PROJECT_SOURCE_DIR}/tools/generate_naturaldocs_api.py"
+                    "${PROJECT_SOURCE_DIR}/docs/naturaldocs/Project.txt"
+                    "${PROJECT_SOURCE_DIR}/docs/naturaldocs/Languages.txt"
+                    "${PROJECT_SOURCE_DIR}/docs/naturaldocs/Comments.txt"
+            BYPRODUCTS
+                    "${CKAS_SCRIPT_API_JSON}"
+            COMMENT "Generating CKAngelScript Natural Docs API reference"
+            VERBATIM
+    )
+    add_custom_target(docs-api DEPENDS "${CKAS_API_OUTPUT_DIR}/index.html")
+else ()
+    add_custom_target(docs-api
+            COMMAND "${CMAKE_COMMAND}" -E echo "Reconfigure with -DCKAS_BUILD_API_DOCS=ON and -DCKAS_NATURALDOCS_EXECUTABLE=<path> to enable docs-api."
+            COMMAND "${CMAKE_COMMAND}" -E false
+            VERBATIM)
+endif ()
+
 if (NOT SKIP_INSTALL_ALL AND CKAS_INSTALL_DOCS)
     install(FILES
             "${PROJECT_SOURCE_DIR}/README.md"
@@ -70,6 +128,9 @@ if (NOT SKIP_INSTALL_ALL AND CKAS_INSTALL_DOCS)
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/docs/"
             DESTINATION "${CMAKE_INSTALL_DOCDIR}/docs"
             FILES_MATCHING PATTERN "*.md")
+    install(DIRECTORY "${CKAS_API_OUTPUT_DIR}/"
+            DESTINATION "${CMAKE_INSTALL_DOCDIR}/api"
+            OPTIONAL)
 endif ()
 
 set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")

@@ -6,10 +6,26 @@ param(
     [int]$LogTailLines = 40,
     [switch]$IncludeLogTail,
     [switch]$SkipInstall,
-    [switch]$SkipPlayer
+    [switch]$SkipPlayer,
+    [string]$ExportScriptApi = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+function Resolve-ValidationPath {
+    param(
+        [string]$Path,
+        [string]$BaseDir
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+    return [System.IO.Path]::GetFullPath((Join-Path $BaseDir $Path))
+}
 
 function Read-ValidationTextFile {
     param(
@@ -123,7 +139,8 @@ function Throw-BallanceValidationError {
 
 function Stop-BallanceValidationPlayer {
     param(
-        [System.Diagnostics.Process]$Process
+        [System.Diagnostics.Process]$Process,
+        [int]$CloseWaitSeconds = 10
     )
 
     if ($null -eq $Process) {
@@ -142,8 +159,12 @@ function Stop-BallanceValidationPlayer {
 
     if (-not $Process.HasExited) {
         $closedByTest = $Process.CloseMainWindow()
-        Start-Sleep -Seconds 2
-        $Process.Refresh()
+        $closeStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        do {
+            Start-Sleep -Milliseconds 250
+            $Process.Refresh()
+        } while (-not $Process.HasExited -and
+                 $closeStopwatch.ElapsedMilliseconds -lt ([Math]::Max(1, $CloseWaitSeconds) * 1000))
         if (-not $Process.HasExited) {
             Stop-Process -Id $Process.Id -Force
             $killedByTest = $true
@@ -256,12 +277,16 @@ function Resolve-BallanceRoot {
 $BallanceRoot = Resolve-BallanceRoot -RequestedRoot $BallanceRoot
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+if ($SkipPlayer -and -not [string]::IsNullOrWhiteSpace($ExportScriptApi)) {
+    throw "-ExportScriptApi requires Player startup and cannot be combined with -SkipPlayer."
+}
 if ([string]::IsNullOrWhiteSpace($BuildDll)) {
     $BuildDll = Join-Path $repoRoot "build\src\Release\AngelScript.dll"
 }
 if ([string]::IsNullOrWhiteSpace($ValidationDir)) {
     $ValidationDir = Join-Path $repoRoot "build\validation\ballance"
 }
+$scriptApiJson = Resolve-ValidationPath -Path $ExportScriptApi -BaseDir $repoRoot
 
 $buildingBlocks = Join-Path $BallanceRoot "BuildingBlocks"
 $bin = Join-Path $BallanceRoot "Bin"
@@ -289,6 +314,9 @@ $opsJson = Join-Path $ValidationDir "ops.json"
 $bbsJson = Join-Path $ValidationDir "bbs.json"
 $startupSelfTestMarker = Join-Path $ValidationDir "startup-selftest.txt"
 Remove-Item -LiteralPath $startupSelfTestMarker -ErrorAction SilentlyContinue
+if (-not [string]::IsNullOrWhiteSpace($scriptApiJson)) {
+    Remove-Item -LiteralPath $scriptApiJson -ErrorAction SilentlyContinue
+}
 
 $sourceHash = (Get-FileHash -LiteralPath $BuildDll -Algorithm SHA256).Hash
 $backupPath = $null
@@ -356,8 +384,16 @@ if (-not $SkipPlayer) {
 
     $oldSelfTestMarker = $env:CKAS_SELFTEST_MARKER
     $oldRunSelfTests = $env:CKAS_RUN_SELFTESTS
+    $oldExportScriptApi = $env:CKAS_EXPORT_SCRIPT_API
     $env:CKAS_SELFTEST_MARKER = $startupSelfTestMarker
     $env:CKAS_RUN_SELFTESTS = "1"
+    if (-not [string]::IsNullOrWhiteSpace($scriptApiJson)) {
+        $scriptApiParent = Split-Path -Parent $scriptApiJson
+        if (-not [string]::IsNullOrWhiteSpace($scriptApiParent)) {
+            New-Item -ItemType Directory -Force -Path $scriptApiParent | Out-Null
+        }
+        $env:CKAS_EXPORT_SCRIPT_API = $scriptApiJson
+    }
     $process = $null
     $waitResult = $null
     $closeResult = $null
@@ -383,6 +419,11 @@ if (-not $SkipPlayer) {
         } else {
             $env:CKAS_RUN_SELFTESTS = $oldRunSelfTests
         }
+        if ($null -eq $oldExportScriptApi) {
+            Remove-Item Env:\CKAS_EXPORT_SCRIPT_API -ErrorAction SilentlyContinue
+        } else {
+            $env:CKAS_EXPORT_SCRIPT_API = $oldExportScriptApi
+        }
         $closeResult = Stop-BallanceValidationPlayer -Process $process
     }
 
@@ -395,6 +436,46 @@ if (-not $SkipPlayer) {
         ClosedByTest = $closeResult.ClosedByTest
         KilledByTest = $closeResult.KilledByTest
         StartupSelfTest = ($waitResult.MarkerText.Trim() -replace "`r?`n", "; ")
+    }
+}
+
+$scriptApiResult = $null
+if (-not [string]::IsNullOrWhiteSpace($scriptApiJson)) {
+    if (-not (Test-Path -LiteralPath $scriptApiJson)) {
+        Throw-BallanceValidationError `
+            -Message "Script API export JSON was not created: $scriptApiJson" `
+            -StartupSelfTestMarker $startupSelfTestMarker `
+            -AngelScriptLog $angelScriptLog `
+            -PlayerLog $playerLog `
+            -LogTailLines $LogTailLines `
+            -AngelScriptLogStartLine $angelScriptLogStartLine `
+            -PlayerLogStartLine $playerLogStartLine
+    }
+
+    try {
+        $scriptApi = Get-Content -LiteralPath $scriptApiJson -Raw | ConvertFrom-Json
+        if ($scriptApi.schemaVersion -ne 1) {
+            throw "Expected schemaVersion 1, found $($scriptApi.schemaVersion)."
+        }
+        $scriptApiResult = [pscustomobject]@{
+            Path = $scriptApiJson
+            AngelScriptVersion = $scriptApi.angelScriptVersion
+            GlobalFunctionCount = @($scriptApi.globalFunctions).Count
+            GlobalPropertyCount = @($scriptApi.globalProperties).Count
+            ObjectTypeCount = @($scriptApi.objectTypes).Count
+            EnumCount = @($scriptApi.enums).Count
+            TypedefCount = @($scriptApi.typedefs).Count
+            FuncdefCount = @($scriptApi.funcdefs).Count
+        }
+    } catch {
+        Throw-BallanceValidationError `
+            -Message "Script API export JSON is not valid: $($_.Exception.Message)" `
+            -StartupSelfTestMarker $startupSelfTestMarker `
+            -AngelScriptLog $angelScriptLog `
+            -PlayerLog $playerLog `
+            -LogTailLines $LogTailLines `
+            -AngelScriptLogStartLine $angelScriptLogStartLine `
+            -PlayerLogStartLine $playerLogStartLine
     }
 }
 
@@ -412,6 +493,7 @@ $result = [ordered]@{
     AngelScriptLog = if (Test-Path -LiteralPath $angelScriptLog) { $angelScriptLog } else { $null }
     PlayerLog = if (Test-Path -LiteralPath $playerLog) { $playerLog } else { $null }
     Player = $playerResult
+    ScriptApi = $scriptApiResult
 }
 if ($IncludeLogTail) {
     $result["AngelScriptLogTail"] = Get-ValidationTextTail -Path $angelScriptLog -LineCount $LogTailLines -StartLine $angelScriptLogStartLine

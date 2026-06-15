@@ -7,7 +7,6 @@ set(CKAS_HEADERS
         AngelScriptEventHook.h
         ScriptCache.h
         ScriptInvoker.h
-        ScriptInfo.h
         ScriptFormat.h
         ScriptNativePointer.h
         ScriptNativeBuffer.h
@@ -57,7 +56,6 @@ set(CKAS_SOURCES
         ScriptComponentMetadata.cpp
         ScriptComponentInjection.cpp
         ScriptComponentAutomation.cpp
-        ScriptInfo.cpp
         ScriptFormat.cpp
         ScriptNativePointer.cpp
         ScriptNativeBuffer.cpp
@@ -125,6 +123,16 @@ if (CKAS_BUILD_SELF_TESTS)
     )
 endif ()
 
+if (CKAS_ENABLE_API_EXPORT)
+    list(APPEND CKAS_HEADERS
+            ScriptInfo.h
+    )
+
+    list(APPEND CKAS_SOURCES
+            ScriptInfo.cpp
+    )
+endif ()
+
 add_library(CKAngelScript SHARED ${CKAS_SOURCES} ${CKAS_HEADERS})
 set_target_properties(CKAngelScript PROPERTIES OUTPUT_NAME "AngelScript")
 
@@ -132,6 +140,7 @@ target_compile_definitions(CKAngelScript PRIVATE
         CKAS_BUILDING_DLL
         CKAS_BUILD_SELF_TESTS=$<BOOL:${CKAS_BUILD_SELF_TESTS}>
         CKAS_ENABLE_DYNCALL=$<BOOL:${CKAS_ENABLE_DYNCALL}>
+        CKAS_ENABLE_API_EXPORT=$<BOOL:${CKAS_ENABLE_API_EXPORT}>
 )
 
 target_include_directories(CKAngelScript

@@ -3,6 +3,8 @@
 
 #include <angelscript.h>
 
-void RegisterScriptInfo(asIScriptEngine *engine);
+#include <string>
+
+bool ExportScriptApiIfRequested(asIScriptEngine *engine, std::string &error);
 
 #endif //SCRIPTINFO_H

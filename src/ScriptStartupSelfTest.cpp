@@ -93,6 +93,17 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
         return CKERR_INVALIDOPERATION;
     }
 
+#if CKAS_ENABLE_API_EXPORT
+    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "script-info-export", std::string());
+    if (!RunScriptInfoExportSelfTest(error)) {
+        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+                                                             "script-info-export",
+                                                             "ScriptInfo export",
+                                                             error);
+        return CKERR_INVALIDOPERATION;
+    }
+#endif
+
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "component-metadata", std::string());
     if (!RunScriptComponentMetadataSelfTest(error)) {
         ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
