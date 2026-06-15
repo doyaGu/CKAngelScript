@@ -61,59 +61,33 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         return false;
     }
 
-    const char *source =
-        "void __ckas_message_runtime_probe(const ScriptContext &in ctx) {\n"
-        "  dictionary payload;\n"
-        "  payload.set(\"value\", int64(7));\n"
-        "  bool published = Message::Publish(ctx, \"topic.runtime\", payload);\n"
-        "  bool sent = Message::Send(ctx, \"runtime:missing\", \"topic.runtime\", payload);\n"
-        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, \"runtime:missing\", \"topic.runtime\", payload, 1);\n"
-        "  Message::Subscribe(ctx, \"topic.runtime\");\n"
-        "  Message::Unsubscribe(ctx, \"topic.runtime\");\n"
-        "}\n"
-        "void __ckas_message_component_probe(const CKBehaviorContext &in ctx) {\n"
-        "  dictionary payload;\n"
-        "  bool published = Message::Publish(ctx, \"topic.component\", payload);\n"
-        "  bool sent = Message::Send(ctx, \"component:1\", \"topic.component\", payload);\n"
-        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, \"component:1\", \"topic.component\", payload, 1);\n"
-        "  Message::Subscribe(ctx, \"topic.component\");\n"
-        "  Message::Unsubscribe(ctx, \"topic.component\");\n"
-        "}\n"
-        "class __CKAS_MessageRuntimeReceiver {\n"
-        "  void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx) {\n"
-        "    Await(Async::Delay(1));\n"
-        "    uint64 id = msg.Id();\n"
-        "    string kind = msg.Kind();\n"
-        "    string topic = msg.Topic();\n"
-        "    string source = msg.Source();\n"
-        "    string target = msg.Target();\n"
-        "    uint64 frame = msg.FrameIndex();\n"
-        "    dictionary@ payload = msg.Payload();\n"
-        "    if (msg.RequiresReply()) Message::Reply(ctx, msg, payload);\n"
-        "  }\n"
-        "}\n"
-        "class __CKAS_MessageComponentReceiver {\n"
-        "  void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) {\n"
-        "    Await(Async::Delay(1));\n"
-        "    dictionary@ payload = msg.Payload();\n"
-        "    if (msg.RequiresReply()) Message::Reject(ctx, msg, \"rejected\");\n"
-        "  }\n"
-        "}\n";
+    const char *previousNamespace = engine->GetDefaultNamespace();
+    const std::string restoreNamespace = previousNamespace ? previousNamespace : "";
+    if (engine->SetDefaultNamespace("Message") < 0) {
+        error = "Message self-test could not enter Message namespace.";
+        return false;
+    }
 
-    CKAngelScriptApi api = CKAngelScriptApi::Get(context);
-    if (!api.IsValid()) {
-        error = "Message self-test could not retrieve CKAngelScript.";
-        return false;
+    const char *decls[] = {
+        "bool Publish(const ScriptContext&in, const string&in, dictionary@, const string&in)",
+        "bool Publish(const CKBehaviorContext&in, const string&in, dictionary@, const string&in)",
+        "bool Send(const ScriptContext&in, const string&in, const string&in, dictionary@)",
+        "bool Send(const CKBehaviorContext&in, const string&in, const string&in, dictionary@)",
+        "AsyncTask<dictionary@>@ Request(const ScriptContext&in, const string&in, const string&in, dictionary@, int)",
+        "AsyncTask<dictionary@>@ Request(const CKBehaviorContext&in, const string&in, const string&in, dictionary@, int)",
+        "bool Subscribe(const ScriptContext&in, const string&in)",
+        "bool Subscribe(const CKBehaviorContext&in, const string&in)",
+        "bool Unsubscribe(const ScriptContext&in, const string&in)",
+        "bool Unsubscribe(const CKBehaviorContext&in, const string&in)"
+    };
+    for (const char *decl : decls) {
+        if (!engine->GetGlobalFunctionByDecl(decl)) {
+            engine->SetDefaultNamespace(restoreNamespace.c_str());
+            error = std::string("Message self-test could not resolve declaration: ") + decl;
+            return false;
+        }
     }
-    CKAngelScriptResult result = {};
-    constexpr const char *moduleName = "__CKAS_MessageCompileSelfTest";
-    if (api->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_OK) {
-        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
-            ? result.ErrorMessage
-            : "Message script API compile probe failed.";
-        return false;
-    }
-    api->UnloadModule(moduleName, nullptr);
+    engine->SetDefaultNamespace(restoreNamespace.c_str());
     return true;
 }
 

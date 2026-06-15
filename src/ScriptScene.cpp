@@ -821,6 +821,12 @@ Entity2DRef *CreateEntity2DCtx(CKContext *context, const std::string &name, bool
 MaterialRef *CreateMaterialCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<MaterialRef>(context, CKCID_MATERIAL, name, dynamic, "CKMaterial"); }
 TextureRef *CreateTextureCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<TextureRef>(context, CKCID_TEXTURE, name, dynamic, "CKTexture"); }
 MeshRef *CreateMeshCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<MeshRef>(context, CKCID_MESH, name, dynamic, "CKMesh"); }
+void ReleaseScriptArrayParam(CScriptArray *array) {
+    if (array) {
+        array->Release();
+    }
+}
+
 bool AddToCurrentSceneCtx(CKContext *context, ObjectRef *ref, bool dependencies) { return AddToCurrentSceneImpl(context, ref, dependencies); }
 bool RemoveFromCurrentSceneCtx(CKContext *context, ObjectRef *ref, bool dependencies) { return RemoveFromCurrentSceneImpl(context, ref, dependencies); }
 bool IsInCurrentSceneCtx(CKContext *context, ObjectRef *ref) { return IsInCurrentSceneImpl(context, ref); }
@@ -828,7 +834,11 @@ bool IsInSceneCtx(CKContext *context, SceneRef *scene, ObjectRef *ref) { return 
 bool AddToSceneCtx(CKContext *context, SceneRef *scene, ObjectRef *ref, bool dependencies) { return AddToSceneImpl(context, scene, ref, dependencies); }
 bool RemoveFromSceneCtx(CKContext *context, SceneRef *scene, ObjectRef *ref, bool dependencies) { return RemoveFromSceneImpl(context, scene, ref, dependencies); }
 bool DestroyCtx(CKContext *context, ObjectRef *ref, bool allowPersistent, CKDWORD flags) { return DestroyImpl(context, ref, allowPersistent, flags); }
-bool SelectCtx(CKContext *context, CScriptArray *objects, bool clearSelection) { return SelectImpl(context, objects, clearSelection); }
+bool SelectCtx(CKContext *context, CScriptArray *objects, bool clearSelection) {
+    const bool result = SelectImpl(context, objects, clearSelection);
+    ReleaseScriptArrayParam(objects);
+    return result;
+}
 
 // CKBehaviorContext overloads.
 LevelRef *CurrentLevelBehavior(const CKBehaviorContext &ctx) { return ctx.CurrentLevel ? MakeTypedRef<LevelRef>(ContextFrom(ctx), ctx.CurrentLevel) : CurrentLevelImpl(ContextFrom(ctx)); }
@@ -871,7 +881,11 @@ bool IsInSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef 
 bool AddToSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return AddToSceneImpl(ContextFrom(ctx), scene, ref, dependencies); }
 bool RemoveFromSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return RemoveFromSceneImpl(ContextFrom(ctx), scene, ref, dependencies); }
 bool DestroyBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool allowPersistent, CKDWORD flags) { return DestroyImpl(ContextFrom(ctx), ref, allowPersistent, flags); }
-bool SelectBehavior(const CKBehaviorContext &ctx, CScriptArray *objects, bool clearSelection) { return SelectImpl(ContextFrom(ctx), objects, clearSelection); }
+bool SelectBehavior(const CKBehaviorContext &ctx, CScriptArray *objects, bool clearSelection) {
+    const bool result = SelectImpl(ContextFrom(ctx), objects, clearSelection);
+    ReleaseScriptArrayParam(objects);
+    return result;
+}
 
 // ScriptContext overloads.
 LevelRef *CurrentLevelScript(const ScriptContext &ctx) { return CurrentLevelImpl(ContextFrom(ctx)); }
@@ -914,7 +928,11 @@ bool IsInSceneScript(const ScriptContext &ctx, SceneRef *scene, ObjectRef *ref) 
 bool AddToSceneScript(const ScriptContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return AddToSceneImpl(ContextFrom(ctx), scene, ref, dependencies); }
 bool RemoveFromSceneScript(const ScriptContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return RemoveFromSceneImpl(ContextFrom(ctx), scene, ref, dependencies); }
 bool DestroyScript(const ScriptContext &ctx, ObjectRef *ref, bool allowPersistent, CKDWORD flags) { return DestroyImpl(ContextFrom(ctx), ref, allowPersistent, flags); }
-bool SelectScript(const ScriptContext &ctx, CScriptArray *objects, bool clearSelection) { return SelectImpl(ContextFrom(ctx), objects, clearSelection); }
+bool SelectScript(const ScriptContext &ctx, CScriptArray *objects, bool clearSelection) {
+    const bool result = SelectImpl(ContextFrom(ctx), objects, clearSelection);
+    ReleaseScriptArrayParam(objects);
+    return result;
+}
 
 } // namespace
 

@@ -282,7 +282,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     behaviorContext.CallbackMessage = 0;
     behaviorContext.CallbackArg = nullptr;
 
-    asIScriptContext *scriptContext = engine->CreateContext();
+    asIScriptContext *scriptContext = engine->RequestContext();
     if (!scriptContext) {
         error = "Failed to create AngelScript execution context.";
         manager->UnloadModule(moduleName, nullptr);
@@ -313,7 +313,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
         error = fmt::format("AngelScript self-test execution failed ({}).", r);
     }
 
-    scriptContext->Release();
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
     manager->UnloadModule(moduleName, nullptr);
     return ok;
 }

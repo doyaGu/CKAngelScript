@@ -313,7 +313,7 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     behaviorContext.CurrentLevel = context->GetCurrentLevel();
     behaviorContext.CurrentScene = context->GetCurrentScene();
 
-    asIScriptContext *scriptContext = engine->CreateContext();
+    asIScriptContext *scriptContext = engine->RequestContext();
     if (!scriptContext) {
         error = "Scene API self-test could not create AngelScript execution context.";
         api->UnloadModule(moduleName, nullptr);
@@ -358,7 +358,9 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         error = fmt::format("Scene API self-test execution failed ({}).", r);
     }
 
-    scriptContext->Release();
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    engine->GarbageCollect(asGC_FULL_CYCLE);
     api->UnloadModule(moduleName, nullptr);
     CleanupNamedObject(context, objectName);
     CleanupNamedObject(context, persistentName);
