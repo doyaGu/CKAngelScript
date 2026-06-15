@@ -57,8 +57,12 @@ The exported JSON is schema version 1 and is intended as the source for generate
 ```powershell
 python tools\generate_naturaldocs_api.py `
   --api-json build\docs\script-api.json `
-  --out-dir build\docs\api-source
+  --metadata docs\api-reference.yml `
+  --out-dir build\docs\api-source `
+  --quality-json build\docs\api-quality.json
 ```
+
+`docs\api-reference.yml` is the curated reference metadata layer for grouping, summaries, funcdef display declarations, and quality gates. The generated quality report records hidden internals, skipped declarations, group counts, metadata orphans, and required high-level type coverage.
 
 ## Environment Variables
 

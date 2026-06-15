@@ -8,8 +8,10 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <fmt/format.h>
@@ -77,6 +79,82 @@ std::string TypeDeclaration(asIScriptEngine *engine, int typeId) {
         return "";
     }
     return SafeString(engine->GetTypeDeclaration(typeId, true));
+}
+
+std::string NormalizeDocIdPart(const std::string &value) {
+    std::string normalized;
+    normalized.reserve(value.size());
+    bool lastWasSpace = false;
+    for (const unsigned char ch : value) {
+        if (std::isspace(ch)) {
+            if (!lastWasSpace && !normalized.empty()) {
+                normalized.push_back(' ');
+            }
+            lastWasSpace = true;
+            continue;
+        }
+        lastWasSpace = false;
+        normalized.push_back(static_cast<char>(std::tolower(ch)));
+    }
+    if (!normalized.empty() && normalized.back() == ' ') {
+        normalized.pop_back();
+    }
+    return normalized;
+}
+
+std::string JoinDocId(std::initializer_list<std::string> parts) {
+    std::ostringstream out;
+    bool first = true;
+    for (const std::string &part : parts) {
+        if (!first) {
+            out << "::";
+        }
+        first = false;
+        out << NormalizeDocIdPart(part);
+    }
+    return out.str();
+}
+
+std::string FunctionDeclaration(asIScriptFunction *func, bool withNamespace) {
+    if (!func) {
+        return "";
+    }
+    return SafeString(func->GetDeclaration(false, withNamespace, true));
+}
+
+std::string FunctionDocId(asIScriptFunction *func) {
+    if (!func) {
+        return "";
+    }
+    const std::string kind = SafeString(func->GetObjectName()).empty() ? "function" : "method";
+    return JoinDocId({
+        kind,
+        SafeString(func->GetNamespace()),
+        SafeString(func->GetObjectName()),
+        FunctionDeclaration(func, true)
+    });
+}
+
+std::string TypeDisplayName(asIScriptEngine *engine, asITypeInfo *type) {
+    if (!type) {
+        return "";
+    }
+    std::string declaration = TypeDeclaration(engine, type->GetTypeId());
+    if (!declaration.empty()) {
+        return declaration;
+    }
+    std::string name = SafeString(type->GetName());
+    if ((type->GetFlags() & asOBJ_TEMPLATE) != 0 && name.find('<') == std::string::npos) {
+        name += "<T>";
+    }
+    return name;
+}
+
+std::string TypeDocId(asIScriptEngine *engine, asITypeInfo *type) {
+    if (!type) {
+        return "";
+    }
+    return JoinDocId({"type", SafeString(type->GetNamespace()), TypeDisplayName(engine, type)});
 }
 
 std::string FunctionTypeName(asEFuncType type) {
@@ -253,7 +331,7 @@ std::string TypeKind(asQWORD flags) {
     return "unknown";
 }
 
-std::string ExportFunction(asIScriptEngine *engine, asIScriptFunction *func) {
+std::string ExportFunction(asIScriptEngine *engine, asIScriptFunction *func, const std::string &memberRole = "function") {
     if (!func) {
         return "{}";
     }
@@ -277,11 +355,13 @@ std::string ExportFunction(asIScriptEngine *engine, asIScriptFunction *func) {
     }
 
     return WriteObject(WithApiCategory({
+        {"docId", FunctionDocId(func)},
         {"id", JsonInt(func->GetId()), true},
         {"name", SafeString(func->GetName())},
         {"namespace", SafeString(func->GetNamespace())},
-        {"declaration", SafeString(func->GetDeclaration(false, false, true))},
-        {"declarationWithNamespace", SafeString(func->GetDeclaration(false, true, true))},
+        {"declaration", FunctionDeclaration(func, false)},
+        {"declarationWithNamespace", FunctionDeclaration(func, true)},
+        {"memberRole", memberRole},
         {"objectName", SafeString(func->GetObjectName())},
         {"functionType", FunctionTypeName(func->GetFuncType())},
         {"moduleName", SafeString(func->GetModuleName())},
@@ -303,6 +383,27 @@ std::string ExportFunction(asIScriptEngine *engine, asIScriptFunction *func) {
     }, ClassifyApi(SafeString(func->GetNamespace()))), 6);
 }
 
+bool IsInternalBehaviour(asEBehaviours behaviour, asIScriptFunction *func) {
+    const std::string declaration = FunctionDeclaration(func, false);
+    if (declaration.find("$beh") != std::string::npos) {
+        return true;
+    }
+    switch (behaviour) {
+        case asBEHAVE_ADDREF:
+        case asBEHAVE_RELEASE:
+        case asBEHAVE_GET_WEAKREF_FLAG:
+        case asBEHAVE_TEMPLATE_CALLBACK:
+        case asBEHAVE_GETREFCOUNT:
+        case asBEHAVE_SETGCFLAG:
+        case asBEHAVE_GETGCFLAG:
+        case asBEHAVE_ENUMREFS:
+        case asBEHAVE_RELEASEREFS:
+            return true;
+        default:
+            return false;
+    }
+}
+
 std::string FunctionSortKey(asIScriptFunction *func) {
     if (!func) {
         return "";
@@ -310,7 +411,7 @@ std::string FunctionSortKey(asIScriptFunction *func) {
     return SafeString(func->GetNamespace()) + "\n" +
            SafeString(func->GetObjectName()) + "\n" +
            SafeString(func->GetName()) + "\n" +
-           SafeString(func->GetDeclaration(false, true, true)) + "\n" +
+           FunctionDeclaration(func, true) + "\n" +
            std::to_string(func->GetId());
 }
 
@@ -337,12 +438,12 @@ std::string ExportObjectType(asIScriptEngine *engine, asITypeInfo *type) {
 
     std::vector<std::string> factoryItems;
     for (asIScriptFunction *func : factories) {
-        factoryItems.push_back(ExportFunction(engine, func));
+        factoryItems.push_back(ExportFunction(engine, func, "factory"));
     }
 
     std::vector<std::string> methodItems;
     for (asIScriptFunction *func : methods) {
-        methodItems.push_back(ExportFunction(engine, func));
+        methodItems.push_back(ExportFunction(engine, func, "method"));
     }
 
     std::vector<std::string> propertyItems;
@@ -359,9 +460,12 @@ std::string ExportObjectType(asIScriptEngine *engine, asITypeInfo *type) {
         bool isConst = false;
         type->GetProperty(i, &name, &typeId, &isPrivate, &isProtected, &offset, &isReference, &accessMask,
                           &compositeOffset, &isCompositeIndirect, &isConst);
+        const std::string declaration = SafeString(type->GetPropertyDeclaration(i, true));
         propertyItems.push_back(WriteObject({
+            {"docId", JoinDocId({"property", SafeString(type->GetNamespace()), TypeDisplayName(engine, type), declaration})},
             {"name", SafeString(name)},
-            {"declaration", SafeString(type->GetPropertyDeclaration(i, true))},
+            {"declaration", declaration},
+            {"memberRole", "property"},
             {"typeId", JsonInt(typeId), true},
             {"type", TypeDeclaration(engine, typeId)},
             {"isPrivate", JsonBool(isPrivate), true},
@@ -380,10 +484,12 @@ std::string ExportObjectType(asIScriptEngine *engine, asITypeInfo *type) {
     for (asUINT i = 0; i < type->GetBehaviourCount(); ++i) {
         asEBehaviours behaviour = asBEHAVE_MAX;
         asIScriptFunction *func = type->GetBehaviourByIndex(i, &behaviour);
+        const bool internal = IsInternalBehaviour(behaviour, func);
         behaviourItems.push_back(WriteObject({
             {"behaviour", BehaviourName(behaviour)},
             {"behaviourId", JsonInt(static_cast<int>(behaviour)), true},
-            {"function", ExportFunction(engine, func), true}
+            {"memberRole", internal ? "internal" : "behaviour"},
+            {"function", ExportFunction(engine, func, internal ? "internal" : "behaviour"), true}
         }, 8));
     }
     std::sort(behaviourItems.begin(), behaviourItems.end());
@@ -410,8 +516,12 @@ std::string ExportObjectType(asIScriptEngine *engine, asITypeInfo *type) {
 
     asITypeInfo *baseType = type->GetBaseType();
     const asQWORD flags = type->GetFlags();
+    const std::string displayName = TypeDisplayName(engine, type);
     return WriteObject(WithApiCategory({
+        {"docId", TypeDocId(engine, type)},
         {"name", SafeString(type->GetName())},
+        {"displayName", displayName},
+        {"declaration", "class " + displayName},
         {"namespace", SafeString(type->GetNamespace())},
         {"typeId", JsonInt(type->GetTypeId()), true},
         {"flags", JsonUInt(flags), true},
@@ -447,6 +557,7 @@ std::string ExportEnum(asITypeInfo *type) {
     std::sort(values.begin(), values.end());
 
     return WriteObject(WithApiCategory({
+        {"docId", JoinDocId({"enum", SafeString(type->GetNamespace()), SafeString(type->GetName())})},
         {"name", SafeString(type->GetName())},
         {"namespace", SafeString(type->GetNamespace())},
         {"typeId", JsonInt(type->GetTypeId()), true},
@@ -462,6 +573,7 @@ std::string ExportTypedef(asIScriptEngine *engine, asITypeInfo *type) {
     }
     const int aliasedTypeId = type->GetTypedefTypeId();
     return WriteObject(WithApiCategory({
+        {"docId", JoinDocId({"typedef", SafeString(type->GetNamespace()), SafeString(type->GetName())})},
         {"name", SafeString(type->GetName())},
         {"namespace", SafeString(type->GetNamespace())},
         {"typeId", JsonInt(type->GetTypeId()), true},
@@ -478,6 +590,7 @@ std::string ExportFuncdef(asIScriptEngine *engine, asITypeInfo *type) {
     }
     const std::string typeDeclaration = TypeDeclaration(engine, type->GetTypeId());
     return WriteObject(WithApiCategory({
+        {"docId", JoinDocId({"funcdef", SafeString(type->GetNamespace()), SafeString(type->GetName())})},
         {"name", SafeString(type->GetName())},
         {"namespace", SafeString(type->GetNamespace())},
         {"typeId", JsonInt(type->GetTypeId()), true},
@@ -498,11 +611,14 @@ std::string ExportGlobalProperty(asIScriptEngine *engine, asUINT index) {
     void *pointer = nullptr;
     asDWORD accessMask = 0;
     engine->GetGlobalPropertyByIndex(index, &name, &nameSpace, &typeId, &isConst, &configGroup, &pointer, &accessMask);
+    const std::string declaration = TypeDeclaration(engine, typeId) + " " + SafeString(name);
     return WriteObject(WithApiCategory({
+        {"docId", JoinDocId({"global-property", SafeString(nameSpace), declaration})},
         {"name", SafeString(name)},
         {"namespace", SafeString(nameSpace)},
         {"typeId", JsonInt(typeId), true},
         {"type", TypeDeclaration(engine, typeId)},
+        {"declaration", declaration},
         {"isConst", JsonBool(isConst), true},
         {"configGroup", SafeString(configGroup)},
         {"accessMask", JsonUInt(accessMask), true},

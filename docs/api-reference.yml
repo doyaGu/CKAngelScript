@@ -1,0 +1,1218 @@
+{
+  "schemaVersion": 1,
+  "title": "CKAngelScript API Reference",
+  "subtitle": "Generated from the live AngelScript engine after CKAngelScript finishes registration.",
+  "fallbackGroup": "misc",
+  "groups": [
+    {
+      "id": "script-api",
+      "title": "Script Workflow API",
+      "overview": "Task-oriented APIs for scene lookup, runtime scripts, behavior graphs, Building Blocks, parameters, messages, and frame-based async work.",
+      "order": 1
+    },
+    {
+      "id": "native-interop",
+      "title": "Native Interop",
+      "overview": "Native pointer, buffer, dynamic library, DynCall, and callback helpers. Treat these APIs as unsafe interop surfaces.",
+      "order": 2
+    },
+    {
+      "id": "ck-bindings",
+      "title": "Virtools CK Bindings",
+      "overview": "CK2 SDK bindings exposed close to their native names. Prefer the workflow APIs for durable script behavior.",
+      "order": 3
+    },
+    {
+      "id": "vx-bindings",
+      "title": "Virtools Vx Bindings",
+      "overview": "Virtools Vx math, geometry, color, transform, and utility bindings.",
+      "order": 4
+    },
+    {
+      "id": "script-addons",
+      "title": "AngelScript Add-ons",
+      "overview": "Registered AngelScript add-ons plus project container and string helper types.",
+      "order": 5
+    },
+    {
+      "id": "misc",
+      "title": "Miscellaneous Bindings",
+      "overview": "Global helpers and symbols that do not belong to the workflow APIs or a named Virtools binding family.",
+      "order": 6
+    }
+  ],
+  "namespaceGroups": {
+    "Scene": "script-api",
+    "Runtime": "script-api",
+    "Behavior": "script-api",
+    "BB": "script-api",
+    "Param": "script-api",
+    "Message": "script-api",
+    "Async": "script-api"
+  },
+  "typeGroups": {
+    "ScriptContext": {
+      "group": "script-api",
+      "summary": "Execution context passed to long-lived runtime scripts.",
+      "family": "runtime"
+    },
+    "RuntimeScriptInfo": {
+      "group": "script-api",
+      "family": "runtime"
+    },
+    "RuntimeDependencyInfo": {
+      "group": "script-api",
+      "family": "runtime"
+    },
+    "ObjectRef": {
+      "group": "script-api",
+      "summary": "Durable revalidating handle to a CK object.",
+      "family": "scene"
+    },
+    "SceneObjectRef": {
+      "group": "script-api",
+      "family": "scene"
+    },
+    "Entity3DRef": {
+      "group": "script-api",
+      "family": "scene"
+    },
+    "Entity2DRef": {
+      "group": "script-api",
+      "family": "scene"
+    },
+    "MaterialRef": {
+      "group": "script-api",
+      "family": "scene"
+    },
+    "TextureRef": {
+      "group": "script-api",
+      "family": "scene"
+    },
+    "MeshRef": {
+      "group": "script-api",
+      "family": "scene"
+    },
+    "SceneRef": {
+      "group": "script-api",
+      "family": "scene"
+    },
+    "LevelRef": {
+      "group": "script-api",
+      "family": "scene"
+    },
+    "BehaviorRef": {
+      "group": "script-api",
+      "family": "behavior"
+    },
+    "BehaviorGraph": {
+      "group": "script-api",
+      "family": "behavior"
+    },
+    "BehaviorGraphEdit": {
+      "group": "script-api",
+      "family": "behavior"
+    },
+    "BehaviorQuery": {
+      "group": "script-api",
+      "family": "behavior"
+    },
+    "BehaviorNode": {
+      "group": "script-api",
+      "family": "behavior"
+    },
+    "BehaviorLayout": {
+      "group": "script-api",
+      "family": "behavior"
+    },
+    "BehaviorLinkRef": {
+      "group": "script-api",
+      "family": "behavior"
+    },
+    "BehaviorBridge": {
+      "group": "script-api",
+      "family": "behavior"
+    },
+    "GraphTask": {
+      "group": "script-api",
+      "family": "behavior"
+    },
+    "BBBridge": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBPrototype": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBDecl": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBConfig": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBSlot": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBInstance": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBResult": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBTask": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBCallBuilder": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBTaskBuilder": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "BBLayout": {
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    "ParamRef": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamInRef": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamOutRef": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamLocalRef": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamStructRef": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamOperationRef": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamValue": {
+      "group": "script-api",
+      "summary": "Generic script representation of a Virtools parameter value.",
+      "family": "parameters"
+    },
+    "ParamStructValue": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamTypeInfo": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamEnumInfo": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamFlagsInfo": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamStructInfo": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamInfo": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamOp": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ParamSourceLinkRef": {
+      "group": "script-api",
+      "family": "parameters"
+    },
+    "ScriptMessage": {
+      "group": "script-api",
+      "family": "messaging"
+    },
+    "AsyncTask": {
+      "group": "script-api",
+      "family": "async"
+    },
+    "AsyncTask<T>": {
+      "group": "script-api",
+      "summary": "Frame-scheduled async task handle; it is cooperative, not an OS thread.",
+      "family": "async"
+    },
+    "NativePointer": {
+      "group": "native-interop",
+      "family": "native-memory"
+    },
+    "NativeBuffer": {
+      "group": "native-interop",
+      "family": "native-memory"
+    },
+    "DynAggregate": {
+      "group": "native-interop",
+      "family": "dynamic-calls"
+    },
+    "DynArgs": {
+      "group": "native-interop",
+      "family": "dynamic-calls"
+    },
+    "DynCallback": {
+      "group": "native-interop",
+      "family": "dynamic-calls"
+    },
+    "DynCall": {
+      "group": "native-interop",
+      "family": "dynamic-calls"
+    },
+    "DynLibrary": {
+      "group": "native-interop",
+      "family": "dynamic-calls"
+    },
+    "DynSymbol": {
+      "group": "native-interop",
+      "family": "dynamic-calls"
+    },
+    "DynValue": {
+      "group": "native-interop",
+      "family": "dynamic-calls"
+    },
+    "string": {
+      "group": "script-addons",
+      "family": "strings"
+    },
+    "array": {
+      "group": "script-addons",
+      "family": "arrays"
+    },
+    "array<T>": {
+      "group": "script-addons",
+      "family": "arrays"
+    },
+    "dictionary": {
+      "group": "script-addons",
+      "family": "handles"
+    },
+    "ref": {
+      "group": "script-addons",
+      "family": "handles"
+    },
+    "weakref": {
+      "group": "script-addons",
+      "family": "handles"
+    },
+    "weakref<T>": {
+      "group": "script-addons",
+      "family": "handles"
+    },
+    "const_weakref": {
+      "group": "script-addons",
+      "family": "handles"
+    },
+    "grid": {
+      "group": "script-addons",
+      "family": "arrays"
+    }
+  },
+  "typePatterns": [
+    {
+      "pattern": "CKBehavior*",
+      "group": "ck-bindings",
+      "family": "ck-behavior"
+    },
+    {
+      "pattern": "CKBEHAVIOR*",
+      "group": "ck-bindings",
+      "family": "ck-behavior"
+    },
+    {
+      "pattern": "CKParameter*",
+      "group": "ck-bindings",
+      "family": "ck-parameters"
+    },
+    {
+      "pattern": "CKPARAMETER*",
+      "group": "ck-bindings",
+      "family": "ck-parameters"
+    },
+    {
+      "pattern": "CKOperationDesc",
+      "group": "ck-bindings",
+      "family": "ck-parameters"
+    },
+    {
+      "pattern": "CKScene*",
+      "group": "ck-bindings",
+      "family": "ck-scene"
+    },
+    {
+      "pattern": "CKLevel",
+      "group": "ck-bindings",
+      "family": "ck-scene"
+    },
+    {
+      "pattern": "CKGroup",
+      "group": "ck-bindings",
+      "family": "ck-scene"
+    },
+    {
+      "pattern": "CKLayer",
+      "group": "ck-bindings",
+      "family": "ck-scene"
+    },
+    {
+      "pattern": "CKPlace",
+      "group": "ck-bindings",
+      "family": "ck-scene"
+    },
+    {
+      "pattern": "CKRender*",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKCamera",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKTargetCamera",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKLight",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKTargetLight",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKMaterial",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKMesh",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKPatch*",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKProgressiveMesh",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKTexture",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKSprite*",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CK2d*",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CK3d*",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKVertexBuffer",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "pattern": "CKAnim*",
+      "group": "ck-bindings",
+      "family": "ck-animation"
+    },
+    {
+      "pattern": "CKAnimation",
+      "group": "ck-bindings",
+      "family": "ck-animation"
+    },
+    {
+      "pattern": "CK*Key",
+      "group": "ck-bindings",
+      "family": "ck-animation"
+    },
+    {
+      "pattern": "CKKey*",
+      "group": "ck-bindings",
+      "family": "ck-animation"
+    },
+    {
+      "pattern": "CKMorph*",
+      "group": "ck-bindings",
+      "family": "ck-animation"
+    },
+    {
+      "pattern": "CKSkin*",
+      "group": "ck-bindings",
+      "family": "ck-animation"
+    },
+    {
+      "pattern": "CKCharacter",
+      "group": "ck-bindings",
+      "family": "ck-animation"
+    },
+    {
+      "pattern": "CKBodyPart",
+      "group": "ck-bindings",
+      "family": "ck-animation"
+    },
+    {
+      "pattern": "CKKinematic*",
+      "group": "ck-bindings",
+      "family": "ck-animation"
+    },
+    {
+      "pattern": "CKFile*",
+      "group": "ck-bindings",
+      "family": "ck-media-files"
+    },
+    {
+      "pattern": "CK*Reader",
+      "group": "ck-bindings",
+      "family": "ck-media-files"
+    },
+    {
+      "pattern": "CKBitmap*",
+      "group": "ck-bindings",
+      "family": "ck-media-files"
+    },
+    {
+      "pattern": "CKMovie*",
+      "group": "ck-bindings",
+      "family": "ck-media-files"
+    },
+    {
+      "pattern": "CKSound*",
+      "group": "ck-bindings",
+      "family": "ck-media-files"
+    },
+    {
+      "pattern": "CKWave*",
+      "group": "ck-bindings",
+      "family": "ck-media-files"
+    },
+    {
+      "pattern": "CKMidi*",
+      "group": "ck-bindings",
+      "family": "ck-media-files"
+    },
+    {
+      "pattern": "CKDirectoryParser",
+      "group": "ck-bindings",
+      "family": "ck-media-files"
+    },
+    {
+      "pattern": "CKPath*",
+      "group": "ck-bindings",
+      "family": "ck-media-files"
+    },
+    {
+      "pattern": "CKPlugin*",
+      "group": "ck-bindings",
+      "family": "ck-plugins"
+    },
+    {
+      "pattern": "CKObjectDeclaration",
+      "group": "ck-bindings",
+      "family": "ck-plugins"
+    },
+    {
+      "pattern": "CK*Manager",
+      "group": "ck-bindings",
+      "family": "ck-managers"
+    },
+    {
+      "pattern": "CKData*",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKSOD*",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKObjectArray",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKPATH*",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKRECT",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKPOINT",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKPICKRESULT",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKFlagsStruct",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKEnumStruct",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKStructStruct",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKWaveFormat",
+      "group": "ck-bindings",
+      "family": "ck-data"
+    },
+    {
+      "pattern": "CKUI*",
+      "group": "ck-bindings",
+      "family": "ck-ui-input"
+    },
+    {
+      "pattern": "CKInput*",
+      "group": "ck-bindings",
+      "family": "ck-ui-input"
+    },
+    {
+      "pattern": "CKInterface*",
+      "group": "ck-bindings",
+      "family": "ck-ui-input"
+    },
+    {
+      "pattern": "CKListener*",
+      "group": "ck-bindings",
+      "family": "ck-ui-input"
+    },
+    {
+      "pattern": "CK*",
+      "group": "ck-bindings",
+      "family": "ck-core"
+    },
+    {
+      "pattern": "VxVector*",
+      "group": "vx-bindings",
+      "family": "vx-linear-algebra"
+    },
+    {
+      "pattern": "Vx2DVector",
+      "group": "vx-bindings",
+      "family": "vx-linear-algebra"
+    },
+    {
+      "pattern": "VxMatrix",
+      "group": "vx-bindings",
+      "family": "vx-linear-algebra"
+    },
+    {
+      "pattern": "VxQuaternion",
+      "group": "vx-bindings",
+      "family": "vx-linear-algebra"
+    },
+    {
+      "pattern": "VxAngle",
+      "group": "vx-bindings",
+      "family": "vx-linear-algebra"
+    },
+    {
+      "pattern": "VxBbox",
+      "group": "vx-bindings",
+      "family": "vx-geometry"
+    },
+    {
+      "pattern": "VxOBB",
+      "group": "vx-bindings",
+      "family": "vx-geometry"
+    },
+    {
+      "pattern": "VxPlane",
+      "group": "vx-bindings",
+      "family": "vx-geometry"
+    },
+    {
+      "pattern": "VxRay",
+      "group": "vx-bindings",
+      "family": "vx-geometry"
+    },
+    {
+      "pattern": "VxFrustum",
+      "group": "vx-bindings",
+      "family": "vx-geometry"
+    },
+    {
+      "pattern": "VxSphere",
+      "group": "vx-bindings",
+      "family": "vx-geometry"
+    },
+    {
+      "pattern": "VxRect",
+      "group": "vx-bindings",
+      "family": "vx-geometry"
+    },
+    {
+      "pattern": "VxIntersection*",
+      "group": "vx-bindings",
+      "family": "vx-geometry"
+    },
+    {
+      "pattern": "VxColor*",
+      "group": "vx-bindings",
+      "family": "vx-render-data"
+    },
+    {
+      "pattern": "VxImage*",
+      "group": "vx-bindings",
+      "family": "vx-render-data"
+    },
+    {
+      "pattern": "VxDraw*",
+      "group": "vx-bindings",
+      "family": "vx-render-data"
+    },
+    {
+      "pattern": "VxShade*",
+      "group": "vx-bindings",
+      "family": "vx-render-data"
+    },
+    {
+      "pattern": "VxFog*",
+      "group": "vx-bindings",
+      "family": "vx-render-data"
+    },
+    {
+      "pattern": "VxLight*",
+      "group": "vx-bindings",
+      "family": "vx-render-data"
+    },
+    {
+      "pattern": "VX_*",
+      "group": "vx-bindings",
+      "family": "vx-render-data"
+    },
+    {
+      "pattern": "Vx*",
+      "group": "vx-bindings",
+      "family": "vx-geometry"
+    },
+    {
+      "pattern": "X*Array*",
+      "group": "script-addons",
+      "family": "x-containers"
+    },
+    {
+      "pattern": "X*It",
+      "group": "script-addons",
+      "family": "x-containers"
+    },
+    {
+      "pattern": "XBitArray",
+      "group": "script-addons",
+      "family": "x-containers"
+    },
+    {
+      "pattern": "XString*",
+      "group": "script-addons",
+      "family": "strings"
+    },
+    {
+      "pattern": "X*",
+      "group": "script-addons",
+      "family": "x-containers"
+    },
+    {
+      "pattern": "Native*",
+      "group": "native-interop",
+      "family": "native-memory"
+    },
+    {
+      "pattern": "Dyn*",
+      "group": "native-interop",
+      "family": "dynamic-calls"
+    }
+  ],
+  "symbolPatterns": [
+    {
+      "kind": "*",
+      "pattern": "Scene*",
+      "group": "script-api",
+      "family": "scene"
+    },
+    {
+      "kind": "*",
+      "pattern": "Runtime*",
+      "group": "script-api",
+      "family": "runtime"
+    },
+    {
+      "kind": "*",
+      "pattern": "Behavior*",
+      "group": "script-api",
+      "family": "behavior"
+    },
+    {
+      "kind": "*",
+      "pattern": "BB*",
+      "group": "script-api",
+      "family": "building-blocks"
+    },
+    {
+      "kind": "*",
+      "pattern": "Param*",
+      "group": "script-api",
+      "family": "parameters"
+    },
+    {
+      "kind": "*",
+      "pattern": "Message*",
+      "group": "script-api",
+      "family": "messaging"
+    },
+    {
+      "kind": "*",
+      "pattern": "Async*",
+      "group": "script-api",
+      "family": "async"
+    },
+    {
+      "kind": "*",
+      "pattern": "Native*",
+      "group": "native-interop",
+      "family": "native-memory"
+    },
+    {
+      "kind": "*",
+      "pattern": "Dyn*",
+      "group": "native-interop",
+      "family": "dynamic-calls"
+    },
+    {
+      "kind": "*",
+      "pattern": "CKBEHAVIOR*",
+      "group": "ck-bindings",
+      "family": "ck-behavior"
+    },
+    {
+      "kind": "*",
+      "pattern": "CKBehavior*",
+      "group": "ck-bindings",
+      "family": "ck-behavior"
+    },
+    {
+      "kind": "*",
+      "pattern": "CKPARAMETER*",
+      "group": "ck-bindings",
+      "family": "ck-parameters"
+    },
+    {
+      "kind": "*",
+      "pattern": "CKParameter*",
+      "group": "ck-bindings",
+      "family": "ck-parameters"
+    },
+    {
+      "kind": "*",
+      "pattern": "CK_RENDER*",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "kind": "*",
+      "pattern": "CK_MESH*",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "kind": "*",
+      "pattern": "CK_MATERIAL*",
+      "group": "ck-bindings",
+      "family": "ck-rendering"
+    },
+    {
+      "kind": "*",
+      "pattern": "CK_PLUGIN*",
+      "group": "ck-bindings",
+      "family": "ck-plugins"
+    },
+    {
+      "kind": "*",
+      "pattern": "CK*",
+      "group": "ck-bindings",
+      "family": "ck-core"
+    },
+    {
+      "kind": "*",
+      "pattern": "Vx*",
+      "group": "vx-bindings",
+      "family": "vx-linear-algebra"
+    },
+    {
+      "kind": "*",
+      "pattern": "VX_*",
+      "group": "vx-bindings",
+      "family": "vx-render-data"
+    },
+    {
+      "kind": "*",
+      "pattern": "X*",
+      "group": "script-addons",
+      "family": "x-containers"
+    }
+  ],
+  "funcdefs": {
+    "AsyncVoidFunc": {
+      "declaration": "void AsyncVoidFunc()"
+    },
+    "AsyncIntFunc": {
+      "declaration": "int AsyncIntFunc()"
+    },
+    "AsyncFloatFunc": {
+      "declaration": "float AsyncFloatFunc()"
+    },
+    "AsyncStringFunc": {
+      "declaration": "string AsyncStringFunc()"
+    },
+    "AsyncObjectFunc": {
+      "declaration": "CKObject@ AsyncObjectFunc()"
+    },
+    "DynCallbackHandler": {
+      "declaration": "int8 DynCallbackHandler(NativePointer pcb, DynArgs &args, DynValue &result)"
+    },
+    "CK_EFFECTCALLBACK": {
+      "declaration": "VX_EFFECTCALLBACK_RETVAL CK_EFFECTCALLBACK(CKRenderContext@ dev, CKMaterial@ mat, int stage)"
+    },
+    "CK_INITINSTANCEFCT": {
+      "declaration": "CKERROR CK_INITINSTANCEFCT(CKContext@ context)"
+    },
+    "CK_EXITINSTANCEFCT": {
+      "declaration": "CKERROR CK_EXITINSTANCEFCT(CKContext@ context)"
+    },
+    "CKBEHAVIORFCT": {
+      "declaration": "int CKBEHAVIORFCT(const CKBehaviorContext &in context)"
+    },
+    "CKBEHAVIORCALLBACKFCT": {
+      "declaration": "CKERROR CKBEHAVIORCALLBACKFCT(const CKBehaviorContext &in context)"
+    },
+    "CK_PARAMETEROPERATION": {
+      "declaration": "void CK_PARAMETEROPERATION(CKContext@ context, CKParameterOut@ res, CKParameterIn@ p1, CKParameterIn@ p2)"
+    },
+    "CKDLL_OBJECTDECLARATIONFUNCTION": {
+      "declaration": "void CKDLL_OBJECTDECLARATIONFUNCTION(XObjectDeclarationArray &out declArray)"
+    },
+    "CKDLL_CREATEPROTOFUNCTION": {
+      "declaration": "CKERROR CKDLL_CREATEPROTOFUNCTION(CKBehaviorPrototype@ &out prototype)"
+    },
+    "CK_RENDERCALLBACK": {
+      "declaration": "void CK_RENDERCALLBACK(CKRenderContext@ dev)"
+    },
+    "CK_RENDEROBJECT_CALLBACK": {
+      "declaration": "CKBOOL CK_RENDEROBJECT_CALLBACK(CKRenderContext@ dev, CKRenderObject@ entity)"
+    },
+    "CK_MESHRENDERCALLBACK": {
+      "declaration": "void CK_MESHRENDERCALLBACK(CKRenderContext@ dev, CK3dEntity@ mov, CKMesh@ object)"
+    },
+    "CK_SUBMESHRENDERCALLBACK": {
+      "declaration": "void CK_SUBMESHRENDERCALLBACK(CKRenderContext@ dev, CK3dEntity@ mov, CKMesh@ object, CKMaterial@ mat)"
+    },
+    "CK_MATERIALCALLBACK": {
+      "declaration": "int CK_MATERIALCALLBACK(CKRenderContext@ dev, CKMaterial@ mat)"
+    },
+    "CKUICALLBACKFCT": {
+      "declaration": "CKERROR CKUICALLBACKFCT(CKUICallbackStruct &in param)"
+    },
+    "CK_PARAMETERCREATEDEFAULTFUNCTION": {
+      "declaration": "CKERROR CK_PARAMETERCREATEDEFAULTFUNCTION(CKParameter@ param)"
+    },
+    "CK_PARAMETERDELETEFUNCTION": {
+      "declaration": "void CK_PARAMETERDELETEFUNCTION(CKParameter@ param)"
+    },
+    "CK_PARAMETERCHECKFUNCTION": {
+      "declaration": "void CK_PARAMETERCHECKFUNCTION(CKParameter@ param)"
+    },
+    "CK_PARAMETERREMAPFUNCTION": {
+      "declaration": "void CK_PARAMETERREMAPFUNCTION(CKParameter@ param, CKDependenciesContext@ context)"
+    },
+    "CK_PARAMETERCOPYFUNCTION": {
+      "declaration": "void CK_PARAMETERCOPYFUNCTION(CKParameter@ destParam, CKParameter@ srcParam)"
+    },
+    "CK_PARAMETERSAVELOADFUNCTION": {
+      "declaration": "void CK_PARAMETERSAVELOADFUNCTION(CKParameter@ param, CKStateChunk@ &out chunk, bool load)"
+    },
+    "CK_PARAMETERSTRINGFUNCTION": {
+      "declaration": "int CK_PARAMETERSTRINGFUNCTION(CKParameter@ param, string valueString, bool readFromString)"
+    },
+    "CK_PARAMETERUICREATORFUNCTION": {
+      "declaration": "WIN_HANDLE CK_PARAMETERUICREATORFUNCTION(CKParameter@ param, WIN_HANDLE parentWindow, CKRECT &in rect)"
+    },
+    "less": {
+      "declaration": "bool less(const T&in first, const T&in second)"
+    }
+  },
+  "links": {
+    "Getting started": "docs/getting-started.md",
+    "Scene interop": "docs/scene-interop.md",
+    "Behavior bridge": "docs/behavior-bridge-design.md",
+    "Messaging": "docs/messaging.md",
+    "Async": "docs/async.md",
+    "Native Interop": "docs/native-ffi.md"
+  },
+  "quality": {
+    "requiredPrimaryGroup": "script-api",
+    "requiredPrimaryTypes": [
+      "ObjectRef",
+      "AsyncTask<T>",
+      "ParamValue"
+    ]
+  },
+  "families": [
+    {
+      "id": "runtime",
+      "group": "script-api",
+      "title": "Runtime Scripts",
+      "overview": "Script manager context, runtime script discovery, and lifecycle inspection.",
+      "order": 1
+    },
+    {
+      "id": "scene",
+      "group": "script-api",
+      "title": "Scene and Object Refs",
+      "overview": "Durable object references plus scene lookup, creation, selection, and membership helpers.",
+      "order": 2
+    },
+    {
+      "id": "behavior",
+      "group": "script-api",
+      "title": "Behavior Graphs",
+      "overview": "Behavior graph lookup, traversal, layout, bridge, and graph task APIs.",
+      "order": 3
+    },
+    {
+      "id": "building-blocks",
+      "group": "script-api",
+      "title": "Building Blocks",
+      "overview": "Building Block prototype discovery, declarations, configuration, calls, tasks, and runtime instances.",
+      "order": 4
+    },
+    {
+      "id": "parameters",
+      "group": "script-api",
+      "title": "Parameters",
+      "overview": "Virtools parameter references, values, metadata, conversion, operations, and source links.",
+      "order": 5
+    },
+    {
+      "id": "messaging",
+      "group": "script-api",
+      "title": "Messaging",
+      "overview": "Script message payloads, publish/send/request/reply APIs, and topic-driven communication.",
+      "order": 6
+    },
+    {
+      "id": "async",
+      "group": "script-api",
+      "title": "Async Tasks",
+      "overview": "Frame-scheduled cooperative async tasks, waits, races, and function callback types.",
+      "order": 7
+    },
+    {
+      "id": "native-memory",
+      "group": "native-interop",
+      "title": "Native Memory",
+      "overview": "NativePointer and NativeBuffer memory access helpers.",
+      "order": 1
+    },
+    {
+      "id": "dynamic-calls",
+      "group": "native-interop",
+      "title": "Dynamic Calls",
+      "overview": "DynLoad, DynCall, DynCallback, and native call argument/result helpers.",
+      "order": 2
+    },
+    {
+      "id": "ck-core",
+      "group": "ck-bindings",
+      "title": "CK Core",
+      "overview": "Core CK context, base object, state, dependency, GUID, class, and synchronization bindings.",
+      "order": 1
+    },
+    {
+      "id": "ck-scene",
+      "group": "ck-bindings",
+      "title": "CK Scene Model",
+      "overview": "Scenes, levels, groups, layers, places, and scene object descriptors.",
+      "order": 2
+    },
+    {
+      "id": "ck-behavior",
+      "group": "ck-bindings",
+      "title": "CK Behavior Graph",
+      "overview": "Raw CK behavior, behavior IO/link/prototype, and behavior manager bindings.",
+      "order": 3
+    },
+    {
+      "id": "ck-parameters",
+      "group": "ck-bindings",
+      "title": "CK Parameters",
+      "overview": "Raw CK parameter classes, parameter type descriptors, operations, and callback funcdefs.",
+      "order": 4
+    },
+    {
+      "id": "ck-rendering",
+      "group": "ck-bindings",
+      "title": "CK Rendering and Visual Objects",
+      "overview": "Render contexts, render objects, cameras, lights, materials, meshes, textures, sprites, and visual geometry.",
+      "order": 5
+    },
+    {
+      "id": "ck-animation",
+      "group": "ck-bindings",
+      "title": "CK Animation and Character",
+      "overview": "Animation keys, controllers, morphs, skinning, characters, and kinematic chains.",
+      "order": 6
+    },
+    {
+      "id": "ck-media-files",
+      "group": "ck-bindings",
+      "title": "CK Files and Media",
+      "overview": "Files, readers, bitmap/movie/sound/wave/midi media, model readers, and path parsing.",
+      "order": 7
+    },
+    {
+      "id": "ck-managers",
+      "group": "ck-bindings",
+      "title": "CK Managers",
+      "overview": "Raw Virtools manager bindings not covered by a more specific family.",
+      "order": 8
+    },
+    {
+      "id": "ck-plugins",
+      "group": "ck-bindings",
+      "title": "CK Plugins",
+      "overview": "Plugin metadata, plugin entries, object declarations, and plugin manager APIs.",
+      "order": 9
+    },
+    {
+      "id": "ck-data",
+      "group": "ck-bindings",
+      "title": "CK Data Structures",
+      "overview": "Data arrays, SOD hashes, object arrays, path vectors, structs, rectangles, points, and plain data holders.",
+      "order": 10
+    },
+    {
+      "id": "ck-ui-input",
+      "group": "ck-bindings",
+      "title": "CK UI and Input",
+      "overview": "Interface, UI callback, input, picking, and listener-facing bindings.",
+      "order": 11
+    },
+    {
+      "id": "vx-linear-algebra",
+      "group": "vx-bindings",
+      "title": "Vx Linear Algebra",
+      "overview": "Vectors, matrices, quaternions, angles, and transform math.",
+      "order": 1
+    },
+    {
+      "id": "vx-geometry",
+      "group": "vx-bindings",
+      "title": "Vx Geometry",
+      "overview": "Bounding volumes, planes, rays, intersections, frustums, spheres, rectangles, and geometry helpers.",
+      "order": 2
+    },
+    {
+      "id": "vx-render-data",
+      "group": "vx-bindings",
+      "title": "Vx Render Data",
+      "overview": "Colors, image descriptors, draw primitives, shade states, fog, lights, and render-related value types.",
+      "order": 3
+    },
+    {
+      "id": "strings",
+      "group": "script-addons",
+      "title": "Strings",
+      "overview": "AngelScript string and project string helper registrations.",
+      "order": 1
+    },
+    {
+      "id": "arrays",
+      "group": "script-addons",
+      "title": "Arrays and Grids",
+      "overview": "AngelScript arrays, grids, and array-like helper types.",
+      "order": 2
+    },
+    {
+      "id": "handles",
+      "group": "script-addons",
+      "title": "Handles and Dictionaries",
+      "overview": "Dictionaries, ref, weakref, and handle helper types.",
+      "order": 3
+    },
+    {
+      "id": "x-containers",
+      "group": "script-addons",
+      "title": "Virtools X Containers",
+      "overview": "XObjectArray, XBitArray, and related Virtools container wrappers.",
+      "order": 4
+    },
+    {
+      "id": "misc-general",
+      "group": "misc",
+      "title": "General Miscellaneous Bindings",
+      "overview": "Remaining helpers that do not fit a named workflow or SDK binding family.",
+      "order": 1
+    }
+  ],
+  "namespaceFamilies": {
+    "Runtime": "runtime",
+    "Scene": "scene",
+    "Behavior": "behavior",
+    "BB": "building-blocks",
+    "Param": "parameters",
+    "Message": "messaging",
+    "Async": "async"
+  }
+}

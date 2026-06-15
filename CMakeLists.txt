@@ -69,6 +69,7 @@ add_subdirectory(src)
 set(CKAS_SCRIPT_API_JSON "${CMAKE_BINARY_DIR}/docs/script-api.json")
 set(CKAS_API_SOURCE_DIR "${CMAKE_BINARY_DIR}/docs/api-source")
 set(CKAS_API_OUTPUT_DIR "${CMAKE_BINARY_DIR}/docs/api")
+set(CKAS_API_QUALITY_JSON "${CMAKE_BINARY_DIR}/docs/api-quality.json")
 
 if (CKAS_BUILD_API_DOCS)
     if (NOT CKAS_ENABLE_API_EXPORT)
@@ -93,7 +94,9 @@ if (CKAS_BUILD_API_DOCS)
             COMMAND "${Python3_EXECUTABLE}"
                     "${PROJECT_SOURCE_DIR}/tools/generate_naturaldocs_api.py"
                     --api-json "${CKAS_SCRIPT_API_JSON}"
+                    --metadata "${PROJECT_SOURCE_DIR}/docs/api-reference.yml"
                     --out-dir "${CKAS_API_SOURCE_DIR}"
+                    --quality-json "${CKAS_API_QUALITY_JSON}"
             COMMAND "${CKAS_NATURALDOCS_EXECUTABLE}"
                     "${PROJECT_SOURCE_DIR}/docs/naturaldocs"
                     --rebuild
@@ -104,11 +107,13 @@ if (CKAS_BUILD_API_DOCS)
                     CKAngelScript
                     "${PROJECT_SOURCE_DIR}/tools/Validate-Ballance.ps1"
                     "${PROJECT_SOURCE_DIR}/tools/generate_naturaldocs_api.py"
+                    "${PROJECT_SOURCE_DIR}/docs/api-reference.yml"
                     "${PROJECT_SOURCE_DIR}/docs/naturaldocs/Project.txt"
                     "${PROJECT_SOURCE_DIR}/docs/naturaldocs/Languages.txt"
                     "${PROJECT_SOURCE_DIR}/docs/naturaldocs/Comments.txt"
             BYPRODUCTS
                     "${CKAS_SCRIPT_API_JSON}"
+                    "${CKAS_API_QUALITY_JSON}"
             COMMENT "Generating CKAngelScript Natural Docs API reference"
             VERBATIM
     )

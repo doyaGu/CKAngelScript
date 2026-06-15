@@ -62,7 +62,7 @@ cmake --build build --config Release --target PACKAGE
 
 The package contains `bin\AngelScript.dll`, public headers under `include\`, and project documentation under `share\doc\CKAngelScript\`.
 
-To generate the optional AngelScript API reference, provide Natural Docs and run the `docs-api` target. This starts Ballance/Player, exports the live `asIScriptEngine` API to JSON, converts it to Natural Docs `.as` stubs, and writes HTML under `build\docs\api`.
+To generate the optional AngelScript API reference, provide Natural Docs and run the `docs-api` target. This starts Ballance/Player, exports the live `asIScriptEngine` API to JSON, applies the curated metadata in `docs\api-reference.yml`, converts it to Natural Docs `.as` stubs, writes a quality report to `build\docs\api-quality.json`, and writes HTML under `build\docs\api`.
 
 ```powershell
 cmake -B build -G "Visual Studio 17 2022" -A Win32 `
