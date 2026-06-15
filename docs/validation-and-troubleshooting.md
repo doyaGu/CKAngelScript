@@ -22,6 +22,7 @@ Useful options:
 | `-IncludeLogTail` | Include current-run `AngelScript.log` and `Player.log` tails in successful output. |
 | `-LogTailLines <n>` | Number of current-run log lines to include in diagnostics; defaults to 40. |
 | `-SkipPlayer` | Run exporter validation without launching Player. |
+| `-ExportScriptApi <path>` | Start Player and export the initialized live AngelScript API JSON. Incompatible with `-SkipPlayer`. |
 
 ### Runtime Script Static Validation
 
@@ -42,6 +43,23 @@ The script backs up the installed DLL when needed, copies the new DLL, runs `Vir
 
 `BallanceRoot` is resolved from the explicit parameter, `BALLANCE_ROOT`, `CKAS_BALLANCE_ROOT`, or `%USERPROFILE%\Games\Ballance`. Player validation sets `CKAS_SELFTEST_MARKER` and `CKAS_RUN_SELFTESTS=1` only for the launched process and then restores the caller environment. The result object includes the installed/source hashes, whether they match, backup path, export JSON path, marker path, and Player close/kill status. Successful output omits log tails unless `-IncludeLogTail` is set; failures always include marker content and current-run log tails. Normal installs fail immediately if the copied DLL hash does not match the built DLL; `-SkipInstall` still validates the already installed DLL and reports whether it matches the build.
 
+To export the script API surface from the live engine, build the DLL with `CKAS_ENABLE_API_EXPORT=ON` and then run:
+
+```powershell
+tools\Validate-Ballance.ps1 `
+  -BallanceRoot $env:BALLANCE_ROOT `
+  -BuildDll build\src\Release\AngelScript.dll `
+  -ExportScriptApi build\docs\script-api.json
+```
+
+The exported JSON is schema version 1 and is intended as the source for generated Natural Docs stubs:
+
+```powershell
+python tools\generate_naturaldocs_api.py `
+  --api-json build\docs\script-api.json `
+  --out-dir build\docs\api-source
+```
+
 ## Environment Variables
 
 | Variable | Used by | Meaning |
@@ -50,6 +68,7 @@ The script backs up the installed DLL when needed, copies the new DLL, runs `Vir
 | `CKAS_SELFTEST_MARKER` | Plugin runtime / validation scripts | File path where startup self-test status is written. |
 | `CKAS_SCRIPT_ROOTS` | Runtime manager / validation scripts | Semicolon-separated extra runtime script roots. |
 | `CKAS_RUNTIME_VALIDATE_ONLY` | Runtime manager | Compile discovered runtime scripts without running lifecycle callbacks. |
+| `CKAS_EXPORT_SCRIPT_API` | Plugin runtime / validation scripts | File path where the initialized `asIScriptEngine` API JSON is written. Requires a DLL built with `CKAS_ENABLE_API_EXPORT=ON`. |
 | `BALLANCE_ROOT` / `CKAS_BALLANCE_ROOT` | Tools | Default Ballance root. |
 | `CKAS_NMO_EXE` | FPS sample tool | Path to `nmo` when injecting sample components. |
 
