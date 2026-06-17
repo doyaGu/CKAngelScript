@@ -69,12 +69,20 @@ void RegisterObjectRefCommon(asIScriptEngine *engine,
 
 template <typename Derived, typename Base>
 Derived *CheckedObjectRefDowncast(Base *base) {
-    return dynamic_cast<Derived *>(base);
+    Derived *derived = dynamic_cast<Derived *>(base);
+    if (derived) {
+        derived->AddRef();
+    }
+    return derived;
 }
 
 template <typename Derived, typename Base>
 Base *ObjectRefUpcast(Derived *derived) {
-    return static_cast<Base *>(derived);
+    Base *base = static_cast<Base *>(derived);
+    if (base) {
+        base->AddRef();
+    }
+    return base;
 }
 
 template <typename Derived, typename Base>
