@@ -845,6 +845,22 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "int __ckas_public_get_side_effect() { return __ckas_public_side_effect_value; }\n"
         "int __ckas_public_async() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 9; }\n"
         "int __ckas_public_exception() { array<int> values; return values[1]; }\n"
+        "int __ckas_public_ckui_callback_struct() {\n"
+        "    CKUICallbackStruct first;\n"
+        "    first.Reason = CKUIM_OUTTOCONSOLE;\n"
+        "    first.ConsoleString = \"alpha\";\n"
+        "    first.ConsoleString = \"beta\";\n"
+        "    if (first.ConsoleString != \"beta\") return 0;\n"
+        "    CKUICallbackStruct second(first);\n"
+        "    if (second.ConsoleString != \"beta\") return 0;\n"
+        "    second.ConsoleString = \"gamma\";\n"
+        "    if (first.ConsoleString != \"beta\" || second.ConsoleString != \"gamma\") return 0;\n"
+        "    CKUICallbackStruct third;\n"
+        "    third = second;\n"
+        "    if (third.ConsoleString != \"gamma\") return 0;\n"
+        "    third.ConsoleString = \"delta\";\n"
+        "    return third.ConsoleString == \"delta\" ? 1 : 0;\n"
+        "}\n"
         "[ckas_selftest_type]\n"
         "class __CKAS_PublicMetadataType {\n"
         "    [ckas_selftest_property]\n"
@@ -1215,6 +1231,37 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->ReleaseExecution(execution);
+
+    CKAngelScriptFunctionOptions ckuiFunctionOptions = CKAngelScriptApi::FunctionOptions();
+    ckuiFunctionOptions.ModuleName = moduleName;
+    ckuiFunctionOptions.FunctionDecl = "int __ckas_public_ckui_callback_struct()";
+    CKAngelScriptFunction *ckuiFunction = nullptr;
+    if (api->FindFunction(ckuiFunctionOptions, &ckuiFunction, &result) != CKAS_OK || !ckuiFunction) {
+        error = "CKAngelScript API self-test could not find the CKUICallbackStruct smoke function.";
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+
+    CKAngelScriptFunctionExecutionOptions ckuiExecuteOptions =
+        CKAngelScriptApi::FunctionExecutionOptions(ckuiFunction);
+    IntExecutionData ckuiData;
+    CKAngelScriptExecutionStepOptions ckuiStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(nullptr, ReadIntReturn, &ckuiData);
+    CKAngelScriptExecution *ckuiExecution = nullptr;
+    if (api->CreateFunctionExecution(ckuiExecuteOptions, &ckuiExecution, &result) != CKAS_OK ||
+        !ckuiExecution ||
+        api->StartExecution(ckuiExecution, ckuiStepOptions, &result) != CKAS_OK ||
+        ckuiData.Output != 1) {
+        error = "CKAngelScript API self-test found invalid CKUICallbackStruct string ownership behavior.";
+        if (ckuiExecution) {
+            api->ReleaseExecution(ckuiExecution);
+        }
+        api->ReleaseFunction(ckuiFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    api->ReleaseExecution(ckuiExecution);
+    api->ReleaseFunction(ckuiFunction);
 
     CKAngelScriptFunctionOptions sideEffectFunctionOptions = CKAngelScriptApi::FunctionOptions();
     sideEffectFunctionOptions.ModuleName = moduleName;

@@ -1,7 +1,9 @@
 #include "ScriptCKDefines.h"
 
 #include <cstring>
+#include <mutex>
 #include <string>
+#include <unordered_set>
 
 #include "CKAll.h"
 
@@ -1030,8 +1032,87 @@ void RegisterCKBehaviorContext(asIScriptEngine *engine) {
 
 // CKUICallbackStruct
 
+static std::mutex g_CKUICallbackStringMutex;
+static std::unordered_set<CKSTRING> g_CKUICallbackOwnedStrings;
+
+static void ReleaseCKUICallbackString(CKSTRING value) {
+    if (!value) {
+        return;
+    }
+
+    bool owned = false;
+    {
+        std::lock_guard<std::mutex> lock(g_CKUICallbackStringMutex);
+        owned = g_CKUICallbackOwnedStrings.erase(value) > 0;
+    }
+    if (owned) {
+        CKDeletePointer(value);
+    }
+}
+
+static CKSTRING DuplicateCKUICallbackString(const std::string &value) {
+    CKSTRING copy = CKStrdup(const_cast<CKSTRING>(value.c_str()));
+    if (copy) {
+        std::lock_guard<std::mutex> lock(g_CKUICallbackStringMutex);
+        g_CKUICallbackOwnedStrings.insert(copy);
+    }
+    return copy;
+}
+
+static CKSTRING DuplicateCKUICallbackString(CKSTRING value) {
+    CKSTRING copy = CKStrdup(value);
+    if (copy) {
+        std::lock_guard<std::mutex> lock(g_CKUICallbackStringMutex);
+        g_CKUICallbackOwnedStrings.insert(copy);
+    }
+    return copy;
+}
+
+static bool CKUICallbackReasonUsesConsoleString(CKDWORD reason) {
+    return reason == CKUIM_OUTTOCONSOLE || reason == CKUIM_OUTTOINFOBAR;
+}
+
+static void ConstructCKUICallbackStruct(CKUICallbackStruct *self) {
+    std::memset(self, 0, sizeof(CKUICallbackStruct));
+}
+
+static void ConstructCKUICallbackStructCopy(const CKUICallbackStruct &other, CKUICallbackStruct *self) {
+    *self = other;
+    if (CKUICallbackReasonUsesConsoleString(other.Reason) && other.ConsoleString) {
+        self->ConsoleString = DuplicateCKUICallbackString(other.ConsoleString);
+    }
+}
+
+static void DestructCKUICallbackStruct(CKUICallbackStruct *self) {
+    ReleaseCKUICallbackString(self->ConsoleString);
+    std::memset(self, 0, sizeof(CKUICallbackStruct));
+}
+
+static CKUICallbackStruct &AssignCKUICallbackStruct(CKUICallbackStruct *self, const CKUICallbackStruct &other) {
+    if (self == &other) {
+        return *self;
+    }
+
+    ReleaseCKUICallbackString(self->ConsoleString);
+    *self = other;
+    if (CKUICallbackReasonUsesConsoleString(other.Reason) && other.ConsoleString) {
+        self->ConsoleString = DuplicateCKUICallbackString(other.ConsoleString);
+    }
+    return *self;
+}
+
+static void SetCKUICallbackConsoleString(CKUICallbackStruct *self, const std::string &value) {
+    ReleaseCKUICallbackString(self->ConsoleString);
+    self->ConsoleString = DuplicateCKUICallbackString(value);
+}
+
 void RegisterCKUICallbackStruct(asIScriptEngine *engine) {
     int r = 0;
+
+    r = engine->RegisterObjectBehaviour("CKUICallbackStruct", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKUICallbackStruct), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKUICallbackStruct", asBEHAVE_CONSTRUCT, "void f(const CKUICallbackStruct &in other)", asFUNCTION(ConstructCKUICallbackStructCopy), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKUICallbackStruct", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructCKUICallbackStruct), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "CKUICallbackStruct &opAssign(const CKUICallbackStruct &in other)", asFUNCTION(AssignCKUICallbackStruct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectProperty("CKUICallbackStruct", "CKDWORD Reason", asOFFSET(CKUICallbackStruct, Reason)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKUICallbackStruct", "CKDWORD Param3", asOFFSET(CKUICallbackStruct, Param3)); CKAS_CHECK_REGISTER(r);
@@ -1062,7 +1143,7 @@ void RegisterCKUICallbackStruct(asIScriptEngine *engine) {
 #endif
 
     r = engine->RegisterObjectMethod("CKUICallbackStruct", "string get_ConsoleString() const", asFUNCTIONPR([](const CKUICallbackStruct *self) -> std::string { return ScriptStringify(self->ConsoleString); }, (const CKUICallbackStruct *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_ConsoleString(const string &in value)", asFUNCTIONPR([](CKUICallbackStruct *self, const std::string &value) { self->ConsoleString = CKStrdup(const_cast<CKSTRING>(value.c_str())); }, (CKUICallbackStruct *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKUICallbackStruct", "void set_ConsoleString(const string &in value)", asFUNCTION(SetCKUICallbackConsoleString), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKClassDesc

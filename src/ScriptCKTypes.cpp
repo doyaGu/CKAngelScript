@@ -88,7 +88,7 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("CKGUID", sizeof(CKGUID), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKGUID>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("VxEffectDescription", sizeof(VxEffectDescription), asOBJ_VALUE | asGetTypeTraits<VxEffectDescription>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CKBehaviorContext", sizeof(CKBehaviorContext), asOBJ_VALUE | asGetTypeTraits<CKBehaviorContext>()); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectType("CKUICallbackStruct", sizeof(CKUICallbackStruct), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKUICallbackStruct>()); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("CKUICallbackStruct", sizeof(CKUICallbackStruct), asOBJ_VALUE | asGetTypeTraits<CKUICallbackStruct>()); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectType("CKClassDesc", sizeof(CKClassDesc), asOBJ_VALUE | asGetTypeTraits<CKClassDesc>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CKPluginInfo", sizeof(CKPluginInfo), asOBJ_VALUE | asGetTypeTraits<CKPluginInfo>()); CKAS_CHECK_REGISTER(r);
