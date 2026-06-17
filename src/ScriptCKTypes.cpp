@@ -41,7 +41,7 @@ void RegisterCKTypedefs(asIScriptEngine *engine) {
 void RegisterCKFuncdefs(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterFuncdef("VX_EFFECTCALLBACK_RETVAL CK_EFFECTCALLBACK(CKRenderContext@ dev, CKMaterial@ mat, int stage)"); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterFuncdef("VX_EFFECTCALLBACK_RETVAL CK_EFFECTCALLBACK(CKRenderContext@ dev, CKMaterial@ mat, int stage, NativePointer argument)"); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterFuncdef("CKERROR CK_INITINSTANCEFCT(CKContext@ context)"); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterFuncdef("CKERROR CK_EXITINSTANCEFCT(CKContext@ context)"); CKAS_CHECK_REGISTER(r);
