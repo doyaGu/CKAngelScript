@@ -1367,11 +1367,11 @@ void RegisterScriptAsync(asIScriptEngine *engine) {
     r = engine->RegisterFuncdef("string AsyncStringFunc()"); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterFuncdef("CKObject@ AsyncObjectFunc()"); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<void>@ task)", asFUNCTION(ScriptAsyncInternal::AwaitVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<int>@ task, int &out result)", asFUNCTION(ScriptAsyncInternal::AwaitInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<float>@ task, float &out result)", asFUNCTION(ScriptAsyncInternal::AwaitFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<string>@ task, string &out result)", asFUNCTION(ScriptAsyncInternal::AwaitString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<CKObject@>@ task, CKObject@ &out result)", asFUNCTION(ScriptAsyncInternal::AwaitObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<void>@+ task)", asFUNCTION(ScriptAsyncInternal::AwaitVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<int>@+ task, int &out result)", asFUNCTION(ScriptAsyncInternal::AwaitInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<float>@+ task, float &out result)", asFUNCTION(ScriptAsyncInternal::AwaitFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<string>@+ task, string &out result)", asFUNCTION(ScriptAsyncInternal::AwaitString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<CKObject@>@+ task, CKObject@ &out result)", asFUNCTION(ScriptAsyncInternal::AwaitObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void Await(?&in task, ?&out result)", asFUNCTION(ScriptAsyncInternal::AwaitGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
 
     const char *previousNamespace = engine->GetDefaultNamespace();
