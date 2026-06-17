@@ -43,6 +43,8 @@ public:
 
     char &operator[](size_t index);
     const char &operator[](size_t index) const;
+    asBYTE &ByteAt(size_t index);
+    const asBYTE &ByteAt(size_t index) const;
 
     size_t Write(void *x, size_t size);
     size_t Read(void *x, size_t size);

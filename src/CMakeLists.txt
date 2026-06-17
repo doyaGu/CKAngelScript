@@ -115,6 +115,7 @@ if (CKAS_BUILD_SELF_TESTS)
             ScriptParameterRegistrySelfTest.cpp
             ScriptRuntimeMetadataSelfTest.cpp
             ScriptRuntimeDependencySelfTest.cpp
+            ScriptNativeMemorySelfTest.cpp
             ScriptMessageSelfTest.cpp
             ScriptSceneSelfTest.cpp
             ScriptRuntimeSelfTest.cpp

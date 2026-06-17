@@ -45,7 +45,7 @@ public:
     }
 
     bool operator<(const NativePointer &rhs) const {
-        return m_Ptr < rhs.m_Ptr;
+        return ToUInt() < rhs.ToUInt();
     }
 
     bool operator>=(const NativePointer &rhs) const {
@@ -61,7 +61,15 @@ public:
     }
 
     int Compare(const NativePointer &rhs) const {
-        return m_Ptr - rhs.m_Ptr;
+        const uintptr_t lhsAddress = ToUInt();
+        const uintptr_t rhsAddress = rhs.ToUInt();
+        if (lhsAddress < rhsAddress) {
+            return -1;
+        }
+        if (lhsAddress > rhsAddress) {
+            return 1;
+        }
+        return 0;
     }
 
     NativePointer &operator+=(int rhs) {

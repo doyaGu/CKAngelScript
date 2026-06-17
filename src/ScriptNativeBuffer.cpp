@@ -72,6 +72,28 @@ const char &NativeBuffer::operator[](size_t index) const {
     return m_Buffer[index];
 }
 
+asBYTE &NativeBuffer::ByteAt(size_t index) {
+    static asBYTE dummy = 0;
+    if (!m_Buffer || index >= m_Size) {
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx)
+            ctx->SetException("Index out of bounds");
+        return dummy;
+    }
+    return *reinterpret_cast<asBYTE *>(&m_Buffer[index]);
+}
+
+const asBYTE &NativeBuffer::ByteAt(size_t index) const {
+    static constexpr asBYTE dummy = 0;
+    if (!m_Buffer || index >= m_Size) {
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx)
+            ctx->SetException("Index out of bounds");
+        return dummy;
+    }
+    return *reinterpret_cast<const asBYTE *>(&m_Buffer[index]);
+}
+
 size_t NativeBuffer::Write(void *x, size_t size) {
     if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !x)
         return 0;
@@ -190,7 +212,16 @@ NativeBuffer *NativeBuffer::Extract(size_t size) {
     if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
         return nullptr;
 
-    auto *buffer = Create(&m_Buffer[m_CursorPos], size);
+    auto *buffer = Create(size);
+    if (!buffer || (size > 0 && !buffer->m_Buffer)) {
+        if (buffer) {
+            buffer->Release();
+        }
+        return nullptr;
+    }
+    if (size > 0) {
+        memcpy(buffer->m_Buffer, &m_Buffer[m_CursorPos], size);
+    }
     m_CursorPos += size;
     return buffer;
 }
@@ -236,9 +267,16 @@ size_t NativeBuffer::Save(const char *filename, size_t size) {
 static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));;
     auto *self = static_cast<NativeBuffer *>(gen->GetObject());
     size_t size = 0;
+
+    if (typeId & asTYPEID_OBJHANDLE) {
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx)
+            ctx->SetException("Cannot write object handle to buffer");
+        gen->SetReturnDWord(0);
+        return;
+    }
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         asIScriptContext *ctx = asGetActiveContext();
@@ -248,15 +286,8 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
         return;
     }
 
+    void *addr = gen->GetArgAddress(0);
     if (typeId & asTYPEID_APPOBJECT) {
-        if (typeId & asTYPEID_OBJHANDLE) {
-            asIScriptContext *ctx = asGetActiveContext();
-            if (ctx)
-                ctx->SetException("Cannot write object handle to buffer");
-            gen->SetReturnDWord(0);
-            return;
-        }
-
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
             gen->SetReturnDWord(0);
@@ -300,9 +331,16 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
 static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));;
     auto *self = static_cast<NativeBuffer *>(gen->GetObject());
     size_t size = 0;
+
+    if (typeId & asTYPEID_OBJHANDLE) {
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx)
+            ctx->SetException("Cannot read object handle from buffer");
+        gen->SetReturnDWord(0);
+        return;
+    }
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         asIScriptContext *ctx = asGetActiveContext();
@@ -312,15 +350,8 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
         return;
     }
 
+    void *addr = gen->GetArgAddress(0);
     if (typeId & asTYPEID_APPOBJECT) {
-        if (typeId & asTYPEID_OBJHANDLE) {
-            asIScriptContext *ctx = asGetActiveContext();
-            if (ctx)
-                ctx->SetException("Cannot read object handle from buffer");
-            gen->SetReturnDWord(0);
-            return;
-        }
-
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
             gen->SetReturnDWord(0);
@@ -373,8 +404,8 @@ void RegisterNativeBuffer(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_RELEASE, "void f()", asMETHOD(NativeBuffer, Release), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_GET_WEAKREF_FLAG, "int &f()", asMETHOD(NativeBuffer, GetWeakRefFlag), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "uint8 &opIndex(uint index)", asMETHODPR(NativeBuffer, operator[], (size_t), char &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativeBuffer", "const uint8 &opIndex(uint index) const", asMETHODPR(NativeBuffer, operator[], (size_t) const, const char &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativeBuffer", "uint8 &opIndex(uint index)", asMETHODPR(NativeBuffer, ByteAt, (size_t), asBYTE &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativeBuffer", "const uint8 &opIndex(uint index) const", asMETHODPR(NativeBuffer, ByteAt, (size_t) const, const asBYTE &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("NativeBuffer", "size_t Write(?&in)", asFUNCTION(NativeBufferWriteGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("NativeBuffer", "size_t Read(?&out)", asFUNCTION(NativeBufferReadGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);

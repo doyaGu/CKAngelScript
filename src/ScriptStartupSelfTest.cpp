@@ -131,6 +131,17 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
         return CKERR_INVALIDOPERATION;
     }
 
+    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "native-memory", std::string());
+    if (!RunScriptNativeMemorySelfTest(manager ? manager->GetCKContext() : nullptr,
+                                       manager ? manager->GetScriptEngine() : nullptr,
+                                       error)) {
+        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+                                                             "native-memory",
+                                                             "Native memory",
+                                                             error);
+        return CKERR_INVALIDOPERATION;
+    }
+
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "behavior-bridge", std::string());
     if (!RunScriptBehaviorBridgeSelfTest(manager ? manager->GetCKContext() : nullptr,
                                          manager ? manager->GetScriptEngine() : nullptr,

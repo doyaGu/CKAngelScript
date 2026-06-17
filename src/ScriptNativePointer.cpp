@@ -1,6 +1,7 @@
 #include "ScriptNativePointer.h"
 
 #include <cassert>
+#include <cstring>
 #include <fmt/format.h>
 
 #include <add_on/scriptarray/scriptarray.h>
@@ -69,12 +70,21 @@ static void ConstructNativePointerGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
 
     const int typeId = gen->GetArgTypeId(0);
+    if ((typeId & asTYPEID_OBJHANDLE) || (typeId & asTYPEID_SCRIPTOBJECT)) {
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx) {
+            ctx->SetException("Cannot create NativePointer from script objects or object handles");
+        }
+        new (gen->GetObject()) NativePointer();
+        return;
+    }
+
+    void *addr = gen->GetArgAddress(0);
     asITypeInfo *type = engine->GetTypeInfoById(typeId);
     if (type && strcmp(type->GetName(), "array") == 0) {
-        auto *array = *static_cast<CScriptArray **>(gen->GetAddressOfArg(0));
+        auto *array = static_cast<CScriptArray *>(addr);
         new (gen->GetObject()) NativePointer(array ? array->GetBuffer() : nullptr);
     } else {
-        void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
         new (gen->GetObject()) NativePointer(addr);
     }
 }
@@ -82,9 +92,16 @@ static void ConstructNativePointerGeneric(asIScriptGeneric *gen) {
 static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
     auto *self = static_cast<NativePointer *>(gen->GetObject());
     size_t size = 0;
+
+    if (typeId & asTYPEID_OBJHANDLE) {
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx)
+            ctx->SetException("Cannot write object handle to buffer");
+        gen->SetReturnDWord(0);
+        return;
+    }
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         asIScriptContext *ctx = asGetActiveContext();
@@ -94,15 +111,8 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
         return;
     }
 
+    void *addr = gen->GetArgAddress(0);
     if (typeId & asTYPEID_APPOBJECT) {
-        if (typeId & asTYPEID_OBJHANDLE) {
-            asIScriptContext *ctx = asGetActiveContext();
-            if (ctx)
-                ctx->SetException("Cannot write object handle to buffer");
-            gen->SetReturnDWord(0);
-            return;
-        }
-
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
             gen->SetReturnDWord(0);
@@ -138,9 +148,16 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
 static void NativePointerReadGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(0);
-    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
     auto *self = static_cast<NativePointer *>(gen->GetObject());
     size_t size = 0;
+
+    if (typeId & asTYPEID_OBJHANDLE) {
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx)
+            ctx->SetException("Cannot read object handle from buffer");
+        gen->SetReturnDWord(0);
+        return;
+    }
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         asIScriptContext *ctx = asGetActiveContext();
@@ -150,15 +167,8 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
         return;
     }
 
+    void *addr = gen->GetArgAddress(0);
     if (typeId & asTYPEID_APPOBJECT) {
-        if (typeId & asTYPEID_OBJHANDLE) {
-            asIScriptContext *ctx = asGetActiveContext();
-            if (ctx)
-                ctx->SetException("Cannot read object handle from buffer");
-            gen->SetReturnDWord(0);
-            return;
-        }
-
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
             gen->SetReturnDWord(0);
@@ -211,7 +221,7 @@ void RegisterNativePointer(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAssign(const NativePointer &in other)", asMETHODPR(NativePointer, operator=, (const NativePointer &), NativePointer &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("NativePointer", "bool opEquals(const NativePointer &in other) const", asMETHODPR(NativePointer, operator==, (const NativePointer &) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-   r = engine->RegisterObjectMethod("NativePointer", "int opCmp(const NativePointer &in other) const", asMETHODPR(NativePointer, Compare, (const NativePointer &) const, int), asCALL_THISCALL); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("NativePointer", "int opCmp(const NativePointer &in other) const", asMETHODPR(NativePointer, Compare, (const NativePointer &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opAddAssign(int rhs)", asMETHODPR(NativePointer, operator+=, (int), NativePointer &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("NativePointer", "NativePointer &opSubAssign(int rhs)", asMETHODPR(NativePointer, operator-=, (int), NativePointer &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
