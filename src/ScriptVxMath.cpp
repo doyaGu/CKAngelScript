@@ -1031,6 +1031,9 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
 
     constexpr const char *moduleName = "__CKAS_VxBindingSelfTest";
     const char *source =
+        "float ReadConstFrustumRBound(const VxFrustum &in frustum) {\n"
+        "  return frustum.GetRBound();\n"
+        "}\n"
         "int Run() {\n"
         "  Vx3DCapsDesc caps;\n"
         "  caps.CKRasterizerSpecificCaps = 0x12345678;\n"
@@ -1295,6 +1298,27 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxVector raySphereInter2;\n"
         "  int raySphereCount = VxIntersectRaySphere(faceRay, sphere, raySphereInter1, raySphereInter2);\n"
         "  int sphereAabbResult = VxIntersectSphereAABB(sphere, sameBox);\n"
+        "  VxFrustum frustum(VxVector(0.0f, 0.0f, 0.0f), VxVector(1.0f, 0.0f, 0.0f), VxVector(0.0f, 1.0f, 0.0f), VxVector(0.0f, 0.0f, 1.0f), 1.0f, 10.0f, 1.0f, 1.0f);\n"
+        "  if (frustum.GetOrigin().x != 0.0f || frustum.GetRight().x != 1.0f || frustum.GetUp().y != 1.0f || frustum.GetDir().z != 1.0f) return 600;\n"
+        "  frustum.GetRBound() = 2.0f;\n"
+        "  frustum.GetUBound() = 3.0f;\n"
+        "  frustum.GetDMin() = 1.0f;\n"
+        "  frustum.GetDMax() = 10.0f;\n"
+        "  if (ReadConstFrustumRBound(frustum) != 2.0f) return 601;\n"
+        "  frustum.Update();\n"
+        "  bool frustumInside = frustum.IsInside(VxVector(0.0f, 0.0f, 2.0f));\n"
+        "  uint frustumFlags = frustum.Classify(VxVector(0.0f, 0.0f, 2.0f));\n"
+        "  float frustumBoxClass = frustum.Classify(sameBox);\n"
+        "  float frustumBoxMatrixClass = frustum.Classify(sameBox, identity);\n"
+        "  frustum.Transform(identity);\n"
+        "  NativeBuffer@ frustumVertices = NativeBuffer(8 * 12);\n"
+        "  frustum.ComputeVertices(frustumVertices.ToPointer());\n"
+        "  VxVector frustumVertex;\n"
+        "  if (frustumVertices.Read(frustumVertex) != 12) return 602;\n"
+        "  bool frustumFace = VxIntersectFrustumFace(frustum, VxVector(0.0f, 0.0f, 2.0f), VxVector(1.0f, 0.0f, 2.0f), VxVector(0.0f, 1.0f, 2.0f));\n"
+        "  bool frustumAabb = VxIntersectFrustumAABB(frustum, sameBox);\n"
+        "  bool frustumObb = VxIntersectFrustumOBB(frustum, sameBox, identity);\n"
+        "  bool frustumBox = VxIntersectFrustumBox(frustum, sameBox, identity);\n"
         "  VxMemoryMappedFile missingMap(\"__ckas_missing_vx_mmf_smoke_7f6e5d99__.bin\");\n"
         "  if (missingMap.IsValid()) return 82;\n"
         "  if (!missingMap.GetBase().IsNull()) return 83;\n"
@@ -3217,6 +3241,22 @@ static bool VxIntersectSphereSphereBool(const VxSphere &sphere1, const VxVector 
     return VxIntersect::SphereSphere(sphere1, speed1, sphere2, speed2, &collisionTime1, &collisionTime2) != FALSE;
 }
 
+static bool VxIntersectFrustumFaceBool(const VxFrustum &frustum, const VxVector &pt0, const VxVector &pt1, const VxVector &pt2) {
+    return VxIntersect::FrustumFace(frustum, pt0, pt1, pt2) != FALSE;
+}
+
+static bool VxIntersectFrustumAABBBool(const VxFrustum &frustum, const VxBbox &box) {
+    return VxIntersect::FrustumAABB(frustum, box) != FALSE;
+}
+
+static bool VxIntersectFrustumOBBBool(const VxFrustum &frustum, const VxBbox &box, const VxMatrix &mat) {
+    return VxIntersect::FrustumOBB(frustum, box, mat) != FALSE;
+}
+
+static bool VxIntersectFrustumBoxBool(const VxFrustum &frustum, const VxBbox &box, const VxMatrix &mat) {
+    return VxIntersect::FrustumBox(frustum, box, mat) != FALSE;
+}
+
 static void RegisterVxIntersect(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3271,16 +3311,16 @@ static void RegisterVxIntersect(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("int VxIntersectSphereAABB(const VxSphere &in sphere, const VxBbox &in box)", asFUNCTION(VxIntersect::SphereAABB), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Frustum - Face
-    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumFace(const VxFrustum &in frustum, const VxVector &in pt0, const VxVector &in pt1, const VxVector &in pt2)", asFUNCTION(VxIntersect::FrustumFace), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumFace(const VxFrustum &in frustum, const VxVector &in pt0, const VxVector &in pt1, const VxVector &in pt2)", asFUNCTION(VxIntersectFrustumFaceBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Frustum - AABB
-    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumAABB(const VxFrustum &in frustum, const VxBbox &in box)", asFUNCTION(VxIntersect::FrustumAABB), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumAABB(const VxFrustum &in frustum, const VxBbox &in box)", asFUNCTION(VxIntersectFrustumAABBBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Frustum - OBB
-    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumOBB(const VxFrustum &in frustum, const VxBbox &in box, const VxMatrix &in mat)", asFUNCTION(VxIntersect::FrustumOBB), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumOBB(const VxFrustum &in frustum, const VxBbox &in box, const VxMatrix &in mat)", asFUNCTION(VxIntersectFrustumOBBBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Frustum - Box
-    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumBox(const VxFrustum &in frustum, const VxBbox &in box, const VxMatrix &in mat)", asFUNCTION(VxIntersect::FrustumBox), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectFrustumBox(const VxFrustum &in frustum, const VxBbox &in box, const VxMatrix &in mat)", asFUNCTION(VxIntersectFrustumBoxBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 }
 
 // VxDistance
@@ -3317,6 +3357,20 @@ static void RegisterVxDistance(asIScriptEngine *engine) {
 
 // VxFrustum
 
+static bool VxFrustumIsInside(const VxFrustum &frustum, const VxVector &point) {
+    return frustum.IsInside(point) != FALSE;
+}
+
+static void VxFrustumComputeVertices(const VxFrustum &frustum, NativePointer vertices) {
+    if (vertices.IsNull()) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxFrustum.ComputeVertices requires a non-null NativePointer");
+        }
+        return;
+    }
+    frustum.ComputeVertices(reinterpret_cast<VxVector *>(vertices.Get()));
+}
+
 static void RegisterVxFrustum(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3348,9 +3402,13 @@ static void RegisterVxFrustum(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxFrustum", "const VxVector &GetDir() const", asMETHODPR(VxFrustum, GetDir, () const, const VxVector &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxFrustum", "float &GetRBound()", asMETHODPR(VxFrustum, GetRBound, (), float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxFrustum", "const float &GetRBound() const", asMETHODPR(VxFrustum, GetRBound, () const, const float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "float &GetUBound()", asMETHODPR(VxFrustum, GetUBound, (), float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxFrustum", "const float &GetUBound() const", asMETHODPR(VxFrustum, GetUBound, () const, const float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "float &GetDMin()", asMETHODPR(VxFrustum, GetDMin, (), float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxFrustum", "const float &GetDMin() const", asMETHODPR(VxFrustum, GetDMin, () const, const float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "float &GetDMax()", asMETHODPR(VxFrustum, GetDMax, (), float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxFrustum", "const float &GetDMax() const", asMETHODPR(VxFrustum, GetDMax, () const, const float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "float GetDRatio() const", asMETHOD(VxFrustum, GetDRatio), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "float GetRF() const", asMETHOD(VxFrustum, GetRF), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "float GetUF() const", asMETHOD(VxFrustum, GetUF), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -3367,9 +3425,9 @@ static void RegisterVxFrustum(asIScriptEngine *engine) {
 #endif
     r = engine->RegisterObjectMethod("VxFrustum", "float Classify(const VxBbox &in box) const", asMETHODPR(VxFrustum, Classify, (const VxBbox &) const, float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "float Classify(const VxBbox &in box, const VxMatrix &in mat) const", asMETHODPR(VxFrustum, Classify, (const VxBbox &, const VxMatrix &) const, float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxFrustum", "bool IsInside(const VxVector &in mat) const", asMETHODPR(VxFrustum, IsInside, (const VxVector &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxFrustum", "bool IsInside(const VxVector &in point) const", asFUNCTION(VxFrustumIsInside), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "void Transform(const VxMatrix &in mat)", asMETHODPR(VxFrustum, Transform, (const VxMatrix &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    // r = engine->RegisterObjectMethod("VxFrustum", "void ComputeVertices(VxVector[8]) const", asMETHOD(VxFrustum, ComputeVertices), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxFrustum", "void ComputeVertices(NativePointer vertices) const", asFUNCTION(VxFrustumComputeVertices), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "void Update()", asMETHOD(VxFrustum, Update), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
