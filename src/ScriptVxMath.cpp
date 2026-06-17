@@ -1204,6 +1204,11 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxMatrix multipliedGlobal;\n"
         "  Vx3DMultiplyMatrix(multipliedGlobal, matrix, identityCopy);\n"
         "  if (multipliedGlobal[0].x != 1.0f || multipliedGlobal[3].x != 5.0f || multipliedGlobal[3].w != 1.0f) return 81;\n"
+        "  VxMemoryMappedFile missingMap(\"__ckas_missing_vx_mmf_smoke_7f6e5d99__.bin\");\n"
+        "  if (missingMap.IsValid()) return 82;\n"
+        "  if (!missingMap.GetBase().IsNull()) return 83;\n"
+        "  if (missingMap.GetFileSize() != 0) return 84;\n"
+        "  if (missingMap.GetErrorType() != VxMMF_FileOpen) return 85;\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
@@ -1696,6 +1701,14 @@ static void RegisterVxSharedLibrary(asIScriptEngine *engine) {
 
 // VxMemoryMappedFile
 
+static NativePointer VxMemoryMappedFileGetBase(VxMemoryMappedFile &self) {
+    return NativePointer(self.GetBase());
+}
+
+static bool VxMemoryMappedFileIsValid(VxMemoryMappedFile &self) {
+    return self.IsValid();
+}
+
 static void RegisterVxMemoryMappedFile(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1706,9 +1719,9 @@ static void RegisterVxMemoryMappedFile(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxMemoryMappedFile", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxMemoryMappedFile *self) { self->~VxMemoryMappedFile(); }, (VxMemoryMappedFile *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     // Methods
-    r = engine->RegisterObjectMethod("VxMemoryMappedFile", "uint GetBase()", asMETHOD(VxMemoryMappedFile, GetBase), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxMemoryMappedFile", "NativePointer GetBase()", asFUNCTION(VxMemoryMappedFileGetBase), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxMemoryMappedFile", "uint GetFileSize()", asMETHOD(VxMemoryMappedFile, GetFileSize), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxMemoryMappedFile", "bool IsValid()", asMETHOD(VxMemoryMappedFile, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxMemoryMappedFile", "bool IsValid()", asFUNCTION(VxMemoryMappedFileIsValid), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxMemoryMappedFile", "VxMMF_Error GetErrorType()", asMETHOD(VxMemoryMappedFile, GetErrorType), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
