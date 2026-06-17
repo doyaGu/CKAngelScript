@@ -1407,6 +1407,16 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  assignedTimeProfiler.Reset();\n"
         "  if (assignedTimeProfiler.Current() < 0.0f) return 882;\n"
 #endif
+        "  VxSharedLibrary missingLibrary;\n"
+        "  if (missingLibrary.Load(\"__ckas_missing_vx_shared_library_smoke_78d3c1f0__.dll\") != 0) return 890;\n"
+        "  missingLibrary.Attach(0);\n"
+        "  missingLibrary.ReleaseLibrary();\n"
+        "  VxSharedLibrary sharedLibrary;\n"
+        "  INSTANCE_HANDLE kernel32 = sharedLibrary.Load(\"kernel32.dll\");\n"
+        "  if (kernel32 == 0) return 891;\n"
+        "  FUNC_PTR getTickCount = sharedLibrary.GetFunctionPtr(\"GetTickCount\");\n"
+        "  if (getTickCount == 0) return 892;\n"
+        "  sharedLibrary.ReleaseLibrary();\n"
         "  VxOBB obb(box, identity);\n"
         "  if (obb.GetCenter().x != 1.0f || obb.GetCenter().y != 2.0f || obb.GetCenter().z != 3.0f) return 86;\n"
         "  if (obb.GetAxis(0).x != 1.0f || obb.GetAxis(1).y != 1.0f || obb.GetAxis(2).z != 1.0f) return 87;\n"
@@ -1975,12 +1985,12 @@ static void RegisterVxTimeProfiler(asIScriptEngine *engine) {
 
 // VxSharedLibrary
 
-static INSTANCE_HANDLE VxSharedLibraryLoad(const std::string &LibraryName, VxSharedLibrary &shl) {
-    return shl.Load(const_cast<char *>(LibraryName.c_str()));
+static INSTANCE_HANDLE VxSharedLibraryLoad(VxSharedLibrary *self, const std::string &libraryName) {
+    return self->Load(const_cast<char *>(libraryName.c_str()));
 }
 
-static void *VxSharedLibraryGetFunctionPtr(const std::string &FunctionName, VxSharedLibrary &shl) {
-    return shl.GetFunctionPtr(const_cast<char *>(FunctionName.c_str()));
+static void *VxSharedLibraryGetFunctionPtr(VxSharedLibrary *self, const std::string &functionName) {
+    return self->GetFunctionPtr(const_cast<char *>(functionName.c_str()));
 }
 
 static void RegisterVxSharedLibrary(asIScriptEngine *engine) {
@@ -1994,10 +2004,9 @@ static void RegisterVxSharedLibrary(asIScriptEngine *engine) {
 
     // Methods
     r = engine->RegisterObjectMethod("VxSharedLibrary", "void Attach(INSTANCE_HANDLE libraryHandle)", asMETHODPR(VxSharedLibrary, Attach, (INSTANCE_HANDLE), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxSharedLibrary", "INSTANCE_HANDLE Load(const string &in libraryName)", asMETHOD(VxSharedLibrary, Load), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxSharedLibrary", "INSTANCE_HANDLE Load(const string &libraryName)", asFUNCTIONPR(VxSharedLibraryLoad, (const std::string &, VxSharedLibrary &), INSTANCE_HANDLE), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxSharedLibrary", "INSTANCE_HANDLE Load(const string &in libraryName)", asFUNCTIONPR(VxSharedLibraryLoad, (VxSharedLibrary *, const std::string &), INSTANCE_HANDLE), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxSharedLibrary", "void ReleaseLibrary()", asMETHODPR(VxSharedLibrary, ReleaseLibrary, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxSharedLibrary", "FUNC_PTR GetFunctionPtr(const string &functionName)", asFUNCTIONPR(VxSharedLibraryGetFunctionPtr, (const std::string &, VxSharedLibrary &), void *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxSharedLibrary", "FUNC_PTR GetFunctionPtr(const string &in functionName)", asFUNCTIONPR(VxSharedLibraryGetFunctionPtr, (VxSharedLibrary *, const std::string &), void *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // VxMemoryMappedFile
