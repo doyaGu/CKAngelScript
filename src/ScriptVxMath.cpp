@@ -1585,6 +1585,54 @@ static void RegisterVxVector(asIScriptEngine *engine) {
 
 // VxVector4
 
+static int VxVector4Compare(const VxVector4 &lhs, const VxVector4 &rhs) {
+    if (lhs.x < rhs.x) return -1;
+    if (lhs.x > rhs.x) return 1;
+    if (lhs.y < rhs.y) return -1;
+    if (lhs.y > rhs.y) return 1;
+    if (lhs.z < rhs.z) return -1;
+    if (lhs.z > rhs.z) return 1;
+    if (lhs.w < rhs.w) return -1;
+    if (lhs.w > rhs.w) return 1;
+    return 0;
+}
+
+static float &VxVector4Index(VxVector4 &v, int index) {
+    static thread_local float dummy = 0.0f;
+    switch (index) {
+    case 0: return v.x;
+    case 1: return v.y;
+    case 2: return v.z;
+    case 3: return v.w;
+    default:
+        dummy = 0.0f;
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxVector4 index out of range");
+        }
+        return dummy;
+    }
+}
+
+static const float &VxVector4IndexConst(const VxVector4 &v, int index) {
+    static thread_local float dummy = 0.0f;
+    switch (index) {
+    case 0: return v.x;
+    case 1: return v.y;
+    case 2: return v.z;
+    case 3: return v.w;
+    default:
+        dummy = 0.0f;
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxVector4 index out of range");
+        }
+        return dummy;
+    }
+}
+
+static VxVector4 VxVector4ScaleLeft(float scalar, const VxVector4 &rhs) {
+    return rhs * scalar;
+}
+
 static void RegisterVxVector4(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1596,10 +1644,10 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
 
     // Constructors
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxVector4 *self) { new(self) VxVector4(); }, (VxVector4*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(const VxVector4 & v)", asFUNCTIONPR([](const VxVector4 &v, VxVector4 *self) { new(self) VxVector4(v); }, (const VxVector4 &, VxVector4*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(const VxVector4 &in v)", asFUNCTIONPR([](const VxVector4 &v, VxVector4 *self) { new(self) VxVector4(v); }, (const VxVector4 &, VxVector4*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(float f)", asFUNCTIONPR([](float f, VxVector4 *self) { new(self) VxVector4(f); }, (float, VxVector4*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z, float w)", asFUNCTIONPR([](float x, float y, float z, float w, VxVector4 *self) { new(self) VxVector4(x, y, z, w); }, (float, float, float, float, VxVector4*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxVector4 *self) { new(self) VxVector4(list[0], list[1], list[2], list[3]); }, (float *, VxVector4 *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxVector4 *self) { new(self) VxVector4(list[0], list[1], list[2], list[3]); }, (float *, VxVector4 *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxVector4", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxVector4 *self) { self->~VxVector4(); }, (VxVector4*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -1609,7 +1657,7 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAssign(const VxVector &in v)", asMETHODPR(VxVector4, operator=, (const VxVector &), VxVector4 &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxVector4", "bool opEquals(const VxVector4 &in v) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) -> bool { return lhs == rhs; }, (const VxVector4 &, const VxVector4 &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxVector4", "int opCmp(const VxVector4 &in v) const", asFUNCTIONPR([](const VxVector4 &lhs, const VxVector4 &rhs) -> int { if (lhs < rhs) return -1; else if (lhs == rhs) return 0; else return 1; }, (const VxVector4 &, const VxVector4 &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector4", "int opCmp(const VxVector4 &in v) const", asFUNCTION(VxVector4Compare), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opAddAssign(const VxVector4 &in v)", asMETHODPR(VxVector4, operator+=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 &opSubAssign(const VxVector4 &in v)", asMETHODPR(VxVector4, operator-=, (const VxVector4 &), VxVector4 &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1632,14 +1680,15 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opAdd(float s) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs + scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opSub(float s) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs - scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul(float s) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs * scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul_r(float s) const", asFUNCTION(VxVector4ScaleLeft), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opDiv(float s) const", asFUNCTIONPR([](const VxVector4 &lhs, float scalar) { return lhs / scalar; }, (const VxVector4 &, float), VxVector4), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opMul(const VxMatrix &in mat) const", asFUNCTIONPR(operator*, (const VxVector4 &, const VxMatrix &), VxVector4), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxVector4", "VxVector4 opNeg() const", asFUNCTIONPR([](const VxVector4 &v) -> const VxVector4 { return -v; }, (const VxVector4 &), const VxVector4), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxVector4", "float &opIndex(int index)", asFUNCTIONPR([](VxVector4 &v, int i) -> float & { return v[i]; }, (VxVector4 &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
-    r = engine->RegisterObjectMethod("VxVector4", "const float &opIndex(int index) const", asFUNCTIONPR([](const VxVector4 &v, int i) -> const float & { return v[i]; }, (const VxVector4 &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector4", "float &opIndex(int index)", asFUNCTION(VxVector4Index), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxVector4", "const float &opIndex(int index) const", asFUNCTION(VxVector4IndexConst), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxVector4", "void Set(float x, float y, float z, float w)", asMETHODPR(VxVector4, Set, (float, float, float, float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
