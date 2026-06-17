@@ -920,7 +920,18 @@ BBConfig::BBConfig(ScriptBehaviorBridge *bridge,
                      const CKBehaviorContext &ctx,
                      const ScriptBridgeBBInvocationSpec &request,
                      const std::string &error)
-    : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_Error(error) {}
+    : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_Error(error) {
+    if (ctx.Behavior) {
+        CKBeObject *owner = ctx.Behavior->GetOwner();
+        if (owner && m_Request.OwnerId == owner->GetID() && m_Request.OwnerStamp.Flags == 0) {
+            m_Request.OwnerStamp = CaptureBridgeObjectStamp(owner);
+        }
+        CKBeObject *target = ctx.Behavior->GetTarget();
+        if (target && m_Request.TargetId == target->GetID() && m_Request.TargetStamp.Flags == 0) {
+            m_Request.TargetStamp = CaptureBridgeObjectStamp(target);
+        }
+    }
+}
 
 BBConfig::~BBConfig() {
     Destroy();
@@ -1031,12 +1042,14 @@ bool BBConfig::RequireSlot(ScriptBridgeSlotKind kind, const std::string &name, i
 
 BBConfig *BBConfig::Owner(CKBeObject *owner) {
     m_Request.OwnerId = owner ? owner->GetID() : 0;
+    m_Request.OwnerStamp = owner ? CaptureBridgeObjectStamp(owner) : ScriptBridgeObjectStamp();
     AddRef();
     return this;
 }
 
 BBConfig *BBConfig::Target(CKBeObject *target) {
     m_Request.TargetId = target ? target->GetID() : 0;
+    m_Request.TargetStamp = target ? CaptureBridgeObjectStamp(target) : ScriptBridgeObjectStamp();
     AddRef();
     return this;
 }
@@ -1130,8 +1143,26 @@ bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
         }
     }
 
-    CKObject *ownerObject = m_Request.OwnerId ? GetCKObjectById(context, m_Request.OwnerId) : nullptr;
-    CKObject *targetObject = m_Request.TargetId ? GetCKObjectById(context, m_Request.TargetId) : nullptr;
+    CKObject *ownerObject = m_Request.OwnerId
+        ? (m_Request.OwnerStamp.Flags != 0
+            ? GetStampedCKObjectById(context, m_Request.OwnerId, m_Request.OwnerStamp)
+            : GetCKObjectById(context, m_Request.OwnerId))
+        : nullptr;
+    CKObject *targetObject = m_Request.TargetId
+        ? (m_Request.TargetStamp.Flags != 0
+            ? GetStampedCKObjectById(context, m_Request.TargetId, m_Request.TargetStamp)
+            : GetCKObjectById(context, m_Request.TargetId))
+        : nullptr;
+    if (m_Request.OwnerId && !ownerObject) {
+        SetError(fmt::format("Owner object {} is no longer valid.", m_Request.OwnerId));
+        SetScriptException(m_Error);
+        return false;
+    }
+    if (m_Request.TargetId && !targetObject) {
+        SetError(fmt::format("Target object {} is no longer valid.", m_Request.TargetId));
+        SetScriptException(m_Error);
+        return false;
+    }
     if (targetObject) {
         if ((layout->BehaviorFlags & CKBEHAVIOR_TARGETABLE) == 0) {
             SetError(fmt::format("Building Block '{}' is not targetable.",
