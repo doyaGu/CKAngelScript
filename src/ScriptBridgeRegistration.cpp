@@ -427,9 +427,9 @@ void RegisterParamRefSpecificMethods(asIScriptEngine *engine, int &r, const char
     r = engine->RegisterObjectMethod(typeName, "int DataSize() const", asMETHOD(T, DataSize), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "ParamRef@ RealSource() const", asMETHOD(T, RealSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "ParamRef@ DirectSource() const", asMETHOD(T, DirectSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(typeName, "ParamSourceLinkRef@ SetSourceScoped(ParamRef@ source)", asMETHOD(T, SetSourceScoped), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(typeName, "bool SetSource(ParamRef@ source)", asMETHOD(T, SetSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(typeName, "bool Set(ParamValue@ value)", asMETHOD(T, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(typeName, "ParamSourceLinkRef@ SetSourceScoped(ParamRef@+ source)", asMETHOD(T, SetSourceScoped), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(typeName, "bool SetSource(ParamRef@+ source)", asMETHOD(T, SetSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(typeName, "bool Set(ParamValue@+ value)", asMETHOD(T, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "bool SetInt(int value)", asMETHOD(T, SetInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "bool SetFloat(float value)", asMETHOD(T, SetFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "bool SetBool(bool value)", asMETHOD(T, SetBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -439,15 +439,15 @@ void RegisterParamRefSpecificMethods(asIScriptEngine *engine, int &r, const char
     r = engine->RegisterObjectMethod(typeName, "bool SetEnum(int value)", asMETHOD(T, SetEnumInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "bool SetFlags(const string &in namesOrMask)", asMETHOD(T, SetFlags), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "bool SetFlags(uint mask)", asMETHOD(T, SetFlagsMask), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(typeName, "bool SetStruct(ParamStructValue@ value)", asMETHOD(T, SetStruct), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(typeName, "bool SetStruct(ParamStructValue@+ value)", asMETHOD(T, SetStruct), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "ParamValue@ Get() const", asMETHOD(T, GetValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(typeName, "bool CopyFrom(ParamRef@ source)", asMETHOD(T, CopyFrom), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(typeName, "bool CopyFrom(ParamRef@+ source)", asMETHOD(T, CopyFrom), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "string GetText() const", asMETHOD(T, GetText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "string GetEnumText() const", asMETHOD(T, GetEnumText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "string GetFlagsText() const", asMETHOD(T, GetFlagsText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "bool SetText(const string &in text)", asMETHOD(T, SetText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "NativeBuffer@ GetRaw() const", asMETHOD(T, GetRaw), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(typeName, "bool SetRaw(NativeBuffer@ data)", asMETHOD(T, SetRaw), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(typeName, "bool SetRaw(NativeBuffer@+ data)", asMETHOD(T, SetRaw), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "ParamStructRef@ Struct()", asMETHOD(T, Struct), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
@@ -536,9 +536,9 @@ void RegisterParamHandleMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("ParamRef", "int DataSize() const", asMETHOD(ParamRef, DataSize), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "ParamRef@ RealSource() const", asMETHOD(ParamRef, RealSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "ParamRef@ DirectSource() const", asMETHOD(ParamRef, DirectSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ParamRef", "ParamSourceLinkRef@ SetSourceScoped(ParamRef@ source)", asMETHOD(ParamRef, SetSourceScoped), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ParamRef", "bool SetSource(ParamRef@ source)", asMETHOD(ParamRef, SetSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ParamRef", "bool Set(ParamValue@ value)", asMETHOD(ParamRef, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ParamRef", "ParamSourceLinkRef@ SetSourceScoped(ParamRef@+ source)", asMETHOD(ParamRef, SetSourceScoped), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ParamRef", "bool SetSource(ParamRef@+ source)", asMETHOD(ParamRef, SetSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ParamRef", "bool Set(ParamValue@+ value)", asMETHOD(ParamRef, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "bool SetInt(int value)", asMETHOD(ParamRef, SetInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "bool SetFloat(float value)", asMETHOD(ParamRef, SetFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "bool SetBool(bool value)", asMETHOD(ParamRef, SetBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -548,15 +548,15 @@ void RegisterParamHandleMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("ParamRef", "bool SetEnum(int value)", asMETHOD(ParamRef, SetEnumInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "bool SetFlags(const string &in namesOrMask)", asMETHOD(ParamRef, SetFlags), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "bool SetFlags(uint mask)", asMETHOD(ParamRef, SetFlagsMask), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ParamRef", "bool SetStruct(ParamStructValue@ value)", asMETHOD(ParamRef, SetStruct), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ParamRef", "bool SetStruct(ParamStructValue@+ value)", asMETHOD(ParamRef, SetStruct), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "ParamValue@ Get() const", asMETHOD(ParamRef, GetValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ParamRef", "bool CopyFrom(ParamRef@ source)", asMETHOD(ParamRef, CopyFrom), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ParamRef", "bool CopyFrom(ParamRef@+ source)", asMETHOD(ParamRef, CopyFrom), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "string GetText() const", asMETHOD(ParamRef, GetText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "string GetEnumText() const", asMETHOD(ParamRef, GetEnumText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "string GetFlagsText() const", asMETHOD(ParamRef, GetFlagsText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "bool SetText(const string &in text)", asMETHOD(ParamRef, SetText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "NativeBuffer@ GetRaw() const", asMETHOD(ParamRef, GetRaw), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ParamRef", "bool SetRaw(NativeBuffer@ data)", asMETHOD(ParamRef, SetRaw), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ParamRef", "bool SetRaw(NativeBuffer@+ data)", asMETHOD(ParamRef, SetRaw), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "ParamStructRef@ Struct()", asMETHOD(ParamRef, Struct), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamRef", "string Describe() const", asMETHOD(ParamRef, Describe), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
