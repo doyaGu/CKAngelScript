@@ -1032,6 +1032,16 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxColor other(0.25f, 0.5f, 0.75f, 1.0f);\n"
         "  if (color.GetSquareDistance(other) != 0.0f) return 4;\n"
         "  if (RGBAFTOCOLOR(color) != color.GetRGBA()) return 5;\n"
+        "  VxCompressedVector compressed = {0.0f, 1.0f, 0.0f};\n"
+        "  VxCompressedVector copiedCompressed;\n"
+        "  copiedCompressed = compressed;\n"
+        "  if (copiedCompressed.xa != compressed.xa || copiedCompressed.ya != compressed.ya) return 6;\n"
+        "  VxVector sourceVector(0.0f, 0.0f, 1.0f);\n"
+        "  copiedCompressed = sourceVector;\n"
+        "  VxCompressedVector axis;\n"
+        "  axis.Set(1.0f, 0.0f, 0.0f);\n"
+        "  VxCompressedVector mixed;\n"
+        "  mixed.Slerp(0.5f, compressed, axis);\n"
         "  return 0;\n"
         "}\n";
 
@@ -1961,7 +1971,7 @@ static void RegisterVxCompressedVector(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVector *self) { new(self) VxCompressedVector(); }, (VxCompressedVector*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f(const VxCompressedVector &in v)", asFUNCTIONPR([](const VxCompressedVector &v, VxCompressedVector *self) { new(self) VxCompressedVector(v); }, (const VxCompressedVector &, VxCompressedVector*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVector *self) { new(self) VxCompressedVector(x, y, z); }, (float, float, float, VxCompressedVector*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxCompressedVector *self) { new(self) VxCompressedVector(list[0], list[1], list[2]); }, (float *, VxCompressedVector *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxCompressedVector *self) { new(self) VxCompressedVector(list[0], list[1], list[2]); }, (float *, VxCompressedVector *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxCompressedVector", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVector *self) { self->~VxCompressedVector(); }, (VxCompressedVector*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
