@@ -1047,6 +1047,26 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxColor other(0.25f, 0.5f, 0.75f, 1.0f);\n"
         "  if (color.GetSquareDistance(other) != 0.0f) return 4;\n"
         "  if (RGBAFTOCOLOR(color) != color.GetRGBA()) return 5;\n"
+        "  VxImageDescEx imageDesc;\n"
+        "  imageDesc.Width = 2;\n"
+        "  imageDesc.Height = 2;\n"
+        "  imageDesc.BytesPerLine = 8;\n"
+        "  imageDesc.BitsPerPixel = 32;\n"
+        "  imageDesc.RedMask = 0x00ff0000;\n"
+        "  imageDesc.GreenMask = 0x0000ff00;\n"
+        "  imageDesc.BlueMask = 0x000000ff;\n"
+        "  imageDesc.AlphaMask = 0xff000000;\n"
+        "  if (!imageDesc.HasAlpha()) return 700;\n"
+        "  VxImageDescEx imageCopy(imageDesc);\n"
+        "  if (!(imageDesc == imageCopy)) return 701;\n"
+        "  VxImageDescEx imageAssigned;\n"
+        "  imageAssigned = imageDesc;\n"
+        "  if (!(imageAssigned == imageDesc)) return 702;\n"
+        "  NativeBuffer@ imageStorage = NativeBuffer(16);\n"
+        "  NativeBuffer@ colorMapStorage = NativeBuffer(16);\n"
+        "  imageDesc.Image = imageStorage.ToPointer();\n"
+        "  imageDesc.ColorMap = colorMapStorage.ToPointer();\n"
+        "  if (imageDesc.Image.IsNull() || imageDesc.ColorMap.IsNull()) return 703;\n"
         "  VxCompressedVector compressed = {0.0f, 1.0f, 0.0f};\n"
         "  VxCompressedVector copiedCompressed;\n"
         "  copiedCompressed = compressed;\n"
@@ -3509,6 +3529,14 @@ static void RegisterVxColor(asIScriptEngine *engine) {
 
 // VxImageDescEx
 
+static bool VxImageDescExEquals(const VxImageDescEx &lhs, const VxImageDescEx &rhs) {
+    return const_cast<VxImageDescEx &>(lhs) == rhs;
+}
+
+static bool VxImageDescExHasAlpha(const VxImageDescEx &desc) {
+    return const_cast<VxImageDescEx &>(desc).HasAlpha() != FALSE;
+}
+
 static void RegisterVxImageDescEx(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3538,10 +3566,10 @@ static void RegisterVxImageDescEx(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxImageDescEx", "VxImageDescEx &opAssign(const VxImageDescEx &in desc)", asFUNCTIONPR([](VxImageDescEx &lhs, const VxImageDescEx &rhs) -> VxImageDescEx & { if (&lhs != &rhs) { lhs.Set(rhs); } return lhs; },  (VxImageDescEx &, const VxImageDescEx &), VxImageDescEx &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxImageDescEx", "bool opEquals(const VxImageDescEx &in desc) const", asMETHODPR(VxImageDescEx, operator==, (const VxImageDescEx &), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "bool opEquals(const VxImageDescEx &in desc) const", asFUNCTION(VxImageDescExEquals), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxImageDescEx", "void Set(const VxImageDescEx &in desc)", asMETHOD(VxImageDescEx, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxImageDescEx", "bool HasAlpha() const", asMETHOD(VxImageDescEx, HasAlpha), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "bool HasAlpha() const", asFUNCTION(VxImageDescExHasAlpha), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxImageDescEx", "NativePointer get_ColorMap() const", asFUNCTIONPR([](const VxImageDescEx *self) { return NativePointer(self->ColorMap); }, (const VxImageDescEx *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxImageDescEx", "void set_ColorMap(NativePointer ptr)", asFUNCTIONPR([](VxImageDescEx *self, NativePointer ptr) { self->ColorMap = reinterpret_cast<XBYTE *>(ptr.Get()); }, (VxImageDescEx *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
