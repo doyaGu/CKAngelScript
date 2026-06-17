@@ -1400,9 +1400,9 @@ void RegisterScriptAsync(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void Race(?&in tasks, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncRaceGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Any(array<AsyncTask<void>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAnyVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void Any(?&in tasks, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncAnyGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(BBTask@ task)", asFUNCTION(ScriptAsyncInternal::AsyncWaitBBTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(BBTask@+ task)", asFUNCTION(ScriptAsyncInternal::AsyncWaitBBTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(GraphTask@ task)", asFUNCTION(ScriptAsyncInternal::AsyncWaitGraphTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, BBTask@ task, int inputIndex = -1)", asFUNCTION(ScriptAsyncInternal::AsyncWaitBBTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, BBTask@+ task, int inputIndex = -1)", asFUNCTION(ScriptAsyncInternal::AsyncWaitBBTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, GraphTask@ task)", asFUNCTION(ScriptAsyncInternal::AsyncWaitGraphTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->SetDefaultNamespace(previous.c_str()); CKAS_CHECK_REGISTER(r);

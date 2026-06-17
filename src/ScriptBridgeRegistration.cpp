@@ -967,14 +967,14 @@ void RegisterTaskMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBTask", "int ReturnCode() const", asMETHOD(BBTask, ReturnCode), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "string Error() const", asMETHOD(BBTask, Error), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool OutputActive(int outputIndex) const", asMETHOD(BBTask, OutputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBTask", "bool OutputActive(BBSlot@ output) const", asMETHOD(BBTask, OutputActiveSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBTask", "bool OutputActive(BBSlot@+ output) const", asMETHOD(BBTask, OutputActiveSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool Step(const CKBehaviorContext &in ctx, int inputIndex = -1)", asMETHOD(BBTask, Step), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBTask", "bool Step(const CKBehaviorContext &in ctx, BBSlot@ input)", asMETHOD(BBTask, StepSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBTask", "bool Step(const CKBehaviorContext &in ctx, BBSlot@+ input)", asMETHOD(BBTask, StepSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool Reset()", asMETHOD(BBTask, Reset), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool Destroy()", asMETHOD(BBTask, Destroy), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "BehaviorRef@ Behavior() const", asMETHOD(BBTask, Behavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "ParamRef@ Pout(int index) const", asMETHOD(BBTask, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBTask", "ParamRef@ Pout(BBSlot@ pout) const", asMETHOD(BBTask, PoutSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBTask", "ParamRef@ Pout(BBSlot@+ pout) const", asMETHOD(BBTask, PoutSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(BBTask, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("GraphTask", "bool IsValid() const", asMETHOD(GraphTask, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
