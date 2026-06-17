@@ -1027,6 +1027,11 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  Vx3DCapsDesc assigned;\n"
         "  assigned = copied;\n"
         "  if (assigned.CKRasterizerSpecificCaps != 0x12345678) return 2;\n"
+        "  VxColor color = {0.25f, 0.5f, 0.75f, 1.0f};\n"
+        "  if (color.r != 0.25f || color.g != 0.5f || color.b != 0.75f || color.a != 1.0f) return 3;\n"
+        "  VxColor other(0.25f, 0.5f, 0.75f, 1.0f);\n"
+        "  if (color.GetSquareDistance(other) != 0.0f) return 4;\n"
+        "  if (RGBAFTOCOLOR(color) != color.GetRGBA()) return 5;\n"
         "  return 0;\n"
         "}\n";
 
@@ -2602,7 +2607,7 @@ static void RegisterVxColor(asIScriptEngine *engine) {
 #endif
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int r, int g, int b, int a)", asFUNCTIONPR([](int r, int g, int b, int a, VxColor *self) { new(self) VxColor(r, g, b, a); }, (int, int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_CONSTRUCT, "void f(int r, int g, int b)", asFUNCTIONPR([](int r, int g, int b, VxColor *self) { new(self) VxColor(r, g, b); }, (int, int, int, VxColor *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxColor *self) { new(self) VxColor(list[0], list[1], list[2], list[3]); }, (float *, VxColor *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxColor *self) { new(self) VxColor(list[0], list[1], list[2], list[3]); }, (float *, VxColor *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxColor", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxColor *self) { self->~VxColor(); }, (VxColor*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
