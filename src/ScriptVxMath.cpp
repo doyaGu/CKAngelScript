@@ -837,6 +837,10 @@ static void RegisterVxMathGlobalVariables(asIScriptEngine *engine) {
     r = engine->RegisterGlobalProperty("const float CKRST_MAX_STAGES", (void*)&g_CKRST_MAX_STAGES); CKAS_CHECK_REGISTER(r);
 }
 
+static bool VxTransformBox2DBool(const VxMatrix &worldProjectionMat, const VxBbox &box, VxRect &screenSize, VxRect &extents, VXCLIP_FLAGS &orClipFlags, VXCLIP_FLAGS &andClipFlags) {
+    return VxTransformBox2D(worldProjectionMat, box, &screenSize, &extents, orClipFlags, andClipFlags) != FALSE;
+}
+
 static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     int r = 0;
 
@@ -849,7 +853,7 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void InterpolateVectorArray(NativePointer res, NativePointer array1, NativePointer array2, float factor, int count, uint strideRes, uint strideIn)", asFUNCTIONPR([](NativePointer res, NativePointer array1, NativePointer array2, float factor, int count, unsigned int strideRes, unsigned int strideIn) { InterpolateVectorArray(res.Get(), array1.Get(), array2.Get(), factor, count, strideRes, strideIn); }, (NativePointer, NativePointer, NativePointer, float, int, unsigned int, unsigned int), void), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Box and transformation functions
-    r = engine->RegisterGlobalFunction("bool VxTransformBox2D(const VxMatrix &in, const VxBbox &in, VxRect &out, VxRect &out, VXCLIP_FLAGS &out, VXCLIP_FLAGS &out)", asFUNCTION(VxTransformBox2D), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxTransformBox2D(const VxMatrix &in, const VxBbox &in, VxRect &out, VxRect &out, VXCLIP_FLAGS &out, VXCLIP_FLAGS &out)", asFUNCTION(VxTransformBox2DBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void VxProjectBoxZExtents(const VxMatrix &in, const VxBbox &in, float &out, float &out)", asFUNCTION(VxProjectBoxZExtents), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Structure copying functions
@@ -1074,6 +1078,30 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (Vx2DVector(1.0f, 2.0f).Dot(Vx2DVector(3.0f, 4.0f)) != 11.0f) return 14;\n"
         "  Vx2DVector cross = Vx2DVector(2.0f, 3.0f).Cross();\n"
         "  if (cross.x != -3.0f || cross.y != 2.0f) return 15;\n"
+        "  VxRect rect = {0.0f, 0.0f, 10.0f, 20.0f};\n"
+        "  if (rect.left != 0.0f || rect.top != 0.0f || rect.right != 10.0f || rect.bottom != 20.0f) return 400;\n"
+        "  Vx2DVector rectTopLeft(1.0f, 2.0f);\n"
+        "  Vx2DVector rectBottomRight(5.0f, 6.0f);\n"
+        "  VxRect rectFromVectors(rectTopLeft, rectBottomRight);\n"
+        "  if (rectFromVectors.left != 1.0f || rectFromVectors.top != 2.0f || rectFromVectors.right != 5.0f || rectFromVectors.bottom != 6.0f) return 401;\n"
+        "  VxRect rectCopy(rect);\n"
+        "  if (!(rect == rectCopy)) return 402;\n"
+        "  if (!rect.IsInside(Vx2DVector(5.0f, 5.0f))) return 403;\n"
+        "  if (rect.IsOutside(VxRect(2.0f, 2.0f, 8.0f, 8.0f))) return 404;\n"
+        "  VxRect nullRect;\n"
+        "  nullRect.Clear();\n"
+        "  if (!nullRect.IsNull()) return 405;\n"
+#if CKVERSION != 0x26052005
+        "  if (!nullRect.IsEmpty()) return 406;\n"
+#endif
+        "  VxRect clippedRect(-1.0f, -1.0f, 3.0f, 3.0f);\n"
+        "  if (!clippedRect.Clip(VxRect(0.0f, 0.0f, 2.0f, 2.0f))) return 407;\n"
+        "  if (clippedRect.left != 0.0f || clippedRect.top != 0.0f || clippedRect.right != 2.0f || clippedRect.bottom != 2.0f) return 408;\n"
+        "  Vx2DVector clippedPoint(12.0f, 25.0f);\n"
+        "  rect.Clip(clippedPoint);\n"
+        "  if (clippedPoint.x != 9.0f || clippedPoint.y != 19.0f) return 409;\n"
+        "  rect.Clip(clippedPoint, false);\n"
+        "  if (clippedPoint.x != 9.0f || clippedPoint.y != 19.0f) return 410;\n"
         "  VxBbox box = {VxVector(0.0f, 0.0f, 0.0f), VxVector(2.0f, 4.0f, 6.0f)};\n"
         "  if (box.Min.x != 0.0f || box.Max.z != 6.0f) return 16;\n"
         "  VxVector center = box.GetCenter();\n"
@@ -1091,6 +1119,11 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (box.Max.x != 2.0f || box.Max.y != 4.0f || box.Max.z != 6.0f) return 22;\n"
         "  VxMatrix identity;\n"
         "  identity.SetIdentity();\n"
+        "  VxRect transformScreen;\n"
+        "  VxRect transformExtents;\n"
+        "  VXCLIP_FLAGS transformOrClip;\n"
+        "  VXCLIP_FLAGS transformAndClip;\n"
+        "  bool transformedBox2D = VxTransformBox2D(identity, sameBox, transformScreen, transformExtents, transformOrClip, transformAndClip);\n"
         "  NativeBuffer@ boxPoints = NativeBuffer(8 * 12);\n"
         "  box.TransformTo(boxPoints.ToPointer(), identity);\n"
         "  VxVector firstPoint;\n"
@@ -2732,6 +2765,32 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
 
 // VxRect
 
+static bool VxRectIsOutside(const VxRect &rect, const VxRect &clipRect) {
+    return rect.IsOutside(clipRect) != FALSE;
+}
+
+static bool VxRectIsInsidePoint(const VxRect &rect, const Vx2DVector &point) {
+    return rect.IsInside(point) != FALSE;
+}
+
+static bool VxRectIsNull(const VxRect &rect) {
+    return rect.IsNull() != FALSE;
+}
+
+#if CKVERSION != 0x26052005
+static bool VxRectIsEmpty(const VxRect &rect) {
+    return rect.IsEmpty() != FALSE;
+}
+#endif
+
+static bool VxRectClipRect(VxRect &rect, const VxRect &clipRect) {
+    return rect.Clip(clipRect) != FALSE;
+}
+
+static void VxRectClipPoint(const VxRect &rect, Vx2DVector &point, bool excludeRightBottom) {
+    rect.Clip(point, excludeRightBottom ? TRUE : FALSE);
+}
+
 static void RegisterVxRect(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2752,7 +2811,7 @@ static void RegisterVxRect(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(const VxRect &in rect)", asFUNCTIONPR([](const VxRect &rect, VxRect *self) { new(self) VxRect(rect); }, (const VxRect &, VxRect*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(float left, float top, float right, float bottom)", asFUNCTIONPR([](float l, float t, float r, float b, VxRect *self) { new(self) VxRect(l, t, r, b); }, (float, float, float, float, VxRect*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_CONSTRUCT, "void f(Vx2DVector &in, Vx2DVector &in)", asFUNCTIONPR([](Vx2DVector &topleft, Vx2DVector &bottomright, VxRect *self) { new(self) VxRect(topleft, bottomright); }, (Vx2DVector &, Vx2DVector &, VxRect*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxRect *self) { new(self) VxRect(list[0], list[1], list[2], list[3]); }, (float *, VxRect *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxRect *self) { new(self) VxRect(list[0], list[1], list[2], list[3]); }, (float *, VxRect *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxRect", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxRect *self) { self->~VxRect(); }, (VxRect*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -2808,14 +2867,14 @@ static void RegisterVxRect(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxRect", "void Interpolate(float value, const VxRect &in a)", asMETHOD(VxRect, Interpolate), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxRect", "void Merge(const VxRect &in)", asMETHOD(VxRect, Merge), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxRect", "int IsInside(const VxRect &in a) const", asMETHODPR(VxRect, IsInside, (const VxRect &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxRect", "bool IsOutside(const VxRect &in clipRect) const", asMETHOD(VxRect, IsOutside), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxRect", "bool IsInside(const Vx2DVector &in pt) const", asMETHODPR(VxRect, IsInside, (const Vx2DVector &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxRect", "bool IsNull() const", asMETHODPR(VxRect, IsNull, () const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxRect", "bool IsOutside(const VxRect &in clipRect) const", asFUNCTION(VxRectIsOutside), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxRect", "bool IsInside(const Vx2DVector &in pt) const", asFUNCTION(VxRectIsInsidePoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxRect", "bool IsNull() const", asFUNCTION(VxRectIsNull), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #if CKVERSION != 0x26052005
-    r = engine->RegisterObjectMethod("VxRect", "bool IsEmpty() const", asMETHODPR(VxRect, IsEmpty, () const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxRect", "bool IsEmpty() const", asFUNCTION(VxRectIsEmpty), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
-    r = engine->RegisterObjectMethod("VxRect", "bool Clip(const VxRect &in clipRect)", asMETHODPR(VxRect, Clip, (const VxRect &), XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxRect", "void Clip(Vx2DVector &out pt, bool excludeRightBottom = true) const", asMETHODPR(VxRect, Clip, (Vx2DVector &, XBOOL) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxRect", "bool Clip(const VxRect &in clipRect)", asFUNCTION(VxRectClipRect), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxRect", "void Clip(Vx2DVector &inout pt, bool excludeRightBottom = true) const", asFUNCTION(VxRectClipPoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxRect", "void Transform(const VxRect &in destScreen, const VxRect &in srcScreen)", asMETHODPR(VxRect, Transform, (const VxRect &, const VxRect &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxRect", "void Transform(const Vx2DVector &in destScreenSize, const Vx2DVector &in srcScreenSize)", asMETHODPR(VxRect, Transform, (const Vx2DVector &, const Vx2DVector &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxRect", "void TransformToHomogeneous(const VxRect &in screen)", asMETHODPR(VxRect, TransformToHomogeneous, (const VxRect &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
