@@ -913,9 +913,9 @@ static void RegisterDynValue(asIScriptEngine *engine) {
 static void RegisterDynArgs(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectType("DynArgs", 0, asOBJ_REF | asOBJ_NOCOUNT); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("DynArgs", 0, asOBJ_REF | asOBJ_NOHANDLE); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("DynArgs", "int ArgBool()", asFUNCTIONPR([](DCArgs *args) -> bool { return dcbArgBool(args); }, (DCArgs *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("DynArgs", "bool ArgBool()", asFUNCTIONPR([](DCArgs *args) -> bool { return dcbArgBool(args); }, (DCArgs *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynArgs", "int8 ArgChar()", asFUNCTIONPR([](DCArgs *args) { return dcbArgChar(args); }, (DCArgs *), char), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynArgs", "int16 ArgShort()", asFUNCTIONPR([](DCArgs *args) { return dcbArgShort(args); }, (DCArgs *), short), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynArgs", "int ArgInt()", asFUNCTIONPR([](DCArgs *args) { return dcbArgInt(args); }, (DCArgs *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -931,7 +931,15 @@ static void RegisterDynArgs(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("DynArgs", "NativePointer ArgPointer()", asFUNCTIONPR([](DCArgs *args) { return NativePointer(dcbArgPointer(args)); }, (DCArgs *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynArgs", "string ArgString()", asFUNCTIONPR([](DCArgs *args) -> std::string { auto *str = static_cast<char *>(dcbArgPointer(args)); return str ? str : ""; }, (DCArgs *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynArgs", "NativePointer ArgAggregate(NativePointer target)", asFUNCTIONPR([](DCArgs *args, NativePointer target) { return NativePointer(dcbArgAggr(args, target.Get())); }, (DCArgs *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("DynArgs", "void ReturnAggregate(DynValue@ result, NativePointer ret)", asFUNCTIONPR([](DCArgs *args, DCValue *result, NativePointer ret) { dcbReturnAggr(args, result, ret.Get()); }, (DCArgs *, DCValue *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("DynArgs", "void ReturnAggregate(DynValue@ result, NativePointer ret)", asFUNCTIONPR([](DCArgs *args, DCValue *result, NativePointer ret) {
+        if (!result) {
+            if (auto *ctx = asGetActiveContext()) {
+                ctx->SetException("DynArgs.ReturnAggregate requires a DynValue result.");
+            }
+            return;
+        }
+        dcbReturnAggr(args, result, ret.Get());
+    }, (DCArgs *, DCValue *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 static void RegisterDynCallback(asIScriptEngine *engine) {
