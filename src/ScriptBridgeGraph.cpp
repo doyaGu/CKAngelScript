@@ -760,7 +760,7 @@ GraphEditLink::~GraphEditLink() {
 }
 
 bool GraphEditLink::IsValid() const {
-    return m_Edit && m_Error.empty() && (m_SpecIndex >= 0 || m_LinkId != 0);
+    return m_Edit && m_Error.empty() && m_Edit->IsLinkValid(this);
 }
 
 std::string GraphEditLink::Error() const { return m_Error; }
@@ -772,6 +772,9 @@ BehaviorLinkRef *GraphEditLink::Link() const {
 std::string GraphEditLink::Describe() const {
     if (!m_Error.empty()) {
         return m_Error;
+    }
+    if (!IsValid()) {
+        return "GraphEditLink is not valid.";
     }
     BehaviorLinkRef *link = Link();
     if (link) {
@@ -1399,6 +1402,8 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             return failApply(error);
         }
         spec.CreatedLinkId = link->GetID();
+        spec.CreatedLinkStamp = CaptureBridgeObjectStamp(link);
+        spec.CreatedLinkAddress = ScriptBridgeObjectAddress(link);
         createdLinks.push_back(link->GetID());
     }
 
@@ -1564,10 +1569,16 @@ bool BehaviorGraphEdit::IsNodeValid(const GraphEditNode *node) const {
 }
 
 BehaviorLinkRef *BehaviorGraphEdit::ResolveLink(const GraphEditLink *link) const {
-    if (!link || link->EditOwner() != this) {
+    CKBehavior *root = RootBehavior();
+    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
+    if (!root || !context || !link || link->EditOwner() != this || !link->Error().empty()) {
         return nullptr;
     }
     if (link->LinkId()) {
+        CKBehaviorLink *rawLink = CKBehaviorLink::Cast(GetCKObjectById(context, link->LinkId()));
+        if (!rawLink || !ScriptBridgeGraphInternal::GraphContainsLink(root, rawLink)) {
+            return nullptr;
+        }
         return new BehaviorLinkRef(m_Bridge, m_RootBehaviorId, link->LinkId(), ComponentIdFromContext(m_Context));
     }
     const int index = link->SpecIndex();
@@ -1575,7 +1586,53 @@ BehaviorLinkRef *BehaviorGraphEdit::ResolveLink(const GraphEditLink *link) const
         return nullptr;
     }
     const LinkSpec &spec = m_Links[index];
-    return spec.CreatedLinkId ? new BehaviorLinkRef(m_Bridge, m_RootBehaviorId, spec.CreatedLinkId, ComponentIdFromContext(m_Context)) : nullptr;
+    if (!spec.CreatedLinkId) {
+        return nullptr;
+    }
+    CKBehaviorLink *rawLink = CKBehaviorLink::Cast(GetStampedCKObjectById(context, spec.CreatedLinkId, spec.CreatedLinkStamp));
+    if (!rawLink ||
+        (spec.CreatedLinkAddress && ScriptBridgeObjectAddress(rawLink) != spec.CreatedLinkAddress) ||
+        !ScriptBridgeGraphInternal::GraphContainsLink(root, rawLink)) {
+        return nullptr;
+    }
+    return new BehaviorLinkRef(m_Bridge,
+                               m_RootBehaviorId,
+                               spec.CreatedLinkId,
+                               ComponentIdFromContext(m_Context),
+                               spec.CreatedLinkStamp,
+                               spec.CreatedLinkAddress,
+                               context);
+}
+
+bool BehaviorGraphEdit::IsLinkValid(const GraphEditLink *link) const {
+    if (!RootBehavior() || !link || link->EditOwner() != this || !link->Error().empty()) {
+        return false;
+    }
+    if (link->LinkId()) {
+        BehaviorLinkRef *resolved = ResolveLink(link);
+        const bool valid = resolved && resolved->IsValid();
+        if (resolved) {
+            resolved->Release();
+        }
+        return valid;
+    }
+    const int index = link->SpecIndex();
+    if (index < 0 || index >= static_cast<int>(m_Links.size())) {
+        return false;
+    }
+    const LinkSpec &spec = m_Links[index];
+    if (spec.Type == LinkSpec::Kind::Create && !spec.CreatedLinkId) {
+        return true;
+    }
+    if (spec.Type != LinkSpec::Kind::Create || !spec.CreatedLinkId) {
+        return false;
+    }
+    BehaviorLinkRef *resolved = ResolveLink(link);
+    const bool valid = resolved && resolved->IsValid();
+    if (resolved) {
+        resolved->Release();
+    }
+    return valid;
 }
 
 GraphEditResult *BehaviorGraphEdit::MakeResult(bool ok,
@@ -2498,6 +2555,22 @@ BehaviorLinkRef::BehaviorLinkRef(ScriptBehaviorBridge *bridge,
                                  CK_ID componentId,
                                  CKContext *context)
     : ObjectRef(context ? context : (bridge && bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr), linkId),
+      m_Bridge(bridge),
+      m_RootBehaviorId(rootBehaviorId),
+      m_ComponentId(componentId) {}
+
+BehaviorLinkRef::BehaviorLinkRef(ScriptBehaviorBridge *bridge,
+                                 CK_ID rootBehaviorId,
+                                 CK_ID linkId,
+                                 CK_ID componentId,
+                                 const ScriptBridgeObjectStamp &linkStamp,
+                                 std::uintptr_t linkAddress,
+                                 CKContext *context)
+    : ObjectRef(context ? context : (bridge && bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr),
+                linkId,
+                linkStamp,
+                std::string(),
+                linkAddress),
       m_Bridge(bridge),
       m_RootBehaviorId(rootBehaviorId),
       m_ComponentId(componentId) {}

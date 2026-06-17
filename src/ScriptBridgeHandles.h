@@ -552,6 +552,7 @@ public:
     CKBehavior *RootBehavior() const;
     CKBehavior *ResolveNode(const GraphEditNode *node) const;
     bool IsNodeValid(const GraphEditNode *node) const;
+    bool IsLinkValid(const GraphEditLink *link) const;
     BehaviorLinkRef *ResolveLink(const GraphEditLink *link) const;
 
 private:
@@ -577,6 +578,8 @@ private:
         CK_ID ExistingLinkId = 0;
         ScriptBridgeObjectStamp ExistingLinkStamp;
         CK_ID CreatedLinkId = 0;
+        ScriptBridgeObjectStamp CreatedLinkStamp;
+        std::uintptr_t CreatedLinkAddress = 0;
     };
 
     struct RemoveSpec {
@@ -727,6 +730,13 @@ public:
                     CK_ID rootBehaviorId,
                     CK_ID linkId,
                     CK_ID componentId,
+                    CKContext *context = nullptr);
+    BehaviorLinkRef(ScriptBehaviorBridge *bridge,
+                    CK_ID rootBehaviorId,
+                    CK_ID linkId,
+                    CK_ID componentId,
+                    const ScriptBridgeObjectStamp &linkStamp,
+                    std::uintptr_t linkAddress,
                     CKContext *context = nullptr);
 
     bool IsValid() const;

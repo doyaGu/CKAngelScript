@@ -11,10 +11,6 @@
 
 namespace {
 
-std::uintptr_t ObjectAddress(CKObject *object) {
-    return reinterpret_cast<std::uintptr_t>(object);
-}
-
 CKObject *ObjectById(CKContext *context, CK_ID id) {
     return id ? GetCKObjectById(context, id) : nullptr;
 }
@@ -160,7 +156,7 @@ ObjectRef::ObjectRef(CKContext *context, CKObject *object) {
 
 ObjectRef::ObjectRef(CKContext *context, CK_ID id, std::string error) {
     CKObject *object = ObjectById(context, id);
-    ResetObject(context, id, CaptureBridgeObjectStamp(object), std::move(error), ObjectAddress(object));
+    ResetObject(context, id, CaptureBridgeObjectStamp(object), std::move(error), ScriptBridgeObjectAddress(object));
 }
 
 ObjectRef::ObjectRef(CKContext *context,
@@ -235,7 +231,7 @@ CKObject *ObjectRef::Resolve() const {
         m_Error = fmt::format("Object id={} is pending deletion.", m_Id);
         return nullptr;
     }
-    if (m_ObjectAddress && ObjectAddress(object) != m_ObjectAddress) {
+    if (m_ObjectAddress && ScriptBridgeObjectAddress(object) != m_ObjectAddress) {
         m_Error = fmt::format("Object id={} was reused by another native object.", m_Id);
         return nullptr;
     }
@@ -249,7 +245,7 @@ void ObjectRef::ResetObject(CKContext *context, CKObject *object, std::string er
                 object ? object->GetID() : 0,
                 CaptureBridgeObjectStamp(object),
                 std::move(error),
-                ObjectAddress(object));
+                ScriptBridgeObjectAddress(object));
 }
 
 void ObjectRef::ResetObject(CKContext *context,

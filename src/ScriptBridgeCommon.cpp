@@ -22,6 +22,10 @@ CKObject *GetCKObjectById(CKContext *context, CK_ID id) {
     return context && id ? CKGetObject(context, id) : nullptr;
 }
 
+std::uintptr_t ScriptBridgeObjectAddress(CKObject *object) {
+    return reinterpret_cast<std::uintptr_t>(object);
+}
+
 ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object) {
     ScriptBridgeObjectStamp stamp;
     if (!object) {
