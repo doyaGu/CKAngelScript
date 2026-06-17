@@ -683,7 +683,7 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKRenderContext", "CKWORD &GetDrawPrimitiveIndices(int indicesCount)", asMETHODPR(CKRenderContext, GetDrawPrimitiveIndices, (int), CKWORD*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "void Transform(VxVector &out dest, const VxVector &in src, CK3dEntity@ ref = null)", asMETHODPR(CKRenderContext, Transform, (VxVector *, VxVector *, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "void TransformVertices(int vertexCount, VxTransformData &out data, CK3dEntity@ ref = null)", asMETHODPR(CKRenderContext, TransformVertices, (int, VxTransformData*, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void TransformVertices(int vertexCount, VxTransformData &inout data, CK3dEntity@ ref = null)", asMETHODPR(CKRenderContext, TransformVertices, (int, VxTransformData*, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "CKERROR GoFullScreen(int width = 640, int height = 480, int bpp = -1, int driver = 0, int refreshRate = 0)", asMETHODPR(CKRenderContext, GoFullScreen, (int, int, int, int, int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "CKERROR StopFullScreen()", asMETHODPR(CKRenderContext, StopFullScreen, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

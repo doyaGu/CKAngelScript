@@ -1093,6 +1093,25 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxSpriteRenderOptions assignedSpriteOptions;\n"
         "  assignedSpriteOptions = copiedSpriteOptions;\n"
         "  if (assignedSpriteOptions.SrcBlendMode != VXBLEND_SRCALPHA || assignedSpriteOptions.DstBlendMode != VXBLEND_INVSRCALPHA) return 854;\n"
+        "  VxTransformData transformData;\n"
+        "  NativeBuffer@ transformIn = NativeBuffer(12);\n"
+        "  NativeBuffer@ transformOut = NativeBuffer(16);\n"
+        "  NativeBuffer@ transformScreenBuffer = NativeBuffer(16);\n"
+        "  NativeBuffer@ transformClip = NativeBuffer(4);\n"
+        "  transformData.InVertices = transformIn.ToPointer();\n"
+        "  transformData.OutVertices = transformOut.ToPointer();\n"
+        "  transformData.ScreenVertices = transformScreenBuffer.ToPointer();\n"
+        "  transformData.ClipFlags = transformClip.ToPointer();\n"
+        "  transformData.InStride = 12;\n"
+        "  transformData.OutStride = 16;\n"
+        "  transformData.ScreenStride = 16;\n"
+        "  transformData.m_Offscreen = 1;\n"
+        "  if (transformData.InVertices.IsNull() || transformData.OutVertices.IsNull() || transformData.ScreenVertices.IsNull() || transformData.ClipFlags.IsNull()) return 870;\n"
+        "  VxTransformData copiedTransformData(transformData);\n"
+        "  if (copiedTransformData.InStride != 12 || copiedTransformData.OutStride != 16 || copiedTransformData.m_Offscreen != 1) return 871;\n"
+        "  VxTransformData assignedTransformData;\n"
+        "  assignedTransformData = copiedTransformData;\n"
+        "  if (assignedTransformData.ScreenStride != 16 || assignedTransformData.ClipFlags.IsNull()) return 872;\n"
         "  VxCompressedVector compressed = {0.0f, 1.0f, 0.0f};\n"
         "  VxCompressedVector copiedCompressed;\n"
         "  copiedCompressed = compressed;\n"
@@ -1759,9 +1778,13 @@ static void RegisterVxTransformData(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxTransformData", "VxTransformData &opAssign(const VxTransformData &in other)", asMETHODPR(VxTransformData, operator=, (const VxTransformData &), VxTransformData &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxTransformData", "NativePointer get_InVertices() const", asFUNCTIONPR([](const VxTransformData *self) { return NativePointer(self->InVertices); }, (const VxTransformData *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxTransformData", "void set_InVertices(NativePointer ptr)", asFUNCTIONPR([](VxTransformData *self, NativePointer ptr) { self->InVertices = ptr.Get(); }, (VxTransformData *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxTransformData", "NativePointer get_OutVertices() const", asFUNCTIONPR([](const VxTransformData *self) { return NativePointer(self->OutVertices); }, (const VxTransformData *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxTransformData", "void set_OutVertices(NativePointer ptr)", asFUNCTIONPR([](VxTransformData *self, NativePointer ptr) { self->OutVertices = ptr.Get(); }, (VxTransformData *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxTransformData", "NativePointer get_ScreenVertices() const", asFUNCTIONPR([](const VxTransformData *self) { return NativePointer(self->ScreenVertices); }, (const VxTransformData *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxTransformData", "void set_ScreenVertices(NativePointer ptr)", asFUNCTIONPR([](VxTransformData *self, NativePointer ptr) { self->ScreenVertices = ptr.Get(); }, (VxTransformData *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxTransformData", "NativePointer get_ClipFlags() const", asFUNCTIONPR([](const VxTransformData *self) { return NativePointer(self->ClipFlags); }, (const VxTransformData *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxTransformData", "void set_ClipFlags(NativePointer ptr)", asFUNCTIONPR([](VxTransformData *self, NativePointer ptr) { self->ClipFlags = reinterpret_cast<unsigned int *>(ptr.Get()); }, (VxTransformData *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // VxDirectXData
