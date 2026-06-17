@@ -142,6 +142,15 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
         return CKERR_INVALIDOPERATION;
     }
 
+    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "vx-bindings", std::string());
+    if (!RunScriptVxBindingSelfTest(error)) {
+        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+                                                             "vx-bindings",
+                                                             "Vx bindings",
+                                                             error);
+        return CKERR_INVALIDOPERATION;
+    }
+
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "behavior-bridge", std::string());
     if (!RunScriptBehaviorBridgeSelfTest(manager ? manager->GetCKContext() : nullptr,
                                          manager ? manager->GetScriptEngine() : nullptr,

@@ -1011,6 +1011,87 @@ static void RegisterVxDisplayMode(asIScriptEngine *engine) {
 
 // VxDrawPrimitiveData
 
+#if CKVERSION == 0x13022002 || CKVERSION == 0x05082002
+static NativePointer GetVxDrawPrimitiveTexCoordPtr(const VxDrawPrimitiveData *self, int stage) {
+    if (!self || stage < 0 || stage >= CKRST_MAX_STAGES) {
+        return NativePointer();
+    }
+    return stage == 0 ? NativePointer(self->TexCoordPtr) : NativePointer(self->TexCoordPtrs[stage - 1]);
+}
+
+static unsigned int GetVxDrawPrimitiveTexCoordStride(const VxDrawPrimitiveData *self, int stage) {
+    if (!self || stage < 0 || stage >= CKRST_MAX_STAGES) {
+        return 0;
+    }
+    return stage == 0 ? self->TexCoordStride : self->TexCoordStrides[stage - 1];
+}
+#else
+static VxStridedData GetVxDrawPrimitiveTexCoord(const VxDrawPrimitiveData *self, int stage) {
+    if (!self || stage < 0 || stage >= CKRST_MAX_STAGES) {
+        return VxStridedData();
+    }
+    return stage == 0 ? self->TexCoord : self->TexCoords[stage - 1];
+}
+#endif
+
+bool RunScriptVxBindingSelfTest(std::string &error) {
+#if CKVERSION == 0x13022002 || CKVERSION == 0x05082002
+    VxDrawPrimitiveData data = {};
+    char stages[CKRST_MAX_STAGES] = {};
+    data.TexCoordPtr = &stages[0];
+    data.TexCoordStride = 8;
+    for (int stage = 1; stage < CKRST_MAX_STAGES; ++stage) {
+        data.TexCoordPtrs[stage - 1] = &stages[stage];
+        data.TexCoordStrides[stage - 1] = static_cast<unsigned int>(8 + stage);
+    }
+
+    if (GetVxDrawPrimitiveTexCoordPtr(&data, 0).Get() != &stages[0] ||
+        GetVxDrawPrimitiveTexCoordStride(&data, 0) != 8) {
+        error = "VxDrawPrimitiveData stage 0 texture coordinate access is invalid.";
+        return false;
+    }
+    if (GetVxDrawPrimitiveTexCoordPtr(&data, 1).Get() != &stages[1] ||
+        GetVxDrawPrimitiveTexCoordStride(&data, 1) != 9) {
+        error = "VxDrawPrimitiveData stage 1 texture coordinate access is invalid.";
+        return false;
+    }
+    if (GetVxDrawPrimitiveTexCoordPtr(&data, CKRST_MAX_STAGES - 1).Get() != &stages[CKRST_MAX_STAGES - 1] ||
+        GetVxDrawPrimitiveTexCoordStride(&data, CKRST_MAX_STAGES - 1) != static_cast<unsigned int>(8 + CKRST_MAX_STAGES - 1)) {
+        error = "VxDrawPrimitiveData last texture coordinate stage is unreachable.";
+        return false;
+    }
+    if (GetVxDrawPrimitiveTexCoordPtr(&data, -1).Get() ||
+        GetVxDrawPrimitiveTexCoordPtr(&data, CKRST_MAX_STAGES).Get() ||
+        GetVxDrawPrimitiveTexCoordStride(&data, -1) != 0 ||
+        GetVxDrawPrimitiveTexCoordStride(&data, CKRST_MAX_STAGES) != 0) {
+        error = "VxDrawPrimitiveData out-of-range texture coordinate stages are not rejected.";
+        return false;
+    }
+#else
+    VxDrawPrimitiveData data = {};
+    char stages[CKRST_MAX_STAGES] = {};
+    data.TexCoord.Ptr = &stages[0];
+    data.TexCoord.Stride = 8;
+    for (int stage = 1; stage < CKRST_MAX_STAGES; ++stage) {
+        data.TexCoords[stage - 1].Ptr = &stages[stage];
+        data.TexCoords[stage - 1].Stride = static_cast<unsigned int>(8 + stage);
+    }
+
+    if (GetVxDrawPrimitiveTexCoord(&data, 0).Ptr != &stages[0] ||
+        GetVxDrawPrimitiveTexCoord(&data, 0).Stride != 8 ||
+        GetVxDrawPrimitiveTexCoord(&data, 1).Ptr != &stages[1] ||
+        GetVxDrawPrimitiveTexCoord(&data, 1).Stride != 9 ||
+        GetVxDrawPrimitiveTexCoord(&data, CKRST_MAX_STAGES - 1).Ptr != &stages[CKRST_MAX_STAGES - 1] ||
+        GetVxDrawPrimitiveTexCoord(&data, CKRST_MAX_STAGES - 1).Stride != static_cast<unsigned int>(8 + CKRST_MAX_STAGES - 1) ||
+        GetVxDrawPrimitiveTexCoord(&data, -1).Ptr ||
+        GetVxDrawPrimitiveTexCoord(&data, CKRST_MAX_STAGES).Ptr) {
+        error = "VxDrawPrimitiveData texture coordinate stage access is invalid.";
+        return false;
+    }
+#endif
+    return true;
+}
+
 static void RegisterVxDrawPrimitiveData(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1051,10 +1132,10 @@ static void RegisterVxDrawPrimitiveData(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "NativePointer get_SpecularColorPtr() const", asFUNCTIONPR([](const VxDrawPrimitiveData *self) { return NativePointer(self->SpecularColorPtr); }, (const VxDrawPrimitiveData *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "NativePointer get_TexCoordPtr() const", asFUNCTIONPR([](const VxDrawPrimitiveData *self) { return NativePointer(self->TexCoordPtr); }, (const VxDrawPrimitiveData *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "NativePointer GetTexCoordPtrs(int i) const", asFUNCTIONPR([](const VxDrawPrimitiveData *self, int i) -> NativePointer { if (i == 0) return NativePointer(self->TexCoordPtr); else if (0 < i && i < CKRST_MAX_STAGES - 1) return NativePointer(self->TexCoordPtrs[i]); else return NativePointer(); }, (const VxDrawPrimitiveData *, int), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "uint GetTexCoordStrides(int i) const", asFUNCTIONPR([](const VxDrawPrimitiveData *self, int i) -> unsigned int { if (i == 0) return self->TexCoordStride; else if (0 < i && i < CKRST_MAX_STAGES - 1) return self->TexCoordStrides[i]; else return 0; }, (const VxDrawPrimitiveData *, int), unsigned int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "NativePointer GetTexCoordPtrs(int i) const", asFUNCTION(GetVxDrawPrimitiveTexCoordPtr), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "uint GetTexCoordStrides(int i) const", asFUNCTION(GetVxDrawPrimitiveTexCoordStride), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #else
-    r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "VxStridedData GetTexCoords(int i) const", asFUNCTIONPR([](const VxDrawPrimitiveData *self, int i) -> VxStridedData { if (i == 0) return self->TexCoord; else if (0 < i && i < CKRST_MAX_STAGES - 1) return self->TexCoords[i]; else return VxStridedData(); }, (const VxDrawPrimitiveData *, int), VxStridedData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxDrawPrimitiveData", "VxStridedData GetTexCoords(int i) const", asFUNCTION(GetVxDrawPrimitiveTexCoord), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
 }
 
