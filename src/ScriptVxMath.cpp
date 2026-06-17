@@ -1034,11 +1034,25 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "float ReadConstFrustumRBound(const VxFrustum &in frustum) {\n"
         "  return frustum.GetRBound();\n"
         "}\n"
+        "uint8 ReadConstXStringIndex(const XString &in value) {\n"
+        "  return value[0];\n"
+        "}\n"
         "VX_EFFECTCALLBACK_RETVAL VxEffectSmokeCallback(CKRenderContext@ dev, CKMaterial@ mat, int stage, NativePointer argument) {\n"
         "  if (dev !is null || mat !is null || stage != 3 || argument.IsNull()) return VXEFFECTRETVAL_SKIPALL;\n"
         "  return VXEFFECTRETVAL_SKIPNONE;\n"
         "}\n"
         "int Run() {\n"
+        "  XString xstr(\"abaca\");\n"
+        "  if (!(xstr < XString(\"abacb\"))) return 859;\n"
+        "  if (!(xstr < \"abacb\")) return 860;\n"
+        "  if (!xstr.Contains(XString(\"ba\"))) return 861;\n"
+        "  if (xstr.RFind(97) != 2) return 862;\n"
+        "  if (xstr.Find(97) != 0) return 863;\n"
+        "  if (xstr[1] != 98) return 864;\n"
+        "  xstr[1] = 90;\n"
+        "  if (xstr[1] != 90 || ReadConstXStringIndex(xstr) != 97) return 865;\n"
+        "  XString xcopy(xstr);\n"
+        "  if (!(xcopy == xstr) || string(xcopy) != \"aZaca\") return 866;\n"
         "  Vx2DCapsDesc caps2d;\n"
         "  caps2d.Family = CKRST_DIRECTX;\n"
         "  caps2d.MaxVideoMemory = 0x01020304;\n"
@@ -1634,6 +1648,10 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "void OutOfRangeVxQuaternionIndex() {\n"
         "  VxQuaternion quat(1.0f, 2.0f, 3.0f, 4.0f);\n"
         "  quat[4] = 0.0f;\n"
+        "}\n"
+        "void OutOfRangeXStringIndex() {\n"
+        "  XString value(\"x\");\n"
+        "  value[1] = 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -1735,6 +1753,9 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
     }
     if (ok) {
         ok = runExpectedException("void OutOfRangeVxQuaternionIndex()", "VxQuaternion index out of range", "VxQuaternion out-of-range access");
+    }
+    if (ok) {
+        ok = runExpectedException("void OutOfRangeXStringIndex()", "Out of range", "XString out-of-range access");
     }
 
     context->Unprepare();
