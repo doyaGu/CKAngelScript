@@ -959,6 +959,10 @@ static void RegisterVxStridedData(asIScriptEngine *engine) {
 
 // VxUV
 
+static VxUV VxUVScaleLeft(float scalar, const VxUV &uv) {
+    return scalar * uv;
+}
+
 static void RegisterVxUV(asIScriptEngine *engine) {
     int r = 0;
 
@@ -966,7 +970,8 @@ static void RegisterVxUV(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("VxUV", "float v", asOFFSET(VxUV, v)); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxUV *self) { new(self) VxUV(); }, (VxUV *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f(float u = 0, float v = 0)", asFUNCTIONPR([](float u, float v, VxUV *self) { new(self) VxUV(u, v); }, (float, float, VxUV *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f(float u)", asFUNCTIONPR([](float u, VxUV *self) { new(self) VxUV(u); }, (float, VxUV *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f(float u, float v)", asFUNCTIONPR([](float u, float v, VxUV *self) { new(self) VxUV(u, v); }, (float, float, VxUV *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_CONSTRUCT, "void f(const VxUV &in uv)", asFUNCTIONPR([](const VxUV &uv, VxUV *self) { new(self) VxUV(uv); }, (const VxUV &, VxUV *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("VxUV", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxUV *self) { self->~VxUV(); }, (VxUV *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -983,6 +988,7 @@ static void RegisterVxUV(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxUV", "VxUV opAdd(const VxUV &in uv) const", asFUNCTIONPR([](const VxUV &v1, const VxUV &v2) { return v1 + v2; }, (const VxUV &, const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxUV", "VxUV opSub(const VxUV &in uv) const", asFUNCTIONPR([](const VxUV &v1, const VxUV &v2) { return v1 - v2; }, (const VxUV &, const VxUV &), VxUV), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxUV", "VxUV opMul(float s) const", asFUNCTIONPR([](const VxUV &uv, float s) { return uv * s; }, (const VxUV &, float), VxUV), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxUV", "VxUV opMul_r(float s) const", asFUNCTION(VxUVScaleLeft), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxUV", "VxUV opDiv(float s) const", asFUNCTIONPR([](const VxUV& uv, float s) { return uv / s; }, (const VxUV &, float), VxUV), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
@@ -1127,6 +1133,28 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxVector4 multipliedVector4;\n"
         "  Vx3DMultiplyMatrixVector4(multipliedVector4, identity, VxVector4(1.0f, 2.0f, 3.0f, 4.0f));\n"
         "  if (multipliedVector4.x != 1.0f || multipliedVector4.y != 2.0f || multipliedVector4.z != 3.0f || multipliedVector4.w != 4.0f) return 47;\n"
+        "  VxUV defaultUv;\n"
+        "  if (defaultUv.u != 0.0f || defaultUv.v != 0.0f) return 48;\n"
+        "  VxUV defaultUvCall = VxUV();\n"
+        "  if (defaultUvCall.u != 0.0f || defaultUvCall.v != 0.0f) return 49;\n"
+        "  VxUV oneArgUv(3.0f);\n"
+        "  if (oneArgUv.u != 3.0f || oneArgUv.v != 0.0f) return 50;\n"
+        "  VxUV uv(1.0f, 2.0f);\n"
+        "  VxUV copiedUv(uv);\n"
+        "  if (copiedUv.u != 1.0f || copiedUv.v != 2.0f) return 51;\n"
+        "  VxUV uvSum = uv + VxUV(3.0f, 4.0f);\n"
+        "  if (uvSum.u != 4.0f || uvSum.v != 6.0f) return 52;\n"
+        "  VxUV uvDiff = VxUV(3.0f, 5.0f) - uv;\n"
+        "  if (uvDiff.u != 2.0f || uvDiff.v != 3.0f) return 53;\n"
+        "  VxUV uvScalarRight = uv * 2.0f;\n"
+        "  if (uvScalarRight.u != 2.0f || uvScalarRight.v != 4.0f) return 54;\n"
+        "  VxUV uvScalarLeft = 2.0f * uv;\n"
+        "  if (uvScalarLeft.u != 2.0f || uvScalarLeft.v != 4.0f) return 55;\n"
+        "  VxUV uvDiv = VxUV(4.0f, 8.0f) / 2.0f;\n"
+        "  if (uvDiv.u != 2.0f || uvDiv.v != 4.0f) return 56;\n"
+        "  uv += VxUV(1.0f, 1.0f);\n"
+        "  uv *= 2.0f;\n"
+        "  if (uv.u != 4.0f || uv.v != 6.0f) return 57;\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
