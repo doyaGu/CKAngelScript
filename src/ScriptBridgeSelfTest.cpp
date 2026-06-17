@@ -159,6 +159,35 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    missingGuidDecl.IsValid(); missingGuidDecl.Error();\n";
     source += "    return 0;\n";
     source += "}\n";
+    source += "int ProbeBBCallBuilderApi(const CKBehaviorContext &in ctx) {\n";
+    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    if (decl is null || !decl.IsValid()) return 910;\n";
+    source += "    BBSlot@ pin = decl.Pin(\"pIn 0\");\n";
+    source += "    BBSlot@ input = decl.Input(\"In\");\n";
+    source += "    if (pin is null || !pin.IsValid() || input is null || !input.IsValid()) return 911;\n";
+    source += "    ParamValue@ intValue = Param::Int(7);\n";
+    source += "    if (intValue is null || !intValue.IsValid()) return 912;\n";
+    source += "    CKObject@ objectValue = null;\n";
+    source += "    BBCallBuilder@ call = BB::Call(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    if (call is null) return 913;\n";
+    source += "    if (call.Owner(null) is null || call.Target(null) is null || call.Set(0, intValue) is null) return 914;\n";
+    source += "    BBResult@ result = call.Run();\n";
+    source += "    if (result is null || !result.Ok() || !result.OutputActive(0)) return 915;\n";
+    source += "    result.ReturnCode();\n";
+    source += "    BBCallBuilder@ slotCall = BB::Call(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    if (slotCall is null) return 916;\n";
+    source += "    slotCall.Set(pin, intValue);\n";
+    source += "    slotCall.Set(pin, 8);\n";
+    source += "    slotCall.Set(pin, 8.0f);\n";
+    source += "    slotCall.Set(pin, true);\n";
+    source += "    slotCall.Set(pin, \"8\");\n";
+    source += "    slotCall.Set(pin, objectValue);\n";
+    source += "    if (slotCall.Set(pin, intValue) is null) return 917;\n";
+    source += "    BBResult@ slotResult = slotCall.Run(input);\n";
+    source += "    if (slotResult is null || !slotResult.Ok() || !slotResult.OutputActive(0)) return 918;\n";
+    source += "    slotResult.ReturnCode();\n";
+    source += "    return 0;\n";
+    source += "}\n";
     source += "void ProbeGraphTaskApi(const CKBehaviorContext &in ctx, BehaviorRef@ ref, GraphTask@ task) {\n";
     source += "    BBDecl@ spec = BB::Require(ctx, \"__missing__\"); BBSlot@ input = spec !is null ? spec.Input(\"In\") : null; BBSlot@ output = spec !is null ? spec.Output(\"Out\") : null; BBSlot@ pinSlot = spec !is null ? spec.Pin(\"Value\") : null; BBSlot@ poutSlot = spec !is null ? spec.Pout(\"Value\") : null;\n";
     source += "    if (ref !is null) { BehaviorLayout@ l = ref.Layout(); int p = l.FindPin(\"Value\"); ParamRef@ pin = p >= 0 ? ref.Pin(p) : null; ParamSourceLinkRef@ link = pin !is null ? pin.SetSourceScoped(pin) : null; if (link !is null) { link.IsValid(); link.Commit(); link.Restore(); link.Describe(); } ParamOperationRef@ opRef = null; if (opRef !is null) opRef.Restore(); GraphTask@ s = ref.Start(0); GraphTask@ ss = ref.Start(input); ref.Trigger(input); ref.OutputActive(output); ref.Pin(pinSlot); ref.Pout(poutSlot); GraphTask@ w = ref.Watch(); }\n";
@@ -259,6 +288,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (textValue is null || !textValue.IsValid()) return 55;\n";
     source += "    int bbBridgeResult = ProbeBBBridgeApi(ctx);\n";
     source += "    if (bbBridgeResult != 0) return bbBridgeResult;\n";
+    source += "    int bbCallBuilderResult = ProbeBBCallBuilderApi(ctx);\n";
+    source += "    if (bbCallBuilderResult != 0) return bbCallBuilderResult;\n";
     source += "    return 0;\n";
     source += "}\n";
 
@@ -2120,10 +2151,12 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     bridge->InvalidateBehaviorLayout(behavior->GetID());
     WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-duplicate", std::string());
     const ScriptBridgeLayoutRecord *duplicateInputLayout = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
+    CKBehaviorContext emptyBehaviorContext = {};
+    ScriptBridgeBBInvocationSpec emptyRequest = MakeDefaultRequest(emptyBehaviorContext);
     BBSlot *duplicateInput = duplicateInputLayout
         ? new BBSlot(bridge,
-                     CKBehaviorContext(),
-                     MakeDefaultRequest(CKBehaviorContext()),
+                     emptyBehaviorContext,
+                     emptyRequest,
                      ScriptBridgeSlotKind::Input,
                      1,
                      "In",
@@ -2137,7 +2170,8 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
                      behavior->GetID(),
                      stamp)
         : nullptr;
-    if (!duplicateInput || !duplicateInput->IsValid()) {
+    const bool duplicateInputValid = duplicateInput && duplicateInput->IsValid();
+    if (!duplicateInputValid) {
         if (duplicateInput) {
             duplicateInput->Release();
         }
@@ -2151,7 +2185,7 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     SetScriptBridgeSlotMetadataFlag(defaultInputFlags, ScriptBridgeSlotMetadataFlags::Stop, true);
     duplicateInput->SetMetadata(defaultInputFlags, std::string(), std::string());
 
-    BBConfig defaultInputConfig(bridge, CKBehaviorContext(), MakeDefaultRequest(CKBehaviorContext()));
+    BBConfig defaultInputConfig(bridge, emptyBehaviorContext, emptyRequest);
     WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-register", std::string());
     if (!defaultInputConfig.RegisterSlot(duplicateInput)) {
         error = "BBConfig duplicate input metadata self-test failed to register slot: " + defaultInputConfig.Error();

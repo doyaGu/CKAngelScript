@@ -289,6 +289,8 @@ struct ScriptBridgeBBInvocationSpec {
     CK_ID ComponentId = 0;
     CK_ID OwnerId = 0;
     CK_ID TargetId = 0;
+    ScriptBridgeObjectStamp OwnerStamp;
+    ScriptBridgeObjectStamp TargetStamp;
     std::vector<ScriptBridgeIndexedValue> IndexedParameters;
     std::vector<ScriptBridgeIndexedValue> IndexedSettings;
     std::vector<ScriptBridgeInputSource> SourceParameters;

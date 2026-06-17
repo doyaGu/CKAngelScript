@@ -919,19 +919,19 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
 
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Owner(CKBeObject@ owner)", asMETHOD(BBCallBuilder, Owner), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Target(CKBeObject@ target)", asMETHOD(BBCallBuilder, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(int pinIndex, ParamValue@ value)", asMETHOD(BBCallBuilder, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@ pin, ParamValue@ value)", asMETHOD(BBCallBuilder, SetSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@ pin, int value)", asMETHOD(BBCallBuilder, SetSlotInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@ pin, float value)", asMETHOD(BBCallBuilder, SetSlotFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@ pin, bool value)", asMETHOD(BBCallBuilder, SetSlotBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@ pin, const string &in value)", asMETHOD(BBCallBuilder, SetSlotString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@ pin, CKObject@ value)", asMETHOD(BBCallBuilder, SetSlotObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ SetSource(int pinIndex, ParamRef@ source)", asMETHOD(BBCallBuilder, SetSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Source(BBSlot@ pin, ParamRef@ source)", asMETHOD(BBCallBuilder, Source), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ SetOperation(int pinIndex, ParamOp@ operation)", asMETHOD(BBCallBuilder, SetOperation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Operation(BBSlot@ pin, ParamOp@ operation)", asMETHOD(BBCallBuilder, Operation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(int pinIndex, ParamValue@+ value)", asMETHOD(BBCallBuilder, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@+ pin, ParamValue@+ value)", asMETHOD(BBCallBuilder, SetSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@+ pin, int value)", asMETHOD(BBCallBuilder, SetSlotInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@+ pin, float value)", asMETHOD(BBCallBuilder, SetSlotFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@+ pin, bool value)", asMETHOD(BBCallBuilder, SetSlotBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@+ pin, const string &in value)", asMETHOD(BBCallBuilder, SetSlotString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@+ pin, CKObject@ value)", asMETHOD(BBCallBuilder, SetSlotObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ SetSource(int pinIndex, ParamRef@+ source)", asMETHOD(BBCallBuilder, SetSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Source(BBSlot@+ pin, ParamRef@+ source)", asMETHOD(BBCallBuilder, Source), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ SetOperation(int pinIndex, ParamOp@+ operation)", asMETHOD(BBCallBuilder, SetOperation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Operation(BBSlot@+ pin, ParamOp@+ operation)", asMETHOD(BBCallBuilder, Operation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBResult@ Run(int inputIndex = 0)", asMETHOD(BBCallBuilder, Run), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBCallBuilder", "BBResult@ Run(BBSlot@ input)", asMETHOD(BBCallBuilder, RunSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBResult@ Run(BBSlot@+ input)", asMETHOD(BBCallBuilder, RunSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTaskBuilder@ Owner(CKBeObject@ owner)", asMETHOD(BBTaskBuilder, Owner), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTaskBuilder@ Target(CKBeObject@ target)", asMETHOD(BBTaskBuilder, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

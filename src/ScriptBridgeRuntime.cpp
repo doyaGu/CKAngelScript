@@ -66,12 +66,40 @@ bool NotifyIndexedSettingsEdited(CKBehavior *behavior,
     return true;
 }
 
+CKBeObject *ResolveRequestBeObject(CKContext *context,
+                                   CK_ID id,
+                                   const ScriptBridgeObjectStamp &stamp,
+                                   const char *role,
+                                   std::string &error) {
+    if (!id) {
+        return nullptr;
+    }
+
+    CKObject *object = stamp.Flags != 0 ? GetStampedCKObjectById(context, id, stamp) : GetCKObjectById(context, id);
+    if (!object) {
+        error = fmt::format("{} object {} is no longer valid.", role ? role : "Building Block request", id);
+        return nullptr;
+    }
+
+    CKBeObject *beObject = CKBeObject::Cast(object);
+    if (!beObject) {
+        error = fmt::format("{} object {} is no longer a CKBeObject.", role ? role : "Building Block request", id);
+    }
+    return beObject;
+}
+
 bool ConfigureBehaviorOwnerAndTarget(CKContext *context,
                                      CKBehavior *behavior,
                                      const ScriptBridgeBBInvocationSpec &request,
                                      std::string &error) {
-    CKBeObject *owner = request.OwnerId ? CKBeObject::Cast(GetCKObjectById(context, request.OwnerId)) : nullptr;
-    CKBeObject *target = request.TargetId ? CKBeObject::Cast(GetCKObjectById(context, request.TargetId)) : nullptr;
+    CKBeObject *owner = ResolveRequestBeObject(context, request.OwnerId, request.OwnerStamp, "Owner", error);
+    if (request.OwnerId && !owner) {
+        return false;
+    }
+    CKBeObject *target = ResolveRequestBeObject(context, request.TargetId, request.TargetStamp, "Target", error);
+    if (request.TargetId && !target) {
+        return false;
+    }
     const CK_CLASSID compatibleClassId = behavior->GetCompatibleClassID();
 
     if (target) {
@@ -313,7 +341,14 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
     }
     createCallbackSent = true;
 
-    CKBeObject *owner = request.OwnerId ? CKBeObject::Cast(GetCKObjectById(context, request.OwnerId)) : nullptr;
+    CKBeObject *owner = ScriptBehaviorBridgeInternal::ResolveRequestBeObject(context,
+                                                                             request.OwnerId,
+                                                                             request.OwnerStamp,
+                                                                             "Owner",
+                                                                             error);
+    if (request.OwnerId && !owner) {
+        return fail(error);
+    }
     if (owner) {
         err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORATTACH, &ctx);
         if (err != CK_OK) {
@@ -887,7 +922,14 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
     }
     createCallbackSent = true;
 
-    CKBeObject *owner = request.OwnerId ? CKBeObject::Cast(GetCKObjectById(context, request.OwnerId)) : nullptr;
+    CKBeObject *owner = ScriptBehaviorBridgeInternal::ResolveRequestBeObject(context,
+                                                                             request.OwnerId,
+                                                                             request.OwnerStamp,
+                                                                             "Owner",
+                                                                             error);
+    if (request.OwnerId && !owner) {
+        return fail(error);
+    }
     if (owner) {
         err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORATTACH, &ctx);
         if (err != CK_OK) {

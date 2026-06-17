@@ -2361,12 +2361,14 @@ BBCallBuilder::BBCallBuilder(ScriptBehaviorBridge *bridge,
 
 BBCallBuilder *BBCallBuilder::Owner(CKBeObject *owner) {
     m_Request.OwnerId = owner ? owner->GetID() : 0;
+    m_Request.OwnerStamp = owner ? CaptureBridgeObjectStamp(owner) : ScriptBridgeObjectStamp();
     AddRef();
     return this;
 }
 
 BBCallBuilder *BBCallBuilder::Target(CKBeObject *target) {
     m_Request.TargetId = target ? target->GetID() : 0;
+    m_Request.TargetStamp = target ? CaptureBridgeObjectStamp(target) : ScriptBridgeObjectStamp();
     AddRef();
     return this;
 }
