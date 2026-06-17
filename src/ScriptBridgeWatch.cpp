@@ -112,11 +112,11 @@ bool ScriptBehaviorBridge::SetGraphWatchTimeout(CK_ID watchId, int generation, f
 
 bool ScriptBehaviorBridge::IsGraphWatchAlive(CK_ID watchId, int generation) const {
     const ScriptBridgeGraphWatch *record = FindGraphWatch(watchId, generation);
-    return record && record->HasFlag(ScriptBridgeTaskFlags::Alive);
+    return record && record->HasFlag(ScriptBridgeTaskFlags::Alive) && GetGraphWatchBehavior(watchId, generation);
 }
 
 bool ScriptBehaviorBridge::IsGraphWatchValid(CK_ID watchId, int generation) const {
-    return FindGraphWatch(watchId, generation) != nullptr;
+    return GetGraphWatchBehavior(watchId, generation) != nullptr;
 }
 
 bool ScriptBehaviorBridge::IsGraphWatchPaused(CK_ID watchId, int generation) const {
