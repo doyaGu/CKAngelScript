@@ -1182,6 +1182,28 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxVector copiedB;\n"
         "  if (destBytes.Read(copiedA) != 12 || destBytes.Read(copiedB) != 12) return 71;\n"
         "  if (copiedA.x != 3.0f || copiedB.x != 1.0f) return 72;\n"
+        "  VxMatrix matrix;\n"
+        "  matrix.SetIdentity();\n"
+        "  if (matrix[0].x != 1.0f || matrix[0].y != 0.0f || matrix[1].y != 1.0f || matrix[2].z != 1.0f || matrix[3].w != 1.0f) return 73;\n"
+        "  matrix[3].x = 5.0f;\n"
+        "  if (matrix[3].x != 5.0f) return 74;\n"
+        "  VxMatrix matrixCopy(matrix);\n"
+        "  if (!(matrix == matrixCopy)) return 75;\n"
+        "  matrixCopy.Clear();\n"
+        "  if (matrix == matrixCopy) return 76;\n"
+        "  VxMatrix identityCopy;\n"
+        "  Vx3DMatrixIdentity(identityCopy);\n"
+        "  VxMatrix product = matrix * identityCopy;\n"
+        "  if (product[0].x != 1.0f || product[3].x != 5.0f || product[3].w != 1.0f) return 77;\n"
+        "  matrix *= identityCopy;\n"
+        "  if (matrix[0].x != 1.0f || matrix[3].x != 5.0f || matrix[3].w != 1.0f) return 78;\n"
+        "  VxVector matrixVector = identityCopy * VxVector(1.0f, 2.0f, 3.0f);\n"
+        "  if (matrixVector.x != 1.0f || matrixVector.y != 2.0f || matrixVector.z != 3.0f) return 79;\n"
+        "  VxVector4 matrixVector4 = identityCopy * VxVector4(1.0f, 2.0f, 3.0f, 4.0f);\n"
+        "  if (matrixVector4.x != 1.0f || matrixVector4.y != 2.0f || matrixVector4.z != 3.0f || matrixVector4.w != 1.0f) return 80;\n"
+        "  VxMatrix multipliedGlobal;\n"
+        "  Vx3DMultiplyMatrix(multipliedGlobal, matrix, identityCopy);\n"
+        "  if (multipliedGlobal[0].x != 1.0f || multipliedGlobal[3].x != 5.0f || multipliedGlobal[3].w != 1.0f) return 81;\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
@@ -1195,6 +1217,11 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "void OutOfRangeVxVector4Index() {\n"
         "  VxVector4 vec(1.0f, 2.0f, 3.0f, 4.0f);\n"
         "  vec[4] = 0.0f;\n"
+        "}\n"
+        "void OutOfRangeVxMatrixIndex() {\n"
+        "  VxMatrix mat;\n"
+        "  mat.SetIdentity();\n"
+        "  mat[4].x = 0.0f;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -1284,6 +1311,9 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
     }
     if (ok) {
         ok = runExpectedException("void OutOfRangeVxVector4Index()", "VxVector4 index out of range", "VxVector4 out-of-range access");
+    }
+    if (ok) {
+        ok = runExpectedException("void OutOfRangeVxMatrixIndex()", "VxMatrix index out of range", "VxMatrix out-of-range access");
     }
 
     context->Unprepare();
@@ -2337,6 +2367,42 @@ static void RegisterVx2DVector(asIScriptEngine *engine) {
 
 // VxMatrix
 
+static bool VxMatrixEquals(const VxMatrix &lhs, const VxMatrix &rhs) {
+    return lhs == rhs;
+}
+
+static VxVector4 &VxMatrixIndex(VxMatrix &mat, int index) {
+    static thread_local VxVector4 dummy;
+    switch (index) {
+    case 0: return mat[0];
+    case 1: return mat[1];
+    case 2: return mat[2];
+    case 3: return mat[3];
+    default:
+        dummy = VxVector4();
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxMatrix index out of range");
+        }
+        return dummy;
+    }
+}
+
+static const VxVector4 &VxMatrixIndexConst(const VxMatrix &mat, int index) {
+    static thread_local VxVector4 dummy;
+    switch (index) {
+    case 0: return mat[0];
+    case 1: return mat[1];
+    case 2: return mat[2];
+    case 3: return mat[3];
+    default:
+        dummy = VxVector4();
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxMatrix index out of range");
+        }
+        return dummy;
+    }
+}
+
 static void RegisterVxMatrix(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2350,15 +2416,15 @@ static void RegisterVxMatrix(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix &opAssign(const VxMatrix &in mat)", asMETHODPR(VxMatrix, operator=, (const VxMatrix &), VxMatrix &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxMatrix", "bool opEquals(const VxMatrix &in mat) const", asMETHODPR(VxMatrix, operator==, (const VxMatrix&) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxMatrix", "bool opEquals(const VxMatrix &in mat) const", asFUNCTION(VxMatrixEquals), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix &opMulAssign(const VxMatrix &in mat)", asMETHODPR(VxMatrix, operator*=, (const VxMatrix&), VxMatrix&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxMatrix", "VxMatrix opMul(const VxMatrix &in mat) const", asMETHODPR(VxMatrix, operator*, (const VxMatrix&) const, VxMatrix), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxMatrix", "VxVector opMul(const VxVector &in mat) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector&), VxVector), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxMatrix", "VxVector4 opMul(const VxVector4 &in mat) const", asFUNCTIONPR(operator*, (const VxMatrix&, const VxVector4&), VxVector4), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxMatrix", "VxVector4& opIndex(int index)", asMETHODPR(VxMatrix, operator[], (int), VxVector4&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxMatrix", "const VxVector4& opIndex(int index) const", asMETHODPR(VxMatrix, operator[], (int) const, const VxVector4&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxMatrix", "VxVector4& opIndex(int index)", asFUNCTION(VxMatrixIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxMatrix", "const VxVector4& opIndex(int index) const", asFUNCTION(VxMatrixIndexConst), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxMatrix", "void SetIdentity()", asMETHODPR(VxMatrix, SetIdentity, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxMatrix", "void Clear()", asMETHODPR(VxMatrix, Clear, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
