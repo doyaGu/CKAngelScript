@@ -81,7 +81,7 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectType("CKFileInfo", sizeof(CKFileInfo), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<CKFileInfo>()); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectType("CKStats", sizeof(CKStats), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKFileInfo>()); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("CKStats", sizeof(CKStats), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKStats>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("VxDriverDesc", sizeof(VxDriverDesc), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxDriverDesc>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("VxIntersectionDesc", sizeof(VxIntersectionDesc), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxIntersectionDesc>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("VxStats", sizeof(VxStats), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxStats>()); CKAS_CHECK_REGISTER(r);
