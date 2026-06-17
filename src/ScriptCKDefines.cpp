@@ -2277,6 +2277,25 @@ void RegisterCK2dCurvePoint(asIScriptEngine *engine) {
 
 // CK2dCurve
 
+static CK2dCurvePoint &GetCK2dCurveControlPoint(CK2dCurve *self, int pos) {
+    static thread_local CK2dCurvePoint dummy;
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CK2dCurve is null.");
+        }
+        return dummy;
+    }
+
+    const int count = self->GetControlPointCount();
+    if (pos < 0 || pos >= count) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CK2dCurve control point index out of range.");
+        }
+        return dummy;
+    }
+    return *self->GetControlPoint(pos);
+}
+
 void RegisterCK2dCurve(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2294,7 +2313,7 @@ void RegisterCK2dCurve(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CK2dCurve", "void DeleteControlPoint(CK2dCurvePoint &in cpt)", asMETHOD(CK2dCurve, DeleteControlPoint), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurve", "void AddControlPoint(const Vx2DVector &in pos)", asMETHOD(CK2dCurve, AddControlPoint), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurve", "int GetControlPointCount()", asMETHOD(CK2dCurve, GetControlPointCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurve", "CK2dCurvePoint &GetControlPoint(int pos)", asMETHOD(CK2dCurve, GetControlPoint), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurve", "CK2dCurvePoint &GetControlPoint(int pos)", asFUNCTION(GetCK2dCurveControlPoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CK2dCurve", "void Update()", asMETHOD(CK2dCurve, Update), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
