@@ -1042,6 +1042,16 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  axis.Set(1.0f, 0.0f, 0.0f);\n"
         "  VxCompressedVector mixed;\n"
         "  mixed.Slerp(0.5f, compressed, axis);\n"
+        "  VxCompressedVectorOld oldCompressed = {0.0f, 1.0f, 0.0f};\n"
+        "  VxCompressedVectorOld copiedOldCompressed;\n"
+        "  copiedOldCompressed = oldCompressed;\n"
+        "  if (copiedOldCompressed.xa != oldCompressed.xa || copiedOldCompressed.ya != oldCompressed.ya) return 7;\n"
+        "  copiedOldCompressed = sourceVector;\n"
+        "  copiedOldCompressed = compressed;\n"
+        "  VxCompressedVectorOld oldAxis;\n"
+        "  oldAxis.Set(1.0f, 0.0f, 0.0f);\n"
+        "  VxCompressedVectorOld oldMixed;\n"
+        "  oldMixed.Slerp(0.5f, oldCompressed, oldAxis);\n"
         "  return 0;\n"
         "}\n";
 
@@ -1998,7 +2008,7 @@ static void RegisterVxCompressedVectorOld(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(); }, (VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f(const VxCompressedVectorOld &in v)", asFUNCTIONPR([](const VxCompressedVectorOld &v, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(v); }, (const VxCompressedVectorOld &, VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z)", asFUNCTIONPR([](float x, float y, float z, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(x, y, z); }, (float, float, float, VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(list[0], list[1], list[2]); }, (float *, VxCompressedVectorOld *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxCompressedVectorOld *self) { new(self) VxCompressedVectorOld(list[0], list[1], list[2]); }, (float *, VxCompressedVectorOld *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxCompressedVectorOld", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxCompressedVectorOld *self) { self->~VxCompressedVectorOld(); }, (VxCompressedVectorOld*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
