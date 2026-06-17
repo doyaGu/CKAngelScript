@@ -103,10 +103,13 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    NativeBuffer@ rawCopy = rawValue !is null ? rawValue.AsRaw() : null;\n";
     source += "    if (rawCopy is null || rawCopy.Size() != 4) return 1046;\n";
     source += "    ParamStructValue@ structValue = Param::Struct(ctx, structGuid);\n";
-    source += "    ParamValue@ structParam = structValue !is null ? structValue.AsValue() : null;\n";
-    source += "    if (structParam !is null) { structParam.AsStruct(); }\n";
+    source += "    if (structValue is null || !structValue.IsValid() || !structValue.TypeGuid().IsValid() || structValue.TypeName() == \"\" || structValue.Describe() == \"\") return 1047;\n";
+    source += "    if (structValue.Set(0, Param::Int(9)) is null) return 1048;\n";
+    source += "    ParamValue@ structMemberValue = structValue.Value();\n";
+    source += "    ParamValue@ structParam = structValue.AsValue();\n";
+    source += "    if (structMemberValue is null || structMemberValue.AsStruct() is null || structParam is null || structParam.AsStruct() is null) return 1049;\n";
     source += "    ParamValue@ textValue = Param::Text(ctx, CKPGUID_BOOL, \"TRUE\");\n";
-    source += "    if (textValue is null || textValue.AsText() == \"\") return 1047;\n";
+    source += "    if (textValue is null || textValue.AsText() == \"\") return 1062;\n";
     source += "    return 0;\n";
     source += "}\n";
     source += "int ProbeParamRefApi(const CKBehaviorContext &in ctx) {\n";
