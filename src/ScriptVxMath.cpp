@@ -1066,6 +1066,28 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (Vx2DVector(1.0f, 2.0f).Dot(Vx2DVector(3.0f, 4.0f)) != 11.0f) return 14;\n"
         "  Vx2DVector cross = Vx2DVector(2.0f, 3.0f).Cross();\n"
         "  if (cross.x != -3.0f || cross.y != 2.0f) return 15;\n"
+        "  VxBbox box = {VxVector(0.0f, 0.0f, 0.0f), VxVector(2.0f, 4.0f, 6.0f)};\n"
+        "  if (box.Min.x != 0.0f || box.Max.z != 6.0f) return 16;\n"
+        "  VxVector center = box.GetCenter();\n"
+        "  if (center.x != 1.0f || center.y != 2.0f || center.z != 3.0f) return 17;\n"
+        "  VxVector size = box.GetSize();\n"
+        "  if (size.x != 2.0f || size.y != 4.0f || size.z != 6.0f) return 18;\n"
+        "  VxBbox sameBox(VxVector(0.0f, 0.0f, 0.0f), VxVector(2.0f, 4.0f, 6.0f));\n"
+#if CKVERSION == 0x13022002
+        "  if (!(box == sameBox)) return 19;\n"
+#endif
+        "  if (!box.VectorIn(VxVector(1.0f, 2.0f, 3.0f))) return 20;\n"
+        "  box.Merge(VxVector(3.0f, 5.0f, 7.0f));\n"
+        "  if (box.Max.x != 3.0f || box.Max.y != 5.0f || box.Max.z != 7.0f) return 21;\n"
+        "  box.Intersect(sameBox);\n"
+        "  if (box.Max.x != 2.0f || box.Max.y != 4.0f || box.Max.z != 6.0f) return 22;\n"
+        "  VxMatrix identity;\n"
+        "  identity.SetIdentity();\n"
+        "  NativeBuffer@ boxPoints = NativeBuffer(8 * 12);\n"
+        "  box.TransformTo(boxPoints.ToPointer(), identity);\n"
+        "  VxVector firstPoint;\n"
+        "  if (boxPoints.Read(firstPoint) != 12) return 23;\n"
+        "  if (firstPoint.x < 0.0f || firstPoint.x > 2.0f || firstPoint.y < 0.0f || firstPoint.y > 4.0f || firstPoint.z < 0.0f || firstPoint.z > 6.0f) return 24;\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
@@ -1966,6 +1988,17 @@ static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, int iVcount, Native
     box.ClassifyVerticesOneAxis(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, iAxis, reinterpret_cast<unsigned long *>(oFlags.Get()));
 }
 
+static void VxBboxTransformTo(const VxBbox &box, NativePointer pts, const VxMatrix &mat) {
+    VxVector *points = reinterpret_cast<VxVector *>(pts.Get());
+    if (!points) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxBbox::TransformTo requires a valid output buffer for 8 VxVector values");
+        }
+        return;
+    }
+    box.TransformTo(points, mat);
+}
+
 static void RegisterVxBbox(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1978,7 +2011,7 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(const VxBbox &in box)", asFUNCTIONPR([](const VxBbox &box, VxBbox *self) { new(self) VxBbox(box); }, (const VxBbox &, VxBbox*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(const VxVector &in min, const VxVector &in max)", asFUNCTIONPR([](const VxVector &min, const VxVector &max, VxBbox *self) { new(self) VxBbox(min, max); }, (const VxVector &, const VxVector &, VxBbox*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_CONSTRUCT, "void f(float value)", asFUNCTIONPR([](float value, VxBbox *self) { new(self) VxBbox(value); }, (float, VxBbox*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {VxVector, VxVector}", asFUNCTIONPR([](VxVector *list, VxBbox *self) { new(self) VxBbox(list[0], list[1]); }, (VxVector *, VxBbox *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {VxVector, VxVector}", asFUNCTIONPR([](VxVector *list, VxBbox *self) { new(self) VxBbox(list[0], list[1]); }, (VxVector *, VxBbox *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxBbox", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxBbox *self) { self->~VxBbox(); }, (VxBbox*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -1987,7 +2020,7 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxBbox", "VxBbox &opAssign(const VxBbox &in box)", asMETHODPR(VxBbox, operator=, (const VxBbox &), VxBbox &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("VxBbox", "bool opEquals(const VxVector &in v) const", asFUNCTIONPR([](const VxBbox &lhs, const VxBbox &rhs) -> bool { return lhs == rhs; }, (const VxBbox &, const VxBbox &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxBbox", "bool opEquals(const VxBbox &in box) const", asFUNCTIONPR([](const VxBbox &lhs, const VxBbox &rhs) -> bool { return lhs == rhs; }, (const VxBbox &, const VxBbox &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
 
     r = engine->RegisterObjectMethod("VxBbox", "bool IsValid() const", asMETHOD(VxBbox, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -2011,7 +2044,7 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxBbox", "bool VectorIn(const VxVector &in v) const", asMETHODPR(VxBbox, VectorIn, (const VxVector &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxBbox", "bool IsBoxInside(const VxBbox &in box) const", asMETHODPR(VxBbox, IsBoxInside, (const VxBbox &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxBbox", "void TransformTo(VxVector &out pts, const VxMatrix &in mat) const", asMETHODPR(VxBbox, TransformTo, (VxVector *, const VxMatrix &) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxBbox", "void TransformTo(NativePointer pts, const VxMatrix &in mat) const", asFUNCTION(VxBboxTransformTo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxBbox", "void TransformFrom(const VxBbox &in box, const VxMatrix &in mat)", asMETHODPR(VxBbox, TransformFrom, (const VxBbox &, const VxMatrix &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
