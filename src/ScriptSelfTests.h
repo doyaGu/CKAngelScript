@@ -27,7 +27,7 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
 bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptNativeMemorySelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
-bool RunScriptVxBindingSelfTest(std::string &error);
+bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error);
 
 namespace ScriptRuntimeMetadata {
 bool RunScriptRuntimeMetadataSelfTest(std::string &error);

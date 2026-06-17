@@ -1011,6 +1011,81 @@ static void RegisterVxDisplayMode(asIScriptEngine *engine) {
 
 // VxDrawPrimitiveData
 
+static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "Vx binding self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_VxBindingSelfTest";
+    const char *source =
+        "int Run() {\n"
+        "  Vx3DCapsDesc caps;\n"
+        "  caps.CKRasterizerSpecificCaps = 0x12345678;\n"
+        "  Vx3DCapsDesc copied(caps);\n"
+        "  if (copied.CKRasterizerSpecificCaps != 0x12345678) return 1;\n"
+        "  Vx3DCapsDesc assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.CKRasterizerSpecificCaps != 0x12345678) return 2;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "Vx binding self-test could not create a script module.";
+        return false;
+    }
+    int r = module->AddScriptSection("vx-binding-self-test", source);
+    if (r < 0) {
+        error = "Vx binding self-test could not add script source.";
+        engine->DiscardModule(moduleName);
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        error = "Vx binding self-test script failed to build.";
+        engine->DiscardModule(moduleName);
+        return false;
+    }
+    asIScriptFunction *function = module->GetFunctionByDecl("int Run()");
+    if (!function) {
+        error = "Vx binding self-test script entry point is unavailable.";
+        engine->DiscardModule(moduleName);
+        return false;
+    }
+
+    asIScriptContext *context = engine->RequestContext();
+    if (!context) {
+        error = "Vx binding self-test could not create an execution context.";
+        engine->DiscardModule(moduleName);
+        return false;
+    }
+    r = context->Prepare(function);
+    if (r >= 0) {
+        r = context->Execute();
+    }
+    bool ok = false;
+    if (r == asEXECUTION_FINISHED) {
+        const int code = static_cast<int>(context->GetReturnDWord());
+        if (code == 0) {
+            ok = true;
+        } else {
+            error = "Vx binding self-test script returned " + std::to_string(code) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = context->GetExceptionString();
+        error = std::string("Vx binding self-test script exception: ") +
+                (exception && exception[0] ? exception : "<empty>");
+    } else {
+        error = "Vx binding self-test script execution failed.";
+    }
+
+    context->Unprepare();
+    engine->ReturnContext(context);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 #if CKVERSION == 0x13022002 || CKVERSION == 0x05082002
 static NativePointer GetVxDrawPrimitiveTexCoordPtr(const VxDrawPrimitiveData *self, int stage) {
     if (!self || stage < 0 || stage >= CKRST_MAX_STAGES) {
@@ -1034,7 +1109,11 @@ static VxStridedData GetVxDrawPrimitiveTexCoord(const VxDrawPrimitiveData *self,
 }
 #endif
 
-bool RunScriptVxBindingSelfTest(std::string &error) {
+bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!ExecuteVxBindingScriptSmoke(engine, error)) {
+        return false;
+    }
+
 #if CKVERSION == 0x13022002 || CKVERSION == 0x05082002
     VxDrawPrimitiveData data = {};
     char stages[CKRST_MAX_STAGES] = {};
@@ -1067,6 +1146,17 @@ bool RunScriptVxBindingSelfTest(std::string &error) {
         error = "VxDrawPrimitiveData out-of-range texture coordinate stages are not rejected.";
         return false;
     }
+
+    Vx3DCapsDesc caps = {};
+    caps.CKRasterizerSpecificCaps = 0x12345678u;
+    Vx3DCapsDesc copiedCaps(caps);
+    Vx3DCapsDesc assignedCaps = {};
+    assignedCaps = copiedCaps;
+    if (copiedCaps.CKRasterizerSpecificCaps != 0x12345678u ||
+        assignedCaps.CKRasterizerSpecificCaps != 0x12345678u) {
+        error = "Vx3DCapsDesc CKRasterizerSpecificCaps copy/assignment is invalid.";
+        return false;
+    }
 #else
     VxDrawPrimitiveData data = {};
     char stages[CKRST_MAX_STAGES] = {};
@@ -1086,6 +1176,17 @@ bool RunScriptVxBindingSelfTest(std::string &error) {
         GetVxDrawPrimitiveTexCoord(&data, -1).Ptr ||
         GetVxDrawPrimitiveTexCoord(&data, CKRST_MAX_STAGES).Ptr) {
         error = "VxDrawPrimitiveData texture coordinate stage access is invalid.";
+        return false;
+    }
+
+    Vx3DCapsDesc caps = {};
+    caps.CKRasterizerSpecificCaps = 0x12345678u;
+    Vx3DCapsDesc copiedCaps(caps);
+    Vx3DCapsDesc assignedCaps = {};
+    assignedCaps = copiedCaps;
+    if (copiedCaps.CKRasterizerSpecificCaps != 0x12345678u ||
+        assignedCaps.CKRasterizerSpecificCaps != 0x12345678u) {
+        error = "Vx3DCapsDesc CKRasterizerSpecificCaps copy/assignment is invalid.";
         return false;
     }
 #endif
@@ -1280,6 +1381,7 @@ static void RegisterVx3DCapsDesc(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint RasterCaps", asOFFSET(Vx3DCapsDesc, RasterCaps)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint SrcBlendCaps", asOFFSET(Vx3DCapsDesc, SrcBlendCaps)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint DestBlendCaps", asOFFSET(Vx3DCapsDesc, DestBlendCaps)); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectProperty("Vx3DCapsDesc", "uint CKRasterizerSpecificCaps", asOFFSET(Vx3DCapsDesc, CKRasterizerSpecificCaps)); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("Vx3DCapsDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](Vx3DCapsDesc *self) { new(self) Vx3DCapsDesc(); }, (Vx3DCapsDesc *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("Vx3DCapsDesc", asBEHAVE_CONSTRUCT, "void f(const Vx3DCapsDesc &in other)", asFUNCTIONPR([](const Vx3DCapsDesc &options, Vx3DCapsDesc *self) { new(self) Vx3DCapsDesc(options); }, (const Vx3DCapsDesc &, Vx3DCapsDesc *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);

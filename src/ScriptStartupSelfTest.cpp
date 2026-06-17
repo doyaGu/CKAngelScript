@@ -143,7 +143,7 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     }
 
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "vx-bindings", std::string());
-    if (!RunScriptVxBindingSelfTest(error)) {
+    if (!RunScriptVxBindingSelfTest(manager ? manager->GetScriptEngine() : nullptr, error)) {
         ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
                                                              "vx-bindings",
                                                              "Vx bindings",
