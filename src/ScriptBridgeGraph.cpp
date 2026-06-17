@@ -721,7 +721,7 @@ GraphEditNode::~GraphEditNode() {
 }
 
 bool GraphEditNode::IsValid() const {
-    return m_Edit && m_Error.empty() && (m_SpecIndex >= 0 || m_BehaviorId != 0);
+    return m_Edit && m_Error.empty() && m_Edit->IsNodeValid(this);
 }
 
 std::string GraphEditNode::Error() const { return m_Error; }
@@ -1285,6 +1285,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             return failApply(error);
         }
         spec.CreatedBehaviorId = behavior->GetID();
+        spec.CreatedBehaviorStamp = CaptureBridgeObjectStamp(behavior);
         createdNodes.push_back(behavior->GetID());
     }
 
@@ -1544,6 +1545,22 @@ CKBehavior *BehaviorGraphEdit::ResolveNode(const GraphEditNode *node) const {
         return nullptr;
     }
     return ResolveNodeBehavior(index);
+}
+
+bool BehaviorGraphEdit::IsNodeValid(const GraphEditNode *node) const {
+    int index = -1;
+    std::string error;
+    if (!ResolveNodeIndex(node, index, error)) {
+        return false;
+    }
+    const NodeSpec &spec = m_Nodes[index];
+    if (spec.Type == NodeSpec::Kind::Create && !spec.CreatedBehaviorId) {
+        return true;
+    }
+    if (spec.Type == NodeSpec::Kind::Clone && !spec.CreatedBehaviorId) {
+        return true;
+    }
+    return ResolveNodeBehavior(index) != nullptr;
 }
 
 BehaviorLinkRef *BehaviorGraphEdit::ResolveLink(const GraphEditLink *link) const {
@@ -1898,8 +1915,15 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
 }
 
 bool BehaviorGraphEdit::ResolveNodeIndex(const GraphEditNode *node, int &index, std::string &error) const {
-    if (!node || node->EditOwner() != this || !node->IsValid()) {
+    if (!RootBehavior()) {
+        error = "BehaviorGraphEdit root graph is not valid.";
+        return false;
+    }
+    if (!node || node->EditOwner() != this || !node->Error().empty()) {
         error = node ? node->Error() : "Graph edit node is not valid.";
+        if (error.empty()) {
+            error = "Graph edit node is not valid.";
+        }
         return false;
     }
     index = node->SpecIndex();
@@ -1916,10 +1940,12 @@ CKBehavior *BehaviorGraphEdit::ResolveNodeBehavior(int index) const {
     }
     const NodeSpec &spec = m_Nodes[index];
     if (spec.Type == NodeSpec::Kind::Create) {
-        return spec.CreatedBehaviorId ? ScriptBridgeGraphInternal::BehaviorById(m_Bridge, spec.CreatedBehaviorId) : nullptr;
+        return spec.CreatedBehaviorId
+            ? ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, spec.CreatedBehaviorId, spec.CreatedBehaviorStamp)
+            : nullptr;
     }
     if (spec.Type == NodeSpec::Kind::Clone && spec.CreatedBehaviorId) {
-        return ScriptBridgeGraphInternal::BehaviorById(m_Bridge, spec.CreatedBehaviorId);
+        return ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, spec.CreatedBehaviorId, spec.CreatedBehaviorStamp);
     }
     return ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
 }

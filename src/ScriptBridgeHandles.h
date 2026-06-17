@@ -551,6 +551,7 @@ public:
     CK_ID RootId() const;
     CKBehavior *RootBehavior() const;
     CKBehavior *ResolveNode(const GraphEditNode *node) const;
+    bool IsNodeValid(const GraphEditNode *node) const;
     BehaviorLinkRef *ResolveLink(const GraphEditLink *link) const;
 
 private:
@@ -562,6 +563,7 @@ private:
         ScriptBridgeBBInvocationSpec Request;
         std::string Name;
         CK_ID CreatedBehaviorId = 0;
+        ScriptBridgeObjectStamp CreatedBehaviorStamp;
     };
 
     struct LinkSpec {
