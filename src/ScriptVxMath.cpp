@@ -1397,6 +1397,16 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  {\n"
         "    VxMutexLock lock(mutex);\n"
         "  }\n"
+        "  VxTimeProfiler timeProfiler;\n"
+        "  timeProfiler.Reset();\n"
+        "  if (timeProfiler.Current() < 0.0f) return 880;\n"
+        "  if (timeProfiler.Split() < 0.0f) return 881;\n"
+#if CKVERSION == 0x13022002
+        "  VxTimeProfiler assignedTimeProfiler;\n"
+        "  assignedTimeProfiler = timeProfiler;\n"
+        "  assignedTimeProfiler.Reset();\n"
+        "  if (assignedTimeProfiler.Current() < 0.0f) return 882;\n"
+#endif
         "  VxOBB obb(box, identity);\n"
         "  if (obb.GetCenter().x != 1.0f || obb.GetCenter().y != 2.0f || obb.GetCenter().z != 3.0f) return 86;\n"
         "  if (obb.GetAxis(0).x != 1.0f || obb.GetAxis(1).y != 1.0f || obb.GetAxis(2).z != 1.0f) return 87;\n"
@@ -1955,7 +1965,12 @@ static void RegisterVxTimeProfiler(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxTimeProfiler", "VxTimeProfiler &opAssign(const VxTimeProfiler &in other)", asMETHOD(VxTimeProfiler, operator=), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod("VxTimeProfiler", "void Reset()", asMETHOD(VxTimeProfiler, Reset), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxTimeProfiler", "float Current() const", asMETHOD(VxTimeProfiler, Current), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxTimeProfiler", "float Current()", asMETHOD(VxTimeProfiler, Current), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxTimeProfiler", "float Split()", asFUNCTIONPR([](VxTimeProfiler *self) {
+        const float current = self->Current();
+        self->Reset();
+        return current;
+    }, (VxTimeProfiler *), float), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // VxSharedLibrary
