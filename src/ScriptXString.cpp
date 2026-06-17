@@ -176,6 +176,10 @@ static int XStringCmp(const std::string &str, const XString &self) {
     return self.Compare(str.c_str());
 }
 
+static bool XStringContains(const XString &str, const XString &self) {
+    return self.Contains(str) != FALSE;
+}
+
 static XString &XStringAddAssign(const std::string &str, XString &self) {
     if (!CheckStringSize(str))
         return self;
@@ -190,16 +194,33 @@ static XString XStringAdd(const std::string &str, const XString &self) {
     return self + str.c_str();
 }
 
-static char *XStringCharAt(const XWORD i, XString &self) {
+static asBYTE &XStringCharAt(const XWORD i, XString &self) {
+    static thread_local asBYTE dummy = 0;
     if (i >= self.Length()) {
         // Set a script exception
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Out of range");
-        return nullptr;
+        dummy = 0;
+        return dummy;
     }
 
-    return &self[i];
+    return reinterpret_cast<asBYTE &>(self[i]);
+}
+
+static const asBYTE &XStringCharAtConst(const XWORD i, const XString &self) {
+    static thread_local asBYTE value = 0;
+    if (i >= self.Length()) {
+        // Set a script exception
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx)
+            ctx->SetException("Out of range");
+        value = 0;
+        return value;
+    }
+
+    value = static_cast<asBYTE>(self[i]);
+    return value;
 }
 
 static std::string XStringCastToString(const XString &str) {
@@ -242,8 +263,8 @@ void RegisterXString(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("XString", "bool opEquals(const XString &in other) const", asFUNCTIONPR(XStringEquals, (const XString &, const XString &), bool), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "bool opEquals(const string &in str) const", asFUNCTIONPR(XStringEquals, (const std::string &, const XString &), bool), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("XString", "int opCmp(const XString &in other) const", asFUNCTIONPR(XStringCmp, (const XString &, const XString &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("XString", "int opCmp(const string &in str) const", asFUNCTIONPR(XStringCmp, (const std::string &, const XString &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("XString", "int opCmp(const XString &in other) const", asFUNCTIONPR(XStringCmp, (const XString &, const XString &), int), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("XString", "int opCmp(const string &in str) const", asFUNCTIONPR(XStringCmp, (const std::string &, const XString &), int), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(const XString &in str)", asMETHODPR(XString, operator+=, (const XString&), XString &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "XString &opAddAssign(const string &in str)", asFUNCTIONPR(XStringAddAssign, (const std::string &, XString &), XString &), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -259,8 +280,8 @@ void RegisterXString(asIScriptEngine *engine) {
 
     // Register the index operator, both as a mutator and as an inspector
     // Note that we don't register the operator[] directly, as it doesn't do bounds checking
-    r = engine->RegisterObjectMethod("XString", "uint8 &opIndex(uint16 index)", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("XString", "const uint8 &opIndex(uint16 index) const", asFUNCTION(XStringCharAt), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("XString", "uint8 &opIndex(uint16 index)", asFUNCTIONPR(XStringCharAt, (XWORD, XString &), asBYTE &), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("XString", "const uint8 &opIndex(uint16 index) const", asFUNCTIONPR(XStringCharAtConst, (XWORD, const XString &), const asBYTE &), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("XString", "string opImplConv() const", asFUNCTION(XStringCastToString), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("string", "XString opImplConv() const", asFUNCTION(StringCastToXString), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -285,7 +306,7 @@ void RegisterXString(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("XString", "XString &Trim()", asMETHODPR(XString, Trim, (), XString &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "XString &Strip()", asMETHODPR(XString, Strip, (), XString &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("XString", "bool Contains(const XString &in str) const", asMETHODPR(XString, Contains, (const XBaseString &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("XString", "bool Contains(const XString &in str) const", asFUNCTIONPR(XStringContains, (const XString &, const XString &), bool), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("XString", "bool StartsWith(const XString &in str) const", asMETHODPR(XString, StartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "bool IStartsWith(const XString &in str) const", asMETHODPR(XString, IStartsWith, (const XBaseString &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -294,7 +315,7 @@ void RegisterXString(asIScriptEngine *engine) {
 #endif
     r = engine->RegisterObjectMethod("XString", "uint16 Find(uint8 c, uint16 start = 0) const", asMETHODPR(XString, Find, (char, XWORD) const, XWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "uint16 Find(const XString &in str, uint16 start = 0) const", asMETHODPR(XString, Find, (const XBaseString &, XWORD) const, XWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("XString", "uint16 RFind(uint8 c, uint16 start = 0) const", asMETHODPR(XString, RFind, (char, XWORD) const, XWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("XString", "uint16 RFind(uint8 c, uint16 start = 65535) const", asMETHODPR(XString, RFind, (char, XWORD) const, XWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "XString Substring(uint16 start, uint16 length = 0) const", asMETHODPR(XString, Substring, (XWORD, XWORD) const, XString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "XString &Crop(uint16 start, uint16 length)", asMETHODPR(XString, Crop, (XWORD, XWORD), XString &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("XString", "XString &Cut(uint16 start, uint16 length)", asMETHODPR(XString, Cut, (XWORD, XWORD), XString &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
