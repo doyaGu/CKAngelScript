@@ -527,6 +527,14 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BehaviorNode@ root = graph.Root();\n";
     source += "    if (root is null) return 1032;\n";
     source += "    root.IsValid(); root.Error(); root.Describe();\n";
+    source += "    BehaviorQuery@ nodeQuery = Behavior::Query().Recursive(false).MaxDepth(1);\n";
+    source += "    BehaviorNode@ next = root.Next(nodeQuery);\n";
+    source += "    BehaviorNode@ prev = root.Prev(nodeQuery);\n";
+    source += "    array<BehaviorNode@>@ nextAll = root.NextAll(nodeQuery);\n";
+    source += "    array<BehaviorNode@>@ prevAll = root.PrevAll(nodeQuery);\n";
+    source += "    BehaviorLinkRef@ nextLink = root.NextLink(nodeQuery);\n";
+    source += "    BehaviorLinkRef@ prevLink = root.PrevLink(nodeQuery);\n";
+    source += "    if (nextAll is null || prevAll is null) return 1034;\n";
     source += "    BehaviorRef@ self = bridge.Self();\n";
     source += "    if (self !is null) { self.IsValid(); self.Id(); self.Name(); self.Describe(); }\n";
     source += "    BehaviorRef@ owner = bridge.OwnerScript();\n";
