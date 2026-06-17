@@ -1103,6 +1103,24 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  imageDesc.Image = imageStorage.ToPointer();\n"
         "  imageDesc.ColorMap = colorMapStorage.ToPointer();\n"
         "  if (imageDesc.Image.IsNull() || imageDesc.ColorMap.IsNull()) return 703;\n"
+        "  VXFONTINFO fontInfo;\n"
+        "  fontInfo.FaceName = \"CKAS Font\";\n"
+        "  fontInfo.Height = 14;\n"
+        "  fontInfo.Weight = 400;\n"
+        "  fontInfo.Italic = 1;\n"
+        "  fontInfo.Underline = 0;\n"
+        "  if (fontInfo.FaceName != \"CKAS Font\" || fontInfo.Height != 14 || fontInfo.Weight != 400) return 847;\n"
+        "  if (fontInfo.Italic != 1 || fontInfo.Underline != 0) return 848;\n"
+        "  VXFONTINFO copiedFontInfo(fontInfo);\n"
+        "  if (copiedFontInfo.FaceName != \"CKAS Font\" || copiedFontInfo.Height != 14) return 857;\n"
+        "  VXFONTINFO assignedFontInfo;\n"
+        "  assignedFontInfo = copiedFontInfo;\n"
+        "  if (assignedFontInfo.Weight != 400 || assignedFontInfo.Italic != 1) return 858;\n"
+        "  FONT_HANDLE smokeFont = VxCreateFont(\"Arial\", 12, 400, false, false);\n"
+        "  if (smokeFont == 0) return 849;\n"
+        "  VXFONTINFO queriedFontInfo;\n"
+        "  if (!VxGetFontInfo(smokeFont, queriedFontInfo)) { VxDeleteFont(smokeFont); return 856; }\n"
+        "  VxDeleteFont(smokeFont);\n"
         "  VxDirectXData dxData;\n"
         "  dxData.DxVersion = 0x700;\n"
         "  VxDirectXData dxCopy(dxData);\n"
@@ -2211,7 +2229,10 @@ static void RegisterVXFONTINFO(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("VXFONTINFO", "int Underline", asOFFSET(VXFONTINFO, Underline)); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("VXFONTINFO", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](VXFONTINFO *self) { new(self) VXFONTINFO(); }, (VXFONTINFO*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("VXFONTINFO", asBEHAVE_CONSTRUCT, "void f(const VXFONTINFO &in other)", asFUNCTIONPR([](const VXFONTINFO &info, VXFONTINFO *self) { new(self) VXFONTINFO(info); }, (const VXFONTINFO &, VXFONTINFO *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VXFONTINFO", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VXFONTINFO *self) { self->~VXFONTINFO(); }, (VXFONTINFO*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+
+    r = engine->RegisterObjectMethod("VXFONTINFO", "VXFONTINFO &opAssign(const VXFONTINFO &in other)", asMETHODPR(VXFONTINFO, operator=, (const VXFONTINFO &), VXFONTINFO &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
 // VxWindowFunctions
@@ -2276,6 +2297,10 @@ static FONT_HANDLE VxCreateFontWrapper(const std::string &fontName, int fontSize
     return VxCreateFont(const_cast<char *>(fontName.c_str()), fontSize, weight, italic, underline);
 }
 
+static bool VxGetFontInfoBool(FONT_HANDLE font, VXFONTINFO &desc) {
+    return VxGetFontInfo(font, desc) != FALSE;
+}
+
 static bool VxDrawBitmapTextWrapper(BITMAP_HANDLE bitmap, FONT_HANDLE font, const std::string &str, CKRECT &rect, unsigned int align, unsigned int bkColor, unsigned int fontColor) {
     return VxDrawBitmapText(bitmap, font, const_cast<char *>(str.c_str()), &rect, align, bkColor, fontColor);
 }
@@ -2329,7 +2354,7 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
 
     // Font functions
     r = engine->RegisterGlobalFunction("FONT_HANDLE VxCreateFont(const string &in fontName, int fontSize, int weight, bool italic, bool underline)", asFUNCTION(VxCreateFontWrapper), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxGetFontInfo(FONT_HANDLE Font, VXFONTINFO &out desc)", asFUNCTION(VxGetFontInfo), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxGetFontInfo(FONT_HANDLE Font, VXFONTINFO &out desc)", asFUNCTION(VxGetFontInfoBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool VxDrawBitmapText(BITMAP_HANDLE bitmap, FONT_HANDLE font, string &in str, CKRECT &in rect, uint align, uint bkColor, uint fontColor)", asFUNCTION(VxDrawBitmapTextWrapper), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void VxDeleteFont(FONT_HANDLE font)", asFUNCTION(VxDeleteFont), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 }
