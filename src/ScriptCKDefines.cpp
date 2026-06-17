@@ -3022,6 +3022,12 @@ void RegisterCKDependencies(asIScriptEngine *engine) {
 
 // CKDependenciesContext
 
+static void CopyCKDependenciesContext(CKDependenciesContext *self, const std::string &appendString) {
+    if (self) {
+        self->Copy(appendString.empty() ? nullptr : const_cast<CKSTRING>(appendString.c_str()));
+    }
+}
+
 void RegisterCKDependenciesContext(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3037,7 +3043,7 @@ void RegisterCKDependenciesContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKDependenciesContext", "void StartDependencies(CKDependencies &in d)", asMETHODPR(CKDependenciesContext, StartDependencies, (CKDependencies*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDependenciesContext", "void StopDependencies()", asMETHODPR(CKDependenciesContext, StopDependencies, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDependenciesContext", "CKDWORD GetClassDependencies(int c)", asMETHODPR(CKDependenciesContext, GetClassDependencies, (int), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDependenciesContext", "void Copy(const string &in appendString = void)", asMETHODPR(CKDependenciesContext, Copy, (CKSTRING), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKDependenciesContext", "void Copy(const string &in appendString = void)", asFUNCTION(CopyCKDependenciesContext), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDependenciesContext", "void SetOperationMode(CK_DEPENDENCIES_OPMODE m)", asMETHODPR(CKDependenciesContext, SetOperationMode, (CK_DEPENDENCIES_OPMODE), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDependenciesContext", "bool IsInMode(CK_DEPENDENCIES_OPMODE m)", asFUNCTIONPR([](CKDependenciesContext *self, CK_DEPENDENCIES_OPMODE m) -> bool { return self->IsInMode(m); }, (CKDependenciesContext *, CK_DEPENDENCIES_OPMODE), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDependenciesContext", "void SetCreationMode(CK_OBJECTCREATION_OPTIONS m)", asMETHODPR(CKDependenciesContext, SetCreationMode, (CK_OBJECTCREATION_OPTIONS), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
