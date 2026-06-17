@@ -1274,6 +1274,27 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  bool rayFaceCulled = VxIntersectRayFaceCulled(faceRay, VxVector(0.0f, 0.0f, 0.0f), VxVector(0.0f, 4.0f, 0.0f), VxVector(0.0f, 0.0f, 4.0f), VxVector(-1.0f, 0.0f, 0.0f), facePoint, faceDist, faceI1, faceI2);\n"
         "  float rayDistanceT0 = 0.0f;\n"
         "  if (VxPointRaySquareDistance(VxVector(1.0f, 3.0f, 0.0f), rayFromEndpoints, rayDistanceT0) != 1.0f) return 315;\n"
+        "  VxSphere sphere(VxVector(1.0f, 2.0f, 3.0f), 2.0f);\n"
+        "  if (sphere.Center().x != 1.0f || sphere.Radius() != 2.0f) return 500;\n"
+        "  sphere.Center().x = 2.0f;\n"
+        "  sphere.Radius() = 3.0f;\n"
+        "  if (sphere.Center().x != 2.0f || sphere.Radius() != 3.0f) return 501;\n"
+        "  VxSphere sphereCopy(sphere);\n"
+#if CKVERSION == 0x13022002
+        "  if (!(sphere == sphereCopy)) return 502;\n"
+#endif
+        "  if (!sphere.IsPointInside(VxVector(2.0f, 2.0f, 3.0f))) return 503;\n"
+        "  if (!sphere.IsPointOnSurface(VxVector(5.0f, 2.0f, 3.0f))) return 504;\n"
+#if CKVERSION == 0x13022002
+        "  if (!VxSphere(VxVector(1.0f, 2.0f, 3.0f), 5.0f).IsBoxTotallyInside(sameBox)) return 505;\n"
+#endif
+        "  float sphereCollisionT0 = 0.0f;\n"
+        "  float sphereCollisionT1 = 0.0f;\n"
+        "  bool sphereSphere = VxIntersectSphereSphere(sphere, VxVector(0.0f, 0.0f, 0.0f), sphereCopy, VxVector(0.0f, 0.0f, 0.0f), sphereCollisionT0, sphereCollisionT1);\n"
+        "  VxVector raySphereInter1;\n"
+        "  VxVector raySphereInter2;\n"
+        "  int raySphereCount = VxIntersectRaySphere(faceRay, sphere, raySphereInter1, raySphereInter2);\n"
+        "  int sphereAabbResult = VxIntersectSphereAABB(sphere, sameBox);\n"
         "  VxMemoryMappedFile missingMap(\"__ckas_missing_vx_mmf_smoke_7f6e5d99__.bin\");\n"
         "  if (missingMap.IsValid()) return 82;\n"
         "  if (!missingMap.GetBase().IsNull()) return 83;\n"
@@ -3192,6 +3213,10 @@ static bool VxIntersectRayFaceCulledBool(const VxRay &ray, const VxVector &pt0, 
     return VxIntersect::RayFaceCulled(ray, pt0, pt1, pt2, norm, res, dist, i1, i2) != FALSE;
 }
 
+static bool VxIntersectSphereSphereBool(const VxSphere &sphere1, const VxVector &speed1, const VxSphere &sphere2, const VxVector &speed2, float &collisionTime1, float &collisionTime2) {
+    return VxIntersect::SphereSphere(sphere1, speed1, sphere2, speed2, &collisionTime1, &collisionTime2) != FALSE;
+}
+
 static void RegisterVxIntersect(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3237,7 +3262,7 @@ static void RegisterVxIntersect(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool VxIntersectRayFaceCulled(const VxRay &in ray, const VxVector &in pt0, const VxVector &in pt1, const VxVector &in pt2, const VxVector &in norm, VxVector &out res, float &out dist, int &out i1, int &out i2)", asFUNCTION(VxIntersectRayFaceCulledBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Sphere - Sphere
-    r = engine->RegisterGlobalFunction("bool VxIntersectSphereSphere(const VxSphere &in s1, const VxVector &in p1, const VxSphere &in s2, const VxVector &in p2, float &out collisionTime1, float &out collisionTime2)", asFUNCTION(VxIntersect::SphereSphere), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectSphereSphere(const VxSphere &in s1, const VxVector &in p1, const VxSphere &in s2, const VxVector &in p2, float &out collisionTime1, float &out collisionTime2)", asFUNCTION(VxIntersectSphereSphereBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Ray - Sphere
     r = engine->RegisterGlobalFunction("int VxIntersectRaySphere(const VxRay &in ray, const VxSphere &in sphere, VxVector &out inter1, VxVector &out inter2)", asFUNCTION(VxIntersect::RaySphere), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
