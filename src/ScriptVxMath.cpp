@@ -1109,6 +1109,24 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxVector rotatedByAxis = vector.Rotate(vector.axisY, 0.0f);\n"
         "  if (rotatedByAxis.x != vector.x || rotatedByAxis.y != vector.y || rotatedByAxis.z != vector.z) return 35;\n"
         "  if (vector.axisX.x != 1.0f || vector.axisY.y != 1.0f || vector.axisZ.z != 1.0f) return 36;\n"
+        "  VxVector4 vector4 = {1.0f, 2.0f, 3.0f, 4.0f};\n"
+        "  if (vector4.x != 1.0f || vector4.y != 2.0f || vector4.z != 3.0f || vector4.w != 4.0f) return 37;\n"
+        "  VxVector4 copiedVector4(vector4);\n"
+        "  if (copiedVector4.x != 1.0f || copiedVector4.y != 2.0f || copiedVector4.z != 3.0f || copiedVector4.w != 4.0f) return 38;\n"
+        "  if (vector4[0] != 1.0f || vector4[1] != 2.0f || vector4[2] != 3.0f || vector4[3] != 4.0f) return 39;\n"
+        "  vector4[3] = 8.0f;\n"
+        "  if (vector4.w != 8.0f) return 40;\n"
+        "  if (!(VxVector4(0.0f, 0.0f, 0.0f, 1.0f) < VxVector4(0.0f, 0.0f, 0.0f, 2.0f))) return 41;\n"
+        "  if (!(VxVector4(0.0f, 0.0f, 0.0f, 2.0f) > VxVector4(0.0f, 0.0f, 0.0f, 1.0f))) return 42;\n"
+        "  VxVector4 scalarRight = VxVector4(1.0f, 2.0f, 3.0f, 4.0f) * 2.0f;\n"
+        "  if (scalarRight.x != 2.0f || scalarRight.y != 4.0f || scalarRight.z != 6.0f || scalarRight.w != 8.0f) return 43;\n"
+        "  VxVector4 scalarLeft = 2.0f * VxVector4(1.0f, 2.0f, 3.0f, 4.0f);\n"
+        "  if (scalarLeft.x != 2.0f || scalarLeft.y != 4.0f || scalarLeft.z != 6.0f || scalarLeft.w != 8.0f) return 44;\n"
+        "  if (VxVector4(1.0f, 2.0f, 3.0f, 4.0f).Dot(VxVector4(4.0f, 5.0f, 6.0f, 7.0f)) != 32.0f) return 45;\n"
+        "  if (VxVector4(1.0f, 2.0f, 2.0f, 4.0f).SquareMagnitude() != 9.0f) return 46;\n"
+        "  VxVector4 multipliedVector4;\n"
+        "  Vx3DMultiplyMatrixVector4(multipliedVector4, identity, VxVector4(1.0f, 2.0f, 3.0f, 4.0f));\n"
+        "  if (multipliedVector4.x != 1.0f || multipliedVector4.y != 2.0f || multipliedVector4.z != 3.0f || multipliedVector4.w != 4.0f) return 47;\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
@@ -1118,6 +1136,10 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "void OutOfRangeVxVectorIndex() {\n"
         "  VxVector vec(1.0f, 2.0f, 3.0f);\n"
         "  vec[3] = 0.0f;\n"
+        "}\n"
+        "void OutOfRangeVxVector4Index() {\n"
+        "  VxVector4 vec(1.0f, 2.0f, 3.0f, 4.0f);\n"
+        "  vec[4] = 0.0f;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -1204,6 +1226,9 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
     }
     if (ok) {
         ok = runExpectedException("void OutOfRangeVxVectorIndex()", "VxVector index out of range", "VxVector out-of-range access");
+    }
+    if (ok) {
+        ok = runExpectedException("void OutOfRangeVxVector4Index()", "VxVector4 index out of range", "VxVector4 out-of-range access");
     }
 
     context->Unprepare();
