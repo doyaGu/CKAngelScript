@@ -443,6 +443,25 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    task.Destroy();\n";
     source += "    return 0;\n";
     source += "}\n";
+    source += "int ProbeBehaviorBridgeApi(const CKBehaviorContext &in ctx) {\n";
+    source += "    BehaviorBridge@ bridge = Behavior::From(ctx);\n";
+    source += "    if (bridge is null) return 1030;\n";
+    source += "    BehaviorGraph@ graph = bridge.Graph();\n";
+    source += "    if (graph is null) return 1031;\n";
+    source += "    graph.IsValid(); graph.Describe();\n";
+    source += "    BehaviorNode@ root = graph.Root();\n";
+    source += "    if (root is null) return 1032;\n";
+    source += "    root.IsValid(); root.Error(); root.Describe();\n";
+    source += "    BehaviorRef@ self = bridge.Self();\n";
+    source += "    if (self !is null) { self.IsValid(); self.Id(); self.Name(); self.Describe(); }\n";
+    source += "    BehaviorRef@ owner = bridge.OwnerScript();\n";
+    source += "    if (owner !is null) { owner.IsValid(); owner.Id(); owner.Name(); }\n";
+    source += "    BehaviorRef@ missing = bridge.Find(\"__missing__\");\n";
+    source += "    BehaviorRef@ missingById = bridge.FindByID(0);\n";
+    source += "    BehaviorRef@ missingOnNull = bridge.FindOn(null, \"__missing__\");\n";
+    source += "    if (missing !is null || missingById !is null || missingOnNull !is null) return 1033;\n";
+    source += "    return 0;\n";
+    source += "}\n";
     source += "void ProbeGraphTaskApi(const CKBehaviorContext &in ctx, BehaviorRef@ ref, GraphTask@ task) {\n";
     source += "    BBDecl@ spec = BB::Require(ctx, \"__missing__\"); BBSlot@ input = spec !is null ? spec.Input(\"In\") : null; BBSlot@ output = spec !is null ? spec.Output(\"Out\") : null; BBSlot@ pinSlot = spec !is null ? spec.Pin(\"Value\") : null; BBSlot@ poutSlot = spec !is null ? spec.Pout(\"Value\") : null;\n";
     source += "    if (ref !is null) { BehaviorLayout@ l = ref.Layout(); int p = l.FindPin(\"Value\"); ParamRef@ pin = p >= 0 ? ref.Pin(p) : null; ParamSourceLinkRef@ link = pin !is null ? pin.SetSourceScoped(pin) : null; if (link !is null) { link.IsValid(); link.Commit(); link.Restore(); link.Describe(); } ParamOperationRef@ opRef = null; if (opRef !is null) opRef.Restore(); GraphTask@ s = ref.Start(0); GraphTask@ ss = ref.Start(input); ref.Trigger(input); ref.OutputActive(output); ref.Pin(pinSlot); ref.Pout(poutSlot); GraphTask@ w = ref.Watch(); }\n";
@@ -565,6 +584,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (bbTaskBuilderResult != 0) return bbTaskBuilderResult;\n";
     source += "    int behaviorRefResult = ProbeBehaviorRefApi(ctx, operationName);\n";
     source += "    if (behaviorRefResult != 0) return behaviorRefResult;\n";
+    source += "    int behaviorBridgeResult = ProbeBehaviorBridgeApi(ctx);\n";
+    source += "    if (behaviorBridgeResult != 0) return behaviorBridgeResult;\n";
     source += "    return 0;\n";
     source += "}\n";
 

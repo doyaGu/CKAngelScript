@@ -454,39 +454,73 @@ std::string BehaviorRef::Describe() const {
 }
 
 BehaviorBridge::BehaviorBridge(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx)
-    : m_Bridge(bridge), m_Context(ctx) {}
+    : m_Context(ctx.Context ? ctx.Context : (bridge && bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr)),
+      m_ComponentId(ComponentIdFromContext(ctx)),
+      m_ComponentStamp(CaptureBridgeObjectStamp(ctx.Behavior)) {}
+
+ScriptBehaviorBridge *BehaviorBridge::Bridge() const {
+    ScriptManager *manager = m_Context ? ScriptManager::GetManager(m_Context) : nullptr;
+    return manager ? manager->GetBehaviorBridge() : nullptr;
+}
+
+CKBehavior *BehaviorBridge::Component() const {
+    return CKBehavior::Cast(GetStampedCKObjectById(m_Context, m_ComponentId, m_ComponentStamp));
+}
+
+CKBehaviorContext BehaviorBridge::MakeContext() const {
+    CKBehaviorContext ctx;
+    ctx.Context = m_Context;
+    ctx.Behavior = Component();
+    ctx.ParameterManager = m_Context ? m_Context->GetParameterManager() : nullptr;
+    ctx.MessageManager = m_Context ? m_Context->GetMessageManager() : nullptr;
+    ctx.AttributeManager = m_Context ? m_Context->GetAttributeManager() : nullptr;
+    ctx.TimeManager = m_Context ? m_Context->GetTimeManager() : nullptr;
+    ctx.CurrentRenderContext = m_Context ? m_Context->GetPlayerRenderContext() : nullptr;
+    return ctx;
+}
 
 BehaviorGraph *BehaviorBridge::Graph() const {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (!bridge) {
+        return nullptr;
+    }
+    CKBehaviorContext ctx = MakeContext();
+    CKBehavior *behavior = ctx.Behavior;
     CKBehavior *root = nullptr;
-    if (m_Context.Behavior) {
-        root = ScriptBridgeBehaviorInternal::FindContainingOwnerScript(m_Context.Behavior);
+    if (behavior) {
+        root = ScriptBridgeBehaviorInternal::FindContainingOwnerScript(behavior);
     }
-    if (!root && m_Context.Behavior) {
-        root = ScriptBridgeBehaviorInternal::FindContainingBehaviorInContext(m_Context.Behavior);
+    if (!root && behavior) {
+        root = ScriptBridgeBehaviorInternal::FindContainingBehaviorInContext(behavior);
     }
-    if (!root && m_Context.Behavior) {
-        root = m_Context.Behavior->GetOwnerScript();
+    if (!root && behavior) {
+        root = behavior->GetOwnerScript();
     }
-    CKBeObject *owner = m_Context.Behavior ? m_Context.Behavior->GetOwner() : nullptr;
+    CKBeObject *owner = behavior ? behavior->GetOwner() : nullptr;
     if (!root && owner && owner->GetScriptCount() > 0) {
         root = owner->GetScript(0);
     }
-    if (!root && m_Context.Behavior) {
-        root = m_Context.Behavior;
+    if (!root && behavior) {
+        root = behavior;
     }
-    return root ? new BehaviorGraph(m_Bridge, m_Context, root->GetID()) : nullptr;
+    return new BehaviorGraph(bridge, ctx, root ? root->GetID() : 0);
 }
 
 BehaviorRef *BehaviorBridge::Self() const {
-    return m_Bridge && m_Context.Behavior ? m_Bridge->WrapBehavior(m_Context.Behavior, ComponentIdFromContext(m_Context)) : nullptr;
+    ScriptBehaviorBridge *bridge = Bridge();
+    CKBehavior *behavior = Component();
+    return bridge && behavior ? bridge->WrapBehavior(behavior, m_ComponentId) : nullptr;
 }
 
 BehaviorRef *BehaviorBridge::OwnerScript() const {
-    return m_Bridge && m_Context.Behavior ? m_Bridge->WrapBehavior(m_Context.Behavior->GetOwnerScript(), ComponentIdFromContext(m_Context)) : nullptr;
+    ScriptBehaviorBridge *bridge = Bridge();
+    CKBehavior *behavior = Component();
+    return bridge && behavior ? bridge->WrapBehavior(behavior->GetOwnerScript(), m_ComponentId) : nullptr;
 }
 
 BehaviorRef *BehaviorBridge::Find(const std::string &name) const {
-    if (!m_Bridge || name.empty()) return nullptr;
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (!bridge || name.empty()) return nullptr;
     BehaviorGraph *graph = Graph();
     if (graph) {
         BehaviorQuery *query = new BehaviorQuery();
@@ -501,30 +535,33 @@ BehaviorRef *BehaviorBridge::Find(const std::string &name) const {
             return ref;
         }
     }
-    CKBeObject *owner = m_Context.Behavior ? m_Context.Behavior->GetOwner() : nullptr;
+    CKBehavior *behavior = Component();
+    CKBeObject *owner = behavior ? behavior->GetOwner() : nullptr;
     if (CKBehavior *found = FindBehaviorOnOwner(owner, name)) {
-        return m_Bridge->WrapBehavior(found, ComponentIdFromContext(m_Context));
+        return bridge->WrapBehavior(found, m_ComponentId);
     }
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    if (CKBehavior *found = FindBehaviorByNameInContext(context, name)) {
-        return m_Bridge->WrapBehavior(found, ComponentIdFromContext(m_Context));
+    if (CKBehavior *found = FindBehaviorByNameInContext(m_Context, name)) {
+        return bridge->WrapBehavior(found, m_ComponentId);
     }
     return nullptr;
 }
 
 BehaviorRef *BehaviorBridge::FindOn(CKBeObject *owner, const std::string &name) const {
-    if (!m_Bridge || !owner || name.empty()) return nullptr;
-    return m_Bridge->WrapBehavior(FindBehaviorOnOwner(owner, name), ComponentIdFromContext(m_Context));
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (!bridge || !owner || name.empty()) return nullptr;
+    return bridge->WrapBehavior(FindBehaviorOnOwner(owner, name), m_ComponentId);
 }
 
 BehaviorRef *BehaviorBridge::FindByID(CK_ID id) const {
-    CKContext *context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    return m_Bridge ? m_Bridge->WrapBehavior(CKBehavior::Cast(GetCKObjectById(context, id)), ComponentIdFromContext(m_Context)) : nullptr;
+    ScriptBehaviorBridge *bridge = Bridge();
+    return bridge ? bridge->WrapBehavior(CKBehavior::Cast(GetCKObjectById(m_Context, id)), m_ComponentId) : nullptr;
 }
 
 BehaviorRef *BehaviorBridge::FromParameter(const std::string &name) const {
-    if (!m_Bridge || !m_Context.Behavior) return nullptr;
-    CKParameter *param = FindReadableParameter(m_Context.Behavior, name);
+    ScriptBehaviorBridge *bridge = Bridge();
+    CKBehavior *behavior = Component();
+    if (!bridge || !behavior) return nullptr;
+    CKParameter *param = FindReadableParameter(behavior, name);
     CKObject *obj = param ? param->GetValueObject(TRUE) : nullptr;
-    return m_Bridge->WrapBehavior(CKBehavior::Cast(obj), ComponentIdFromContext(m_Context));
+    return bridge->WrapBehavior(CKBehavior::Cast(obj), m_ComponentId);
 }

@@ -769,8 +769,13 @@ public:
     BehaviorRef *FromParameter(const std::string &name) const;
 
 private:
-    ScriptBehaviorBridge *m_Bridge = nullptr;
-    CKBehaviorContext m_Context;
+    ScriptBehaviorBridge *Bridge() const;
+    CKBehavior *Component() const;
+    CKBehaviorContext MakeContext() const;
+
+    CKContext *m_Context = nullptr;
+    CK_ID m_ComponentId = 0;
+    ScriptBridgeObjectStamp m_ComponentStamp;
 };
 
 class BBSlot final : public RefCounted {
