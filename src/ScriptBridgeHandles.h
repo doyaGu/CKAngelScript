@@ -1113,9 +1113,13 @@ public:
 private:
     BBTaskBuilder *SetValueForPin(int pinIndex, const ScriptParamValue &value);
     bool ResolvePinSlot(BBSlot *slot, int &pinIndex, const char *method);
+    ScriptBehaviorBridge *Bridge() const;
+    CKBehavior *Component() const;
+    CKBehaviorContext MakeContext() const;
 
-    ScriptBehaviorBridge *m_Bridge = nullptr;
-    CKBehaviorContext m_Context;
+    CKContext *m_Context = nullptr;
+    CK_ID m_ComponentId = 0;
+    ScriptBridgeObjectStamp m_ComponentStamp;
     ScriptBridgeBBInvocationSpec m_Request;
 };
 

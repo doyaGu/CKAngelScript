@@ -2477,16 +2477,36 @@ bool BBCallBuilder::ResolvePinSlot(BBSlot *slot, int &pinIndex, const char *meth
 BBTaskBuilder::BBTaskBuilder(ScriptBehaviorBridge *bridge,
                              const CKBehaviorContext &ctx,
                              const ScriptBridgeBBInvocationSpec &request)
-    : m_Bridge(bridge), m_Context(ctx), m_Request(request) {}
+    : m_Context(ctx.Context ? ctx.Context : (ctx.Behavior ? ctx.Behavior->GetCKContext() : nullptr)),
+      m_ComponentId(ComponentIdFromContext(ctx)),
+      m_ComponentStamp(CaptureBridgeObjectStamp(ctx.Behavior)),
+      m_Request(request) {
+    (void)bridge;
+    if (!m_Request.ComponentId) {
+        m_Request.ComponentId = m_ComponentId;
+    }
+    if (ctx.Behavior) {
+        CKBeObject *owner = ctx.Behavior->GetOwner();
+        if (owner && m_Request.OwnerId == owner->GetID() && m_Request.OwnerStamp.Flags == 0) {
+            m_Request.OwnerStamp = CaptureBridgeObjectStamp(owner);
+        }
+        CKBeObject *target = ctx.Behavior->GetTarget();
+        if (target && m_Request.TargetId == target->GetID() && m_Request.TargetStamp.Flags == 0) {
+            m_Request.TargetStamp = CaptureBridgeObjectStamp(target);
+        }
+    }
+}
 
 BBTaskBuilder *BBTaskBuilder::Owner(CKBeObject *owner) {
     m_Request.OwnerId = owner ? owner->GetID() : 0;
+    m_Request.OwnerStamp = owner ? CaptureBridgeObjectStamp(owner) : ScriptBridgeObjectStamp();
     AddRef();
     return this;
 }
 
 BBTaskBuilder *BBTaskBuilder::Target(CKBeObject *target) {
     m_Request.TargetId = target ? target->GetID() : 0;
+    m_Request.TargetStamp = target ? CaptureBridgeObjectStamp(target) : ScriptBridgeObjectStamp();
     AddRef();
     return this;
 }
@@ -2564,7 +2584,17 @@ BBTaskBuilder *BBTaskBuilder::Operation(BBSlot *slot, ParamOp *operation) {
 }
 
 BBTask *BBTaskBuilder::Start(int inputIndex) {
-    return m_Bridge ? m_Bridge->StartTask(m_Request, m_Context, inputIndex) : nullptr;
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (!bridge) {
+        SetScriptException("BBTaskBuilder.Start requires a live AngelScript behavior bridge.");
+        return nullptr;
+    }
+    CKBehaviorContext ctx = MakeContext();
+    if (m_ComponentId && !ctx.Behavior) {
+        SetScriptException("BBTaskBuilder.Start owning behavior is no longer valid.");
+        return nullptr;
+    }
+    return bridge->StartTask(m_Request, ctx, inputIndex);
 }
 
 BBTask *BBTaskBuilder::StartSlot(BBSlot *input) {
@@ -2590,6 +2620,27 @@ bool BBTaskBuilder::ResolvePinSlot(BBSlot *slot, int &pinIndex, const char *meth
         return false;
     }
     return true;
+}
+
+ScriptBehaviorBridge *BBTaskBuilder::Bridge() const {
+    ScriptManager *manager = m_Context ? ScriptManager::GetManager(m_Context) : nullptr;
+    return manager ? manager->GetBehaviorBridge() : nullptr;
+}
+
+CKBehavior *BBTaskBuilder::Component() const {
+    return CKBehavior::Cast(GetStampedCKObjectById(m_Context, m_ComponentId, m_ComponentStamp));
+}
+
+CKBehaviorContext BBTaskBuilder::MakeContext() const {
+    CKBehaviorContext ctx = {};
+    ctx.Context = m_Context;
+    ctx.Behavior = Component();
+    ctx.ParameterManager = m_Context ? m_Context->GetParameterManager() : nullptr;
+    ctx.MessageManager = m_Context ? m_Context->GetMessageManager() : nullptr;
+    ctx.AttributeManager = m_Context ? m_Context->GetAttributeManager() : nullptr;
+    ctx.TimeManager = m_Context ? m_Context->GetTimeManager() : nullptr;
+    ctx.CurrentRenderContext = m_Context ? m_Context->GetPlayerRenderContext() : nullptr;
+    return ctx;
 }
 
 BBPrototype::BBPrototype(ScriptBehaviorBridge *bridge,
