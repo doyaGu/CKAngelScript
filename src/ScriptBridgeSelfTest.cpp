@@ -395,7 +395,8 @@ static ParamOp *CreateSelfTestParamOperation(ScriptBehaviorBridge *bridge,
                                              CKGUID operationGuid,
                                              CKGUID typeGuid,
                                              bool invalidInput) {
-    ParamOp *operation = new ParamOp(bridge, ctx, operationGuid);
+    CKContext *context = ctx.Context ? ctx.Context : (bridge && bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr);
+    ParamOp *operation = new ParamOp(context, operationGuid);
     ParamOp *returnedOperation = operation->Result(typeGuid);
     if (returnedOperation) {
         returnedOperation->Release();

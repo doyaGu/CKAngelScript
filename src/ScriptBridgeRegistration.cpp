@@ -353,7 +353,7 @@ ParamOp *ParamOperationByName(const CKBehaviorContext &ctx, const std::string &n
         SetScriptException(error);
         return nullptr;
     }
-    return new ParamOp(bridge, ctx, name);
+    return new ParamOp(context, name);
 }
 
 ParamOp *ParamOperationByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
@@ -369,7 +369,7 @@ ParamOp *ParamOperationByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
         SetScriptException(error);
         return nullptr;
     }
-    return new ParamOp(bridge, ctx, guid);
+    return new ParamOp(context, guid);
 }
 
 template <typename T>
@@ -581,8 +581,8 @@ void RegisterParamHandleMethods(asIScriptEngine *engine, int &r) {
 
     r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ Result(CKGUID guid)", asMETHODPR(ParamOp, Result, (CKGUID), ParamOp *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ Result(const string &in typeName)", asMETHOD(ParamOp, ResultName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ In(int slot, ParamRef@ source)", asMETHOD(ParamOp, InRef), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ In(int slot, ParamValue@ value)", asMETHOD(ParamOp, InValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ In(int slot, ParamRef@+ source)", asMETHOD(ParamOp, InRef), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ParamOp", "ParamOp@ In(int slot, ParamValue@+ value)", asMETHOD(ParamOp, InValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamOp", "string Describe() const", asMETHOD(ParamOp, Describe), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("ParamOperationRef", "bool IsValid() const", asMETHOD(ParamOperationRef, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

@@ -1016,13 +1016,13 @@ bool ParamOperationRef::RestoreTargetSource(std::string &error) {
     return true;
 }
 
-ParamOp::ParamOp(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx, const std::string &operationName)
-    : m_Bridge(bridge), m_Context(ctx) {
+ParamOp::ParamOp(CKContext *context, const std::string &operationName)
+    : m_Context(context) {
     m_Request.OperationName = operationName;
 }
 
-ParamOp::ParamOp(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx, CKGUID operationGuid)
-    : m_Bridge(bridge), m_Context(ctx) {
+ParamOp::ParamOp(CKContext *context, CKGUID operationGuid)
+    : m_Context(context) {
     m_Request.OperationGuid = operationGuid;
 }
 
@@ -1078,10 +1078,9 @@ ScriptBridgeOperationSpec ParamOp::RequestForPin(int pinIndex) const {
 }
 
 std::string ParamOp::Describe() const {
-    CKContext *context = m_Context.Context;
-    CKParameterManager *pm = context ? context->GetParameterManager() : nullptr;
+    CKParameterManager *pm = m_Context ? m_Context->GetParameterManager() : nullptr;
     std::string error;
-    const CKGUID guid = ResolveOperationGuid(context, m_Request.OperationGuid, m_Request.OperationName, error);
+    const CKGUID guid = ResolveOperationGuid(m_Context, m_Request.OperationGuid, m_Request.OperationName, error);
     CKSTRING name = pm && guid.IsValid() ? pm->OperationGuidToName(guid) : nullptr;
     return fmt::format("ParamOp '{}' guid={} result={}",
         name && name[0] ? name : m_Request.OperationName,

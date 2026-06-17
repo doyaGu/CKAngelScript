@@ -311,8 +311,8 @@ private:
 
 class ParamOp final : public RefCounted {
 public:
-    ParamOp(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx, const std::string &operationName);
-    ParamOp(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx, CKGUID operationGuid);
+    ParamOp(CKContext *context, const std::string &operationName);
+    ParamOp(CKContext *context, CKGUID operationGuid);
 
     ParamOp *Result(CKGUID guid);
     ParamOp *ResultName(const std::string &typeName);
@@ -324,8 +324,7 @@ public:
 private:
     ScriptBridgeOperationInput *Slot(int slot);
 
-    ScriptBehaviorBridge *m_Bridge = nullptr;
-    CKBehaviorContext m_Context;
+    CKContext *m_Context = nullptr;
     ScriptBridgeOperationSpec m_Request;
 };
 
