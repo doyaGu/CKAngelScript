@@ -4,6 +4,8 @@
 #include <new>
 #include <string>
 
+#include "add_on/scriptarray/scriptarray.h"
+
 #include "VxDefines.h"
 #include "VxMath.h"
 #include "CKDefines.h"
@@ -1230,6 +1232,32 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (obb.axisX.x != 0.5f) return 93;\n"
         "  obb.GetExtent(0) = 2.0f;\n"
         "  if (obb.extents.x != 2.0f) return 94;\n"
+        "  VxPlane plane(VxVector(0.0f, 1.0f, 0.0f), -2.0f);\n"
+        "  if (plane.Classify(VxVector(1.0f, 2.0f, 3.0f)) != 0.0f) return 95;\n"
+        "  if (plane.Distance(VxVector(1.0f, 5.0f, 3.0f)) != 3.0f) return 96;\n"
+        "  VxVector nearest = plane.NearestPoint(VxVector(1.0f, 5.0f, 3.0f));\n"
+        "  if (nearest.x != 1.0f || nearest.y != 2.0f || nearest.z != 3.0f) return 97;\n"
+        "  if (!VxIntersectBoxPlane(box, plane)) return 98;\n"
+        "  if (!VxIntersectBoxPlane(box, identity, plane)) return 99;\n"
+        "  array<VxVector> planeAxes = {VxVector(1.0f, 0.0f, 0.0f), VxVector(0.0f, 1.0f, 0.0f), VxVector(0.0f, 0.0f, 1.0f), VxVector(1.0f, 2.0f, 3.0f)};\n"
+        "  if (plane.XClassify(planeAxes) != 0.0f) return 100;\n"
+        "  VxRay planeRay;\n"
+        "  planeRay.origin = VxVector(1.0f, 0.0f, 3.0f);\n"
+        "  planeRay.direction = VxVector(0.0f, 1.0f, 0.0f);\n"
+        "  VxVector planePoint;\n"
+        "  float planeDist = 0.0f;\n"
+        "  if (!VxIntersectRayPlane(planeRay, plane, planePoint, planeDist)) return 101;\n"
+        "  if (planePoint.y != 2.0f) return 102;\n"
+        "  if (!VxIntersectLinePlane(planeRay, plane, planePoint, planeDist)) return 103;\n"
+        "  bool segmentPlane = VxIntersectSegmentPlane(planeRay, plane, planePoint, planeDist);\n"
+        "  bool segmentPlaneCulled = VxIntersectSegmentPlaneCulled(planeRay, plane, planePoint, planeDist);\n"
+        "  bool rayPlaneCulled = VxIntersectRayPlaneCulled(planeRay, plane, planePoint, planeDist);\n"
+        "  VxPlane planeX(VxVector(1.0f, 0.0f, 0.0f), 0.0f);\n"
+        "  VxPlane planeY(VxVector(0.0f, 1.0f, 0.0f), 0.0f);\n"
+        "  VxPlane planeZ(VxVector(0.0f, 0.0f, 1.0f), 0.0f);\n"
+        "  VxVector planesPoint;\n"
+        "  if (!VxIntersectPlanes(planeX, planeY, planeZ, planesPoint)) return 105;\n"
+        "  if (planesPoint.x != 0.0f || planesPoint.y != 0.0f || planesPoint.z != 0.0f) return 106;\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
@@ -2864,6 +2892,53 @@ static void RegisterVxSphere(asIScriptEngine *engine) {
 
 // VxPlane
 
+static float VxPlaneXClassifyArray(const VxPlane &plane, const CScriptArray &boxAxis) {
+    if (boxAxis.GetSize() != 4) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxPlane.XClassify requires exactly 4 VxVector values");
+        }
+        return 0.0f;
+    }
+
+    VxVector axes[4];
+    for (asUINT i = 0; i < 4; ++i) {
+        axes[i] = *static_cast<const VxVector *>(boxAxis.At(i));
+    }
+    return plane.XClassify(axes);
+}
+
+static bool VxIntersectRayPlaneBool(const VxRay &ray, const VxPlane &plane, VxVector &point, float &dist) {
+    return VxIntersect::RayPlane(ray, plane, point, dist);
+}
+
+static bool VxIntersectRayPlaneCulledBool(const VxRay &ray, const VxPlane &plane, VxVector &point, float &dist) {
+    return VxIntersect::RayPlaneCulled(ray, plane, point, dist);
+}
+
+static bool VxIntersectSegmentPlaneBool(const VxRay &ray, const VxPlane &plane, VxVector &point, float &dist) {
+    return VxIntersect::SegmentPlane(ray, plane, point, dist);
+}
+
+static bool VxIntersectSegmentPlaneCulledBool(const VxRay &ray, const VxPlane &plane, VxVector &point, float &dist) {
+    return VxIntersect::SegmentPlaneCulled(ray, plane, point, dist);
+}
+
+static bool VxIntersectLinePlaneBool(const VxRay &ray, const VxPlane &plane, VxVector &point, float &dist) {
+    return VxIntersect::LinePlane(ray, plane, point, dist);
+}
+
+static bool VxIntersectBoxPlaneBool(const VxBbox &box, const VxPlane &plane) {
+    return VxIntersect::BoxPlane(box, plane);
+}
+
+static bool VxIntersectBoxMatrixPlaneBool(const VxBbox &box, const VxMatrix &mat, const VxPlane &plane) {
+    return VxIntersect::BoxPlane(box, mat, plane);
+}
+
+static bool VxIntersectPlanesBool(const VxPlane &plane1, const VxPlane &plane2, const VxPlane &plane3, VxVector &point) {
+    return VxIntersect::Planes(plane1, plane2, plane3, point);
+}
+
 static void RegisterVxPlane(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2901,7 +2976,7 @@ static void RegisterVxPlane(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxPlane", "VxVector NearestPoint(const VxVector &in p) const", asMETHODPR(VxPlane, NearestPoint, (const VxVector &) const, const VxVector), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxPlane", "void Create(const VxVector &in n, const VxVector &in p)", asMETHODPR(VxPlane, Create, (const VxVector &, const VxVector &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxPlane", "void Create(const VxVector &in a, const VxVector &in b, const VxVector &in c)", asMETHODPR(VxPlane, Create, (const VxVector &, const VxVector &, const VxVector &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    // r = engine->RegisterObjectMethod("VxPlane", "float XClassify(const VxVector[4] &in) const", asMETHODPR(VxPlane, XClassify, (const VxVector[4] &) const, float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxPlane", "float XClassify(const array<VxVector> &in boxAxis) const", asFUNCTION(VxPlaneXClassifyArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // VxIntersect
@@ -2927,22 +3002,21 @@ static void RegisterVxIntersect(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool VxIntersectOBBOBB(const VxOBB &in box1, const VxOBB &in box2)", asFUNCTION(VxIntersectOBBOBBBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Ray - Plane
-    r = engine->RegisterGlobalFunction("bool VxIntersectRayPlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::RayPlane), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxIntersectRayPlaneCulled(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::RayPlaneCulled), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectRayPlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersectRayPlaneBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectRayPlaneCulled(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersectRayPlaneCulledBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Segment - Plane
-    r = engine->RegisterGlobalFunction("bool VxIntersectSegmentPlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::SegmentPlane), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxIntersectSegmentPlaneCulled(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::SegmentPlaneCulled), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectSegmentPlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersectSegmentPlaneBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectSegmentPlaneCulled(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersectSegmentPlaneCulledBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Line - Plane
-    r = engine->RegisterGlobalFunction("bool VxIntersectLinePlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::LinePlane), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectLinePlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersectLinePlaneBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Box - Plane
-    r = engine->RegisterGlobalFunction("bool VxIntersectBoxPlane(const VxBbox &in box, const VxPlane &in plane)", asFUNCTIONPR(VxIntersect::BoxPlane, (const VxBbox &, const VxPlane &), XBOOL), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxIntersectBoxPlane(const VxBbox &in box, const VxMatrix &in mat, const VxPlane &in plane)", asFUNCTIONPR(VxIntersect::BoxPlane, (const VxBbox &, const VxMatrix &, const VxPlane &), XBOOL), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-
+    r = engine->RegisterGlobalFunction("bool VxIntersectBoxPlane(const VxBbox &in box, const VxPlane &in plane)", asFUNCTION(VxIntersectBoxPlaneBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectBoxPlane(const VxBbox &in box, const VxMatrix &in mat, const VxPlane &in plane)", asFUNCTION(VxIntersectBoxMatrixPlaneBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     // Intersection of 3 Planes
-    r = engine->RegisterGlobalFunction("bool VxIntersectPlanes(const VxPlane &in plane1, const VxPlane &in plane2, const VxPlane &in plane3, VxVector &out p)", asFUNCTION(VxIntersect::Planes), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectPlanes(const VxPlane &in plane1, const VxPlane &in plane2, const VxPlane &in plane3, VxVector &out p)", asFUNCTION(VxIntersectPlanesBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Face - Face
     r = engine->RegisterGlobalFunction("bool VxIntersectFaceFace(const VxVector &in a0, const VxVector &in a1, const VxVector &in a2, const VxVector &in n0, const VxVector &in b0, const VxVector &in b1, const VxVector &in b2, const VxVector &in n1)", asFUNCTION(VxIntersect::FaceFace), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
