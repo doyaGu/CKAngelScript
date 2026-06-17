@@ -162,6 +162,17 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  if (behaviorContext.CurrentLevel !is null || behaviorContext.CurrentScene !is null || behaviorContext.PreviousScene !is null) return 11;\n"
         "  if (behaviorContext.CurrentRenderContext !is null || behaviorContext.ParameterManager !is null || behaviorContext.MessageManager !is null) return 12;\n"
         "  if (behaviorContext.AttributeManager !is null || behaviorContext.TimeManager !is null || behaviorContext.CallbackArg != 0) return 13;\n"
+        "  RuntimeScriptInfo info;\n"
+        "  RuntimeScriptInfo copied(info);\n"
+        "  RuntimeScriptInfo assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.Exists() || assigned.Enabled() || assigned.Loaded() || assigned.Failed()) return 14;\n"
+        "  if (assigned.Id() != \"\" || assigned.Name() != \"\" || assigned.Version() != \"\") return 15;\n"
+        "  if (assigned.Description() != \"\" || assigned.Author() != \"\" || assigned.Category() != \"\") return 16;\n"
+        "  if (assigned.State() != \"\" || assigned.Phase() != \"\" || assigned.Error() != \"\") return 17;\n"
+        "  if (assigned.Root() != \"\" || assigned.Manifest() != \"\" || assigned.Entry() != \"\") return 18;\n"
+        "  if (assigned.TagCount() != 0 || assigned.Tag(0) != \"\" || assigned.Tag(-1) != \"\") return 19;\n"
+        "  if (assigned.Generation() != 0) return 20;\n"
         "  return 0;\n"
         "}\n";
     CKAngelScriptApi api = CKAngelScriptApi::Get(context);
