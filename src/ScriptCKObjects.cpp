@@ -55,6 +55,17 @@ static void RegisterCKObjectCast(asIScriptEngine *engine, const char *derived, c
 }
 
 template <typename T>
+static CKERROR CopyCKObject(T *self, CKObject *obj, CKDependenciesContext &context) {
+    if (!self || !obj) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKObject.Copy requires a non-null source object.");
+        }
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->Copy(*obj, context);
+}
+
+template <typename T>
 static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -96,7 +107,7 @@ static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context, bool caller = true)", asFUNCTIONPR([](T *self, CKDependenciesContext &context, bool caller) -> CKERROR { return self->PrepareDependencies(context, caller); }, (T *, CKDependenciesContext &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod(name, "CKERROR RemapDependencies(CKDependenciesContext &in context)", asMETHODPR(T, RemapDependencies, (CKDependenciesContext &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asMETHODPR(T, Copy, (CKObject&, CKDependenciesContext &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asFUNCTION(CopyCKObject<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "bool IsUpToDate()", asFUNCTIONPR([](T *self) -> bool { return self->IsUpToDate(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsPrivate()", asFUNCTIONPR([](T *self) -> bool { return self->IsPrivate(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -160,7 +171,7 @@ static void RegisterCKObjectMembers<CKScene>(asIScriptEngine *engine, const char
     r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context, bool caller = true)", asFUNCTIONPR([](CKScene *obj, CKDependenciesContext &context, bool caller) { return obj->PrepareDependencies(context, caller); }, (CKScene *, CKDependenciesContext &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod(name, "CKERROR RemapDependencies(CKDependenciesContext &in context)", asMETHODPR(CKScene, RemapDependencies, (CKDependenciesContext &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asMETHODPR(CKScene, Copy, (CKObject&, CKDependenciesContext &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asFUNCTION(CopyCKObject<CKScene>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "bool IsUpToDate()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsUpToDate(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsPrivate()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsPrivate(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
