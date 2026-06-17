@@ -1258,6 +1258,32 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxVector planesPoint;\n"
         "  if (!VxIntersectPlanes(planeX, planeY, planeZ, planesPoint)) return 105;\n"
         "  if (planesPoint.x != 0.0f || planesPoint.y != 0.0f || planesPoint.z != 0.0f) return 106;\n"
+        "  VxQuaternion quat = {1.0f, 2.0f, 3.0f, 4.0f};\n"
+        "  if (quat.x != 1.0f || quat.y != 2.0f || quat.z != 3.0f || quat.w != 4.0f) return 107;\n"
+        "  if (quat[0] != 1.0f || quat[1] != 2.0f || quat[2] != 3.0f || quat[3] != 4.0f) return 108;\n"
+        "  quat[3] = 5.0f;\n"
+        "  if (quat.w != 5.0f) return 109;\n"
+        "  VxQuaternion quatCopy(quat);\n"
+        "  if (!(quat == quatCopy)) return 110;\n"
+        "  if (quat.Magnitude() != 39.0f) return 111;\n"
+        "  if (quat.DotProduct(quat) != 39.0f) return 112;\n"
+        "  VxQuaternion identityQuat;\n"
+        "  identityQuat.FromMatrix(identity);\n"
+        "  VxMatrix quatMatrix;\n"
+        "  identityQuat.ToMatrix(quatMatrix);\n"
+        "  if (quatMatrix[0].x != 1.0f || quatMatrix[1].y != 1.0f || quatMatrix[2].z != 1.0f) return 113;\n"
+        "  VxQuaternion fromMatrixQuat = Vx3DQuaternionFromMatrix(identity);\n"
+        "  VxQuaternion multipliedQuat = Vx3DQuaternionMultiply(identityQuat, fromMatrixQuat);\n"
+        "  VxQuaternion dividedQuat = Vx3DQuaternionDivide(multipliedQuat, fromMatrixQuat);\n"
+        "  VxQuaternion conjugatedQuat = Vx3DQuaternionConjugate(identityQuat);\n"
+        "  VxQuaternion snuggleQuat(0.0f, 0.0f, 0.0f, 1.0f);\n"
+        "  VxVector snuggleScale(1.0f, 2.0f, 3.0f);\n"
+        "  VxQuaternion snuggledQuat = Vx3DQuaternionSnuggle(snuggleQuat, snuggleScale);\n"
+        "  if (snuggledQuat.Magnitude() == 0.0f || snuggleScale.x == 0.0f) return 114;\n"
+        "  VxQuaternion slerpedQuat = Slerp(0.0f, identityQuat, fromMatrixQuat);\n"
+        "  VxQuaternion lndifQuat = LnDif(identityQuat, fromMatrixQuat);\n"
+        "  VxQuaternion lnQuat = Ln(identityQuat);\n"
+        "  VxQuaternion expQuat = Exp(lnQuat);\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
@@ -1284,6 +1310,10 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "void OutOfRangeVxOBBExtent() {\n"
         "  VxOBB obb;\n"
         "  obb.GetExtent(3) = 0.0f;\n"
+        "}\n"
+        "void OutOfRangeVxQuaternionIndex() {\n"
+        "  VxQuaternion quat(1.0f, 2.0f, 3.0f, 4.0f);\n"
+        "  quat[4] = 0.0f;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -1382,6 +1412,9 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
     }
     if (ok) {
         ok = runExpectedException("void OutOfRangeVxOBBExtent()", "VxOBB extent index out of range", "VxOBB extent out-of-range access");
+    }
+    if (ok) {
+        ok = runExpectedException("void OutOfRangeVxQuaternionIndex()", "VxQuaternion index out of range", "VxQuaternion out-of-range access");
     }
 
     context->Unprepare();
@@ -2542,6 +2575,58 @@ static void RegisterVxMatrix(asIScriptEngine *engine) {
 
 // VxQuaternion
 
+static bool VxQuaternionEquals(const VxQuaternion &lhs, const VxQuaternion &rhs) {
+    return lhs == rhs;
+}
+
+static float &VxQuaternionIndex(VxQuaternion &quat, int index) {
+    static thread_local float dummy = 0.0f;
+    switch (index) {
+    case 0: return quat[0];
+    case 1: return quat[1];
+    case 2: return quat[2];
+    case 3: return quat[3];
+    default:
+        dummy = 0.0f;
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxQuaternion index out of range");
+        }
+        return dummy;
+    }
+}
+
+static const float &VxQuaternionIndexConst(const VxQuaternion &quat, int index) {
+    static thread_local float dummy = 0.0f;
+    switch (index) {
+    case 0: return quat[0];
+    case 1: return quat[1];
+    case 2: return quat[2];
+    case 3: return quat[3];
+    default:
+        dummy = 0.0f;
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxQuaternion index out of range");
+        }
+        return dummy;
+    }
+}
+
+static void VxQuaternionFromMatrix(VxQuaternion &quat, const VxMatrix &mat, bool matIsUnit, bool restoreMat) {
+    quat.FromMatrix(mat, matIsUnit ? TRUE : FALSE, restoreMat ? TRUE : FALSE);
+}
+
+static float VxQuaternionMagnitude(const VxQuaternion &quat) {
+    return Magnitude(quat);
+}
+
+static float VxQuaternionDotProduct(const VxQuaternion &lhs, const VxQuaternion &rhs) {
+    return DotProduct(lhs, rhs);
+}
+
+static VxQuaternion Vx3DQuaternionSnuggleRefs(VxQuaternion &quat, VxVector &scale) {
+    return Vx3DQuaternionSnuggle(&quat, &scale);
+}
+
 static void RegisterVxQuaternion(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2563,7 +2648,7 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(const VxQuaternion &in quat)", asFUNCTIONPR([](const VxQuaternion &quat, VxQuaternion *self) { new(self) VxQuaternion(quat); }, (const VxQuaternion &, VxQuaternion*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(const VxVector &in v, float angle)", asFUNCTIONPR([](const VxVector &v, float angle, VxQuaternion *self) { new(self) VxQuaternion(v, angle); }, (const VxVector &, float, VxQuaternion*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z, float w)", asFUNCTIONPR([](float x, float y, float z, float w, VxQuaternion *self) { new(self) VxQuaternion(x, y, z, w); }, (float, float, float, float, VxQuaternion*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxQuaternion *self) { new(self) VxQuaternion(list[0], list[1], list[2], list[3]); }, (float *, VxQuaternion *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float, float}", asFUNCTIONPR([](float *list, VxQuaternion *self) { new(self) VxQuaternion(list[0], list[1], list[2], list[3]); }, (float *, VxQuaternion *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxQuaternion", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxQuaternion *self) { self->~VxQuaternion(); }, (VxQuaternion*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -2571,7 +2656,7 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opAssign(const VxQuaternion &in quat)", asMETHODPR(VxQuaternion, operator=, (const VxQuaternion &), VxQuaternion &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "bool opEquals(const VxQuaternion &in quat) const", asFUNCTIONPR(operator==, (const VxQuaternion &, const VxQuaternion &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxQuaternion", "bool opEquals(const VxQuaternion &in quat) const", asFUNCTION(VxQuaternionEquals), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion &opMulAssign(float s)", asMETHODPR(VxQuaternion, operator*=, (float), VxQuaternion &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -2584,21 +2669,21 @@ static void RegisterVxQuaternion(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxQuaternion", "VxQuaternion opNeg() const", asMETHODPR(VxQuaternion, operator-, () const, VxQuaternion), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "float &opIndex(int index)", asMETHODPR(VxQuaternion, operator[], (int), float&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxQuaternion", "const float &opIndex(int index) const", asMETHODPR(VxQuaternion, operator[], (int) const, const float&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxQuaternion", "float &opIndex(int index)", asFUNCTION(VxQuaternionIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxQuaternion", "const float &opIndex(int index) const", asFUNCTION(VxQuaternionIndexConst), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxQuaternion", "void FromMatrix(const VxMatrix &in mat)", asMETHOD(VxQuaternion, FromMatrix), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxQuaternion", "void FromMatrix(const VxMatrix &in mat, bool matIsUnit = true, bool restoreMat = true)", asFUNCTION(VxQuaternionFromMatrix), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxQuaternion", "void ToMatrix(VxMatrix &out mat) const", asMETHOD(VxQuaternion, ToMatrix), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxQuaternion", "void Multiply(const VxQuaternion &in quat)", asMETHOD(VxQuaternion, Multiply), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxQuaternion", "void FromRotation(const VxVector &in v, float angle)", asMETHOD(VxQuaternion, FromRotation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxQuaternion", "void FromEulerAngles(float eax, float eay, float eaz)", asMETHOD(VxQuaternion, FromEulerAngles), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxQuaternion", "void ToEulerAngles(float &out eax, float &out eay, float &out eaz) const", asMETHOD(VxQuaternion, ToEulerAngles), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxQuaternion", "void Normalize()", asMETHOD(VxQuaternion, Normalize), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxQuaternion", "float Magnitude() const", asFUNCTIONPR(Magnitude, (const VxVector &), float), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxQuaternion", "float DotProduct(const VxQuaternion &in quat) const", asFUNCTIONPR(DotProduct, (const VxVector &, const VxVector &), float), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxQuaternion", "float Magnitude() const", asFUNCTION(VxQuaternionMagnitude), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxQuaternion", "float DotProduct(const VxQuaternion &in quat) const", asFUNCTION(VxQuaternionDotProduct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     
     // Function registration
-    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionSnuggle(VxQuaternion &in quat, VxVector &in scale)", asFUNCTION(Vx3DQuaternionSnuggle), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionSnuggle(VxQuaternion &inout quat, VxVector &inout scale)", asFUNCTION(Vx3DQuaternionSnuggleRefs), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionFromMatrix(const VxMatrix &in mat)", asFUNCTION(Vx3DQuaternionFromMatrix), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionConjugate(const VxQuaternion &in quat)", asFUNCTION(Vx3DQuaternionConjugate), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("VxQuaternion Vx3DQuaternionMultiply(const VxQuaternion &in l, const VxQuaternion &in r)", asFUNCTION(Vx3DQuaternionMultiply), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
