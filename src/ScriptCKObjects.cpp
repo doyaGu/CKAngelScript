@@ -790,7 +790,15 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKRenderContext", "int CopyToVideo(const VxRect &in rect, VXBUFFER_TYPE bufferType, VxImageDescEx &out desc)", asMETHODPR(CKRenderContext, CopyToVideo, (const VxRect*, VXBUFFER_TYPE, VxImageDescEx&), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "CKERROR DumpToFile(const string &in filename, const VxRect &in rect, VXBUFFER_TYPE bufferType)", asFUNCTIONPR([](CKRenderContext *self, const std::string &filename, const VxRect *rect, VXBUFFER_TYPE bufferType) { return self->DumpToFile(const_cast<CKSTRING>(filename.c_str()), rect, bufferType); }, (CKRenderContext *, const std::string &, const VxRect *, VXBUFFER_TYPE), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKRenderContext", "VxDirectXData &GetDirectXInfo()", asMETHODPR(CKRenderContext, GetDirectXInfo, (), VxDirectXData*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "bool GetDirectXInfo(VxDirectXData &out data)", asFUNCTIONPR([](CKRenderContext *self, VxDirectXData &data) -> bool {
+        VxDirectXData *directXInfo = self->GetDirectXInfo();
+        if (!directXInfo) {
+            data = VxDirectXData();
+            return false;
+        }
+        data = *directXInfo;
+        return true;
+    }, (CKRenderContext *, VxDirectXData &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "void WarnEnterThread()", asMETHODPR(CKRenderContext, WarnEnterThread, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "void WarnExitThread()", asMETHODPR(CKRenderContext, WarnExitThread, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
