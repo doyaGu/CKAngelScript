@@ -2122,17 +2122,53 @@ void RegisterCKSquare(asIScriptEngine *engine) {
 
 // CK2dCurvePoint
 
+static void CopyDetachedCK2dCurvePoint(const CK2dCurvePoint &source, CK2dCurvePoint &target) {
+    CK2dCurvePoint &mutableSource = const_cast<CK2dCurvePoint &>(source);
+    target.SetBias(source.GetBias());
+    target.SetTension(source.GetTension());
+    target.SetContinuity(source.GetContinuity());
+    target.SetPosition(mutableSource.GetPosition());
+    target.SetInTangent(mutableSource.GetInTangent());
+    target.SetOutTangent(mutableSource.GetOutTangent());
+    target.SetLinear(source.IsLinear() != FALSE);
+    target.UseTCB(source.IsTCB() != FALSE);
+}
+
+static void ConstructCK2dCurvePointCopy(const CK2dCurvePoint &source, CK2dCurvePoint *self) {
+    new(self) CK2dCurvePoint();
+    CopyDetachedCK2dCurvePoint(source, *self);
+}
+
+static CK2dCurvePoint &AssignCK2dCurvePoint(CK2dCurvePoint &self, const CK2dCurvePoint &source) {
+    if (&self != &source) {
+        CopyDetachedCK2dCurvePoint(source, self);
+    }
+    return self;
+}
+
+static CK2dCurve &GetCK2dCurvePointOwner(const CK2dCurvePoint &point) {
+    static thread_local CK2dCurve dummy;
+    if (CK2dCurve *curve = point.GetCurve()) {
+        return *curve;
+    }
+
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException("CK2dCurvePoint has no owner curve.");
+    }
+    return dummy;
+}
+
 void RegisterCK2dCurvePoint(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectBehaviour("CK2dCurvePoint", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CK2dCurvePoint *self) { new(self) CK2dCurvePoint(); }, (CK2dCurvePoint *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CK2dCurvePoint", asBEHAVE_CONSTRUCT, "void f(const CK2dCurvePoint &in other)", asFUNCTIONPR([](const CK2dCurvePoint &p, CK2dCurvePoint *self) { new(self) CK2dCurvePoint(p); }, (const CK2dCurvePoint &, CK2dCurvePoint *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CK2dCurvePoint", asBEHAVE_CONSTRUCT, "void f(const CK2dCurvePoint &in other)", asFUNCTION(ConstructCK2dCurvePointCopy), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CK2dCurvePoint", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CK2dCurvePoint *self) { self->~CK2dCurvePoint(); }, (CK2dCurvePoint *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "CK2dCurvePoint &opAssign(const CK2dCurvePoint &in other)", asMETHODPR(CK2dCurvePoint, operator=, (const CK2dCurvePoint &), CK2dCurvePoint &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "CK2dCurvePoint &opAssign(const CK2dCurvePoint &in other)", asFUNCTION(AssignCK2dCurvePoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "CK2dCurve &GetCurve() const", asMETHOD(CK2dCurvePoint, GetCurve), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "CK2dCurve &GetCurve() const", asFUNCTION(GetCK2dCurvePointOwner), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "float GetBias() const", asMETHOD(CK2dCurvePoint, GetBias), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetBias(float b)", asMETHOD(CK2dCurvePoint, SetBias), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
