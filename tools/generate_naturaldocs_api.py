@@ -642,6 +642,18 @@ def collect_items(api: dict[str, Any], metadata: Metadata, quality: Quality) -> 
     for collection, (section, kind) in mapping.items():
         for item in api.get(collection, []):
             known_doc_ids.add(doc_id(kind, item))
+            if collection == "objectTypes":
+                for factory in item.get("factories", []):
+                    known_doc_ids.add(doc_id("factory", factory))
+                for prop in item.get("properties", []):
+                    known_doc_ids.add(doc_id("property", prop))
+                for method in item.get("methods", []):
+                    known_doc_ids.add(doc_id("method", method))
+                for behaviour in item.get("behaviours", []):
+                    function = dict(behaviour.get("function") or {})
+                    function["name"] = str(behaviour.get("behaviour") or function.get("name") or "")
+                    function["memberRole"] = str(behaviour.get("memberRole") or function.get("memberRole") or "")
+                    known_doc_ids.add(doc_id("behaviour", function))
             if metadata.hidden(kind, item):
                 quality.hidden_internals.append({"kind": kind, "name": item_name(item), "docId": doc_id(kind, item)})
                 continue
