@@ -2651,15 +2651,42 @@ CKBehaviorPrototype *BBPrototype::Prototype(std::string &error) const {
     return m_Bridge ? m_Bridge->ResolvePrototypeObject(m_Request, error) : nullptr;
 }
 
-BBBridge::BBBridge(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx)
-    : m_Bridge(bridge), m_Context(ctx) {}
+BBBridge::BBBridge(ScriptBehaviorBridge *, const CKBehaviorContext &ctx)
+    : m_Context(ctx.Context),
+      m_ComponentId(ComponentIdFromContext(ctx)),
+      m_ComponentStamp(CaptureBridgeObjectStamp(ctx.Behavior)) {}
+
+ScriptBehaviorBridge *BBBridge::Bridge() const {
+    ScriptManager *manager = m_Context ? ScriptManager::GetManager(m_Context) : nullptr;
+    return manager ? manager->GetBehaviorBridge() : nullptr;
+}
+
+CKBehavior *BBBridge::Component() const {
+    return CKBehavior::Cast(GetStampedCKObjectById(m_Context, m_ComponentId, m_ComponentStamp));
+}
+
+CKBehaviorContext BBBridge::MakeContext() const {
+    CKBehaviorContext ctx;
+    ctx.Context = m_Context;
+    ctx.Behavior = Component();
+    ctx.ParameterManager = m_Context ? m_Context->GetParameterManager() : nullptr;
+    ctx.MessageManager = m_Context ? m_Context->GetMessageManager() : nullptr;
+    ctx.AttributeManager = m_Context ? m_Context->GetAttributeManager() : nullptr;
+    ctx.TimeManager = m_Context ? m_Context->GetTimeManager() : nullptr;
+    ctx.CurrentRenderContext = m_Context ? m_Context->GetPlayerRenderContext() : nullptr;
+    return ctx;
+}
 
 BBPrototype *BBBridge::PrototypeByName(const std::string &name) const {
-    return m_Bridge ? m_Bridge->CreatePrototype(m_Context, name) : nullptr;
+    ScriptBehaviorBridge *bridge = Bridge();
+    CKBehaviorContext ctx = MakeContext();
+    return bridge ? bridge->CreatePrototype(ctx, name) : nullptr;
 }
 
 BBPrototype *BBBridge::PrototypeByGuid(CKGUID guid) const {
-    return m_Bridge ? m_Bridge->CreatePrototype(m_Context, guid) : nullptr;
+    ScriptBehaviorBridge *bridge = Bridge();
+    CKBehaviorContext ctx = MakeContext();
+    return bridge ? bridge->CreatePrototype(ctx, guid) : nullptr;
 }
 
 int BBBridge::Count() const {
@@ -2667,22 +2694,26 @@ int BBBridge::Count() const {
 }
 
 BBPrototype *BBBridge::At(int index) const {
-    if (!m_Bridge || index < 0 || index >= Count()) {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (!bridge || index < 0 || index >= Count()) {
         return nullptr;
     }
 
     CKObjectDeclaration *decl = CKGetPrototypeDeclaration(index);
-    return decl ? m_Bridge->CreatePrototype(m_Context, decl->GetGuid()) : nullptr;
+    CKBehaviorContext ctx = MakeContext();
+    return decl ? bridge->CreatePrototype(ctx, decl->GetGuid()) : nullptr;
 }
 
 BBPrototype *BBBridge::Find(const std::string &query, int occurrence) const {
-    if (!m_Bridge || query.empty() || occurrence < 0) {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (!bridge || query.empty() || occurrence < 0) {
         return nullptr;
     }
 
+    CKBehaviorContext ctx = MakeContext();
     CKGUID parsed;
     if (ParseScriptGuidString(query, parsed)) {
-        return occurrence == 0 && CKGetPrototypeFromGuid(parsed) ? m_Bridge->CreatePrototype(m_Context, parsed) : nullptr;
+        return occurrence == 0 && CKGetPrototypeFromGuid(parsed) ? bridge->CreatePrototype(ctx, parsed) : nullptr;
     }
 
     int seen = 0;
@@ -2693,7 +2724,7 @@ BBPrototype *BBBridge::Find(const std::string &query, int occurrence) const {
             continue;
         }
         if (seen == occurrence) {
-            return m_Bridge->CreatePrototype(m_Context, decl->GetGuid());
+            return bridge->CreatePrototype(ctx, decl->GetGuid());
         }
         ++seen;
     }
@@ -2702,40 +2733,44 @@ BBPrototype *BBBridge::Find(const std::string &query, int occurrence) const {
 }
 
 CScriptArray *BBBridge::FindAll(const std::string &query) const {
-    if (!m_Bridge) {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (!bridge) {
         return nullptr;
     }
 
-    CScriptArray *results = ScriptBridgeBBInternal::CreatePrototypeArray(m_Bridge);
+    CScriptArray *results = ScriptBridgeBBInternal::CreatePrototypeArray(bridge);
     if (!results) {
         return nullptr;
     }
 
+    CKBehaviorContext ctx = MakeContext();
     CKGUID parsed;
     if (!query.empty() && ParseScriptGuidString(query, parsed)) {
         if (CKGetPrototypeFromGuid(parsed)) {
-            ScriptBridgeBBInternal::AppendPrototype(results, m_Bridge->CreatePrototype(m_Context, parsed));
+            ScriptBridgeBBInternal::AppendPrototype(results, bridge->CreatePrototype(ctx, parsed));
         }
         return results;
     }
 
     for (CKObjectDeclaration *decl : ScriptBridgeBBInternal::FindPrototypeDeclarations(query)) {
-        ScriptBridgeBBInternal::AppendPrototype(results, m_Bridge->CreatePrototype(m_Context, decl->GetGuid()));
+        ScriptBridgeBBInternal::AppendPrototype(results, bridge->CreatePrototype(ctx, decl->GetGuid()));
     }
 
     return results;
 }
 
 BBDecl *BBBridge::Require(const std::string &query) const {
+    ScriptBehaviorBridge *bridge = Bridge();
+    CKBehaviorContext ctx = MakeContext();
     ScriptBridgeBBInvocationSpec request;
-    request.ComponentId = ComponentIdFromContext(m_Context);
+    request.ComponentId = ComponentIdFromContext(ctx);
     request.PrototypeName = query;
 
-    if (!m_Bridge) {
-        return new BBDecl(nullptr, m_Context, request, "AngelScript BB bridge is not available.");
+    if (!bridge) {
+        return new BBDecl(nullptr, ctx, request, "AngelScript BB bridge is not available.");
     }
     if (query.empty()) {
-        return new BBDecl(m_Bridge, m_Context, request, "BB::Require needs a non-empty prototype name, Category/Name, or GUID.");
+        return new BBDecl(bridge, ctx, request, "BB::Require needs a non-empty prototype name, Category/Name, or GUID.");
     }
 
     CKGUID parsed;
@@ -2743,43 +2778,45 @@ BBDecl *BBBridge::Require(const std::string &query) const {
         request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
         request.Guid = parsed;
         if (CKGetPrototypeFromGuid(parsed)) {
-            return new BBDecl(m_Bridge, m_Context, request);
+            return new BBDecl(bridge, ctx, request);
         }
-        return new BBDecl(m_Bridge, m_Context, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(parsed)));
+        return new BBDecl(bridge, ctx, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(parsed)));
     }
 
     const std::vector<CKObjectDeclaration *> matches = ScriptBridgeBBInternal::FindPrototypeDeclarations(query);
     if (matches.size() == 1 && matches[0]) {
         request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
         request.Guid = matches[0]->GetGuid();
-        return new BBDecl(m_Bridge, m_Context, request);
+        return new BBDecl(bridge, ctx, request);
     }
     if (matches.size() > 1) {
-        return new BBDecl(m_Bridge,
-                          m_Context,
+        return new BBDecl(bridge,
+                          ctx,
                           request,
                           fmt::format("BB prototype '{}' is ambiguous. Candidates: {}.",
                                       query,
                                       ScriptBridgeBBInternal::PrototypeCandidateList(matches)));
     }
 
-    return new BBDecl(m_Bridge,
-                      m_Context,
+    return new BBDecl(bridge,
+                      ctx,
                       request,
                       fmt::format("BB prototype '{}' was not found. Use BB::FindAll(query) to inspect candidates.", query));
 }
 
 BBDecl *BBBridge::RequireGuid(CKGUID guid) const {
+    ScriptBehaviorBridge *bridge = Bridge();
+    CKBehaviorContext ctx = MakeContext();
     ScriptBridgeBBInvocationSpec request;
-    request.ComponentId = ComponentIdFromContext(m_Context);
+    request.ComponentId = ComponentIdFromContext(ctx);
     request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
     request.Guid = guid;
 
-    if (!m_Bridge) {
-        return new BBDecl(nullptr, m_Context, request, "AngelScript BB bridge is not available.");
+    if (!bridge) {
+        return new BBDecl(nullptr, ctx, request, "AngelScript BB bridge is not available.");
     }
     if (!guid.IsValid() || !CKGetPrototypeFromGuid(guid)) {
-        return new BBDecl(m_Bridge, m_Context, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(guid)));
+        return new BBDecl(bridge, ctx, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(guid)));
     }
-    return new BBDecl(m_Bridge, m_Context, request);
+    return new BBDecl(bridge, ctx, request);
 }

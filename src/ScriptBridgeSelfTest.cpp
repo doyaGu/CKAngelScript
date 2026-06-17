@@ -138,6 +138,27 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (call !is null) { call.Set(slot, value); call.Set(slot, 1); call.Set(slot, 1.0f); call.Set(slot, true); call.Set(slot, \"x\"); call.Set(slot, objectValue); call.Source(slot, source); call.Operation(slot, operation); BBResult@ sr = call.Run(input); if (sr !is null) { sr.OutputActive(output); sr.Pout(slot); } }\n";
     source += "    if (spawn !is null) { spawn.Set(slot, value); spawn.Set(slot, 1); spawn.Set(slot, 1.0f); spawn.Set(slot, true); spawn.Set(slot, \"x\"); spawn.Set(slot, objectValue); spawn.Source(slot, source); spawn.Operation(slot, operation); BBTask@ st = spawn.Start(input); if (st !is null) { st.OutputActive(output); st.Step(ctx, input); st.Pout(slot); } }\n";
     source += "}\n";
+    source += "int ProbeBBBridgeApi(const CKBehaviorContext &in ctx) {\n";
+    source += "    BBBridge@ bridge = BB::From(ctx);\n";
+    source += "    if (bridge is null) return 900;\n";
+    source += "    int count = bridge.Count();\n";
+    source += "    if (count < 0) return 901;\n";
+    source += "    BBPrototype@ first = bridge.At(0);\n";
+    source += "    if (count > 0 && first is null) return 902;\n";
+    source += "    if (first !is null) { first.IsValid(); first.GetGuid(); first.GetName(); first.GetCategory(); first.GetQualifiedName(); first.Describe(); }\n";
+    source += "    CKGUID emptyGuid;\n";
+    source += "    bridge.Prototype(\"__missing__\");\n";
+    source += "    bridge.Prototype(emptyGuid);\n";
+    source += "    bridge.Find(\"__missing__\");\n";
+    source += "    array<BBPrototype@>@ missingAll = bridge.FindAll(\"__missing__\");\n";
+    source += "    if (missingAll is null) return 903;\n";
+    source += "    BBDecl@ missingDecl = bridge.Require(\"__missing__\");\n";
+    source += "    BBDecl@ missingGuidDecl = bridge.Require(emptyGuid);\n";
+    source += "    if (missingDecl is null || missingGuidDecl is null) return 904;\n";
+    source += "    missingDecl.IsValid(); missingDecl.Error(); missingDecl.Guid(); missingDecl.Name(); missingDecl.Category(); missingDecl.QualifiedName(); missingDecl.Describe();\n";
+    source += "    missingGuidDecl.IsValid(); missingGuidDecl.Error();\n";
+    source += "    return 0;\n";
+    source += "}\n";
     source += "void ProbeGraphTaskApi(const CKBehaviorContext &in ctx, BehaviorRef@ ref, GraphTask@ task) {\n";
     source += "    BBDecl@ spec = BB::Require(ctx, \"__missing__\"); BBSlot@ input = spec !is null ? spec.Input(\"In\") : null; BBSlot@ output = spec !is null ? spec.Output(\"Out\") : null; BBSlot@ pinSlot = spec !is null ? spec.Pin(\"Value\") : null; BBSlot@ poutSlot = spec !is null ? spec.Pout(\"Value\") : null;\n";
     source += "    if (ref !is null) { BehaviorLayout@ l = ref.Layout(); int p = l.FindPin(\"Value\"); ParamRef@ pin = p >= 0 ? ref.Pin(p) : null; ParamSourceLinkRef@ link = pin !is null ? pin.SetSourceScoped(pin) : null; if (link !is null) { link.IsValid(); link.Commit(); link.Restore(); link.Describe(); } ParamOperationRef@ opRef = null; if (opRef !is null) opRef.Restore(); GraphTask@ s = ref.Start(0); GraphTask@ ss = ref.Start(input); ref.Trigger(input); ref.OutputActive(output); ref.Pin(pinSlot); ref.Pout(poutSlot); GraphTask@ w = ref.Watch(); }\n";
@@ -236,6 +257,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    }\n";
     source += "    ParamValue@ textValue = Param::Text(ctx, typeName, \"0\");\n";
     source += "    if (textValue is null || !textValue.IsValid()) return 55;\n";
+    source += "    int bbBridgeResult = ProbeBBBridgeApi(ctx);\n";
+    source += "    if (bbBridgeResult != 0) return bbBridgeResult;\n";
     source += "    return 0;\n";
     source += "}\n";
 
