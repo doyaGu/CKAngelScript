@@ -402,8 +402,8 @@ void RegisterParamValueFactories(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("ParamValue@ ObjectArray(const XObjectArray &in value)", asFUNCTION(ParamObjectArray), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("ParamValue@ Text(const CKBehaviorContext &in ctx, const string &in typeName, const string &in text)", asFUNCTION(ParamTextByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("ParamValue@ Text(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in text)", asFUNCTION(ParamTextByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, const string &in typeName, NativeBuffer@ data)", asFUNCTION(ParamRawByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, CKGUID typeGuid, NativeBuffer@ data)", asFUNCTION(ParamRawByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, const string &in typeName, NativeBuffer@+ data)", asFUNCTION(ParamRawByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, CKGUID typeGuid, NativeBuffer@+ data)", asFUNCTION(ParamRawByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, const string &in typeName, const string &in nameOrValue)", asFUNCTION(ParamEnumByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in nameOrValue)", asFUNCTION(ParamEnumByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, const string &in typeName, int value)", asFUNCTION(ParamEnumIntByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
