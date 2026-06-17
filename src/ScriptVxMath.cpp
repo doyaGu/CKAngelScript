@@ -1088,11 +1088,36 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxVector firstPoint;\n"
         "  if (boxPoints.Read(firstPoint) != 12) return 23;\n"
         "  if (firstPoint.x < 0.0f || firstPoint.x > 2.0f || firstPoint.y < 0.0f || firstPoint.y > 4.0f || firstPoint.z < 0.0f || firstPoint.z > 6.0f) return 24;\n"
+        "  VxVector vector = {1.0f, 2.0f, 3.0f};\n"
+        "  if (vector.x != 1.0f || vector.y != 2.0f || vector.z != 3.0f) return 25;\n"
+        "  if (vector[0] != 1.0f || vector[1] != 2.0f || vector[2] != 3.0f) return 26;\n"
+        "  vector[2] = 4.0f;\n"
+        "  if (vector.z != 4.0f) return 27;\n"
+        "  VxVector scalarAdded = vector + 2.0f;\n"
+        "  if (scalarAdded.x != 3.0f || scalarAdded.y != 4.0f || scalarAdded.z != 6.0f) return 28;\n"
+        "  VxVector scalarSubtracted = vector - 1.0f;\n"
+        "  if (scalarSubtracted.x != 0.0f || scalarSubtracted.y != 1.0f || scalarSubtracted.z != 3.0f) return 29;\n"
+        "  if (VxVector(1.0f, 2.0f, 3.0f).Dot(VxVector(4.0f, 5.0f, 6.0f)) != 32.0f) return 30;\n"
+        "  VxVector vectorCross = VxVector(1.0f, 0.0f, 0.0f).Cross(VxVector(0.0f, 1.0f, 0.0f));\n"
+        "  if (vectorCross.x != 0.0f || vectorCross.y != 0.0f || vectorCross.z != 1.0f) return 31;\n"
+        "  VxVector vectorNorm = VxVector(3.0f, 4.0f, 0.0f).Normalize();\n"
+        "  if (vectorNorm.SquareMagnitude() < 0.99f || vectorNorm.SquareMagnitude() > 1.01f) return 32;\n"
+        "  VxVector reflected = VxVector(0.0f, 1.0f, 0.0f).Reflect(VxVector(0.0f, 1.0f, 0.0f));\n"
+        "  if (reflected.x != 0.0f || reflected.y != 1.0f || reflected.z != 0.0f) return 33;\n"
+        "  VxVector rotatedByMatrix = vector.Rotate(identity);\n"
+        "  if (rotatedByMatrix.x != vector.x || rotatedByMatrix.y != vector.y || rotatedByMatrix.z != vector.z) return 34;\n"
+        "  VxVector rotatedByAxis = vector.Rotate(vector.axisY, 0.0f);\n"
+        "  if (rotatedByAxis.x != vector.x || rotatedByAxis.y != vector.y || rotatedByAxis.z != vector.z) return 35;\n"
+        "  if (vector.axisX.x != 1.0f || vector.axisY.y != 1.0f || vector.axisZ.z != 1.0f) return 36;\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
         "  Vx2DVector vec(1.0f, 2.0f);\n"
         "  vec[-1] = 0.0f;\n"
+        "}\n"
+        "void OutOfRangeVxVectorIndex() {\n"
+        "  VxVector vec(1.0f, 2.0f, 3.0f);\n"
+        "  vec[3] = 0.0f;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -1145,33 +1170,40 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         error = "Vx binding self-test script execution failed.";
     }
 
-    if (ok) {
+    auto runExpectedException = [&](const char *decl, const char *expected, const char *label) -> bool {
         context->Unprepare();
-        function = module->GetFunctionByDecl("void OutOfRangeIndex()");
+        function = module->GetFunctionByDecl(decl);
         if (!function) {
-            error = "Vx binding self-test out-of-range entry point is unavailable.";
-            ok = false;
-        } else {
-            r = context->Prepare(function);
-            if (r >= 0) {
-                r = context->Execute();
-            }
-            if (r == asEXECUTION_EXCEPTION) {
-                const char *exception = context->GetExceptionString();
-                const std::string exceptionText = exception ? exception : "";
-                if (exceptionText.find("Vx2DVector index out of range") == std::string::npos) {
-                    error = "Vx binding self-test got unexpected Vx2DVector index exception: " +
-                            (exceptionText.empty() ? std::string("<empty>") : exceptionText);
-                    ok = false;
-                }
-            } else if (r == asEXECUTION_FINISHED) {
-                error = "Vx binding self-test Vx2DVector out-of-range access did not raise an exception.";
-                ok = false;
-            } else {
-                error = "Vx binding self-test Vx2DVector out-of-range execution failed.";
-                ok = false;
-            }
+            error = std::string("Vx binding self-test ") + label + " entry point is unavailable.";
+            return false;
         }
+        r = context->Prepare(function);
+        if (r >= 0) {
+            r = context->Execute();
+        }
+        if (r == asEXECUTION_EXCEPTION) {
+            const char *exception = context->GetExceptionString();
+            const std::string exceptionText = exception ? exception : "";
+            if (exceptionText.find(expected) == std::string::npos) {
+                error = std::string("Vx binding self-test got unexpected ") + label + " exception: " +
+                        (exceptionText.empty() ? std::string("<empty>") : exceptionText);
+                return false;
+            }
+            return true;
+        }
+        if (r == asEXECUTION_FINISHED) {
+            error = std::string("Vx binding self-test ") + label + " did not raise an exception.";
+            return false;
+        }
+        error = std::string("Vx binding self-test ") + label + " execution failed.";
+        return false;
+    };
+
+    if (ok) {
+        ok = runExpectedException("void OutOfRangeIndex()", "Vx2DVector index out of range", "Vx2DVector out-of-range access");
+    }
+    if (ok) {
+        ok = runExpectedException("void OutOfRangeVxVectorIndex()", "VxVector index out of range", "VxVector out-of-range access");
     }
 
     context->Unprepare();
@@ -1781,6 +1813,36 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
 
 // VxVector
 
+static float &VxVectorIndex(VxVector &v, int index) {
+    static thread_local float dummy = 0.0f;
+    switch (index) {
+    case 0: return v.x;
+    case 1: return v.y;
+    case 2: return v.z;
+    default:
+        dummy = 0.0f;
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxVector index out of range");
+        }
+        return dummy;
+    }
+}
+
+static const float &VxVectorIndexConst(const VxVector &v, int index) {
+    static thread_local float dummy = 0.0f;
+    switch (index) {
+    case 0: return v.x;
+    case 1: return v.y;
+    case 2: return v.z;
+    default:
+        dummy = 0.0f;
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxVector index out of range");
+        }
+        return dummy;
+    }
+}
+
 static void RegisterVxVector(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1794,7 +1856,7 @@ static void RegisterVxVector(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(const VxVector &in v)", asFUNCTIONPR([](const VxVector &v, VxVector *self) { new(self) VxVector(v); }, (const VxVector &, VxVector *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(float f)", asFUNCTIONPR([](float f, VxVector *self) { new(self) VxVector(f); }, (float, VxVector*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_CONSTRUCT, "void f(float x, float y, float z)", asFUNCTIONPR([](float x, float y, float z, VxVector *self) { new(self) VxVector(x, y, z); }, (float, float, float, VxVector *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxVector *self) { new(self) VxVector(list[0], list[1], list[2]); }, (float *, VxVector *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {float, float, float}", asFUNCTIONPR([](float *list, VxVector *self) { new(self) VxVector(list[0], list[1], list[2]); }, (float *, VxVector *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     // Destructor
     r = engine->RegisterObjectBehaviour("VxVector", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxVector* self) { self->~VxVector(); }, (VxVector *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -1821,13 +1883,15 @@ static void RegisterVxVector(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxVector", "VxVector opMul(float s) const", asFUNCTIONPR([](const VxVector &lhs, float scalar) { return lhs * scalar; }, (const VxVector &, float), VxVector), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxVector", "VxVector opDiv(float s) const", asFUNCTIONPR([](const VxVector &lhs, float scalar) { return lhs / scalar; }, (const VxVector &, float), VxVector), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector opAdd(float s) const", asFUNCTIONPR([](const VxVector &lhs, float scalar) { return lhs + scalar; }, (const VxVector &, float), VxVector), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxVector", "VxVector opSub(float s) const", asFUNCTIONPR([](const VxVector &lhs, float scalar) { return lhs - scalar; }, (const VxVector &, float), VxVector), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxVector", "VxVector opMul(const VxMatrix &in mat) const", asFUNCTIONPR(operator*, (const VxVector&, const VxMatrix&), VxVector), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxVector", "VxVector opNeg() const", asFUNCTIONPR([](const VxVector &v) -> const VxVector { return -v; }, (const VxVector &), const VxVector), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxVector", "float &opIndex(int index)", asFUNCTIONPR([](VxVector &v, int i) -> float & { return v[i]; }, (VxVector &, int), float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
-    r = engine->RegisterObjectMethod("VxVector", "const float &opIndex(int index) const", asFUNCTIONPR([](const VxVector &v, int i) -> const float & { return v[i]; }, (const VxVector &, int), const float &), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("VxVector", "float &opIndex(int index)", asFUNCTION(VxVectorIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxVector", "const float &opIndex(int index) const", asFUNCTION(VxVectorIndexConst), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxVector", "void Set(float x, float y, float z)", asMETHOD(VxVector, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
