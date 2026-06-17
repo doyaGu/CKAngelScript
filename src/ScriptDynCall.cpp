@@ -646,14 +646,16 @@ public:
         if (!syms) {
             return "";
         }
-        return std::move(std::string(dlSymsName(syms, index)));
+        const char *name = dlSymsName(syms, index);
+        return name ? std::string(name) : std::string();
     }
 
     std::string GetNameByValue(void *value) const {
         if (!syms) {
             return "";
         }
-        return std::move(std::string(dlSymsNameFromValue(syms, value)));
+        const char *name = dlSymsNameFromValue(syms, value);
+        return name ? std::string(name) : std::string();
     }
 
     DLSyms *syms;
