@@ -983,6 +983,23 @@ void RegisterVxEffectDescription(asIScriptEngine *engine) {
 
 // CKBehaviorContext
 
+static void ConstructCKBehaviorContext(CKBehaviorContext *self) {
+    new(self) CKBehaviorContext();
+    self->Behavior = nullptr;
+    self->DeltaTime = 0.0f;
+    self->Context = nullptr;
+    self->CurrentLevel = nullptr;
+    self->CurrentScene = nullptr;
+    self->PreviousScene = nullptr;
+    self->CurrentRenderContext = nullptr;
+    self->ParameterManager = nullptr;
+    self->MessageManager = nullptr;
+    self->AttributeManager = nullptr;
+    self->TimeManager = nullptr;
+    self->CallbackMessage = 0;
+    self->CallbackArg = nullptr;
+}
+
 void RegisterCKBehaviorContext(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1000,7 +1017,7 @@ void RegisterCKBehaviorContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKBehaviorContext", "CKDWORD CallbackMessage", asOFFSET(CKBehaviorContext, CallbackMessage)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKBehaviorContext", "uintptr_t CallbackArg", asOFFSET(CKBehaviorContext, CallbackArg)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKBehaviorContext", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKBehaviorContext *self) { new(self) CKBehaviorContext(); }, (CKBehaviorContext *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKBehaviorContext", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKBehaviorContext), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("CKBehaviorContext", asBEHAVE_CONSTRUCT, "void f(const CKBehaviorContext &in other)", asFUNCTIONPR([](const CKBehaviorContext &ctx, CKBehaviorContext *self) { new(self) CKBehaviorContext(ctx); }, (const CKBehaviorContext &, CKBehaviorContext *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKBehaviorContext", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKBehaviorContext *self) { self->~CKBehaviorContext(); }, (CKBehaviorContext *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
