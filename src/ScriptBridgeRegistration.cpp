@@ -520,7 +520,7 @@ void RegisterParamHandleMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("ParamStructValue", "bool IsValid() const", asMETHOD(ParamStructValue, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamStructValue", "CKGUID TypeGuid() const", asMETHOD(ParamStructValue, TypeGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamStructValue", "string TypeName() const", asMETHOD(ParamStructValue, TypeName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ParamStructValue", "ParamStructValue@ Set(int index, ParamValue@ value)", asMETHOD(ParamStructValue, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ParamStructValue", "ParamStructValue@ Set(int index, ParamValue@+ value)", asMETHOD(ParamStructValue, Set), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamStructValue", "ParamValue@ Value() const", asMETHOD(ParamStructValue, Value), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamStructValue", "ParamValue@ AsValue() const", asMETHOD(ParamStructValue, AsValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ParamStructValue", "string Describe() const", asMETHOD(ParamStructValue, Describe), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
