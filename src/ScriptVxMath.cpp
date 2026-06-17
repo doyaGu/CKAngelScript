@@ -1217,6 +1217,19 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  {\n"
         "    VxMutexLock lock(mutex);\n"
         "  }\n"
+        "  VxOBB obb(box, identity);\n"
+        "  if (obb.GetCenter().x != 1.0f || obb.GetCenter().y != 2.0f || obb.GetCenter().z != 3.0f) return 86;\n"
+        "  if (obb.GetAxis(0).x != 1.0f || obb.GetAxis(1).y != 1.0f || obb.GetAxis(2).z != 1.0f) return 87;\n"
+        "  if (obb.GetExtent(0) != 1.0f || obb.GetExtent(1) != 2.0f || obb.GetExtent(2) != 3.0f) return 88;\n"
+        "  if (!obb.VectorIn(VxVector(1.0f, 2.0f, 3.0f))) return 89;\n"
+        "  if (!obb.IsBoxInside(sameBox)) return 90;\n"
+        "  if (!VxIntersectAABBOBB(sameBox, obb)) return 91;\n"
+        "  VxOBB obbCopy(obb);\n"
+        "  if (!VxIntersectOBBOBB(obb, obbCopy)) return 92;\n"
+        "  obb.GetAxis(0).x = 0.5f;\n"
+        "  if (obb.axisX.x != 0.5f) return 93;\n"
+        "  obb.GetExtent(0) = 2.0f;\n"
+        "  if (obb.extents.x != 2.0f) return 94;\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
@@ -1235,6 +1248,14 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxMatrix mat;\n"
         "  mat.SetIdentity();\n"
         "  mat[4].x = 0.0f;\n"
+        "}\n"
+        "void OutOfRangeVxOBBAxis() {\n"
+        "  VxOBB obb;\n"
+        "  obb.GetAxis(3).x = 0.0f;\n"
+        "}\n"
+        "void OutOfRangeVxOBBExtent() {\n"
+        "  VxOBB obb;\n"
+        "  obb.GetExtent(3) = 0.0f;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -1327,6 +1348,12 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
     }
     if (ok) {
         ok = runExpectedException("void OutOfRangeVxMatrixIndex()", "VxMatrix index out of range", "VxMatrix out-of-range access");
+    }
+    if (ok) {
+        ok = runExpectedException("void OutOfRangeVxOBBAxis()", "VxOBB axis index out of range", "VxOBB axis out-of-range access");
+    }
+    if (ok) {
+        ok = runExpectedException("void OutOfRangeVxOBBExtent()", "VxOBB extent index out of range", "VxOBB extent out-of-range access");
     }
 
     context->Unprepare();
@@ -2649,6 +2676,82 @@ static void RegisterVxRect(asIScriptEngine *engine) {
 
 // VxOBB
 
+static VxVector &VxOBBGetAxis(VxOBB &box, int index) {
+    static thread_local VxVector dummy;
+    switch (index) {
+    case 0: return box.GetAxis(0);
+    case 1: return box.GetAxis(1);
+    case 2: return box.GetAxis(2);
+    default:
+        dummy = VxVector();
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxOBB axis index out of range");
+        }
+        return dummy;
+    }
+}
+
+static const VxVector &VxOBBGetAxisConst(const VxOBB &box, int index) {
+    static thread_local VxVector dummy;
+    switch (index) {
+    case 0: return box.GetAxis(0);
+    case 1: return box.GetAxis(1);
+    case 2: return box.GetAxis(2);
+    default:
+        dummy = VxVector();
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxOBB axis index out of range");
+        }
+        return dummy;
+    }
+}
+
+static float &VxOBBGetExtent(VxOBB &box, int index) {
+    static thread_local float dummy = 0.0f;
+    switch (index) {
+    case 0: return box.GetExtent(0);
+    case 1: return box.GetExtent(1);
+    case 2: return box.GetExtent(2);
+    default:
+        dummy = 0.0f;
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxOBB extent index out of range");
+        }
+        return dummy;
+    }
+}
+
+static const float &VxOBBGetExtentConst(const VxOBB &box, int index) {
+    static thread_local float dummy = 0.0f;
+    switch (index) {
+    case 0: return box.GetExtent(0);
+    case 1: return box.GetExtent(1);
+    case 2: return box.GetExtent(2);
+    default:
+        dummy = 0.0f;
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("VxOBB extent index out of range");
+        }
+        return dummy;
+    }
+}
+
+static bool VxOBBVectorIn(const VxOBB &box, const VxVector &point) {
+    return box.VectorIn(point);
+}
+
+static bool VxOBBIsBoxInside(const VxOBB &box, const VxBbox &inner) {
+    return box.IsBoxInside(inner);
+}
+
+static bool VxIntersectAABBOBBBool(const VxBbox &box1, const VxOBB &box2) {
+    return VxIntersect::AABBOBB(box1, box2);
+}
+
+static bool VxIntersectOBBOBBBool(const VxOBB &box1, const VxOBB &box2) {
+    return VxIntersect::OBBOBB(box1, box2);
+}
+
 static void RegisterVxOBB(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2677,16 +2780,16 @@ static void RegisterVxOBB(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxOBB", "VxVector &GetCenter()", asMETHODPR(VxOBB, GetCenter, (), VxVector &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxOBB", "const VxVector &GetCenter() const", asMETHODPR(VxOBB, GetCenter, () const, const VxVector &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxOBB", "VxVector &GetAxis(int i)", asMETHODPR(VxOBB, GetAxis, (int), VxVector &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxOBB", "const VxVector &GetAxis(int i) const", asMETHODPR(VxOBB, GetAxis, (int) const, const VxVector &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxOBB", "VxVector &GetAxis(int i)", asFUNCTION(VxOBBGetAxis), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxOBB", "const VxVector &GetAxis(int i) const", asFUNCTION(VxOBBGetAxisConst), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxOBB", "float &GetExtent(int i)", asMETHODPR(VxOBB, GetExtent, (int), float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxOBB", "const float &GetExtent(int i) const", asMETHODPR(VxOBB, GetExtent, (int) const, const float &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxOBB", "float &GetExtent(int i)", asFUNCTION(VxOBBGetExtent), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxOBB", "const float &GetExtent(int i) const", asFUNCTION(VxOBBGetExtentConst), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxOBB", "void Create(const VxBbox &in box, const VxMatrix &in mat)", asMETHODPR(VxOBB, Create, (const VxBbox &, const VxMatrix &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("VxOBB", "bool VectorIn(const VxVector &in v) const", asMETHODPR(VxOBB, VectorIn, (const VxVector &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxOBB", "bool IsBoxInside(const VxBbox &in box) const", asMETHODPR(VxOBB, IsBoxInside, (const VxBbox &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxOBB", "bool VectorIn(const VxVector &in v) const", asFUNCTION(VxOBBVectorIn), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxOBB", "bool IsBoxInside(const VxBbox &in box) const", asFUNCTION(VxOBBIsBoxInside), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
 }
 
@@ -2820,8 +2923,8 @@ static void RegisterVxIntersect(asIScriptEngine *engine) {
 
     // Intersection Box - Box
     r = engine->RegisterGlobalFunction("bool VxIntersectAABBAABB(const VxBbox &in box1, const VxBbox &in box2)", asFUNCTION(VxIntersect::AABBAABB), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxIntersectAABBOBB(const VxBbox &in box1, const VxOBB &in box2)", asFUNCTION(VxIntersect::AABBOBB), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxIntersectOBBOBB(const VxOBB &in box1, const VxOBB &in box2)", asFUNCTION(VxIntersect::OBBOBB), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectAABBOBB(const VxBbox &in box1, const VxOBB &in box2)", asFUNCTION(VxIntersectAABBOBBBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIntersectOBBOBB(const VxOBB &in box1, const VxOBB &in box2)", asFUNCTION(VxIntersectOBBOBBBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Intersection Ray - Plane
     r = engine->RegisterGlobalFunction("bool VxIntersectRayPlane(const VxRay &in ray, const VxPlane &in plane, VxVector &out point, float &out dist)", asFUNCTION(VxIntersect::RayPlane), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
