@@ -685,10 +685,10 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorGraph", "bool get_valid() const", asMETHOD(BehaviorGraph, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Root() const", asMETHOD(BehaviorGraph, Root), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorGraphEdit@ Edit() const", asMETHOD(BehaviorGraph, Edit), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Find(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, Find), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Require(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, Require), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorGraph", "array<BehaviorNode@>@ FindAll(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, FindAll), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorGraph", "string DescribeCandidates(BehaviorQuery@ query) const", asMETHOD(BehaviorGraph, DescribeCandidates), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Find(BehaviorQuery@+ query) const", asMETHOD(BehaviorGraph, Find), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Require(BehaviorQuery@+ query) const", asMETHOD(BehaviorGraph, Require), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "array<BehaviorNode@>@ FindAll(BehaviorQuery@+ query) const", asMETHOD(BehaviorGraph, FindAll), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "string DescribeCandidates(BehaviorQuery@+ query) const", asMETHOD(BehaviorGraph, DescribeCandidates), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraph", "string Describe() const", asMETHOD(BehaviorGraph, Describe), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("GraphEditResult", "bool Ok() const", asMETHOD(GraphEditResult, Ok), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
