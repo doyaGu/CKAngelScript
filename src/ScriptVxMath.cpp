@@ -1209,6 +1209,11 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (!missingMap.GetBase().IsNull()) return 83;\n"
         "  if (missingMap.GetFileSize() != 0) return 84;\n"
         "  if (missingMap.GetErrorType() != VxMMF_FileOpen) return 85;\n"
+        "  VxMutex mutex;\n"
+        "  mutex.EnterMutex();\n"
+        "  mutex.LeaveMutex();\n"
+        "  mutex.opPostInc();\n"
+        "  mutex.opPostDec();\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
@@ -1634,6 +1639,14 @@ static void RegisterVx3DCapsDesc(asIScriptEngine *engine) {
 
 // VxMutex
 
+static int VxMutexPostInc(VxMutex &self) {
+    return self.operator++(0);
+}
+
+static int VxMutexPostDec(VxMutex &self) {
+    return self.operator--(0);
+}
+
 static void RegisterVxMutex(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1646,8 +1659,8 @@ static void RegisterVxMutex(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxMutex", "int LeaveMutex()", asMETHOD(VxMutex, LeaveMutex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Operator Overloads
-    r = engine->RegisterObjectMethod("VxMutex", "int opPostInc()", asMETHOD(VxMutex, operator++), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxMutex", "int opPostDec()", asMETHOD(VxMutex, operator--), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxMutex", "int opPostInc()", asFUNCTION(VxMutexPostInc), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxMutex", "int opPostDec()", asFUNCTION(VxMutexPostDec), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("VxMutexLock", asBEHAVE_CONSTRUCT, "void f(VxMutex &in other)", asFUNCTIONPR([](VxMutexLock *self, VxMutex &mutex) { new(self) VxMutexLock(mutex); }, (VxMutexLock *, VxMutex &), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("VxMutexLock", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](VxMutexLock *self) { self->~VxMutexLock(); }, (VxMutexLock *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
