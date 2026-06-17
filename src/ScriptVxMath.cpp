@@ -853,7 +853,7 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     // Structure copying functions
     r = engine->RegisterGlobalFunction("bool VxFillStructure(int count, NativePointer dst, uint stride, uint sizeSrc, NativePointer src)", asFUNCTIONPR([](int count, NativePointer dst, unsigned int stride, unsigned int sizeSrc, NativePointer src) -> bool { return VxFillStructure(count, dst.Get(), stride, sizeSrc, src.Get()); }, (int, NativePointer, unsigned int, unsigned int, NativePointer), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool VxCopyStructure(int count, NativePointer dst, uint outStride, uint sizeSrc, NativePointer src, uint inStride)", asFUNCTIONPR([](int count, NativePointer dst, unsigned int outStride, unsigned int sizeSrc, NativePointer src, unsigned int inStride) -> bool { return VxCopyStructure(count, dst.Get(), outStride, sizeSrc, src.Get(), inStride); }, (int, NativePointer, unsigned int, unsigned int, NativePointer, unsigned int), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxIndexedCopy(const VxStridedData &dst, const VxStridedData &src, uint sizeSrc, NativePointer indices, int indexCount)", asFUNCTIONPR([](const VxStridedData &dst, const VxStridedData &src, unsigned int sizeSrc, NativePointer indices, int indexCount) -> bool { return VxIndexedCopy(dst, src, sizeSrc, reinterpret_cast<int *>(indices.Get()), indexCount); }, (const VxStridedData &, const VxStridedData &, unsigned int, NativePointer, int), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIndexedCopy(const VxStridedData &in dst, const VxStridedData &in src, uint sizeSrc, NativePointer indices, int indexCount)", asFUNCTIONPR([](const VxStridedData &dst, const VxStridedData &src, unsigned int sizeSrc, NativePointer indices, int indexCount) -> bool { return VxIndexedCopy(dst, src, sizeSrc, reinterpret_cast<int *>(indices.Get()), indexCount); }, (const VxStridedData &, const VxStridedData &, unsigned int, NativePointer, int), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Graphic utilities (Blitting)
     r = engine->RegisterGlobalFunction("void VxDoBlit(const VxImageDescEx &in src, const VxImageDescEx &in dst)", asFUNCTION(VxDoBlit), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
@@ -1155,6 +1155,33 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  uv += VxUV(1.0f, 1.0f);\n"
         "  uv *= 2.0f;\n"
         "  if (uv.u != 4.0f || uv.v != 6.0f) return 57;\n"
+        "  VxStridedData stridedDefault;\n"
+        "  if (!stridedDefault.Ptr.IsNull() || stridedDefault.Stride != 0) return 58;\n"
+        "  NativeBuffer@ sourceBytes = NativeBuffer(36);\n"
+        "  NativeBuffer@ destBytes = NativeBuffer(24);\n"
+        "  NativeBuffer@ indexBytes = NativeBuffer(8);\n"
+        "  if (sourceBytes is null || destBytes is null || indexBytes is null) return 59;\n"
+        "  if (sourceBytes.Write(VxVector(1.0f, 0.0f, 0.0f)) != 12) return 60;\n"
+        "  if (sourceBytes.Write(VxVector(2.0f, 0.0f, 0.0f)) != 12) return 61;\n"
+        "  if (sourceBytes.Write(VxVector(3.0f, 0.0f, 0.0f)) != 12) return 62;\n"
+        "  if (!sourceBytes.Seek(0)) return 63;\n"
+        "  VxStridedData sourceStride(sourceBytes.ToPointer(), 12);\n"
+        "  VxStridedData copiedStride(sourceStride);\n"
+        "  if (copiedStride.Ptr.IsNull() || copiedStride.Stride != 12) return 64;\n"
+        "  VxStridedData assignedStride;\n"
+        "  assignedStride = copiedStride;\n"
+        "  if (assignedStride.Ptr.IsNull() || assignedStride.Stride != 12) return 65;\n"
+        "  assignedStride.Ptr = destBytes.ToPointer();\n"
+        "  assignedStride.Stride = 12;\n"
+        "  if (assignedStride.Ptr.IsNull() || assignedStride.Stride != 12) return 66;\n"
+        "  if (indexBytes.WriteInt(2) != 4 || indexBytes.WriteInt(0) != 4) return 67;\n"
+        "  if (!indexBytes.Seek(0)) return 68;\n"
+        "  if (!VxIndexedCopy(assignedStride, sourceStride, 12, indexBytes.ToPointer(), 2)) return 69;\n"
+        "  if (!destBytes.Seek(0)) return 70;\n"
+        "  VxVector copiedA;\n"
+        "  VxVector copiedB;\n"
+        "  if (destBytes.Read(copiedA) != 12 || destBytes.Read(copiedB) != 12) return 71;\n"
+        "  if (copiedA.x != 3.0f || copiedB.x != 1.0f) return 72;\n"
         "  return 0;\n"
         "}\n"
         "void OutOfRangeIndex() {\n"
