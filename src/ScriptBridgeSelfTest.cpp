@@ -1603,7 +1603,10 @@ static bool RunBehaviorBridgeNativeGraphSearchSelfTest(CKContext *context,
     graphFromRef->Release();
     rootRef->Release();
 
-    BehaviorQuery *sourceQuery = (new BehaviorQuery())->Name("__CKAS_GraphSearchSource")->Recursive(true)->PinCount(1);
+    BehaviorQuery *sourceQuery = new BehaviorQuery();
+    sourceQuery->Name("__CKAS_GraphSearchSource")->Release();
+    sourceQuery->Recursive(true)->Release();
+    sourceQuery->PinCount(1)->Release();
     BehaviorNode *sourceNode = graph->Require(sourceQuery);
     if (!graph->IsValid() || !sourceNode || !sourceNode->IsValid()) {
         error = "Graph search self-test failed exact Require: " + (sourceNode ? sourceNode->Error() : std::string("<null>"));
@@ -1631,9 +1634,13 @@ static bool RunBehaviorBridgeNativeGraphSearchSelfTest(CKContext *context,
         return false;
     }
 
-    BehaviorQuery *containsQuery = (new BehaviorQuery())->NameContains("GraphSearch")->Recursive(false);
+    BehaviorQuery *containsQuery = new BehaviorQuery();
+    containsQuery->NameContains("GraphSearch")->Release();
+    containsQuery->Recursive(false)->Release();
     CScriptArray *all = graph->FindAll(containsQuery);
-    BehaviorQuery *duplicateQuery = (new BehaviorQuery())->NameContains("GraphSearch")->Recursive(true);
+    BehaviorQuery *duplicateQuery = new BehaviorQuery();
+    duplicateQuery->NameContains("GraphSearch")->Release();
+    duplicateQuery->Recursive(true)->Release();
     BehaviorNode *requiredDuplicate = graph->Require(duplicateQuery);
     if (!all || all->GetSize() != 2 || !requiredDuplicate || requiredDuplicate->IsValid() || requiredDuplicate->Error().find("found") == std::string::npos) {
         error = "Graph search self-test failed FindAll or multi-candidate diagnostics.";
@@ -1787,8 +1794,12 @@ static bool RunBehaviorBridgeNativeGraphEditDynamicLayoutSelfTest(CKContext *con
     };
 
     BehaviorGraph *graph = new BehaviorGraph(bridge, ctx, root->GetID());
-    BehaviorQuery *switchQuery = (new BehaviorQuery())->Name("__CKAS_GraphEditDynamicSwitch")->Recursive(false);
-    BehaviorQuery *selectorQuery = (new BehaviorQuery())->Name("__CKAS_GraphEditDynamicSelector")->Recursive(false);
+    BehaviorQuery *switchQuery = new BehaviorQuery();
+    switchQuery->Name("__CKAS_GraphEditDynamicSwitch")->Release();
+    switchQuery->Recursive(false)->Release();
+    BehaviorQuery *selectorQuery = new BehaviorQuery();
+    selectorQuery->Name("__CKAS_GraphEditDynamicSelector")->Release();
+    selectorQuery->Recursive(false)->Release();
     BehaviorNode *switchNode = graph->Require(switchQuery);
     BehaviorNode *selectorNode = graph->Require(selectorQuery);
     switchQuery->Release();
@@ -1911,8 +1922,12 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     };
 
     BehaviorGraph *graph = new BehaviorGraph(bridge, ctx, root->GetID());
-    BehaviorQuery *sourceQuery = (new BehaviorQuery())->Name("__CKAS_GraphEditSource")->Recursive(false);
-    BehaviorQuery *targetQuery = (new BehaviorQuery())->Name("__CKAS_GraphEditTarget")->Recursive(false);
+    BehaviorQuery *sourceQuery = new BehaviorQuery();
+    sourceQuery->Name("__CKAS_GraphEditSource")->Release();
+    sourceQuery->Recursive(false)->Release();
+    BehaviorQuery *targetQuery = new BehaviorQuery();
+    targetQuery->Name("__CKAS_GraphEditTarget")->Release();
+    targetQuery->Recursive(false)->Release();
     BehaviorNode *sourceNode = graph->Require(sourceQuery);
     BehaviorNode *targetNode = graph->Require(targetQuery);
     sourceQuery->Release();

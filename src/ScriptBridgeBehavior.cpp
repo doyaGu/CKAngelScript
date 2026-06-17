@@ -489,7 +489,9 @@ BehaviorRef *BehaviorBridge::Find(const std::string &name) const {
     if (!m_Bridge || name.empty()) return nullptr;
     BehaviorGraph *graph = Graph();
     if (graph) {
-        BehaviorQuery *query = (new BehaviorQuery())->Name(name)->Recursive(true);
+        BehaviorQuery *query = new BehaviorQuery();
+        query->Name(name)->Release();
+        query->Recursive(true)->Release();
         BehaviorNode *node = graph->Find(query);
         BehaviorRef *ref = node ? node->Behavior() : nullptr;
         if (node) node->Release();
