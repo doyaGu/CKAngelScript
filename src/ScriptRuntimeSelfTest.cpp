@@ -22,6 +22,26 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     if (!ScriptMessageSelfTest::RunScriptMessageSelfTest(context, engine, error)) {
         return false;
     }
+
+    ScriptContext defaultContext;
+    CKBehaviorContext defaultBehaviorContext = defaultContext.ToBehaviorContext();
+    if (defaultBehaviorContext.Behavior ||
+        defaultBehaviorContext.DeltaTime != 0.0f ||
+        defaultBehaviorContext.Context ||
+        defaultBehaviorContext.CurrentLevel ||
+        defaultBehaviorContext.CurrentScene ||
+        defaultBehaviorContext.PreviousScene ||
+        defaultBehaviorContext.CurrentRenderContext ||
+        defaultBehaviorContext.ParameterManager ||
+        defaultBehaviorContext.MessageManager ||
+        defaultBehaviorContext.AttributeManager ||
+        defaultBehaviorContext.TimeManager ||
+        defaultBehaviorContext.CallbackMessage != 0 ||
+        defaultBehaviorContext.CallbackArg) {
+        error = "Default ScriptContext produced a non-empty CKBehaviorContext.";
+        return false;
+    }
+
     const char *source =
         "void __ckas_runtime_compile_probe(const ScriptContext &in ctx) {\n"
         "  CKContext@ c = ctx.Context();\n"
@@ -125,10 +145,33 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  void OnReset(const ScriptContext &in ctx) {}\n"
         "  void OnPause(const ScriptContext &in ctx) {}\n"
         "  void OnResume(const ScriptContext &in ctx) {}\n"
+        "}\n"
+        "int __ckas_runtime_execute_probe() {\n"
+        "  ScriptContext ctx;\n"
+        "  if (ctx.Context() !is null) return 1;\n"
+        "  if (ctx.DeltaTime() != 0.0f || ctx.TimeSeconds() != 0.0f) return 2;\n"
+        "  if (ctx.Id() != \"\" || ctx.Name() != \"\" || ctx.Version() != \"\") return 3;\n"
+        "  if (ctx.Root() != \"\" || ctx.Manifest() != \"\" || ctx.Entry() != \"\") return 4;\n"
+        "  if (ctx.Target() != \"\" || ctx.Phase() != \"\" || ctx.State() != \"\") return 5;\n"
+        "  if (ctx.Generation() != 0 || ctx.FrameIndex() != 0) return 6;\n"
+        "  if (ctx.Metadata(\"missing\", \"fallback\") != \"fallback\") return 7;\n"
+        "  if (ctx.MetadataCount() != 0 || ctx.MetadataKey(0) != \"\" || ctx.MetadataValue(0) != \"\") return 8;\n"
+        "  CKBehaviorContext behaviorContext = ctx.ToBehaviorContext();\n"
+        "  if (behaviorContext.Behavior !is null || behaviorContext.Context !is null) return 9;\n"
+        "  if (behaviorContext.DeltaTime != 0.0f || behaviorContext.CallbackMessage != 0) return 10;\n"
+        "  if (behaviorContext.CurrentLevel !is null || behaviorContext.CurrentScene !is null || behaviorContext.PreviousScene !is null) return 11;\n"
+        "  if (behaviorContext.CurrentRenderContext !is null || behaviorContext.ParameterManager !is null || behaviorContext.MessageManager !is null) return 12;\n"
+        "  if (behaviorContext.AttributeManager !is null || behaviorContext.TimeManager !is null || behaviorContext.CallbackArg != 0) return 13;\n"
+        "  return 0;\n"
         "}\n";
     CKAngelScriptApi api = CKAngelScriptApi::Get(context);
     if (!api.IsValid()) {
         error = "Runtime self-test could not retrieve CKAngelScript.";
+        return false;
+    }
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    if (!manager) {
+        error = "Runtime self-test could not retrieve ScriptManager.";
         return false;
     }
     const char *moduleName = "__CKAS_RuntimeCompileSelfTest";
@@ -137,6 +180,44 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
             ? result.ErrorMessage
             : "Runtime script API compile probe failed.";
+        return false;
+    }
+    asIScriptModule *module = manager->GetModule(moduleName);
+    asIScriptFunction *function = module ? module->GetFunctionByDecl("int __ckas_runtime_execute_probe()") : nullptr;
+    if (!function) {
+        api->UnloadModule(moduleName, nullptr);
+        error = "Runtime ScriptContext execute probe function was not found.";
+        return false;
+    }
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        api->UnloadModule(moduleName, nullptr);
+        error = "Runtime ScriptContext execute probe could not create an execution context.";
+        return false;
+    }
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+    bool executeOk = false;
+    if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        if (returnCode == 0) {
+            executeOk = true;
+        } else {
+            error = "Runtime ScriptContext execute probe returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string("Runtime ScriptContext execute probe exception: ") +
+                (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = "Runtime ScriptContext execute probe failed with code " + std::to_string(r) + ".";
+    }
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    if (!executeOk) {
+        api->UnloadModule(moduleName, nullptr);
         return false;
     }
     api->UnloadModule(moduleName, nullptr);

@@ -125,6 +125,24 @@ ScriptContext MakeRuntimeContext(CKContext *context,
     return MakeRuntimeContext(context, metadata, "", "", 0, 0, deltaTime, timeSeconds);
 }
 
+CKBehaviorContext MakeClearedBehaviorContext() {
+    CKBehaviorContext ctx;
+    ctx.Behavior = nullptr;
+    ctx.DeltaTime = 0.0f;
+    ctx.Context = nullptr;
+    ctx.CurrentLevel = nullptr;
+    ctx.CurrentScene = nullptr;
+    ctx.PreviousScene = nullptr;
+    ctx.CurrentRenderContext = nullptr;
+    ctx.ParameterManager = nullptr;
+    ctx.MessageManager = nullptr;
+    ctx.AttributeManager = nullptr;
+    ctx.TimeManager = nullptr;
+    ctx.CallbackMessage = 0;
+    ctx.CallbackArg = nullptr;
+    return ctx;
+}
+
 int LifecycleIndexByName(const char *name) {
     if (!name) {
         return -1;
@@ -676,7 +694,7 @@ void ScriptContext::Raise(const std::string &message) const {
 }
 
 CKBehaviorContext ScriptContext::ToBehaviorContext() const {
-    CKBehaviorContext ctx = m_Context ? m_Context->m_BehaviorContext : CKBehaviorContext();
+    CKBehaviorContext ctx = m_Context ? m_Context->m_BehaviorContext : ScriptRuntimeInternal::MakeClearedBehaviorContext();
     ctx.Context = m_Context;
     ctx.DeltaTime = m_DeltaTime;
     if (m_Context) {
