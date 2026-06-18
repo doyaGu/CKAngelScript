@@ -377,6 +377,58 @@ bool ExecuteCKParameterOperationProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKParameterOutDestinationProbe(asIScriptEngine *engine,
+                                           asIScriptFunction *function,
+                                           CKParameterOut *parameter,
+                                           CKParameter *destinationA,
+                                           CKParameter *destinationB,
+                                           bool expectException,
+                                           const char *label,
+                                           std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, parameter);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, destinationA);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(2, destinationB);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAttributeDescProbe(asIScriptEngine *engine,
                                  asIScriptFunction *function,
                                  bool expectException,
@@ -3691,6 +3743,32 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "void ProbeCKParameterOperationSetOwnerNull(CKParameterOperation@ op) {\n"
         "  op.SetOwner(null);\n"
         "}\n"
+        "int ProbeCKParameterOutDestinations(CKParameterOut@ outp, CKParameter@ destA, CKParameter@ destB) {\n"
+        "  if (outp is null || destA is null || destB is null) return 2;\n"
+        "  outp.RemoveAllDestinations();\n"
+        "  if (outp.GetDestinationCount() != 0) return 3;\n"
+        "  if (outp.AddDestination(destA) != CK_OK) return 4;\n"
+        "  if (outp.GetDestinationCount() != 1) return 5;\n"
+        "  if (outp.GetDestination(0) !is destA) return 6;\n"
+        "  if (outp.AddDestination(destB) != CK_OK) return 7;\n"
+        "  if (outp.GetDestinationCount() != 2) return 8;\n"
+        "  outp.DataChanged();\n"
+        "  outp.RemoveDestination(destA);\n"
+        "  if (outp.GetDestinationCount() != 1) return 9;\n"
+        "  if (outp.GetDestination(0) !is destB) return 10;\n"
+        "  outp.RemoveAllDestinations();\n"
+        "  if (outp.GetDestinationCount() != 0) return 11;\n"
+        "  return 0;\n"
+        "}\n"
+        "void ProbeCKParameterOutAddNull(CKParameterOut@ outp, CKParameter@ destA, CKParameter@ destB) {\n"
+        "  outp.AddDestination(null);\n"
+        "}\n"
+        "void ProbeCKParameterOutRemoveNull(CKParameterOut@ outp, CKParameter@ destA, CKParameter@ destB) {\n"
+        "  outp.RemoveDestination(null);\n"
+        "}\n"
+        "void ProbeCKParameterOutGetDestinationInvalid(CKParameterOut@ outp, CKParameter@ destA, CKParameter@ destB) {\n"
+        "  outp.GetDestination(-1);\n"
+        "}\n"
         "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
         "  local.CopyValue(null);\n"
         "}\n"
@@ -3743,6 +3821,10 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *pinSetOwnerInvalid = module->GetFunctionByDecl("void ProbeCKParameterInSetOwnerInvalid(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
     asIScriptFunction *operationBasics = module->GetFunctionByDecl("int ProbeCKParameterOperationBasics(CKParameterOperation@)");
     asIScriptFunction *operationOwnerNull = module->GetFunctionByDecl("void ProbeCKParameterOperationSetOwnerNull(CKParameterOperation@)");
+    asIScriptFunction *outDestinations = module->GetFunctionByDecl("int ProbeCKParameterOutDestinations(CKParameterOut@, CKParameter@, CKParameter@)");
+    asIScriptFunction *outAddNull = module->GetFunctionByDecl("void ProbeCKParameterOutAddNull(CKParameterOut@, CKParameter@, CKParameter@)");
+    asIScriptFunction *outRemoveNull = module->GetFunctionByDecl("void ProbeCKParameterOutRemoveNull(CKParameterOut@, CKParameter@, CKParameter@)");
+    asIScriptFunction *outGetInvalid = module->GetFunctionByDecl("void ProbeCKParameterOutGetDestinationInvalid(CKParameterOut@, CKParameter@, CKParameter@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
@@ -3750,7 +3832,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
         !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
         !pinSetTypeGuid || !pinSourceGraph || !pinShareNull || !pinSetOwnerNull || !pinSetOwnerInvalid ||
-        !operationBasics || !operationOwnerNull || !copyValueNull || !compatibleNull) {
+        !operationBasics || !operationOwnerNull || !outDestinations || !outAddNull || !outRemoveNull ||
+        !outGetInvalid || !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -3889,6 +3972,30 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
             if (operation) {
                 context->DestroyObject(operation);
             }
+        }
+    }
+
+    if (ok) {
+        CKParameterOut *outParam = context->CreateCKParameterOut(const_cast<CKSTRING>("__CKAS_CKParameterOutDestinationSource"), CKPGUID_INT, TRUE);
+        CKParameterLocal *destinationA = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterOutDestinationA"), CKPGUID_INT, TRUE);
+        CKParameterLocal *destinationB = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterOutDestinationB"), CKPGUID_INT, TRUE);
+        if (!outParam || !destinationA || !destinationB) {
+            ok = false;
+            error = "CKParameterOut destination probe could not create its native parameters.";
+        } else {
+            ok = ExecuteCKParameterOutDestinationProbe(engine, outDestinations, outParam, destinationA, destinationB, false, "CKParameterOut destination probe", error) &&
+                 ExecuteCKParameterOutDestinationProbe(engine, outAddNull, outParam, destinationA, destinationB, true, "CKParameterOut AddDestination null probe", error) &&
+                 ExecuteCKParameterOutDestinationProbe(engine, outRemoveNull, outParam, destinationA, destinationB, true, "CKParameterOut RemoveDestination null probe", error) &&
+                 ExecuteCKParameterOutDestinationProbe(engine, outGetInvalid, outParam, destinationA, destinationB, true, "CKParameterOut GetDestination invalid probe", error);
+        }
+        if (outParam) {
+            context->DestroyObject(outParam);
+        }
+        if (destinationB) {
+            context->DestroyObject(destinationB);
+        }
+        if (destinationA) {
+            context->DestroyObject(destinationA);
         }
     }
 

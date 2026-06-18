@@ -637,16 +637,46 @@ void RegisterCKParameter(asIScriptEngine *engine) {
 }
 
 template <typename T>
+static CKERROR AddCKParameterOutDestination(T *self, CKParameter *param, bool checkType) {
+    if (!self || !param) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKParameterOut.AddDestination requires a non-null parameter.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->AddDestination(param, checkType);
+}
+
+template <typename T>
+static void RemoveCKParameterOutDestination(T *self, CKParameter *param) {
+    if (!self || !param) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKParameterOut.RemoveDestination requires a non-null parameter.");
+        return;
+    }
+    self->RemoveDestination(param);
+}
+
+template <typename T>
+static CKParameter *GetCKParameterOutDestination(T *self, int pos) {
+    if (!self || pos < 0 || pos >= self->GetDestinationCount()) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKParameterOut.GetDestination index out of range.");
+        return nullptr;
+    }
+    return self->GetDestination(pos);
+}
+
+template <typename T>
 static void RegisterCKParameterOutMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
     RegisterCKParameterMembers<T>(engine, name);
 
     r = engine->RegisterObjectMethod(name, "void DataChanged()", asMETHODPR(T, DataChanged, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR AddDestination(CKParameter@ param, bool checkType = true)", asFUNCTIONPR([](T *self, CKParameter *param, bool checkType) { return self->AddDestination(param, checkType); }, (T *, CKParameter *, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void RemoveDestination(CKParameter@ param)", asMETHODPR(T, RemoveDestination, (CKParameter*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR AddDestination(CKParameter@ param, bool checkType = true)", asFUNCTIONPR(AddCKParameterOutDestination<T>, (T *, CKParameter *, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void RemoveDestination(CKParameter@ param)", asFUNCTIONPR(RemoveCKParameterOutDestination<T>, (T *, CKParameter *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetDestinationCount()", asMETHODPR(T, GetDestinationCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKParameter@ GetDestination(int pos)", asMETHODPR(T, GetDestination, (int), CKParameter*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKParameter@ GetDestination(int pos)", asFUNCTIONPR(GetCKParameterOutDestination<T>, (T *, int), CKParameter *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void RemoveAllDestinations()", asMETHODPR(T, RemoveAllDestinations, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // r = engine->RegisterObjectMethod(name, "void Update()", asMETHODPR(T, Update, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
