@@ -374,7 +374,7 @@ public:
     BehaviorQuery *PrototypeGuid(CKGUID guid);
     BehaviorQuery *PrototypeName(const std::string &name);
     BehaviorQuery *PrototypeQuery(const std::string &query);
-    BehaviorQuery *Target(CKBeObject *target);
+    BehaviorQuery *Target(ObjectRef *target);
     BehaviorQuery *TargetName(const std::string &name);
     BehaviorQuery *TargetId(CK_ID id);
     BehaviorQuery *InputCount(int count);

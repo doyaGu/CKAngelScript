@@ -540,6 +540,10 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (nextAll is null || prevAll is null) return 1034;\n";
     source += "    BehaviorRef@ self = bridge.Self();\n";
     source += "    if (self !is null) { self.IsValid(); self.Id(); self.Name(); self.Describe(); }\n";
+    source += "    ObjectRef@ selfObject = self;\n";
+    source += "    BehaviorQuery@ targetQuery = Behavior::Query().Target(selfObject);\n";
+    source += "    if (targetQuery is null || targetQuery.Describe() == \"\") return 1035;\n";
+    source += "    if (selfObject !is null && selfObject.IsValid()) { graph.Find(targetQuery); graph.FindAll(targetQuery); graph.DescribeCandidates(targetQuery); }\n";
     source += "    BehaviorRef@ owner = bridge.OwnerScript();\n";
     source += "    if (owner !is null) { owner.IsValid(); owner.Id(); owner.Name(); }\n";
     source += "    BehaviorRef@ missing = bridge.Find(\"__missing__\");\n";
@@ -2808,6 +2812,16 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
         }
         if (engine->GetTypeInfoByName("BBSpec") || engine->GetTypeInfoByName("BBBinding")) {
             error = "Bridge v3 clean-break self-test found legacy BBSpec/BBBinding types.";
+            return false;
+        }
+        asITypeInfo *behaviorQueryType = engine->GetTypeInfoByName("BehaviorQuery");
+        if (!behaviorQueryType ||
+            !behaviorQueryType->GetMethodByDecl("BehaviorQuery@ Target(ObjectRef@+ target)")) {
+            error = "BehaviorQuery.Target ObjectRef declaration self-test failed.";
+            return false;
+        }
+        if (behaviorQueryType->GetMethodByDecl("BehaviorQuery@ Target(CKBeObject@ target)")) {
+            error = "BehaviorQuery.Target still exposes a raw CKBeObject handle.";
             return false;
         }
     }

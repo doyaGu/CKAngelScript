@@ -668,7 +668,7 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ PrototypeGuid(CKGUID guid)", asMETHOD(BehaviorQuery, PrototypeGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ PrototypeName(const string &in name)", asMETHOD(BehaviorQuery, PrototypeName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ PrototypeQuery(const string &in query)", asMETHOD(BehaviorQuery, PrototypeQuery), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ Target(CKBeObject@ target)", asMETHOD(BehaviorQuery, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ Target(ObjectRef@+ target)", asMETHOD(BehaviorQuery, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ TargetName(const string &in name)", asMETHOD(BehaviorQuery, TargetName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ TargetId(CK_ID id)", asMETHOD(BehaviorQuery, TargetId), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorQuery", "BehaviorQuery@ InputCount(int count)", asMETHOD(BehaviorQuery, InputCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

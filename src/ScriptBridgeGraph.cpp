@@ -433,8 +433,12 @@ BehaviorQuery *BehaviorQuery::PrototypeQuery(const std::string &query) {
     return this;
 }
 
-BehaviorQuery *BehaviorQuery::Target(CKBeObject *target) {
-    m_TargetId = target ? target->GetID() : 0;
+BehaviorQuery *BehaviorQuery::Target(ObjectRef *target) {
+    if (target && !target->IsValid()) {
+        SetScriptException("BehaviorQuery.Target requires a valid ObjectRef.");
+        return nullptr;
+    }
+    m_TargetId = target ? target->Id() : 0;
     AddRef();
     return this;
 }
