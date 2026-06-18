@@ -2641,21 +2641,117 @@ void RegisterCKPARAMETER_DESC(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "void set_DefaultValue(NativePointer ptr)", asFUNCTIONPR([](CKPARAMETER_DESC *self, NativePointer ptr) { self->DefaultValue = reinterpret_cast<CKBYTE *>(ptr.Get()); }, (CKPARAMETER_DESC *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
+static std::mutex g_CKBehaviorIoDescOwnedMutex;
+static std::unordered_set<CKBEHAVIORIO_DESC *> g_CKBehaviorIoDescOwnedValues;
+
+static void TrackCKBehaviorIoDescValue(CKBEHAVIORIO_DESC *self) {
+    std::lock_guard<std::mutex> lock(g_CKBehaviorIoDescOwnedMutex);
+    g_CKBehaviorIoDescOwnedValues.insert(self);
+}
+
+static bool UntrackCKBehaviorIoDescValue(CKBEHAVIORIO_DESC *self) {
+    std::lock_guard<std::mutex> lock(g_CKBehaviorIoDescOwnedMutex);
+    return g_CKBehaviorIoDescOwnedValues.erase(self) > 0;
+}
+
+static bool IsTrackedCKBehaviorIoDescValue(CKBEHAVIORIO_DESC *self) {
+    std::lock_guard<std::mutex> lock(g_CKBehaviorIoDescOwnedMutex);
+    return g_CKBehaviorIoDescOwnedValues.find(self) != g_CKBehaviorIoDescOwnedValues.end();
+}
+
+static void RejectBorrowedCKBehaviorIoDescWrite() {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException("Cannot assign to a borrowed CKBEHAVIORIO_DESC descriptor.");
+    }
+}
+
+static void ReleaseCKBehaviorIoDescStorage(CKBEHAVIORIO_DESC *self) {
+    if (!self) {
+        return;
+    }
+
+    CKDeletePointer(self->Name);
+    self->Name = nullptr;
+}
+
+static void CopyCKBehaviorIoDescStorage(CKBEHAVIORIO_DESC *self, const CKBEHAVIORIO_DESC &other) {
+    self->Name = other.Name ? CKStrdup(other.Name) : nullptr;
+    self->Flags = other.Flags;
+}
+
+static void ConstructCKBehaviorIoDesc(CKBEHAVIORIO_DESC *self) {
+    self->Name = nullptr;
+    self->Flags = 0;
+    TrackCKBehaviorIoDescValue(self);
+}
+
+static void ConstructCKBehaviorIoDescCopy(const CKBEHAVIORIO_DESC &other, CKBEHAVIORIO_DESC *self) {
+    CopyCKBehaviorIoDescStorage(self, other);
+    TrackCKBehaviorIoDescValue(self);
+}
+
+static void DestructCKBehaviorIoDesc(CKBEHAVIORIO_DESC *self) {
+    if (UntrackCKBehaviorIoDescValue(self)) {
+        ReleaseCKBehaviorIoDescStorage(self);
+    }
+}
+
+static CKBEHAVIORIO_DESC &AssignCKBehaviorIoDesc(CKBEHAVIORIO_DESC *self, const CKBEHAVIORIO_DESC &other) {
+    if (self == &other) {
+        return *self;
+    }
+    if (!IsTrackedCKBehaviorIoDescValue(self)) {
+        RejectBorrowedCKBehaviorIoDescWrite();
+        return *self;
+    }
+
+    CKSTRING nameCopy = other.Name ? CKStrdup(other.Name) : nullptr;
+    ReleaseCKBehaviorIoDescStorage(self);
+    self->Name = nameCopy;
+    self->Flags = other.Flags;
+    return *self;
+}
+
+static CKDWORD GetCKBehaviorIoDescFlags(const CKBEHAVIORIO_DESC *self) {
+    return self->Flags;
+}
+
+static void SetCKBehaviorIoDescFlags(CKBEHAVIORIO_DESC *self, CKDWORD value) {
+    if (!IsTrackedCKBehaviorIoDescValue(self)) {
+        RejectBorrowedCKBehaviorIoDescWrite();
+        return;
+    }
+    self->Flags = value;
+}
+
+static std::string GetCKBehaviorIoDescName(const CKBEHAVIORIO_DESC *self) {
+    return ScriptStringify(self->Name);
+}
+
+static void SetCKBehaviorIoDescName(CKBEHAVIORIO_DESC *self, const std::string &value) {
+    if (!IsTrackedCKBehaviorIoDescValue(self)) {
+        RejectBorrowedCKBehaviorIoDescWrite();
+        return;
+    }
+
+    ReleaseCKBehaviorIoDescStorage(self);
+    self->Name = value.empty() ? nullptr : CKStrdup(const_cast<CKSTRING>(value.c_str()));
+}
+
 void RegisterCKBEHAVIORIO_DESC(asIScriptEngine *engine) {
     int r = 0;
 
-    // r = engine->RegisterObjectProperty("CKBEHAVIORIO_DESC", "uintptr_t Name", asOFFSET(CKBEHAVIORIO_DESC, Name)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKBEHAVIORIO_DESC", "CKDWORD Flags", asOFFSET(CKBEHAVIORIO_DESC, Flags)); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKBEHAVIORIO_DESC", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKBehaviorIoDesc), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKBEHAVIORIO_DESC", asBEHAVE_CONSTRUCT, "void f(const CKBEHAVIORIO_DESC &in other)", asFUNCTION(ConstructCKBehaviorIoDescCopy), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKBEHAVIORIO_DESC", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKBEHAVIORIO_DESC *self) { new(self) CKBEHAVIORIO_DESC(); }, (CKBEHAVIORIO_DESC*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKBEHAVIORIO_DESC", asBEHAVE_CONSTRUCT, "void f(const CKBEHAVIORIO_DESC &in other)", asFUNCTIONPR([](const CKBEHAVIORIO_DESC &desc, CKBEHAVIORIO_DESC *self) { new(self) CKBEHAVIORIO_DESC(desc); }, (const CKBEHAVIORIO_DESC &, CKBEHAVIORIO_DESC *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKBEHAVIORIO_DESC", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructCKBehaviorIoDesc), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKBEHAVIORIO_DESC", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKBEHAVIORIO_DESC *self) { self->~CKBEHAVIORIO_DESC(); }, (CKBEHAVIORIO_DESC *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBEHAVIORIO_DESC", "CKBEHAVIORIO_DESC &opAssign(const CKBEHAVIORIO_DESC &in other)", asFUNCTION(AssignCKBehaviorIoDesc), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKBEHAVIORIO_DESC", "CKBEHAVIORIO_DESC &opAssign(const CKBEHAVIORIO_DESC &in other)", asMETHODPR(CKBEHAVIORIO_DESC, operator=, (const CKBEHAVIORIO_DESC &), CKBEHAVIORIO_DESC &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("CKBEHAVIORIO_DESC", "string get_Name() const", asFUNCTIONPR([](const CKBEHAVIORIO_DESC *self) -> std::string { return ScriptStringify(self->Name); }, (const CKBEHAVIORIO_DESC *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBEHAVIORIO_DESC", "void set_Name(const string &in value)", asFUNCTIONPR([](CKBEHAVIORIO_DESC *self, const std::string &value) { CKDeletePointer(self->Name); self->Name = CKStrdup(const_cast<CKSTRING>(value.c_str())); }, (CKBEHAVIORIO_DESC *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBEHAVIORIO_DESC", "CKDWORD get_Flags() const", asFUNCTION(GetCKBehaviorIoDescFlags), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBEHAVIORIO_DESC", "void set_Flags(CKDWORD value)", asFUNCTION(SetCKBehaviorIoDescFlags), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBEHAVIORIO_DESC", "string get_Name() const", asFUNCTION(GetCKBehaviorIoDescName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBEHAVIORIO_DESC", "void set_Name(const string &in value)", asFUNCTION(SetCKBehaviorIoDescName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKBehaviorPrototype

@@ -190,6 +190,46 @@ bool ExecuteCKParameterTypeDescProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteNoArgIntProbe(asIScriptEngine *engine,
+                          asIScriptFunction *function,
+                          bool expectException,
+                          const char *label,
+                          std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKParameterLocal *parameter,
@@ -2170,6 +2210,22 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         return false;
     }
 #if CKVERSION == 0x13022002
+    asITypeInfo *behaviorIoDescType = engine->GetTypeInfoByDecl("CKBEHAVIORIO_DESC");
+    if (!behaviorIoDescType) {
+        error = "CKBehaviorPrototype self-test could not find CKBEHAVIORIO_DESC.";
+        return false;
+    }
+    if (behaviorIoDescType->GetPropertyCount() != 0) {
+        error = "CKBEHAVIORIO_DESC self-test found exposed raw properties.";
+        return false;
+    }
+    if (behaviorIoDescType->GetMethodByDecl("CKDWORD get_Flags() const") == nullptr ||
+        behaviorIoDescType->GetMethodByDecl("void set_Flags(CKDWORD value)") == nullptr ||
+        behaviorIoDescType->GetMethodByDecl("string get_Name() const") == nullptr ||
+        behaviorIoDescType->GetMethodByDecl("void set_Name(const string &in value)") == nullptr) {
+        error = "CKBEHAVIORIO_DESC self-test could not find expected guarded accessors.";
+        return false;
+    }
     if (prototypeType->GetMethodByDecl("CKBEHAVIORIO_DESC &GetInIOList(int index)") == nullptr ||
         prototypeType->GetMethodByDecl("CKBEHAVIORIO_DESC &GetOutIOList(int index)") == nullptr ||
         prototypeType->GetMethodByDecl("CKPARAMETER_DESC &GetInParameterList(int index)") == nullptr ||
@@ -2209,6 +2265,26 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         "}\n";
 #if CKVERSION == 0x13022002
     const char *listSource =
+        "int ProbeCKBehaviorIoDescValue() {\n"
+        "  CKBEHAVIORIO_DESC first;\n"
+        "  if (first.Flags != 0) return 1;\n"
+        "  if (first.Name != \"\") return 2;\n"
+        "  first.Flags = 0x10000000;\n"
+        "  first.Name = \"input\";\n"
+        "  CKBEHAVIORIO_DESC copied(first);\n"
+        "  if (copied.Flags != 0x10000000 || copied.Name != \"input\") return 3;\n"
+        "  copied.Name = \"copy\";\n"
+        "  copied.Flags = 0x20000000;\n"
+        "  if (first.Name != \"input\" || first.Flags != 0x10000000) return 4;\n"
+        "  if (copied.Name != \"copy\" || copied.Flags != 0x20000000) return 5;\n"
+        "  CKBEHAVIORIO_DESC assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.Name != \"copy\" || assigned.Flags != 0x20000000) return 6;\n"
+        "  assigned.Name = \"assigned\";\n"
+        "  assigned.Flags = 0x40000000;\n"
+        "  if (copied.Name != \"copy\" || copied.Flags != 0x20000000) return 7;\n"
+        "  return assigned.Name == \"assigned\" && assigned.Flags == 0x40000000 ? 0 : 8;\n"
+        "}\n"
         "void ProbeCKBehaviorPrototypeLists(CKBehaviorPrototype@ proto) {\n"
         "  if (proto is null) return;\n"
         "  if (proto.GetInputCount() > 0) {\n"
@@ -2275,6 +2351,12 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         return false;
     }
 #if CKVERSION == 0x13022002
+    asIScriptFunction *ioDescProbe = module->GetFunctionByDecl("int ProbeCKBehaviorIoDescValue()");
+    if (!ioDescProbe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBEHAVIORIO_DESC value self-test function was not found.";
+        return false;
+    }
     asIScriptFunction *listProbe = module->GetFunctionByDecl("void ProbeCKBehaviorPrototypeLists(CKBehaviorPrototype@)");
     if (!listProbe) {
         engine->DiscardModule(moduleName);
@@ -2283,8 +2365,14 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
     }
 #endif
 
+#if CKVERSION == 0x13022002
+    const bool ok = ExecuteNoArgIntProbe(engine, ioDescProbe, false, "CKBEHAVIORIO_DESC value probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+#else
     engine->DiscardModule(moduleName);
     return true;
+#endif
 }
 
 bool RunCKMaterialScriptSelfTest(asIScriptEngine *engine, std::string &error) {
