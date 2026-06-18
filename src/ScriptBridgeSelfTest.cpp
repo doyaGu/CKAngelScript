@@ -3099,6 +3099,21 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
             error = "MeshRef still exposes a raw CK handle.";
             return false;
         }
+        asITypeInfo *sceneRefType = engine->GetTypeInfoByName("SceneRef");
+        if (!sceneRefType ||
+            !sceneRefType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
+            !sceneRefType->GetMethodByDecl("const ObjectRef@ opImplCast() const") ||
+            !sceneRefType->GetMethodByDecl("SceneObjectRef@ opImplCast()") ||
+            !sceneRefType->GetMethodByDecl("const SceneObjectRef@ opImplCast() const")) {
+            error = "SceneRef wrapper cast declaration self-test failed.";
+            return false;
+        }
+        if (sceneRefType->GetMethodByDecl("CKObject@ Object() const") ||
+            sceneRefType->GetMethodByDecl("CKSceneObject@ SceneObject() const") ||
+            sceneRefType->GetMethodByDecl("CKScene@ Scene() const")) {
+            error = "SceneRef still exposes a raw CK handle.";
+            return false;
+        }
         asITypeInfo *behaviorRefType = engine->GetTypeInfoByName("BehaviorRef");
         if (!behaviorRefType ||
             !behaviorRefType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
