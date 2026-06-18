@@ -158,6 +158,10 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    ObjectRef@ object = ref;\n";
     source += "    return object !is null ? cast<CK2dEntity>(object.Object()) : null;\n";
     source += "}\n";
+    source += "CKMaterial@ __ckas_material_raw(MaterialRef@ ref) {\n";
+    source += "    ObjectRef@ object = ref;\n";
+    source += "    return object !is null ? cast<CKMaterial>(object.Object()) : null;\n";
+    source += "}\n";
     source += "void ProbeSceneApi(const CKBehaviorContext &in ctx) {\n";
     source += "    LevelRef@ currentLevel = Scene::CurrentLevel(ctx);\n";
     source += "    SceneRef@ currentScene = Scene::CurrentScene(ctx);\n";
@@ -189,12 +193,12 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    Scene::AddToScene(ctx, currentScene, found, true);\n";
     source += "    Scene::RemoveFromScene(ctx, currentScene, found, true);\n";
     source += "    if (e3d !is null) { CK3dEntity@ raw3d = __ckas_entity3d_raw(e3d); if (raw3d !is null) { VxVector p; VxQuaternion q; raw3d.SetPosition(p); raw3d.SetPosition(0.0f, 0.0f, 0.0f); raw3d.GetPosition(p); raw3d.Translate(p); raw3d.Translate(0.0f, 0.0f, 0.0f); raw3d.SetQuaternion(q); raw3d.GetQuaternion(q); raw3d.SetScale(p); raw3d.SetScale(1.0f, 1.0f, 1.0f); raw3d.GetScale(p); raw3d.LookAt(p); raw3d.GetParent(); raw3d.GetChild(0); raw3d.GetChildrenCount(); raw3d.SetParent(null); raw3d.AddChild(null); raw3d.RemoveChild(null); raw3d.SetPickable(); raw3d.IsPickable(); CKMesh@ rawMesh = oneMesh !is null ? oneMesh.Mesh() : null; raw3d.GetCurrentMesh(); raw3d.SetCurrentMesh(rawMesh); raw3d.GetMeshCount(); raw3d.GetMesh(0); raw3d.AddMesh(rawMesh); } }\n";
-    source += "    if (e2d !is null) { CK2dEntity@ raw2d = __ckas_entity2d_raw(e2d); if (raw2d !is null) { Vx2DVector p2; VxRect r2; raw2d.SetPosition(p2); raw2d.GetPosition(p2); raw2d.SetSize(p2); raw2d.GetSize(p2); raw2d.SetRect(r2); raw2d.GetRect(r2); raw2d.SetSourceRect(r2); raw2d.GetSourceRect(r2); raw2d.UseSourceRect(); raw2d.IsUsingSourceRect(); CKMaterial@ rawMaterial = oneMaterial !is null ? oneMaterial.Material() : null; raw2d.SetMaterial(rawMaterial); raw2d.GetMaterial(); raw2d.SetPickable(); raw2d.IsPickable(); raw2d.SetClipToParent(); raw2d.IsClipToParent(); raw2d.GetParent(); raw2d.GetChild(0); raw2d.GetChildrenCount(); raw2d.SetParent(null); } }\n";
+    source += "    if (e2d !is null) { CK2dEntity@ raw2d = __ckas_entity2d_raw(e2d); if (raw2d !is null) { Vx2DVector p2; VxRect r2; raw2d.SetPosition(p2); raw2d.GetPosition(p2); raw2d.SetSize(p2); raw2d.GetSize(p2); raw2d.SetRect(r2); raw2d.GetRect(r2); raw2d.SetSourceRect(r2); raw2d.GetSourceRect(r2); raw2d.UseSourceRect(); raw2d.IsUsingSourceRect(); CKMaterial@ rawMaterial = oneMaterial !is null ? __ckas_material_raw(oneMaterial) : null; raw2d.SetMaterial(rawMaterial); raw2d.GetMaterial(); raw2d.SetPickable(); raw2d.IsPickable(); raw2d.SetClipToParent(); raw2d.IsClipToParent(); raw2d.GetParent(); raw2d.GetChild(0); raw2d.GetChildrenCount(); raw2d.SetParent(null); } }\n";
     source += "    MaterialRef@ material = Scene::FindMaterial(ctx, \"__missing__\");\n";
     source += "    TextureRef@ texture = Scene::FindTexture(ctx, \"__missing__\");\n";
     source += "    MeshRef@ mesh = Scene::FindMesh(ctx, \"__missing__\");\n";
     source += "    BehaviorRef@ behaviorSceneRef = Scene::FindBehavior(ctx, \"__missing__\");\n";
-    source += "    if (material !is null) { CKMaterial@ rawMaterial = material.Material(); CKTexture@ rawTexture = texture !is null ? texture.Texture() : null; if (rawMaterial !is null) { rawMaterial.GetTexture(); rawMaterial.SetTexture(rawTexture); } }\n";
+    source += "    if (material !is null) { CKMaterial@ rawMaterial = __ckas_material_raw(material); CKTexture@ rawTexture = texture !is null ? texture.Texture() : null; if (rawMaterial !is null) { rawMaterial.GetTexture(); rawMaterial.SetTexture(rawTexture); } }\n";
     source += "    if (found !is null) { found.IsValid(); bool valid = found.valid; found.Error(); found.Describe(); found.Id(); found.Name(); found.ClassId(); found.IsDynamic(); found.Object(); BehaviorRef@ castBehavior = cast<BehaviorRef>(found); ParamRef@ castParam = cast<ParamRef>(found); SceneObjectRef@ castSceneObject = cast<SceneObjectRef>(found); }\n";
     source += "    SceneObjectRef@ sceneAsObject = currentScene;\n";
     source += "    if (sceneAsObject !is null) { Scene::IsInCurrentScene(ctx, sceneAsObject); Scene::IsInScene(ctx, currentScene, sceneAsObject); }\n";
@@ -3049,6 +3053,18 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
         if (entity2DRefType->GetMethodByDecl("CKObject@ Object() const") ||
             entity2DRefType->GetMethodByDecl("CK2dEntity@ Entity2D() const")) {
             error = "Entity2DRef still exposes a raw CK handle.";
+            return false;
+        }
+        asITypeInfo *materialRefType = engine->GetTypeInfoByName("MaterialRef");
+        if (!materialRefType ||
+            !materialRefType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
+            !materialRefType->GetMethodByDecl("const ObjectRef@ opImplCast() const")) {
+            error = "MaterialRef wrapper cast declaration self-test failed.";
+            return false;
+        }
+        if (materialRefType->GetMethodByDecl("CKObject@ Object() const") ||
+            materialRefType->GetMethodByDecl("CKMaterial@ Material() const")) {
+            error = "MaterialRef still exposes a raw CK handle.";
             return false;
         }
         asITypeInfo *behaviorRefType = engine->GetTypeInfoByName("BehaviorRef");
