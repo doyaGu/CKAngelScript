@@ -650,10 +650,13 @@ GraphEditResult::GraphEditResult(ScriptBehaviorBridge *bridge,
                                  bool ok,
                                  const std::string &error,
                                  const std::string &description,
-                                 const std::vector<CK_ID> &createdNodeIds,
-                                 const std::vector<CK_ID> &createdLinkIds)
+                                 const std::vector<ScriptBridgeStampedObjectRef> &createdNodeIds,
+                                 const std::vector<ScriptBridgeStampedObjectRef> &createdLinkIds)
     : m_Bridge(bridge),
       m_Context(ctx),
+      m_RootBehaviorId(ctx.Behavior ? ctx.Behavior->GetID() : 0),
+      m_RootBehaviorStamp(CaptureBridgeObjectStamp(ctx.Behavior)),
+      m_RootBehaviorAddress(ScriptBridgeObjectAddress(ctx.Behavior)),
       m_Ok(ok),
       m_Error(error),
       m_Description(description),
@@ -676,9 +679,19 @@ CScriptArray *GraphEditResult::CreatedNodes() const {
     if (!array) {
         return nullptr;
     }
-    CK_ID rootId = m_Context.Behavior ? m_Context.Behavior->GetID() : 0;
-    for (CK_ID id : m_CreatedNodeIds) {
-        ScriptBridgeGraphInternal::AppendNode(array, new BehaviorNode(m_Bridge, m_Context, rootId, id, ComponentIdFromContext(m_Context)));
+    CKBehavior *root = RootBehavior();
+    if (!root) {
+        return array;
+    }
+    CKBehaviorContext ctx = m_Context;
+    ctx.Behavior = root;
+    const CK_ID rootId = root->GetID();
+    const CK_ID componentId = ComponentIdFromContext(ctx);
+    for (const ScriptBridgeStampedObjectRef &ref : m_CreatedNodeIds) {
+        CKBehavior *behavior = CreatedBehavior(ref);
+        if (behavior) {
+            ScriptBridgeGraphInternal::AppendNode(array, new BehaviorNode(m_Bridge, ctx, rootId, behavior->GetID(), componentId));
+        }
     }
     return array;
 }
@@ -688,11 +701,54 @@ CScriptArray *GraphEditResult::CreatedLinks() const {
     if (!array) {
         return nullptr;
     }
-    CK_ID rootId = m_Context.Behavior ? m_Context.Behavior->GetID() : 0;
-    for (CK_ID id : m_CreatedLinkIds) {
-        ScriptBridgeGraphInternal::AppendLink(array, new BehaviorLinkRef(m_Bridge, rootId, id, ComponentIdFromContext(m_Context)));
+    CKBehavior *root = RootBehavior();
+    if (!root) {
+        return array;
+    }
+    CKBehaviorContext ctx = m_Context;
+    ctx.Behavior = root;
+    const CK_ID rootId = root->GetID();
+    const CK_ID componentId = ComponentIdFromContext(ctx);
+    for (const ScriptBridgeStampedObjectRef &ref : m_CreatedLinkIds) {
+        CKBehaviorLink *link = CreatedLink(ref);
+        if (link) {
+            ScriptBridgeGraphInternal::AppendLink(array, new BehaviorLinkRef(m_Bridge,
+                                                                             rootId,
+                                                                             link->GetID(),
+                                                                             componentId,
+                                                                             ref.Stamp,
+                                                                             ref.Address,
+                                                                             ScriptBridgeGraphInternal::GraphContext(m_Bridge, ctx)));
+        }
     }
     return array;
+}
+
+CKBehavior *GraphEditResult::RootBehavior() const {
+    CKContext *context = ScriptBridgeGraphInternal::GraphContext(m_Bridge, m_Context);
+    CKBehavior *root = CKBehavior::Cast(GetStampedCKObjectById(context, m_RootBehaviorId, m_RootBehaviorStamp));
+    if (root && m_RootBehaviorAddress && ScriptBridgeObjectAddress(root) != m_RootBehaviorAddress) {
+        return nullptr;
+    }
+    return root;
+}
+
+CKBehavior *GraphEditResult::CreatedBehavior(const ScriptBridgeStampedObjectRef &ref) const {
+    CKContext *context = ScriptBridgeGraphInternal::GraphContext(m_Bridge, m_Context);
+    CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(context, ref.Id, ref.Stamp));
+    if (behavior && ref.Address && ScriptBridgeObjectAddress(behavior) != ref.Address) {
+        return nullptr;
+    }
+    return behavior;
+}
+
+CKBehaviorLink *GraphEditResult::CreatedLink(const ScriptBridgeStampedObjectRef &ref) const {
+    CKContext *context = ScriptBridgeGraphInternal::GraphContext(m_Bridge, m_Context);
+    CKBehaviorLink *link = CKBehaviorLink::Cast(GetStampedCKObjectById(context, ref.Id, ref.Stamp));
+    if (link && ref.Address && ScriptBridgeObjectAddress(link) != ref.Address) {
+        return nullptr;
+    }
+    return link;
 }
 
 bool GraphEditResult::Raise(const CKBehaviorContext &ctx) const {
@@ -1151,8 +1207,8 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
 
     CKContext *context = ScriptBridgeGraphInternal::GraphContext(m_Bridge, ctx);
     CKBehavior *root = RootBehavior();
-    std::vector<CK_ID> createdNodes;
-    std::vector<CK_ID> createdLinks;
+    std::vector<ScriptBridgeStampedObjectRef> createdNodes;
+    std::vector<ScriptBridgeStampedObjectRef> createdLinks;
     std::vector<CK_ID> createdOperations;
     std::vector<ParamSourceLinkRef *> appliedSourceLinks;
     std::vector<ParamOperationRef *> appliedOperations;
@@ -1192,8 +1248,11 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             ScriptBridgeGraphInternal::DestroyGraphEditLocalSource(context, localId);
         }
         createdValueLocalSources.clear();
-        for (CK_ID linkId : createdLinks) {
-            if (CKBehaviorLink *link = CKBehaviorLink::Cast(GetCKObjectById(context, linkId))) {
+        for (const ScriptBridgeStampedObjectRef &linkRef : createdLinks) {
+            if (CKBehaviorLink *link = CKBehaviorLink::Cast(GetStampedCKObjectById(context, linkRef.Id, linkRef.Stamp))) {
+                if (linkRef.Address && ScriptBridgeObjectAddress(link) != linkRef.Address) {
+                    continue;
+                }
                 if (root) {
                     root->RemoveSubBehaviorLink(link);
                 }
@@ -1231,8 +1290,11 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             }
         }
         appliedTargetEdits.clear();
-        for (CK_ID behaviorId : createdNodes) {
-            if (CKBehavior *behavior = CKBehavior::Cast(GetCKObjectById(context, behaviorId))) {
+        for (const ScriptBridgeStampedObjectRef &nodeRef : createdNodes) {
+            if (CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(context, nodeRef.Id, nodeRef.Stamp))) {
+                if (nodeRef.Address && ScriptBridgeObjectAddress(behavior) != nodeRef.Address) {
+                    continue;
+                }
                 if (root) {
                     root->RemoveSubBehavior(behavior);
                 }
@@ -1289,7 +1351,9 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         }
         spec.CreatedBehaviorId = behavior->GetID();
         spec.CreatedBehaviorStamp = CaptureBridgeObjectStamp(behavior);
-        createdNodes.push_back(behavior->GetID());
+        createdNodes.push_back(ScriptBridgeStampedObjectRef{behavior->GetID(),
+                                                            spec.CreatedBehaviorStamp,
+                                                            ScriptBridgeObjectAddress(behavior)});
     }
 
     for (const LayoutSpec &spec : m_LayoutEdits) {
@@ -1404,7 +1468,9 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         spec.CreatedLinkId = link->GetID();
         spec.CreatedLinkStamp = CaptureBridgeObjectStamp(link);
         spec.CreatedLinkAddress = ScriptBridgeObjectAddress(link);
-        createdLinks.push_back(link->GetID());
+        createdLinks.push_back(ScriptBridgeStampedObjectRef{link->GetID(),
+                                                            spec.CreatedLinkStamp,
+                                                            spec.CreatedLinkAddress});
     }
 
     for (const ValueSpec &spec : m_Values) {
@@ -1638,8 +1704,8 @@ bool BehaviorGraphEdit::IsLinkValid(const GraphEditLink *link) const {
 GraphEditResult *BehaviorGraphEdit::MakeResult(bool ok,
                                                const std::string &error,
                                                const std::string &description,
-                                               const std::vector<CK_ID> &createdNodes,
-                                               const std::vector<CK_ID> &createdLinks) const {
+                                               const std::vector<ScriptBridgeStampedObjectRef> &createdNodes,
+                                               const std::vector<ScriptBridgeStampedObjectRef> &createdLinks) const {
     CKBehavior *root = RootBehavior();
     CKBehaviorContext resultContext = m_Context;
     resultContext.Behavior = root;

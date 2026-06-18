@@ -1,6 +1,7 @@
 #ifndef CK_SCRIPTBEHAVIORBRIDGE_H
 #define CK_SCRIPTBEHAVIORBRIDGE_H
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -130,6 +131,12 @@ struct ScriptBridgeObjectStamp {
 struct ScriptBridgeStampedObjectId {
     CK_ID Id = 0;
     ScriptBridgeObjectStamp Stamp;
+};
+
+struct ScriptBridgeStampedObjectRef {
+    CK_ID Id = 0;
+    ScriptBridgeObjectStamp Stamp;
+    std::uintptr_t Address = 0;
 };
 
 inline CKDWORD ScriptBridgeTaskFlagMask(ScriptBridgeTaskFlags flag) {

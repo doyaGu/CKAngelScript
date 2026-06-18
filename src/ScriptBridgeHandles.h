@@ -448,8 +448,8 @@ public:
                     bool ok,
                     const std::string &error,
                     const std::string &description,
-                    const std::vector<CK_ID> &createdNodeIds = {},
-                    const std::vector<CK_ID> &createdLinkIds = {});
+                    const std::vector<ScriptBridgeStampedObjectRef> &createdNodeIds = {},
+                    const std::vector<ScriptBridgeStampedObjectRef> &createdLinkIds = {});
 
     bool Ok() const;
     bool IsOk() const;
@@ -460,13 +460,20 @@ public:
     bool Raise(const CKBehaviorContext &ctx) const;
 
 private:
+    CKBehavior *RootBehavior() const;
+    CKBehavior *CreatedBehavior(const ScriptBridgeStampedObjectRef &ref) const;
+    CKBehaviorLink *CreatedLink(const ScriptBridgeStampedObjectRef &ref) const;
+
     ScriptBehaviorBridge *m_Bridge = nullptr;
     CKBehaviorContext m_Context;
+    CK_ID m_RootBehaviorId = 0;
+    ScriptBridgeObjectStamp m_RootBehaviorStamp;
+    std::uintptr_t m_RootBehaviorAddress = 0;
     bool m_Ok = false;
     std::string m_Error;
     std::string m_Description;
-    std::vector<CK_ID> m_CreatedNodeIds;
-    std::vector<CK_ID> m_CreatedLinkIds;
+    std::vector<ScriptBridgeStampedObjectRef> m_CreatedNodeIds;
+    std::vector<ScriptBridgeStampedObjectRef> m_CreatedLinkIds;
 };
 
 class GraphEditNode final : public RefCounted {
@@ -628,8 +635,8 @@ private:
     GraphEditResult *MakeResult(bool ok,
                                 const std::string &error,
                                 const std::string &description,
-                                const std::vector<CK_ID> &createdNodes = {},
-                                const std::vector<CK_ID> &createdLinks = {}) const;
+                                const std::vector<ScriptBridgeStampedObjectRef> &createdNodes = {},
+                                const std::vector<ScriptBridgeStampedObjectRef> &createdLinks = {}) const;
     bool ValidateInternal(const CKBehaviorContext &ctx, std::string &error) const;
     bool ResolveNodeIndex(const GraphEditNode *node, int &index, std::string &error) const;
     CKBehavior *ResolveNodeBehavior(int index) const;

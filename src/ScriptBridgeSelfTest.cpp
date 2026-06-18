@@ -2089,6 +2089,102 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
         return false;
     }
 
+    ScriptBridgeBBInvocationSpec createdNodeRequest = MakeDefaultRequest(ctx);
+    createdNodeRequest.PrototypeName = "Logics/Calculator/Identity";
+    BBDecl *createdNodeDecl = new BBDecl(bridge, ctx, createdNodeRequest);
+    BehaviorGraphEdit *createdNodeEdit = graph->Edit();
+    GraphEditNode *createdNodePlan = createdNodeEdit ? createdNodeEdit->AddDecl(createdNodeDecl, "__CKAS_GraphEditResultNode") : nullptr;
+    GraphEditResult *createdNodeResult = createdNodeEdit ? createdNodeEdit->Apply(ctx) : nullptr;
+    CScriptArray *createdNodes = createdNodeResult ? createdNodeResult->CreatedNodes() : nullptr;
+    const bool createdNodeOk = createdNodeResult &&
+        createdNodeResult->Ok() &&
+        createdNodePlan &&
+        createdNodePlan->IsValid() &&
+        createdNodes &&
+        createdNodes->GetSize() == 1;
+    if (!createdNodeOk) {
+        error = fmt::format("Graph edit self-test failed created-node result: result={} plan={} count={}.",
+                            createdNodeResult && createdNodeResult->Ok() ? "ok" : (createdNodeResult ? createdNodeResult->Error() : "<null>"),
+                            createdNodePlan && createdNodePlan->IsValid() ? "ok" : "invalid",
+                            createdNodes ? static_cast<int>(createdNodes->GetSize()) : -1);
+        if (createdNodes) createdNodes->Release();
+        if (createdNodeResult) createdNodeResult->Release();
+        if (createdNodePlan) createdNodePlan->Release();
+        if (createdNodeEdit) createdNodeEdit->Release();
+        createdNodeDecl->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+    void *createdNodeSlot = createdNodes->At(0);
+    BehaviorNode *createdBehaviorNode = createdNodeSlot ? *static_cast<BehaviorNode **>(createdNodeSlot) : nullptr;
+    if (createdBehaviorNode) {
+        createdBehaviorNode->AddRef();
+    }
+    createdNodes->Release();
+    if (!createdBehaviorNode || !createdBehaviorNode->IsValid()) {
+        error = "Graph edit self-test failed to resolve created node for cleanup.";
+        if (createdBehaviorNode) createdBehaviorNode->Release();
+        createdNodeResult->Release();
+        createdNodePlan->Release();
+        createdNodeEdit->Release();
+        createdNodeDecl->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    BehaviorGraphEdit *removeCreatedNodeEdit = graph->Edit();
+    removeCreatedNodeEdit->Remove(createdBehaviorNode, true)->Release();
+    GraphEditResult *removeCreatedNodeResult = removeCreatedNodeEdit->Apply(ctx);
+    if (!removeCreatedNodeResult || !removeCreatedNodeResult->Ok() || createdBehaviorNode->IsValid()) {
+        error = "Graph edit self-test failed created-node cleanup.";
+        if (removeCreatedNodeResult) removeCreatedNodeResult->Release();
+        removeCreatedNodeEdit->Release();
+        createdBehaviorNode->Release();
+        createdNodeResult->Release();
+        createdNodePlan->Release();
+        createdNodeEdit->Release();
+        createdNodeDecl->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+    removeCreatedNodeResult->Release();
+    removeCreatedNodeEdit->Release();
+    createdBehaviorNode->Release();
+    createdNodeResult->Release();
+    createdNodePlan->Release();
+    createdNodeEdit->Release();
+    createdNodeDecl->Release();
+
     BehaviorGraphEdit *unlinkEdit = graph->Edit();
     unlinkEdit->Unlink(createdLink)->Release();
     GraphEditResult *unlinkResult = unlinkEdit->Apply(ctx);
