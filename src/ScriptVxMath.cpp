@@ -3,6 +3,7 @@
 #include <cassert>
 #include <new>
 #include <string>
+#include <vector>
 
 #include "add_on/scriptarray/scriptarray.h"
 
@@ -791,7 +792,7 @@ static void RegisterVxMathObjectTypes(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectType("CKFileExtension", sizeof(CKFileExtension), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKFileExtension>()); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectType("CKDirectoryParser", sizeof(CKDirectoryParser), asOBJ_VALUE | asGetTypeTraits<CKDirectoryParser>()); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("CKDirectoryParser", sizeof(CKDirectoryParser), asOBJ_VALUE | asOBJ_APP_CLASS_CD); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectType("VxVector", sizeof(VxVector), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS | asGetTypeTraits<VxVector>()); CKAS_CHECK_REGISTER(r);
 
@@ -1763,6 +1764,51 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         ok = runExpectedException("void OutOfRangeXStringIndex()", "Out of range", "XString out-of-range access");
     }
 
+    auto expectBuildFailure = [&](const char *script, const char *label) -> bool {
+        const char *negativeModuleName = "__CKAS_VxBindingNegativeSelfTest";
+        asIScriptModule *negativeModule = engine->GetModule(negativeModuleName, asGM_ALWAYS_CREATE);
+        if (!negativeModule) {
+            error = std::string("Vx binding self-test could not create negative module for ") + label + ".";
+            return false;
+        }
+        int buildResult = negativeModule->AddScriptSection(label, script);
+        if (buildResult >= 0) {
+            buildResult = negativeModule->Build();
+        }
+        engine->DiscardModule(negativeModuleName);
+        if (buildResult >= 0) {
+            error = std::string("Vx binding self-test unexpectedly built ") + label + ".";
+            return false;
+        }
+        return true;
+    };
+
+    if (ok) {
+        ok = expectBuildFailure(
+            "void RejectDirectoryParserCopy() {\n"
+            "  CKDirectoryParser parser(\"__ckas_missing_directory__\", \"*.none\", false);\n"
+            "  CKDirectoryParser copied(parser);\n"
+            "}\n",
+            "CKDirectoryParser copy construction");
+    }
+    if (ok) {
+        ok = expectBuildFailure(
+            "void RejectDirectoryParserAssign() {\n"
+            "  CKDirectoryParser lhs(\"__ckas_missing_directory__\", \"*.none\", false);\n"
+            "  CKDirectoryParser rhs(\"__ckas_missing_directory__\", \"*.none\", false);\n"
+            "  lhs = rhs;\n"
+            "}\n",
+            "CKDirectoryParser assignment");
+    }
+    if (ok) {
+        ok = expectBuildFailure(
+            "void RejectDirectoryParserPartialReset() {\n"
+            "  CKDirectoryParser parser(\"__ckas_missing_directory__\", \"*.none\", false);\n"
+            "  parser.Reset(\"__ckas_missing_directory__\");\n"
+            "}\n",
+            "CKDirectoryParser partial Reset");
+    }
+
     context->Unprepare();
     engine->ReturnContext(context);
     engine->DiscardModule(moduleName);
@@ -1809,6 +1855,23 @@ bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error) {
     }
     if (pathSplitterType->GetMethodByDecl("string GetFileName() const")) {
         error = "CKPathSplitter incorrectly exposes CKPathMaker.GetFileName.";
+        return false;
+    }
+    asITypeInfo *directoryParserType = engine->GetTypeInfoByDecl("CKDirectoryParser");
+    if (!directoryParserType) {
+        error = "CKDirectoryParser type is not registered.";
+        return false;
+    }
+    if (!directoryParserType->GetMethodByDecl("string GetNextFile()")) {
+        error = "CKDirectoryParser.GetNextFile is not registered.";
+        return false;
+    }
+    if (!directoryParserType->GetMethodByDecl("void Reset()")) {
+        error = "CKDirectoryParser.Reset default overload is not registered.";
+        return false;
+    }
+    if (!directoryParserType->GetMethodByDecl("void Reset(const string &in dir, const string &in fileMask, bool recursive = false)")) {
+        error = "CKDirectoryParser.Reset explicit overload is not registered.";
         return false;
     }
 
@@ -2267,16 +2330,30 @@ static void RegisterCKFileExtension(asIScriptEngine *engine) {
 
 // CKDirectoryParser
 
+static std::vector<char> MakeMutableCKDirectoryParserString(const std::string &value) {
+    std::vector<char> buffer(value.begin(), value.end());
+    buffer.push_back('\0');
+    return buffer;
+}
+
 static void ConstructCKDirectoryParser(const std::string &dir, const std::string &fileMask, bool recurse, CKDirectoryParser *self) {
-    new(self) CKDirectoryParser(const_cast<char *>(dir.c_str()), const_cast<char *>(fileMask.c_str()), recurse);
+    std::vector<char> dirBuffer = MakeMutableCKDirectoryParserString(dir);
+    std::vector<char> maskBuffer = MakeMutableCKDirectoryParserString(fileMask);
+    new(self) CKDirectoryParser(dirBuffer.data(), maskBuffer.data(), recurse);
 }
 
 static std::string CKDirectoryParserGetNextFile(CKDirectoryParser *self) {
     return ScriptStringify(self->GetNextFile());
 }
 
+static void CKDirectoryParserResetDefault(CKDirectoryParser *self) {
+    self->Reset();
+}
+
 static void CKDirectoryParserReset(const std::string &dir, const std::string &fileMask, bool recurse, CKDirectoryParser *self) {
-    self->Reset(dir.empty() ? nullptr : const_cast<char *>(dir.c_str()), fileMask.empty() ? nullptr : const_cast<char *>(fileMask.c_str()), recurse);
+    std::vector<char> dirBuffer = MakeMutableCKDirectoryParserString(dir);
+    std::vector<char> maskBuffer = MakeMutableCKDirectoryParserString(fileMask);
+    self->Reset(dirBuffer.data(), maskBuffer.data(), recurse);
 }
 
 static void RegisterCKDirectoryParser(asIScriptEngine *engine) {
@@ -2290,7 +2367,8 @@ static void RegisterCKDirectoryParser(asIScriptEngine *engine) {
 
     // Methods
     r = engine->RegisterObjectMethod("CKDirectoryParser", "string GetNextFile()", asFUNCTION(CKDirectoryParserGetNextFile), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDirectoryParser", "void Reset(const string &in dir = \"\", const string &in fileMask = \"\", bool recursive = false)", asFUNCTION(CKDirectoryParserReset), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKDirectoryParser", "void Reset()", asFUNCTION(CKDirectoryParserResetDefault), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKDirectoryParser", "void Reset(const string &in dir, const string &in fileMask, bool recursive = false)", asFUNCTION(CKDirectoryParserReset), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 }
 
 // VXFONTINFO
