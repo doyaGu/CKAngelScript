@@ -3,6 +3,7 @@
 #include <cstring>
 #include <mutex>
 #include <string>
+#include <type_traits>
 #include <unordered_set>
 
 #include "CKAll.h"
@@ -2961,9 +2962,11 @@ template<typename T>
 void RegisterCKAnimControllerMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
-    r = engine->RegisterObjectMethod(name, "bool Evaluate(float timeStep, NativePointer res)", asFUNCTIONPR([](T *self, float timeStep, NativePointer res) -> bool { return self->Evaluate(timeStep, res.Get()); }, (T *, float, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "int AddKey(CKKey &in key)", asMETHODPR(T, AddKey, (CKKey *), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKKey &GetKey(int index)", asMETHODPR(T, GetKey, (int), CKKey *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    if constexpr (!std::is_same_v<T, CKMorphController>) {
+        r = engine->RegisterObjectMethod(name, "bool Evaluate(float timeStep, NativePointer res)", asFUNCTIONPR([](T *self, float timeStep, NativePointer res) -> bool { return self->Evaluate(timeStep, res.Get()); }, (T *, float, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "int AddKey(CKKey &in key)", asMETHODPR(T, AddKey, (CKKey *), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "CKKey &GetKey(int index)", asMETHODPR(T, GetKey, (int), CKKey *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    }
     r = engine->RegisterObjectMethod(name, "void RemoveKey(int index)", asMETHODPR(T, RemoveKey, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int DumpKeysTo(NativePointer buffer)", asFUNCTIONPR([](T *self, NativePointer buffer) -> int { return self->DumpKeysTo(buffer.Get()); }, (T *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int ReadKeysFrom(NativePointer buffer)", asFUNCTIONPR([](T *self, NativePointer buffer) -> int { return self->ReadKeysFrom(buffer.Get()); }, (T *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -3024,6 +3027,86 @@ static bool CompareCKMorphKey(CKMorphKey *self, CKMorphKey &key, int nbVertex, f
         }
     }
     return self->Compare(key, nbVertex, threshold) != FALSE;
+}
+
+static CKMorphKey &InvalidCKMorphKey(const char *message) {
+    static thread_local CKMorphKey dummy;
+    dummy = CKMorphKey();
+    dummy.PosArray = nullptr;
+    dummy.NormArray = nullptr;
+    if (message) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException(message);
+        }
+    }
+    return dummy;
+}
+
+static int AddCKMorphControllerKey(CKMorphController *self, CKMorphKey &key, bool allocateNormals) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphController.AddMorphKey called with a null controller.");
+        }
+        return -1;
+    }
+    if (!key.PosArray) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphController.AddMorphKey requires CKMorphKey.PosArray to reference morph vertex data.");
+        }
+        return -1;
+    }
+    return self->AddKey(&key, allocateNormals);
+}
+
+static CKMorphKey &GetCKMorphControllerKey(CKMorphController *self, int index) {
+    if (!self) {
+        return InvalidCKMorphKey("CKMorphController.GetMorphKey called with a null controller.");
+    }
+    if (index < 0 || index >= self->GetKeyCount()) {
+        return InvalidCKMorphKey("CKMorphController.GetMorphKey index out of range.");
+    }
+    CKKey *key = self->GetKey(index);
+    if (!key) {
+        return InvalidCKMorphKey("CKMorphController.GetMorphKey returned a null native key.");
+    }
+    return *static_cast<CKMorphKey *>(key);
+}
+
+static bool EvaluateCKMorphController(CKMorphController *self,
+                                      float timeStep,
+                                      int vertexCount,
+                                      NativePointer vertexPtr,
+                                      CKDWORD vertexStride,
+                                      NativePointer normalPtr) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphController.Evaluate called with a null controller.");
+        }
+        return false;
+    }
+    if (vertexCount < 0) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphController.Evaluate requires a non-negative vertex count.");
+        }
+        return false;
+    }
+    if (vertexCount > 0 && !vertexPtr.Get()) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphController.Evaluate requires a vertex output buffer when vertexCount is positive.");
+        }
+        return false;
+    }
+    if (vertexCount > 0 && vertexStride < sizeof(VxVector)) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphController.Evaluate vertexStride is smaller than VxVector.");
+        }
+        return false;
+    }
+    return self->Evaluate(timeStep,
+                          vertexCount,
+                          vertexPtr.Get(),
+                          vertexStride,
+                          reinterpret_cast<VxCompressedVector *>(normalPtr.Get())) != FALSE;
 }
 
 void RegisterCKKeyframeData(asIScriptEngine *engine) {
@@ -3108,8 +3191,9 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     RegisterCKAnimControllerMembers<CKMorphController>(engine, "CKMorphController");
 
     r = engine->RegisterObjectMethod("CKMorphController", "int AddKey(float timeStep, bool allocateNormals)", asFUNCTIONPR([](CKMorphController *self, float timeStep, bool allocateNormals) { return self->AddKey(timeStep, allocateNormals); }, (CKMorphController *, float, bool), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMorphController", "int AddKey(CKKey &in key, bool allocateNormals)", asFUNCTIONPR([](CKMorphController *self, CKKey &key, bool allocateNormals) { return self->AddKey(&key, allocateNormals); }, (CKMorphController *, CKKey &, bool), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMorphController", "bool Evaluate(float timeStep, int vertexCount, NativePointer vertexPtr, CKDWORD vertexStride, NativePointer normalPtr)", asFUNCTIONPR([](CKMorphController *self, float timeStep, int vertexCount, NativePointer vertexPtr, CKDWORD vertexStride, NativePointer normalPtr) -> bool { return self->Evaluate(timeStep, vertexCount, vertexPtr.Get(), vertexStride, reinterpret_cast<VxCompressedVector *>(normalPtr.Get())); }, (CKMorphController *, float, int, NativePointer, CKDWORD, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphController", "int AddMorphKey(CKMorphKey &in key, bool allocateNormals = true)", asFUNCTION(AddCKMorphControllerKey), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphController", "CKMorphKey &GetMorphKey(int index)", asFUNCTION(GetCKMorphControllerKey), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphController", "bool Evaluate(float timeStep, int vertexCount, NativePointer vertexPtr, CKDWORD vertexStride, NativePointer normalPtr)", asFUNCTION(EvaluateCKMorphController), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMorphController", "void SetMorphVertexCount(int count)", asMETHODPR(CKMorphController, SetMorphVertexCount, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 

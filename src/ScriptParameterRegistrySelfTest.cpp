@@ -2070,6 +2070,64 @@ bool RunCKMorphKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     return ok;
 }
 
+bool RunCKMorphControllerScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKMorphController script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *morphControllerType = engine->GetTypeInfoByDecl("CKMorphController");
+    if (!morphControllerType) {
+        error = "CKMorphController self-test could not find the registered type.";
+        return false;
+    }
+    if (morphControllerType->GetMethodByDecl("bool Evaluate(float timeStep, NativePointer res)") != nullptr ||
+        morphControllerType->GetMethodByDecl("int AddKey(CKKey&in key)") != nullptr ||
+        morphControllerType->GetMethodByDecl("int AddKey(CKKey&in key, bool allocateNormals)") != nullptr ||
+        morphControllerType->GetMethodByDecl("CKKey& GetKey(int index)") != nullptr) {
+        error = "CKMorphController self-test found stale inherited base-key methods.";
+        return false;
+    }
+    if (morphControllerType->GetMethodByDecl("int AddMorphKey(CKMorphKey&in key, bool allocateNormals = true)") == nullptr ||
+        morphControllerType->GetMethodByDecl("CKMorphKey& GetMorphKey(int index)") == nullptr ||
+        morphControllerType->GetMethodByDecl("bool Evaluate(float timeStep, int vertexCount, NativePointer vertexPtr, CKDWORD vertexStride, NativePointer normalPtr)") == nullptr) {
+        error = "CKMorphController self-test could not find expected morph-specific methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKMorphControllerSelfTest";
+    const char *source =
+        "void ProbeMorphControllerSurface(CKMorphController@ controller, CKMorphKey &in key, NativePointer vertexPtr, NativePointer normalPtr) {\n"
+        "  if (controller is null) return;\n"
+        "  controller.AddMorphKey(key);\n"
+        "  controller.AddMorphKey(key, false);\n"
+        "  CKMorphKey got = controller.GetMorphKey(0);\n"
+        "  controller.Evaluate(0.0f, 0, vertexPtr, 12, normalPtr);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKMorphController self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-morph-controller-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMorphController self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMorphController self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBezierPositionKey script self-test requires an AngelScript engine.";
@@ -2361,6 +2419,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKMorphKeyScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKMorphControllerScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKBezierPositionKeyScriptSelfTest(engine, error)) {
