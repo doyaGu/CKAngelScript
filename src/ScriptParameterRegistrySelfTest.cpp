@@ -1512,6 +1512,98 @@ bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &erro
     return true;
 }
 
+bool RunCKPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKPositionKey script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *keyType = engine->GetTypeInfoByDecl("CKKey");
+    asITypeInfo *positionKeyType = engine->GetTypeInfoByDecl("CKPositionKey");
+    if (!keyType || !positionKeyType) {
+        error = "CKPositionKey self-test could not find key types.";
+        return false;
+    }
+    if (positionKeyType->GetMethodByDecl("CKTCBPositionKey opConv() const") != nullptr ||
+        positionKeyType->GetMethodByDecl("CKBezierPositionKey opConv() const") != nullptr) {
+        error = "CKPositionKey self-test found stale unsafe position-key down-conversion.";
+        return false;
+    }
+    if (positionKeyType->GetMethodByDecl("CKKey opImplConv() const") == nullptr) {
+        error = "CKPositionKey self-test could not find safe CKKey value conversion.";
+        return false;
+    }
+    if (positionKeyType->GetMethodByDecl("float GetTime()") == nullptr ||
+        positionKeyType->GetMethodByDecl("const VxVector& GetPosition()") == nullptr ||
+        positionKeyType->GetMethodByDecl("bool Compare(CKPositionKey&in key, float threshold)") == nullptr) {
+        error = "CKPositionKey self-test could not find expected non-const SDK declarations.";
+        return false;
+    }
+    if (positionKeyType->GetMethodByDecl("float GetTime() const") != nullptr ||
+        positionKeyType->GetMethodByDecl("const VxVector& GetPosition() const") != nullptr ||
+        positionKeyType->GetMethodByDecl("bool Compare(CKPositionKey&in key, float threshold) const") != nullptr) {
+        error = "CKPositionKey self-test found stale const SDK declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKPositionKeySelfTest";
+    const char *source =
+        "int ProbePositionKey() {\n"
+        "  VxVector pos(1.0f, 2.0f, 3.0f);\n"
+        "  CKPositionKey key(1.25f, pos);\n"
+        "  if (key.GetTime() != 1.25f) return 1;\n"
+        "  VxVector got = key.GetPosition();\n"
+        "  if (got.x != 1.0f || got.y != 2.0f || got.z != 3.0f) return 2;\n"
+        "  CKPositionKey copy(key);\n"
+        "  if (!key.Compare(copy, 0.0f)) return 3;\n"
+        "  copy.Pos.x = 4.0f;\n"
+        "  if (key.Compare(copy, 0.0f)) return 4;\n"
+        "  CKPositionKey assigned;\n"
+        "  assigned = key;\n"
+        "  if (!key.Compare(assigned, 0.0f)) return 5;\n"
+        "  CKKey baseKey = key;\n"
+        "  if (baseKey.GetTime() != 1.25f) return 6;\n"
+        "  key.SetTime(2.5f);\n"
+        "  if (key.GetTime() != 2.5f) return 7;\n"
+        "  VxVector moved(7.0f, 8.0f, 9.0f);\n"
+        "  key.SetPosition(moved);\n"
+        "  got = key.GetPosition();\n"
+        "  if (got.x != 7.0f || got.y != 8.0f || got.z != 9.0f) return 8;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPositionKey self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-position-key-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPositionKey self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPositionKey self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbePositionKey()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKPositionKey self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKPositionKey probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBezierPositionKey script self-test requires an AngelScript engine.";
@@ -1785,6 +1877,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKDependenciesScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKPositionKeyScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKBezierPositionKeyScriptSelfTest(engine, error)) {
