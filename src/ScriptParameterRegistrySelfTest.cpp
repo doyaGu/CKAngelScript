@@ -3610,6 +3610,26 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (value.x != source.x || value.y != source.y || value.z != source.z) return 5;\n"
         "  return 0;\n"
         "}\n"
+        "int ProbeCKParameterLocalMyselfState(CKParameterLocal@ local) {\n"
+        "  if (local is null) return 2;\n"
+        "  if (local.IsMyselfParameter()) return 3;\n"
+        "  CKParameterType originalType = local.GetType();\n"
+        "  CKGUID originalGuid = local.GetGUID();\n"
+        "  local.SetAsMyselfParameter(true);\n"
+        "  if (!local.IsMyselfParameter()) return 4;\n"
+        "  int blocked = 77;\n"
+        "  if (local.SetValue(blocked) != CKERR_INVALIDPARAMETER) return 5;\n"
+        "  if (!local.GetWriteDataPtr().IsNull()) return 6;\n"
+        "  local.SetAsMyselfParameter(false);\n"
+        "  if (local.IsMyselfParameter()) return 7;\n"
+        "  local.SetType(originalType);\n"
+        "  local.SetGUID(originalGuid);\n"
+        "  if (local.SetValue(blocked) != CK_OK) return 8;\n"
+        "  int value = 0;\n"
+        "  if (local.GetValue(value) != CK_OK) return 9;\n"
+        "  if (value != blocked) return 10;\n"
+        "  return 0;\n"
+        "}\n"
         "class CKParameterGenericRejected { int value; }\n"
         "void ProbeCKParameterGenericSetScriptObject(CKParameterLocal@ local) {\n"
         "  CKParameterGenericRejected rejected;\n"
@@ -3801,6 +3821,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *genericSetString = module->GetFunctionByDecl("int ProbeCKParameterGenericSetStringValue(CKParameterLocal@)");
     asIScriptFunction *genericInt = module->GetFunctionByDecl("int ProbeCKParameterGenericIntValue(CKParameterLocal@)");
     asIScriptFunction *genericVector = module->GetFunctionByDecl("int ProbeCKParameterGenericVectorValue(CKParameterLocal@)");
+    asIScriptFunction *localMyselfState = module->GetFunctionByDecl("int ProbeCKParameterLocalMyselfState(CKParameterLocal@)");
     asIScriptFunction *genericSetScriptObject = module->GetFunctionByDecl("void ProbeCKParameterGenericSetScriptObject(CKParameterLocal@)");
     asIScriptFunction *genericGetScriptObject = module->GetFunctionByDecl("void ProbeCKParameterGenericGetScriptObject(CKParameterLocal@)");
     asIScriptFunction *genericSetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterGenericSetObjectHandle(CKParameterLocal@)");
@@ -3828,6 +3849,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
+        !localMyselfState ||
         !genericSetScriptObject || !genericGetScriptObject || !genericSetObjectHandle || !genericGetObjectHandle ||
         !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
         !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
@@ -3860,11 +3882,17 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                 ok = false;
                 error = "CKParameter generic vector probe could not create a local vector parameter.";
             } else {
-                ok = ExecuteCKParameterLocalProbe(engine, genericString, local, false, "CKParameter generic string probe", error) &&
+                CKParameterLocal *myselfLocal = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterLocalMyself"), CKPGUID_INT, TRUE);
+                if (!myselfLocal) {
+                    ok = false;
+                    error = "CKParameterLocal myself probe could not create a local int parameter.";
+                } else {
+                    ok = ExecuteCKParameterLocalProbe(engine, genericString, local, false, "CKParameter generic string probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, setString, local, false, "CKParameter SetStringValue probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericSetString, local, false, "CKParameter generic SetValue string probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericInt, intLocal, false, "CKParameter generic int probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericVector, vectorLocal, false, "CKParameter generic vector probe", error) &&
+                     ExecuteCKParameterLocalProbe(engine, localMyselfState, myselfLocal, false, "CKParameterLocal myself-state probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericSetScriptObject, local, true, "CKParameter generic SetValue script-object probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericGetScriptObject, local, true, "CKParameter generic GetValue script-object probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericSetObjectHandle, local, true, "CKParameter generic SetValue object-handle probe", error) &&
@@ -3873,6 +3901,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                      ExecuteCKParameterLocalProbe(engine, genericGetNonPodObject, local, true, "CKParameter generic GetValue non-POD probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, copyValueNull, local, true, "CKParameter CopyValue null probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, compatibleNull, local, true, "CKParameter IsCompatibleWith null probe", error);
+                    context->DestroyObject(myselfLocal);
+                }
                 context->DestroyObject(vectorLocal);
             }
             context->DestroyObject(intLocal);
