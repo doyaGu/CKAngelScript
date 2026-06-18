@@ -2594,6 +2594,39 @@ void RegisterCKBEHAVIORIO_DESC(asIScriptEngine *engine) {
 
 // CKBehaviorPrototype
 
+static bool RejectCKBehaviorPrototypeRawPointerWrite(const NativePointer &ptr, const char *message) {
+    if (ptr.IsNull()) {
+        return false;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return true;
+}
+
+static void SetCKBehaviorPrototypeFunction(CKBehaviorPrototype *self, NativePointer fct) {
+    if (RejectCKBehaviorPrototypeRawPointerWrite(fct, "CKBehaviorPrototype.SetFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->SetFunction(nullptr);
+}
+
+static NativePointer GetCKBehaviorPrototypeFunction(CKBehaviorPrototype *self) {
+    return NativePointer(reinterpret_cast<uintptr_t>(self->GetFunction()));
+}
+
+static void SetCKBehaviorPrototypeCallback(CKBehaviorPrototype *self, NativePointer fct, CKDWORD callbackMask, NativePointer param) {
+    if (RejectCKBehaviorPrototypeRawPointerWrite(fct, "CKBehaviorPrototype.SetBehaviorCallbackFct only accepts a null function NativePointer from script.") ||
+        RejectCKBehaviorPrototypeRawPointerWrite(param, "CKBehaviorPrototype.SetBehaviorCallbackFct only accepts a null parameter NativePointer from script.")) {
+        return;
+    }
+    self->SetBehaviorCallbackFct(nullptr, callbackMask, nullptr);
+}
+
+static NativePointer GetCKBehaviorPrototypeCallback(CKBehaviorPrototype *self) {
+    return NativePointer(reinterpret_cast<uintptr_t>(self->GetBehaviorCallbackFct()));
+}
+
 void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2614,10 +2647,10 @@ void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CK_BEHAVIORPROTOTYPE_FLAGS GetFlags()", asMETHODPR(CKBehaviorPrototype, GetFlags, (), CK_BEHAVIORPROTOTYPE_FLAGS), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetApplyToClassID(CK_CLASSID cid)", asMETHODPR(CKBehaviorPrototype, SetApplyToClassID, (CK_CLASSID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CK_CLASSID GetApplyToClassID()", asMETHODPR(CKBehaviorPrototype, GetApplyToClassID, (), CK_CLASSID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetFunction(NativePointer fct)", asMETHODPR(CKBehaviorPrototype, SetFunction, (CKBEHAVIORFCT), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "NativePointer GetFunction()", asMETHODPR(CKBehaviorPrototype, GetFunction, (), CKBEHAVIORFCT), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetBehaviorCallbackFct(NativePointer fct, CKDWORD callbackMask, NativePointer param)", asMETHODPR(CKBehaviorPrototype, SetBehaviorCallbackFct, (CKBEHAVIORCALLBACKFCT, CKDWORD, void *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "NativePointer GetBehaviorCallbackFct()", asMETHODPR(CKBehaviorPrototype, GetBehaviorCallbackFct, (), CKBEHAVIORCALLBACKFCT), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetFunction(NativePointer fct)", asFUNCTION(SetCKBehaviorPrototypeFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "NativePointer GetFunction()", asFUNCTION(GetCKBehaviorPrototypeFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetBehaviorCallbackFct(NativePointer fct, CKDWORD callbackMask, NativePointer param)", asFUNCTION(SetCKBehaviorPrototypeCallback), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "NativePointer GetBehaviorCallbackFct()", asFUNCTION(GetCKBehaviorPrototypeCallback), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetBehaviorFlags(CK_BEHAVIOR_FLAGS flags)", asMETHODPR(CKBehaviorPrototype, SetBehaviorFlags, (CK_BEHAVIOR_FLAGS), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CK_BEHAVIOR_FLAGS GetBehaviorFlags()", asMETHODPR(CKBehaviorPrototype, GetBehaviorFlags, (), CK_BEHAVIOR_FLAGS), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 

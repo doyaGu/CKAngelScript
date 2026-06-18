@@ -1751,6 +1751,66 @@ bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &erro
     return true;
 }
 
+bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKBehaviorPrototype script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *prototypeType = engine->GetTypeInfoByDecl("CKBehaviorPrototype");
+    if (!prototypeType) {
+        error = "CKBehaviorPrototype self-test could not find the registered type.";
+        return false;
+    }
+    if (prototypeType->GetMethodByDecl("void SetFunction(NativePointer fct)") == nullptr ||
+        prototypeType->GetMethodByDecl("NativePointer GetFunction()") == nullptr ||
+        prototypeType->GetMethodByDecl("void SetBehaviorCallbackFct(NativePointer fct, CKDWORD callbackMask, NativePointer param)") == nullptr ||
+        prototypeType->GetMethodByDecl("NativePointer GetBehaviorCallbackFct()") == nullptr) {
+        error = "CKBehaviorPrototype self-test could not find expected guarded pointer methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBehaviorPrototypeSelfTest";
+    const char *source =
+        "void ProbeCKBehaviorPrototypePointers(CKBehaviorPrototype@ proto) {\n"
+        "  if (proto is null) return;\n"
+        "  NativePointer empty;\n"
+        "  proto.SetFunction(empty);\n"
+        "  NativePointer f = proto.GetFunction();\n"
+        "  proto.SetBehaviorCallbackFct(empty, CKCB_BEHAVIORALL, empty);\n"
+        "  NativePointer cb = proto.GetBehaviorCallbackFct();\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBehaviorPrototype self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-behavior-prototype-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKBehaviorPrototypePointers(CKBehaviorPrototype@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype self-test function was not found.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKMaterialScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKMaterial script self-test requires an AngelScript engine.";
@@ -3338,6 +3398,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKPluginManagerScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKBehaviorPrototypeScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKMaterialScriptSelfTest(engine, error)) {
