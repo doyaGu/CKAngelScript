@@ -598,6 +598,91 @@ bool RunCKAttributeCategoryDescScriptSelfTest(asIScriptEngine *engine, std::stri
     return ok;
 }
 
+bool RunCK2dCurvePointScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CK2dCurvePoint script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *pointType = engine->GetTypeInfoByDecl("CK2dCurvePoint");
+    if (!pointType) {
+        error = "CK2dCurvePoint type is not registered.";
+        return false;
+    }
+    if (!pointType->GetMethodByDecl("NativePointer GetCurve() const")) {
+        error = "CK2dCurvePoint NativePointer GetCurve declaration is not registered.";
+        return false;
+    }
+    if (pointType->GetMethodByDecl("CK2dCurve &GetCurve() const")) {
+        error = "CK2dCurvePoint still exposes the old non-null GetCurve reference declaration.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CK2dCurvePointSelfTest";
+    const char *source =
+        "int ProbeCurvePointDetachedOwner() {\n"
+        "  CK2dCurvePoint point;\n"
+        "  if (!point.GetCurve().IsNull()) return 1;\n"
+        "  point.SetBias(0.25f);\n"
+        "  point.SetTension(0.5f);\n"
+        "  point.SetContinuity(0.75f);\n"
+        "  point.SetLinear(true);\n"
+        "  if (!point.IsLinear()) return 2;\n"
+        "  point.SetLinear(false);\n"
+        "  if (point.IsLinear()) return 3;\n"
+        "  point.UseTCB(false);\n"
+        "  if (point.IsTCB()) return 4;\n"
+        "  point.UseTCB(true);\n"
+        "  if (!point.IsTCB()) return 5;\n"
+        "  point.SetPosition(Vx2DVector(1.0f, 2.0f));\n"
+        "  point.SetInTangent(Vx2DVector(3.0f, 4.0f));\n"
+        "  point.SetOutTangent(Vx2DVector(5.0f, 6.0f));\n"
+        "  point.NotifyUpdate();\n"
+        "  CK2dCurvePoint copied(point);\n"
+        "  if (!copied.GetCurve().IsNull()) return 6;\n"
+        "  CK2dCurvePoint assigned;\n"
+        "  assigned = point;\n"
+        "  if (!assigned.GetCurve().IsNull()) return 7;\n"
+        "  if (assigned.GetBias() != point.GetBias()) return 8;\n"
+        "  if (assigned.GetTension() != point.GetTension()) return 9;\n"
+        "  if (assigned.GetContinuity() != point.GetContinuity()) return 10;\n"
+        "  if (copied.GetPosition().x != 1.0f || copied.GetPosition().y != 2.0f) return 11;\n"
+        "  if (assigned.GetInTangent().x != 3.0f || assigned.GetInTangent().y != 4.0f) return 12;\n"
+        "  if (assigned.GetOutTangent().x != 5.0f || assigned.GetOutTangent().y != 6.0f) return 13;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CK2dCurvePoint self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-2d-curve-point-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CK2dCurvePoint self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CK2dCurvePoint self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCurvePointDetachedOwner()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CK2dCurvePoint self-test function was not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CK2dCurvePoint detached owner probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKAttributeManager script self-test requires CKContext and AngelScript engine.";
@@ -1449,6 +1534,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKAttributeCategoryDescScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCK2dCurvePointScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeManagerScriptSelfTest(context, engine, error)) {

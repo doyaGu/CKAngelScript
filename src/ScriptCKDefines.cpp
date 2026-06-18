@@ -2663,16 +2663,33 @@ void RegisterCKSquare(asIScriptEngine *engine) {
 
 // CK2dCurvePoint
 
+struct CK2dCurvePointStorage {
+    CK2dCurve *Curve;
+    float Tension;
+    float Continuity;
+    float Bias;
+    float Length;
+    Vx2DVector Position;
+    Vx2DVector InTang;
+    Vx2DVector OutTang;
+    Vx2DVector RCurvePos;
+    CKDWORD Flags;
+};
+
+static_assert(sizeof(CK2dCurvePointStorage) == sizeof(CK2dCurvePoint),
+              "CK2dCurvePoint storage mirror must match the SDK layout.");
+
+static CK2dCurvePointStorage &GetCK2dCurvePointStorage(CK2dCurvePoint &point) {
+    return *reinterpret_cast<CK2dCurvePointStorage *>(&point);
+}
+
+static const CK2dCurvePointStorage &GetCK2dCurvePointStorage(const CK2dCurvePoint &point) {
+    return *reinterpret_cast<const CK2dCurvePointStorage *>(&point);
+}
+
 static void CopyDetachedCK2dCurvePoint(const CK2dCurvePoint &source, CK2dCurvePoint &target) {
-    CK2dCurvePoint &mutableSource = const_cast<CK2dCurvePoint &>(source);
-    target.SetBias(source.GetBias());
-    target.SetTension(source.GetTension());
-    target.SetContinuity(source.GetContinuity());
-    target.SetPosition(mutableSource.GetPosition());
-    target.SetInTangent(mutableSource.GetInTangent());
-    target.SetOutTangent(mutableSource.GetOutTangent());
-    target.SetLinear(source.IsLinear() != FALSE);
-    target.UseTCB(source.IsTCB() != FALSE);
+    std::memcpy(&target, &source, sizeof(CK2dCurvePoint));
+    GetCK2dCurvePointStorage(target).Curve = nullptr;
 }
 
 static void ConstructCK2dCurvePointCopy(const CK2dCurvePoint &source, CK2dCurvePoint *self) {
@@ -2687,16 +2704,85 @@ static CK2dCurvePoint &AssignCK2dCurvePoint(CK2dCurvePoint &self, const CK2dCurv
     return self;
 }
 
-static CK2dCurve &GetCK2dCurvePointOwner(const CK2dCurvePoint &point) {
-    static thread_local CK2dCurve dummy;
-    if (CK2dCurve *curve = point.GetCurve()) {
-        return *curve;
+static NativePointer GetCK2dCurvePointOwner(const CK2dCurvePoint &point) {
+    return NativePointer(point.GetCurve());
+}
+
+static void SetCK2dCurvePointBias(CK2dCurvePoint &point, float bias) {
+    if (point.GetCurve()) {
+        point.SetBias(bias);
+        return;
+    }
+    GetCK2dCurvePointStorage(point).Bias = bias;
+}
+
+static void SetCK2dCurvePointTension(CK2dCurvePoint &point, float tension) {
+    if (point.GetCurve()) {
+        point.SetTension(tension);
+        return;
+    }
+    GetCK2dCurvePointStorage(point).Tension = tension;
+}
+
+static void SetCK2dCurvePointContinuity(CK2dCurvePoint &point, float continuity) {
+    if (point.GetCurve()) {
+        point.SetContinuity(continuity);
+        return;
+    }
+    GetCK2dCurvePointStorage(point).Continuity = continuity;
+}
+
+static void SetCK2dCurvePointLinear(CK2dCurvePoint &point, bool linear) {
+    if (point.GetCurve()) {
+        point.SetLinear(linear);
+        return;
     }
 
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        ctx->SetException("CK2dCurvePoint has no owner curve.");
+    CKDWORD &flags = GetCK2dCurvePointStorage(point).Flags;
+    if (linear) {
+        flags |= CK2DCURVEPOINT_LINEAR;
+    } else {
+        flags &= ~CK2DCURVEPOINT_LINEAR;
     }
-    return dummy;
+}
+
+static void UseCK2dCurvePointTCB(CK2dCurvePoint &point, bool use) {
+    CKDWORD &flags = GetCK2dCurvePointStorage(point).Flags;
+    if (use) {
+        flags &= ~CK2DCURVEPOINT_USETANGENTS;
+    } else {
+        flags |= CK2DCURVEPOINT_USETANGENTS;
+    }
+}
+
+static void SetCK2dCurvePointPosition(CK2dCurvePoint &point, const Vx2DVector &position) {
+    if (point.GetCurve()) {
+        point.SetPosition(position);
+        return;
+    }
+    GetCK2dCurvePointStorage(point).Position = position;
+}
+
+static void SetCK2dCurvePointInTangent(CK2dCurvePoint &point, const Vx2DVector &input) {
+    if (point.GetCurve()) {
+        point.SetInTangent(input);
+        return;
+    }
+    GetCK2dCurvePointStorage(point).InTang = input;
+}
+
+static void SetCK2dCurvePointOutTangent(CK2dCurvePoint &point, const Vx2DVector &output) {
+    if (point.GetCurve()) {
+        point.SetOutTangent(output);
+        return;
+    }
+    GetCK2dCurvePointStorage(point).OutTang = output;
+}
+
+static void NotifyCK2dCurvePointUpdate(CK2dCurvePoint &point) {
+    if (point.GetCurve()) {
+        point.NotifyUpdate();
+    }
 }
 
 void RegisterCK2dCurvePoint(asIScriptEngine *engine) {
@@ -2709,30 +2795,30 @@ void RegisterCK2dCurvePoint(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "CK2dCurvePoint &opAssign(const CK2dCurvePoint &in other)", asFUNCTION(AssignCK2dCurvePoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "CK2dCurve &GetCurve() const", asFUNCTION(GetCK2dCurvePointOwner), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "NativePointer GetCurve() const", asFUNCTION(GetCK2dCurvePointOwner), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "float GetBias() const", asMETHOD(CK2dCurvePoint, GetBias), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetBias(float b)", asMETHOD(CK2dCurvePoint, SetBias), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetBias(float b)", asFUNCTION(SetCK2dCurvePointBias), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "float GetTension() const", asMETHOD(CK2dCurvePoint, GetTension), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetTension(float t)", asMETHOD(CK2dCurvePoint, SetTension), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetTension(float t)", asFUNCTION(SetCK2dCurvePointTension), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "float GetContinuity() const", asMETHOD(CK2dCurvePoint, GetContinuity), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetContinuity(float c)", asMETHOD(CK2dCurvePoint, SetContinuity), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetContinuity(float c)", asFUNCTION(SetCK2dCurvePointContinuity), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "bool IsLinear() const", asFUNCTIONPR([](CK2dCurvePoint *self) -> bool { return self->IsLinear(); }, (CK2dCurvePoint *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetLinear(bool linear = false)", asFUNCTIONPR([](CK2dCurvePoint *self, bool linear) { self->SetLinear(linear); }, (CK2dCurvePoint *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetLinear(bool linear = false)", asFUNCTION(SetCK2dCurvePointLinear), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "bool IsTCB() const", asFUNCTIONPR([](CK2dCurvePoint *self) -> bool { return self->IsTCB(); }, (CK2dCurvePoint *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void UseTCB(bool use = true)", asFUNCTIONPR([](CK2dCurvePoint *self, bool use) { self->UseTCB(use); }, (CK2dCurvePoint *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void UseTCB(bool use = true)", asFUNCTION(UseCK2dCurvePointTCB), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "float GetLength() const", asMETHOD(CK2dCurvePoint, GetLength), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "Vx2DVector &GetPosition()", asMETHOD(CK2dCurvePoint, GetPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetPosition(const Vx2DVector &in pos)", asMETHOD(CK2dCurvePoint, SetPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetPosition(const Vx2DVector &in pos)", asFUNCTION(SetCK2dCurvePointPosition), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "Vx2DVector &GetInTangent()", asMETHOD(CK2dCurvePoint, GetInTangent), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurvePoint", "Vx2DVector &GetOutTangent()", asMETHOD(CK2dCurvePoint, GetOutTangent), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetInTangent(const Vx2DVector &in input)", asMETHOD(CK2dCurvePoint, SetInTangent), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetOutTangent(const Vx2DVector &in output)", asMETHOD(CK2dCurvePoint, SetOutTangent), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetInTangent(const Vx2DVector &in input)", asFUNCTION(SetCK2dCurvePointInTangent), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void SetOutTangent(const Vx2DVector &in output)", asFUNCTION(SetCK2dCurvePointOutTangent), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void NotifyUpdate()", asMETHOD(CK2dCurvePoint, NotifyUpdate), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurvePoint", "void NotifyUpdate()", asFUNCTION(NotifyCK2dCurvePointUpdate), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CK2dCurve
