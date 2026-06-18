@@ -138,7 +138,7 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("CKMovieInfo", 0, asOBJ_REF | asOBJ_NOCOUNT); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CKBitmapData", sizeof(CKBitmapData), asOBJ_VALUE | asGetTypeTraits<CKBitmapData>()); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectType("CKVertexBuffer", 0, asOBJ_REF | asOBJ_NOCOUNT); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("CKVertexBuffer", 0, asOBJ_REF); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectType("CKFloorPoint", sizeof(CKFloorPoint), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKFloorPoint>()); CKAS_CHECK_REGISTER(r);
 

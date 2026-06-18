@@ -1977,12 +1977,30 @@ bool RunCKRenderManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
         error = "CKVertexBuffer self-test could not find the registered type.";
         return false;
     }
+    if ((vertexBufferType->GetFlags() & asOBJ_NOCOUNT) != 0) {
+        error = "CKVertexBuffer self-test found stale no-count type registration.";
+        return false;
+    }
+    if (vertexBufferType->GetMethodByDecl("bool get_valid() const") == nullptr ||
+        vertexBufferType->GetMethodByDecl("bool IsValid() const") == nullptr) {
+        error = "CKVertexBuffer self-test could not find validity accessors.";
+        return false;
+    }
     if (vertexBufferType->GetMethodByDecl("bool Lock(CKRenderContext@ ctx, CKDWORD startVertex, CKDWORD vertexCount, VxDrawPrimitiveData &out data, CKLOCKFLAGS lockFlags = CK_LOCK_DEFAULT)") == nullptr) {
         error = "CKVertexBuffer self-test could not find guarded Lock declaration.";
         return false;
     }
     if (vertexBufferType->GetMethodByDecl("VxDrawPrimitiveData &Lock(CKRenderContext@ ctx, CKDWORD startVertex, CKDWORD vertexCount, CKLOCKFLAGS lockFlags = CK_LOCK_DEFAULT)") != nullptr) {
         error = "CKVertexBuffer self-test found stale reference-return Lock declaration.";
+        return false;
+    }
+    if (vertexBufferType->GetMethodByDecl("bool Draw(CKRenderContext@ ctx, VXPRIMITIVETYPE pType, NativePointer indices, int indexCount, CKDWORD startVertex, CKDWORD vertexCount)") != nullptr) {
+        error = "CKVertexBuffer self-test found stale NativePointer Draw declaration.";
+        return false;
+    }
+    if (vertexBufferType->GetMethodByDecl("bool Draw(CKRenderContext@ ctx, VXPRIMITIVETYPE pType, CKDWORD startVertex, CKDWORD vertexCount)") == nullptr ||
+        vertexBufferType->GetMethodByDecl("bool Draw(CKRenderContext@ ctx, VXPRIMITIVETYPE pType, const array<uint16>&in indices, CKDWORD startVertex, CKDWORD vertexCount)") == nullptr) {
+        error = "CKVertexBuffer self-test could not find safe Draw declarations.";
         return false;
     }
 
@@ -1999,10 +2017,18 @@ bool RunCKRenderManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
         "  if (rm is null) return 1;\n"
         "  CKVertexBuffer@ vb = rm.CreateVertexBuffer();\n"
         "  if (vb is null) return 2;\n"
+        "  if (!vb.valid || !vb.IsValid()) { rm.DestroyVertexBuffer(vb); return 3; }\n"
         "  VxDrawPrimitiveData data;\n"
         "  bool locked = vb.Lock(null, 0, 1, data);\n"
-        "  if (locked) { vb.Unlock(null); rm.DestroyVertexBuffer(vb); return 3; }\n"
+        "  if (locked) { vb.Unlock(null); rm.DestroyVertexBuffer(vb); return 4; }\n"
+        "  if (vb.Draw(null, VX_POINTLIST, 0, 0)) { rm.DestroyVertexBuffer(vb); return 5; }\n"
+        "  array<uint16> indices = {0, 1, 2};\n"
+        "  if (vb.Draw(null, VX_TRIANGLELIST, indices, 0, 3)) { rm.DestroyVertexBuffer(vb); return 6; }\n"
         "  rm.DestroyVertexBuffer(vb);\n"
+        "  if (vb.valid || vb.IsValid()) return 7;\n"
+        "  if (vb.Lock(null, 0, 1, data)) return 8;\n"
+        "  if (vb.Draw(null, VX_POINTLIST, 0, 0)) return 9;\n"
+        "  if (vb.Draw(null, VX_TRIANGLELIST, indices, 0, 3)) return 10;\n"
         "  return 0;\n"
         "}\n";
 

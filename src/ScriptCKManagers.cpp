@@ -7,6 +7,7 @@
 #include "ScriptUtils.h"
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
+#include "ScriptCKVertexBuffer.h"
 
 static CKPluginEntry &MissingCKPluginEntry(const char *message) {
     static thread_local CKPluginEntry dummy;
@@ -1266,8 +1267,8 @@ void RegisterCKRenderManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKRenderManager", "CKERROR DestroyRenderContext(CKRenderContext@ context)", asMETHODPR(CKRenderManager, DestroyRenderContext, (CKRenderContext *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderManager", "void RemoveRenderContext(CKRenderContext@ context)", asMETHODPR(CKRenderManager, RemoveRenderContext, (CKRenderContext *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKRenderManager", "CKVertexBuffer@ CreateVertexBuffer()", asMETHODPR(CKRenderManager, CreateVertexBuffer, (), CKVertexBuffer *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderManager", "void DestroyVertexBuffer(CKVertexBuffer@ vb)", asMETHODPR(CKRenderManager, DestroyVertexBuffer, (CKVertexBuffer *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderManager", "CKVertexBuffer@ CreateVertexBuffer()", asFUNCTION(CreateScriptCKVertexBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderManager", "void DestroyVertexBuffer(CKVertexBuffer@ vb)", asFUNCTION(DestroyScriptCKVertexBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKRenderManager", "void SetRenderOptions(const string &in option, CKDWORD value)", asFUNCTIONPR([](CKRenderManager *self, const std::string &option, CKDWORD value) { self->SetRenderOptions(const_cast<CKSTRING>(option.c_str()), value); }, (CKRenderManager *, const std::string &, CKDWORD), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

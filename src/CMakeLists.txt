@@ -18,6 +18,7 @@ set(CKAS_HEADERS
         ScriptCKTypes.h
         ScriptCKEnums.h
         ScriptCKDefines.h
+        ScriptCKVertexBuffer.h
         ScriptXObjectArray.h
         ScriptCKContext.h
         ScriptCKManagers.h
@@ -65,6 +66,7 @@ set(CKAS_SOURCES
         ScriptCKTypes.cpp
         ScriptCKEnums.cpp
         ScriptCKDefines.cpp
+        ScriptCKVertexBuffer.cpp
         ScriptXObjectArray.cpp
         ScriptCKContext.cpp
         ScriptCKManagers.cpp

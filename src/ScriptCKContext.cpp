@@ -8,6 +8,15 @@
 #include "ScriptUtils.h"
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
+#include "ScriptCKVertexBuffer.h"
+
+static CKERROR ClearCKContextAll(CKContext *self) {
+    if (!self) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    InvalidateScriptCKVertexBuffersForManager(self->GetRenderManager());
+    return self->ClearAll();
+}
 
 void RegisterCKContext(asIScriptEngine *engine) {
     int r = 0;
@@ -57,7 +66,7 @@ void RegisterCKContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKContext", "bool IsPlaying()", asFUNCTIONPR([](CKContext *self) -> bool { return self->IsPlaying(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "bool IsReseted()", asFUNCTIONPR([](CKContext *self) -> bool { return self->IsReseted(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Process()", asMETHODPR(CKContext, Process, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKERROR ClearAll()", asMETHODPR(CKContext, ClearAll, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR ClearAll()", asFUNCTION(ClearCKContextAll), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "bool IsInClearAll()", asFUNCTIONPR([](CKContext *self) -> bool { return self->IsInClearAll(); }, (CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Current Level & Scene functions
