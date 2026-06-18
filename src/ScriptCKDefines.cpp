@@ -1726,7 +1726,10 @@ static void RegisterCKDataReaderMembers(asIScriptEngine *engine, const char *nam
     int r = 0;
 
     r = engine->RegisterObjectMethod(name, "void Release()", asMETHODPR(T, Release, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKPluginInfo &GetReaderInfo()", asMETHODPR(T, GetReaderInfo, (), CKPluginInfo*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKPluginInfo GetReaderInfo()", asFUNCTIONPR([](T *self) -> CKPluginInfo {
+        CKPluginInfo *info = self ? self->GetReaderInfo() : nullptr;
+        return info ? *info : CKPluginInfo();
+    }, (T *), CKPluginInfo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetOptionsCount()", asMETHODPR(T, GetOptionsCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "string GetOptionDescription(int i)", asFUNCTIONPR([](T *self, int i) -> std::string { return ScriptStringify(self->GetOptionDescription(i)); }, (T *, int), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK_DATAREADER_FLAGS GetFlags()", asMETHODPR(T, GetFlags, (), CK_DATAREADER_FLAGS), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

@@ -1719,6 +1719,71 @@ bool RunCKModelReaderScriptSelfTest(asIScriptEngine *engine, std::string &error)
     return true;
 }
 
+bool RunCKDataReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKDataReader script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    const char *readerTypes[] = {
+        "CKDataReader",
+        "CKModelReader",
+        "CKBitmapReader",
+        "CKSoundReader",
+        "CKMovieReader",
+    };
+    for (const char *readerTypeName : readerTypes) {
+        asITypeInfo *readerType = engine->GetTypeInfoByDecl(readerTypeName);
+        if (!readerType) {
+            error = std::string("CKDataReader self-test could not find registered type ") + readerTypeName + ".";
+            return false;
+        }
+        if (readerType->GetMethodByDecl("CKPluginInfo GetReaderInfo()") == nullptr) {
+            error = std::string("CKDataReader self-test could not find value GetReaderInfo on ") + readerTypeName + ".";
+            return false;
+        }
+        if (readerType->GetMethodByDecl("CKPluginInfo &GetReaderInfo()") != nullptr) {
+            error = std::string("CKDataReader self-test found stale reference GetReaderInfo on ") + readerTypeName + ".";
+            return false;
+        }
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKDataReaderSelfTest";
+    const char *source =
+        "void ProbeDataReaderInfo(CKDataReader@ data, CKModelReader@ model) {\n"
+        "  if (data !is null) {\n"
+        "    CKPluginInfo info = data.GetReaderInfo();\n"
+        "    info.m_Version = info.m_Version;\n"
+        "  }\n"
+        "  if (model !is null) {\n"
+        "    CKPluginInfo modelInfo = model.GetReaderInfo();\n"
+        "    modelInfo.m_Version = modelInfo.m_Version;\n"
+        "  }\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKDataReader self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-data-reader-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKDataReader self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKDataReader self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKKey script self-test requires an AngelScript engine.";
@@ -2917,6 +2982,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKModelReaderScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKDataReaderScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKPluginManagerScriptSelfTest(engine, error)) {
