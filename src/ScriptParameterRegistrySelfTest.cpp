@@ -919,6 +919,99 @@ bool RunCKDataRowItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     return ok;
 }
 
+bool RunXIntArrayItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XIntArrayIt script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("XIntArrayIt");
+    if (!iteratorType) {
+        error = "XIntArrayIt self-test could not find the registered type.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("bool opEquals(const XIntArrayIt &in other) const") ||
+        !iteratorType->GetMethodByDecl("bool opNotEquals(const XIntArrayIt &in other) const")) {
+        error = "XIntArrayIt self-test could not find iterator comparison methods.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("XIntArray");
+    if (!arrayType) {
+        error = "XIntArrayIt self-test could not find XIntArray.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("XIntArrayIt Begin() const") ||
+        !arrayType->GetMethodByDecl("XIntArrayIt End() const") ||
+        !arrayType->GetMethodByDecl("XIntArrayIt RBegin() const") ||
+        !arrayType->GetMethodByDecl("XIntArrayIt REnd() const")) {
+        error = "XIntArrayIt self-test could not find XIntArray iterator producers.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XIntArrayItSelfTest";
+    const char *source =
+        "int ProbeXIntArrayIt() {\n"
+        "  XIntArray values;\n"
+        "  int first = 19;\n"
+        "  int second = 23;\n"
+        "  values.PushBack(first);\n"
+        "  values.PushBack(second);\n"
+        "  XIntArrayIt begin = values.Begin();\n"
+        "  XIntArrayIt end = values.End();\n"
+        "  if (!begin.IsValid()) return 1;\n"
+        "  if (begin == end) return 2;\n"
+        "  if (begin.Get() != first) return 3;\n"
+        "  XIntArrayIt copied(begin);\n"
+        "  if (!(copied == begin) || copied != begin) return 4;\n"
+        "  ++copied;\n"
+        "  if (copied == begin || !(copied != begin)) return 5;\n"
+        "  if (copied.Get() != second) return 6;\n"
+        "  XIntArrayIt assigned;\n"
+        "  assigned = copied;\n"
+        "  if (!(assigned == copied)) return 7;\n"
+        "  ++assigned;\n"
+        "  if (!(assigned == end) || assigned != end) return 8;\n"
+        "  XIntArrayIt rbegin = values.RBegin();\n"
+        "  XIntArrayIt rend = values.REnd();\n"
+        "  if (rbegin == rend) return 9;\n"
+        "  if (rbegin.Get() != second) return 10;\n"
+        "  --rbegin;\n"
+        "  if (rbegin.Get() != first) return 11;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XIntArrayIt self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xintarrayit-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XIntArrayIt self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XIntArrayIt self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXIntArrayIt()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "XIntArrayIt self-test function was not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XIntArrayIt iterator probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKAttributeDesc script self-test requires an AngelScript engine.";
@@ -4755,6 +4848,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKDataRowItScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXIntArrayItScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeDescScriptSelfTest(engine, error)) {
