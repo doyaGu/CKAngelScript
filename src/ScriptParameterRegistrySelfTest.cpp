@@ -811,6 +811,10 @@ bool RunCKRenderManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
         error = "CKRenderManager self-test could not find GetRenderDriverDescription.";
         return false;
     }
+    if (renderManagerType->GetMethodByDecl("CKRenderContext@ CreateRenderContext(WIN_HANDLE window, int driver = 0, CKRECT &in rect = void, bool fullscreen = false, int bpp = -1, int zbpp = -1, int stencilBpp = -1, int refreshRate = 0)") == nullptr) {
+        error = "CKRenderManager self-test could not find CreateRenderContext with optional rect.";
+        return false;
+    }
 
     constexpr const char *moduleName = "__CKAS_CKRenderManagerSelfTest";
     const char *source =
