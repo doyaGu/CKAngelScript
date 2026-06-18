@@ -1534,6 +1534,45 @@ void RegisterCKObjectAnimation(asIScriptEngine *engine) {
 }
 
 template <typename T>
+static CKAnimation *CreateMergedCKAnimation(T *self, CKAnimation *anim2, bool dynamic) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAnimation.CreateMergedAnimation called with a null animation.");
+        }
+        return nullptr;
+    }
+    if (!anim2) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAnimation.CreateMergedAnimation requires a non-null animation.");
+        }
+        return nullptr;
+    }
+    return self->CreateMergedAnimation(anim2, dynamic);
+}
+
+template <typename T>
+static float CreateCKAnimationTransition(T *self,
+                                         CKAnimation *input,
+                                         CKAnimation *output,
+                                         CKDWORD outTransitionMode,
+                                         float length,
+                                         float frameTo) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAnimation.CreateTransition called with a null animation.");
+        }
+        return 0.0f;
+    }
+    if (!input || !output) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAnimation.CreateTransition requires non-null input and output animations.");
+        }
+        return 0.0f;
+    }
+    return self->CreateTransition(input, output, outTransitionMode, length, frameTo);
+}
+
+template <typename T>
 static void RegisterCKAnimationMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -1583,13 +1622,13 @@ static void RegisterCKAnimationMembers(asIScriptEngine *engine, const char *name
     r = engine->RegisterObjectMethod(name, "float GetMergeFactor()", asMETHODPR(T, GetMergeFactor, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetMergeFactor(float frame)", asMETHODPR(T, SetMergeFactor, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsMerged()", asFUNCTIONPR([](T *self) -> bool { return self->IsMerged(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKAnimation@ CreateMergedAnimation(CKAnimation@ anim2, bool dynamic = false)", asFUNCTIONPR([](T *self, CKAnimation *anim2, bool dynamic) { return self->CreateMergedAnimation(anim2, dynamic); }, (T *, CKAnimation *, bool), CKAnimation *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKAnimation@ CreateMergedAnimation(CKAnimation@ anim2, bool dynamic = false)", asFUNCTIONPR(CreateMergedCKAnimation<T>, (T *, CKAnimation *, bool), CKAnimation *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Set current step
     r = engine->RegisterObjectMethod(name, "void SetCurrentStep(float step)", asMETHODPR(T, SetCurrentStep, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Transition animation
-    r = engine->RegisterObjectMethod(name, "float CreateTransition(CKAnimation@ input, CKAnimation@ output, CKDWORD outTransitionMode, float length = 6.0, float frameTo = 0)", asMETHODPR(T, CreateTransition, (CKAnimation*, CKAnimation*, CKDWORD, float, float), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float CreateTransition(CKAnimation@ input, CKAnimation@ output, CKDWORD outTransitionMode, float length = 6.0, float frameTo = 0)", asFUNCTIONPR(CreateCKAnimationTransition<T>, (T *, CKAnimation *, CKAnimation *, CKDWORD, float, float), float), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKAnimation") != 0) {
         RegisterCKObjectCast<T, CKAnimation>(engine, name, "CKAnimation");

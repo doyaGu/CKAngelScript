@@ -2235,6 +2235,54 @@ bool RunCKObjectAnimationScriptSelfTest(asIScriptEngine *engine, std::string &er
     return true;
 }
 
+bool RunCKAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKAnimation script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *animationType = engine->GetTypeInfoByDecl("CKAnimation");
+    if (!animationType) {
+        error = "CKAnimation self-test could not find the registered type.";
+        return false;
+    }
+    if (animationType->GetMethodByDecl("CKAnimation@ CreateMergedAnimation(CKAnimation@ anim2, bool dynamic = false)") == nullptr ||
+        animationType->GetMethodByDecl("float CreateTransition(CKAnimation@ input, CKAnimation@ output, CKDWORD outTransitionMode, float length = 6.0, float frameTo = 0)") == nullptr) {
+        error = "CKAnimation self-test could not find expected guarded methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKAnimationSelfTest";
+    const char *source =
+        "void ProbeAnimationSurface(CKAnimation@ anim, CKAnimation@ other) {\n"
+        "  if (anim is null || other is null) return;\n"
+        "  CKAnimation@ merged = anim.CreateMergedAnimation(other);\n"
+        "  anim.CreateTransition(anim, other, 0);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKAnimation self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-animation-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKAnimation self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKAnimation self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKKeyedAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKKeyedAnimation script self-test requires an AngelScript engine.";
@@ -2599,6 +2647,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKObjectAnimationScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKAnimationScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKKeyedAnimationScriptSelfTest(engine, error)) {
