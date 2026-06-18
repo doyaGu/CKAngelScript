@@ -1930,6 +1930,44 @@ void RegisterCKAttributeVal(asIScriptEngine *engine) {
 // CKAttributeDesc
 
 #if CKVERSION == 0x13022002
+static bool RejectCKAttributeDescRawPointerWrite(const NativePointer &ptr, const char *message) {
+    if (ptr.IsNull()) {
+        return false;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return true;
+}
+
+static void SetCKAttributeDescCallbackFct(CKAttributeDesc *self, NativePointer ptr) {
+    if (RejectCKAttributeDescRawPointerWrite(ptr, "CKAttributeDesc.CallbackFct only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->CallbackFct = nullptr;
+}
+
+static void SetCKAttributeDescCallbackArg(CKAttributeDesc *self, NativePointer ptr) {
+    if (RejectCKAttributeDescRawPointerWrite(ptr, "CKAttributeDesc.CallbackArg only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->CallbackArg = nullptr;
+}
+
+static void SetCKAttributeDescDefaultValuePointer(CKAttributeDesc *self, NativePointer ptr) {
+    if (RejectCKAttributeDescRawPointerWrite(ptr, "CKAttributeDesc.DefaultValuePointer only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->DefaultValue = nullptr;
+}
+
+static void SetCKAttributeDescCreatorDll(CKAttributeDesc *self, NativePointer ptr) {
+    if (RejectCKAttributeDescRawPointerWrite(ptr, "CKAttributeDesc.CreatorDll only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->CreatorDll = nullptr;
+}
+
 void RegisterCKAttributeDesc(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1952,17 +1990,17 @@ void RegisterCKAttributeDesc(asIScriptEngine *engine) {
     }, (CKAttributeDesc *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKAttributeDesc", "NativePointer get_CallbackFct() const", asFUNCTIONPR([](const CKAttributeDesc *self) { return NativePointer(self->CallbackFct); }, (const CKAttributeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKAttributeDesc", "void set_CallbackFct(NativePointer ptr)", asFUNCTIONPR([](CKAttributeDesc *self, NativePointer ptr) { self->CallbackFct = reinterpret_cast<CKATTRIBUTECALLBACK>(ptr.Get()); }, (CKAttributeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeDesc", "void set_CallbackFct(NativePointer ptr)", asFUNCTION(SetCKAttributeDescCallbackFct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKAttributeDesc", "NativePointer get_CallbackArg() const", asFUNCTIONPR([](const CKAttributeDesc *self) { return NativePointer(self->CallbackArg); }, (const CKAttributeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKAttributeDesc", "void set_CallbackArg(NativePointer ptr)", asFUNCTIONPR([](CKAttributeDesc *self, NativePointer ptr) { self->CallbackArg = ptr.Get(); }, (CKAttributeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeDesc", "void set_CallbackArg(NativePointer ptr)", asFUNCTION(SetCKAttributeDescCallbackArg), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKAttributeDesc", "string get_DefaultValue() const", asFUNCTIONPR([](const CKAttributeDesc *self) -> std::string { return ScriptStringify(self->DefaultValue); }, (const CKAttributeDesc *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKAttributeDesc", "NativePointer get_DefaultValuePointer() const", asFUNCTIONPR([](const CKAttributeDesc *self) { return NativePointer(self->DefaultValue); }, (const CKAttributeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKAttributeDesc", "void set_DefaultValuePointer(NativePointer ptr)", asFUNCTIONPR([](CKAttributeDesc *self, NativePointer ptr) { self->DefaultValue = static_cast<CKSTRING>(ptr.Get()); }, (CKAttributeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeDesc", "void set_DefaultValuePointer(NativePointer ptr)", asFUNCTION(SetCKAttributeDescDefaultValuePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKAttributeDesc", "NativePointer get_CreatorDll() const", asFUNCTIONPR([](const CKAttributeDesc *self) { return NativePointer(self->CreatorDll); }, (const CKAttributeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKAttributeDesc", "void set_CreatorDll(NativePointer ptr)", asFUNCTIONPR([](CKAttributeDesc *self, NativePointer ptr) { self->CreatorDll = reinterpret_cast<CKPluginEntry *>(ptr.Get()); }, (CKAttributeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeDesc", "void set_CreatorDll(NativePointer ptr)", asFUNCTION(SetCKAttributeDescCreatorDll), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKAttributeCategoryDesc
