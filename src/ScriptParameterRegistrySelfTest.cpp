@@ -1015,6 +1015,25 @@ bool RunCKGridManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine,
     return true;
 }
 
+bool RunCKFloorManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKFloorManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *floorManagerType = engine->GetTypeInfoByDecl("CKFloorManager");
+    if (!floorManagerType) {
+        error = "CKFloorManager self-test could not find the registered type.";
+        return false;
+    }
+    if (floorManagerType->GetMethodByDecl("bool ReadAttributeValues(CK3dEntity@ ent, CKDWORD &out geo = void, bool &out moving = void, int &out type = void, bool &out hiera = void, bool &out first = void)") == nullptr) {
+        error = "CKFloorManager self-test could not find guarded ReadAttributeValues declaration.";
+        return false;
+    }
+
+    return true;
+}
+
 bool RunCKInterfaceManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKInterfaceManager script self-test requires CKContext and AngelScript engine.";
@@ -1390,6 +1409,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKGridManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKFloorManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKInterfaceManagerScriptSelfTest(context, engine, error)) {

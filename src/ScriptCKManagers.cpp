@@ -257,6 +257,43 @@ static int DoCKInterfaceRenameDialog(CKInterfaceManager *self, std::string &name
     return result;
 }
 
+static bool ReadCKFloorAttributeValues(CKFloorManager *self,
+                                       CK3dEntity *entity,
+                                       CKDWORD *geo,
+                                       bool *moving,
+                                       int *type,
+                                       bool *hiera,
+                                       bool *first) {
+    if (!self) {
+        SetActiveScriptException("CKFloorManager.ReadAttributeValues requires a valid manager.");
+        return false;
+    }
+    if (!entity) {
+        SetActiveScriptException("CKFloorManager.ReadAttributeValues requires a non-null entity.");
+        return false;
+    }
+
+    CKBOOL nativeMoving = FALSE;
+    CKBOOL nativeHiera = FALSE;
+    CKBOOL nativeFirst = FALSE;
+    const CKBOOL result = self->ReadAttributeValues(entity,
+                                                    geo,
+                                                    moving ? &nativeMoving : nullptr,
+                                                    type,
+                                                    hiera ? &nativeHiera : nullptr,
+                                                    first ? &nativeFirst : nullptr);
+    if (moving) {
+        *moving = nativeMoving != FALSE;
+    }
+    if (hiera) {
+        *hiera = nativeHiera != FALSE;
+    }
+    if (first) {
+        *first = nativeFirst != FALSE;
+    }
+    return result != FALSE;
+}
+
 static VxDriverDesc &MissingVxDriverDesc(const char *message) {
     static thread_local VxDriverDesc dummy{};
     dummy = VxDriverDesc{};
@@ -873,7 +910,7 @@ void RegisterCKFloorManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKFloorManager", "int GetCacheSize()", asMETHODPR(CKFloorManager, GetCacheSize, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKFloorManager", "void SetCacheSize(int size)", asMETHODPR(CKFloorManager, SetCacheSize, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKFloorManager", "bool ReadAttributeValues(CK3dEntity@ ent, CKDWORD &out geo = void, bool &out moving = void, int &out type = void, bool &out hiera = void, bool &out first = void)", asFUNCTIONPR([](CKFloorManager *self, CK3dEntity *ent, CKDWORD *geo, bool *moving, int *type, bool *hiera, bool *first) -> bool { CKBOOL m = FALSE; CKBOOL h = FALSE; CKBOOL f = FALSE; bool ret = self->ReadAttributeValues(ent, geo, moving ? &m : nullptr, type, hiera ? &h : nullptr, first ? &f : nullptr); if (moving) *moving = m != FALSE; if (hiera) *hiera = h != FALSE; if (first) *first = f != FALSE; return ret; }, (CKFloorManager *, CK3dEntity *, CKDWORD *, bool *, int *, bool *, bool *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKFloorManager", "bool ReadAttributeValues(CK3dEntity@ ent, CKDWORD &out geo = void, bool &out moving = void, int &out type = void, bool &out hiera = void, bool &out first = void)", asFUNCTIONPR(ReadCKFloorAttributeValues, (CKFloorManager *, CK3dEntity *, CKDWORD *, bool *, int *, bool *, bool *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKFloorManager", "int GetFloorAttribute()", asMETHODPR(CKFloorManager, GetFloorAttribute, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKFloorManager", "bool ConstrainToFloor(const VxVector &in oldPos, const VxVector &in position, float radius, VxVector &out oPosition, int excludeAttribute = -1)", asFUNCTIONPR([](CKFloorManager *self, const VxVector &oldPos, const VxVector &position, float radius, VxVector &oPosition, int excludeAttribute) -> bool { return self->ConstrainToFloor(oldPos, position, radius, &oPosition, static_cast<CKAttributeType>(excludeAttribute)); }, (CKFloorManager *, const VxVector &, const VxVector &, float, VxVector &, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
