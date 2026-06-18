@@ -3,6 +3,7 @@
 #include "angelscript.h"
 
 #include "CKAttributeManager.h"
+#include "CKStateChunk.h"
 #include "CKParameterOperation.h"
 #include "CKParameterManager.h"
 #include "ScriptParameterRegistry.h"
@@ -400,6 +401,54 @@ bool ExecuteCKParameterOutDestinationProbe(asIScriptEngine *engine,
     }
     if (r >= 0) {
         r = scriptContext->SetArgObject(2, destinationB);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCKStateChunkProbe(asIScriptEngine *engine,
+                              asIScriptFunction *function,
+                              CKStateChunk *chunk,
+                              CKContext *context,
+                              bool expectException,
+                              const char *label,
+                              std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, chunk);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, context);
     }
     if (r >= 0) {
         r = scriptContext->Execute();
@@ -3492,6 +3541,94 @@ CKGUID FindCKParameterOperationSelfTestGuid(CKContext *context) {
     return CKGUID();
 }
 
+bool RunCKStateChunkScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKStateChunk script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *stateChunkType = engine->GetTypeInfoByDecl("CKStateChunk");
+    if (!stateChunkType) {
+        error = "CKStateChunk self-test could not find the registered type.";
+        return false;
+    }
+    if (stateChunkType->GetMethodByDecl("int ReadString(string &out str)") == nullptr ||
+        stateChunkType->GetMethodByDecl("CKObject@ ReadObject(CKContext@ context)") == nullptr ||
+        stateChunkType->GetMethodByDecl("const XObjectPointerArray &ReadXObjectArray(CKContext@ context)") == nullptr) {
+        error = "CKStateChunk self-test could not find the guarded read declarations.";
+        return false;
+    }
+    if (stateChunkType->GetMethodByDecl("void AddChunkAndDelete(CKStateChunk@ chunk)") != nullptr) {
+        error = "CKStateChunk self-test found stale AddChunkAndDelete declaration.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKStateChunkSelfTest";
+    const char *source =
+        "int ProbeCKStateChunkReadString(CKStateChunk@ chunk, CKContext@ context) {\n"
+        "  if (chunk is null || context is null) return 2;\n"
+        "  chunk.StartRead();\n"
+        "  string value;\n"
+        "  int count = chunk.ReadString(value);\n"
+        "  if (count <= 0) return 3;\n"
+        "  if (value != \"ckas-statechunk\") return 4;\n"
+        "  return 0;\n"
+        "}\n"
+        "void ProbeCKStateChunkReadObjectNull(CKStateChunk@ chunk, CKContext@ context) {\n"
+        "  chunk.ReadObject(null);\n"
+        "}\n"
+        "void ProbeCKStateChunkReadXObjectArrayNull(CKStateChunk@ chunk, CKContext@ context) {\n"
+        "  chunk.ReadXObjectArray(null);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKStateChunk self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-statechunk-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKStateChunk self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKStateChunk self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *readString = module->GetFunctionByDecl("int ProbeCKStateChunkReadString(CKStateChunk@, CKContext@)");
+    asIScriptFunction *readObjectNull = module->GetFunctionByDecl("void ProbeCKStateChunkReadObjectNull(CKStateChunk@, CKContext@)");
+    asIScriptFunction *readXObjectArrayNull = module->GetFunctionByDecl("void ProbeCKStateChunkReadXObjectArrayNull(CKStateChunk@, CKContext@)");
+    if (!readString || !readObjectNull || !readXObjectArrayNull) {
+        engine->DiscardModule(moduleName);
+        error = "CKStateChunk self-test function was not found.";
+        return false;
+    }
+
+    CKStateChunk *chunk = CreateCKStateChunk(CKCID_OBJECT, nullptr);
+    if (!chunk) {
+        engine->DiscardModule(moduleName);
+        error = "CKStateChunk self-test could not create a native chunk.";
+        return false;
+    }
+
+    chunk->StartWrite();
+    chunk->WriteString(const_cast<CKSTRING>("ckas-statechunk"));
+    chunk->CloseChunk();
+
+    const bool ok = ExecuteCKStateChunkProbe(engine, readString, chunk, context, false, "CKStateChunk ReadString probe", error) &&
+                    ExecuteCKStateChunkProbe(engine, readObjectNull, chunk, context, true, "CKStateChunk ReadObject null context probe", error) &&
+                    ExecuteCKStateChunkProbe(engine, readXObjectArrayNull, chunk, context, true, "CKStateChunk ReadXObjectArray null context probe", error);
+
+    DeleteCKStateChunk(chunk);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameter script self-test requires CKContext and AngelScript engine.";
@@ -4339,6 +4476,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKMaterialScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKStateChunkScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKParameterScriptSelfTest(context, engine, error)) {

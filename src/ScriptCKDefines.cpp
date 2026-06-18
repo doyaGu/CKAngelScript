@@ -4142,6 +4142,44 @@ void RegisterCKFileObject(asIScriptEngine *engine) {
 
 // CKStateChunk
 
+static CKObject *ReadCKStateChunkObject(CKStateChunk *self, CKContext *context) {
+    if (!self || !context) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKStateChunk.ReadObject requires a non-null CKContext.");
+        return nullptr;
+    }
+    return self->ReadObject(context);
+}
+
+static const XObjectPointerArray &ReadCKStateChunkXObjectArray(CKStateChunk *self, CKContext *context) {
+    static XObjectPointerArray empty;
+    if (!self || !context) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKStateChunk.ReadXObjectArray requires a non-null CKContext.");
+        empty.Clear();
+        return empty;
+    }
+    return self->ReadXObjectArray(context);
+}
+
+static int ReadCKStateChunkString(CKStateChunk *self, std::string &str) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKStateChunk.ReadString requires a valid state chunk.");
+        return 0;
+    }
+
+    CKSTRING buffer = nullptr;
+    const int result = self->ReadString(&buffer);
+    if (buffer) {
+        str = buffer;
+        CKDeletePointer(buffer);
+    } else {
+        str.clear();
+    }
+    return result;
+}
+
 void RegisterCKStateChunk(asIScriptEngine *engine) {
     int r = 0;
 
@@ -4224,7 +4262,7 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "int ReadManagerIntSequence()", asMETHODPR(CKStateChunk, ReadManagerIntSequence, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "CK_ID ReadObjectID()", asMETHODPR(CKStateChunk, ReadObjectID, (), CK_ID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKStateChunk", "CKObject@ ReadObject(CKContext@ context)", asMETHODPR(CKStateChunk, ReadObject, (CKContext *), CKObject *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "CKObject@ ReadObject(CKContext@ context)", asFUNCTION(ReadCKStateChunkObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "uint8 ReadByte()", asMETHODPR(CKStateChunk, ReadByte, (), CKBYTE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "uint16 ReadWord()", asMETHODPR(CKStateChunk, ReadWord, (), CKWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -4241,7 +4279,7 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "int ReadArray_LEndian16(NativePointer &out array)", asFUNCTIONPR([](CKStateChunk *self, NativePointer *array) { void *ptr = nullptr; int result = self->ReadArray_LEndian16(&ptr); *array = ptr; return result; }, (CKStateChunk *, NativePointer *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod("CKStateChunk", "const XObjectArray &ReadXObjectArray()", asMETHODPR(CKStateChunk, ReadXObjectArray, (), const XObjectArray &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKStateChunk", "const XObjectPointerArray &ReadXObjectArray(CKContext@ context)", asMETHODPR(CKStateChunk, ReadXObjectArray, (CKContext *), const XObjectPointerArray &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "const XObjectPointerArray &ReadXObjectArray(CKContext@ context)", asFUNCTION(ReadCKStateChunkXObjectArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadObjectArray(CKObjectArray@ objArray)", asMETHODPR(CKStateChunk, ReadObjectArray, (CKObjectArray *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "CKObjectArray@ ReadObjectArray()", asMETHODPR(CKStateChunk, ReadObjectArray, (), CKObjectArray *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -4260,7 +4298,7 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "CKStateChunk@ ReadSubChunk(CK_READSUBCHUNK_FLAGS flags = CK_RSC_DEFAULT)", asMETHODPR(CKStateChunk, ReadSubChunk, (CK_READSUBCHUNK_FLAGS), CKStateChunk *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod("CKStateChunk", "int ReadBuffer(NativePointer &out buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer *buffer) { void *ptr = nullptr; int result = self->ReadBuffer(&ptr); *buffer = ptr; return result; }, (CKStateChunk *, NativePointer *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKStateChunk", "int ReadString(string &out str)", asFUNCTIONPR([](CKStateChunk *self, std::string &str) { CKSTRING buffer = nullptr; int result = self->ReadString(&buffer); if (buffer) { str = buffer; } return result; }, (CKStateChunk *, std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "int ReadString(string &out str)", asFUNCTION(ReadCKStateChunkString), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "BITMAP_HANDLE ReadBitmap()", asMETHODPR(CKStateChunk, ReadBitmap, (), BITMAP_HANDLE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
@@ -4273,7 +4311,6 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "int RemapParameterInt(CKGUID parameterType, NativePointer conversionTable, int nbEntries)", asFUNCTIONPR([](CKStateChunk *self, CKGUID parameterType, NativePointer conversionTable, int nbEntries) { return self->RemapParameterInt(parameterType, reinterpret_cast<int*>(conversionTable.Get()), nbEntries); }, (CKStateChunk *, CKGUID, NativePointer, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void AddChunk(CKStateChunk@ chunk)", asMETHODPR(CKStateChunk, AddChunk, (CKStateChunk *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKStateChunk", "void AddChunkAndDelete(CKStateChunk@ chunk)", asMETHODPR(CKStateChunk, AddChunkAndDelete, (CKStateChunk *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "int ConvertToBuffer(NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer buffer) { return self->ConvertToBuffer(buffer.Get()); }, (CKStateChunk *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "bool ConvertFromBuffer(NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer buffer) -> bool { return self->ConvertFromBuffer(buffer.Get()); }, (CKStateChunk *, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
