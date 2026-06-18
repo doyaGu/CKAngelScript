@@ -1561,6 +1561,56 @@ bool RunCKBitmapReaderScriptSelfTest(asIScriptEngine *engine, std::string &error
     return true;
 }
 
+bool RunCKSoundReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKSoundReader script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *soundReaderType = engine->GetTypeInfoByDecl("CKSoundReader");
+    if (!soundReaderType) {
+        error = "CKSoundReader self-test could not find the registered type.";
+        return false;
+    }
+    if (soundReaderType->GetMethodByDecl("CKERROR GetDataBuffer(NativePointer &out buf, int &out size)") == nullptr ||
+        soundReaderType->GetMethodByDecl("CKERROR ReadMemory(NativePointer memory, int size)") == nullptr) {
+        error = "CKSoundReader self-test could not find expected memory methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKSoundReaderSelfTest";
+    const char *source =
+        "void ProbeSoundReaderMemory(CKSoundReader@ reader, NativePointer memory, int size) {\n"
+        "  NativePointer buffer;\n"
+        "  int bufferSize = 0;\n"
+        "  if (reader is null) return;\n"
+        "  reader.GetDataBuffer(buffer, bufferSize);\n"
+        "  reader.ReadMemory(memory, size);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKSoundReader self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-sound-reader-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSoundReader self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSoundReader self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKKey script self-test requires an AngelScript engine.";
@@ -2750,6 +2800,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKBitmapReaderScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKSoundReaderScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKPluginManagerScriptSelfTest(engine, error)) {
