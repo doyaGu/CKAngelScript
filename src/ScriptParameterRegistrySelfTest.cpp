@@ -232,6 +232,50 @@ bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKParameterInProbe(asIScriptEngine *engine,
+                               asIScriptFunction *function,
+                               CKParameterIn *parameter,
+                               bool expectException,
+                               const char *label,
+                               std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, parameter);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAttributeDescProbe(asIScriptEngine *engine,
                                  asIScriptFunction *function,
                                  bool expectException,
@@ -3383,6 +3427,45 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  XString value;\n"
         "  local.GetValue(value);\n"
         "}\n"
+        "int ProbeCKParameterInGenericStringValue(CKParameterIn@ pin) {\n"
+        "  if (pin is null) return 2;\n"
+        "  string value;\n"
+        "  if (pin.GetValue(value) != CK_OK) return 3;\n"
+        "  if (value != \"input text\") return 4;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKParameterInGenericIntValue(CKParameterIn@ pin) {\n"
+        "  if (pin is null) return 2;\n"
+        "  int value = 0;\n"
+        "  if (pin.GetValue(value) != CK_OK) return 3;\n"
+        "  if (value != 2468) return 4;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKParameterInGenericVectorValue(CKParameterIn@ pin) {\n"
+        "  if (pin is null) return 2;\n"
+        "  VxVector value;\n"
+        "  if (pin.GetValue(value) != CK_OK) return 3;\n"
+        "  if (value.x != 4.0f || value.y != 5.0f || value.z != 6.0f) return 4;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKParameterInGenericMissingSource(CKParameterIn@ pin) {\n"
+        "  if (pin is null) return 2;\n"
+        "  int value = 123;\n"
+        "  if (pin.GetValue(value) != CKERR_NOTINITIALIZED) return 3;\n"
+        "  return 0;\n"
+        "}\n"
+        "void ProbeCKParameterInGenericGetScriptObject(CKParameterIn@ pin) {\n"
+        "  CKParameterGenericRejected rejected;\n"
+        "  pin.GetValue(rejected);\n"
+        "}\n"
+        "void ProbeCKParameterInGenericGetObjectHandle(CKParameterIn@ pin) {\n"
+        "  CKObject@ obj;\n"
+        "  pin.GetValue(@obj);\n"
+        "}\n"
+        "void ProbeCKParameterInGenericGetNonPodObject(CKParameterIn@ pin) {\n"
+        "  XString value;\n"
+        "  pin.GetValue(value);\n"
+        "}\n"
         "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
         "  local.CopyValue(null);\n"
         "}\n"
@@ -3421,11 +3504,20 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *genericGetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterGenericGetObjectHandle(CKParameterLocal@)");
     asIScriptFunction *genericSetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterGenericSetNonPodObject(CKParameterLocal@)");
     asIScriptFunction *genericGetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterGenericGetNonPodObject(CKParameterLocal@)");
+    asIScriptFunction *pinString = module->GetFunctionByDecl("int ProbeCKParameterInGenericStringValue(CKParameterIn@)");
+    asIScriptFunction *pinInt = module->GetFunctionByDecl("int ProbeCKParameterInGenericIntValue(CKParameterIn@)");
+    asIScriptFunction *pinVector = module->GetFunctionByDecl("int ProbeCKParameterInGenericVectorValue(CKParameterIn@)");
+    asIScriptFunction *pinMissingSource = module->GetFunctionByDecl("int ProbeCKParameterInGenericMissingSource(CKParameterIn@)");
+    asIScriptFunction *pinGetScriptObject = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetScriptObject(CKParameterIn@)");
+    asIScriptFunction *pinGetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetObjectHandle(CKParameterIn@)");
+    asIScriptFunction *pinGetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetNonPodObject(CKParameterIn@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
         !genericSetScriptObject || !genericGetScriptObject || !genericSetObjectHandle || !genericGetObjectHandle ||
-        !genericSetNonPodObject || !genericGetNonPodObject || !copyValueNull || !compatibleNull) {
+        !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
+        !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
+        !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -3471,6 +3563,57 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         }
     }
     context->DestroyObject(local);
+
+    if (ok) {
+        CKParameterLocal *sourceString = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterInSourceString"), CKPGUID_STRING, TRUE);
+        CKParameterLocal *sourceInt = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterInSourceInt"), CKPGUID_INT, TRUE);
+        CKParameterLocal *sourceVector = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterInSourceVector"), CKPGUID_VECTOR, TRUE);
+        CKParameterIn *inputString = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInString"), CKPGUID_STRING, TRUE);
+        CKParameterIn *inputInt = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInInt"), CKPGUID_INT, TRUE);
+        CKParameterIn *inputVector = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInVector"), CKPGUID_VECTOR, TRUE);
+        CKParameterIn *inputMissing = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInMissing"), CKPGUID_INT, TRUE);
+        if (!sourceString || !sourceInt || !sourceVector || !inputString || !inputInt || !inputVector || !inputMissing) {
+            ok = false;
+            error = "CKParameterIn generic probe could not create its native parameters.";
+        } else {
+            int intValue = 2468;
+            VxVector vectorValue;
+            vectorValue.x = 4.0f;
+            vectorValue.y = 5.0f;
+            vectorValue.z = 6.0f;
+            if (sourceString->SetStringValue(const_cast<CKSTRING>("input text")) != CK_OK ||
+                sourceInt->SetValue(&intValue, sizeof(intValue)) != CK_OK ||
+                sourceVector->SetValue(&vectorValue, sizeof(vectorValue)) != CK_OK ||
+                inputString->SetDirectSource(sourceString) != CK_OK ||
+                inputInt->SetDirectSource(sourceInt) != CK_OK ||
+                inputVector->SetDirectSource(sourceVector) != CK_OK) {
+                ok = false;
+                error = "CKParameterIn generic probe could not initialize its native sources.";
+            } else {
+                ok = ExecuteCKParameterInProbe(engine, pinString, inputString, false, "CKParameterIn generic string probe", error) &&
+                     ExecuteCKParameterInProbe(engine, pinInt, inputInt, false, "CKParameterIn generic int probe", error) &&
+                     ExecuteCKParameterInProbe(engine, pinVector, inputVector, false, "CKParameterIn generic vector probe", error) &&
+                     ExecuteCKParameterInProbe(engine, pinMissingSource, inputMissing, false, "CKParameterIn generic missing-source probe", error) &&
+                     ExecuteCKParameterInProbe(engine, pinGetScriptObject, inputString, true, "CKParameterIn generic script-object probe", error) &&
+                     ExecuteCKParameterInProbe(engine, pinGetObjectHandle, inputString, true, "CKParameterIn generic object-handle probe", error) &&
+                     ExecuteCKParameterInProbe(engine, pinGetNonPodObject, inputString, true, "CKParameterIn generic non-POD probe", error);
+            }
+        }
+        if (inputMissing)
+            context->DestroyObject(inputMissing);
+        if (inputVector)
+            context->DestroyObject(inputVector);
+        if (inputInt)
+            context->DestroyObject(inputInt);
+        if (inputString)
+            context->DestroyObject(inputString);
+        if (sourceVector)
+            context->DestroyObject(sourceVector);
+        if (sourceInt)
+            context->DestroyObject(sourceInt);
+        if (sourceString)
+            context->DestroyObject(sourceString);
+    }
 
     engine->DiscardModule(moduleName);
     return ok;

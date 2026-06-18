@@ -205,13 +205,22 @@ void RegisterCKInterfaceObjectManager(asIScriptEngine *engine) {
     RegisterCKObjectMembers<CKInterfaceObjectManager>(engine, "CKInterfaceObjectManager");
 }
 
+static int ReadCKParameterStringValue(CKParameter *self, std::string &value, bool update);
+
 static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     asIScriptContext *ctx = asGetActiveContext();
 
     auto *self = static_cast<CKParameterIn *>(gen->GetObject());
     const int typeId = gen->GetArgTypeId(0);
-    void *buf = *static_cast<void **>(gen->GetAddressOfArg(0));
+    void *buf = gen->GetArgAddress(0);
+
+    if (!self || !buf) {
+        if (ctx)
+            ctx->SetException("CKParameterIn.GetValue requires a valid output reference");
+        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+        return;
+    }
 
     CKParameter *p = self->GetRealSource();
     if (!p) {
@@ -244,11 +253,8 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
 
         if (strcmp(type->GetName(), "string") == 0) {
             std::string &str = *static_cast<std::string *>(buf);
-            CKSTRING value = (CKSTRING) p->GetReadDataPtr();
-            if (value)
-                str = value;
-            else
-                err = CKERR_INVALIDPARAMETER;
+            const int read = ReadCKParameterStringValue(p, str, true);
+            err = read < 0 ? static_cast<CKERROR>(read) : CK_OK;
         } else {
             int size = engine->GetSizeOfPrimitiveType(typeId);
             if (size == 0) {
