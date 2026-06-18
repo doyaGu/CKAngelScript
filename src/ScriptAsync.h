@@ -47,6 +47,8 @@ public:
     int TypeId() const { return m_TypeId; }
 
     void Clear();
+    void EnumReferences(asIScriptEngine *engine) const;
+    void ReleaseReferences();
     void Store(asIScriptEngine *engine, void *address, int typeId);
     bool CopyTo(void *address, int typeId, std::string &error) const;
     bool CopyFrom(const ScriptAsyncStoredValue &other, std::string &error);
@@ -78,10 +80,13 @@ public:
     bool IsDone() const;
     std::string Error() const;
     bool Cancel();
+    void EnumReferences(asIScriptEngine *engine);
+    void ReleaseAllReferences(asIScriptEngine *engine);
 
     ScriptAsyncTaskState State() const { return m_State; }
     ScriptAsyncTaskKind Kind() const { return m_Kind; }
     int SubTypeId() const { return m_SubTypeId; }
+    void NotifyGarbageCollector();
 
     void SetDelayFrames(int frames);
     void SetFunction(asIScriptFunction *function);

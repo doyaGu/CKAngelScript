@@ -221,7 +221,7 @@ std::string ContextExceptionMessage(asIScriptContext *ctx, const char *label) {
 }
 
 bool ScriptAsyncTemplateCallback(asITypeInfo *type, bool &dontGarbageCollect) {
-    dontGarbageCollect = true;
+    dontGarbageCollect = false;
     return type != nullptr;
 }
 
@@ -517,6 +517,33 @@ void ScriptAsyncStoredValue::Clear() {
     m_Object = nullptr;
 }
 
+void ScriptAsyncStoredValue::EnumReferences(asIScriptEngine *engine) const {
+    if (!engine || !m_HasValue || !m_Object || !m_Engine || !(m_TypeId & asTYPEID_MASK_OBJECT)) {
+        return;
+    }
+
+    asITypeInfo *type = ScriptAsyncInternal::TypeInfoById(m_Engine, m_TypeId);
+    if (!type) {
+        return;
+    }
+
+    const asQWORD flags = type->GetFlags();
+    if ((m_TypeId & asTYPEID_OBJHANDLE) != 0) {
+        if ((flags & asOBJ_GC) != 0) {
+            engine->GCEnumCallback(m_Object);
+        }
+        return;
+    }
+
+    if ((flags & asOBJ_VALUE) != 0 && (flags & asOBJ_GC) != 0) {
+        engine->ForwardGCEnumReferences(m_Object, type);
+    }
+}
+
+void ScriptAsyncStoredValue::ReleaseReferences() {
+    Clear();
+}
+
 void ScriptAsyncStoredValue::Store(asIScriptEngine *engine, void *address, int typeId) {
     Clear();
     m_Engine = engine;
@@ -709,6 +736,53 @@ bool ScriptAsyncTaskBase::Cancel() {
     m_Error = "Async task was cancelled.";
     SetState(ScriptAsyncTaskState::Cancelled);
     return true;
+}
+
+void ScriptAsyncTaskBase::EnumReferences(asIScriptEngine *engine) {
+    if (!engine) {
+        return;
+    }
+
+    if (m_Function) {
+        engine->GCEnumCallback(m_Function);
+    }
+    m_Result.EnumReferences(engine);
+    for (ScriptAsyncTaskBase *child : m_Children) {
+        if (child) {
+            engine->GCEnumCallback(child);
+        }
+    }
+}
+
+void ScriptAsyncTaskBase::ReleaseAllReferences(asIScriptEngine *) {
+    ReleaseContext();
+    if (m_Function) {
+        m_Function->Release();
+        m_Function = nullptr;
+    }
+    ReleaseChildren();
+    ReleaseBridgeTasks();
+    m_Result.ReleaseReferences();
+}
+
+void ScriptAsyncTaskBase::NotifyGarbageCollector() {
+    if (!m_Engine) {
+        return;
+    }
+    const char *subtypeDecl = m_SubTypeId == asTYPEID_VOID ? "void" : m_Engine->GetTypeDeclaration(m_SubTypeId, true);
+    if (!subtypeDecl || subtypeDecl[0] == '\0') {
+        return;
+    }
+    const std::string taskDecl = fmt::format("AsyncTask<{}>", subtypeDecl);
+    asITypeInfo *type = m_Engine->GetTypeInfoByDecl(taskDecl.c_str());
+    if (!type) {
+        asITypeInfo *subtype = ScriptAsyncInternal::TypeInfoById(m_Engine, m_SubTypeId);
+        asIScriptModule *module = subtype ? subtype->GetModule() : nullptr;
+        type = module ? module->GetTypeInfoByDecl(taskDecl.c_str()) : nullptr;
+    }
+    if (type && (type->GetFlags() & asOBJ_GC) != 0) {
+        m_Engine->NotifyGarbageCollectorOfNewObject(this, type);
+    }
 }
 
 void ScriptAsyncTaskBase::SetDelayFrames(int frames) {
@@ -1186,6 +1260,7 @@ asIScriptEngine *ScriptAsyncScheduler::GetEngine() const {
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateDelay(int frames) {
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::Delay, asTYPEID_VOID);
+    task->NotifyGarbageCollector();
     task->SetDelayFrames(frames);
     Track(task);
     return task;
@@ -1193,12 +1268,14 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateDelay(int frames) {
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateManualTask(int subtypeId) {
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::Manual, subtypeId);
+    task->NotifyGarbageCollector();
     Track(task);
     return task;
 }
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateScriptTask(asIScriptFunction *function, int subtypeId) {
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::Script, subtypeId);
+    task->NotifyGarbageCollector();
     task->SetFunction(function);
     Track(task);
     return task;
@@ -1208,6 +1285,7 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateAggregate(ScriptAsyncTaskKind k
                                                            int subtypeId,
                                                            const std::vector<ScriptAsyncTaskBase *> &children) {
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), kind, subtypeId);
+    task->NotifyGarbageCollector();
     task->SetChildren(children);
     Track(task);
     return task;
@@ -1215,6 +1293,7 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateAggregate(ScriptAsyncTaskKind k
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateBBTask(BBTask *taskHandle, const CKBehaviorContext *context, int inputIndex) {
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::BBTask, asTYPEID_VOID);
+    task->NotifyGarbageCollector();
     task->SetBBTask(taskHandle, context, inputIndex);
     Track(task);
     return task;
@@ -1222,6 +1301,7 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateBBTask(BBTask *taskHandle, cons
 
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateGraphTask(GraphTask *taskHandle, const CKBehaviorContext *context) {
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::GraphTask, asTYPEID_VOID);
+    task->NotifyGarbageCollector();
     task->SetGraphTask(taskHandle, context);
     Track(task);
     return task;
@@ -1348,10 +1428,15 @@ void RegisterScriptAsync(asIScriptEngine *engine) {
     assert(engine != nullptr);
     int r = 0;
 
-    r = engine->RegisterObjectType("AsyncTask<class T>", 0, asOBJ_REF | asOBJ_TEMPLATE); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("AsyncTask<class T>", 0, asOBJ_REF | asOBJ_GC | asOBJ_TEMPLATE); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_TEMPLATE_CALLBACK, "bool f(int&in, bool&out)", asFUNCTION(ScriptAsyncInternal::ScriptAsyncTemplateCallback), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_ADDREF, "void f()", asMETHOD(ScriptAsyncTaskBase, AddRef), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_RELEASE, "void f()", asMETHOD(ScriptAsyncTaskBase, Release), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_GETREFCOUNT, "int f()", asMETHOD(ScriptAsyncTaskBase, GetRefCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_SETGCFLAG, "void f()", asMETHOD(ScriptAsyncTaskBase, SetGCFlag), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_GETGCFLAG, "bool f()", asMETHOD(ScriptAsyncTaskBase, GetGCFlag), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_ENUMREFS, "void f(int&in)", asMETHOD(ScriptAsyncTaskBase, EnumReferences), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_RELEASEREFS, "void f(int&in)", asMETHOD(ScriptAsyncTaskBase, ReleaseAllReferences), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("AsyncTask<T>", "bool IsPending() const", asMETHOD(ScriptAsyncTaskBase, IsPending), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("AsyncTask<T>", "bool IsRunning() const", asMETHOD(ScriptAsyncTaskBase, IsRunning), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("AsyncTask<T>", "bool IsCompleted() const", asMETHOD(ScriptAsyncTaskBase, IsCompleted), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

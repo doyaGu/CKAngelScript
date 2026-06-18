@@ -189,8 +189,95 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
 
-    WriteAsyncSelfTestStage("delay");
+    WriteAsyncSelfTestStage("gc-flags");
+    asITypeInfo *voidTaskType = engine->GetTypeInfoByDecl("AsyncTask<void>");
+    asITypeInfo *intTaskType = engine->GetTypeInfoByDecl("AsyncTask<int>");
+    if (!voidTaskType || !intTaskType) {
+        error = "Async self-test could not resolve instantiated AsyncTask<T> types.";
+        return false;
+    }
+    if ((voidTaskType->GetFlags() & asOBJ_GC) == 0 || (intTaskType->GetFlags() & asOBJ_GC) == 0) {
+        error = "AsyncTask<T> template instances are not registered as garbage collected.";
+        return false;
+    }
+
     ScriptAsyncScheduler scheduler(ScriptManager::GetManager(context));
+
+    WriteAsyncSelfTestStage("gc-cycle");
+    CKAngelScriptApi api = CKAngelScriptApi::Get(context);
+    if (!api.IsValid()) {
+        error = "Async GC self-test could not retrieve CKAngelScript.";
+        return false;
+    }
+    CKAngelScriptResult result = {};
+    if (api->CompileModule("__CKAS_AsyncGCCycleSelfTest",
+                           "class __CKAS_AsyncCycleBox {\n"
+                           "  AsyncTask<__CKAS_AsyncCycleBox@>@ task;\n"
+                           "}\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Async GC cycle self-test compile failed.";
+        return false;
+    }
+
+    asIScriptModule *cycleModule = engine->GetModule("__CKAS_AsyncGCCycleSelfTest", asGM_ONLY_IF_EXISTS);
+    asITypeInfo *boxType = cycleModule ? cycleModule->GetTypeInfoByDecl("__CKAS_AsyncCycleBox") : nullptr;
+    const int boxHandleType = cycleModule ? cycleModule->GetTypeIdByDecl("__CKAS_AsyncCycleBox@") : 0;
+    const int boxTaskType = cycleModule ? cycleModule->GetTypeIdByDecl("AsyncTask<__CKAS_AsyncCycleBox@>@") : 0;
+    if (!boxType || boxHandleType == 0 || boxTaskType == 0 || boxType->GetPropertyCount() != 1) {
+        api->UnloadModule("__CKAS_AsyncGCCycleSelfTest", nullptr);
+        error = "Async GC cycle self-test could not resolve cycle test types.";
+        return false;
+    }
+    int boxTaskPropertyType = 0;
+    boxType->GetProperty(0, nullptr, &boxTaskPropertyType);
+    if (boxTaskPropertyType != boxTaskType) {
+        api->UnloadModule("__CKAS_AsyncGCCycleSelfTest", nullptr);
+        error = "Async GC cycle self-test resolved an unexpected Box.task type.";
+        return false;
+    }
+
+    asIScriptObject *box = static_cast<asIScriptObject *>(engine->CreateScriptObject(boxType));
+    if (!box) {
+        api->UnloadModule("__CKAS_AsyncGCCycleSelfTest", nullptr);
+        error = "Async GC cycle self-test could not create the script object.";
+        return false;
+    }
+    ScriptAsyncTaskBase *cycleTask = new ScriptAsyncTaskBase(&scheduler, engine, ScriptAsyncTaskKind::Manual, boxHandleType);
+    cycleTask->NotifyGarbageCollector();
+    void *boxHandle = box;
+    cycleTask->CompleteFromAddress(&boxHandle, boxHandleType);
+
+    ScriptAsyncTaskBase **taskSlot = static_cast<ScriptAsyncTaskBase **>(box->GetAddressOfProperty(0));
+    if (!taskSlot) {
+        cycleTask->Release();
+        box->Release();
+        api->UnloadModule("__CKAS_AsyncGCCycleSelfTest", nullptr);
+        error = "Async GC cycle self-test could not access Box.task.";
+        return false;
+    }
+    *taskSlot = cycleTask;
+    cycleTask->AddRef();
+
+    asUINT destroyedBefore = 0;
+    engine->GetGCStatistics(nullptr, &destroyedBefore);
+    cycleTask->Release();
+    box->Release();
+    for (int i = 0; i < 4; ++i) {
+        engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    }
+    asUINT destroyedAfter = 0;
+    engine->GetGCStatistics(nullptr, &destroyedAfter);
+    if (destroyedAfter <= destroyedBefore) {
+        api->UnloadModule("__CKAS_AsyncGCCycleSelfTest", nullptr);
+        error = "Async GC cycle self-test did not destroy the AsyncTask/script-object cycle.";
+        return false;
+    }
+    api->UnloadModule("__CKAS_AsyncGCCycleSelfTest", nullptr);
+
+    WriteAsyncSelfTestStage("delay");
     ScriptAsyncTaskBase *delay = scheduler.CreateDelay(2);
     if (!delay || delay->IsDone()) {
         error = "Async delay self-test created an already completed Delay(2).";
