@@ -2180,6 +2180,61 @@ bool RunCKMorphControllerScriptSelfTest(asIScriptEngine *engine, std::string &er
     return true;
 }
 
+bool RunCKObjectAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKObjectAnimation script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *animationType = engine->GetTypeInfoByDecl("CKObjectAnimation");
+    if (!animationType) {
+        error = "CKObjectAnimation self-test could not find the registered type.";
+        return false;
+    }
+    if (animationType->GetMethodByDecl("bool EvaluateMorphTarget(float time, int vertexCount, NativePointer vertices, CKDWORD vStride, NativePointer normals)") == nullptr ||
+        animationType->GetMethodByDecl("bool Compare(CKObjectAnimation@ anim, float threshold = 0.0)") == nullptr ||
+        animationType->GetMethodByDecl("bool ShareDataFrom(CKObjectAnimation@ anim)") == nullptr ||
+        animationType->GetMethodByDecl("CKObjectAnimation@ CreateMergedAnimation(CKObjectAnimation@ subAnim2, bool dynamic = false)") == nullptr ||
+        animationType->GetMethodByDecl("void CreateTransition(float length, CKObjectAnimation@ animIn, float stepFrom, CKObjectAnimation@ animOut, float stepTo, bool veloc, bool dontTurn, CKAnimKey&in startingSet = void)") == nullptr ||
+        animationType->GetMethodByDecl("void Clone(CKObjectAnimation@ anim)") == nullptr) {
+        error = "CKObjectAnimation self-test could not find expected guarded methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKObjectAnimationSelfTest";
+    const char *source =
+        "void ProbeObjectAnimationSurface(CKObjectAnimation@ anim, CKObjectAnimation@ other, NativePointer vertices, NativePointer normals) {\n"
+        "  if (anim is null || other is null) return;\n"
+        "  anim.EvaluateMorphTarget(0.0f, 0, vertices, 12, normals);\n"
+        "  anim.Compare(other);\n"
+        "  anim.ShareDataFrom(other);\n"
+        "  CKObjectAnimation@ merged = anim.CreateMergedAnimation(other);\n"
+        "  anim.Clone(other);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKObjectAnimation self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-object-animation-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKObjectAnimation self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKObjectAnimation self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBezierPositionKey script self-test requires an AngelScript engine.";
@@ -2477,6 +2532,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKMorphControllerScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKObjectAnimationScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKBezierPositionKeyScriptSelfTest(engine, error)) {

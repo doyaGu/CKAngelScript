@@ -1345,6 +1345,111 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKBehavior", "void SetPrototypeGuid(CKGUID ckguid)", asMETHODPR(CKBehavior, SetPrototypeGuid, (CKGUID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
+static void SetCKObjectAnimationException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+static bool EvaluateCKObjectAnimationMorphTarget(CKObjectAnimation *self,
+                                                 float time,
+                                                 int vertexCount,
+                                                 NativePointer vertices,
+                                                 CKDWORD vStride,
+                                                 NativePointer normals) {
+    if (!self) {
+        SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget called with a null animation.");
+        return false;
+    }
+    if (vertexCount < 0) {
+        SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget requires a non-negative vertex count.");
+        return false;
+    }
+    if (vertexCount > 0 && !vertices.Get()) {
+        SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget requires a vertex output buffer when vertexCount is positive.");
+        return false;
+    }
+    if (vertexCount > 0 && vStride < sizeof(VxVector)) {
+        SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget vertex stride is smaller than VxVector.");
+        return false;
+    }
+    return self->EvaluateMorphTarget(time,
+                                     vertexCount,
+                                     reinterpret_cast<VxVector *>(vertices.Get()),
+                                     vStride,
+                                     reinterpret_cast<VxCompressedVector *>(normals.Get())) != FALSE;
+}
+
+static bool CompareCKObjectAnimation(CKObjectAnimation *self, CKObjectAnimation *anim, float threshold) {
+    if (!self) {
+        SetCKObjectAnimationException("CKObjectAnimation.Compare called with a null animation.");
+        return false;
+    }
+    if (!anim) {
+        SetCKObjectAnimationException("CKObjectAnimation.Compare requires a non-null animation.");
+        return false;
+    }
+    return self->Compare(anim, threshold) != FALSE;
+}
+
+static bool ShareCKObjectAnimationDataFrom(CKObjectAnimation *self, CKObjectAnimation *anim) {
+    if (!self) {
+        SetCKObjectAnimationException("CKObjectAnimation.ShareDataFrom called with a null animation.");
+        return false;
+    }
+    if (!anim) {
+        SetCKObjectAnimationException("CKObjectAnimation.ShareDataFrom requires a non-null animation.");
+        return false;
+    }
+    return self->ShareDataFrom(anim) != FALSE;
+}
+
+static CKObjectAnimation *CreateMergedCKObjectAnimation(CKObjectAnimation *self,
+                                                       CKObjectAnimation *subAnim2,
+                                                       bool dynamic) {
+    if (!self) {
+        SetCKObjectAnimationException("CKObjectAnimation.CreateMergedAnimation called with a null animation.");
+        return nullptr;
+    }
+    if (!subAnim2) {
+        SetCKObjectAnimationException("CKObjectAnimation.CreateMergedAnimation requires a non-null animation.");
+        return nullptr;
+    }
+    return self->CreateMergedAnimation(subAnim2, dynamic);
+}
+
+static void CreateCKObjectAnimationTransition(CKObjectAnimation *self,
+                                             float length,
+                                             CKObjectAnimation *animIn,
+                                             float stepFrom,
+                                             CKObjectAnimation *animOut,
+                                             float stepTo,
+                                             bool veloc,
+                                             bool dontTurn,
+                                             CKAnimKey *startingSet) {
+    if (!self) {
+        SetCKObjectAnimationException("CKObjectAnimation.CreateTransition called with a null animation.");
+        return;
+    }
+    if (!animIn || !animOut) {
+        SetCKObjectAnimationException("CKObjectAnimation.CreateTransition requires non-null input and output animations.");
+        return;
+    }
+    self->CreateTransition(length, animIn, stepFrom, animOut, stepTo, veloc, dontTurn, startingSet);
+}
+
+static void CloneCKObjectAnimation(CKObjectAnimation *self, CKObjectAnimation *anim) {
+    if (!self) {
+        SetCKObjectAnimationException("CKObjectAnimation.Clone called with a null animation.");
+        return;
+    }
+    if (!anim) {
+        SetCKObjectAnimationException("CKObjectAnimation.Clone requires a non-null animation.");
+        return;
+    }
+    self->Clone(anim);
+}
+
 void RegisterCKObjectAnimation(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -1366,7 +1471,7 @@ void RegisterCKObjectAnimation(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateScale(float time, VxVector &out scl)", asFUNCTIONPR([](CKObjectAnimation *self, float time, VxVector &scl) -> bool { return self->EvaluateScale(time, scl); }, (CKObjectAnimation *, float, VxVector &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateRotation(float time, VxQuaternion &out rot)", asFUNCTIONPR([](CKObjectAnimation *self, float time, VxQuaternion &rot) -> bool { return self->EvaluateRotation(time, rot); }, (CKObjectAnimation *, float, VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateScaleAxis(float time, VxQuaternion &out scaleAxis)", asFUNCTIONPR([](CKObjectAnimation *self, float time, VxQuaternion &scaleAxis) -> bool { return self->EvaluateScaleAxis(time, scaleAxis); }, (CKObjectAnimation *, float, VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateMorphTarget(float time, int vertexCount, NativePointer vertices, CKDWORD vStride, NativePointer normals)", asFUNCTIONPR([](CKObjectAnimation *self, float time, int vertexCount, NativePointer vertices, CKDWORD vStride, NativePointer normals) -> bool { return self->EvaluateMorphTarget(time, vertexCount, reinterpret_cast<VxVector *>(vertices.Get()), vStride, reinterpret_cast<VxCompressedVector *>(normals.Get())); }, (CKObjectAnimation *, float, int, NativePointer, CKDWORD, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateMorphTarget(float time, int vertexCount, NativePointer vertices, CKDWORD vStride, NativePointer normals)", asFUNCTION(EvaluateCKObjectAnimationMorphTarget), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateKeys(float step, VxQuaternion &out rot, VxVector &out pos, VxVector &out scale, VxQuaternion &out scaleRot = void)", asFUNCTIONPR([](CKObjectAnimation *self, float step, VxQuaternion *rot, VxVector *pos, VxVector *scale, VxQuaternion *scaleRot) -> bool { return self->EvaluateKeys(step, rot, pos, scale, scaleRot); }, (CKObjectAnimation *, float, VxQuaternion *, VxVector *, VxVector *, VxQuaternion *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Info functions
@@ -1384,8 +1489,8 @@ void RegisterCKObjectAnimation(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectAnimation", "void AddScaleAxisKey(float timeStep, VxQuaternion &in sclAxis)", asMETHODPR(CKObjectAnimation, AddScaleAxisKey, (float, VxQuaternion*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Comparison and sharing functions
-    r = engine->RegisterObjectMethod("CKObjectAnimation", "bool Compare(CKObjectAnimation@ anim, float threshold = 0.0)", asFUNCTIONPR([](CKObjectAnimation *self, CKObjectAnimation *anim, float threshold) -> bool { return self->Compare(anim, threshold); }, (CKObjectAnimation *, CKObjectAnimation *, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKObjectAnimation", "bool ShareDataFrom(CKObjectAnimation@ anim)", asFUNCTIONPR([](CKObjectAnimation *self, CKObjectAnimation *anim) -> bool { return self->ShareDataFrom(anim); }, (CKObjectAnimation *, CKObjectAnimation *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectAnimation", "bool Compare(CKObjectAnimation@ anim, float threshold = 0.0)", asFUNCTION(CompareCKObjectAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectAnimation", "bool ShareDataFrom(CKObjectAnimation@ anim)", asFUNCTION(ShareCKObjectAnimationDataFrom), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectAnimation", "CKObjectAnimation@ Shared()", asMETHODPR(CKObjectAnimation, Shared, (), CKObjectAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Flags
@@ -1400,7 +1505,7 @@ void RegisterCKObjectAnimation(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectAnimation", "float GetMergeFactor()", asMETHODPR(CKObjectAnimation, GetMergeFactor, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectAnimation", "void SetMergeFactor(float factor)", asMETHODPR(CKObjectAnimation, SetMergeFactor, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectAnimation", "bool IsMerged()", asFUNCTIONPR([](CKObjectAnimation *self) -> bool { return self->IsMerged(); }, (CKObjectAnimation *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKObjectAnimation", "CKObjectAnimation@ CreateMergedAnimation(CKObjectAnimation@ subAnim2, bool dynamic = false)", asFUNCTIONPR([](CKObjectAnimation *self, CKObjectAnimation *subAnim2, bool dynamic) { return self->CreateMergedAnimation(subAnim2, dynamic); }, (CKObjectAnimation *, CKObjectAnimation *, bool), CKObjectAnimation *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectAnimation", "CKObjectAnimation@ CreateMergedAnimation(CKObjectAnimation@ subAnim2, bool dynamic = false)", asFUNCTION(CreateMergedCKObjectAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Length
     r = engine->RegisterObjectMethod("CKObjectAnimation", "void SetLength(float nbFrame)", asMETHODPR(CKObjectAnimation, SetLength, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1422,10 +1527,10 @@ void RegisterCKObjectAnimation(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectAnimation", "int GetMorphVertexCount()", asMETHODPR(CKObjectAnimation, GetMorphVertexCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Transitions
-    r = engine->RegisterObjectMethod("CKObjectAnimation", "void CreateTransition(float length, CKObjectAnimation@ animIn, float stepFrom, CKObjectAnimation@ animOut, float stepTo, bool veloc, bool dontTurn, CKAnimKey &in startingSet = void)", asFUNCTIONPR([](CKObjectAnimation *self, float length, CKObjectAnimation *animIn, float stepFrom, CKObjectAnimation *animOut, float stepTo, bool veloc, bool dontTurn, CKAnimKey *startingSet) { self->CreateTransition(length, animIn, stepFrom, animOut, stepTo, veloc, dontTurn, startingSet); }, (CKObjectAnimation *, float, CKObjectAnimation *, float, CKObjectAnimation *, float, bool, bool, CKAnimKey *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectAnimation", "void CreateTransition(float length, CKObjectAnimation@ animIn, float stepFrom, CKObjectAnimation@ animOut, float stepTo, bool veloc, bool dontTurn, CKAnimKey &in startingSet = void)", asFUNCTION(CreateCKObjectAnimationTransition), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Clone
-    r = engine->RegisterObjectMethod("CKObjectAnimation", "void Clone(CKObjectAnimation@ anim)", asMETHODPR(CKObjectAnimation, Clone, (CKObjectAnimation *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectAnimation", "void Clone(CKObjectAnimation@ anim)", asFUNCTION(CloneCKObjectAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 template <typename T>
