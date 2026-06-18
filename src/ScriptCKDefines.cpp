@@ -1375,19 +1375,129 @@ void RegisterCKEnumStruct(asIScriptEngine *engine) {
 }
 
 // CKFlagsStruct
+
+static std::mutex g_CKFlagsStructOwnedMutex;
+static std::unordered_set<CKFlagsStruct *> g_CKFlagsStructOwnedValues;
+
+static void TrackCKFlagsStructValue(CKFlagsStruct *self) {
+    std::lock_guard<std::mutex> lock(g_CKFlagsStructOwnedMutex);
+    g_CKFlagsStructOwnedValues.insert(self);
+}
+
+static bool UntrackCKFlagsStructValue(CKFlagsStruct *self) {
+    std::lock_guard<std::mutex> lock(g_CKFlagsStructOwnedMutex);
+    return g_CKFlagsStructOwnedValues.erase(self) > 0;
+}
+
+static bool IsTrackedCKFlagsStructValue(CKFlagsStruct *self) {
+    std::lock_guard<std::mutex> lock(g_CKFlagsStructOwnedMutex);
+    return g_CKFlagsStructOwnedValues.find(self) != g_CKFlagsStructOwnedValues.end();
+}
+
+static void ReleaseCKFlagsStructStorage(CKFlagsStruct *self) {
+    if (!self) {
+        return;
+    }
+
+    if (self->Desc) {
+        for (int i = 0; i < self->NbData; ++i) {
+            CKDeletePointer(self->Desc[i]);
+        }
+        delete[] self->Desc;
+    }
+    delete[] self->Vals;
+
+    self->NbData = 0;
+    self->Vals = nullptr;
+    self->Desc = nullptr;
+}
+
+static void CopyCKFlagsStructStorage(CKFlagsStruct *self, const CKFlagsStruct &other) {
+    self->NbData = 0;
+    self->Vals = nullptr;
+    self->Desc = nullptr;
+
+    if (other.NbData <= 0) {
+        return;
+    }
+
+    self->NbData = other.NbData;
+    self->Vals = new int[other.NbData];
+    self->Desc = new CKSTRING[other.NbData];
+    for (int i = 0; i < other.NbData; ++i) {
+        self->Vals[i] = other.Vals ? other.Vals[i] : 0;
+        self->Desc[i] = other.Desc && other.Desc[i] ? CKStrdup(other.Desc[i]) : nullptr;
+    }
+}
+
+static void ConstructCKFlagsStruct(CKFlagsStruct *self) {
+    self->NbData = 0;
+    self->Vals = nullptr;
+    self->Desc = nullptr;
+    TrackCKFlagsStructValue(self);
+}
+
+static void ConstructCKFlagsStructCopy(const CKFlagsStruct &other, CKFlagsStruct *self) {
+    CopyCKFlagsStructStorage(self, other);
+    TrackCKFlagsStructValue(self);
+}
+
+static void DestructCKFlagsStruct(CKFlagsStruct *self) {
+    if (UntrackCKFlagsStructValue(self)) {
+        ReleaseCKFlagsStructStorage(self);
+    }
+}
+
+static CKFlagsStruct &AssignCKFlagsStruct(CKFlagsStruct *self, const CKFlagsStruct &other) {
+    if (self == &other) {
+        return *self;
+    }
+
+    if (!IsTrackedCKFlagsStructValue(self)) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("Cannot assign to a borrowed CKFlagsStruct descriptor.");
+        }
+        return *self;
+    }
+
+    ReleaseCKFlagsStructStorage(self);
+    CopyCKFlagsStructStorage(self, other);
+    return *self;
+}
+
+static int GetCKFlagsStructValue(const CKFlagsStruct *self, int index) {
+    if (!self || index < 0 || index >= self->NbData || !self->Vals) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKFlagsStruct flag index out of range.");
+        }
+        return 0;
+    }
+    return self->Vals[index];
+}
+
+static std::string GetCKFlagsStructDescription(const CKFlagsStruct *self, int index) {
+    if (!self || index < 0 || index >= self->NbData || !self->Desc) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKFlagsStruct flag index out of range.");
+        }
+        return {};
+    }
+    return ScriptStringify(self->Desc[index]);
+}
+
 void RegisterCKFlagsStruct(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectBehaviour("CKFlagsStruct", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKFlagsStruct *self) { new(self) CKFlagsStruct(); }, (CKFlagsStruct*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKFlagsStruct", asBEHAVE_CONSTRUCT, "void f(const CKFlagsStruct &in other)", asFUNCTIONPR([](const CKFlagsStruct &info, CKFlagsStruct *self) { new(self) CKFlagsStruct(info); }, (const CKFlagsStruct &, CKFlagsStruct *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKFlagsStruct", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKFlagsStruct), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKFlagsStruct", asBEHAVE_CONSTRUCT, "void f(const CKFlagsStruct &in other)", asFUNCTION(ConstructCKFlagsStructCopy), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKFlagsStruct", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKFlagsStruct *self) { self->~CKFlagsStruct(); }, (CKFlagsStruct *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKFlagsStruct", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructCKFlagsStruct), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKFlagsStruct", "CKFlagsStruct &opAssign(const CKFlagsStruct &in other)", asMETHODPR(CKFlagsStruct, operator=, (const CKFlagsStruct &), CKFlagsStruct &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKFlagsStruct", "CKFlagsStruct &opAssign(const CKFlagsStruct &in other)", asFUNCTION(AssignCKFlagsStruct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKFlagsStruct", "int GetNumFlags() const", asMETHOD(CKFlagsStruct, GetNumFlags), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKFlagsStruct", "int GetFlagValue(int index) const", asMETHOD(CKFlagsStruct, GetFlagValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKFlagsStruct", "string GetFlagDescription(int index) const", asFUNCTIONPR([](CKFlagsStruct *self, int index) -> std::string { return self->GetFlagDescription(index); }, (CKFlagsStruct *, int), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKFlagsStruct", "int GetFlagValue(int index) const", asFUNCTION(GetCKFlagsStructValue), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKFlagsStruct", "string GetFlagDescription(int index) const", asFUNCTION(GetCKFlagsStructDescription), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKStructStruct

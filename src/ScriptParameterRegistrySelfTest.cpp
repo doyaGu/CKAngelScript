@@ -55,6 +55,50 @@ bool ExecuteCKEnumStructProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKFlagsStructProbe(asIScriptEngine *engine,
+                               asIScriptFunction *function,
+                               CKFlagsStruct &input,
+                               bool expectException,
+                               const char *label,
+                               std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, &input);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool RunCKEnumStructScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKEnumStruct script self-test requires an AngelScript engine.";
@@ -115,6 +159,70 @@ bool RunCKEnumStructScriptSelfTest(asIScriptEngine *engine, std::string &error) 
 
     bool ok = ExecuteCKEnumStructProbe(engine, probe, input, nullptr, false, "CKEnumStruct copy probe", error) &&
               ExecuteCKEnumStructProbe(engine, outOfRange, input, nullptr, true, "CKEnumStruct out-of-range probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCKFlagsStructScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKFlagsStruct script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKFlagsStructSelfTest";
+    const char *source =
+        "int ProbeFlagsStruct(const CKFlagsStruct &in input) {\n"
+        "  if (input.GetNumFlags() != 2) return 1;\n"
+        "  if (input.GetFlagValue(0) != 1 || input.GetFlagValue(1) != 2) return 2;\n"
+        "  if (input.GetFlagDescription(0) != \"Alpha\" || input.GetFlagDescription(1) != \"Beta\") return 3;\n"
+        "  CKFlagsStruct copied(input);\n"
+        "  if (copied.GetNumFlags() != 2 || copied.GetFlagValue(1) != 2) return 4;\n"
+        "  CKFlagsStruct assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.GetNumFlags() != 2 || assigned.GetFlagDescription(0) != \"Alpha\") return 5;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeFlagsStructOutOfRange(const CKFlagsStruct &in input) {\n"
+        "  return input.GetFlagValue(2);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKFlagsStruct self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-flags-struct-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKFlagsStruct self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKFlagsStruct self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeFlagsStruct(const CKFlagsStruct &in)");
+    asIScriptFunction *outOfRange = module->GetFunctionByDecl("int ProbeFlagsStructOutOfRange(const CKFlagsStruct &in)");
+    if (!probe || !outOfRange) {
+        engine->DiscardModule(moduleName);
+        error = "CKFlagsStruct self-test functions were not found.";
+        return false;
+    }
+
+    int values[2] = {1, 2};
+    CKSTRING descriptions[2] = {const_cast<CKSTRING>("Alpha"), const_cast<CKSTRING>("Beta")};
+    CKFlagsStruct input;
+    input.NbData = 2;
+    input.Vals = values;
+    input.Desc = descriptions;
+
+    bool ok = ExecuteCKFlagsStructProbe(engine, probe, input, false, "CKFlagsStruct copy probe", error) &&
+              ExecuteCKFlagsStructProbe(engine, outOfRange, input, true, "CKFlagsStruct out-of-range probe", error);
 
     engine->DiscardModule(moduleName);
     return ok;
@@ -200,6 +308,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     }
 
     if (!RunCKEnumStructScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKFlagsStructScriptSelfTest(engine, error)) {
         return false;
     }
 
