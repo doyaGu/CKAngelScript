@@ -1085,6 +1085,36 @@ bool RunCKMidiManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine,
     return true;
 }
 
+bool RunCKSoundManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKSoundManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *soundManagerType = engine->GetTypeInfoByDecl("CKSoundManager");
+    if (!soundManagerType) {
+        error = "CKSoundManager self-test could not find the registered type.";
+        return false;
+    }
+    if (soundManagerType->GetMethodByDecl("void Play(CKWaveSound@ sound, NativePointer source, bool loop)") == nullptr ||
+        soundManagerType->GetMethodByDecl("void Pause(CKWaveSound@ sound, NativePointer source)") == nullptr ||
+        soundManagerType->GetMethodByDecl("void Stop(CKWaveSound@ sound, NativePointer source)") == nullptr ||
+        soundManagerType->GetMethodByDecl("void UpdateSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSoundSettings &inout settings, bool set = true)") == nullptr ||
+        soundManagerType->GetMethodByDecl("void Update3DSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSound3DSettings &inout settings, bool set = true)") == nullptr ||
+        soundManagerType->GetMethodByDecl("void UpdateListenerSettings(CK_SOUNDMANAGER_CAPS settingsoptions, CKListenerSettings &inout settings, bool set = true)") == nullptr) {
+        error = "CKSoundManager self-test could not find expected guarded playback/settings declarations.";
+        return false;
+    }
+    if (soundManagerType->GetMethodByDecl("void UpdateSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSoundSettings &out settings, bool set = true)") != nullptr ||
+        soundManagerType->GetMethodByDecl("void Update3DSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSound3DSettings &out settings, bool set = true)") != nullptr ||
+        soundManagerType->GetMethodByDecl("void UpdateListenerSettings(CK_SOUNDMANAGER_CAPS settingsoptions, CKListenerSettings &out settings, bool set = true)") != nullptr) {
+        error = "CKSoundManager self-test found stale out-only settings declarations.";
+        return false;
+    }
+
+    return true;
+}
+
 bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKObjectManager script self-test requires CKContext and AngelScript engine.";
@@ -1446,6 +1476,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKMidiManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKSoundManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {

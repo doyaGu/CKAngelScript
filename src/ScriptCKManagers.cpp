@@ -429,6 +429,40 @@ static CKDWORD CKMidiTicksToMillisecs(CKMidiManager *self, NativePointer source,
     return 0;
 }
 
+static bool ValidateCKSoundPlayback(CKSoundManager *self, CKWaveSound *sound, NativePointer source, const char *methodName) {
+    if (!self) {
+        SetActiveScriptException(methodName);
+        return false;
+    }
+    if (!sound) {
+        SetActiveScriptException("CKSoundManager playback methods require a non-null CKWaveSound handle.");
+        return false;
+    }
+    if (!source.Get()) {
+        SetActiveScriptException("CKSoundManager playback methods require a non-null source pointer.");
+        return false;
+    }
+    return true;
+}
+
+static void PlayCKSound(CKSoundManager *self, CKWaveSound *sound, NativePointer source, bool loop) {
+    if (ValidateCKSoundPlayback(self, sound, source, "CKSoundManager.Play requires a valid manager.")) {
+        self->Play(sound, source.Get(), loop);
+    }
+}
+
+static void PauseCKSound(CKSoundManager *self, CKWaveSound *sound, NativePointer source) {
+    if (ValidateCKSoundPlayback(self, sound, source, "CKSoundManager.Pause requires a valid manager.")) {
+        self->Pause(sound, source.Get());
+    }
+}
+
+static void StopCKSound(CKSoundManager *self, CKWaveSound *sound, NativePointer source) {
+    if (ValidateCKSoundPlayback(self, sound, source, "CKSoundManager.Stop requires a valid manager.")) {
+        self->Stop(sound, source.Get());
+    }
+}
+
 static VxDriverDesc &MissingVxDriverDesc(const char *message) {
     static thread_local VxDriverDesc dummy{};
     dummy = VxDriverDesc{};
@@ -1121,11 +1155,11 @@ void RegisterCKSoundManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKSoundManager", "NativePointer DuplicateSource(NativePointer source)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source) { return NativePointer(self->DuplicateSource(source.Get())); }, (CKSoundManager *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundManager", "void ReleaseSource(NativePointer source)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source) { self->ReleaseSource(source.Get()); }, (CKSoundManager *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKSoundManager", "void Play(CKWaveSound@ sound, NativePointer source, bool loop)", asFUNCTIONPR([](CKSoundManager *self, CKWaveSound *sound, NativePointer source, bool loop) { self->Play(sound, source.Get(), loop); }, (CKSoundManager *, CKWaveSound *, NativePointer, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKSoundManager", "void Pause(CKWaveSound@ sound, NativePointer source)", asFUNCTIONPR([](CKSoundManager *self, CKWaveSound *sound, NativePointer source) { self->Pause(sound, source.Get()); }, (CKSoundManager *, CKWaveSound *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSoundManager", "void Play(CKWaveSound@ sound, NativePointer source, bool loop)", asFUNCTIONPR(PlayCKSound, (CKSoundManager *, CKWaveSound *, NativePointer, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSoundManager", "void Pause(CKWaveSound@ sound, NativePointer source)", asFUNCTIONPR(PauseCKSound, (CKSoundManager *, CKWaveSound *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundManager", "void SetPlayPosition(NativePointer source, int pos)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source, int pos) { self->SetPlayPosition(source.Get(), pos); }, (CKSoundManager *, NativePointer, int), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundManager", "int GetPlayPosition(NativePointer source)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source) { return self->GetPlayPosition(source.Get()); }, (CKSoundManager *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKSoundManager", "void Stop(CKWaveSound@ sound, NativePointer source)", asFUNCTIONPR([](CKSoundManager *self, CKWaveSound *sound, NativePointer source) { self->Stop(sound, source.Get()); }, (CKSoundManager *, CKWaveSound *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSoundManager", "void Stop(CKWaveSound@ sound, NativePointer source)", asFUNCTIONPR(StopCKSound, (CKSoundManager *, CKWaveSound *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundManager", "bool IsPlaying(NativePointer source)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source) -> bool { return self->IsPlaying(source.Get()); }, (CKSoundManager *, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKSoundManager", "CKERROR SetWaveFormat(NativePointer source, CKWaveFormat &in wf)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source, CKWaveFormat &wf) { return self->SetWaveFormat(source.Get(), wf); }, (CKSoundManager *, NativePointer, CKWaveFormat &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -1143,10 +1177,10 @@ void RegisterCKSoundManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKSoundManager", "void SetType(NativePointer source, CK_WAVESOUND_TYPE type)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source, CK_WAVESOUND_TYPE type) { self->SetType(source.Get(), type); }, (CKSoundManager *, NativePointer, CK_WAVESOUND_TYPE), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundManager", "CK_WAVESOUND_TYPE GetType(NativePointer source)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source) { return self->GetType(source.Get()); }, (CKSoundManager *, NativePointer), CK_WAVESOUND_TYPE), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKSoundManager", "void UpdateSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSoundSettings &out settings, bool set = true)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSoundSettings &settings, bool set) { self->UpdateSettings(source.Get(), settingsoptions, settings, set); }, (CKSoundManager *, NativePointer, CK_SOUNDMANAGER_CAPS, CKWaveSoundSettings &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKSoundManager", "void Update3DSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSound3DSettings &out settings, bool set = true)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSound3DSettings &settings, bool set) { self->Update3DSettings(source.Get(), settingsoptions, settings, set); }, (CKSoundManager *, NativePointer, CK_SOUNDMANAGER_CAPS, CKWaveSound3DSettings &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSoundManager", "void UpdateSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSoundSettings &inout settings, bool set = true)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSoundSettings &settings, bool set) { self->UpdateSettings(source.Get(), settingsoptions, settings, set); }, (CKSoundManager *, NativePointer, CK_SOUNDMANAGER_CAPS, CKWaveSoundSettings &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSoundManager", "void Update3DSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSound3DSettings &inout settings, bool set = true)", asFUNCTIONPR([](CKSoundManager *self, NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSound3DSettings &settings, bool set) { self->Update3DSettings(source.Get(), settingsoptions, settings, set); }, (CKSoundManager *, NativePointer, CK_SOUNDMANAGER_CAPS, CKWaveSound3DSettings &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKSoundManager", "void UpdateListenerSettings(CK_SOUNDMANAGER_CAPS settingsoptions, CKListenerSettings &out settings, bool set = true)", asFUNCTIONPR([](CKSoundManager *self, CK_SOUNDMANAGER_CAPS settingsoptions, CKListenerSettings &settings, bool set) { self->UpdateListenerSettings(settingsoptions, settings, set); }, (CKSoundManager *, CK_SOUNDMANAGER_CAPS, CKListenerSettings &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSoundManager", "void UpdateListenerSettings(CK_SOUNDMANAGER_CAPS settingsoptions, CKListenerSettings &inout settings, bool set = true)", asFUNCTIONPR([](CKSoundManager *self, CK_SOUNDMANAGER_CAPS settingsoptions, CKListenerSettings &settings, bool set) { self->UpdateListenerSettings(settingsoptions, settings, set); }, (CKSoundManager *, CK_SOUNDMANAGER_CAPS, CKListenerSettings &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundManager", "void SetListener(CK3dEntity@ listener)", asMETHODPR(CKSoundManager, SetListener, (CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundManager", "CK3dEntity@ GetListener()", asMETHODPR(CKSoundManager, GetListener, (), CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
