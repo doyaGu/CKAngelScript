@@ -1,6 +1,8 @@
 #include "ScriptCKObjects.h"
 
+#include <string>
 #include <type_traits>
+#include <vector>
 
 #include "CKAll.h"
 
@@ -422,6 +424,32 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
 }
 
 template <typename T>
+static int GetCKParameterStringValue(T *self, std::string &value, bool update) {
+    value.clear();
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKParameter.GetStringValue requires a valid parameter.");
+        }
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    const int size = self->GetStringValue(nullptr, update);
+    if (size <= 0) {
+        return size;
+    }
+
+    std::vector<char> buffer(static_cast<std::size_t>(size) + 1u, '\0');
+    const int written = self->GetStringValue(buffer.data(), update);
+    if (written < 0) {
+        value.clear();
+        return written;
+    }
+
+    value.assign(buffer.data());
+    return written;
+}
+
+template <typename T>
 static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -442,7 +470,7 @@ static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name
     r = engine->RegisterObjectMethod(name, "NativePointer GetWriteDataPtr()", asFUNCTIONPR([](T *self) { return NativePointer(self->GetWriteDataPtr()); }, (T *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKERROR SetStringValue(const string &in value)", asFUNCTIONPR([](T *self, const std::string &value) { return self->SetStringValue(const_cast<CKSTRING>(value.c_str())); }, (T *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "int GetStringValue(const string &in, bool = true)", asFUNCTIONPR([](T *self, const std::string &value, bool flag) { return self->GetStringValue(const_cast<CKSTRING>(value.c_str()), flag); }, (T *, const std::string &, bool), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "int GetStringValue(string &out value, bool update = true)", asFUNCTION(GetCKParameterStringValue<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKParameterType GetType()", asMETHODPR(T, GetType, (), CKParameterType), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetType(CKParameterType type)", asMETHODPR(T, SetType, (CKParameterType), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

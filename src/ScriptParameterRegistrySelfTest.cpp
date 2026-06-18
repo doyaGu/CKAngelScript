@@ -3220,6 +3220,75 @@ bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &
     return ok;
 }
 
+bool RunCKParameterScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKParameter script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    const char *typeNames[] = {"CKParameter", "CKParameterOut", "CKParameterLocal"};
+    for (const char *typeName : typeNames) {
+        asITypeInfo *parameterType = engine->GetTypeInfoByDecl(typeName);
+        if (!parameterType) {
+            error = std::string(typeName) + " self-test could not find the registered type.";
+            return false;
+        }
+        if (parameterType->GetMethodByDecl("int GetStringValue(string &out value, bool update = true)") == nullptr) {
+            error = std::string(typeName) + " self-test could not find the guarded GetStringValue declaration.";
+            return false;
+        }
+        if (parameterType->GetMethodByDecl("int GetStringValue(const string &in, bool = true)") != nullptr) {
+            error = std::string(typeName) + " self-test found stale GetStringValue input-buffer declaration.";
+            return false;
+        }
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKParameterSelfTest";
+    const char *source =
+        "void ProbeCKParameterStringValue(CKParameter@ param, CKParameterOut@ pout, CKParameterLocal@ local) {\n"
+        "  string value;\n"
+        "  if (param !is null) {\n"
+        "    int count = param.GetStringValue(value);\n"
+        "    count = param.GetStringValue(value, false);\n"
+        "  }\n"
+        "  if (pout !is null) {\n"
+        "    int count = pout.GetStringValue(value);\n"
+        "  }\n"
+        "  if (local !is null) {\n"
+        "    int count = local.GetStringValue(value);\n"
+        "  }\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKParameter self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-parameter-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKParameter self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKParameter self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKParameterStringValue(CKParameter@, CKParameterOut@, CKParameterLocal@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKParameter self-test function was not found.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
@@ -3495,6 +3564,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKMaterialScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKParameterScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {
