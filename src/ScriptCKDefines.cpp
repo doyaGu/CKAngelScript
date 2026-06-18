@@ -581,6 +581,13 @@ void RegisterCKGlobalVariables(asIScriptEngine *engine) {
     r = engine->RegisterGlobalProperty("const CKGUID CKPGUID_OLDATTRIBUTE", (void *)&g_CKPGUID_OLDATTRIBUTE); CKAS_CHECK_REGISTER(r);
 }
 
+static CKDependencies CopyDefaultClassDependenciesValue(CK_DEPENDENCIES_OPMODE mode) {
+    if (CKDependencies *dependencies = CKGetDefaultClassDependencies(mode)) {
+        return *dependencies;
+    }
+    return CKDependencies();
+}
+
 void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
     int r = 0;
 
@@ -661,7 +668,7 @@ void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void CKDeleteBitmapProperties(CKBitmapProperties@ bp)", asFUNCTION(CKDeletePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterGlobalFunction("void CKCopyDefaultClassDependencies(CKDependencies &out d, CK_DEPENDENCIES_OPMODE mode)", asFUNCTION(CKCopyDefaultClassDependencies), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("CKDependencies &CKGetDefaultClassDependencies(CK_DEPENDENCIES_OPMODE mode)", asFUNCTION(CKGetDefaultClassDependencies), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("CKDependencies CKGetDefaultClassDependencies(CK_DEPENDENCIES_OPMODE mode)", asFUNCTION(CopyDefaultClassDependenciesValue), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterGlobalFunction("void CKDeletePointer(NativePointer ptr)", asFUNCTIONPR([](NativePointer ptr) { CKDeletePointer(ptr.Get()); }, (NativePointer), void), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 

@@ -683,6 +683,68 @@ bool RunCK2dCurvePointScriptSelfTest(asIScriptEngine *engine, std::string &error
     return ok;
 }
 
+bool RunCKDependenciesScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKDependencies script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    if (!engine->GetGlobalFunctionByDecl("CKDependencies CKGetDefaultClassDependencies(CK_DEPENDENCIES_OPMODE mode)")) {
+        error = "CKDependencies value-returning CKGetDefaultClassDependencies declaration is not registered.";
+        return false;
+    }
+    if (engine->GetGlobalFunctionByDecl("CKDependencies &CKGetDefaultClassDependencies(CK_DEPENDENCIES_OPMODE mode)")) {
+        error = "CKDependencies still exposes CKGetDefaultClassDependencies as a non-null reference.";
+        return false;
+    }
+    if (!engine->GetGlobalFunctionByDecl("void CKCopyDefaultClassDependencies(CKDependencies &out d, CK_DEPENDENCIES_OPMODE mode)")) {
+        error = "CKCopyDefaultClassDependencies declaration is not registered.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKDependenciesSelfTest";
+    const char *source =
+        "int ProbeDependenciesDefaultCopy() {\n"
+        "  CKDependencies copied;\n"
+        "  CKCopyDefaultClassDependencies(copied, CK_DEPENDENCIES_COPY);\n"
+        "  if (copied.Size() < 0) return 1;\n"
+        "  CKDependencies value = CKGetDefaultClassDependencies(CK_DEPENDENCIES_COPY);\n"
+        "  if (value.Size() < 0) return 2;\n"
+        "  CKDependencies unsupported = CKGetDefaultClassDependencies(CK_DEPENDENCIES_OPERATIONMODE);\n"
+        "  if (unsupported.Size() < 0) return 3;\n"
+        "  unsupported.ModifyOptions(CKCID_OBJECT, 0, 0);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKDependencies self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-dependencies-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKDependencies self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKDependencies self-test script failed to build.";
+        return false;
+    }
+
+    if (!module->GetFunctionByDecl("int ProbeDependenciesDefaultCopy()")) {
+        engine->DiscardModule(moduleName);
+        error = "CKDependencies self-test function was not found.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKAttributeManager script self-test requires CKContext and AngelScript engine.";
@@ -1537,6 +1599,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCK2dCurvePointScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKDependenciesScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeManagerScriptSelfTest(context, engine, error)) {
