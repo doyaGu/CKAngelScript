@@ -1967,6 +1967,24 @@ bool RunCKRenderManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
         error = "CKRenderManager self-test could not find CreateRenderContext with optional rect.";
         return false;
     }
+    if (renderManagerType->GetMethodByDecl("CKVertexBuffer@ CreateVertexBuffer()") == nullptr ||
+        renderManagerType->GetMethodByDecl("void DestroyVertexBuffer(CKVertexBuffer@ vb)") == nullptr) {
+        error = "CKRenderManager self-test could not find vertex buffer creation/destruction declarations.";
+        return false;
+    }
+    asITypeInfo *vertexBufferType = engine->GetTypeInfoByDecl("CKVertexBuffer");
+    if (!vertexBufferType) {
+        error = "CKVertexBuffer self-test could not find the registered type.";
+        return false;
+    }
+    if (vertexBufferType->GetMethodByDecl("bool Lock(CKRenderContext@ ctx, CKDWORD startVertex, CKDWORD vertexCount, VxDrawPrimitiveData &out data, CKLOCKFLAGS lockFlags = CK_LOCK_DEFAULT)") == nullptr) {
+        error = "CKVertexBuffer self-test could not find guarded Lock declaration.";
+        return false;
+    }
+    if (vertexBufferType->GetMethodByDecl("VxDrawPrimitiveData &Lock(CKRenderContext@ ctx, CKDWORD startVertex, CKDWORD vertexCount, CKLOCKFLAGS lockFlags = CK_LOCK_DEFAULT)") != nullptr) {
+        error = "CKVertexBuffer self-test found stale reference-return Lock declaration.";
+        return false;
+    }
 
     constexpr const char *moduleName = "__CKAS_CKRenderManagerSelfTest";
     const char *source =
@@ -1974,6 +1992,17 @@ bool RunCKRenderManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
         "  CKRenderManager@ rm = ctx.GetRenderManager();\n"
         "  if (rm is null) return 1;\n"
         "  rm.GetRenderDriverDescription(-1);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeVertexBuffer(CKContext@ ctx) {\n"
+        "  CKRenderManager@ rm = ctx.GetRenderManager();\n"
+        "  if (rm is null) return 1;\n"
+        "  CKVertexBuffer@ vb = rm.CreateVertexBuffer();\n"
+        "  if (vb is null) return 2;\n"
+        "  VxDrawPrimitiveData data;\n"
+        "  bool locked = vb.Lock(null, 0, 1, data);\n"
+        "  if (locked) { vb.Unlock(null); rm.DestroyVertexBuffer(vb); return 3; }\n"
+        "  rm.DestroyVertexBuffer(vb);\n"
         "  return 0;\n"
         "}\n";
 
@@ -2002,8 +2031,15 @@ bool RunCKRenderManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
         error = "CKRenderManager self-test function was not found.";
         return false;
     }
+    asIScriptFunction *vertexProbe = module->GetFunctionByDecl("int ProbeVertexBuffer(CKContext@)");
+    if (!vertexProbe) {
+        engine->DiscardModule(moduleName);
+        error = "CKVertexBuffer self-test function was not found.";
+        return false;
+    }
 
-    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, true, "CKRenderManager invalid driver probe", error);
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, true, "CKRenderManager invalid driver probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, vertexProbe, context, false, "CKVertexBuffer guarded Lock probe", error);
 
     engine->DiscardModule(moduleName);
     return ok;
