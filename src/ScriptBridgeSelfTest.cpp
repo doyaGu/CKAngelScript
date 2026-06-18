@@ -909,6 +909,157 @@ static CKGUID FindSelfTestOperationGuid(CKContext *context,
     return CKGUID();
 }
 
+static bool RunParamOperationRefScriptSelfTest(CKContext *context,
+                                               CKParameterManager *parameterManager,
+                                               asIScriptEngine *engine,
+                                               std::string &error) {
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptBehaviorBridge *bridge = manager ? manager->GetBehaviorBridge() : nullptr;
+    if (!context || !parameterManager || !engine || !manager || !bridge) {
+        error = "ParamOperationRef script self-test requires CKContext, manager, engine, and bridge.";
+        return false;
+    }
+
+    const CKGUID operationGuid = FindSelfTestOperationGuid(context, parameterManager);
+    if (!operationGuid.IsValid()) {
+        return true;
+    }
+
+    CKParameterIn *input = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_ScriptOperationInput"), CKPGUID_INT, TRUE);
+    CKParameterOut *sourceA = context->CreateCKParameterOut(const_cast<CKSTRING>("__CKAS_ScriptOperationSourceA"), CKPGUID_INT, TRUE);
+    CKParameterOut *sourceB = context->CreateCKParameterOut(const_cast<CKSTRING>("__CKAS_ScriptOperationSourceB"), CKPGUID_INT, TRUE);
+    CKParameterOperation *operation = context->CreateCKParameterOperation(
+        const_cast<CKSTRING>("__CKAS_ScriptOperation"),
+        operationGuid,
+        CKPGUID_INT,
+        CKPGUID_INT,
+        CKPGUID_INT);
+    if (!input || !sourceA || !sourceB || !operation || !operation->GetOutParameter()) {
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "Failed to create objects for ParamOperationRef script self-test.";
+        return false;
+    }
+
+    if (input->SetDirectSource(sourceA) != CK_OK ||
+        input->SetDirectSource(operation->GetOutParameter()) != CK_OK ||
+        input->GetDirectSource() != operation->GetOutParameter()) {
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        error = "ParamOperationRef script self-test failed to install operation output.";
+        return false;
+    }
+
+    ParamOperationRef *operationRef = new ParamOperationRef(bridge, operation->GetID(), input, sourceA);
+
+    const char *moduleName = "__CKAS_ParamOperationRefScriptSelfTest";
+    std::string source;
+    source += "int Probe(ParamOperationRef@ op) {\n";
+    source += "    if (op is null || !op.IsValid() || !op.valid) return 1200;\n";
+    source += "    if (op.Id() == 0 || op.Name() == \"\" || op.Describe() == \"\") return 1201;\n";
+    source += "    op.Error(); op.ClassId(); op.IsDynamic();\n";
+    source += "    ObjectRef@ objectRef = op;\n";
+    source += "    if (objectRef is null || objectRef.Id() != op.Id()) return 1202;\n";
+    source += "    ParamRef@ outParam = op.Out();\n";
+    source += "    ParamRef@ in1 = op.In1();\n";
+    source += "    ParamRef@ in2 = op.In2();\n";
+    source += "    if (outParam is null || in1 is null || in2 is null) return 1203;\n";
+    source += "    outParam.IsValid(); in1.IsValid(); in2.IsValid();\n";
+    source += "    op.Do();\n";
+    source += "    if (!op.Restore() || !op.IsValid()) return 1204;\n";
+    source += "    if (!op.Destroy()) return 1205;\n";
+    source += "    if (op.IsValid() || op.valid || op.Out() !is null) return 1206;\n";
+    source += "    return 0;\n";
+    source += "}\n";
+
+    CKAngelScriptResult compileResult = {};
+    if (manager->CompileModule(moduleName, source.c_str(), CKAS_COMPILE_REPLACEEXISTING, &compileResult) != CKAS_OK) {
+        error = compileResult.ErrorMessage && compileResult.ErrorMessage[0] != '\0'
+            ? compileResult.ErrorMessage
+            : "Failed to build ParamOperationRef script self-test module.";
+        operationRef->Release();
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        return false;
+    }
+
+    asIScriptModule *module = manager->GetModule(moduleName);
+    asIScriptFunction *function = module ? module->GetFunctionByDecl("int Probe(ParamOperationRef@ op)") : nullptr;
+    if (!function) {
+        error = "Failed to find ParamOperationRef script self-test Probe() function.";
+        manager->UnloadModule(moduleName, nullptr);
+        operationRef->Release();
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        return false;
+    }
+
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = "Failed to create ParamOperationRef script self-test context.";
+        manager->UnloadModule(moduleName, nullptr);
+        operationRef->Release();
+        DestroySelfTestObject(context, operation);
+        DestroySelfTestObject(context, input);
+        DestroySelfTestObject(context, sourceA);
+        DestroySelfTestObject(context, sourceB);
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, operationRef);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        if (returnCode == 0) {
+            ok = true;
+        } else {
+            error = fmt::format("ParamOperationRef script self-test returned {}.", returnCode);
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = fmt::format("ParamOperationRef script self-test exception: {}.",
+                            exception && exception[0] ? exception : "<empty>");
+    } else {
+        error = fmt::format("ParamOperationRef script self-test execution failed ({}).", r);
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    manager->UnloadModule(moduleName, nullptr);
+
+    const bool restoredTargetSource = input->GetDirectSource() == sourceA;
+    const bool operationStillValid = operationRef->IsValid();
+    operationRef->Release();
+    if (operationStillValid) {
+        DestroySelfTestObject(context, operation);
+    }
+    DestroySelfTestObject(context, input);
+    DestroySelfTestObject(context, sourceA);
+    DestroySelfTestObject(context, sourceB);
+
+    if (ok && !restoredTargetSource) {
+        error = "ParamOperationRef script self-test did not restore the target source.";
+        return false;
+    }
+
+    return ok;
+}
+
 static ScriptParamValue MakeSelfTestOperationValue(CKContext *context, CKGUID typeGuid, int value) {
     CKParameterManager *pm = context ? context->GetParameterManager() : nullptr;
     if (typeGuid == CKPGUID_FLOAT) {
@@ -2863,6 +3014,17 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
             error = "BehaviorRef still exposes a raw CKObject handle.";
             return false;
         }
+        asITypeInfo *paramOperationType = engine->GetTypeInfoByName("ParamOperationRef");
+        if (!paramOperationType ||
+            !paramOperationType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
+            !paramOperationType->GetMethodByDecl("const ObjectRef@ opImplCast() const")) {
+            error = "ParamOperationRef wrapper cast declaration self-test failed.";
+            return false;
+        }
+        if (paramOperationType->GetMethodByDecl("CKObject@ Object() const")) {
+            error = "ParamOperationRef still exposes a raw CKObject handle.";
+            return false;
+        }
         asITypeInfo *behaviorLinkType = engine->GetTypeInfoByName("BehaviorLinkRef");
         if (!behaviorLinkType ||
             !behaviorLinkType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
@@ -3338,6 +3500,12 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-mutation", std::string());
     if (!RunBehaviorBridgeNativeMutationSelfTest(context, parameterManager, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-mutation", error);
+        return false;
+    }
+
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "script-param-operation-ref", std::string());
+    if (!RunParamOperationRefScriptSelfTest(context, parameterManager, engine, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "script-param-operation-ref", error);
         return false;
     }
 

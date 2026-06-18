@@ -157,6 +157,12 @@ ObjectRefIdentityOptions WithoutIsValidAndDescribe() {
     return options;
 }
 
+ObjectRefIdentityOptions WithoutIsValidDescribeAndObject() {
+    ObjectRefIdentityOptions options = WithoutIsValidAndDescribe();
+    options.object = false;
+    return options;
+}
+
 ObjectRefIdentityOptions WithoutIsValidValidAndDescribe() {
     ObjectRefIdentityOptions options;
     options.isValid = false;
@@ -407,7 +413,7 @@ void RegisterScriptObjectRefBridge(asIScriptEngine *engine) {
     RegisterObjectRefType<ParamOutRef>(engine, "ParamOutRef");
     RegisterObjectRefType<ParamLocalRef>(engine, "ParamLocalRef");
     RegisterObjectRefType<ParamStructRef>(engine, "ParamStructRef", WithoutIsValidAndDescribe());
-    RegisterObjectRefType<ParamOperationRef>(engine, "ParamOperationRef", WithoutIsValidAndDescribe());
+    RegisterObjectRefType<ParamOperationRef>(engine, "ParamOperationRef", WithoutIsValidDescribeAndObject());
     RegisterObjectRefType<BehaviorLinkRef>(engine, "BehaviorLinkRef", WithoutIsValidValidDescribeAndObject());
 
     RegisterObjectRefCast<BehaviorRef, ObjectRef>(engine, "BehaviorRef", "ObjectRef");
