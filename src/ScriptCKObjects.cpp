@@ -2717,6 +2717,86 @@ void RegisterCKSound(asIScriptEngine *engine) {
     RegisterCKSoundMembers<CKSound>(engine, "CKSound");
 }
 
+static void SetCKWaveSoundException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+static CKERROR WriteCKWaveSoundData(CKWaveSound *self, NativePointer buffer, int size) {
+    if (!self) {
+        SetCKWaveSoundException("CKWaveSound.WriteData called with a null sound.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (size < 0) {
+        SetCKWaveSoundException("CKWaveSound.WriteData requires a non-negative size.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (size > 0 && buffer.IsNull()) {
+        SetCKWaveSoundException("CKWaveSound.WriteData requires a non-null buffer when size is positive.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->WriteData(reinterpret_cast<CKBYTE *>(buffer.Get()), size);
+}
+
+static CKERROR LockCKWaveSound(CKWaveSound *self,
+                               CKDWORD writeCursor,
+                               CKDWORD numBytes,
+                               NativePointer *ptr1,
+                               CKDWORD *bytes1,
+                               NativePointer *ptr2,
+                               CKDWORD *bytes2,
+                               CK_WAVESOUND_LOCKMODE flags) {
+    if (ptr1) {
+        *ptr1 = NativePointer();
+    }
+    if (bytes1) {
+        *bytes1 = 0;
+    }
+    if (ptr2) {
+        *ptr2 = NativePointer();
+    }
+    if (bytes2) {
+        *bytes2 = 0;
+    }
+
+    if (!self || !ptr1 || !bytes1 || !ptr2 || !bytes2) {
+        SetCKWaveSoundException("CKWaveSound.Lock requires a valid sound and output parameters.");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    void *rawPtr1 = nullptr;
+    void *rawPtr2 = nullptr;
+    CKDWORD rawBytes1 = 0;
+    CKDWORD rawBytes2 = 0;
+    const CKERROR err = self->Lock(writeCursor, numBytes, &rawPtr1, &rawBytes1, &rawPtr2, &rawBytes2, flags);
+    *ptr1 = NativePointer(rawPtr1);
+    *bytes1 = rawBytes1;
+    *ptr2 = NativePointer(rawPtr2);
+    *bytes2 = rawBytes2;
+    return err;
+}
+
+static CKERROR UnlockCKWaveSound(CKWaveSound *self,
+                                 NativePointer ptr1,
+                                 CKDWORD bytes1,
+                                 NativePointer ptr2,
+                                 CKDWORD bytes2) {
+    if (!self) {
+        SetCKWaveSoundException("CKWaveSound.Unlock called with a null sound.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (bytes1 > 0 && ptr1.IsNull()) {
+        SetCKWaveSoundException("CKWaveSound.Unlock requires ptr1 when bytes1 is positive.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (bytes2 > 0 && ptr2.IsNull()) {
+        SetCKWaveSoundException("CKWaveSound.Unlock requires ptr2 when bytes2 is positive.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->Unlock(ptr1.Get(), bytes1, ptr2.Get(), bytes2);
+}
+
 void RegisterCKWaveSound(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -2785,10 +2865,10 @@ void RegisterCKWaveSound(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKWaveSound", "void SetOrientation(VxVector &in dir, VxVector &in up)", asMETHODPR(CKWaveSound, SetOrientation, (VxVector &, VxVector &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKWaveSound", "void GetOrientation(VxVector &out dir, VxVector &out up)", asMETHODPR(CKWaveSound, GetOrientation, (VxVector &, VxVector &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR WriteData(NativePointer buffer, int size)", asFUNCTIONPR([](CKWaveSound *self, NativePointer buffer, int size) { return self->WriteData(reinterpret_cast<CKBYTE *>(buffer.Get()), size); }, (CKWaveSound *, NativePointer, int), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR WriteData(NativePointer buffer, int size)", asFUNCTION(WriteCKWaveSoundData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR Lock(CKDWORD writeCursor, CKDWORD numBytes, NativePointer &out ptr1, CKDWORD &out bytes1, NativePointer &out ptr2, CKDWORD &out bytes2, CK_WAVESOUND_LOCKMODE flags)", asFUNCTIONPR([](CKWaveSound *self, CKDWORD writeCursor, CKDWORD numBytes, NativePointer *ptr1, CKDWORD *bytes1, NativePointer *ptr2, CKDWORD* bytes2, CK_WAVESOUND_LOCKMODE flags) { return self->Lock(writeCursor, numBytes, reinterpret_cast<void **>(ptr1), bytes1, reinterpret_cast<void **>(ptr2), bytes2, flags); }, (CKWaveSound *, CKDWORD, CKDWORD, NativePointer *, CKDWORD *, NativePointer *, CKDWORD *, CK_WAVESOUND_LOCKMODE), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR Unlock(NativePointer ptr1, CKDWORD bytes1, NativePointer ptr2, CKDWORD bytes2)", asFUNCTIONPR([](CKWaveSound *self, NativePointer ptr1, CKDWORD bytes1, NativePointer ptr2, CKDWORD bytes2) { return self->Unlock(ptr1.Get(), bytes1, ptr2.Get(), bytes2); }, (CKWaveSound *, NativePointer, CKDWORD, NativePointer, CKDWORD), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR Lock(CKDWORD writeCursor, CKDWORD numBytes, NativePointer &out ptr1, CKDWORD &out bytes1, NativePointer &out ptr2, CKDWORD &out bytes2, CK_WAVESOUND_LOCKMODE flags)", asFUNCTION(LockCKWaveSound), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR Unlock(NativePointer ptr1, CKDWORD bytes1, NativePointer ptr2, CKDWORD bytes2)", asFUNCTION(UnlockCKWaveSound), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKWaveSound", "CKDWORD GetPlayPosition()", asMETHODPR(CKWaveSound, GetPlayPosition, (), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKWaveSound", "int GetPlayedMs()", asMETHODPR(CKWaveSound, GetPlayedMs, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
