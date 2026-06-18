@@ -1053,6 +1053,11 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (xstr[1] != 90 || ReadConstXStringIndex(xstr) != 97) return 865;\n"
         "  XString xcopy(xstr);\n"
         "  if (!(xcopy == xstr) || string(xcopy) != \"aZaca\") return 866;\n"
+        "  CKPathSplitter pathSplitter(\"name.ext\");\n"
+        "  if (pathSplitter.GetDrive() != \"\" || pathSplitter.GetDir() != \"\") return 870;\n"
+        "  if (pathSplitter.GetName() != \"name\" || pathSplitter.GetExtension() != \".ext\") return 871;\n"
+        "  CKPathMaker pathMaker(\"\", \"\", pathSplitter.GetName(), pathSplitter.GetExtension());\n"
+        "  if (pathMaker.GetFileName() != \"name.ext\") return 872;\n"
         "  Vx2DCapsDesc caps2d;\n"
         "  caps2d.Family = CKRST_DIRECTX;\n"
         "  caps2d.MaxVideoMemory = 0x01020304;\n"
@@ -1792,6 +1797,21 @@ bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error) {
         return false;
     }
 
+    asITypeInfo *pathMakerType = engine->GetTypeInfoByDecl("CKPathMaker");
+    asITypeInfo *pathSplitterType = engine->GetTypeInfoByDecl("CKPathSplitter");
+    if (!pathMakerType || !pathSplitterType) {
+        error = "CKPathMaker or CKPathSplitter type is not registered.";
+        return false;
+    }
+    if (!pathMakerType->GetMethodByDecl("string GetFileName() const")) {
+        error = "CKPathMaker.GetFileName is not registered.";
+        return false;
+    }
+    if (pathSplitterType->GetMethodByDecl("string GetFileName() const")) {
+        error = "CKPathSplitter incorrectly exposes CKPathMaker.GetFileName.";
+        return false;
+    }
+
 #if CKVERSION == 0x13022002 || CKVERSION == 0x05082002
     VxDrawPrimitiveData data = {};
     char stages[CKRST_MAX_STAGES] = {};
@@ -2180,10 +2200,20 @@ static void RegisterVxMemoryMappedFile(asIScriptEngine *engine) {
 
 // CKPathSplitter
 
+static char *MutablePathCString(std::string &value) {
+    value.push_back('\0');
+    return &value[0];
+}
+
+static void ConstructCKPathSplitter(const std::string &fileName, CKPathSplitter *self) {
+    std::string mutableFileName = fileName;
+    new(self) CKPathSplitter(MutablePathCString(mutableFileName));
+}
+
 static void RegisterCKPathSplitter(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectBehaviour("CKPathSplitter", asBEHAVE_CONSTRUCT, "void f(const string &in fileName)", asFUNCTIONPR([](const std::string &fileName, CKPathSplitter *self) { new(self) CKPathSplitter((char *)fileName.c_str()); }, (const std::string &, CKPathSplitter *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKPathSplitter", asBEHAVE_CONSTRUCT, "void f(const string &in fileName)", asFUNCTION(ConstructCKPathSplitter), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKPathSplitter", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPathSplitter *self) { self->~CKPathSplitter(); }, (CKPathSplitter *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
@@ -2195,18 +2225,31 @@ static void RegisterCKPathSplitter(asIScriptEngine *engine) {
 
 // CKPathMaker
 
+static void ConstructCKPathMaker(const std::string &drive,
+                                 const std::string &directory,
+                                 const std::string &fileName,
+                                 const std::string &extension,
+                                 CKPathMaker *self) {
+    std::string mutableDrive = drive;
+    std::string mutableDirectory = directory;
+    std::string mutableFileName = fileName;
+    std::string mutableExtension = extension;
+    new(self) CKPathMaker(MutablePathCString(mutableDrive),
+                          MutablePathCString(mutableDirectory),
+                          MutablePathCString(mutableFileName),
+                          MutablePathCString(mutableExtension));
+}
+
 static void RegisterCKPathMaker(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectBehaviour("CKPathMaker", asBEHAVE_CONSTRUCT, "void f(const string &in drive, const string &in directory, const string &in fileName, const string &in extension)",
-        asFUNCTIONPR([](const std::string &Drive, const std::string &Directory, const std::string &Fname, const std::string &Extension, CKPathMaker *self) {
-            new(self) CKPathMaker((char *) Drive.c_str(), (char *) Directory.c_str(), (char *) Fname.c_str(), (char *) Extension.c_str());
-        }, (const std::string &, const std::string &, const std::string &, const std::string &, CKPathMaker *), void),
+        asFUNCTION(ConstructCKPathMaker),
         asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKPathMaker", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPathMaker *self) { self->~CKPathMaker(); }, (CKPathMaker *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKPathSplitter", "string GetFileName() const", asFUNCTIONPR([](CKPathMaker *self) -> std::string { return ScriptStringify(self->GetFileName()); }, (CKPathMaker *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPathMaker", "string GetFileName() const", asFUNCTIONPR([](CKPathMaker *self) -> std::string { return ScriptStringify(self->GetFileName()); }, (CKPathMaker *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKFileExtension
