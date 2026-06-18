@@ -60,9 +60,10 @@ void RegisterXIterator(asIScriptEngine *engine, const char *className, const cha
     XString decl;
     XString name = decl.Format("%sIt", className);
 
-    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>()); assert(r >= 0 || r == asALREADY_REGISTERED);
+    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());
     if (r == asALREADY_REGISTERED)
         return;
+    CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour(name.CStr(), asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](C *self) { new(self) C(); }, (C *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
@@ -73,6 +74,12 @@ void RegisterXIterator(asIScriptEngine *engine, const char *className, const cha
 
     decl.Format("%s &opAssign(const %s &in other)", name.CStr(), name.CStr());
     r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator=, (const C &), C &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+
+    decl.Format("bool opEquals(const %s &in other) const", name.CStr());
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTIONPR([](const C &self, const C &other) -> bool { return self == other; }, (const C &, const C &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+
+    decl.Format("bool opNotEquals(const %s &in other) const", name.CStr());
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTIONPR([](const C &self, const C &other) -> bool { return self != other; }, (const C &, const C &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("const %s &Get() const", elementType);
     r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator*, () const, const T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -197,16 +204,16 @@ void RegisterXArray(asIScriptEngine *engine, const char *className, const char *
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Back, (), T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Begin() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.Begin(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.Begin(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt RBegin() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.RBegin(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.RBegin(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt End() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.End(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.End(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt REnd() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.REnd(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.REnd(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(className, "int Size() const", asMETHODPR(C, Size, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
@@ -289,10 +296,10 @@ void RegisterXSArray(asIScriptEngine *engine, const char *className, const char 
 #endif
 
     decl.Format("%sIt Begin() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.Begin(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.Begin(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt End() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.End(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return array.End(); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(className, "int Size() const", asMETHODPR(C, Size, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(className, "int GetMemoryOccupation(bool addStatic = false) const", asMETHODPR(XSArray<T>, GetMemoryOccupation, (XBOOL) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
