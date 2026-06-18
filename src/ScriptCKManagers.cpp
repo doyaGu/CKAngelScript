@@ -307,9 +307,9 @@ template <typename T>
 static void RegisterCKBaseManagerMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
-    r = engine->RegisterObjectMethod(name, "CKGUID GetGuid() const", asMETHODPR(T, GetGuid, (), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "string GetName() const", asFUNCTIONPR([](T *self) -> std::string { return ScriptStringify(self->GetName()); }, (T *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKStateChunk@ SaveData(CKFile@ savedFile) const", asMETHODPR(T, SaveData, (CKFile*), CKStateChunk*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKGUID GetGuid()", asMETHODPR(T, GetGuid, (), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "string GetName()", asFUNCTIONPR([](T *self) -> std::string { return ScriptStringify(self->GetName()); }, (T *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKStateChunk@ SaveData(CKFile@ savedFile)", asMETHODPR(T, SaveData, (CKFile*), CKStateChunk*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR LoadData(CKStateChunk@ chunk, CKFile@ loadedFile)", asMETHODPR(T, LoadData, (CKStateChunk*, CKFile*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR PreClearAll()", asMETHODPR(T, PreClearAll, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR PostClearAll()", asMETHODPR(T, PostClearAll, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -339,7 +339,7 @@ static void RegisterCKBaseManagerMembers(asIScriptEngine *engine, const char *na
     r = engine->RegisterObjectMethod(name, "CKERROR OnPostRender(CKRenderContext@ dev)", asMETHODPR(T, OnPostRender, (CKRenderContext *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR OnPostSpriteRender(CKRenderContext@ dev)", asMETHODPR(T, OnPostSpriteRender, (CKRenderContext *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetFunctionPriority(CKMANAGER_FUNCTIONS functions)", asMETHODPR(T, GetFunctionPriority, (CKMANAGER_FUNCTIONS), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKDWORD GetValidFunctionsMask() const", asMETHODPR(T, GetValidFunctionsMask, (), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKDWORD GetValidFunctionsMask()", asMETHODPR(T, GetValidFunctionsMask, (), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(T, CKDestroyObject, (CKObject *, CKDWORD, CKDependencies *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

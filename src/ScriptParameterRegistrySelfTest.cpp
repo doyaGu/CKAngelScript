@@ -677,6 +677,26 @@ bool RunCKBaseManagerCastScriptSelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
 
+    asITypeInfo *baseManagerType = engine->GetTypeInfoByDecl("CKBaseManager");
+    if (!baseManagerType) {
+        error = "CKBaseManager self-test could not find the registered type.";
+        return false;
+    }
+    if (baseManagerType->GetMethodByDecl("CKGUID GetGuid()") == nullptr ||
+        baseManagerType->GetMethodByDecl("string GetName()") == nullptr ||
+        baseManagerType->GetMethodByDecl("CKStateChunk@ SaveData(CKFile@ savedFile)") == nullptr ||
+        baseManagerType->GetMethodByDecl("CKDWORD GetValidFunctionsMask()") == nullptr) {
+        error = "CKBaseManager self-test could not find expected non-const manager methods.";
+        return false;
+    }
+    if (baseManagerType->GetMethodByDecl("CKGUID GetGuid() const") != nullptr ||
+        baseManagerType->GetMethodByDecl("string GetName() const") != nullptr ||
+        baseManagerType->GetMethodByDecl("CKStateChunk@ SaveData(CKFile@ savedFile) const") != nullptr ||
+        baseManagerType->GetMethodByDecl("CKDWORD GetValidFunctionsMask() const") != nullptr) {
+        error = "CKBaseManager self-test found stale const manager method declarations.";
+        return false;
+    }
+
     constexpr const char *moduleName = "__CKAS_CKBaseManagerCastSelfTest";
     const char *source =
         "int ProbeBaseManagerCasts(CKContext@ ctx) {\n"
