@@ -85,7 +85,7 @@ void RegisterCKObjectTypes(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("VxDriverDesc", sizeof(VxDriverDesc), asOBJ_VALUE | asGetTypeTraits<VxDriverDesc>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("VxIntersectionDesc", sizeof(VxIntersectionDesc), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxIntersectionDesc>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("VxStats", sizeof(VxStats), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<VxStats>()); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectType("CKGUID", sizeof(CKGUID), asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<CKGUID>()); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("CKGUID", sizeof(CKGUID), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLINTS | asGetTypeTraits<CKGUID>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("VxEffectDescription", sizeof(VxEffectDescription), asOBJ_VALUE | asGetTypeTraits<VxEffectDescription>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CKBehaviorContext", sizeof(CKBehaviorContext), asOBJ_VALUE | asGetTypeTraits<CKBehaviorContext>()); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectType("CKUICallbackStruct", sizeof(CKUICallbackStruct), asOBJ_VALUE | asGetTypeTraits<CKUICallbackStruct>()); CKAS_CHECK_REGISTER(r);

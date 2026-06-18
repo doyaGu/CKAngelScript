@@ -430,6 +430,80 @@ bool RunCKStructStructScriptSelfTest(asIScriptEngine *engine, std::string &error
     return ok;
 }
 
+bool RunCKGUIDScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKGUID script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *guidType = engine->GetTypeInfoByDecl("CKGUID");
+    if (!guidType) {
+        error = "CKGUID type is not registered.";
+        return false;
+    }
+    if ((guidType->GetFlags() & asOBJ_APP_CLASS_ALLINTS) == 0) {
+        error = "CKGUID type is missing asOBJ_APP_CLASS_ALLINTS.";
+        return false;
+    }
+    if (!guidType->GetMethodByDecl("int opCmp(const CKGUID &in other) const")) {
+        error = "CKGUID comparison method is not registered.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKGUIDSelfTest";
+    const char *source =
+        "int ProbeCKGUID() {\n"
+        "  CKGUID empty;\n"
+        "  if (empty.IsValid()) return 1;\n"
+        "  CKGUID direct(0x11111111, 0x22222222);\n"
+        "  if (direct.d1 != 0x11111111 || direct.d2 != 0x22222222) return 2;\n"
+        "  CKGUID listed = {0x33333333, 0x44444444};\n"
+        "  if (listed.d1 != 0x33333333 || listed.d2 != 0x44444444) return 3;\n"
+        "  listed.d1 = 0x55555555;\n"
+        "  listed.d2 = 0x66666666;\n"
+        "  if (listed.d1 != 0x55555555 || listed.d2 != 0x66666666) return 4;\n"
+        "  CKGUID copied(listed);\n"
+        "  if (copied.d1 != listed.d1 || copied.d2 != listed.d2) return 5;\n"
+        "  CKGUID assigned;\n"
+        "  assigned = direct;\n"
+        "  if (assigned.d1 != direct.d1 || assigned.d2 != direct.d2) return 6;\n"
+        "  if (direct.opCmp(assigned) != 0) return 7;\n"
+        "  if (direct.opCmp(listed) >= 0) return 8;\n"
+        "  if (!direct.IsValid()) return 9;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKGUID self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-guid-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKGUID self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKGUID self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKGUID()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKGUID self-test function was not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKGUID value probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKAttributeDesc script self-test requires an AngelScript engine.";
@@ -1590,6 +1664,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKStructStructScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKGUIDScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeDescScriptSelfTest(engine, error)) {

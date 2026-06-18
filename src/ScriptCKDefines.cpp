@@ -946,12 +946,12 @@ void RegisterCKGUID(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKGUID *self) { new(self) CKGUID(); }, (CKGUID *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_CONSTRUCT, "void f(CKDWORD gd1 = 0, CKDWORD gd2 = 0)", asFUNCTIONPR([](CKDWORD gd1, CKDWORD gd2, CKGUID *self) { new(self) CKGUID(gd1, gd2); }, (CKDWORD, CKDWORD, CKGUID *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_CONSTRUCT, "void f(const CKGUID &in other)", asFUNCTIONPR([](const CKGUID &guid, CKGUID *self) { new(self) CKGUID(guid); }, (const CKGUID &, CKGUID *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {CKDWORD, CKDWORD}", asFUNCTIONPR([](CKDWORD *list, CKGUID *self) { new(self) CKGUID(list[0], list[1]); }, (CKDWORD *, CKGUID *), void), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_LIST_CONSTRUCT, "void f(const int &in) {CKDWORD, CKDWORD}", asFUNCTIONPR([](CKDWORD *list, CKGUID *self) { new(self) CKGUID(list[0], list[1]); }, (CKDWORD *, CKGUID *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKGUID", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKGUID *self) { self->~CKGUID(); }, (CKGUID *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGUID", "CKGUID &opAssign(const CKGUID &in other)", asMETHODPR(CKGUID, operator=, (const CKGUID &), CKGUID &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGUID", "int opCmp(const CKGUID &in other) const", asFUNCTIONPR([](const CKGUID &lhs, const CKGUID &rhs) -> int { if (lhs == rhs) return 0; else if (lhs < rhs) return -1; else return 1; }, (const CKGUID &, const CKGUID &), int), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod("CKGUID", "int opCmp(const CKGUID &in other) const", asFUNCTIONPR([](const CKGUID &lhs, const CKGUID &rhs) -> int { if (lhs == rhs) return 0; else if (lhs < rhs) return -1; else return 1; }, (const CKGUID &, const CKGUID &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGUID", "bool IsValid() const", asFUNCTIONPR([](const CKGUID &guid) -> bool { return const_cast<CKGUID &>(guid).IsValid(); }, (const CKGUID &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
