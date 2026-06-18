@@ -1769,6 +1769,21 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBehaviorPrototype self-test could not find expected guarded pointer methods.";
         return false;
     }
+    if (prototypeType->GetMethodByDecl("int DeclareInParameter(const string &in name, CKGUID guidType)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareInParameter(const string &in name, CKGUID guidType, const string &in defaultVal)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareInParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareOutParameter(const string &in name, CKGUID guidType)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareOutParameter(const string &in name, CKGUID guidType, const string &in defaultVal)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareOutParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareLocalParameter(const string &in name, CKGUID guidType)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareLocalParameter(const string &in name, CKGUID guidType, const string &in defaultVal)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareLocalParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareSetting(const string &in name, CKGUID guidType)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareSetting(const string &in name, CKGUID guidType, const string &in defaultVal)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareSetting(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)") == nullptr) {
+        error = "CKBehaviorPrototype self-test could not find expected guarded parameter declaration overloads.";
+        return false;
+    }
 #if CKVERSION == 0x13022002
     if (prototypeType->GetMethodByDecl("CKBEHAVIORIO_DESC &GetInIOList(int index)") == nullptr ||
         prototypeType->GetMethodByDecl("CKBEHAVIORIO_DESC &GetOutIOList(int index)") == nullptr ||
@@ -1789,6 +1804,23 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         "  NativePointer f = proto.GetFunction();\n"
         "  proto.SetBehaviorCallbackFct(empty, CKCB_BEHAVIORALL, empty);\n"
         "  NativePointer cb = proto.GetBehaviorCallbackFct();\n"
+        "}\n";
+    const char *parameterSource =
+        "void ProbeCKBehaviorPrototypeParameterDeclarations(CKBehaviorPrototype@ proto) {\n"
+        "  if (proto is null) return;\n"
+        "  NativePointer empty;\n"
+        "  proto.DeclareInParameter(\"In\", CKPGUID_INT);\n"
+        "  proto.DeclareInParameter(\"InText\", CKPGUID_STRING, \"text\");\n"
+        "  proto.DeclareInParameter(\"InRaw\", CKPGUID_INT, empty, 0);\n"
+        "  proto.DeclareOutParameter(\"Out\", CKPGUID_INT);\n"
+        "  proto.DeclareOutParameter(\"OutText\", CKPGUID_STRING, \"text\");\n"
+        "  proto.DeclareOutParameter(\"OutRaw\", CKPGUID_INT, empty, 0);\n"
+        "  proto.DeclareLocalParameter(\"Local\", CKPGUID_INT);\n"
+        "  proto.DeclareLocalParameter(\"LocalText\", CKPGUID_STRING, \"text\");\n"
+        "  proto.DeclareLocalParameter(\"LocalRaw\", CKPGUID_INT, empty, 0);\n"
+        "  proto.DeclareSetting(\"Setting\", CKPGUID_BOOL);\n"
+        "  proto.DeclareSetting(\"SettingText\", CKPGUID_STRING, \"text\");\n"
+        "  proto.DeclareSetting(\"SettingRaw\", CKPGUID_BOOL, empty, 0);\n"
         "}\n";
 #if CKVERSION == 0x13022002
     const char *listSource =
@@ -1824,6 +1856,12 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBehaviorPrototype self-test could not add its script section.";
         return false;
     }
+    r = module->AddScriptSection("ck-behavior-prototype-parameter-self-test", parameterSource);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype self-test could not add its parameter script section.";
+        return false;
+    }
 #if CKVERSION == 0x13022002
     r = module->AddScriptSection("ck-behavior-prototype-list-self-test", listSource);
     if (r < 0) {
@@ -1843,6 +1881,12 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
     if (!probe) {
         engine->DiscardModule(moduleName);
         error = "CKBehaviorPrototype self-test function was not found.";
+        return false;
+    }
+    asIScriptFunction *parameterProbe = module->GetFunctionByDecl("void ProbeCKBehaviorPrototypeParameterDeclarations(CKBehaviorPrototype@)");
+    if (!parameterProbe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype parameter self-test function was not found.";
         return false;
     }
 #if CKVERSION == 0x13022002

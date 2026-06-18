@@ -2627,6 +2627,130 @@ static NativePointer GetCKBehaviorPrototypeCallback(CKBehaviorPrototype *self) {
     return NativePointer(reinterpret_cast<uintptr_t>(self->GetBehaviorCallbackFct()));
 }
 
+static int SetCKBehaviorPrototypeParameterException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static bool GetCKBehaviorPrototypeRawDefaultValue(NativePointer defaultVal, int valSize, void *&value) {
+    value = nullptr;
+    if (valSize < 0) {
+        SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype raw default value size must be non-negative.");
+        return false;
+    }
+    if (valSize == 0) {
+        return true;
+    }
+    if (defaultVal.IsNull()) {
+        SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype raw default value requires a non-null NativePointer when size is positive.");
+        return false;
+    }
+    value = defaultVal.Get();
+    return true;
+}
+
+static int DeclareCKBehaviorPrototypeInParameter(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareInParameter requires a valid prototype.");
+    }
+    return self->DeclareInParameter(const_cast<CKSTRING>(name.c_str()), guidType, static_cast<CKSTRING>(nullptr));
+}
+
+static int DeclareCKBehaviorPrototypeInParameterString(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareInParameter requires a valid prototype.");
+    }
+    return self->DeclareInParameter(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str()));
+}
+
+static int DeclareCKBehaviorPrototypeInParameterRaw(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, NativePointer defaultVal, int valSize) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareInParameter requires a valid prototype.");
+    }
+    void *value = nullptr;
+    if (!GetCKBehaviorPrototypeRawDefaultValue(defaultVal, valSize, value)) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->DeclareInParameter(const_cast<CKSTRING>(name.c_str()), guidType, value, valSize);
+}
+
+static int DeclareCKBehaviorPrototypeOutParameter(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareOutParameter requires a valid prototype.");
+    }
+    return self->DeclareOutParameter(const_cast<CKSTRING>(name.c_str()), guidType, static_cast<CKSTRING>(nullptr));
+}
+
+static int DeclareCKBehaviorPrototypeOutParameterString(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareOutParameter requires a valid prototype.");
+    }
+    return self->DeclareOutParameter(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str()));
+}
+
+static int DeclareCKBehaviorPrototypeOutParameterRaw(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, NativePointer defaultVal, int valSize) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareOutParameter requires a valid prototype.");
+    }
+    void *value = nullptr;
+    if (!GetCKBehaviorPrototypeRawDefaultValue(defaultVal, valSize, value)) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->DeclareOutParameter(const_cast<CKSTRING>(name.c_str()), guidType, value, valSize);
+}
+
+static int DeclareCKBehaviorPrototypeLocalParameter(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareLocalParameter requires a valid prototype.");
+    }
+    return self->DeclareLocalParameter(const_cast<CKSTRING>(name.c_str()), guidType, static_cast<CKSTRING>(nullptr));
+}
+
+static int DeclareCKBehaviorPrototypeLocalParameterString(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareLocalParameter requires a valid prototype.");
+    }
+    return self->DeclareLocalParameter(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str()));
+}
+
+static int DeclareCKBehaviorPrototypeLocalParameterRaw(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, NativePointer defaultVal, int valSize) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareLocalParameter requires a valid prototype.");
+    }
+    void *value = nullptr;
+    if (!GetCKBehaviorPrototypeRawDefaultValue(defaultVal, valSize, value)) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->DeclareLocalParameter(const_cast<CKSTRING>(name.c_str()), guidType, value, valSize);
+}
+
+static int DeclareCKBehaviorPrototypeSetting(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareSetting requires a valid prototype.");
+    }
+    return self->DeclareSetting(const_cast<CKSTRING>(name.c_str()), guidType, static_cast<CKSTRING>(nullptr));
+}
+
+static int DeclareCKBehaviorPrototypeSettingString(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareSetting requires a valid prototype.");
+    }
+    return self->DeclareSetting(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str()));
+}
+
+static int DeclareCKBehaviorPrototypeSettingRaw(CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, NativePointer defaultVal, int valSize) {
+    if (!self) {
+        return SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype.DeclareSetting requires a valid prototype.");
+    }
+    void *value = nullptr;
+    if (!GetCKBehaviorPrototypeRawDefaultValue(defaultVal, valSize, value)) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->DeclareSetting(const_cast<CKSTRING>(name.c_str()), guidType, value, valSize);
+}
+
 #if CKVERSION == 0x13022002
 static CKBEHAVIORIO_DESC *GetInvalidCKBehaviorPrototypeIODesc(const char *message) {
     static thread_local CKBEHAVIORIO_DESC dummy;
@@ -2705,14 +2829,18 @@ void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInput(const string &in name)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name) { return self->DeclareInput(const_cast<CKSTRING>(name.c_str())); }, (CKBehaviorPrototype *, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutput(const string &in name)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name) { return self->DeclareOutput(const_cast<CKSTRING>(name.c_str())); }, (CKBehaviorPrototype *, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInParameter(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) { return self->DeclareInParameter(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str())); }, (CKBehaviorPrototype *, const std::string &, CKGUID, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, NativePointer defaultVal, int valSize) { return self->DeclareInParameter(const_cast<CKSTRING>(name.c_str()), guidType, defaultVal.Get(), valSize); }, (CKBehaviorPrototype *, const std::string &, CKGUID, NativePointer, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutParameter(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) { return self->DeclareOutParameter(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str())); }, (CKBehaviorPrototype *, const std::string &, CKGUID, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, NativePointer defaultVal, int valSize) { return self->DeclareOutParameter(const_cast<CKSTRING>(name.c_str()), guidType, defaultVal.Get(), valSize); }, (CKBehaviorPrototype *, const std::string &, CKGUID, NativePointer, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareLocalParameter(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) { return self->DeclareLocalParameter(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str())); }, (CKBehaviorPrototype *, const std::string &, CKGUID, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareLocalParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, NativePointer defaultVal, int valSize) { return self->DeclareLocalParameter(const_cast<CKSTRING>(name.c_str()), guidType, defaultVal.Get(), valSize); }, (CKBehaviorPrototype *, const std::string &, CKGUID, NativePointer, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareSetting(const string &in name, CKGUID guidType, const string &in defaultVal = void)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, const std::string &defaultVal) { return self->DeclareSetting(const_cast<CKSTRING>(name.c_str()), guidType, const_cast<CKSTRING>(defaultVal.c_str())); }, (CKBehaviorPrototype *, const std::string &, CKGUID, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareSetting(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTIONPR([](CKBehaviorPrototype *self, const std::string &name, CKGUID guidType, NativePointer defaultVal, int valSize) { return self->DeclareSetting(const_cast<CKSTRING>(name.c_str()), guidType, defaultVal.Get(), valSize); }, (CKBehaviorPrototype *, const std::string &, CKGUID, NativePointer, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInParameter(const string &in name, CKGUID guidType)", asFUNCTION(DeclareCKBehaviorPrototypeInParameter), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInParameter(const string &in name, CKGUID guidType, const string &in defaultVal)", asFUNCTION(DeclareCKBehaviorPrototypeInParameterString), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareInParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTION(DeclareCKBehaviorPrototypeInParameterRaw), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutParameter(const string &in name, CKGUID guidType)", asFUNCTION(DeclareCKBehaviorPrototypeOutParameter), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutParameter(const string &in name, CKGUID guidType, const string &in defaultVal)", asFUNCTION(DeclareCKBehaviorPrototypeOutParameterString), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareOutParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTION(DeclareCKBehaviorPrototypeOutParameterRaw), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareLocalParameter(const string &in name, CKGUID guidType)", asFUNCTION(DeclareCKBehaviorPrototypeLocalParameter), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareLocalParameter(const string &in name, CKGUID guidType, const string &in defaultVal)", asFUNCTION(DeclareCKBehaviorPrototypeLocalParameterString), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareLocalParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTION(DeclareCKBehaviorPrototypeLocalParameterRaw), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareSetting(const string &in name, CKGUID guidType)", asFUNCTION(DeclareCKBehaviorPrototypeSetting), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareSetting(const string &in name, CKGUID guidType, const string &in defaultVal)", asFUNCTION(DeclareCKBehaviorPrototypeSettingString), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int DeclareSetting(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)", asFUNCTION(DeclareCKBehaviorPrototypeSettingRaw), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "void SetGuid(const CKGUID &in guid)", asMETHODPR(CKBehaviorPrototype, SetGuid, (CKGUID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKGUID GetGuid()", asMETHODPR(CKBehaviorPrototype, GetGuid, (), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
