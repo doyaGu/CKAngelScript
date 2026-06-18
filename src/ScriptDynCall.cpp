@@ -21,6 +21,15 @@ void SetActiveScriptException(const char *message) {
         ctx->SetException(message);
 }
 
+#if defined(DC__Feature_AggrByVal)
+constexpr bool kDyncallSupportsAggregateByValue = true;
+#else
+constexpr bool kDyncallSupportsAggregateByValue = false;
+#endif
+
+constexpr const char *kUnsupportedAggregateByValueMessage =
+    "Dyncall aggregate-by-value calls are not supported on this platform.";
+
 } // namespace
 
 class DynAggregate {
@@ -228,6 +237,10 @@ public:
     }
 
     DynCall &BeginCallAggr(const DynAggregate &aggr) {
+        if (!kDyncallSupportsAggregateByValue) {
+            SetActiveScriptException(kUnsupportedAggregateByValueMessage);
+            return *this;
+        }
         dcBeginCallAggr(vm, aggr.Get());
         return *this;
     }
@@ -283,6 +296,10 @@ public:
     }
 
     DynCall &ArgAggregate(const DynAggregate &aggr, const void *value) {
+        if (!kDyncallSupportsAggregateByValue) {
+            SetActiveScriptException(kUnsupportedAggregateByValueMessage);
+            return *this;
+        }
         dcArgAggr(vm, aggr.Get(), value);
         return *this;
     }
@@ -333,6 +350,10 @@ public:
     }
 
     void *CallAggregate(void *funcptr, const DynAggregate &aggr, void *ret) {
+        if (!kDyncallSupportsAggregateByValue) {
+            SetActiveScriptException(kUnsupportedAggregateByValueMessage);
+            return nullptr;
+        }
         return dcCallAggr(vm, funcptr, aggr.Get(), ret);
     }
 
@@ -362,6 +383,10 @@ public:
     }
 
     static DynCallback *Create(const std::string &signature, asIScriptFunction *func, const DynAggregate &aggregate) {
+        if (!kDyncallSupportsAggregateByValue) {
+            SetActiveScriptException(kUnsupportedAggregateByValueMessage);
+            return nullptr;
+        }
         if (!func) {
             SetActiveScriptException("DynCallback requires a handler.");
             return nullptr;
@@ -384,9 +409,14 @@ public:
     }
 
     DynCallback(std::string signature, asIScriptFunction *func, const DynAggregate &aggregate)
-        : m_Signature(std::move(signature)), m_Aggregate(&aggregate) {
+        : m_Signature(std::move(signature)) {
+        if (!kDyncallSupportsAggregateByValue) {
+            SetActiveScriptException(kUnsupportedAggregateByValueMessage);
+            return;
+        }
         RetainHandler(func);
         aggregate.AddRef();
+        m_Aggregate = &aggregate;
         callback = dcbNewCallback2(m_Signature.c_str(), ScriptCallbackHandler, m_Handler, &aggregate.aggr);
         if (!callback) {
             ReleaseAggregate();
@@ -483,6 +513,10 @@ public:
     }
 
     void Init(const std::string &signature, asIScriptFunction *func, const DynAggregate &aggregate) {
+        if (!kDyncallSupportsAggregateByValue) {
+            SetActiveScriptException(kUnsupportedAggregateByValueMessage);
+            return;
+        }
         if (!callback) {
             SetActiveScriptException("Callback is not initialized.");
             return;
@@ -565,7 +599,7 @@ public:
         return finish(signature);
     }
 
-    DCCallback *callback;
+    DCCallback *callback = nullptr;
 
 private:
     void NotifyGarbageCollector() {
@@ -1087,8 +1121,18 @@ static void RegisterDynArgs(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("DynArgs", "double ArgDouble()", asFUNCTIONPR([](DCArgs *args) { return dcbArgDouble(args); }, (DCArgs *), double), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynArgs", "NativePointer ArgPointer()", asFUNCTIONPR([](DCArgs *args) { return NativePointer(dcbArgPointer(args)); }, (DCArgs *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynArgs", "string ArgString()", asFUNCTIONPR([](DCArgs *args) -> std::string { auto *str = static_cast<char *>(dcbArgPointer(args)); return str ? str : ""; }, (DCArgs *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("DynArgs", "NativePointer ArgAggregate(NativePointer target)", asFUNCTIONPR([](DCArgs *args, NativePointer target) { return NativePointer(dcbArgAggr(args, target.Get())); }, (DCArgs *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("DynArgs", "NativePointer ArgAggregate(NativePointer target)", asFUNCTIONPR([](DCArgs *args, NativePointer target) {
+        if (!kDyncallSupportsAggregateByValue) {
+            SetActiveScriptException(kUnsupportedAggregateByValueMessage);
+            return NativePointer();
+        }
+        return NativePointer(dcbArgAggr(args, target.Get()));
+    }, (DCArgs *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynArgs", "void ReturnAggregate(DynValue@ result, NativePointer ret)", asFUNCTIONPR([](DCArgs *args, DCValue *result, NativePointer ret) {
+        if (!kDyncallSupportsAggregateByValue) {
+            SetActiveScriptException(kUnsupportedAggregateByValueMessage);
+            return;
+        }
         if (!result) {
             if (auto *ctx = asGetActiveContext()) {
                 ctx->SetException("DynArgs.ReturnAggregate requires a DynValue result.");

@@ -3,6 +3,7 @@
 #include "CKAngelScript.h"
 
 #include <angelscript.h>
+#include <dyncall.h>
 #include <windows.h>
 
 namespace {
@@ -171,6 +172,45 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         "  result.SetInt(args.ArgInt() + 11);\n"
         "  return DC_SIGCHAR_INT;\n"
         "}\n"
+        "int8 DynArgsReaderHandler(NativePointer pcb, DynArgs &args, DynValue &result) {\n"
+        "  if (!args.ArgBool()) { result.SetInt(201); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgChar() != 7) { result.SetInt(202); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgUChar() != 8) { result.SetInt(203); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgShort() != 300) { result.SetInt(204); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgUShort() != 301) { result.SetInt(205); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgInt() != 302) { result.SetInt(206); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgUInt() != 303) { result.SetInt(207); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgLong() != 304) { result.SetInt(208); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgULong() != 305) { result.SetInt(209); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgLongLong() != 306) { result.SetInt(210); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgULongLong() != 307) { result.SetInt(211); return DC_SIGCHAR_INT; }\n"
+        "  float f = args.ArgFloat();\n"
+        "  if (f < 12.49f || f > 12.51f) { result.SetInt(212); return DC_SIGCHAR_INT; }\n"
+        "  double d = args.ArgDouble();\n"
+        "  if (d < 45.66 || d > 45.68) { result.SetInt(213); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgString() != \"dynargs\") { result.SetInt(214); return DC_SIGCHAR_INT; }\n"
+        "  if (args.ArgPointer() != NativePointer(uintptr_t(4660))) { result.SetInt(215); return DC_SIGCHAR_INT; }\n"
+        "  result.SetInt(2468);\n"
+        "  return DC_SIGCHAR_INT;\n"
+        "}\n"
+        "int8 DynArgsAggregateArgHandler(NativePointer pcb, DynArgs &args, DynValue &result) {\n"
+        "  NativeBuffer@ target = NativeBuffer(8);\n"
+        "  args.ArgAggregate(target.ToPointer());\n"
+        "  target.Seek(0);\n"
+        "  int a = 0;\n"
+        "  int b = 0;\n"
+        "  target.ReadInt(a);\n"
+        "  target.ReadInt(b);\n"
+        "  result.SetInt(a + b);\n"
+        "  return DC_SIGCHAR_INT;\n"
+        "}\n"
+        "int8 DynArgsAggregateReturnHandler(NativePointer pcb, DynArgs &args, DynValue &result) {\n"
+        "  NativeBuffer@ value = NativeBuffer(8);\n"
+        "  value.WriteInt(321);\n"
+        "  value.WriteInt(654);\n"
+        "  args.ReturnAggregate(result, value.ToPointer());\n"
+        "  return DC_SIGCHAR_AGGREGATE;\n"
+        "}\n"
         "int RunDynCallback() {\n"
         "  DynCallback@ scalarCb = DynCallback(\"i)i\", DynArgsScalarHandler);\n"
         "  if (scalarCb is null) return 1;\n"
@@ -185,6 +225,51 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         "  int rebound = call.Reset().ArgInt(31).CallInt(scalarCb.GetCallback());\n"
         "  if (rebound != 42) return rebound;\n"
         "  if (call.GetError() != DC_ERROR_NONE) return 6;\n"
+        "  return 0;\n"
+        "}\n"
+        "int RunDynArgs() {\n"
+        "  DynCallback@ readerCb = DynCallback(\"BcCsSiIjJlLfdZp)i\", DynArgsReaderHandler);\n"
+        "  if (readerCb is null) return 1;\n"
+        "  DynCall@ call = DynCall();\n"
+        "  if (call is null) return 2;\n"
+        "  int scalar = call.Reset().ArgBool(true).ArgChar(7).ArgChar(8).ArgShort(300).ArgShort(301).ArgInt(302).ArgInt(303).ArgLong(304).ArgLong(305).ArgLongLong(306).ArgLongLong(307).ArgFloat(12.5f).ArgDouble(45.67).ArgString(\"dynargs\").ArgPointer(NativePointer(uintptr_t(4660))).CallInt(readerCb.GetCallback());\n"
+        "  if (scalar != 2468) return scalar;\n"
+        "  if (call.GetError() != DC_ERROR_NONE) return 3;\n"
+        "  return 0;\n"
+        "}\n"
+        "int RunDynArgsUnsupportedAggregate() {\n"
+        "  DynAggregate@ pair = DynAggregate(2, 8);\n"
+        "  if (pair is null) return 4;\n"
+        "  pair.Field(DC_SIGCHAR_INT, 0).Field(DC_SIGCHAR_INT, 4).Close();\n"
+        "  DynCallback@ aggregateArgCb = DynCallback(\"A)i\", DynArgsAggregateArgHandler, pair);\n"
+        "  if (aggregateArgCb is null) return 5;\n"
+        "  return 1;\n"
+        "}\n"
+        "int RunDynArgsAggregateRoundTrip() {\n"
+        "  DynAggregate@ pair = DynAggregate(2, 8);\n"
+        "  if (pair is null) return 4;\n"
+        "  pair.Field(DC_SIGCHAR_INT, 0).Field(DC_SIGCHAR_INT, 4).Close();\n"
+        "  DynCallback@ aggregateArgCb = DynCallback(\"A)i\", DynArgsAggregateArgHandler, pair);\n"
+        "  if (aggregateArgCb is null) return 5;\n"
+        "  DynCall@ call = DynCall();\n"
+        "  if (call is null) return 6;\n"
+        "  NativeBuffer@ aggregateArg = NativeBuffer(8);\n"
+        "  aggregateArg.WriteInt(11);\n"
+        "  aggregateArg.WriteInt(22);\n"
+        "  int aggregateSum = call.Reset().ArgAggregate(pair, aggregateArg.ToPointer()).CallInt(aggregateArgCb.GetCallback());\n"
+        "  if (aggregateSum != 33) return 6;\n"
+        "  if (call.GetError() != DC_ERROR_NONE) return 7;\n"
+        "  DynCallback@ aggregateReturnCb = DynCallback(\")A\", DynArgsAggregateReturnHandler, pair);\n"
+        "  if (aggregateReturnCb is null) return 8;\n"
+        "  NativeBuffer@ ret = NativeBuffer(8);\n"
+        "  call.Reset().CallAggregate(aggregateReturnCb.GetCallback(), pair, ret.ToPointer());\n"
+        "  if (call.GetError() != DC_ERROR_NONE) return 9;\n"
+        "  ret.Seek(0);\n"
+        "  int retA = 0;\n"
+        "  int retB = 0;\n"
+        "  ret.ReadInt(retA);\n"
+        "  ret.ReadInt(retB);\n"
+        "  if (retA != 321 || retB != 654) return 10;\n"
         "  return 0;\n"
         "}\n";
 
@@ -283,12 +368,23 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         return ok;
     };
 
-    return executeIntFunction("int RunDynSymbols()", "DynSymbols") &&
-           executeIntFunction("int RunDynLibrary()", "DynLibrary") &&
-           executeIntFunction("int RunDynCall()", "DynCall") &&
-           executeIntFunction("int RunDynAggregate()", "DynAggregate") &&
-           executeExpectedException("int RunDynAggregateOverflow()", "DynAggregate overflow", "field capacity exceeded") &&
-           executeExpectedException("int RunDynAggregateAfterClose()", "DynAggregate after close", "closed DynAggregate") &&
-           executeExpectedException("int RunDynAggregateCycle()", "DynAggregate cycle", "nesting cycle") &&
-           executeIntFunction("int RunDynCallback()", "DynCallback");
+    bool ok = executeIntFunction("int RunDynSymbols()", "DynSymbols") &&
+              executeIntFunction("int RunDynLibrary()", "DynLibrary") &&
+              executeIntFunction("int RunDynCall()", "DynCall") &&
+              executeIntFunction("int RunDynAggregate()", "DynAggregate") &&
+              executeExpectedException("int RunDynAggregateOverflow()", "DynAggregate overflow", "field capacity exceeded") &&
+              executeExpectedException("int RunDynAggregateAfterClose()", "DynAggregate after close", "closed DynAggregate") &&
+              executeExpectedException("int RunDynAggregateCycle()", "DynAggregate cycle", "nesting cycle") &&
+              executeIntFunction("int RunDynCallback()", "DynCallback") &&
+              executeIntFunction("int RunDynArgs()", "DynArgs");
+
+#if defined(DC__Feature_AggrByVal)
+    ok = ok && executeIntFunction("int RunDynArgsAggregateRoundTrip()", "DynArgs aggregate");
+#else
+    ok = ok && executeExpectedException("int RunDynArgsUnsupportedAggregate()",
+                                        "DynArgs unsupported aggregate",
+                                        "aggregate-by-value calls are not supported");
+#endif
+
+    return ok;
 }
