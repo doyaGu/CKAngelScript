@@ -4,6 +4,7 @@
 
 #include <angelscript.h>
 #include <dyncall.h>
+#include <cstring>
 #include <windows.h>
 
 namespace {
@@ -75,6 +76,16 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
     }
     if ((dynCallbackType->GetFlags() & asOBJ_GC) == 0) {
         error = "DynLoad self-test found DynCallback missing GC type flag.";
+        return false;
+    }
+
+    asITypeInfo *dynValueType = engine->GetTypeInfoByDecl("DynValue");
+    if (!dynValueType) {
+        error = "DynLoad self-test could not resolve DynValue type.";
+        return false;
+    }
+    if ((dynValueType->GetFlags() & asOBJ_NOHANDLE) == 0) {
+        error = "DynLoad self-test found DynValue allowing handles.";
         return false;
     }
 
@@ -172,6 +183,30 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         "  result.SetInt(args.ArgInt() + 11);\n"
         "  return DC_SIGCHAR_INT;\n"
         "}\n"
+        "int8 DynValueRoundTripHandler(NativePointer pcb, DynArgs &args, DynValue &result) {\n"
+        "  result.SetBool(true); if (!result.GetBool()) return DC_SIGCHAR_INT;\n"
+        "  result.SetChar(-7); if (result.GetChar() != -7) return DC_SIGCHAR_INT;\n"
+        "  result.SetUChar(8); if (result.GetUChar() != 8) return DC_SIGCHAR_INT;\n"
+        "  result.SetShort(-300); if (result.GetShort() != -300) return DC_SIGCHAR_INT;\n"
+        "  result.SetUShort(301); if (result.GetUShort() != 301) return DC_SIGCHAR_INT;\n"
+        "  result.SetInt(302); if (result.GetInt() != 302) return DC_SIGCHAR_INT;\n"
+        "  result.SetUInt(303); if (result.GetUInt() != 303) return DC_SIGCHAR_INT;\n"
+        "  result.SetLong(304); if (result.GetLong() != 304) return DC_SIGCHAR_INT;\n"
+        "  result.SetULong(305); if (result.GetULong() != 305) return DC_SIGCHAR_INT;\n"
+        "  result.SetLongLong(306); if (result.GetLongLong() != 306) return DC_SIGCHAR_INT;\n"
+        "  result.SetULongLong(307); if (result.GetULongLong() != 307) return DC_SIGCHAR_INT;\n"
+        "  result.SetFloat(12.5f); float f = result.GetFloat(); if (f < 12.49f || f > 12.51f) return DC_SIGCHAR_INT;\n"
+        "  result.SetDouble(45.67); double d = result.GetDouble(); if (d < 45.66 || d > 45.68) return DC_SIGCHAR_INT;\n"
+        "  result.SetPointer(NativePointer(uintptr_t(4660))); if (result.GetPointer() != NativePointer(uintptr_t(4660))) return DC_SIGCHAR_INT;\n"
+        "  result.SetString(\"temporary\"); if (result.GetString() != \"temporary\") return DC_SIGCHAR_INT;\n"
+        "  result.SetInt(1357);\n"
+        "  return DC_SIGCHAR_INT;\n"
+        "}\n"
+        "int8 DynValueStringHandler(NativePointer pcb, DynArgs &args, DynValue &result) {\n"
+        "  result.SetString(\"first\");\n"
+        "  result.SetString(\"dynvalue-string\");\n"
+        "  return DC_SIGCHAR_STRING;\n"
+        "}\n"
         "int8 DynArgsReaderHandler(NativePointer pcb, DynArgs &args, DynValue &result) {\n"
         "  if (!args.ArgBool()) { result.SetInt(201); return DC_SIGCHAR_INT; }\n"
         "  if (args.ArgChar() != 7) { result.SetInt(202); return DC_SIGCHAR_INT; }\n"
@@ -224,6 +259,21 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         "  if (scalarCb.GetHandler() is null) return 5;\n"
         "  int rebound = call.Reset().ArgInt(31).CallInt(scalarCb.GetCallback());\n"
         "  if (rebound != 42) return rebound;\n"
+        "  if (call.GetError() != DC_ERROR_NONE) return 6;\n"
+        "  return 0;\n"
+        "}\n"
+        "int RunDynValue() {\n"
+        "  DynCallback@ valueCb = DynCallback(\")i\", DynValueRoundTripHandler);\n"
+        "  if (valueCb is null) return 1;\n"
+        "  DynCallback@ stringCb = DynCallback(\")Z\", DynValueStringHandler);\n"
+        "  if (stringCb is null) return 2;\n"
+        "  DynCall@ call = DynCall();\n"
+        "  if (call is null) return 3;\n"
+        "  int value = call.Reset().CallInt(valueCb.GetCallback());\n"
+        "  if (value != 1357) return value;\n"
+        "  if (call.GetError() != DC_ERROR_NONE) return 4;\n"
+        "  string text = call.Reset().CallString(stringCb.GetCallback());\n"
+        "  if (text != \"dynvalue-string\") return 5;\n"
         "  if (call.GetError() != DC_ERROR_NONE) return 6;\n"
         "  return 0;\n"
         "}\n"
@@ -288,6 +338,23 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
     r = module->Build();
     if (r < 0) {
         error = "DynLoad self-test module build failed.";
+        return false;
+    }
+
+    asIScriptModule *negativeModule = engine->GetModule("__CKAS_DynValueHandleNegativeSelfTest", asGM_ALWAYS_CREATE);
+    if (!negativeModule) {
+        error = "DynLoad self-test could not create DynValue negative module.";
+        return false;
+    }
+    const char *negativeSource = "DynValue@ leakedValue;\n";
+    r = negativeModule->AddScriptSection("dynvalue-negative", negativeSource, strlen(negativeSource));
+    if (r < 0) {
+        error = "DynLoad self-test could not add DynValue negative script section.";
+        return false;
+    }
+    r = negativeModule->Build();
+    if (r >= 0) {
+        error = "DynLoad self-test unexpectedly allowed a DynValue handle.";
         return false;
     }
 
@@ -376,6 +443,7 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
               executeExpectedException("int RunDynAggregateAfterClose()", "DynAggregate after close", "closed DynAggregate") &&
               executeExpectedException("int RunDynAggregateCycle()", "DynAggregate cycle", "nesting cycle") &&
               executeIntFunction("int RunDynCallback()", "DynCallback") &&
+              executeIntFunction("int RunDynValue()", "DynValue") &&
               executeIntFunction("int RunDynArgs()", "DynArgs");
 
 #if defined(DC__Feature_AggrByVal)
