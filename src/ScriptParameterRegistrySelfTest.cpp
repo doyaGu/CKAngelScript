@@ -1493,6 +1493,25 @@ bool RunCKMessageManagerScriptSelfTest(CKContext *context, asIScriptEngine *engi
         return false;
     }
 
+    asITypeInfo *waitingObjectType = engine->GetTypeInfoByDecl("CKWaitingObject");
+    if (!waitingObjectType) {
+        error = "CKMessageManager self-test could not find CKWaitingObject.";
+        return false;
+    }
+    if (waitingObjectType->GetPropertyCount() != 0) {
+        error = "CKWaitingObject self-test found exposed raw handle properties.";
+        return false;
+    }
+    if (waitingObjectType->GetMethodByDecl("bool HasBeObject() const") == nullptr ||
+        waitingObjectType->GetMethodByDecl("bool HasBehavior() const") == nullptr ||
+        waitingObjectType->GetMethodByDecl("bool HasOutput() const") == nullptr ||
+        waitingObjectType->GetMethodByDecl("CK_ID BeObjectId() const") == nullptr ||
+        waitingObjectType->GetMethodByDecl("CK_ID BehaviorId() const") == nullptr ||
+        waitingObjectType->GetMethodByDecl("CK_ID OutputId() const") == nullptr) {
+        error = "CKWaitingObject self-test could not find expected safe accessors.";
+        return false;
+    }
+
     constexpr const char *moduleName = "__CKAS_CKMessageManagerSelfTest";
     const char *source =
         "int ProbeMessageManager(CKContext@ ctx) {\n"
@@ -1523,6 +1542,18 @@ bool RunCKMessageManagerScriptSelfTest(CKContext *context, asIScriptEngine *engi
         "  CKMessageManager@ manager = ctx.GetMessageManager();\n"
         "  manager.UnRegisterWait(0, null, 0);\n"
         "  return 0;\n"
+        "}\n"
+        "int ProbeWaitingObject(CKContext@ ctx) {\n"
+        "  if (ctx is null) return 9;\n"
+        "  CKWaitingObject waiting;\n"
+        "  if (waiting.HasBeObject() || waiting.HasBehavior() || waiting.HasOutput()) return 1;\n"
+        "  if (waiting.BeObjectId() != 0 || waiting.BehaviorId() != 0 || waiting.OutputId() != 0) return 2;\n"
+        "  CKWaitingObject copied(waiting);\n"
+        "  if (copied.HasBeObject() || copied.HasBehavior() || copied.HasOutput()) return 3;\n"
+        "  CKWaitingObject assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.BeObjectId() != 0 || assigned.BehaviorId() != 0 || assigned.OutputId() != 0) return 4;\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -1549,13 +1580,15 @@ bool RunCKMessageManagerScriptSelfTest(CKContext *context, asIScriptEngine *engi
     asIScriptFunction *nullGroup = module->GetFunctionByDecl("int ProbeMessageManagerNullGroup(CKContext@)");
     asIScriptFunction *nullWait = module->GetFunctionByDecl("int ProbeMessageManagerNullWait(CKContext@)");
     asIScriptFunction *nullUnwait = module->GetFunctionByDecl("int ProbeMessageManagerNullUnwait(CKContext@)");
-    if (!probe || !nullSingle || !nullGroup || !nullWait || !nullUnwait) {
+    asIScriptFunction *waitingProbe = module->GetFunctionByDecl("int ProbeWaitingObject(CKContext@)");
+    if (!probe || !nullSingle || !nullGroup || !nullWait || !nullUnwait || !waitingProbe) {
         engine->DiscardModule(moduleName);
         error = "CKMessageManager self-test functions were not found.";
         return false;
     }
 
     bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKMessageManager accessors probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, waitingProbe, context, false, "CKWaitingObject safe accessors probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, nullSingle, context, true, "CKMessageManager null single-message probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, nullGroup, context, true, "CKMessageManager null group-message probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, nullWait, context, true, "CKMessageManager null wait probe", error) &&

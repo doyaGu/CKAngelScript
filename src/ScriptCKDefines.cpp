@@ -2552,13 +2552,35 @@ void RegisterCKMessage(asIScriptEngine *engine) {
 
 // CKWaitingObject
 
+#if CKVERSION == 0x13022002
+static bool CKWaitingObjectHasBeObject(const CKWaitingObject &self) {
+    return self.m_BeObject != nullptr;
+}
+
+static bool CKWaitingObjectHasBehavior(const CKWaitingObject &self) {
+    return self.m_Behavior != nullptr;
+}
+
+static bool CKWaitingObjectHasOutput(const CKWaitingObject &self) {
+    return self.m_Output != nullptr;
+}
+
+static CK_ID CKWaitingObjectBeObjectId(const CKWaitingObject &self) {
+    return self.m_BeObject ? self.m_BeObject->GetID() : 0;
+}
+
+static CK_ID CKWaitingObjectBehaviorId(const CKWaitingObject &self) {
+    return self.m_Behavior ? self.m_Behavior->GetID() : 0;
+}
+
+static CK_ID CKWaitingObjectOutputId(const CKWaitingObject &self) {
+    return self.m_Output ? self.m_Output->GetID() : 0;
+}
+#endif
+
 void RegisterCKWaitingObject(asIScriptEngine *engine) {
 #if CKVERSION == 0x13022002
     int r = 0;
-
-    r = engine->RegisterObjectProperty("CKWaitingObject", "CKBeObject@ m_BeObject", asOFFSET(CKWaitingObject, m_BeObject)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKWaitingObject", "CKBehavior@ m_Behavior", asOFFSET(CKWaitingObject, m_Behavior)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKWaitingObject", "CKBehaviorIO@ m_Output", asOFFSET(CKWaitingObject, m_Output)); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKWaitingObject", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKWaitingObject *self) { new(self) CKWaitingObject(); }, (CKWaitingObject*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("CKWaitingObject", asBEHAVE_CONSTRUCT, "void f(const CKWaitingObject &in other)", asFUNCTIONPR([](const CKWaitingObject &obj, CKWaitingObject *self) { new(self) CKWaitingObject(obj); }, (const CKWaitingObject &, CKWaitingObject *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -2566,6 +2588,12 @@ void RegisterCKWaitingObject(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("CKWaitingObject", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKWaitingObject *self) { self->~CKWaitingObject(); }, (CKWaitingObject *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKWaitingObject", "CKWaitingObject &opAssign(const CKWaitingObject &in other)", asMETHODPR(CKWaitingObject, operator=, (const CKWaitingObject &), CKWaitingObject &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaitingObject", "bool HasBeObject() const", asFUNCTION(CKWaitingObjectHasBeObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaitingObject", "bool HasBehavior() const", asFUNCTION(CKWaitingObjectHasBehavior), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaitingObject", "bool HasOutput() const", asFUNCTION(CKWaitingObjectHasOutput), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaitingObject", "CK_ID BeObjectId() const", asFUNCTION(CKWaitingObjectBeObjectId), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaitingObject", "CK_ID BehaviorId() const", asFUNCTION(CKWaitingObjectBehaviorId), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaitingObject", "CK_ID OutputId() const", asFUNCTION(CKWaitingObjectOutputId), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
 }
 
