@@ -3375,6 +3375,14 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  CKObject@ obj;\n"
         "  local.GetValue(@obj);\n"
         "}\n"
+        "void ProbeCKParameterGenericSetNonPodObject(CKParameterLocal@ local) {\n"
+        "  XString value(\"blocked\");\n"
+        "  local.SetValue(value);\n"
+        "}\n"
+        "void ProbeCKParameterGenericGetNonPodObject(CKParameterLocal@ local) {\n"
+        "  XString value;\n"
+        "  local.GetValue(value);\n"
+        "}\n"
         "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
         "  local.CopyValue(null);\n"
         "}\n"
@@ -3411,11 +3419,13 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *genericGetScriptObject = module->GetFunctionByDecl("void ProbeCKParameterGenericGetScriptObject(CKParameterLocal@)");
     asIScriptFunction *genericSetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterGenericSetObjectHandle(CKParameterLocal@)");
     asIScriptFunction *genericGetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterGenericGetObjectHandle(CKParameterLocal@)");
+    asIScriptFunction *genericSetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterGenericSetNonPodObject(CKParameterLocal@)");
+    asIScriptFunction *genericGetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterGenericGetNonPodObject(CKParameterLocal@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
         !genericSetScriptObject || !genericGetScriptObject || !genericSetObjectHandle || !genericGetObjectHandle ||
-        !copyValueNull || !compatibleNull) {
+        !genericSetNonPodObject || !genericGetNonPodObject || !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -3451,6 +3461,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                      ExecuteCKParameterLocalProbe(engine, genericGetScriptObject, local, true, "CKParameter generic GetValue script-object probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericSetObjectHandle, local, true, "CKParameter generic SetValue object-handle probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericGetObjectHandle, local, true, "CKParameter generic GetValue object-handle probe", error) &&
+                     ExecuteCKParameterLocalProbe(engine, genericSetNonPodObject, local, true, "CKParameter generic SetValue non-POD probe", error) &&
+                     ExecuteCKParameterLocalProbe(engine, genericGetNonPodObject, local, true, "CKParameter generic GetValue non-POD probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, copyValueNull, local, true, "CKParameter CopyValue null probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, compatibleNull, local, true, "CKParameter IsCompatibleWith null probe", error);
                 context->DestroyObject(vectorLocal);
