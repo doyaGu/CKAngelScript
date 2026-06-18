@@ -417,7 +417,7 @@ void RegisterScriptObjectRefBridge(asIScriptEngine *engine) {
     RegisterObjectRefType<ParamRef>(engine, "ParamRef", WithoutLegacyIdentityMethods());
     RegisterObjectRefType<ParamInRef>(engine, "ParamInRef", WithoutObjectMethod());
     RegisterObjectRefType<ParamOutRef>(engine, "ParamOutRef", WithoutObjectMethod());
-    RegisterObjectRefType<ParamLocalRef>(engine, "ParamLocalRef");
+    RegisterObjectRefType<ParamLocalRef>(engine, "ParamLocalRef", WithoutObjectMethod());
     RegisterObjectRefType<ParamStructRef>(engine, "ParamStructRef", WithoutIsValidAndDescribe());
     RegisterObjectRefType<ParamOperationRef>(engine, "ParamOperationRef", WithoutIsValidDescribeAndObject());
     RegisterObjectRefType<BehaviorLinkRef>(engine, "BehaviorLinkRef", WithoutIsValidValidDescribeAndObject());
