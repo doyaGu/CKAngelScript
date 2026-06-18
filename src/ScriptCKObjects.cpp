@@ -1905,6 +1905,41 @@ void RegisterCKGroup(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKGroup", "CK_CLASSID GetCommonClassID()", asMETHODPR(CKGroup, GetCommonClassID, (), CK_CLASSID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
+static void SetCKMaterialCallback(CKMaterial *self, NativePointer fct, NativePointer argument) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMaterial.SetCallback requires a valid material.");
+        }
+        return;
+    }
+    if (!fct.IsNull() || !argument.IsNull()) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMaterial.SetCallback only accepts null NativePointer values from script.");
+        }
+        return;
+    }
+    self->SetCallback(nullptr, nullptr);
+}
+
+static NativePointer GetCKMaterialCallback(CKMaterial *self, NativePointer *argument) {
+    if (argument) {
+        *argument = NativePointer();
+    }
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMaterial.GetCallback requires a valid material.");
+        }
+        return {};
+    }
+
+    void *rawArgument = nullptr;
+    CK_MATERIALCALLBACK callback = self->GetCallback(argument ? &rawArgument : nullptr);
+    if (argument) {
+        *argument = NativePointer(rawArgument);
+    }
+    return NativePointer(reinterpret_cast<void *>(callback));
+}
+
 void RegisterCKMaterial(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -1987,8 +2022,8 @@ void RegisterCKMaterial(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMaterial", "void SetAlphaRef(CKBYTE alphaRef = 0)", asMETHODPR(CKMaterial, SetAlphaRef, (CKBYTE), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION != 0x26052005
-    r = engine->RegisterObjectMethod("CKMaterial", "void SetCallback(NativePointer fct, NativePointer argument)", asFUNCTIONPR([](CKMaterial *self, NativePointer fct, NativePointer argument) { self->SetCallback(reinterpret_cast<CK_MATERIALCALLBACK>(fct.Get()), argument.Get()); }, (CKMaterial *, NativePointer, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMaterial", "NativePointer GetCallback(NativePointer &out argument = void) const", asFUNCTIONPR([](CKMaterial *self, NativePointer *argument) { return NativePointer(self->GetCallback(reinterpret_cast<void**>(argument))); }, (CKMaterial *, NativePointer *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMaterial", "void SetCallback(NativePointer fct, NativePointer argument)", asFUNCTION(SetCKMaterialCallback), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMaterial", "NativePointer GetCallback(NativePointer &out argument = void)", asFUNCTION(GetCKMaterialCallback), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
 
     r = engine->RegisterObjectMethod("CKMaterial", "void SetEffect(VX_EFFECT effect)", asMETHODPR(CKMaterial, SetEffect, (VX_EFFECT), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

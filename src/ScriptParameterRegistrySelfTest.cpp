@@ -1704,6 +1704,69 @@ bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &erro
     return true;
 }
 
+bool RunCKMaterialScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKMaterial script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+#if CKVERSION != 0x26052005
+    asITypeInfo *materialType = engine->GetTypeInfoByDecl("CKMaterial");
+    if (!materialType) {
+        error = "CKMaterial self-test could not find the registered type.";
+        return false;
+    }
+    if (materialType->GetMethodByDecl("void SetCallback(NativePointer fct, NativePointer argument)") == nullptr ||
+        materialType->GetMethodByDecl("NativePointer GetCallback(NativePointer &out argument = void)") == nullptr) {
+        error = "CKMaterial self-test could not find expected guarded callback methods.";
+        return false;
+    }
+    if (materialType->GetMethodByDecl("NativePointer GetCallback(NativePointer &out argument = void) const") != nullptr) {
+        error = "CKMaterial self-test found stale const callback declaration.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKMaterialSelfTest";
+    const char *source =
+        "void ProbeCKMaterialCallback(CKMaterial@ material) {\n"
+        "  if (material is null) return;\n"
+        "  NativePointer argument;\n"
+        "  NativePointer callback = material.GetCallback(argument);\n"
+        "  NativePointer empty;\n"
+        "  material.SetCallback(empty, empty);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKMaterial self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-material-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMaterial self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMaterial self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKMaterialCallback(CKMaterial@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKMaterial self-test function was not found.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+#endif
+    return true;
+}
+
 bool RunCKBitmapReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBitmapReader script self-test requires an AngelScript engine.";
@@ -3228,6 +3291,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKPluginManagerScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKMaterialScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {
