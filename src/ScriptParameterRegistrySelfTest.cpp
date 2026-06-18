@@ -671,6 +671,63 @@ bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *en
     return ok;
 }
 
+bool RunCKBaseManagerCastScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKBaseManager cast self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBaseManagerCastSelfTest";
+    const char *source =
+        "int ProbeBaseManagerCasts(CKContext@ ctx) {\n"
+        "  if (ctx is null) return 1;\n"
+        "  CKAttributeManager@ attr = ctx.GetAttributeManager();\n"
+        "  CKTimeManager@ time = ctx.GetTimeManager();\n"
+        "  if (attr is null || time is null) return 2;\n"
+        "  CKBaseManager@ attrBase = attr;\n"
+        "  CKBaseManager@ timeBase = time;\n"
+        "  if (attrBase is null || timeBase is null) return 3;\n"
+        "  CKAttributeManager@ attrAgain = cast<CKAttributeManager>(attrBase);\n"
+        "  CKTimeManager@ timeAgain = cast<CKTimeManager>(timeBase);\n"
+        "  if (attrAgain is null || timeAgain is null) return 4;\n"
+        "  if (cast<CKTimeManager>(attrBase) !is null) return 5;\n"
+        "  if (cast<CKAttributeManager>(timeBase) !is null) return 6;\n"
+        "  if (cast<CKParameterManager>(attrBase) !is null) return 7;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBaseManager cast self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-base-manager-cast-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBaseManager cast self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBaseManager cast self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeBaseManagerCasts(CKContext@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBaseManager cast self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKBaseManager checked-cast probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
@@ -832,6 +889,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKAttributeManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBaseManagerCastScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {

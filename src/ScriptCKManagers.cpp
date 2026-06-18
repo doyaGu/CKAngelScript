@@ -231,6 +231,67 @@ CKERROR CKBaseManager_CKDestroyObjects(CKBaseManager *man, XObjectArray &array, 
 }
 
 template <typename T>
+static CKGUID CKBaseManagerCastGuid() {
+    return CKGUID();
+}
+
+#if CKVERSION == 0x13022002
+template <> CKGUID CKBaseManagerCastGuid<CKObjectManager>() { return OBJECT_MANAGER_GUID; }
+#endif
+template <> CKGUID CKBaseManagerCastGuid<CKParameterManager>() { return PARAMETER_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKAttributeManager>() { return ATTRIBUTE_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKTimeManager>() { return TIME_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKMessageManager>() { return MESSAGE_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKBehaviorManager>() { return BEHAVIOR_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKPathManager>() { return PATH_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKRenderManager>() { return RENDER_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKFloorManager>() { return FLOOR_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKGridManager>() { return GRID_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKInterfaceManager>() { return INTERFACE_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKSoundManager>() { return SOUND_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKMidiManager>() { return MIDI_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKInputManager>() { return INPUT_MANAGER_GUID; }
+template <> CKGUID CKBaseManagerCastGuid<CKCollisionManager>() { return COLLISION_MANAGER_GUID; }
+
+template <typename D>
+static D *CheckedCKBaseManagerCast(CKBaseManager *manager) {
+    if (!manager) {
+        return nullptr;
+    }
+    const CKGUID expected = CKBaseManagerCastGuid<D>();
+    if (expected == CKGUID() || manager->GetGuid() != expected) {
+        return nullptr;
+    }
+    return static_cast<D *>(manager);
+}
+
+template <typename D>
+static CKBaseManager *CKBaseManagerUpCast(D *manager) {
+    return manager;
+}
+
+template <typename D>
+static void RegisterCKBaseManagerCheckedRefCast(asIScriptEngine *engine, const char *derived, const char *base) {
+    int r = 0;
+
+    std::string decl = derived;
+    decl.append("@ opCast()");
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CheckedCKBaseManagerCast<D>), (CKBaseManager *), D *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+
+    decl = base;
+    decl.append("@ opImplCast()");
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKBaseManagerUpCast<D>), (D *), CKBaseManager *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+
+    decl = "const ";
+    decl.append(derived).append("@ opCast() const");
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CheckedCKBaseManagerCast<D>), (CKBaseManager *), D *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+
+    decl = "const ";
+    decl.append(base).append("@ opImplCast() const");
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKBaseManagerUpCast<D>), (D *), CKBaseManager *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+}
+
+template <typename T>
 static void RegisterCKBaseManagerMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -282,7 +343,7 @@ static void RegisterCKBaseManagerMembers(asIScriptEngine *engine, const char *na
     r = engine->RegisterObjectMethod(name, "void StopProfile()", asMETHODPR(T, StopProfile, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKBaseManager") != 0) {
-        RegisterClassRefCast<T, CKBaseManager>(engine, name, "CKBaseManager");
+        RegisterCKBaseManagerCheckedRefCast<T>(engine, name, "CKBaseManager");
     }
 }
 
