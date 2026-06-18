@@ -243,6 +243,20 @@ static void FillCKGridWithObjectShapeSquare(CKGridManager *self,
     self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, const_cast<CKSquare *>(&fillVal));
 }
 
+static int DoCKInterfaceRenameDialog(CKInterfaceManager *self, std::string &name, CK_CLASSID cid) {
+    if (!self) {
+        SetActiveScriptException("CKInterfaceManager.DoRenameDialog requires a valid manager.");
+        return 0;
+    }
+
+    char buffer[128] = {};
+    const std::size_t copied = name.copy(buffer, sizeof(buffer) - 1);
+    buffer[copied] = '\0';
+    const int result = self->DoRenameDialog(buffer, cid);
+    name = buffer;
+    return result;
+}
+
 static VxDriverDesc &MissingVxDriverDesc(const char *message) {
     static thread_local VxDriverDesc dummy{};
     dummy = VxDriverDesc{};
@@ -919,7 +933,7 @@ void RegisterCKInterfaceManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKInterfaceManager", "int CallBehaviorEditionFunction(CKBehavior@ beh, NativePointer arg)", asFUNCTIONPR([](CKInterfaceManager *self, CKBehavior *beh, NativePointer arg) { return self->CallBehaviorEditionFunction(beh, arg.Get()); }, (CKInterfaceManager *, CKBehavior *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInterfaceManager", "int CallBehaviorSettingsEditionFunction(CKBehavior@ beh, NativePointer arg)", asFUNCTIONPR([](CKInterfaceManager *self, CKBehavior *beh, NativePointer arg) { return self->CallBehaviorSettingsEditionFunction(beh, arg.Get()); }, (CKInterfaceManager *, CKBehavior *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInterfaceManager", "int CallEditionFunction(CK_CLASSID cid, NativePointer arg)", asFUNCTIONPR([](CKInterfaceManager *self, CK_CLASSID cid, NativePointer arg) { return self->CallEditionFunction(cid, arg.Get()); }, (CKInterfaceManager *, CK_CLASSID, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKInterfaceManager", "int DoRenameDialog(const string &in name, CK_CLASSID cid)", asFUNCTIONPR([](CKInterfaceManager *self, const std::string &name, CK_CLASSID cid) { return self->DoRenameDialog(const_cast<CKSTRING>(name.c_str()), cid); }, (CKInterfaceManager *, const std::string &, CK_CLASSID), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKInterfaceManager", "int DoRenameDialog(string &inout name, CK_CLASSID cid)", asFUNCTIONPR(DoCKInterfaceRenameDialog, (CKInterfaceManager *, std::string &, CK_CLASSID), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 void RegisterCKSoundManager(asIScriptEngine *engine) {

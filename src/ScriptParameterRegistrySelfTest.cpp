@@ -1015,6 +1015,29 @@ bool RunCKGridManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine,
     return true;
 }
 
+bool RunCKInterfaceManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKInterfaceManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *interfaceManagerType = engine->GetTypeInfoByDecl("CKInterfaceManager");
+    if (!interfaceManagerType) {
+        error = "CKInterfaceManager self-test could not find the registered type.";
+        return false;
+    }
+    if (interfaceManagerType->GetMethodByDecl("int DoRenameDialog(string &inout name, CK_CLASSID cid)") == nullptr) {
+        error = "CKInterfaceManager self-test could not find mutable DoRenameDialog declaration.";
+        return false;
+    }
+    if (interfaceManagerType->GetMethodByDecl("int DoRenameDialog(const string &in name, CK_CLASSID cid)") != nullptr) {
+        error = "CKInterfaceManager self-test found stale const DoRenameDialog declaration.";
+        return false;
+    }
+
+    return true;
+}
+
 bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKObjectManager script self-test requires CKContext and AngelScript engine.";
@@ -1367,6 +1390,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKGridManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKInterfaceManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
