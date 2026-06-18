@@ -177,6 +177,72 @@ static CKERROR UnregisterCKMessageWaitByName(CKMessageManager *self,
     return self->UnRegisterWait(const_cast<CKSTRING>(msgName.c_str()), behavior, outputToActivate);
 }
 
+static bool ValidateCKGridShapeFill(CKGridManager *self, CK3dEntity *entity) {
+    if (!self) {
+        SetActiveScriptException("CKGridManager.FillGridWithObjectShape requires a valid manager.");
+        return false;
+    }
+    if (!entity) {
+        SetActiveScriptException("CKGridManager.FillGridWithObjectShape requires a non-null entity.");
+        return false;
+    }
+    return true;
+}
+
+static void FillCKGridWithObjectShapeInt(CKGridManager *self, CK3dEntity *entity, int layerType, const int &fillVal) {
+    if (!ValidateCKGridShapeFill(self, entity)) {
+        return;
+    }
+    self->FillGridWithObjectShape(entity, layerType, const_cast<int *>(&fillVal));
+}
+
+static void FillCKGridWithObjectShapeFloat(CKGridManager *self, CK3dEntity *entity, int layerType, const float &fillVal) {
+    if (!ValidateCKGridShapeFill(self, entity)) {
+        return;
+    }
+    self->FillGridWithObjectShape(entity, layerType, const_cast<float *>(&fillVal));
+}
+
+static void FillCKGridWithObjectShapeSquare(CKGridManager *self, CK3dEntity *entity, int layerType, const CKSquare &fillVal) {
+    if (!ValidateCKGridShapeFill(self, entity)) {
+        return;
+    }
+    self->FillGridWithObjectShape(entity, layerType, const_cast<CKSquare *>(&fillVal));
+}
+
+static void FillCKGridWithObjectShapeInt(CKGridManager *self,
+                                         CK3dEntity *entity,
+                                         int solidLayerType,
+                                         int shapeLayerType,
+                                         const int &fillVal) {
+    if (!ValidateCKGridShapeFill(self, entity)) {
+        return;
+    }
+    self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, const_cast<int *>(&fillVal));
+}
+
+static void FillCKGridWithObjectShapeFloat(CKGridManager *self,
+                                           CK3dEntity *entity,
+                                           int solidLayerType,
+                                           int shapeLayerType,
+                                           const float &fillVal) {
+    if (!ValidateCKGridShapeFill(self, entity)) {
+        return;
+    }
+    self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, const_cast<float *>(&fillVal));
+}
+
+static void FillCKGridWithObjectShapeSquare(CKGridManager *self,
+                                            CK3dEntity *entity,
+                                            int solidLayerType,
+                                            int shapeLayerType,
+                                            const CKSquare &fillVal) {
+    if (!ValidateCKGridShapeFill(self, entity)) {
+        return;
+    }
+    self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, const_cast<CKSquare *>(&fillVal));
+}
+
 static VxDriverDesc &MissingVxDriverDesc(const char *message) {
     static thread_local VxDriverDesc dummy{};
     dummy = VxDriverDesc{};
@@ -832,8 +898,12 @@ void RegisterCKGridManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKGridManager", "int GetGridObjectCount(int flag = 0)", asMETHODPR(CKGridManager, GetGridObjectCount, (int), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGridManager", "CKGrid@ GetGridObject(int pos, int flag = 0)", asMETHODPR(CKGridManager, GetGridObject, (int, int), CKGrid*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKGridManager", "void FillGridWithObjectShape(CK3dEntity@ ent, int layerType, int &in fillVal)", asMETHODPR(CKGridManager, FillGridWithObjectShape, (CK3dEntity *, int, void *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGridManager", "void FillGridWithObjectShape(CK3dEntity@ ent, int solidLayerType, int shapeLayerType, int &in fillVal)", asMETHODPR(CKGridManager, FillGridWithObjectShape, (CK3dEntity *, int, int, void *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGridManager", "void FillGridWithObjectShape(CK3dEntity@ ent, int layerType, int &in fillVal)", asFUNCTIONPR(FillCKGridWithObjectShapeInt, (CKGridManager *, CK3dEntity *, int, const int &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGridManager", "void FillGridWithObjectShape(CK3dEntity@ ent, int layerType, float &in fillVal)", asFUNCTIONPR(FillCKGridWithObjectShapeFloat, (CKGridManager *, CK3dEntity *, int, const float &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGridManager", "void FillGridWithObjectShape(CK3dEntity@ ent, int layerType, const CKSquare &in fillVal)", asFUNCTIONPR(FillCKGridWithObjectShapeSquare, (CKGridManager *, CK3dEntity *, int, const CKSquare &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGridManager", "void FillGridWithObjectShape(CK3dEntity@ ent, int solidLayerType, int shapeLayerType, int &in fillVal)", asFUNCTIONPR(FillCKGridWithObjectShapeInt, (CKGridManager *, CK3dEntity *, int, int, const int &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGridManager", "void FillGridWithObjectShape(CK3dEntity@ ent, int solidLayerType, int shapeLayerType, float &in fillVal)", asFUNCTIONPR(FillCKGridWithObjectShapeFloat, (CKGridManager *, CK3dEntity *, int, int, const float &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGridManager", "void FillGridWithObjectShape(CK3dEntity@ ent, int solidLayerType, int shapeLayerType, const CKSquare &in fillVal)", asFUNCTIONPR(FillCKGridWithObjectShapeSquare, (CKGridManager *, CK3dEntity *, int, int, const CKSquare &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGridManager", "void Init()", asMETHODPR(CKGridManager, Init, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }

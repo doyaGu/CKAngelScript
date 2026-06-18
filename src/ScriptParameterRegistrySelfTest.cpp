@@ -991,6 +991,30 @@ bool RunCKMessageManagerScriptSelfTest(CKContext *context, asIScriptEngine *engi
     return ok;
 }
 
+bool RunCKGridManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKGridManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *gridManagerType = engine->GetTypeInfoByDecl("CKGridManager");
+    if (!gridManagerType) {
+        error = "CKGridManager self-test could not find the registered type.";
+        return false;
+    }
+    if (gridManagerType->GetMethodByDecl("void FillGridWithObjectShape(CK3dEntity@ ent, int layerType, int &in fillVal)") == nullptr ||
+        gridManagerType->GetMethodByDecl("void FillGridWithObjectShape(CK3dEntity@ ent, int layerType, float &in fillVal)") == nullptr ||
+        gridManagerType->GetMethodByDecl("void FillGridWithObjectShape(CK3dEntity@ ent, int layerType, const CKSquare &in fillVal)") == nullptr ||
+        gridManagerType->GetMethodByDecl("void FillGridWithObjectShape(CK3dEntity@ ent, int solidLayerType, int shapeLayerType, int &in fillVal)") == nullptr ||
+        gridManagerType->GetMethodByDecl("void FillGridWithObjectShape(CK3dEntity@ ent, int solidLayerType, int shapeLayerType, float &in fillVal)") == nullptr ||
+        gridManagerType->GetMethodByDecl("void FillGridWithObjectShape(CK3dEntity@ ent, int solidLayerType, int shapeLayerType, const CKSquare &in fillVal)") == nullptr) {
+        error = "CKGridManager self-test could not find expected typed FillGridWithObjectShape overloads.";
+        return false;
+    }
+
+    return true;
+}
+
 bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKObjectManager script self-test requires CKContext and AngelScript engine.";
@@ -1340,6 +1364,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKMessageManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKGridManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
