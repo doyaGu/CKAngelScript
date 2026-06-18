@@ -1418,6 +1418,126 @@ bool RunXImageArrayItScriptSelfTest(asIScriptEngine *engine, std::string &error)
     return ok;
 }
 
+bool RunXObjectArrayItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XObjectArrayIt script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("XObjectArrayIt");
+    if (!iteratorType) {
+        error = "XObjectArrayIt self-test could not find the registered type.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("bool opEquals(const XObjectArrayIt &in other) const") ||
+        !iteratorType->GetMethodByDecl("bool opNotEquals(const XObjectArrayIt &in other) const")) {
+        error = "XObjectArrayIt self-test could not find iterator comparison methods.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("XObjectArray");
+    if (!arrayType) {
+        error = "XObjectArrayIt self-test could not find XObjectArray.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("XObjectArrayIt Begin() const") ||
+        !arrayType->GetMethodByDecl("XObjectArrayIt End() const") ||
+        !arrayType->GetMethodByDecl("XObjectArrayIt RBegin() const") ||
+        !arrayType->GetMethodByDecl("XObjectArrayIt REnd() const")) {
+        error = "XObjectArrayIt self-test could not find XObjectArray iterator producers.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XObjectArrayItSelfTest";
+    const char *source =
+        "int ProbeXObjectArrayIt() {\n"
+        "  XObjectArray values;\n"
+        "  uint first = 101;\n"
+        "  uint second = 202;\n"
+        "  values.PushBack(first);\n"
+        "  values.PushBack(second);\n"
+        "  XObjectArrayIt begin = values.Begin();\n"
+        "  XObjectArrayIt end = values.End();\n"
+        "  if (!begin.IsValid()) return 1;\n"
+        "  if (begin == end) return 2;\n"
+        "  if (begin.Get() != first) return 3;\n"
+        "  begin.Get() = 303;\n"
+        "  if (values[0] != 303) return 4;\n"
+        "  XObjectArrayIt copied(begin);\n"
+        "  if (!(copied == begin) || copied != begin) return 5;\n"
+        "  ++copied;\n"
+        "  if (copied == begin || !(copied != begin)) return 6;\n"
+        "  if (copied.Get() != second) return 7;\n"
+        "  XObjectArrayIt assigned;\n"
+        "  assigned = copied;\n"
+        "  if (!(assigned == copied)) return 8;\n"
+        "  ++assigned;\n"
+        "  if (!(assigned == end) || assigned != end) return 9;\n"
+        "  XObjectArrayIt rbegin = values.RBegin();\n"
+        "  XObjectArrayIt rend = values.REnd();\n"
+        "  if (rbegin == rend) return 10;\n"
+        "  if (rbegin.Get() != second) return 11;\n"
+        "  --rbegin;\n"
+        "  if (rbegin.Get() != 303) return 12;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectDefaultXObjectArrayItGet() {\n"
+        "  XObjectArrayIt it;\n"
+        "  it.Get();\n"
+        "}\n"
+        "void RejectDefaultXObjectArrayItInc() {\n"
+        "  XObjectArrayIt it;\n"
+        "  ++it;\n"
+        "}\n"
+        "void RejectDefaultXObjectArrayItDec() {\n"
+        "  XObjectArrayIt it;\n"
+        "  --it;\n"
+        "}\n"
+        "void RejectEmptyXObjectArrayItGet() {\n"
+        "  XObjectArray values;\n"
+        "  XObjectArrayIt it = values.Begin();\n"
+        "  it.Get();\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XObjectArrayIt self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xobjectarrayit-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XObjectArrayIt self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XObjectArrayIt self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXObjectArrayIt()");
+    asIScriptFunction *defaultGet = module->GetFunctionByDecl("void RejectDefaultXObjectArrayItGet()");
+    asIScriptFunction *defaultInc = module->GetFunctionByDecl("void RejectDefaultXObjectArrayItInc()");
+    asIScriptFunction *defaultDec = module->GetFunctionByDecl("void RejectDefaultXObjectArrayItDec()");
+    asIScriptFunction *emptyGet = module->GetFunctionByDecl("void RejectEmptyXObjectArrayItGet()");
+    if (!probe || !defaultGet || !defaultInc || !defaultDec || !emptyGet) {
+        engine->DiscardModule(moduleName);
+        error = "XObjectArrayIt self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XObjectArrayIt iterator probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultGet, true, "XObjectArrayIt default Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultInc, true, "XObjectArrayIt default increment rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultDec, true, "XObjectArrayIt default decrement rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyGet, true, "XObjectArrayIt empty Begin Get rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKAttributeDesc script self-test requires an AngelScript engine.";
@@ -5269,6 +5389,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunXImageArrayItScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXObjectArrayItScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeDescScriptSelfTest(engine, error)) {
