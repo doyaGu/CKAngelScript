@@ -772,6 +772,41 @@ bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
     return true;
 }
 
+bool RunCKPathManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKPathManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *pathManagerType = engine->GetTypeInfoByDecl("CKPathManager");
+    if (!pathManagerType) {
+        error = "CKPathManager self-test could not find the registered type.";
+        return false;
+    }
+    if (pathManagerType->GetMethodByDecl("CKERROR RenameCategory(int catIdx, XString &in newName)") == nullptr ||
+        pathManagerType->GetMethodByDecl("int GetPathIndex(int catIdx, XString &in path)") == nullptr ||
+        pathManagerType->GetMethodByDecl("CKERROR RenamePath(int catIdx, int pathIdx, XString &in path)") == nullptr ||
+        pathManagerType->GetMethodByDecl("bool PathIsAbsolute(XString &in file)") == nullptr ||
+        pathManagerType->GetMethodByDecl("bool PathIsUNC(XString &in file)") == nullptr ||
+        pathManagerType->GetMethodByDecl("bool PathIsURL(XString &in file)") == nullptr ||
+        pathManagerType->GetMethodByDecl("bool PathIsFile(XString &in file)") == nullptr) {
+        error = "CKPathManager self-test could not find expected mutable XString methods.";
+        return false;
+    }
+    if (pathManagerType->GetMethodByDecl("CKERROR RenameCategory(int catIdx, const XString &in newName)") != nullptr ||
+        pathManagerType->GetMethodByDecl("int GetPathIndex(int catIdx, const XString &in path)") != nullptr ||
+        pathManagerType->GetMethodByDecl("CKERROR RenamePath(int catIdx, int pathIdx, const XString &in path)") != nullptr ||
+        pathManagerType->GetMethodByDecl("bool PathIsAbsolute(const XString &in file)") != nullptr ||
+        pathManagerType->GetMethodByDecl("bool PathIsUNC(const XString &in file)") != nullptr ||
+        pathManagerType->GetMethodByDecl("bool PathIsURL(const XString &in file)") != nullptr ||
+        pathManagerType->GetMethodByDecl("bool PathIsFile(const XString &in file)") != nullptr) {
+        error = "CKPathManager self-test found stale const XString declarations.";
+        return false;
+    }
+
+    return true;
+}
+
 bool RunCKInputManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKInputManager script self-test requires CKContext and AngelScript engine.";
@@ -1056,6 +1091,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKPathManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKInputManagerScriptSelfTest(context, engine, error)) {
