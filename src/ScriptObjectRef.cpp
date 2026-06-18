@@ -381,7 +381,7 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     RegisterObjectRefType<ObjectRef>(engine, "ObjectRef");
     RegisterObjectRefType<SceneObjectRef>(engine, "SceneObjectRef", WithoutObjectMethod());
     RegisterObjectRefType<Entity3DRef>(engine, "Entity3DRef", WithoutObjectMethod());
-    RegisterObjectRefType<Entity2DRef>(engine, "Entity2DRef");
+    RegisterObjectRefType<Entity2DRef>(engine, "Entity2DRef", WithoutObjectMethod());
     RegisterObjectRefType<MaterialRef>(engine, "MaterialRef");
     RegisterObjectRefType<TextureRef>(engine, "TextureRef");
     RegisterObjectRefType<MeshRef>(engine, "MeshRef");
@@ -400,7 +400,6 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     RegisterObjectRefCast<Entity2DRef, SceneObjectRef>(engine, "Entity2DRef", "SceneObjectRef");
     RegisterObjectRefCast<SceneRef, SceneObjectRef>(engine, "SceneRef", "SceneObjectRef");
 
-    RegisterObjectRefAccessor(engine, "Entity2DRef", "CK2dEntity@ Entity2D() const", &Entity2DRef::Entity2D);
     RegisterObjectRefAccessor(engine, "MaterialRef", "CKMaterial@ Material() const", &MaterialRef::Material);
     RegisterObjectRefAccessor(engine, "TextureRef", "CKTexture@ Texture() const", &TextureRef::Texture);
     RegisterObjectRefAccessor(engine, "MeshRef", "CKMesh@ Mesh() const", &MeshRef::Mesh);
