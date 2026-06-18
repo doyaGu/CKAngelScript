@@ -1383,10 +1383,23 @@ bool RunCKSoundManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
     if (soundManagerType->GetMethodByDecl("void Play(CKWaveSound@ sound, NativePointer source, bool loop)") == nullptr ||
         soundManagerType->GetMethodByDecl("void Pause(CKWaveSound@ sound, NativePointer source)") == nullptr ||
         soundManagerType->GetMethodByDecl("void Stop(CKWaveSound@ sound, NativePointer source)") == nullptr ||
+        soundManagerType->GetMethodByDecl("NativePointer CreateSource(CK_WAVESOUND_TYPE flags, CKWaveFormat &in wf, CKDWORD bytes, bool streamed)") == nullptr ||
+        soundManagerType->GetMethodByDecl("NativePointer DuplicateSource(NativePointer source)") == nullptr ||
+        soundManagerType->GetMethodByDecl("void ReleaseSource(NativePointer source)") == nullptr ||
+        soundManagerType->GetMethodByDecl("void SetPlayPosition(NativePointer source, int pos)") == nullptr ||
+        soundManagerType->GetMethodByDecl("int GetPlayPosition(NativePointer source)") == nullptr ||
+        soundManagerType->GetMethodByDecl("bool IsPlaying(NativePointer source)") == nullptr ||
+        soundManagerType->GetMethodByDecl("CKERROR SetWaveFormat(NativePointer source, CKWaveFormat &in wf)") == nullptr ||
+        soundManagerType->GetMethodByDecl("CKERROR GetWaveFormat(NativePointer source, CKWaveFormat &out wf)") == nullptr ||
+        soundManagerType->GetMethodByDecl("int GetWaveSize(NativePointer source)") == nullptr ||
+        soundManagerType->GetMethodByDecl("CKERROR Lock(NativePointer source, CKDWORD writeCursor, CKDWORD numBytes, NativePointer &out audioPtr1, CKDWORD &out audioBytes1, NativePointer &out audioPtr2, CKDWORD &out audioBytes2, CK_WAVESOUND_LOCKMODE flags)") == nullptr ||
+        soundManagerType->GetMethodByDecl("CKERROR Unlock(NativePointer source, NativePointer audioPtr1, CKDWORD numBytes1, NativePointer audioPtr2, CKDWORD audioBytes2)") == nullptr ||
+        soundManagerType->GetMethodByDecl("void SetType(NativePointer source, CK_WAVESOUND_TYPE type)") == nullptr ||
+        soundManagerType->GetMethodByDecl("CK_WAVESOUND_TYPE GetType(NativePointer source)") == nullptr ||
         soundManagerType->GetMethodByDecl("void UpdateSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSoundSettings &inout settings, bool set = true)") == nullptr ||
         soundManagerType->GetMethodByDecl("void Update3DSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSound3DSettings &inout settings, bool set = true)") == nullptr ||
         soundManagerType->GetMethodByDecl("void UpdateListenerSettings(CK_SOUNDMANAGER_CAPS settingsoptions, CKListenerSettings &inout settings, bool set = true)") == nullptr) {
-        error = "CKSoundManager self-test could not find expected guarded playback/settings declarations.";
+        error = "CKSoundManager self-test could not find expected guarded source/playback/settings declarations.";
         return false;
     }
     if (soundManagerType->GetMethodByDecl("void UpdateSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSoundSettings &out settings, bool set = true)") != nullptr ||
@@ -1396,6 +1409,60 @@ bool RunCKSoundManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
         return false;
     }
 
+    constexpr const char *moduleName = "__CKAS_CKSoundManagerSelfTest";
+    const char *source =
+        "void ProbeCKSoundManagerSource(CKSoundManager@ manager, CKWaveFormat &in wf, CKWaveFormat &out outWf, CKWaveSoundSettings &inout settings, CKWaveSound3DSettings &inout settings3d, CKListenerSettings &inout listener) {\n"
+        "  if (manager is null) return;\n"
+        "  NativePointer source;\n"
+        "  NativePointer created = manager.CreateSource(CK_WAVESOUND_BACKGROUND, wf, 0, false);\n"
+        "  NativePointer duplicate = manager.DuplicateSource(source);\n"
+        "  manager.ReleaseSource(source);\n"
+        "  manager.SetPlayPosition(source, 0);\n"
+        "  int pos = manager.GetPlayPosition(source);\n"
+        "  bool playing = manager.IsPlaying(source);\n"
+        "  manager.SetWaveFormat(source, wf);\n"
+        "  manager.GetWaveFormat(source, outWf);\n"
+        "  int waveSize = manager.GetWaveSize(source);\n"
+        "  NativePointer audioPtr1;\n"
+        "  NativePointer audioPtr2;\n"
+        "  CKDWORD audioBytes1 = 0;\n"
+        "  CKDWORD audioBytes2 = 0;\n"
+        "  manager.Lock(source, 0, 0, audioPtr1, audioBytes1, audioPtr2, audioBytes2, CK_WAVESOUND_LOCKFROMWRITE);\n"
+        "  manager.Unlock(source, audioPtr1, audioBytes1, audioPtr2, audioBytes2);\n"
+        "  manager.SetType(source, CK_WAVESOUND_BACKGROUND);\n"
+        "  CK_WAVESOUND_TYPE type = manager.GetType(source);\n"
+        "  manager.UpdateSettings(source, CK_WAVESOUND_SETTINGS_GAIN, settings, false);\n"
+        "  manager.Update3DSettings(source, CK_WAVESOUND_3DSETTINGS_POSITION, settings3d, false);\n"
+        "  manager.UpdateListenerSettings(CK_WAVESOUND_3DSETTINGS_POSITION, listener, false);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKSoundManager self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-sound-manager-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSoundManager self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSoundManager self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKSoundManagerSource(CKSoundManager@, CKWaveFormat &in, CKWaveFormat &out, CKWaveSoundSettings &inout, CKWaveSound3DSettings &inout, CKListenerSettings &inout)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKSoundManager self-test function was not found.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
     return true;
 }
 
