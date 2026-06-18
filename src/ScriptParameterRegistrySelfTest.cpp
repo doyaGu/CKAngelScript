@@ -1512,6 +1512,84 @@ bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &erro
     return true;
 }
 
+bool RunCKKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKKey script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *keyType = engine->GetTypeInfoByDecl("CKKey");
+    if (!keyType) {
+        error = "CKKey self-test could not find the registered type.";
+        return false;
+    }
+    if (keyType->GetMethodByDecl("CKRotationKey opConv() const") != nullptr ||
+        keyType->GetMethodByDecl("CKPositionKey opConv() const") != nullptr ||
+        keyType->GetMethodByDecl("CKTCBRotationKey opConv() const") != nullptr ||
+        keyType->GetMethodByDecl("CKTCBPositionKey opConv() const") != nullptr ||
+        keyType->GetMethodByDecl("CKBezierPositionKey opConv() const") != nullptr ||
+        keyType->GetMethodByDecl("CKMorphKey opConv() const") != nullptr) {
+        error = "CKKey self-test found stale unsafe base-to-derived value conversion.";
+        return false;
+    }
+    if (keyType->GetMethodByDecl("float GetTime()") == nullptr) {
+        error = "CKKey self-test could not find expected non-const GetTime declaration.";
+        return false;
+    }
+    if (keyType->GetMethodByDecl("float GetTime() const") != nullptr) {
+        error = "CKKey self-test found stale const GetTime declaration.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKKeySelfTest";
+    const char *source =
+        "int ProbeKey() {\n"
+        "  CKKey key;\n"
+        "  if (key.GetTime() != 0.0f) return 1;\n"
+        "  key.SetTime(1.25f);\n"
+        "  if (key.GetTime() != 1.25f) return 2;\n"
+        "  CKKey copy(key);\n"
+        "  if (copy.GetTime() != 1.25f) return 3;\n"
+        "  CKKey assigned;\n"
+        "  assigned = key;\n"
+        "  if (assigned.GetTime() != 1.25f) return 4;\n"
+        "  assigned.TimeStep = 2.5f;\n"
+        "  if (assigned.GetTime() != 2.5f) return 5;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKKey self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-key-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKKey self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKKey self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeKey()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKKey self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKKey probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKPositionKey script self-test requires an AngelScript engine.";
@@ -2160,6 +2238,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKDependenciesScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKKeyScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKPositionKeyScriptSelfTest(engine, error)) {
