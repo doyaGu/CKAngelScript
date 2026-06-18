@@ -61,6 +61,18 @@ static CKPluginEntry &GetCKPluginInfo(CKPluginManager *self, int catIdx, int plu
     return MissingCKPluginEntry("CKPluginManager.GetPluginInfo index is out of range.");
 }
 
+static int GetCKInputKeyName(CKInputManager *self, CKDWORD key, std::string &keyName) {
+    keyName.clear();
+    if (!self) {
+        return 0;
+    }
+
+    char buffer[256] = {};
+    const int result = self->GetKeyName(key, buffer);
+    keyName = buffer;
+    return result;
+}
+
 static CKFlagsStruct &MissingCKFlagsStruct(const char *message) {
     static thread_local CKFlagsStruct dummy;
     dummy.NbData = 0;
@@ -807,7 +819,7 @@ void RegisterCKInputManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyUp(CKDWORD key)", asFUNCTIONPR([](CKInputManager *self, CKDWORD key) -> bool { return self->IsKeyUp(key); }, (CKInputManager *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyToggled(CKDWORD key, CKDWORD &out stamp = 0)", asFUNCTIONPR([](CKInputManager *self, CKDWORD key, CKDWORD &stamp) -> bool { return self->IsKeyToggled(key, &stamp); }, (CKInputManager *, CKDWORD, CKDWORD &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("CKInputManager", "int GetKeyName(CKDWORD key, string &out keyName)", asFUNCTIONPR([](CKInputManager *self, CKDWORD key, std::string &keyName) { return self->GetKeyName(key, const_cast<CKSTRING>(keyName.c_str())); }, (CKInputManager *, CKDWORD, std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKInputManager", "int GetKeyName(CKDWORD key, string &out keyName)", asFUNCTION(GetCKInputKeyName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "CKDWORD GetKeyFromName(const string &in keyName)", asFUNCTIONPR([](CKInputManager *self, const std::string &keyName) { return self->GetKeyFromName(const_cast<CKSTRING>(keyName.c_str())); }, (CKInputManager *, const std::string &), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod("CKInputManager", "NativePointer GetKeyboardState()", asFUNCTIONPR([](CKInputManager *self) { return NativePointer(self->GetKeyboardState()); }, (CKInputManager *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

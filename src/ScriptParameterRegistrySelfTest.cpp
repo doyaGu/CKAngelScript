@@ -752,6 +752,30 @@ bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
     return true;
 }
 
+bool RunCKInputManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKInputManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+#if CKVERSION == 0x13022002
+    asITypeInfo *inputManagerType = engine->GetTypeInfoByDecl("CKInputManager");
+    if (!inputManagerType) {
+        error = "CKInputManager self-test could not find the registered type.";
+        return false;
+    }
+    if (inputManagerType->GetMethodByDecl("int GetKeyName(CKDWORD key, string &out keyName)") == nullptr ||
+        inputManagerType->GetMethodByDecl("CKDWORD GetKeyFromName(const string &in keyName)") == nullptr) {
+        error = "CKInputManager self-test could not find expected key-name methods.";
+        return false;
+    }
+#else
+    return true;
+#endif
+
+    return true;
+}
+
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
@@ -919,6 +943,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKInputManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {
