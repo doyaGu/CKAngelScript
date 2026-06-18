@@ -1537,7 +1537,7 @@ template <typename T>
 static void RegisterCKAnimationMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
-    RegisterCKSceneObjectMembers<CKAnimation>(engine, name);
+    RegisterCKSceneObjectMembers<T>(engine, name);
 
     // Stepping along
     r = engine->RegisterObjectMethod(name, "float GetLength()", asMETHODPR(T, GetLength, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1602,6 +1602,26 @@ void RegisterCKAnimation(asIScriptEngine *engine) {
     RegisterCKAnimationMembers<CKAnimation>(engine, "CKAnimation");
 }
 
+static CKERROR AddCKKeyedAnimationObjectAnimation(CKKeyedAnimation *self, CKObjectAnimation *anim) {
+    if (!self || !anim) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKKeyedAnimation.AddAnimation requires non-null keyed animation and object animation handles.");
+        }
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->AddAnimation(anim);
+}
+
+static CKERROR RemoveCKKeyedAnimationObjectAnimation(CKKeyedAnimation *self, CKObjectAnimation *anim) {
+    if (!self || !anim) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKKeyedAnimation.RemoveAnimation requires non-null keyed animation and object animation handles.");
+        }
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->RemoveAnimation(anim);
+}
+
 void RegisterCKKeyedAnimation(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -1609,8 +1629,8 @@ void RegisterCKKeyedAnimation(asIScriptEngine *engine) {
 
     RegisterCKAnimationMembers<CKKeyedAnimation>(engine, "CKKeyedAnimation");
 
-    r = engine->RegisterObjectMethod("CKKeyedAnimation", "CKERROR AddAnimation(CKObjectAnimation@ anim)", asMETHODPR(CKKeyedAnimation, AddAnimation, (CKObjectAnimation *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKKeyedAnimation", "CKERROR RemoveAnimation(CKObjectAnimation@ anim)", asMETHODPR(CKKeyedAnimation, RemoveAnimation, (CKObjectAnimation *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKKeyedAnimation", "CKERROR AddAnimation(CKObjectAnimation@ anim)", asFUNCTION(AddCKKeyedAnimationObjectAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKKeyedAnimation", "CKERROR RemoveAnimation(CKObjectAnimation@ anim)", asFUNCTION(RemoveCKKeyedAnimationObjectAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKKeyedAnimation", "int GetAnimationCount()", asMETHODPR(CKKeyedAnimation, GetAnimationCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKKeyedAnimation", "CKObjectAnimation@ GetAnimation(CK3dEntity@ ent)", asMETHODPR(CKKeyedAnimation, GetAnimation, (CK3dEntity *), CKObjectAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKKeyedAnimation", "CKObjectAnimation@ GetAnimation(int index)", asMETHODPR(CKKeyedAnimation, GetAnimation, (int), CKObjectAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

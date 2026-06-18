@@ -2235,6 +2235,70 @@ bool RunCKObjectAnimationScriptSelfTest(asIScriptEngine *engine, std::string &er
     return true;
 }
 
+bool RunCKKeyedAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKKeyedAnimation script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *objectType = engine->GetTypeInfoByDecl("CKObject");
+    asITypeInfo *sceneObjectType = engine->GetTypeInfoByDecl("CKSceneObject");
+    asITypeInfo *animationType = engine->GetTypeInfoByDecl("CKAnimation");
+    asITypeInfo *keyedType = engine->GetTypeInfoByDecl("CKKeyedAnimation");
+    if (!objectType || !sceneObjectType || !animationType || !keyedType) {
+        error = "CKKeyedAnimation self-test could not find required object hierarchy types.";
+        return false;
+    }
+    if (objectType->GetMethodByDecl("CKKeyedAnimation@ opCast()") == nullptr ||
+        sceneObjectType->GetMethodByDecl("CKKeyedAnimation@ opCast()") == nullptr ||
+        animationType->GetMethodByDecl("CKKeyedAnimation@ opCast()") == nullptr ||
+        keyedType->GetMethodByDecl("CKObject@ opImplCast()") == nullptr ||
+        keyedType->GetMethodByDecl("CKSceneObject@ opImplCast()") == nullptr ||
+        keyedType->GetMethodByDecl("CKAnimation@ opImplCast()") == nullptr ||
+        keyedType->GetMethodByDecl("CKERROR AddAnimation(CKObjectAnimation@ anim)") == nullptr ||
+        keyedType->GetMethodByDecl("CKERROR RemoveAnimation(CKObjectAnimation@ anim)") == nullptr) {
+        error = "CKKeyedAnimation self-test could not find expected casts or guarded methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKKeyedAnimationSelfTest";
+    const char *source =
+        "void ProbeKeyedAnimationSurface(CKObject@ object, CKSceneObject@ sceneObject, CKAnimation@ animation, CKKeyedAnimation@ keyed, CKObjectAnimation@ objectAnimation) {\n"
+        "  CKKeyedAnimation@ fromObject = cast<CKKeyedAnimation>(object);\n"
+        "  CKKeyedAnimation@ fromSceneObject = cast<CKKeyedAnimation>(sceneObject);\n"
+        "  CKKeyedAnimation@ fromAnimation = cast<CKKeyedAnimation>(animation);\n"
+        "  if (keyed is null) return;\n"
+        "  CKObject@ asObject = keyed;\n"
+        "  CKSceneObject@ asSceneObject = keyed;\n"
+        "  CKAnimation@ asAnimation = keyed;\n"
+        "  keyed.AddAnimation(objectAnimation);\n"
+        "  keyed.RemoveAnimation(objectAnimation);\n"
+        "  CKObjectAnimation@ byIndex = keyed.GetAnimation(0);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKKeyedAnimation self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-keyed-animation-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKKeyedAnimation self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKKeyedAnimation self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBezierPositionKey script self-test requires an AngelScript engine.";
@@ -2535,6 +2599,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKObjectAnimationScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKKeyedAnimationScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKBezierPositionKeyScriptSelfTest(engine, error)) {
