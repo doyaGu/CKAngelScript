@@ -566,32 +566,72 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    task.Cancel();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "void ProbeBehaviorGraphApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BehaviorGraph@ graph = Behavior::Graph(ctx);\n";
+    source += "int ProbeBehaviorGraphEditApi(const CKBehaviorContext &in ctx) {\n";
     source += "    BehaviorBridge@ bridge = Behavior::From(ctx);\n";
-    source += "    BehaviorRef@ self = bridge !is null ? bridge.Self() : null;\n";
-    source += "    BehaviorGraph@ subGraph = self !is null ? self.AsGraph() : null;\n";
-    source += "    BehaviorQuery@ query = Behavior::Query().Name(\"Identity\").Recursive(true).InputCount(-1).OutputCount(-1).PinCount(-1).PoutCount(-1).MaxDepth(16).Occurrence(0);\n";
-    source += "    query.PrototypeName(\"Identity\").NameContains(\"Ident\").IncludeRoot(false).TargetName(\"\").TargetId(0);\n";
-    source += "    CKGUID emptyGuid; query.PrototypeGuid(emptyGuid).PrototypeQuery(\"guid:0x0,0x0\").Target(null);\n";
-    source += "    if (graph !is null) {\n";
-    source += "        BehaviorNode@ node = graph.Find(query);\n";
-    source += "        BehaviorNode@ required = graph.Require(query);\n";
-    source += "        array<BehaviorNode@>@ nodes = graph.FindAll(query);\n";
-    source += "        graph.Root(); graph.Describe(); graph.DescribeCandidates(query);\n";
-    source += "        BehaviorGraphEdit@ edit = graph.Edit();\n";
-    source += "        ParamValue@ value = Param::String(\"x\"); BBSlot@ pinSlot = null; CKObject@ objectValue = null;\n";
-    source += "        if (edit !is null) { edit.IsValid(); edit.Error(); edit.Describe(); GraphEditNode@ rootEdit = edit.Import(graph.Root()); GraphEditNode@ clonedRoot = edit.Clone(graph.Root(), \"Clone\"); edit.Target(clonedRoot, null); BBDecl@ missingDecl = BB::Require(ctx, \"__missing__\"); BBConfig@ missingConfig = missingDecl !is null ? missingDecl.Configure() : null; GraphEditNode@ addedDecl = edit.Add(missingDecl); GraphEditNode@ addedConfig = edit.Add(missingConfig, \"Created\"); edit.EnsureInputCount(rootEdit, 1); edit.EnsureOutputCount(rootEdit, 1); GraphEditLink@ pendingLink = edit.Link(rootEdit, 0, rootEdit, 0); GraphEditLink@ pendingSlotLink = edit.Link(rootEdit, null, rootEdit, null); edit.Set(addedDecl, pinSlot, value); edit.Set(addedDecl, pinSlot, 1); edit.Set(addedDecl, pinSlot, 1.0f); edit.Set(addedDecl, pinSlot, true); edit.Set(addedDecl, pinSlot, \"x\"); edit.Set(addedDecl, pinSlot, objectValue); edit.SetSetting(addedDecl, pinSlot, value); edit.SetSetting(addedDecl, pinSlot, \"x\"); edit.Source(addedDecl, pinSlot, null); edit.Operation(addedDecl, pinSlot, null); edit.Remove(graph.Root(), true); edit.Move(graph.Root(), graph); GraphEditResult@ validation = edit.Validate(ctx); GraphEditResult@ applied = edit.Apply(ctx); if (validation !is null) { validation.Ok(); bool ok = validation.ok; validation.IsOk(); validation.Error(); validation.Describe(); validation.CreatedNodes(); validation.CreatedLinks(); validation.Raise(ctx); } if (rootEdit !is null) { rootEdit.IsValid(); rootEdit.Error(); rootEdit.Behavior(); rootEdit.Describe(); } if (pendingLink !is null) { pendingLink.IsValid(); pendingLink.Error(); pendingLink.Link(); pendingLink.Describe(); } }\n";
-    source += "        if (node !is null) {\n";
-    source += "            node.IsValid(); bool valid = node.valid; node.Error(); node.Describe(); node.Behavior(); node.AsGraph();\n";
-    source += "            BehaviorNode@ input = node.Input(0); BehaviorNode@ output = node.Output(0); BehaviorNode@ next = node.Next(query); BehaviorNode@ prev = node.Prev(query); BehaviorNode@ end = node.End(8);\n";
-    source += "            array<BehaviorNode@>@ nextAll = node.NextAll(query); array<BehaviorNode@>@ prevAll = node.PrevAll(query);\n";
-    source += "            BehaviorLinkRef@ nl = node.NextLink(query); BehaviorLinkRef@ pl = node.PrevLink(query);\n";
-    source += "            if (nl !is null) { nl.IsValid(); nl.SourceBehavior(); nl.SourceOutputIndex(); nl.TargetBehavior(); nl.TargetInputIndex(); nl.Delay(); nl.Describe(); }\n";
-    source += "            if (pl !is null) { pl.SourceBehavior(); pl.TargetBehavior(); }\n";
-    source += "        }\n";
-    source += "    }\n";
-    source += "    if (subGraph !is null) { subGraph.FindAll(Behavior::Query().Recursive(false)); }\n";
+    source += "    if (bridge is null) return 1120;\n";
+    source += "    BehaviorGraph@ graph = bridge.Graph();\n";
+    source += "    if (graph is null) return 1121;\n";
+    source += "    BehaviorGraphEdit@ noOp = graph.Edit();\n";
+    source += "    if (noOp is null) return 1122;\n";
+    source += "    noOp.IsValid(); bool noOpValid = noOp.valid; noOp.Error();\n";
+    source += "    if (noOp.Describe() == \"\") return 1123;\n";
+    source += "    GraphEditResult@ validation = noOp.Validate(ctx);\n";
+    source += "    if (validation is null) return 1124;\n";
+    source += "    bool validationOk = validation.Ok(); bool validationProperty = validation.ok; bool validationIsOk = validation.IsOk();\n";
+    source += "    validation.Error(); validation.Describe();\n";
+    source += "    array<BehaviorNode@>@ validationNodes = validation.CreatedNodes();\n";
+    source += "    array<BehaviorLinkRef@>@ validationLinks = validation.CreatedLinks();\n";
+    source += "    if (validationNodes is null || validationLinks is null) return 1125;\n";
+    source += "    if (validationOk && validationProperty && validationIsOk) validation.Raise(ctx);\n";
+    source += "    GraphEditResult@ applied = noOp.Apply(ctx);\n";
+    source += "    if (applied is null) return 1126;\n";
+    source += "    bool appliedOk = applied.Ok(); bool appliedProperty = applied.ok; bool appliedIsOk = applied.IsOk();\n";
+    source += "    if (applied.CreatedNodes() is null || applied.CreatedLinks() is null) return 1127;\n";
+    source += "    applied.Error(); applied.Describe();\n";
+    source += "    if (appliedOk && appliedProperty && appliedIsOk) applied.Raise(ctx);\n";
+    source += "    BehaviorGraphEdit@ edit = graph.Edit();\n";
+    source += "    if (edit is null) return 1128;\n";
+    source += "    edit.IsValid(); bool editValid = edit.valid;\n";
+    source += "    BehaviorNode@ root = graph.Root();\n";
+    source += "    if (root is null || !root.IsValid()) return 1129;\n";
+    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    if (decl is null || !decl.IsValid()) return 1130;\n";
+    source += "    BBConfig@ config = decl.Configure();\n";
+    source += "    if (config is null || !config.IsValid()) return 1131;\n";
+    source += "    BBSlot@ inputSlot = decl.Input(\"In\");\n";
+    source += "    BBSlot@ outputSlot = decl.Output(\"Out\");\n";
+    source += "    BBSlot@ pinSlot = decl.Pin(\"pIn 0\");\n";
+    source += "    if (inputSlot is null || outputSlot is null || pinSlot is null) return 1132;\n";
+    source += "    ParamValue@ value = Param::String(\"x\");\n";
+    source += "    CKObject@ nullObject = null;\n";
+    source += "    if (value is null || !value.IsValid()) return 1133;\n";
+    source += "    GraphEditNode@ imported = edit.Import(root);\n";
+    source += "    if (imported is null || !imported.IsValid() || !imported.valid) return 1134;\n";
+    source += "    imported.Error(); imported.Describe(); imported.Behavior();\n";
+    source += "    GraphEditNode@ cloned = edit.Clone(root, \"Clone\");\n";
+    source += "    GraphEditNode@ addedDecl = edit.Add(decl);\n";
+    source += "    GraphEditNode@ addedConfig = edit.Add(config, \"Created\");\n";
+    source += "    if (cloned is null || addedDecl is null || addedConfig is null) return 1135;\n";
+    source += "    edit.Remove(root, true);\n";
+    source += "    edit.Move(root, graph);\n";
+    source += "    edit.EnsureInputCount(imported, 1);\n";
+    source += "    edit.EnsureOutputCount(imported, 1);\n";
+    source += "    GraphEditLink@ linkByIndex = edit.Link(imported, 0, imported, 0);\n";
+    source += "    GraphEditLink@ linkBySlot = edit.Link(imported, outputSlot, imported, inputSlot);\n";
+    source += "    if (linkByIndex is null || !linkByIndex.IsValid() || !linkByIndex.valid) return 1136;\n";
+    source += "    if (linkBySlot is null || !linkBySlot.IsValid() || !linkBySlot.valid) return 1137;\n";
+    source += "    linkByIndex.Error(); linkByIndex.Describe(); linkByIndex.Link();\n";
+    source += "    linkBySlot.Error(); linkBySlot.Describe(); linkBySlot.Link();\n";
+    source += "    edit.Set(addedDecl, pinSlot, value);\n";
+    source += "    edit.Set(addedDecl, pinSlot, 1);\n";
+    source += "    edit.Set(addedDecl, pinSlot, 1.0f);\n";
+    source += "    edit.Set(addedDecl, pinSlot, true);\n";
+    source += "    edit.Set(addedDecl, pinSlot, \"x\");\n";
+    source += "    edit.Set(addedDecl, pinSlot, nullObject);\n";
+    source += "    GraphEditResult@ invalid = edit.Validate(ctx);\n";
+    source += "    if (invalid is null) return 1138;\n";
+    source += "    invalid.Error(); invalid.Describe(); invalid.CreatedNodes(); invalid.CreatedLinks();\n";
+    source += "    return 0;\n";
     source += "}\n";
     source += "class ProbeErgonomicComponentFields {\n";
     source += "    BBDecl@ spec;\n";
@@ -683,6 +723,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (behaviorRefResult != 0) return behaviorRefResult;\n";
     source += "    int behaviorBridgeResult = ProbeBehaviorBridgeApi(ctx);\n";
     source += "    if (behaviorBridgeResult != 0) return behaviorBridgeResult;\n";
+    source += "    int behaviorGraphEditResult = ProbeBehaviorGraphEditApi(ctx);\n";
+    source += "    if (behaviorGraphEditResult != 0) return behaviorGraphEditResult;\n";
     source += "    return 0;\n";
     source += "}\n";
 
@@ -714,8 +756,19 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
         return false;
     }
 
+    CKBehavior *scriptRoot = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_BehaviorGraphEditScriptRoot"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!scriptRoot) {
+        error = "Behavior bridge self-test failed to create script graph root.";
+        manager->UnloadModule(moduleName, nullptr);
+        return false;
+    }
+    scriptRoot->UseGraph();
+
     CKBehaviorContext behaviorContext;
-    behaviorContext.Behavior = nullptr;
+    behaviorContext.Behavior = scriptRoot;
     behaviorContext.DeltaTime = 0.0f;
     behaviorContext.Context = context;
     behaviorContext.CurrentLevel = nullptr;
@@ -732,6 +785,9 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     asIScriptContext *scriptContext = engine->RequestContext();
     if (!scriptContext) {
         error = "Failed to create AngelScript execution context.";
+        if (scriptRoot && !scriptRoot->IsToBeDeleted()) {
+            context->DestroyObject(scriptRoot);
+        }
         manager->UnloadModule(moduleName, nullptr);
         return false;
     }
@@ -762,6 +818,9 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
 
     scriptContext->Unprepare();
     engine->ReturnContext(scriptContext);
+    if (scriptRoot && !scriptRoot->IsToBeDeleted()) {
+        context->DestroyObject(scriptRoot);
+    }
     manager->UnloadModule(moduleName, nullptr);
     return ok;
 }
