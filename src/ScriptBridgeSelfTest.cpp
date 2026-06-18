@@ -162,6 +162,10 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    ObjectRef@ object = ref;\n";
     source += "    return object !is null ? cast<CKMaterial>(object.Object()) : null;\n";
     source += "}\n";
+    source += "CKTexture@ __ckas_texture_raw(TextureRef@ ref) {\n";
+    source += "    ObjectRef@ object = ref;\n";
+    source += "    return object !is null ? cast<CKTexture>(object.Object()) : null;\n";
+    source += "}\n";
     source += "void ProbeSceneApi(const CKBehaviorContext &in ctx) {\n";
     source += "    LevelRef@ currentLevel = Scene::CurrentLevel(ctx);\n";
     source += "    SceneRef@ currentScene = Scene::CurrentScene(ctx);\n";
@@ -198,7 +202,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    TextureRef@ texture = Scene::FindTexture(ctx, \"__missing__\");\n";
     source += "    MeshRef@ mesh = Scene::FindMesh(ctx, \"__missing__\");\n";
     source += "    BehaviorRef@ behaviorSceneRef = Scene::FindBehavior(ctx, \"__missing__\");\n";
-    source += "    if (material !is null) { CKMaterial@ rawMaterial = __ckas_material_raw(material); CKTexture@ rawTexture = texture !is null ? texture.Texture() : null; if (rawMaterial !is null) { rawMaterial.GetTexture(); rawMaterial.SetTexture(rawTexture); } }\n";
+    source += "    if (material !is null) { CKMaterial@ rawMaterial = __ckas_material_raw(material); CKTexture@ rawTexture = texture !is null ? __ckas_texture_raw(texture) : null; if (rawMaterial !is null) { rawMaterial.GetTexture(); rawMaterial.SetTexture(rawTexture); } }\n";
     source += "    if (found !is null) { found.IsValid(); bool valid = found.valid; found.Error(); found.Describe(); found.Id(); found.Name(); found.ClassId(); found.IsDynamic(); found.Object(); BehaviorRef@ castBehavior = cast<BehaviorRef>(found); ParamRef@ castParam = cast<ParamRef>(found); SceneObjectRef@ castSceneObject = cast<SceneObjectRef>(found); }\n";
     source += "    SceneObjectRef@ sceneAsObject = currentScene;\n";
     source += "    if (sceneAsObject !is null) { Scene::IsInCurrentScene(ctx, sceneAsObject); Scene::IsInScene(ctx, currentScene, sceneAsObject); }\n";
@@ -3065,6 +3069,18 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
         if (materialRefType->GetMethodByDecl("CKObject@ Object() const") ||
             materialRefType->GetMethodByDecl("CKMaterial@ Material() const")) {
             error = "MaterialRef still exposes a raw CK handle.";
+            return false;
+        }
+        asITypeInfo *textureRefType = engine->GetTypeInfoByName("TextureRef");
+        if (!textureRefType ||
+            !textureRefType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
+            !textureRefType->GetMethodByDecl("const ObjectRef@ opImplCast() const")) {
+            error = "TextureRef wrapper cast declaration self-test failed.";
+            return false;
+        }
+        if (textureRefType->GetMethodByDecl("CKObject@ Object() const") ||
+            textureRefType->GetMethodByDecl("CKTexture@ Texture() const")) {
+            error = "TextureRef still exposes a raw CK handle.";
             return false;
         }
         asITypeInfo *behaviorRefType = engine->GetTypeInfoByName("BehaviorRef");
