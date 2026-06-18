@@ -598,6 +598,79 @@ bool RunCKAttributeCategoryDescScriptSelfTest(asIScriptEngine *engine, std::stri
     return ok;
 }
 
+bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKAttributeManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKAttributeManagerSelfTest";
+    const char *source =
+        "int ProbeAttributeManager(CKContext@ ctx) {\n"
+        "  if (ctx is null) return 1;\n"
+        "  CKAttributeManager@ am = ctx.GetAttributeManager();\n"
+        "  if (am is null) return 2;\n"
+        "  if (am.GetAttributeCount() < 0) return 3;\n"
+        "  if (am.GetCategoriesCount() < 0) return 4;\n"
+        "  am.GetName();\n"
+        "  am.GetGuid();\n"
+        "  am.IsAttributeIndexValid(-2147483647);\n"
+        "  am.IsCategoryIndexValid(-2147483647);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeAttributeManagerCallbackReject(CKContext@ ctx) {\n"
+        "  CKAttributeManager@ am = ctx.GetAttributeManager();\n"
+        "  NativePointer ptr;\n"
+        "  NativePointer empty;\n"
+        "  ptr += 1;\n"
+        "  am.SetAttributeCallbackFunction(-2147483647, ptr, empty);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeAttributeManagerCallbackArgReject(CKContext@ ctx) {\n"
+        "  CKAttributeManager@ am = ctx.GetAttributeManager();\n"
+        "  NativePointer ptr;\n"
+        "  NativePointer empty;\n"
+        "  ptr += 1;\n"
+        "  am.SetAttributeCallbackFunction(-2147483647, empty, ptr);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKAttributeManager self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-attribute-manager-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKAttributeManager self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKAttributeManager self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeAttributeManager(CKContext@)");
+    asIScriptFunction *callbackReject = module->GetFunctionByDecl("int ProbeAttributeManagerCallbackReject(CKContext@)");
+    asIScriptFunction *callbackArgReject = module->GetFunctionByDecl("int ProbeAttributeManagerCallbackArgReject(CKContext@)");
+    if (!probe || !callbackReject || !callbackArgReject) {
+        engine->DiscardModule(moduleName);
+        error = "CKAttributeManager self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKAttributeManager value probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, callbackReject, context, true, "CKAttributeManager callback rejection probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, callbackArgReject, context, true, "CKAttributeManager callback argument rejection probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
@@ -756,6 +829,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKAttributeCategoryDescScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKAttributeManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {

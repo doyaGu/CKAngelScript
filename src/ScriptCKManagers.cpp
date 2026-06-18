@@ -148,6 +148,25 @@ static CKStructStruct &GetCKStructDescByType(CKParameterManager *self, CKParamet
     return MissingCKStructStruct("CKParameterManager.GetStructDescByType did not find a struct descriptor.");
 }
 
+static void SetCKAttributeManagerCallbackFunction(CKAttributeManager *self,
+                                                  CKAttributeType attribType,
+                                                  NativePointer callback,
+                                                  NativePointer arg) {
+    if (!callback.IsNull() || !arg.IsNull()) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAttributeManager.SetAttributeCallbackFunction only accepts null NativePointer values from script.");
+        }
+        return;
+    }
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAttributeManager.SetAttributeCallbackFunction requires a valid manager.");
+        }
+        return;
+    }
+    self->SetAttributeCallbackFunction(attribType, nullptr, nullptr);
+}
+
 void RegisterCKPluginManager(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -382,7 +401,7 @@ void RegisterCKAttributeManager(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKAttributeManager", "CK_ATTRIBUT_FLAGS GetAttributeFlags(CKAttributeType attribType)", asMETHODPR(CKAttributeManager, GetAttributeFlags, (CKAttributeType), CK_ATTRIBUT_FLAGS), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKAttributeManager", "void SetAttributeCallbackFunction(CKAttributeType attribType, NativePointer callback, NativePointer arg)", asFUNCTIONPR([](CKAttributeManager* self, CKAttributeType attribType, NativePointer callback, NativePointer arg) { self->SetAttributeCallbackFunction(attribType, reinterpret_cast<CKATTRIBUTECALLBACK>(callback.Get()), arg.Get()); }, (CKAttributeManager *, CKAttributeType, NativePointer, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeManager", "void SetAttributeCallbackFunction(CKAttributeType attribType, NativePointer callback, NativePointer arg)", asFUNCTION(SetCKAttributeManagerCallbackFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKAttributeManager", "void SetAttributeDefaultValue(CKAttributeType attribType, const string &in defaultVal)", asFUNCTIONPR([](CKAttributeManager *self, CKAttributeType attribType, const std::string &defaultVal) { self->SetAttributeDefaultValue(attribType, const_cast<CKSTRING>(defaultVal.c_str())); }, (CKAttributeManager *, CKAttributeType, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKAttributeManager", "string GetAttributeDefaultValue(CKAttributeType attribType)", asFUNCTIONPR([](CKAttributeManager *self, CKAttributeType attribType) -> std::string { return ScriptStringify(self->GetAttributeDefaultValue(attribType)); }, (CKAttributeManager *, CKAttributeType), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
