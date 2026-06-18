@@ -857,6 +857,26 @@ bool RunCKRenderManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
     return ok;
 }
 
+bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKPluginManager script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *pluginManagerType = engine->GetTypeInfoByDecl("CKPluginManager");
+    if (!pluginManagerType) {
+        error = "CKPluginManager self-test could not find the registered type.";
+        return false;
+    }
+    if (pluginManagerType->GetMethodByDecl("bool SetReaderOptionData(CKContext@ context, NativePointer data, CKParameterOut@ param, CKFileExtension ext, CKGUID &in guid = void)") == nullptr ||
+        pluginManagerType->GetMethodByDecl("CKParameterOut@ GetReaderOptionData(CKContext@ context, NativePointer data, CKFileExtension ext, CKGUID &in guid = void)") == nullptr) {
+        error = "CKPluginManager self-test could not find expected reader option methods.";
+        return false;
+    }
+
+    return true;
+}
+
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
@@ -1030,6 +1050,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKRenderManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKPluginManagerScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {
