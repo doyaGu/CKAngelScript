@@ -688,6 +688,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     if (!ExpectStatus(api->BorrowEngine(&engine, &result), CKAS_OK, "BorrowEngine", &result, error) || !engine) {
         return false;
     }
+    if (!engine->GetGlobalFunctionByDecl("string CKStrupr(const string &in str)") ||
+        !engine->GetGlobalFunctionByDecl("string CKStrlwr(const string &in str)") ||
+        engine->GetGlobalFunctionByDecl("NativePointer CKStrupr(const string &in str)") ||
+        engine->GetGlobalFunctionByDecl("NativePointer CKStrlwr(const string &in str)")) {
+        error = "CKAngelScript API self-test found unsafe CKStrupr/CKStrlwr string overload declarations.";
+        return false;
+    }
 
     {
         void *intArray = nullptr;
@@ -860,6 +867,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "    if (third.ConsoleString != \"gamma\") return 0;\n"
         "    third.ConsoleString = \"delta\";\n"
         "    return third.ConsoleString == \"delta\" ? 1 : 0;\n"
+        "}\n"
+        "int __ckas_public_ckstr_string_overloads() {\n"
+        "    if (CKStrupr(\"BaLl\") != \"BALL\") return 0;\n"
+        "    if (CKStrlwr(\"BaLl\") != \"ball\") return 0;\n"
+        "    if (CKStrupr(\"\") != \"\") return 0;\n"
+        "    if (CKStrlwr(\"\") != \"\") return 0;\n"
+        "    return 1;\n"
         "}\n"
         "[ckas_selftest_type]\n"
         "class __CKAS_PublicMetadataType {\n"
@@ -1262,6 +1276,37 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->ReleaseExecution(ckuiExecution);
     api->ReleaseFunction(ckuiFunction);
+
+    CKAngelScriptFunctionOptions ckstrFunctionOptions = CKAngelScriptApi::FunctionOptions();
+    ckstrFunctionOptions.ModuleName = moduleName;
+    ckstrFunctionOptions.FunctionDecl = "int __ckas_public_ckstr_string_overloads()";
+    CKAngelScriptFunction *ckstrFunction = nullptr;
+    if (api->FindFunction(ckstrFunctionOptions, &ckstrFunction, &result) != CKAS_OK || !ckstrFunction) {
+        error = "CKAngelScript API self-test could not find the CKStrupr/CKStrlwr string overload smoke function.";
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+
+    CKAngelScriptFunctionExecutionOptions ckstrExecuteOptions =
+        CKAngelScriptApi::FunctionExecutionOptions(ckstrFunction);
+    IntExecutionData ckstrData;
+    CKAngelScriptExecutionStepOptions ckstrStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(nullptr, ReadIntReturn, &ckstrData);
+    CKAngelScriptExecution *ckstrExecution = nullptr;
+    if (api->CreateFunctionExecution(ckstrExecuteOptions, &ckstrExecution, &result) != CKAS_OK ||
+        !ckstrExecution ||
+        api->StartExecution(ckstrExecution, ckstrStepOptions, &result) != CKAS_OK ||
+        ckstrData.Output != 1) {
+        error = "CKAngelScript API self-test found invalid CKStrupr/CKStrlwr string overload behavior.";
+        if (ckstrExecution) {
+            api->ReleaseExecution(ckstrExecution);
+        }
+        api->ReleaseFunction(ckstrFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    api->ReleaseExecution(ckstrExecution);
+    api->ReleaseFunction(ckstrFunction);
 
     CKAngelScriptFunctionOptions sideEffectFunctionOptions = CKAngelScriptApi::FunctionOptions();
     sideEffectFunctionOptions.ModuleName = moduleName;

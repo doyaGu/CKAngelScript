@@ -36,6 +36,22 @@ static const int g_CKOBJECT_PRIORITYMIN = CKOBJECT_PRIORITYMIN;
 static const int g_CKBEHAVIOR_PRIORITYMAX = CKBEHAVIOR_PRIORITYMAX;
 static const int g_CKBEHAVIOR_PRIORITYMIN = CKBEHAVIOR_PRIORITYMIN;
 
+static std::string CKStruprString(const std::string &value) {
+    std::string copy = value;
+    if (!copy.empty()) {
+        CKStrupr(&copy[0]);
+    }
+    return copy;
+}
+
+static std::string CKStrlwrString(const std::string &value) {
+    std::string copy = value;
+    if (!copy.empty()) {
+        CKStrlwr(&copy[0]);
+    }
+    return copy;
+}
+
 static const int g_CKM_BASE = CKM_BASE;
 static const int g_CKM_BEHAVIORPRESAVE = CKM_BEHAVIORPRESAVE;
 static const int g_CKM_BEHAVIORDELETE = CKM_BEHAVIORDELETE;
@@ -664,9 +680,9 @@ void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("NativePointer CKStrdup(NativePointer str)", asFUNCTIONPR([](NativePointer str) { return NativePointer(CKStrdup(str.Get())); }, (NativePointer), NativePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("NativePointer CKStrdup(const string &in str)", asFUNCTIONPR([](const std::string &str) { return NativePointer(CKStrdup(const_cast<CKSTRING>(str.c_str()))); }, (const std::string &), NativePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("NativePointer CKStrupr(NativePointer str)", asFUNCTIONPR([](NativePointer str) { return NativePointer(CKStrupr(str.Get())); }, (NativePointer), NativePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("NativePointer CKStrupr(const string &in str)", asFUNCTIONPR([](const std::string &str) { return NativePointer(CKStrupr(const_cast<CKSTRING>(str.c_str()))); }, (const std::string &), NativePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("string CKStrupr(const string &in str)", asFUNCTION(CKStruprString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("NativePointer CKStrlwr(NativePointer str)", asFUNCTIONPR([](NativePointer str) { return NativePointer(CKStrlwr(str.Get())); }, (NativePointer), NativePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("NativePointer CKStrlwr(const string &in str)", asFUNCTIONPR([](const std::string &str) { return NativePointer(CKStrlwr(const_cast<CKSTRING>(str.c_str()))); }, (const std::string &), NativePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("string CKStrlwr(const string &in str)", asFUNCTION(CKStrlwrString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterGlobalFunction("CKBitmapProperties@ CKCopyBitmapProperties(CKBitmapProperties@ bp)", asFUNCTION(CKCopyBitmapProperties), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void CKDeleteBitmapProperties(CKBitmapProperties@ bp)", asFUNCTION(CKDeletePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
