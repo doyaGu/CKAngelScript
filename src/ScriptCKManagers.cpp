@@ -8,6 +8,59 @@
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
 
+static CKPluginEntry &MissingCKPluginEntry(const char *message) {
+    static thread_local CKPluginEntry dummy;
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return dummy;
+}
+
+static CKPluginDll &MissingCKPluginDll(const char *message) {
+    static thread_local CKPluginDll dummy;
+    dummy.m_PluginInfoCount = 0;
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return dummy;
+}
+
+static CKPluginEntry &FindCKPluginComponent(CKPluginManager *self, CKGUID component, int catIdx) {
+    if (self) {
+        if (CKPluginEntry *entry = self->FindComponent(component, catIdx)) {
+            return *entry;
+        }
+    }
+    return MissingCKPluginEntry("CKPluginManager.FindComponent did not find a matching plugin entry.");
+}
+
+static CKPluginDll &GetCKPluginDllInfoByIndex(CKPluginManager *self, int idx) {
+    if (self) {
+        if (CKPluginDll *dll = self->GetPluginDllInfo(idx)) {
+            return *dll;
+        }
+    }
+    return MissingCKPluginDll("CKPluginManager.GetPluginDllInfo index is out of range.");
+}
+
+static CKPluginDll &GetCKPluginDllInfoByName(CKPluginManager *self, const std::string &name, int *idx) {
+    if (self) {
+        if (CKPluginDll *dll = self->GetPluginDllInfo(const_cast<CKSTRING>(name.c_str()), idx)) {
+            return *dll;
+        }
+    }
+    return MissingCKPluginDll("CKPluginManager.GetPluginDllInfo did not find a matching plugin DLL.");
+}
+
+static CKPluginEntry &GetCKPluginInfo(CKPluginManager *self, int catIdx, int pluginIdx) {
+    if (self) {
+        if (CKPluginEntry *entry = self->GetPluginInfo(catIdx, pluginIdx)) {
+            return *entry;
+        }
+    }
+    return MissingCKPluginEntry("CKPluginManager.GetPluginInfo index is out of range.");
+}
+
 void RegisterCKPluginManager(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -15,7 +68,7 @@ void RegisterCKPluginManager(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKPluginManager", "int ParsePlugins(const string &in directory)", asFUNCTIONPR([](CKPluginManager *self, const std::string &directory) { return self->ParsePlugins(const_cast<CKSTRING>(directory.c_str())); }, (CKPluginManager *, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR RegisterPlugin(const string &in plugin)", asFUNCTIONPR([](CKPluginManager *self, const std::string &plugin) { return self->RegisterPlugin(const_cast<CKSTRING>(plugin.c_str())); }, (CKPluginManager *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginEntry &FindComponent(CKGUID component, int catIdx = -1)", asMETHODPR(CKPluginManager, FindComponent, (CKGUID, int), CKPluginEntry *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginEntry &FindComponent(CKGUID component, int catIdx = -1)", asFUNCTION(FindCKPluginComponent), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginManager", "int AddCategory(const string &in category)", asFUNCTIONPR([](CKPluginManager *self, const std::string &category) { return self->AddCategory(const_cast<CKSTRING>(category.c_str())); }, (CKPluginManager *, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR RemoveCategory(int catIdx)", asMETHODPR(CKPluginManager, RemoveCategory, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -25,13 +78,13 @@ void RegisterCKPluginManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR RenameCategory(int catIdx, const string &in newName)", asFUNCTIONPR([](CKPluginManager *self, int catIdx, const std::string &newName) { return self->RenameCategory(catIdx, const_cast<CKSTRING>(newName.c_str())); }, (CKPluginManager *, int, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginManager", "int GetPluginDllCount() const", asMETHODPR(CKPluginManager, GetPluginDllCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginDll &GetPluginDllInfo(int idx)", asMETHODPR(CKPluginManager, GetPluginDllInfo, (int), CKPluginDll*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginDll &GetPluginDllInfo(const string &in name, int &out idx = void)", asFUNCTIONPR([](CKPluginManager *self, const std::string &name, int *idx) { return self->GetPluginDllInfo(const_cast<CKSTRING>(name.c_str()), idx); }, (CKPluginManager *, const std::string &, int *), CKPluginDll *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginDll &GetPluginDllInfo(int idx)", asFUNCTION(GetCKPluginDllInfoByIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginDll &GetPluginDllInfo(const string &in name, int &out idx = void)", asFUNCTION(GetCKPluginDllInfoByName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR UnLoadPluginDll(int idx)", asMETHODPR(CKPluginManager, UnLoadPluginDll, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR ReLoadPluginDll(int idx)", asMETHODPR(CKPluginManager, ReLoadPluginDll, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginManager", "int GetPluginCount(int catIdx)", asMETHODPR(CKPluginManager, GetPluginCount, (int), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginEntry &GetPluginInfo(int catIdx, int pluginIdx)", asMETHODPR(CKPluginManager, GetPluginInfo, (int, int), CKPluginEntry*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginEntry &GetPluginInfo(int catIdx, int pluginIdx)", asFUNCTION(GetCKPluginInfo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginManager", "bool SetReaderOptionData(CKContext@ context, NativePointer data, CKParameterOut @param, CKFileExtension ext, CKGUID &in guid = void)", asFUNCTIONPR([](CKPluginManager *self, CKContext *context, NativePointer data, CKParameterOut *param, CKFileExtension ext, const CKGUID &guid) -> bool { return self->SetReaderOptionData(context, data.Get(), param, ext, const_cast<CKGUID *>(&guid)); }, (CKPluginManager *, CKContext *, NativePointer, CKParameterOut *, CKFileExtension, const CKGUID &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPluginManager", "CKParameterOut@ GetReaderOptionData(CKContext@ context, NativePointer data, CKFileExtension ext, CKGUID &in guid = void)", asFUNCTIONPR([](CKPluginManager *self, CKContext *context, NativePointer data, CKFileExtension ext, CKGUID *guid) { return self->GetReaderOptionData(context, data.Get(), ext, guid); }, (CKPluginManager *, CKContext *, NativePointer, CKFileExtension, CKGUID *), CKParameterOut *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
