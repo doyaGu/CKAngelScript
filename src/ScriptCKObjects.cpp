@@ -39,19 +39,19 @@ static void RegisterCKObjectCast(asIScriptEngine *engine, const char *derived, c
 
     std::string decl = derived;
     decl.append("@ opCast()");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CKObjectDowncast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CKObjectDowncast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     decl = base;
     decl.append("@ opImplCast()");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKObjectUpcast<B, D>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKObjectUpcast<B, D>), (D *), B *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     decl = "const ";
     decl.append(derived).append("@ opCast() const");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CKObjectDowncast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((CKObjectDowncast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     decl = "const ";
     decl.append(base).append("@ opImplCast() const");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKObjectUpcast<B, D>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKObjectUpcast<B, D>), (D *), B *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 }
 
 template <typename T>
