@@ -2627,6 +2627,79 @@ static NativePointer GetCKBehaviorPrototypeCallback(CKBehaviorPrototype *self) {
     return NativePointer(reinterpret_cast<uintptr_t>(self->GetBehaviorCallbackFct()));
 }
 
+#if CKVERSION == 0x13022002
+static CKBEHAVIORIO_DESC *GetInvalidCKBehaviorPrototypeIODesc(const char *message) {
+    static thread_local CKBEHAVIORIO_DESC dummy;
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return &dummy;
+}
+
+static CKPARAMETER_DESC *GetInvalidCKBehaviorPrototypeParameterDesc(const char *message) {
+    static thread_local CKPARAMETER_DESC dummy;
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return &dummy;
+}
+
+static CKBEHAVIORIO_DESC *GetCKBehaviorPrototypeInIOListEntry(CKBehaviorPrototype *self, int index) {
+    if (!self) {
+        return GetInvalidCKBehaviorPrototypeIODesc("CKBehaviorPrototype.GetInIOList requires a valid prototype.");
+    }
+    CKBEHAVIORIO_DESC **list = self->GetInIOList();
+    if (index < 0 || index >= self->GetInputCount() || !list || !list[index]) {
+        return GetInvalidCKBehaviorPrototypeIODesc("CKBehaviorPrototype.GetInIOList index out of range.");
+    }
+    return list[index];
+}
+
+static CKBEHAVIORIO_DESC *GetCKBehaviorPrototypeOutIOListEntry(CKBehaviorPrototype *self, int index) {
+    if (!self) {
+        return GetInvalidCKBehaviorPrototypeIODesc("CKBehaviorPrototype.GetOutIOList requires a valid prototype.");
+    }
+    CKBEHAVIORIO_DESC **list = self->GetOutIOList();
+    if (index < 0 || index >= self->GetOutputCount() || !list || !list[index]) {
+        return GetInvalidCKBehaviorPrototypeIODesc("CKBehaviorPrototype.GetOutIOList index out of range.");
+    }
+    return list[index];
+}
+
+static CKPARAMETER_DESC *GetCKBehaviorPrototypeInParameterListEntry(CKBehaviorPrototype *self, int index) {
+    if (!self) {
+        return GetInvalidCKBehaviorPrototypeParameterDesc("CKBehaviorPrototype.GetInParameterList requires a valid prototype.");
+    }
+    CKPARAMETER_DESC **list = self->GetInParameterList();
+    if (index < 0 || index >= self->GetInParameterCount() || !list || !list[index]) {
+        return GetInvalidCKBehaviorPrototypeParameterDesc("CKBehaviorPrototype.GetInParameterList index out of range.");
+    }
+    return list[index];
+}
+
+static CKPARAMETER_DESC *GetCKBehaviorPrototypeOutParameterListEntry(CKBehaviorPrototype *self, int index) {
+    if (!self) {
+        return GetInvalidCKBehaviorPrototypeParameterDesc("CKBehaviorPrototype.GetOutParameterList requires a valid prototype.");
+    }
+    CKPARAMETER_DESC **list = self->GetOutParameterList();
+    if (index < 0 || index >= self->GetOutParameterCount() || !list || !list[index]) {
+        return GetInvalidCKBehaviorPrototypeParameterDesc("CKBehaviorPrototype.GetOutParameterList index out of range.");
+    }
+    return list[index];
+}
+
+static CKPARAMETER_DESC *GetCKBehaviorPrototypeLocalParameterListEntry(CKBehaviorPrototype *self, int index) {
+    if (!self) {
+        return GetInvalidCKBehaviorPrototypeParameterDesc("CKBehaviorPrototype.GetLocalParameterList requires a valid prototype.");
+    }
+    CKPARAMETER_DESC **list = self->GetLocalParameterList();
+    if (index < 0 || index >= self->GetLocalParameterCount() || !list || !list[index]) {
+        return GetInvalidCKBehaviorPrototypeParameterDesc("CKBehaviorPrototype.GetLocalParameterList index out of range.");
+    }
+    return list[index];
+}
+#endif
+
 void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2663,40 +2736,11 @@ void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "int GetLocalParameterCount()", asMETHODPR(CKBehaviorPrototype, GetLocalParameterCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKBEHAVIORIO_DESC &GetInIOList(int index)", asFUNCTIONPR([](CKBehaviorPrototype *self, int index) -> CKBEHAVIORIO_DESC * {
-        if (index >= 0 && index < self->GetInputCount() && self->GetInIOList()) {
-            return self->GetInIOList()[index];
-        }
-        return nullptr;
-    }, (CKBehaviorPrototype *, int), CKBEHAVIORIO_DESC *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKBEHAVIORIO_DESC &GetOutIOList(int index)", asFUNCTIONPR([](CKBehaviorPrototype *self, int index) -> CKBEHAVIORIO_DESC * {
-        if (index >= 0 && index < self->GetOutputCount() && self->GetOutIOList()) {
-            return self->GetOutIOList()[index];
-        }
-        return nullptr;
-    }, (CKBehaviorPrototype *, int), CKBEHAVIORIO_DESC *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKPARAMETER_DESC &GetInParameterList(int index)", asFUNCTIONPR([](CKBehaviorPrototype *self, int index) -> CKPARAMETER_DESC * {
-        if (index >= 0 && index < self->GetInParameterCount() && self->GetInParameterList()) {
-            return self->GetInParameterList()[index];
-        }
-        return nullptr;
-    }, (CKBehaviorPrototype *, int), CKPARAMETER_DESC *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKPARAMETER_DESC &GetOutParameterList(int index)", asFUNCTIONPR([](CKBehaviorPrototype *self, int index) -> CKPARAMETER_DESC * {
-        if (index >= 0 && index < self->GetOutParameterCount() && self->GetOutParameterList()) {
-            return self->GetOutParameterList()[index];
-        }
-        return nullptr;
-    }, (CKBehaviorPrototype *, int), CKPARAMETER_DESC *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKPARAMETER_DESC &GetLocalParameterList(int index)", asFUNCTIONPR([](CKBehaviorPrototype *self, int index) -> CKPARAMETER_DESC * {
-        if (index >= 0 && index < self->GetLocalParameterCount() && self->GetLocalParameterList()) {
-            return self->GetLocalParameterList()[index];
-        }
-        return nullptr;
-    }, (CKBehaviorPrototype *, int), CKPARAMETER_DESC *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKBEHAVIORIO_DESC &GetInIOList(int index)", asFUNCTION(GetCKBehaviorPrototypeInIOListEntry), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKBEHAVIORIO_DESC &GetOutIOList(int index)", asFUNCTION(GetCKBehaviorPrototypeOutIOListEntry), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKPARAMETER_DESC &GetInParameterList(int index)", asFUNCTION(GetCKBehaviorPrototypeInParameterListEntry), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKPARAMETER_DESC &GetOutParameterList(int index)", asFUNCTION(GetCKBehaviorPrototypeOutParameterListEntry), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKPARAMETER_DESC &GetLocalParameterList(int index)", asFUNCTION(GetCKBehaviorPrototypeLocalParameterListEntry), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
 
     r = engine->RegisterObjectMethod("CKBehaviorPrototype", "CKObjectDeclaration@ GetSourceObjectDeclaration()", asMETHODPR(CKBehaviorPrototype, GetSoureObjectDeclaration, (), CKObjectDeclaration*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

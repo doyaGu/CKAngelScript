@@ -1769,6 +1769,16 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBehaviorPrototype self-test could not find expected guarded pointer methods.";
         return false;
     }
+#if CKVERSION == 0x13022002
+    if (prototypeType->GetMethodByDecl("CKBEHAVIORIO_DESC &GetInIOList(int index)") == nullptr ||
+        prototypeType->GetMethodByDecl("CKBEHAVIORIO_DESC &GetOutIOList(int index)") == nullptr ||
+        prototypeType->GetMethodByDecl("CKPARAMETER_DESC &GetInParameterList(int index)") == nullptr ||
+        prototypeType->GetMethodByDecl("CKPARAMETER_DESC &GetOutParameterList(int index)") == nullptr ||
+        prototypeType->GetMethodByDecl("CKPARAMETER_DESC &GetLocalParameterList(int index)") == nullptr) {
+        error = "CKBehaviorPrototype self-test could not find expected guarded list methods.";
+        return false;
+    }
+#endif
 
     constexpr const char *moduleName = "__CKAS_CKBehaviorPrototypeSelfTest";
     const char *source =
@@ -1780,6 +1790,27 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         "  proto.SetBehaviorCallbackFct(empty, CKCB_BEHAVIORALL, empty);\n"
         "  NativePointer cb = proto.GetBehaviorCallbackFct();\n"
         "}\n";
+#if CKVERSION == 0x13022002
+    const char *listSource =
+        "void ProbeCKBehaviorPrototypeLists(CKBehaviorPrototype@ proto) {\n"
+        "  if (proto is null) return;\n"
+        "  if (proto.GetInputCount() > 0) {\n"
+        "    CKDWORD flags = proto.GetInIOList(0).Flags;\n"
+        "  }\n"
+        "  if (proto.GetOutputCount() > 0) {\n"
+        "    CKDWORD flags = proto.GetOutIOList(0).Flags;\n"
+        "  }\n"
+        "  if (proto.GetInParameterCount() > 0) {\n"
+        "    int owner = proto.GetInParameterList(0).Owner;\n"
+        "  }\n"
+        "  if (proto.GetOutParameterCount() > 0) {\n"
+        "    int owner = proto.GetOutParameterList(0).Owner;\n"
+        "  }\n"
+        "  if (proto.GetLocalParameterCount() > 0) {\n"
+        "    int owner = proto.GetLocalParameterList(0).Owner;\n"
+        "  }\n"
+        "}\n";
+#endif
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
     if (!module) {
@@ -1793,6 +1824,14 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBehaviorPrototype self-test could not add its script section.";
         return false;
     }
+#if CKVERSION == 0x13022002
+    r = module->AddScriptSection("ck-behavior-prototype-list-self-test", listSource);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype self-test could not add its list script section.";
+        return false;
+    }
+#endif
     r = module->Build();
     if (r < 0) {
         engine->DiscardModule(moduleName);
@@ -1806,6 +1845,14 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBehaviorPrototype self-test function was not found.";
         return false;
     }
+#if CKVERSION == 0x13022002
+    asIScriptFunction *listProbe = module->GetFunctionByDecl("void ProbeCKBehaviorPrototypeLists(CKBehaviorPrototype@)");
+    if (!listProbe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype list self-test function was not found.";
+        return false;
+    }
+#endif
 
     engine->DiscardModule(moduleName);
     return true;
