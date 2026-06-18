@@ -1190,6 +1190,26 @@ bool RunCKDependenciesScriptSelfTest(asIScriptEngine *engine, std::string &error
         error = "CKCopyDefaultClassDependencies declaration is not registered.";
         return false;
     }
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("CKDependenciesIt");
+    if (!iteratorType) {
+        error = "CKDependenciesIt self-test could not find the registered type.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("bool opEquals(const CKDependenciesIt &in other) const") ||
+        !iteratorType->GetMethodByDecl("bool opNotEquals(const CKDependenciesIt &in other) const")) {
+        error = "CKDependenciesIt self-test could not find iterator comparison methods.";
+        return false;
+    }
+    asITypeInfo *dependenciesType = engine->GetTypeInfoByDecl("CKDependencies");
+    if (!dependenciesType) {
+        error = "CKDependenciesIt self-test could not find CKDependencies.";
+        return false;
+    }
+    if (!dependenciesType->GetMethodByDecl("CKDependenciesIt Begin() const") ||
+        !dependenciesType->GetMethodByDecl("CKDependenciesIt End() const")) {
+        error = "CKDependenciesIt self-test could not find CKDependencies Begin/End producers.";
+        return false;
+    }
 
     constexpr const char *moduleName = "__CKAS_CKDependenciesSelfTest";
     const char *source =
@@ -1202,6 +1222,29 @@ bool RunCKDependenciesScriptSelfTest(asIScriptEngine *engine, std::string &error
         "  CKDependencies unsupported = CKGetDefaultClassDependencies(CK_DEPENDENCIES_OPERATIONMODE);\n"
         "  if (unsupported.Size() < 0) return 3;\n"
         "  unsupported.ModifyOptions(CKCID_OBJECT, 0, 0);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeDependenciesIterator() {\n"
+        "  CKDependencies deps;\n"
+        "  uint first = 13;\n"
+        "  uint second = 17;\n"
+        "  deps.PushBack(first);\n"
+        "  deps.PushBack(second);\n"
+        "  CKDependenciesIt begin = deps.Begin();\n"
+        "  CKDependenciesIt end = deps.End();\n"
+        "  if (!begin.IsValid()) return 1;\n"
+        "  if (begin == end) return 2;\n"
+        "  if (begin.Get() != first) return 3;\n"
+        "  CKDependenciesIt copiedIt(begin);\n"
+        "  if (!(copiedIt == begin) || copiedIt != begin) return 4;\n"
+        "  ++copiedIt;\n"
+        "  if (copiedIt == begin || !(copiedIt != begin)) return 5;\n"
+        "  if (copiedIt.Get() != second) return 6;\n"
+        "  CKDependenciesIt assignedIt;\n"
+        "  assignedIt = copiedIt;\n"
+        "  if (!(assignedIt == copiedIt)) return 7;\n"
+        "  ++assignedIt;\n"
+        "  if (!(assignedIt == end) || assignedIt != end) return 8;\n"
         "  return 0;\n"
         "}\n";
 
@@ -1229,9 +1272,16 @@ bool RunCKDependenciesScriptSelfTest(asIScriptEngine *engine, std::string &error
         error = "CKDependencies self-test function was not found.";
         return false;
     }
+    asIScriptFunction *iteratorProbe = module->GetFunctionByDecl("int ProbeDependenciesIterator()");
+    if (!iteratorProbe) {
+        engine->DiscardModule(moduleName);
+        error = "CKDependencies iterator self-test function was not found.";
+        return false;
+    }
 
+    const bool ok = ExecuteCKAttributeDescProbe(engine, iteratorProbe, false, "CKDependencies iterator probe", error);
     engine->DiscardModule(moduleName);
-    return true;
+    return ok;
 }
 
 bool RunCKTimeProfilerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
