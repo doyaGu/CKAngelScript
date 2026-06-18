@@ -307,6 +307,21 @@ static CKERROR ShareCKParameterInSourceWith(T *self, CKParameterIn *pin) {
 }
 
 template <typename T>
+static void SetCKParameterInOwner(T *self, CKObject *owner) {
+    if (!self || !owner) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKParameterIn.SetOwner requires a non-null owner.");
+        return;
+    }
+    if (!CKBehavior::Cast(owner) && !CKParameterOperation::Cast(owner)) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKParameterIn.SetOwner only accepts CKBehavior or CKParameterOperation owners.");
+        return;
+    }
+    self->SetOwner(owner);
+}
+
+template <typename T>
 static void SetCKParameterInType(T *self, CKParameterType type, bool updateSource) {
     if (!self)
         return;
@@ -358,7 +373,7 @@ static void RegisterCKParameterInMembers(asIScriptEngine *engine, const char *na
     r = engine->RegisterObjectMethod(name, "void SetGUID(CKGUID guid, bool updateSource, const string &in newName)", asFUNCTIONPR(SetCKParameterInGuidNamed<T>, (T *, CKGUID, bool, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKParameterType GetType()", asMETHODPR(T, GetType, (), CKParameterType), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKGUID GetGUID()", asMETHODPR(T, GetGUID, (), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetOwner(CKObject@ obj)", asMETHODPR(T, SetOwner, (CKObject*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetOwner(CKObject@ obj)", asFUNCTIONPR(SetCKParameterInOwner<T>, (T *, CKObject *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKObject@ GetOwner()", asMETHODPR(T, GetOwner, (), CKObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKParameterIn") != 0) {

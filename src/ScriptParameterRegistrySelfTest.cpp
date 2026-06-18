@@ -3581,6 +3581,12 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "void ProbeCKParameterInShareNull(CKParameterIn@ pin, CKParameter@ sourceA, CKParameter@ sourceB, CKParameterIn@ shared) {\n"
         "  pin.ShareSourceWith(null);\n"
         "}\n"
+        "void ProbeCKParameterInSetOwnerNull(CKParameterIn@ pin, CKParameter@ sourceA, CKParameter@ sourceB, CKParameterIn@ shared) {\n"
+        "  pin.SetOwner(null);\n"
+        "}\n"
+        "void ProbeCKParameterInSetOwnerInvalid(CKParameterIn@ pin, CKParameter@ sourceA, CKParameter@ sourceB, CKParameterIn@ shared) {\n"
+        "  pin.SetOwner(sourceA);\n"
+        "}\n"
         "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
         "  local.CopyValue(null);\n"
         "}\n"
@@ -3629,13 +3635,16 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *pinSetTypeGuid = module->GetFunctionByDecl("int ProbeCKParameterInSetTypeAndGuid(CKParameterIn@)");
     asIScriptFunction *pinSourceGraph = module->GetFunctionByDecl("int ProbeCKParameterInSourceGraph(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
     asIScriptFunction *pinShareNull = module->GetFunctionByDecl("void ProbeCKParameterInShareNull(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
+    asIScriptFunction *pinSetOwnerNull = module->GetFunctionByDecl("void ProbeCKParameterInSetOwnerNull(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
+    asIScriptFunction *pinSetOwnerInvalid = module->GetFunctionByDecl("void ProbeCKParameterInSetOwnerInvalid(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
         !genericSetScriptObject || !genericGetScriptObject || !genericSetObjectHandle || !genericGetObjectHandle ||
         !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
         !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
-        !pinSetTypeGuid || !pinSourceGraph || !pinShareNull || !copyValueNull || !compatibleNull) {
+        !pinSetTypeGuid || !pinSourceGraph || !pinShareNull || !pinSetOwnerNull || !pinSetOwnerInvalid ||
+        !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -3726,7 +3735,9 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                      ExecuteCKParameterInProbe(engine, pinGetNonPodObject, inputString, true, "CKParameterIn generic non-POD probe", error) &&
                      ExecuteCKParameterInProbe(engine, pinSetTypeGuid, inputInt, false, "CKParameterIn SetType/SetGUID probe", error) &&
                      ExecuteCKParameterInSourceProbe(engine, pinSourceGraph, inputGraph, sourceGraphA, sourceGraphB, inputShared, false, "CKParameterIn source graph probe", error) &&
-                     ExecuteCKParameterInSourceProbe(engine, pinShareNull, inputGraph, sourceGraphA, sourceGraphB, inputShared, true, "CKParameterIn ShareSourceWith null probe", error);
+                     ExecuteCKParameterInSourceProbe(engine, pinShareNull, inputGraph, sourceGraphA, sourceGraphB, inputShared, true, "CKParameterIn ShareSourceWith null probe", error) &&
+                     ExecuteCKParameterInSourceProbe(engine, pinSetOwnerNull, inputGraph, sourceGraphA, sourceGraphB, inputShared, true, "CKParameterIn SetOwner null probe", error) &&
+                     ExecuteCKParameterInSourceProbe(engine, pinSetOwnerInvalid, inputGraph, sourceGraphA, sourceGraphB, inputShared, true, "CKParameterIn SetOwner invalid probe", error);
             }
         }
         if (inputGraph)
