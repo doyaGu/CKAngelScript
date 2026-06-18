@@ -748,6 +748,84 @@ bool RunCKBaseManagerCastScriptSelfTest(CKContext *context, asIScriptEngine *eng
     return ok;
 }
 
+bool RunCKTimeManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKTimeManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *timeManagerType = engine->GetTypeInfoByDecl("CKTimeManager");
+    if (!timeManagerType) {
+        error = "CKTimeManager self-test could not find the registered type.";
+        return false;
+    }
+    if (timeManagerType->GetMethodByDecl("uint GetMainTickCount()") == nullptr ||
+        timeManagerType->GetMethodByDecl("float GetTime()") == nullptr ||
+        timeManagerType->GetMethodByDecl("float GetLastDeltaTime()") == nullptr ||
+        timeManagerType->GetMethodByDecl("float GetLastDeltaTimeFree()") == nullptr ||
+        timeManagerType->GetMethodByDecl("float GetAbsoluteTime()") == nullptr ||
+        timeManagerType->GetMethodByDecl("void GetTimeToWaitForLimits(float &out timeBeforeRender, float &out timeBeforeBeh)") == nullptr ||
+        timeManagerType->GetMethodByDecl("void ResetChronos(bool renderChrono, bool behavioralChrono)") == nullptr) {
+        error = "CKTimeManager self-test could not find expected time manager methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKTimeManagerSelfTest";
+    const char *source =
+        "int ProbeTimeManager(CKContext@ ctx) {\n"
+        "  CKTimeManager@ time = ctx.GetTimeManager();\n"
+        "  if (time is null) return 1;\n"
+        "  CKBaseManager@ base = time;\n"
+        "  if (base is null) return 2;\n"
+        "  if (cast<CKTimeManager>(base) is null) return 3;\n"
+        "  uint tick = time.GetMainTickCount();\n"
+        "  float current = time.GetTime();\n"
+        "  float absolute = time.GetAbsoluteTime();\n"
+        "  float delta = time.GetLastDeltaTime();\n"
+        "  float freeDelta = time.GetLastDeltaTimeFree();\n"
+        "  float renderWait = 0.0f;\n"
+        "  float behaviorWait = 0.0f;\n"
+        "  time.GetTimeToWaitForLimits(renderWait, behaviorWait);\n"
+        "  if (time.GetTimeScaleFactor() <= 0.0f) return 4;\n"
+        "  if (time.GetMinimumDeltaTime() < 0.0f) return 5;\n"
+        "  if (time.GetMaximumDeltaTime() < 0.0f) return 6;\n"
+        "  if (time.GetFrameRateLimit() < 0.0f) return 7;\n"
+        "  if (time.GetBehavioralRateLimit() < 0.0f) return 8;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKTimeManager self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-time-manager-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTimeManager self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTimeManager self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeTimeManager(CKContext@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKTimeManager self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKTimeManager accessors probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKObjectManager script self-test requires CKContext and AngelScript engine.";
@@ -1088,6 +1166,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKBaseManagerCastScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKTimeManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
