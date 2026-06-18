@@ -1774,6 +1774,47 @@ static CKERROR ReadCKSoundReaderMemory(CKSoundReader *self, NativePointer memory
     return self->ReadMemory(memory.Get(), size);
 }
 
+static CKERROR OpenCKMovieReaderFile(CKMovieReader *self, const std::string &name) {
+    if (!self) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    std::string mutableName = name;
+    mutableName.push_back('\0');
+    return self->OpenFile(&mutableName[0]);
+}
+
+static CKERROR OpenCKMovieReaderMemory(CKMovieReader *self, const std::string &name) {
+    if (!self) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    std::string mutableName = name;
+    mutableName.push_back('\0');
+    return self->OpenMemory(&mutableName[0]);
+}
+
+static CKERROR OpenCKMovieReaderAsynchronousFile(CKMovieReader *self, const std::string &name) {
+    if (!self) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    std::string mutableName = name;
+    mutableName.push_back('\0');
+    return self->OpenAsynchronousFile(&mutableName[0]);
+}
+
+static CKERROR ReadCKMovieReaderFrame(CKMovieReader *self, int frame, CKMovieProperties **prop) {
+    if (prop) {
+        *prop = nullptr;
+    }
+    if (!self || !prop || frame < 0) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    return self->ReadFrame(frame, prop);
+}
+
 void RegisterCKDataReader(asIScriptEngine *engine) {
     RegisterCKDataReaderMembers<CKDataReader>(engine, "CKDataReader");
 }
@@ -1835,14 +1876,14 @@ void RegisterCKMovieReader(asIScriptEngine *engine) {
 
     RegisterCKDataReaderMembers<CKMovieReader>(engine, "CKMovieReader");
 
-    r = engine->RegisterObjectMethod("CKMovieReader", "int GetMovieFrameCount() const", asMETHODPR(CKMovieReader, GetMovieFrameCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMovieReader", "int GetMovieLength() const", asMETHODPR(CKMovieReader, GetMovieLength, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMovieReader", "int GetMovieFrameCount()", asMETHODPR(CKMovieReader, GetMovieFrameCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMovieReader", "int GetMovieLength()", asMETHODPR(CKMovieReader, GetMovieLength, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenFile(const string &in name)", asFUNCTIONPR([](CKMovieReader *self, const std::string &name) { return self->OpenFile(const_cast<char*>(name.c_str())); }, (CKMovieReader *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenMemory(const string &in name)", asFUNCTIONPR([](CKMovieReader *self, const std::string &name) { return self->OpenMemory(const_cast<char*>(name.c_str())); }, (CKMovieReader *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenAsynchronousFile(const string &in name)", asFUNCTIONPR([](CKMovieReader *self, const std::string &name) { return self->OpenAsynchronousFile(const_cast<char*>(name.c_str())); }, (CKMovieReader *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenFile(const string &in name)", asFUNCTION(OpenCKMovieReaderFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenMemory(const string &in name)", asFUNCTION(OpenCKMovieReaderMemory), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR OpenAsynchronousFile(const string &in name)", asFUNCTION(OpenCKMovieReaderAsynchronousFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR ReadFrame(int f, CKMovieProperties@ &out prop)", asMETHODPR(CKMovieReader, ReadFrame, (int, CKMovieProperties **), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMovieReader", "CKERROR ReadFrame(int f, CKMovieProperties@ &out prop)", asFUNCTION(ReadCKMovieReaderFrame), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKPluginDll

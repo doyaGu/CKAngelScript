@@ -1611,6 +1611,65 @@ bool RunCKSoundReaderScriptSelfTest(asIScriptEngine *engine, std::string &error)
     return true;
 }
 
+bool RunCKMovieReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKMovieReader script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *movieReaderType = engine->GetTypeInfoByDecl("CKMovieReader");
+    if (!movieReaderType) {
+        error = "CKMovieReader self-test could not find the registered type.";
+        return false;
+    }
+    if (movieReaderType->GetMethodByDecl("int GetMovieFrameCount()") == nullptr ||
+        movieReaderType->GetMethodByDecl("int GetMovieLength()") == nullptr ||
+        movieReaderType->GetMethodByDecl("CKERROR ReadFrame(int f, CKMovieProperties@ &out prop)") == nullptr) {
+        error = "CKMovieReader self-test could not find expected reader methods.";
+        return false;
+    }
+    if (movieReaderType->GetMethodByDecl("int GetMovieFrameCount() const") != nullptr ||
+        movieReaderType->GetMethodByDecl("int GetMovieLength() const") != nullptr) {
+        error = "CKMovieReader self-test found stale const frame-count declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKMovieReaderSelfTest";
+    const char *source =
+        "void ProbeMovieReaderSurface(CKMovieReader@ reader) {\n"
+        "  CKMovieProperties@ prop;\n"
+        "  if (reader is null) return;\n"
+        "  reader.GetMovieFrameCount();\n"
+        "  reader.GetMovieLength();\n"
+        "  reader.OpenFile(\"\");\n"
+        "  reader.OpenMemory(\"\");\n"
+        "  reader.OpenAsynchronousFile(\"\");\n"
+        "  reader.ReadFrame(0, prop);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKMovieReader self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-movie-reader-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMovieReader self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMovieReader self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKKey script self-test requires an AngelScript engine.";
@@ -2803,6 +2862,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKSoundReaderScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKMovieReaderScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKPluginManagerScriptSelfTest(engine, error)) {
