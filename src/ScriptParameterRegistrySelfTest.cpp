@@ -3,6 +3,7 @@
 #include "angelscript.h"
 
 #include "CKAttributeManager.h"
+#include "CKParameterOperation.h"
 #include "CKParameterManager.h"
 #include "ScriptParameterRegistry.h"
 
@@ -303,6 +304,50 @@ bool ExecuteCKParameterInSourceProbe(asIScriptEngine *engine,
     }
     if (r >= 0) {
         r = scriptContext->SetArgObject(3, shared);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCKParameterOperationProbe(asIScriptEngine *engine,
+                                      asIScriptFunction *function,
+                                      CKParameterOperation *operation,
+                                      bool expectException,
+                                      const char *label,
+                                      std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, operation);
     }
     if (r >= 0) {
         r = scriptContext->Execute();
@@ -3364,6 +3409,37 @@ bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &
     return ok;
 }
 
+CKGUID FindCKParameterOperationSelfTestGuid(CKContext *context) {
+    CKParameterManager *parameterManager = context ? context->GetParameterManager() : nullptr;
+    if (!context || !parameterManager) {
+        return CKGUID();
+    }
+
+    for (int i = 0; i < parameterManager->GetParameterOperationCount(); ++i) {
+        const CKGUID guid = parameterManager->OperationCodeToGuid(i);
+        if (!guid.IsValid()) {
+            continue;
+        }
+
+        CKParameterOperation *operation = context->CreateCKParameterOperation(
+            const_cast<CKSTRING>("__CKAS_CKParameterOperationGuidProbe"),
+            guid,
+            CKPGUID_INT,
+            CKPGUID_INT,
+            CKPGUID_INT);
+        const bool usable = operation && operation->GetInParameter1() && operation->GetInParameter2() &&
+                            operation->GetOutParameter() && operation->GetOperationFunction();
+        if (operation) {
+            context->DestroyObject(operation);
+        }
+        if (usable) {
+            return guid;
+        }
+    }
+
+    return CKGUID();
+}
+
 bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameter script self-test requires CKContext and AngelScript engine.";
@@ -3396,6 +3472,19 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         parameterInType->GetMethodByDecl("void SetGUID(CKGUID guid, bool updateSource = false)") == nullptr ||
         parameterInType->GetMethodByDecl("void SetGUID(CKGUID guid, bool updateSource, const string &in newName)") == nullptr) {
         error = "CKParameterIn self-test could not find the guarded SetType/SetGUID overloads.";
+        return false;
+    }
+    asITypeInfo *operationType = engine->GetTypeInfoByDecl("CKParameterOperation");
+    if (!operationType) {
+        error = "CKParameterOperation self-test could not find the registered type.";
+        return false;
+    }
+    if (operationType->GetMethodByDecl("bool HasOperationFunction()") == nullptr) {
+        error = "CKParameterOperation self-test could not find HasOperationFunction.";
+        return false;
+    }
+    if (operationType->GetMethodByDecl("NativePointer GetOperationFunction()") != nullptr) {
+        error = "CKParameterOperation self-test found stale raw GetOperationFunction exposure.";
         return false;
     }
     constexpr const char *moduleName = "__CKAS_CKParameterSelfTest";
@@ -3587,6 +3676,21 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "void ProbeCKParameterInSetOwnerInvalid(CKParameterIn@ pin, CKParameter@ sourceA, CKParameter@ sourceB, CKParameterIn@ shared) {\n"
         "  pin.SetOwner(sourceA);\n"
         "}\n"
+        "int ProbeCKParameterOperationBasics(CKParameterOperation@ op) {\n"
+        "  if (op is null) return 2;\n"
+        "  if (op.GetInParameter1() is null) return 3;\n"
+        "  if (op.GetInParameter2() is null) return 4;\n"
+        "  if (op.GetOutParameter() is null) return 5;\n"
+        "  if (!op.HasOperationFunction()) return 6;\n"
+        "  CKGUID guid = op.GetOperationGuid();\n"
+        "  if (!guid.IsValid()) return 7;\n"
+        "  CKERROR err = op.DoOperation();\n"
+        "  if (err != CK_OK && err != CKERR_NOTINITIALIZED) return 8;\n"
+        "  return 0;\n"
+        "}\n"
+        "void ProbeCKParameterOperationSetOwnerNull(CKParameterOperation@ op) {\n"
+        "  op.SetOwner(null);\n"
+        "}\n"
         "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
         "  local.CopyValue(null);\n"
         "}\n"
@@ -3637,6 +3741,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *pinShareNull = module->GetFunctionByDecl("void ProbeCKParameterInShareNull(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
     asIScriptFunction *pinSetOwnerNull = module->GetFunctionByDecl("void ProbeCKParameterInSetOwnerNull(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
     asIScriptFunction *pinSetOwnerInvalid = module->GetFunctionByDecl("void ProbeCKParameterInSetOwnerInvalid(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
+    asIScriptFunction *operationBasics = module->GetFunctionByDecl("int ProbeCKParameterOperationBasics(CKParameterOperation@)");
+    asIScriptFunction *operationOwnerNull = module->GetFunctionByDecl("void ProbeCKParameterOperationSetOwnerNull(CKParameterOperation@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
@@ -3644,7 +3750,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
         !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
         !pinSetTypeGuid || !pinSourceGraph || !pinShareNull || !pinSetOwnerNull || !pinSetOwnerInvalid ||
-        !copyValueNull || !compatibleNull) {
+        !operationBasics || !operationOwnerNull || !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -3762,6 +3868,28 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
             context->DestroyObject(sourceGraphB);
         if (sourceGraphA)
             context->DestroyObject(sourceGraphA);
+    }
+
+    if (ok) {
+        const CKGUID operationGuid = FindCKParameterOperationSelfTestGuid(context);
+        if (operationGuid.IsValid()) {
+            CKParameterOperation *operation = context->CreateCKParameterOperation(
+                const_cast<CKSTRING>("__CKAS_CKParameterOperationScriptProbe"),
+                operationGuid,
+                CKPGUID_INT,
+                CKPGUID_INT,
+                CKPGUID_INT);
+            if (!operation) {
+                ok = false;
+                error = "CKParameterOperation probe could not create its native operation.";
+            } else {
+                ok = ExecuteCKParameterOperationProbe(engine, operationBasics, operation, false, "CKParameterOperation basics probe", error) &&
+                     ExecuteCKParameterOperationProbe(engine, operationOwnerNull, operation, true, "CKParameterOperation SetOwner null probe", error);
+            }
+            if (operation) {
+                context->DestroyObject(operation);
+            }
+        }
     }
 
     engine->DiscardModule(moduleName);

@@ -683,6 +683,21 @@ void RegisterCKParameterLocal(asIScriptEngine *engine) {
 }
 
 template <typename T>
+static void SetCKParameterOperationOwner(T *self, CKBehavior *owner) {
+    if (!self || !owner) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKParameterOperation.SetOwner requires a non-null behavior owner.");
+        return;
+    }
+    self->SetOwner(owner);
+}
+
+template <typename T>
+static bool HasCKParameterOperationFunction(T *self) {
+    return self && self->GetOperationFunction() != nullptr;
+}
+
+template <typename T>
 static void RegisterCKParameterOperationMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -693,14 +708,14 @@ static void RegisterCKParameterOperationMembers(asIScriptEngine *engine, const c
     r = engine->RegisterObjectMethod(name, "CKParameterOut@ GetOutParameter()", asMETHODPR(T, GetOutParameter, (), CKParameterOut *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKBehavior@ GetOwner()", asMETHODPR(T, GetOwner, (), CKBehavior *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetOwner(CKBehavior@)", asMETHODPR(T, SetOwner, (CKBehavior *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetOwner(CKBehavior@)", asFUNCTIONPR(SetCKParameterOperationOwner<T>, (T *, CKBehavior *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKERROR DoOperation()", asMETHODPR(T, DoOperation, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKGUID GetOperationGuid()", asMETHODPR(T, GetOperationGuid, (), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void Reconstruct(const string &in name, CKGUID opGuid, CKGUID resGuid, CKGUID p1Guid, CKGUID p2Guid)", asFUNCTIONPR([](T *self, const std::string &name, CKGUID opGuid, CKGUID resGuid, CKGUID p1Guid, CKGUID p2Guid) { self->Reconstruct(const_cast<CKSTRING>(name.c_str()), opGuid, resGuid, p1Guid, p2Guid); }, (T *, const std::string&, CKGUID, CKGUID, CKGUID, CKGUID), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "NativePointer GetOperationFunction()", asFUNCTIONPR([](T *self) { return NativePointer(self->GetOperationFunction()); }, (T *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool HasOperationFunction()", asFUNCTIONPR(HasCKParameterOperationFunction<T>, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKParameterOperation") != 0) {
         RegisterCKObjectCast<T, CKParameterOperation>(engine, name, "CKParameterOperation");
