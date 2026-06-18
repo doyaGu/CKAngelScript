@@ -570,6 +570,19 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    task.Cancel();\n";
     source += "    return 0;\n";
     source += "}\n";
+    source += "int ProbeBehaviorLinkRefApi(BehaviorLinkRef@ link) {\n";
+    source += "    if (link is null) return 0;\n";
+    source += "    link.IsValid(); bool linkValid = link.valid; link.Error();\n";
+    source += "    if (link.Describe() == \"\") return 1150;\n";
+    source += "    link.Id(); link.Name(); link.ClassId(); link.IsDynamic();\n";
+    source += "    BehaviorRef@ source = link.SourceBehavior();\n";
+    source += "    BehaviorRef@ target = link.TargetBehavior();\n";
+    source += "    link.SourceOutputIndex(); link.TargetInputIndex(); link.Delay();\n";
+    source += "    ObjectRef@ objectRef = link;\n";
+    source += "    if (objectRef is null || objectRef.Id() != link.Id()) return 1151;\n";
+    source += "    if (linkValid && (source is null || target is null)) return 1152;\n";
+    source += "    return 0;\n";
+    source += "}\n";
     source += "int ProbeBehaviorGraphEditApi(const CKBehaviorContext &in ctx) {\n";
     source += "    BehaviorBridge@ bridge = Behavior::From(ctx);\n";
     source += "    if (bridge is null) return 1120;\n";
@@ -628,8 +641,10 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    GraphEditLink@ linkBySlot = edit.Link(imported, outputSlot, imported, inputSlot);\n";
     source += "    if (linkByIndex is null || !linkByIndex.IsValid() || !linkByIndex.valid) return 1139;\n";
     source += "    if (linkBySlot is null || !linkBySlot.IsValid() || !linkBySlot.valid) return 1140;\n";
-    source += "    linkByIndex.Error(); linkByIndex.Describe(); linkByIndex.Link();\n";
-    source += "    linkBySlot.Error(); linkBySlot.Describe(); linkBySlot.Link();\n";
+    source += "    linkByIndex.Error(); linkByIndex.Describe(); BehaviorLinkRef@ indexLink = linkByIndex.Link();\n";
+    source += "    linkBySlot.Error(); linkBySlot.Describe(); BehaviorLinkRef@ slotLink = linkBySlot.Link();\n";
+    source += "    int indexLinkResult = ProbeBehaviorLinkRefApi(indexLink); if (indexLinkResult != 0) return indexLinkResult;\n";
+    source += "    int slotLinkResult = ProbeBehaviorLinkRefApi(slotLink); if (slotLinkResult != 0) return slotLinkResult;\n";
     source += "    edit.Set(addedDecl, pinSlot, value);\n";
     source += "    edit.Set(addedDecl, pinSlot, 1);\n";
     source += "    edit.Set(addedDecl, pinSlot, 1.0f);\n";
@@ -2822,6 +2837,17 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
         }
         if (behaviorQueryType->GetMethodByDecl("BehaviorQuery@ Target(CKBeObject@ target)")) {
             error = "BehaviorQuery.Target still exposes a raw CKBeObject handle.";
+            return false;
+        }
+        asITypeInfo *behaviorLinkType = engine->GetTypeInfoByName("BehaviorLinkRef");
+        if (!behaviorLinkType ||
+            !behaviorLinkType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
+            !behaviorLinkType->GetMethodByDecl("const ObjectRef@ opImplCast() const")) {
+            error = "BehaviorLinkRef wrapper cast declaration self-test failed.";
+            return false;
+        }
+        if (behaviorLinkType->GetMethodByDecl("CKObject@ Object() const")) {
+            error = "BehaviorLinkRef still exposes a raw CKObject handle.";
             return false;
         }
     }

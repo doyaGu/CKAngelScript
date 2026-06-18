@@ -21,6 +21,7 @@ struct ObjectRefIdentityOptions {
     bool describe = true;
     bool idProperty = true;
     bool nameProperty = true;
+    bool object = true;
 };
 
 template <typename T>
@@ -56,7 +57,9 @@ void RegisterObjectRefIdentityMethods(asIScriptEngine *engine,
     }
     r = engine->RegisterObjectMethod(typeName, "CK_CLASSID ClassId() const", asMETHOD(T, ClassId), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(typeName, "bool IsDynamic() const", asMETHOD(T, IsDynamic), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(typeName, "CKObject@ Object() const", asMETHOD(T, Object), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    if (options.object) {
+        r = engine->RegisterObjectMethod(typeName, "CKObject@ Object() const", asMETHOD(T, Object), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    }
 }
 
 template <typename T>
@@ -153,6 +156,12 @@ ObjectRefIdentityOptions WithoutIsValidValidAndDescribe() {
     options.isValid = false;
     options.validProperty = false;
     options.describe = false;
+    return options;
+}
+
+ObjectRefIdentityOptions WithoutIsValidValidDescribeAndObject() {
+    ObjectRefIdentityOptions options = WithoutIsValidValidAndDescribe();
+    options.object = false;
     return options;
 }
 
@@ -393,7 +402,7 @@ void RegisterScriptObjectRefBridge(asIScriptEngine *engine) {
     RegisterObjectRefType<ParamLocalRef>(engine, "ParamLocalRef");
     RegisterObjectRefType<ParamStructRef>(engine, "ParamStructRef", WithoutIsValidAndDescribe());
     RegisterObjectRefType<ParamOperationRef>(engine, "ParamOperationRef", WithoutIsValidAndDescribe());
-    RegisterObjectRefType<BehaviorLinkRef>(engine, "BehaviorLinkRef", WithoutIsValidValidAndDescribe());
+    RegisterObjectRefType<BehaviorLinkRef>(engine, "BehaviorLinkRef", WithoutIsValidValidDescribeAndObject());
 
     RegisterObjectRefCast<BehaviorRef, ObjectRef>(engine, "BehaviorRef", "ObjectRef");
     RegisterObjectRefCast<ParamRef, ObjectRef>(engine, "ParamRef", "ObjectRef");
