@@ -3,6 +3,7 @@
 #include <cassert>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include <dyncall.h>
 #include <dyncall_callback.h>
@@ -12,6 +13,15 @@
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
 
+namespace {
+
+void SetActiveScriptException(const char *message) {
+    if (auto *ctx = asGetActiveContext())
+        ctx->SetException(message);
+}
+
+} // namespace
+
 class DynAggregate {
 public:
     static DynAggregate *Create(size_t maxFieldCount, size_t size) {
@@ -19,17 +29,20 @@ public:
         return new(self) DynAggregate(maxFieldCount, size);
     }
 
-    DynAggregate(size_t maxFieldCount, size_t size) {
-        aggr = dcNewAggr(maxFieldCount, size);
+    DynAggregate(size_t maxFieldCount, size_t size)
+        : aggr(dcNewAggr(maxFieldCount, size)), m_MaxFieldCount(maxFieldCount) {
         if (!aggr) {
-            auto *ctx = asGetActiveContext();
-            if (ctx)
-                ctx->SetException("Failed to create aggregate.");
+            SetActiveScriptException("Failed to create aggregate.");
         }
     }
 
     ~DynAggregate() {
-        dcFreeAggr(aggr);
+        if (aggr)
+            dcFreeAggr(aggr);
+        for (const DynAggregate *nested : m_NestedAggregates) {
+            if (nested)
+                nested->Release();
+        }
         if (m_WeakRefFlag) {
             m_WeakRefFlag->Set(true);
             m_WeakRefFlag->Release();
@@ -74,24 +87,71 @@ public:
     }
 
     DynAggregate &Field(char type, int offset, size_t arrayLength = 1) {
+        if (!CanAddField())
+            return *this;
         dcAggrField(aggr, type, offset, arrayLength);
+        ++m_FieldCount;
         return *this;
     }
 
     DynAggregate &AggregateField(const DynAggregate &nestedAggr, int offset, size_t arrayLength = 1) {
+        if (!CanAddField())
+            return *this;
+        if (!nestedAggr.Get()) {
+            SetActiveScriptException("Nested DynAggregate has no native descriptor.");
+            return *this;
+        }
+        if (&nestedAggr == this || nestedAggr.ContainsNestedAggregate(this)) {
+            SetActiveScriptException("DynAggregate nesting cycle is not allowed.");
+            return *this;
+        }
+        m_NestedAggregates.push_back(&nestedAggr);
+        nestedAggr.AddRef();
         dcAggrField(aggr, DC_SIGCHAR_AGGREGATE, offset, arrayLength, nestedAggr.Get());
+        ++m_FieldCount;
         return *this;
     }
 
     void Close() {
+        if (!aggr || m_Closed)
+            return;
         dcCloseAggr(aggr);
+        m_Closed = true;
     }
 
     DCaggr *aggr;
 
 private:
+    bool CanAddField() const {
+        if (!aggr) {
+            SetActiveScriptException("DynAggregate has no native descriptor.");
+            return false;
+        }
+        if (m_Closed) {
+            SetActiveScriptException("Cannot add fields to a closed DynAggregate.");
+            return false;
+        }
+        if (m_FieldCount >= m_MaxFieldCount) {
+            SetActiveScriptException("DynAggregate field capacity exceeded.");
+            return false;
+        }
+        return true;
+    }
+
+    bool ContainsNestedAggregate(const DynAggregate *candidate) const {
+        for (const DynAggregate *nested : m_NestedAggregates) {
+            if (nested == candidate || (nested && nested->ContainsNestedAggregate(candidate)))
+                return true;
+        }
+        return false;
+    }
+
     mutable RefCount m_RefCount;
     asILockableSharedBool *m_WeakRefFlag = nullptr;
+    size_t m_MaxFieldCount = 0;
+    size_t m_FieldCount = 0;
+    bool m_Closed = false;
+    std::vector<const DynAggregate *> m_NestedAggregates;
 };
 
 class DynCall {

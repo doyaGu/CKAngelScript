@@ -119,6 +119,37 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         "  if (call.GetError() != DC_ERROR_NONE) return 8;\n"
         "  if (name != \"CKAS_OK\") return 9;\n"
         "  return 0;\n"
+        "}\n"
+        "int RunDynAggregate() {\n"
+        "  DynAggregate@ child = DynAggregate(1, 4);\n"
+        "  if (child is null) return 1;\n"
+        "  child.Field(DC_SIGCHAR_INT, 0);\n"
+        "  child.Close();\n"
+        "  DynAggregate@ parent = DynAggregate(2, 8);\n"
+        "  if (parent is null) return 2;\n"
+        "  parent.AggregateField(child, 0);\n"
+        "  @child = null;\n"
+        "  parent.Field(DC_SIGCHAR_INT, 4);\n"
+        "  parent.Close();\n"
+        "  @parent = null;\n"
+        "  return 0;\n"
+        "}\n"
+        "int RunDynAggregateOverflow() {\n"
+        "  DynAggregate@ aggr = DynAggregate(1, 8);\n"
+        "  aggr.Field(DC_SIGCHAR_INT, 0);\n"
+        "  aggr.Field(DC_SIGCHAR_INT, 4);\n"
+        "  return 1;\n"
+        "}\n"
+        "int RunDynAggregateAfterClose() {\n"
+        "  DynAggregate@ aggr = DynAggregate(1, 4);\n"
+        "  aggr.Close();\n"
+        "  aggr.Field(DC_SIGCHAR_INT, 0);\n"
+        "  return 1;\n"
+        "}\n"
+        "int RunDynAggregateCycle() {\n"
+        "  DynAggregate@ aggr = DynAggregate(1, 4);\n"
+        "  aggr.AggregateField(aggr, 0);\n"
+        "  return 1;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -178,7 +209,49 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         return ok;
     };
 
+    auto executeExpectedException = [&](const char *decl, const char *label, const char *expected) -> bool {
+        asIScriptFunction *function = module->GetFunctionByDecl(decl);
+        if (!function) {
+            error = std::string("DynLoad ") + label + " self-test function was not compiled.";
+            return false;
+        }
+
+        asIScriptContext *context = engine->RequestContext();
+        if (!context) {
+            error = std::string("DynLoad self-test could not create ") + label + " execution context.";
+            return false;
+        }
+
+        int exec = context->Prepare(function);
+        if (exec >= 0) {
+            exec = context->Execute();
+        }
+
+        bool ok = false;
+        if (exec == asEXECUTION_EXCEPTION) {
+            const char *exception = context->GetExceptionString();
+            const std::string message = exception ? exception : "";
+            if (message.find(expected) != std::string::npos) {
+                ok = true;
+            } else {
+                error = std::string(label) + " self-test raised unexpected exception: " + message;
+            }
+        } else if (exec == asEXECUTION_FINISHED) {
+            error = std::string(label) + " self-test finished without expected exception.";
+        } else {
+            error = std::string(label) + " self-test execution failed with code " + std::to_string(exec) + ".";
+        }
+
+        context->Unprepare();
+        engine->ReturnContext(context);
+        return ok;
+    };
+
     return executeIntFunction("int RunDynSymbols()", "DynSymbols") &&
            executeIntFunction("int RunDynLibrary()", "DynLibrary") &&
-           executeIntFunction("int RunDynCall()", "DynCall");
+           executeIntFunction("int RunDynCall()", "DynCall") &&
+           executeIntFunction("int RunDynAggregate()", "DynAggregate") &&
+           executeExpectedException("int RunDynAggregateOverflow()", "DynAggregate overflow", "field capacity exceeded") &&
+           executeExpectedException("int RunDynAggregateAfterClose()", "DynAggregate after close", "closed DynAggregate") &&
+           executeExpectedException("int RunDynAggregateCycle()", "DynAggregate cycle", "nesting cycle");
 }
