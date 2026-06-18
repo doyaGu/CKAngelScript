@@ -69,7 +69,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    param.GetText(); param.GetEnumText(); param.GetFlagsText(); param.SetText(\"0\"); NativeBuffer@ raw = param.GetRaw(); param.SetRaw(raw); ParamStructRef@ s = param.Struct(); param.Describe();\n";
     source += "    if (s !is null) { s.IsValid(); s.Count(); s.Info(); s.Member(0); s.FindMember(\"x\"); s.Describe(); }\n";
     source += "    ObjectRef@ paramObject = param;\n";
-    source += "    ParamInRef@ paramIn = cast<ParamInRef>(param); if (paramIn !is null) { paramIn.IsValid(); paramIn.valid; paramIn.Error(); paramIn.Describe(); paramIn.Id(); paramIn.Name(); paramIn.ClassId(); paramIn.IsDynamic(); paramIn.Object(); paramIn.TypeGuid(); paramIn.SetInt(1); ParamRef@ base = paramIn; ObjectRef@ object = paramIn; }\n";
+    source += "    ParamInRef@ paramIn = cast<ParamInRef>(param); if (paramIn !is null) { paramIn.IsValid(); paramIn.valid; paramIn.Error(); paramIn.Describe(); paramIn.Id(); paramIn.Name(); paramIn.ClassId(); paramIn.IsDynamic(); paramIn.TypeGuid(); paramIn.SetInt(1); ParamRef@ base = paramIn; ObjectRef@ object = paramIn; if (base !is null) { base.Id(); } if (object !is null) { object.Id(); } }\n";
     source += "    ParamOutRef@ paramOut = cast<ParamOutRef>(param); if (paramOut !is null) { paramOut.Id(); paramOut.Get(); ParamRef@ base = paramOut; ObjectRef@ object = paramOut; }\n";
     source += "    ParamLocalRef@ paramLocal = cast<ParamLocalRef>(param); if (paramLocal !is null) { paramLocal.Id(); paramLocal.Set(value); ParamRef@ base = paramLocal; ObjectRef@ object = paramLocal; }\n";
     source += "    if (s !is null) { ObjectRef@ structObject = s; ParamRef@ structParam = s; s.Id(); s.Name(); s.ClassId(); s.IsDynamic(); s.Object(); }\n";
@@ -3023,6 +3023,19 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
         }
         if (paramOperationType->GetMethodByDecl("CKObject@ Object() const")) {
             error = "ParamOperationRef still exposes a raw CKObject handle.";
+            return false;
+        }
+        asITypeInfo *paramInType = engine->GetTypeInfoByName("ParamInRef");
+        if (!paramInType ||
+            !paramInType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
+            !paramInType->GetMethodByDecl("const ObjectRef@ opImplCast() const") ||
+            !paramInType->GetMethodByDecl("ParamRef@ opImplCast()") ||
+            !paramInType->GetMethodByDecl("const ParamRef@ opImplCast() const")) {
+            error = "ParamInRef wrapper cast declaration self-test failed.";
+            return false;
+        }
+        if (paramInType->GetMethodByDecl("CKObject@ Object() const")) {
+            error = "ParamInRef still exposes a raw CKObject handle.";
             return false;
         }
         asITypeInfo *behaviorLinkType = engine->GetTypeInfoByName("BehaviorLinkRef");

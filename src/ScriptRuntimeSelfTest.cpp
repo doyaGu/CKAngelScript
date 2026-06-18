@@ -106,7 +106,7 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  SceneObjectRef@ sceneAsObject = currentScene;\n"
         "  if (sceneAsObject !is null) { Scene::IsInCurrentScene(ctx, sceneAsObject); Scene::IsInScene(ctx, currentScene, sceneAsObject); }\n"
         "  ObjectRef@ behaviorAsObject = behavior;\n"
-        "  ParamInRef@ paramIn = cast<ParamInRef>(found); if (paramIn !is null) { paramIn.IsValid(); paramIn.valid; paramIn.Error(); paramIn.Describe(); paramIn.Id(); paramIn.Name(); paramIn.ClassId(); paramIn.IsDynamic(); paramIn.Object(); ParamRef@ paramBase = paramIn; ObjectRef@ paramObject = paramIn; }\n"
+        "  ParamInRef@ paramIn = cast<ParamInRef>(found); if (paramIn !is null) { paramIn.IsValid(); paramIn.valid; paramIn.Error(); paramIn.Describe(); paramIn.Id(); paramIn.Name(); paramIn.ClassId(); paramIn.IsDynamic(); ParamRef@ paramBase = paramIn; ObjectRef@ paramObject = paramIn; }\n"
         "  ParamOutRef@ paramOut = cast<ParamOutRef>(found); if (paramOut !is null) { paramOut.Id(); ParamRef@ paramBase = paramOut; ObjectRef@ paramObject = paramOut; }\n"
         "  ParamLocalRef@ paramLocal = cast<ParamLocalRef>(found); if (paramLocal !is null) { paramLocal.Id(); ParamRef@ paramBase = paramLocal; ObjectRef@ paramObject = paramLocal; }\n"
         "  ParamStructRef@ paramStruct = cast<ParamStructRef>(found); if (paramStruct !is null) { paramStruct.Id(); ParamRef@ paramBase = paramStruct; ObjectRef@ paramObject = paramStruct; }\n"
