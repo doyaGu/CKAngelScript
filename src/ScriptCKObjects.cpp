@@ -279,6 +279,38 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
 }
 
 template <typename T>
+static void SetCKParameterInType(T *self, CKParameterType type, bool updateSource) {
+    if (!self)
+        return;
+    self->SetType(type, updateSource, nullptr);
+}
+
+template <typename T>
+static void SetCKParameterInTypeNamed(T *self, CKParameterType type, bool updateSource, const std::string &newName) {
+    if (!self)
+        return;
+    std::vector<char> buffer(newName.begin(), newName.end());
+    buffer.push_back('\0');
+    self->SetType(type, updateSource, buffer.data());
+}
+
+template <typename T>
+static void SetCKParameterInGuid(T *self, CKGUID guid, bool updateSource) {
+    if (!self)
+        return;
+    self->SetGUID(guid, updateSource, nullptr);
+}
+
+template <typename T>
+static void SetCKParameterInGuidNamed(T *self, CKGUID guid, bool updateSource, const std::string &newName) {
+    if (!self)
+        return;
+    std::vector<char> buffer(newName.begin(), newName.end());
+    buffer.push_back('\0');
+    self->SetGUID(guid, updateSource, buffer.data());
+}
+
+template <typename T>
 static void RegisterCKParameterInMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -292,8 +324,10 @@ static void RegisterCKParameterInMembers(asIScriptEngine *engine, const char *na
     r = engine->RegisterObjectMethod(name, "CKParameter@ GetDirectSource()", asMETHODPR(T, GetDirectSource, (), CKParameter*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR SetDirectSource(CKParameter@ param)", asMETHODPR(T, SetDirectSource, (CKParameter*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR ShareSourceWith(CKParameterIn@ pin)", asMETHODPR(T, ShareSourceWith, (CKParameterIn *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetType(CKParameterType type, bool updateSource = false, const string &in newName = void)", asFUNCTIONPR([](T *self, CKParameterType type, bool updateSource, const std::string &newName) { self->SetType(type, updateSource, const_cast<CKSTRING>(newName.c_str())); }, (T *, CKParameterType, bool, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetGUID(CKGUID guid, bool updateSource = false, const string &in newName = void)", asFUNCTIONPR([](T *self, CKGUID guid, bool updateSource, const std::string &newName) { self->SetGUID(guid, updateSource, const_cast<CKSTRING>(newName.c_str())); }, (T *, CKGUID, bool, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetType(CKParameterType type, bool updateSource = false)", asFUNCTIONPR(SetCKParameterInType<T>, (T *, CKParameterType, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetType(CKParameterType type, bool updateSource, const string &in newName)", asFUNCTIONPR(SetCKParameterInTypeNamed<T>, (T *, CKParameterType, bool, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetGUID(CKGUID guid, bool updateSource = false)", asFUNCTIONPR(SetCKParameterInGuid<T>, (T *, CKGUID, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetGUID(CKGUID guid, bool updateSource, const string &in newName)", asFUNCTIONPR(SetCKParameterInGuidNamed<T>, (T *, CKGUID, bool, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKParameterType GetType()", asMETHODPR(T, GetType, (), CKParameterType), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKGUID GetGUID()", asMETHODPR(T, GetGUID, (), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetOwner(CKObject@ obj)", asMETHODPR(T, SetOwner, (CKObject*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

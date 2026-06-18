@@ -3330,7 +3330,18 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
             return false;
         }
     }
-
+    asITypeInfo *parameterInType = engine->GetTypeInfoByDecl("CKParameterIn");
+    if (!parameterInType) {
+        error = "CKParameterIn self-test could not find the registered type.";
+        return false;
+    }
+    if (parameterInType->GetMethodByDecl("void SetType(CKParameterType type, bool updateSource = false)") == nullptr ||
+        parameterInType->GetMethodByDecl("void SetType(CKParameterType type, bool updateSource, const string &in newName)") == nullptr ||
+        parameterInType->GetMethodByDecl("void SetGUID(CKGUID guid, bool updateSource = false)") == nullptr ||
+        parameterInType->GetMethodByDecl("void SetGUID(CKGUID guid, bool updateSource, const string &in newName)") == nullptr) {
+        error = "CKParameterIn self-test could not find the guarded SetType/SetGUID overloads.";
+        return false;
+    }
     constexpr const char *moduleName = "__CKAS_CKParameterSelfTest";
     const char *source =
         "void ProbeCKParameterStringValue(CKParameter@ param, CKParameterOut@ pout, CKParameterLocal@ local) {\n"
@@ -3466,6 +3477,21 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  XString value;\n"
         "  pin.GetValue(value);\n"
         "}\n"
+        "int ProbeCKParameterInSetTypeAndGuid(CKParameterIn@ pin) {\n"
+        "  if (pin is null) return 2;\n"
+        "  CKParameterType type = pin.GetType();\n"
+        "  if (type < 0) return 3;\n"
+        "  CKGUID guid = pin.GetGUID();\n"
+        "  pin.SetType(type);\n"
+        "  if (pin.GetType() != type) return 4;\n"
+        "  pin.SetType(type, false, \"TypeNameFromScript\");\n"
+        "  if (pin.GetType() != type) return 5;\n"
+        "  pin.SetGUID(guid);\n"
+        "  if (pin.GetGUID() != guid) return 6;\n"
+        "  pin.SetGUID(guid, false, \"GuidNameFromScript\");\n"
+        "  if (pin.GetGUID() != guid) return 7;\n"
+        "  return 0;\n"
+        "}\n"
         "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
         "  local.CopyValue(null);\n"
         "}\n"
@@ -3511,13 +3537,14 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *pinGetScriptObject = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetScriptObject(CKParameterIn@)");
     asIScriptFunction *pinGetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetObjectHandle(CKParameterIn@)");
     asIScriptFunction *pinGetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetNonPodObject(CKParameterIn@)");
+    asIScriptFunction *pinSetTypeGuid = module->GetFunctionByDecl("int ProbeCKParameterInSetTypeAndGuid(CKParameterIn@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
         !genericSetScriptObject || !genericGetScriptObject || !genericSetObjectHandle || !genericGetObjectHandle ||
         !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
         !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
-        !copyValueNull || !compatibleNull) {
+        !pinSetTypeGuid || !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -3596,7 +3623,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                      ExecuteCKParameterInProbe(engine, pinMissingSource, inputMissing, false, "CKParameterIn generic missing-source probe", error) &&
                      ExecuteCKParameterInProbe(engine, pinGetScriptObject, inputString, true, "CKParameterIn generic script-object probe", error) &&
                      ExecuteCKParameterInProbe(engine, pinGetObjectHandle, inputString, true, "CKParameterIn generic object-handle probe", error) &&
-                     ExecuteCKParameterInProbe(engine, pinGetNonPodObject, inputString, true, "CKParameterIn generic non-POD probe", error);
+                     ExecuteCKParameterInProbe(engine, pinGetNonPodObject, inputString, true, "CKParameterIn generic non-POD probe", error) &&
+                     ExecuteCKParameterInProbe(engine, pinSetTypeGuid, inputInt, false, "CKParameterIn SetType/SetGUID probe", error);
             }
         }
         if (inputMissing)
