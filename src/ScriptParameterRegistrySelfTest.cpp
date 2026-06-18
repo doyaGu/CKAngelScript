@@ -796,6 +796,63 @@ bool RunCKInputManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
     return true;
 }
 
+bool RunCKRenderManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKRenderManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *renderManagerType = engine->GetTypeInfoByDecl("CKRenderManager");
+    if (!renderManagerType) {
+        error = "CKRenderManager self-test could not find the registered type.";
+        return false;
+    }
+    if (renderManagerType->GetMethodByDecl("VxDriverDesc &GetRenderDriverDescription(int driver)") == nullptr) {
+        error = "CKRenderManager self-test could not find GetRenderDriverDescription.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKRenderManagerSelfTest";
+    const char *source =
+        "int ProbeRenderManagerInvalidDriver(CKContext@ ctx) {\n"
+        "  CKRenderManager@ rm = ctx.GetRenderManager();\n"
+        "  if (rm is null) return 1;\n"
+        "  rm.GetRenderDriverDescription(-1);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKRenderManager self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-render-manager-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKRenderManager self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKRenderManager self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeRenderManagerInvalidDriver(CKContext@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKRenderManager self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, true, "CKRenderManager invalid driver probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
@@ -966,6 +1023,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKInputManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKRenderManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {

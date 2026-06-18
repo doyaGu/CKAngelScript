@@ -73,6 +73,24 @@ static int GetCKInputKeyName(CKInputManager *self, CKDWORD key, std::string &key
     return result;
 }
 
+static VxDriverDesc &MissingVxDriverDesc(const char *message) {
+    static thread_local VxDriverDesc dummy{};
+    dummy = VxDriverDesc{};
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return dummy;
+}
+
+static VxDriverDesc &GetCKRenderDriverDescription(CKRenderManager *self, int driver) {
+    if (self) {
+        if (VxDriverDesc *desc = self->GetRenderDriverDescription(driver)) {
+            return *desc;
+        }
+    }
+    return MissingVxDriverDesc("CKRenderManager.GetRenderDriverDescription driver index is out of range.");
+}
+
 static CKFlagsStruct &MissingCKFlagsStruct(const char *message) {
     static thread_local CKFlagsStruct dummy;
     dummy.NbData = 0;
@@ -619,7 +637,7 @@ void RegisterCKRenderManager(asIScriptEngine *engine) {
     RegisterCKBaseManagerMembers<CKRenderManager>(engine, "CKRenderManager");
 
     r = engine->RegisterObjectMethod("CKRenderManager", "int GetRenderDriverCount()", asMETHODPR(CKRenderManager, GetRenderDriverCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderManager", "VxDriverDesc &GetRenderDriverDescription(int driver)", asMETHODPR(CKRenderManager, GetRenderDriverDescription, (int), VxDriverDesc *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderManager", "VxDriverDesc &GetRenderDriverDescription(int driver)", asFUNCTION(GetCKRenderDriverDescription), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderManager", "void GetDesiredTexturesVideoFormat(VxImageDescEx &out format)", asMETHODPR(CKRenderManager, GetDesiredTexturesVideoFormat, (VxImageDescEx &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderManager", "void SetDesiredTexturesVideoFormat(VxImageDescEx &in format)", asMETHODPR(CKRenderManager, SetDesiredTexturesVideoFormat, (VxImageDescEx &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
