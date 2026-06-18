@@ -728,6 +728,30 @@ bool RunCKBaseManagerCastScriptSelfTest(CKContext *context, asIScriptEngine *eng
     return ok;
 }
 
+bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKObjectManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *objectManagerType = engine->GetTypeInfoByDecl("CKObjectManager");
+    if (!objectManagerType) {
+        error = "CKObjectManager self-test could not find the registered type.";
+        return false;
+    }
+    if (objectManagerType->GetMethodByDecl("CKObject@ GetObject(CK_ID id)") != nullptr) {
+        error = "CKObjectManager self-test found the removed GetObject(CK_ID) alias.";
+        return false;
+    }
+    if (objectManagerType->GetMethodByDecl("CKObject@ CKGetObject(CK_ID id)") == nullptr ||
+        objectManagerType->GetMethodByDecl("int GetObjectsCount()") == nullptr) {
+        error = "CKObjectManager self-test could not find expected object manager methods.";
+        return false;
+    }
+
+    return true;
+}
+
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
@@ -892,6 +916,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKBaseManagerCastScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {
