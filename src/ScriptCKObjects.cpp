@@ -8,6 +8,7 @@
 
 #include "ScriptManager.h"
 #include "ScriptUtils.h"
+#include "ScriptNativeBuffer.h"
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
 
@@ -586,6 +587,34 @@ static bool IsCKParameterCompatibleWith(T *self, CKParameter *param) {
 }
 
 template <typename T>
+static NativeBuffer *GetCKParameterReadData(T *self, bool update) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKParameter.GetReadData requires a valid parameter.");
+        }
+        return NativeBuffer::Create(0);
+    }
+
+    const int size = self->GetDataSize();
+    void *data = size > 0 ? self->GetReadDataPtr(update) : nullptr;
+    return data ? NativeBuffer::Create(data, static_cast<size_t>(size)) : NativeBuffer::Create(0);
+}
+
+template <typename T>
+static NativeBuffer *GetCKParameterWriteData(T *self) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKParameter.GetWriteData requires a valid parameter.");
+        }
+        return NativeBuffer::Create(0);
+    }
+
+    const int size = self->GetDataSize();
+    void *data = size > 0 ? self->GetWriteDataPtr() : nullptr;
+    return data ? NativeBuffer::Create(data, static_cast<size_t>(size)) : NativeBuffer::Create(0);
+}
+
+template <typename T>
 static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -602,8 +631,8 @@ static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name
     r = engine->RegisterObjectMethod(name, "bool IsCompatibleWith(CKParameter@ param)", asFUNCTION(IsCKParameterCompatibleWith<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "int GetDataSize()", asMETHODPR(T, GetDataSize, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "NativePointer GetReadDataPtr(bool update = true)", asFUNCTIONPR([](T *self, bool update) { return NativePointer(self->GetReadDataPtr(update)); }, (T *, bool), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "NativePointer GetWriteDataPtr()", asFUNCTIONPR([](T *self) { return NativePointer(self->GetWriteDataPtr()); }, (T *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "NativeBuffer@ GetReadData(bool update = true)", asFUNCTION(GetCKParameterReadData<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "NativeBuffer@ GetWriteData()", asFUNCTION(GetCKParameterWriteData<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKERROR SetStringValue(const string &in value)", asFUNCTION(SetCKParameterStringValue<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetStringValue(string &out value, bool update = true)", asFUNCTION(GetCKParameterStringValue<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

@@ -3513,6 +3513,16 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
             error = std::string(typeName) + " self-test found stale GetStringValue input-buffer declaration.";
             return false;
         }
+        if (parameterType->GetMethodByDecl("NativeBuffer@ GetReadData(bool update = true)") == nullptr ||
+            parameterType->GetMethodByDecl("NativeBuffer@ GetWriteData()") == nullptr) {
+            error = std::string(typeName) + " self-test could not find sized NativeBuffer data accessors.";
+            return false;
+        }
+        if (parameterType->GetMethodByDecl("NativePointer GetReadDataPtr(bool update = true)") != nullptr ||
+            parameterType->GetMethodByDecl("NativePointer GetWriteDataPtr()") != nullptr) {
+            error = std::string(typeName) + " self-test found stale raw NativePointer data accessors.";
+            return false;
+        }
     }
     asITypeInfo *parameterInType = engine->GetTypeInfoByDecl("CKParameterIn");
     if (!parameterInType) {
@@ -3596,9 +3606,20 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (local is null) return 2;\n"
         "  int source = 12345;\n"
         "  if (local.SetValue(source) != CK_OK) return 3;\n"
+        "  NativeBuffer@ writeData = local.GetWriteData();\n"
+        "  if (writeData is null) return 6;\n"
+        "  if (writeData.Size() != uint(local.GetDataSize())) return 7;\n"
+        "  int rewritten = 23456;\n"
+        "  if (writeData.WriteInt(rewritten) != 4) return 8;\n"
         "  int value = 0;\n"
-        "  if (local.GetValue(value) != CK_OK) return 4;\n"
-        "  if (value != source) return 5;\n"
+        "  if (local.GetValue(value) != CK_OK) return 9;\n"
+        "  if (value != rewritten) return 10;\n"
+        "  NativeBuffer@ readData = local.GetReadData();\n"
+        "  if (readData is null) return 11;\n"
+        "  if (readData.Size() != uint(local.GetDataSize())) return 12;\n"
+        "  value = 0;\n"
+        "  if (readData.ReadInt(value) != 4) return 13;\n"
+        "  if (value != rewritten) return 14;\n"
         "  return 0;\n"
         "}\n"
         "int ProbeCKParameterGenericVectorValue(CKParameterLocal@ local) {\n"
@@ -3619,7 +3640,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (!local.IsMyselfParameter()) return 4;\n"
         "  int blocked = 77;\n"
         "  if (local.SetValue(blocked) != CKERR_INVALIDPARAMETER) return 5;\n"
-        "  if (!local.GetWriteDataPtr().IsNull()) return 6;\n"
+        "  NativeBuffer@ blockedData = local.GetWriteData();\n"
+        "  if (blockedData is null || !blockedData.IsEmpty()) return 6;\n"
         "  local.SetAsMyselfParameter(false);\n"
         "  if (local.IsMyselfParameter()) return 7;\n"
         "  local.SetType(originalType);\n"
