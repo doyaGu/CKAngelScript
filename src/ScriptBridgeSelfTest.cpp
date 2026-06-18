@@ -3025,6 +3025,17 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
             error = "ParamOperationRef still exposes a raw CKObject handle.";
             return false;
         }
+        asITypeInfo *paramRefType = engine->GetTypeInfoByName("ParamRef");
+        if (!paramRefType ||
+            !paramRefType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
+            !paramRefType->GetMethodByDecl("const ObjectRef@ opImplCast() const")) {
+            error = "ParamRef wrapper cast declaration self-test failed.";
+            return false;
+        }
+        if (paramRefType->GetMethodByDecl("CKObject@ Object() const")) {
+            error = "ParamRef still exposes a raw CKObject handle.";
+            return false;
+        }
         asITypeInfo *paramInType = engine->GetTypeInfoByName("ParamInRef");
         if (!paramInType ||
             !paramInType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
