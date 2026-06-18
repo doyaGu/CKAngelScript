@@ -528,6 +528,76 @@ bool RunCKAttributeDescScriptSelfTest(asIScriptEngine *engine, std::string &erro
     return ok;
 }
 
+bool RunCKAttributeCategoryDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKAttributeCategoryDesc script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKAttributeCategoryDescSelfTest";
+    const char *source =
+        "int ProbeAttributeCategoryDesc() {\n"
+        "  CKAttributeCategoryDesc desc;\n"
+        "  if (desc.Name != \"\" || !desc.NamePointer.IsNull() || desc.Flags != 0) return 1;\n"
+        "  desc.Name = \"Gameplay\";\n"
+        "  desc.Flags = 42;\n"
+        "  if (desc.Name != \"Gameplay\" || desc.NamePointer.IsNull()) return 2;\n"
+        "  CKAttributeCategoryDesc copied(desc);\n"
+        "  if (copied.Name != \"Gameplay\" || copied.Flags != 42 || copied.NamePointer.IsNull()) return 3;\n"
+        "  desc.Name = \"Changed\";\n"
+        "  if (copied.Name != \"Gameplay\") return 4;\n"
+        "  CKAttributeCategoryDesc assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.Name != \"Gameplay\" || assigned.Flags != 42) return 5;\n"
+        "  copied.Name = \"Other\";\n"
+        "  if (assigned.Name != \"Gameplay\") return 6;\n"
+        "  NativePointer empty;\n"
+        "  assigned.NamePointer = empty;\n"
+        "  if (assigned.Name != \"\" || !assigned.NamePointer.IsNull()) return 7;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeAttributeCategoryDescNamePointerReject() {\n"
+        "  CKAttributeCategoryDesc desc;\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  desc.NamePointer = ptr;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKAttributeCategoryDesc self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-attribute-category-desc-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKAttributeCategoryDesc self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKAttributeCategoryDesc self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeAttributeCategoryDesc()");
+    asIScriptFunction *namePointerReject = module->GetFunctionByDecl("int ProbeAttributeCategoryDescNamePointerReject()");
+    if (!probe || !namePointerReject) {
+        engine->DiscardModule(moduleName);
+        error = "CKAttributeCategoryDesc self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKAttributeCategoryDesc value probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, namePointerReject, true, "CKAttributeCategoryDesc NamePointer rejection probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
@@ -683,6 +753,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKAttributeDescScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKAttributeCategoryDescScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {

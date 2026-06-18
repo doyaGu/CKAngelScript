@@ -2005,19 +2005,112 @@ void RegisterCKAttributeDesc(asIScriptEngine *engine) {
 
 // CKAttributeCategoryDesc
 
+static std::mutex g_CKAttributeCategoryDescOwnedMutex;
+static std::unordered_set<CKAttributeCategoryDesc *> g_CKAttributeCategoryDescOwnedValues;
+
+static void TrackCKAttributeCategoryDescValue(CKAttributeCategoryDesc *self) {
+    std::lock_guard<std::mutex> lock(g_CKAttributeCategoryDescOwnedMutex);
+    g_CKAttributeCategoryDescOwnedValues.insert(self);
+}
+
+static bool UntrackCKAttributeCategoryDescValue(CKAttributeCategoryDesc *self) {
+    std::lock_guard<std::mutex> lock(g_CKAttributeCategoryDescOwnedMutex);
+    return g_CKAttributeCategoryDescOwnedValues.erase(self) > 0;
+}
+
+static bool IsTrackedCKAttributeCategoryDescValue(CKAttributeCategoryDesc *self) {
+    std::lock_guard<std::mutex> lock(g_CKAttributeCategoryDescOwnedMutex);
+    return g_CKAttributeCategoryDescOwnedValues.find(self) != g_CKAttributeCategoryDescOwnedValues.end();
+}
+
+static void ReleaseCKAttributeCategoryDescStorage(CKAttributeCategoryDesc *self) {
+    if (!self) {
+        return;
+    }
+
+    CKDeletePointer(self->Name);
+    self->Name = nullptr;
+}
+
+static void CopyCKAttributeCategoryDescStorage(CKAttributeCategoryDesc *self, const CKAttributeCategoryDesc &other) {
+    self->Name = other.Name ? CKStrdup(other.Name) : nullptr;
+    self->Flags = other.Flags;
+}
+
+static void ConstructCKAttributeCategoryDesc(CKAttributeCategoryDesc *self) {
+    self->Name = nullptr;
+    self->Flags = 0;
+    TrackCKAttributeCategoryDescValue(self);
+}
+
+static void ConstructCKAttributeCategoryDescCopy(const CKAttributeCategoryDesc &other, CKAttributeCategoryDesc *self) {
+    CopyCKAttributeCategoryDescStorage(self, other);
+    TrackCKAttributeCategoryDescValue(self);
+}
+
+static void DestructCKAttributeCategoryDesc(CKAttributeCategoryDesc *self) {
+    if (UntrackCKAttributeCategoryDescValue(self)) {
+        ReleaseCKAttributeCategoryDescStorage(self);
+    }
+}
+
+static CKAttributeCategoryDesc &AssignCKAttributeCategoryDesc(CKAttributeCategoryDesc *self, const CKAttributeCategoryDesc &other) {
+    if (self == &other) {
+        return *self;
+    }
+
+    if (!IsTrackedCKAttributeCategoryDescValue(self)) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("Cannot assign to a borrowed CKAttributeCategoryDesc descriptor.");
+        }
+        return *self;
+    }
+
+    ReleaseCKAttributeCategoryDescStorage(self);
+    CopyCKAttributeCategoryDescStorage(self, other);
+    return *self;
+}
+
+static void SetCKAttributeCategoryDescName(CKAttributeCategoryDesc *self, const std::string &value) {
+    if (!IsTrackedCKAttributeCategoryDescValue(self)) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("Cannot assign to a borrowed CKAttributeCategoryDesc descriptor.");
+        }
+        return;
+    }
+
+    ReleaseCKAttributeCategoryDescStorage(self);
+    self->Name = value.empty() ? nullptr : CKStrdup(const_cast<CKSTRING>(value.c_str()));
+}
+
+static void SetCKAttributeCategoryDescNamePointer(CKAttributeCategoryDesc *self, NativePointer ptr) {
+    if (!IsTrackedCKAttributeCategoryDescValue(self)) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("Cannot assign to a borrowed CKAttributeCategoryDesc descriptor.");
+        }
+        return;
+    }
+    if (RejectCKAttributeDescRawPointerWrite(ptr, "CKAttributeCategoryDesc.NamePointer only accepts a null NativePointer from script.")) {
+        return;
+    }
+
+    ReleaseCKAttributeCategoryDescStorage(self);
+}
+
 void RegisterCKAttributeCategoryDesc(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectProperty("CKAttributeCategoryDesc", "CKDWORD Flags", asOFFSET(CKAttributeCategoryDesc, Flags)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKAttributeCategoryDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKAttributeCategoryDesc *self) { new(self) CKAttributeCategoryDesc(); }, (CKAttributeCategoryDesc *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKAttributeCategoryDesc", asBEHAVE_CONSTRUCT, "void f(const CKAttributeCategoryDesc &in other)", asFUNCTIONPR([](const CKAttributeCategoryDesc &desc, CKAttributeCategoryDesc *self) { new(self) CKAttributeCategoryDesc(desc); }, (const CKAttributeCategoryDesc &, CKAttributeCategoryDesc *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKAttributeCategoryDesc", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKAttributeCategoryDesc *self) { self->~CKAttributeCategoryDesc(); }, (CKAttributeCategoryDesc *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKAttributeCategoryDesc", "CKAttributeCategoryDesc &opAssign(const CKAttributeCategoryDesc &in other)", asFUNCTIONPR([](CKAttributeCategoryDesc *self, const CKAttributeCategoryDesc &other) -> CKAttributeCategoryDesc & { *self = other; return *self; }, (CKAttributeCategoryDesc *, const CKAttributeCategoryDesc &), CKAttributeCategoryDesc &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKAttributeCategoryDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKAttributeCategoryDesc), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKAttributeCategoryDesc", asBEHAVE_CONSTRUCT, "void f(const CKAttributeCategoryDesc &in other)", asFUNCTION(ConstructCKAttributeCategoryDescCopy), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKAttributeCategoryDesc", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructCKAttributeCategoryDesc), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeCategoryDesc", "CKAttributeCategoryDesc &opAssign(const CKAttributeCategoryDesc &in other)", asFUNCTION(AssignCKAttributeCategoryDesc), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKAttributeCategoryDesc", "string get_Name() const", asFUNCTIONPR([](const CKAttributeCategoryDesc *self) -> std::string { return ScriptStringify(self->Name); }, (const CKAttributeCategoryDesc *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeCategoryDesc", "void set_Name(const string &in value)", asFUNCTION(SetCKAttributeCategoryDescName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKAttributeCategoryDesc", "NativePointer get_NamePointer() const", asFUNCTIONPR([](const CKAttributeCategoryDesc *self) { return NativePointer(self->Name); }, (const CKAttributeCategoryDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKAttributeCategoryDesc", "void set_NamePointer(NativePointer ptr)", asFUNCTIONPR([](CKAttributeCategoryDesc *self, NativePointer ptr) { self->Name = static_cast<char *>(ptr.Get()); }, (CKAttributeCategoryDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeCategoryDesc", "void set_NamePointer(NativePointer ptr)", asFUNCTION(SetCKAttributeCategoryDescNamePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 #endif
 
