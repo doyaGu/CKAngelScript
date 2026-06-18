@@ -665,6 +665,18 @@ private:
     asILockableSharedBool *m_WeakRefFlag = nullptr;
 };
 
+static void RetainDynLibraryOwner(void *owner) {
+    if (owner) {
+        static_cast<DynLibrary *>(owner)->AddRef();
+    }
+}
+
+static void ReleaseDynLibraryOwner(void *owner) {
+    if (owner) {
+        static_cast<DynLibrary *>(owner)->Release();
+    }
+}
+
 static void RegisterDCEnums(asIScriptEngine* engine) {
     int r = 0;
 
@@ -975,7 +987,13 @@ static void RegisterDynLibrary(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("DynLibrary", "bool IsLoaded() const", asMETHODPR(DynLibrary, IsLoaded, () const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynLibrary", "bool Load(const string &in libPath)", asMETHODPR(DynLibrary, Load, (const std::string &), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("DynLibrary", "NativePointer FindSymbol(const string &in symbolName) const", asFUNCTIONPR([](const DynLibrary *lib, const std::string &symbolName) { return NativePointer(lib->FindSymbol(symbolName)); }, (const DynLibrary *, const std::string &), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("DynLibrary", "NativePointer FindSymbol(const string &in symbolName) const", asFUNCTIONPR([](const DynLibrary *lib, const std::string &symbolName) {
+        void *symbol = lib->FindSymbol(symbolName);
+        if (!symbol) {
+            return NativePointer();
+        }
+        return NativePointer(symbol, const_cast<DynLibrary *>(lib), RetainDynLibraryOwner, ReleaseDynLibraryOwner);
+    }, (const DynLibrary *, const std::string &), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynLibrary", "string GetLibraryPath() const", asMETHODPR(DynLibrary, GetLibraryPath, () const, std::string), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 

@@ -8,30 +8,50 @@
 
 class NativePointer {
 public:
+    using OwnerRetainFn = void (*)(void *);
+    using OwnerReleaseFn = void (*)(void *);
+
     NativePointer() = default;
     NativePointer(void *ptr) { m_Ptr = static_cast<char *>(ptr); }
     NativePointer(intptr_t addr) { m_Ptr = reinterpret_cast<char *>(addr); }
     NativePointer(uintptr_t addr) { m_Ptr = reinterpret_cast<char *>(addr); }
-    NativePointer(const NativePointer &rhs) { m_Ptr = rhs.m_Ptr; }
+    NativePointer(void *ptr, void *owner, OwnerRetainFn retainOwner, OwnerReleaseFn releaseOwner) {
+        m_Ptr = static_cast<char *>(ptr);
+        RetainOwner(owner, retainOwner, releaseOwner);
+    }
+
+    NativePointer(const NativePointer &rhs) {
+        m_Ptr = rhs.m_Ptr;
+        RetainOwner(rhs.m_Owner, rhs.m_RetainOwner, rhs.m_ReleaseOwner);
+    }
+
+    ~NativePointer() {
+        ReleaseOwner();
+    }
 
     NativePointer &operator=(const NativePointer &rhs) {
         if (this != &rhs) {
+            ReleaseOwner();
             m_Ptr = rhs.m_Ptr;
+            RetainOwner(rhs.m_Owner, rhs.m_RetainOwner, rhs.m_ReleaseOwner);
         }
         return *this;
     }
 
     NativePointer &operator=(void *ptr) {
+        ReleaseOwner();
         m_Ptr = static_cast<char *>(ptr);
         return *this;
     }
 
     NativePointer &operator=(intptr_t addr) {
+        ReleaseOwner();
         m_Ptr = reinterpret_cast<char *>(addr);
         return *this;
     }
 
     NativePointer &operator=(uintptr_t addr) {
+        ReleaseOwner();
         m_Ptr = reinterpret_cast<char *>(addr);
         return *this;
     }
@@ -108,31 +128,31 @@ public:
     }
 
     NativePointer operator+(int rhs) const {
-        return {m_Ptr + rhs};
+        return Derive(m_Ptr + rhs);
     }
 
     NativePointer operator-(int rhs) const {
-        return {m_Ptr - rhs};
+        return Derive(m_Ptr - rhs);
     }
 
     NativePointer operator&(int rhs) const {
-        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) & rhs)};
+        return Derive(reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) & rhs));
     }
 
     NativePointer operator|(int rhs) const {
-        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) | rhs)};
+        return Derive(reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) | rhs));
     }
 
     NativePointer operator^(int rhs) const {
-        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) ^ rhs)};
+        return Derive(reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) ^ rhs));
     }
 
     NativePointer operator<<(int rhs) const {
-        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) << rhs)};
+        return Derive(reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) << rhs));
     }
 
     NativePointer operator>>(int rhs) const {
-        return {reinterpret_cast<uint8_t *>(reinterpret_cast<intptr_t>(m_Ptr) >> rhs)};
+        return Derive(reinterpret_cast<char *>(reinterpret_cast<intptr_t>(m_Ptr) >> rhs));
     }
 
     NativePointer &operator++() {
@@ -158,11 +178,11 @@ public:
     }
 
     NativePointer operator-() const {
-        return {reinterpret_cast<uint8_t *>(-reinterpret_cast<intptr_t>(m_Ptr))};
+        return Derive(reinterpret_cast<char *>(-reinterpret_cast<intptr_t>(m_Ptr)));
     }
 
     NativePointer operator~() const {
-        return {reinterpret_cast<uint8_t *>(~reinterpret_cast<intptr_t>(m_Ptr))};
+        return Derive(reinterpret_cast<char *>(~reinterpret_cast<intptr_t>(m_Ptr)));
     }
 
     NativePointer operator+() const { return *this; }
@@ -232,7 +252,36 @@ public:
     bool IsNull() const { return m_Ptr == nullptr; }
 
 private:
+    void RetainOwner(void *owner, OwnerRetainFn retainOwner, OwnerReleaseFn releaseOwner) {
+        m_Owner = owner;
+        m_RetainOwner = retainOwner;
+        m_ReleaseOwner = releaseOwner;
+        if (m_Owner && m_RetainOwner && m_ReleaseOwner) {
+            m_RetainOwner(m_Owner);
+        } else {
+            m_Owner = nullptr;
+            m_RetainOwner = nullptr;
+            m_ReleaseOwner = nullptr;
+        }
+    }
+
+    void ReleaseOwner() {
+        if (m_Owner && m_ReleaseOwner) {
+            m_ReleaseOwner(m_Owner);
+        }
+        m_Owner = nullptr;
+        m_RetainOwner = nullptr;
+        m_ReleaseOwner = nullptr;
+    }
+
+    NativePointer Derive(char *ptr) const {
+        return NativePointer(ptr, m_Owner, m_RetainOwner, m_ReleaseOwner);
+    }
+
     char *m_Ptr = nullptr;
+    void *m_Owner = nullptr;
+    OwnerRetainFn m_RetainOwner = nullptr;
+    OwnerReleaseFn m_ReleaseOwner = nullptr;
 };
 
 void RegisterNativePointer(asIScriptEngine *engine);
