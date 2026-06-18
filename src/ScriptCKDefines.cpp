@@ -2993,7 +2993,7 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKTCBPositionKey", "float easeto", asOFFSET(CKTCBPositionKey, easeto)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKTCBPositionKey", "float easefrom", asOFFSET(CKTCBPositionKey, easefrom)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKTCBPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, VxVector &in pos)", asFUNCTIONPR([](CKTCBPositionKey *self, float time, VxVector &pos) { new (self) CKTCBPositionKey(time, pos); }, (CKTCBPositionKey *, float, VxVector &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKTCBPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, VxVector &in pos, float t = 0, float c = 0, float b = 0, float easeTo = 0, float easeFrom = 0)", asFUNCTIONPR([](CKTCBPositionKey *self, float time, VxVector &pos, float t, float c, float b, float easeTo, float easeFrom) { new (self) CKTCBPositionKey(time, pos, t, c, b, easeTo, easeFrom); }, (CKTCBPositionKey *, float, VxVector &, float, float, float, float, float), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // CKRotationKey
     RegisterCKRotationKeyMembers<CKTCBRotationKey>(engine, "CKTCBRotationKey");

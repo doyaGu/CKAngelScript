@@ -1695,6 +1695,102 @@ bool RunCKRotationKeyScriptSelfTest(asIScriptEngine *engine, std::string &error)
     return ok;
 }
 
+bool RunCKTCBPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKTCBPositionKey script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *tcbPositionKeyType = engine->GetTypeInfoByDecl("CKTCBPositionKey");
+    if (!tcbPositionKeyType) {
+        error = "CKTCBPositionKey self-test could not find the registered type.";
+        return false;
+    }
+    if (tcbPositionKeyType->GetMethodByDecl("CKKey opImplConv() const") == nullptr ||
+        tcbPositionKeyType->GetMethodByDecl("CKPositionKey opImplConv() const") == nullptr) {
+        error = "CKTCBPositionKey self-test could not find safe base value conversions.";
+        return false;
+    }
+    if (tcbPositionKeyType->GetMethodByDecl("float GetTime()") == nullptr ||
+        tcbPositionKeyType->GetMethodByDecl("const VxVector& GetPosition()") == nullptr ||
+        tcbPositionKeyType->GetMethodByDecl("bool Compare(CKTCBPositionKey&in key, float threshold)") == nullptr) {
+        error = "CKTCBPositionKey self-test could not find expected non-const SDK declarations.";
+        return false;
+    }
+    if (tcbPositionKeyType->GetMethodByDecl("float GetTime() const") != nullptr ||
+        tcbPositionKeyType->GetMethodByDecl("const VxVector& GetPosition() const") != nullptr ||
+        tcbPositionKeyType->GetMethodByDecl("bool Compare(CKTCBPositionKey&in key, float threshold) const") != nullptr) {
+        error = "CKTCBPositionKey self-test found stale const SDK declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKTCBPositionKeySelfTest";
+    const char *source =
+        "int ProbeTCBPositionKey() {\n"
+        "  VxVector pos(1.0f, 2.0f, 3.0f);\n"
+        "  CKTCBPositionKey key(1.25f, pos, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f);\n"
+        "  if (key.GetTime() != 1.25f) return 1;\n"
+        "  if (key.tension != 0.1f || key.continuity != 0.2f || key.bias != 0.3f) return 2;\n"
+        "  if (key.easeto != 0.4f || key.easefrom != 0.5f) return 3;\n"
+        "  VxVector got = key.GetPosition();\n"
+        "  if (got.x != 1.0f || got.y != 2.0f || got.z != 3.0f) return 4;\n"
+        "  CKTCBPositionKey defaults(2.0f, pos);\n"
+        "  if (defaults.tension != 0.0f || defaults.continuity != 0.0f || defaults.bias != 0.0f) return 5;\n"
+        "  if (defaults.easeto != 0.0f || defaults.easefrom != 0.0f) return 6;\n"
+        "  CKTCBPositionKey copy(key);\n"
+        "  if (!key.Compare(copy, 0.0f)) return 7;\n"
+        "  copy.tension = 0.9f;\n"
+        "  if (key.Compare(copy, 0.0f)) return 8;\n"
+        "  CKTCBPositionKey assigned;\n"
+        "  assigned = key;\n"
+        "  if (!key.Compare(assigned, 0.0f)) return 9;\n"
+        "  CKPositionKey positionBase = key;\n"
+        "  if (positionBase.GetTime() != 1.25f) return 10;\n"
+        "  VxVector basePos = positionBase.GetPosition();\n"
+        "  if (basePos.x != 1.0f || basePos.y != 2.0f || basePos.z != 3.0f) return 11;\n"
+        "  CKKey baseKey = key;\n"
+        "  if (baseKey.GetTime() != 1.25f) return 12;\n"
+        "  key.SetTime(2.5f);\n"
+        "  if (key.GetTime() != 2.5f) return 13;\n"
+        "  VxVector moved(7.0f, 8.0f, 9.0f);\n"
+        "  key.SetPosition(moved);\n"
+        "  got = key.GetPosition();\n"
+        "  if (got.x != 7.0f || got.y != 8.0f || got.z != 9.0f) return 14;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKTCBPositionKey self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-tcb-position-key-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTCBPositionKey self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTCBPositionKey self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeTCBPositionKey()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKTCBPositionKey self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKTCBPositionKey probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBezierPositionKey script self-test requires an AngelScript engine.";
@@ -1974,6 +2070,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKRotationKeyScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKTCBPositionKeyScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKBezierPositionKeyScriptSelfTest(engine, error)) {
