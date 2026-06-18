@@ -1512,6 +1512,55 @@ bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &erro
     return true;
 }
 
+bool RunCKBitmapReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKBitmapReader script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *bitmapReaderType = engine->GetTypeInfoByDecl("CKBitmapReader");
+    if (!bitmapReaderType) {
+        error = "CKBitmapReader self-test could not find the registered type.";
+        return false;
+    }
+    if (bitmapReaderType->GetMethodByDecl("int SaveMemory(NativePointer &out memory, CKBitmapProperties@ bp)") == nullptr ||
+        bitmapReaderType->GetMethodByDecl("void ReleaseMemory(NativePointer memory)") == nullptr) {
+        error = "CKBitmapReader self-test could not find expected memory methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBitmapReaderSelfTest";
+    const char *source =
+        "void ProbeBitmapReaderSaveMemory(CKBitmapReader@ reader, CKBitmapProperties@ bp) {\n"
+        "  NativePointer memory;\n"
+        "  if (reader is null) return;\n"
+        "  int result = reader.SaveMemory(memory, bp);\n"
+        "  if (result == 0) reader.ReleaseMemory(memory);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBitmapReader self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-bitmap-reader-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBitmapReader self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBitmapReader self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKKey script self-test requires an AngelScript engine.";
@@ -2698,6 +2747,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKRenderManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBitmapReaderScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKPluginManagerScriptSelfTest(engine, error)) {

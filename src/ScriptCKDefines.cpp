@@ -1736,6 +1736,17 @@ static void RegisterCKDataReaderMembers(asIScriptEngine *engine, const char *nam
     }
 }
 
+static int SaveCKBitmapReaderMemory(CKBitmapReader *self, NativePointer *memory, CKBitmapProperties *bp) {
+    if (!self || !memory) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    void *rawMemory = nullptr;
+    const int result = self->SaveMemory(&rawMemory, bp);
+    *memory = NativePointer(rawMemory);
+    return result;
+}
+
 void RegisterCKDataReader(asIScriptEngine *engine) {
     RegisterCKDataReaderMembers<CKDataReader>(engine, "CKDataReader");
 }
@@ -1765,7 +1776,7 @@ void RegisterCKBitmapReader(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadMemory(NativePointer memory, int size, CKBitmapProperties@ &out bp)", asFUNCTIONPR([](CKBitmapReader* self, NativePointer memory, int size, CKBitmapProperties **bp) { return self->ReadMemory(memory.Get(), size, bp); }, (CKBitmapReader *, NativePointer, int, CKBitmapProperties **), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadASynchronousFile(const string &in name, CKBitmapProperties@ &out bp)", asFUNCTIONPR([](CKBitmapReader *self, const std::string &name, CKBitmapProperties **bp) -> int { return self->ReadASynchronousFile(const_cast<char*>(name.c_str()), bp); }, (CKBitmapReader *, const std::string &, CKBitmapProperties **), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapReader", "int SaveFile(const string &in name, CKBitmapProperties@ bp)", asFUNCTIONPR([](CKBitmapReader *self, const std::string &name, CKBitmapProperties *bp) -> int { return self->SaveFile(const_cast<char*>(name.c_str()), bp); }, (CKBitmapReader *, const std::string &, CKBitmapProperties *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBitmapReader", "int SaveMemory(NativePointer &out memory, CKBitmapProperties@ bp)", asFUNCTIONPR([](CKBitmapReader *self, NativePointer *memory, CKBitmapProperties *bp) { return self->SaveMemory(reinterpret_cast<void **>(memory), bp); }, (CKBitmapReader *, NativePointer *, CKBitmapProperties *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBitmapReader", "int SaveMemory(NativePointer &out memory, CKBitmapProperties@ bp)", asFUNCTION(SaveCKBitmapReaderMemory), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapReader", "void ReleaseMemory(NativePointer memory)", asFUNCTIONPR([](CKBitmapReader *self, NativePointer memory) { self->ReleaseMemory(memory.Get()); }, (CKBitmapReader *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
