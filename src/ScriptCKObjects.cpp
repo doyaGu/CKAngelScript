@@ -435,7 +435,9 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
 
         if (strcmp(type->GetName(), "string") == 0) {
             std::string &str = *static_cast<std::string *>(buf);
-            err = self->SetStringValue(str.data());
+            std::vector<char> buffer(str.begin(), str.end());
+            buffer.push_back('\0');
+            err = self->SetStringValue(buffer.data());
         } else {
             int size = engine->GetSizeOfPrimitiveType(typeId);
             if (size == 0) {
