@@ -3536,6 +3536,14 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         error = "CKParameterIn self-test could not find the guarded SetType/SetGUID overloads.";
         return false;
     }
+    if (parameterInType->GetMethodByDecl("NativeBuffer@ GetReadData()") == nullptr) {
+        error = "CKParameterIn self-test could not find the sized GetReadData declaration.";
+        return false;
+    }
+    if (parameterInType->GetMethodByDecl("NativePointer GetReadDataPtr()") != nullptr) {
+        error = "CKParameterIn self-test found stale raw GetReadDataPtr exposure.";
+        return false;
+    }
     asITypeInfo *operationType = engine->GetTypeInfoByDecl("CKParameterOperation");
     if (!operationType) {
         error = "CKParameterOperation self-test could not find the registered type.";
@@ -3733,32 +3741,33 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "}\n"
         "int ProbeCKParameterInSourceGraph(CKParameterIn@ pin, CKParameter@ sourceA, CKParameter@ sourceB, CKParameterIn@ shared) {\n"
         "  if (pin is null || sourceA is null || sourceB is null || shared is null) return 2;\n"
-        "  if (!pin.GetReadDataPtr().IsNull()) return 3;\n"
+        "  NativeBuffer@ emptyData = pin.GetReadData();\n"
+        "  if (emptyData is null || !emptyData.IsEmpty()) return 3;\n"
         "  if (pin.GetDirectSource() !is null) return 4;\n"
         "  if (pin.GetRealSource() !is null) return 5;\n"
         "  if (pin.SetDirectSource(sourceA) != CK_OK) return 6;\n"
         "  if (pin.GetDirectSource() !is sourceA) return 7;\n"
         "  if (pin.GetRealSource() !is sourceA) return 8;\n"
-        "  NativePointer ptrA = pin.GetReadDataPtr();\n"
-        "  if (ptrA.IsNull()) return 9;\n"
+        "  NativeBuffer@ dataA = pin.GetReadData();\n"
+        "  if (dataA is null || dataA.Size() != uint(sourceA.GetDataSize())) return 9;\n"
         "  int value = 0;\n"
-        "  if (ptrA.ReadInt(value) != 4 || value != 1111) return 10;\n"
+        "  if (dataA.ReadInt(value) != 4 || value != 1111) return 10;\n"
         "  if (pin.SetDirectSource(sourceB) != CK_OK) return 11;\n"
         "  if (pin.GetDirectSource() !is sourceB) return 12;\n"
         "  if (pin.GetRealSource() !is sourceB) return 13;\n"
-        "  NativePointer ptrB = pin.GetReadDataPtr();\n"
-        "  if (ptrB.IsNull() || ptrB == ptrA) return 14;\n"
+        "  NativeBuffer@ dataB = pin.GetReadData();\n"
+        "  if (dataB is null || dataB.Size() != uint(sourceB.GetDataSize())) return 14;\n"
         "  value = 0;\n"
-        "  if (ptrB.ReadInt(value) != 4 || value != 2222) return 15;\n"
+        "  if (dataB.ReadInt(value) != 4 || value != 2222) return 15;\n"
         "  if (shared.SetDirectSource(sourceA) != CK_OK) return 16;\n"
         "  if (pin.ShareSourceWith(shared) != CK_OK) return 17;\n"
         "  if (pin.GetSharedSource() !is shared) return 18;\n"
         "  if (pin.GetDirectSource() !is null) return 19;\n"
         "  if (pin.GetRealSource() !is sourceA) return 20;\n"
         "  value = 0;\n"
-        "  NativePointer ptrShared = pin.GetReadDataPtr();\n"
-        "  if (ptrShared.IsNull()) return 21;\n"
-        "  if (ptrShared.ReadInt(value) != 4 || value != 1111) return 22;\n"
+        "  NativeBuffer@ dataShared = pin.GetReadData();\n"
+        "  if (dataShared is null || dataShared.Size() != uint(sourceA.GetDataSize())) return 21;\n"
+        "  if (dataShared.ReadInt(value) != 4 || value != 1111) return 22;\n"
         "  return 0;\n"
         "}\n"
         "void ProbeCKParameterInShareNull(CKParameterIn@ pin, CKParameter@ sourceA, CKParameter@ sourceB, CKParameterIn@ shared) {\n"

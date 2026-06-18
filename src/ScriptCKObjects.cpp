@@ -280,11 +280,22 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
 }
 
 template <typename T>
-static NativePointer GetCKParameterInReadDataPtr(T *self) {
-    if (!self)
-        return {};
+static NativeBuffer *GetCKParameterInReadData(T *self) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKParameterIn.GetReadData requires a valid input parameter.");
+        }
+        return NativeBuffer::Create(0);
+    }
+
     CKParameter *source = self->GetRealSource();
-    return source ? NativePointer(source->GetReadDataPtr()) : NativePointer();
+    if (!source) {
+        return NativeBuffer::Create(0);
+    }
+
+    const int size = source->GetDataSize();
+    void *data = size > 0 ? source->GetReadDataPtr() : nullptr;
+    return data ? NativeBuffer::Create(data, static_cast<size_t>(size)) : NativeBuffer::Create(0);
 }
 
 template <typename T>
@@ -362,7 +373,7 @@ static void RegisterCKParameterInMembers(asIScriptEngine *engine, const char *na
 
     // r = engine->RegisterObjectMethod(name, "CKERROR GetValue(uintptr_t buf)", asMETHODPR(T, GetValue, (void *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR GetValue(?&out value)", asFUNCTION(CKParameterInGetValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "NativePointer GetReadDataPtr()", asFUNCTIONPR(GetCKParameterInReadDataPtr<T>, (T *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "NativeBuffer@ GetReadData()", asFUNCTION(GetCKParameterInReadData<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKParameterIn@ GetSharedSource()", asMETHODPR(T, GetSharedSource, (), CKParameterIn *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKParameter@ GetRealSource()", asMETHODPR(T, GetRealSource, (), CKParameter*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKParameter@ GetDirectSource()", asMETHODPR(T, GetDirectSource, (), CKParameter*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
