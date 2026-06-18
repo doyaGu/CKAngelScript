@@ -304,6 +304,31 @@ void RegisterCKParameterIn(asIScriptEngine *engine) {
     RegisterCKParameterInMembers<CKParameterIn>(engine, "CKParameterIn");
 }
 
+static int ReadCKParameterStringValue(CKParameter *self, std::string &value, bool update) {
+    value.clear();
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKParameter string read requires a valid parameter.");
+        }
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    const int size = self->GetStringValue(nullptr, update);
+    if (size <= 0) {
+        return size;
+    }
+
+    std::vector<char> buffer(static_cast<std::size_t>(size) + 1u, '\0');
+    const int written = self->GetStringValue(buffer.data(), update);
+    if (written < 0) {
+        value.clear();
+        return written;
+    }
+
+    value.assign(buffer.data());
+    return written;
+}
+
 static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     asIScriptContext *ctx = asGetActiveContext();
@@ -338,11 +363,8 @@ static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
 
         if (strcmp(type->GetName(), "string") == 0) {
             std::string &str = *static_cast<std::string *>(buf);
-            CKSTRING value = (CKSTRING) self->GetReadDataPtr();
-            if (value)
-                str = value;
-            else
-                err = CKERR_INVALIDPARAMETER;
+            const int read = ReadCKParameterStringValue(self, str, update);
+            err = read < 0 ? static_cast<CKERROR>(read) : CK_OK;
         } else {
             int size = engine->GetSizeOfPrimitiveType(typeId);
             if (size == 0) {
@@ -425,28 +447,7 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
 
 template <typename T>
 static int GetCKParameterStringValue(T *self, std::string &value, bool update) {
-    value.clear();
-    if (!self) {
-        if (asIScriptContext *ctx = asGetActiveContext()) {
-            ctx->SetException("CKParameter.GetStringValue requires a valid parameter.");
-        }
-        return CKERR_INVALIDPARAMETER;
-    }
-
-    const int size = self->GetStringValue(nullptr, update);
-    if (size <= 0) {
-        return size;
-    }
-
-    std::vector<char> buffer(static_cast<std::size_t>(size) + 1u, '\0');
-    const int written = self->GetStringValue(buffer.data(), update);
-    if (written < 0) {
-        value.clear();
-        return written;
-    }
-
-    value.assign(buffer.data());
-    return written;
+    return ReadCKParameterStringValue(self, value, update);
 }
 
 template <typename T>

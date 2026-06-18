@@ -188,6 +188,44 @@ bool ExecuteCKParameterTypeDescProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
+                                  asIScriptFunction *function,
+                                  CKParameterLocal *parameter,
+                                  const char *label,
+                                  std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, parameter);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAttributeDescProbe(asIScriptEngine *engine,
                                  asIScriptFunction *function,
                                  bool expectException,
@@ -3220,9 +3258,9 @@ bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &
     return ok;
 }
 
-bool RunCKParameterScriptSelfTest(asIScriptEngine *engine, std::string &error) {
-    if (!engine) {
-        error = "CKParameter script self-test requires an AngelScript engine.";
+bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKParameter script self-test requires CKContext and AngelScript engine.";
         return false;
     }
 
@@ -3257,6 +3295,18 @@ bool RunCKParameterScriptSelfTest(asIScriptEngine *engine, std::string &error) {
         "  if (local !is null) {\n"
         "    int count = local.GetStringValue(value);\n"
         "  }\n"
+        "}\n"
+        "int ProbeCKParameterGenericStringValue(CKParameterLocal@ local) {\n"
+        "  if (local is null) return 2;\n"
+        "  string expected = \"generic text\";\n"
+        "  string value;\n"
+        "  if (local.GetValue(value) != CK_OK) return 3;\n"
+        "  if (value != expected) return 4;\n"
+        "  string directValue;\n"
+        "  int count = local.GetStringValue(directValue);\n"
+        "  if (count <= 0) return 5;\n"
+        "  if (directValue != expected) return 6;\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -3279,14 +3329,30 @@ bool RunCKParameterScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     }
 
     asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKParameterStringValue(CKParameter@, CKParameterOut@, CKParameterLocal@)");
-    if (!probe) {
+    asIScriptFunction *genericString = module->GetFunctionByDecl("int ProbeCKParameterGenericStringValue(CKParameterLocal@)");
+    if (!probe || !genericString) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
     }
 
+    CKParameterLocal *local = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterGenericString"), CKPGUID_STRING, TRUE);
+    if (!local) {
+        engine->DiscardModule(moduleName);
+        error = "CKParameter generic string probe could not create a local string parameter.";
+        return false;
+    }
+    const CKERROR setErr = local->SetStringValue(const_cast<CKSTRING>("generic text"));
+    bool ok = setErr == CK_OK;
+    if (!ok) {
+        error = "CKParameter generic string probe could not initialize the local string parameter.";
+    } else {
+        ok = ExecuteCKParameterLocalProbe(engine, genericString, local, "CKParameter generic string probe", error);
+    }
+    context->DestroyObject(local);
+
     engine->DiscardModule(moduleName);
-    return true;
+    return ok;
 }
 
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -3566,7 +3632,7 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunCKMaterialScriptSelfTest(engine, error)) {
         return false;
     }
-    if (!RunCKParameterScriptSelfTest(engine, error)) {
+    if (!RunCKParameterScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {
