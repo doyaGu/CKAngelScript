@@ -2487,6 +2487,84 @@ bool RunCKBitmapReaderScriptSelfTest(asIScriptEngine *engine, std::string &error
     return true;
 }
 
+bool RunCKBitmapSlotScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKBitmapSlot script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *slotType = engine->GetTypeInfoByDecl("CKBitmapSlot");
+    if (!slotType) {
+        error = "CKBitmapSlot self-test could not find the registered type.";
+        return false;
+    }
+    if (slotType->GetMethodByDecl("bool HasDataBuffer() const") == nullptr) {
+        error = "CKBitmapSlot self-test could not find HasDataBuffer.";
+        return false;
+    }
+    if (slotType->GetMethodByDecl("NativePointer get_m_DataBuffer() const") != nullptr ||
+        slotType->GetMethodByDecl("void set_m_DataBuffer(NativePointer ptr)") != nullptr) {
+        error = "CKBitmapSlot self-test found stale raw data-buffer accessors.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBitmapSlotSelfTest";
+    const char *source =
+        "int ProbeBitmapSlot() {\n"
+        "  CKBitmapSlot slot;\n"
+        "  if (slot.HasDataBuffer()) return 1;\n"
+        "  slot.m_FileName = \"source.bmp\";\n"
+        "  slot.Allocate(2, 2, 32);\n"
+        "  if (!slot.HasDataBuffer()) return 2;\n"
+        "  CKBitmapSlot copied(slot);\n"
+        "  if (copied.HasDataBuffer()) return 3;\n"
+        "  if (copied.m_FileName != \"source.bmp\") return 4;\n"
+        "  CKBitmapSlot assigned;\n"
+        "  assigned.Allocate(1, 1, 32);\n"
+        "  if (!assigned.HasDataBuffer()) return 5;\n"
+        "  assigned = slot;\n"
+        "  if (assigned.HasDataBuffer()) return 6;\n"
+        "  if (assigned.m_FileName != \"source.bmp\") return 7;\n"
+        "  slot.Flush();\n"
+        "  if (slot.HasDataBuffer()) return 8;\n"
+        "  slot.Allocate(1, 1, 32);\n"
+        "  slot.Free();\n"
+        "  if (slot.HasDataBuffer()) return 9;\n"
+        "  if (slot.m_FileName != \"\") return 10;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBitmapSlot self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-bitmap-slot-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBitmapSlot self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBitmapSlot self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeBitmapSlot()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBitmapSlot self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKBitmapSlot buffer probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKSoundReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKSoundReader script self-test requires an AngelScript engine.";
@@ -4635,6 +4713,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKRenderManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBitmapSlotScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKBitmapReaderScriptSelfTest(engine, error)) {

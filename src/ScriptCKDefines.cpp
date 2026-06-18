@@ -3049,26 +3049,47 @@ void RegisterCKBehaviorPrototype(asIScriptEngine *engine) {
 
 // CKBitmapSlot
 
+static void ConstructCKBitmapSlot(CKBitmapSlot *self) {
+    new(self) CKBitmapSlot();
+}
+
+static void ConstructCKBitmapSlotCopy(const CKBitmapSlot &other, CKBitmapSlot *self) {
+    new(self) CKBitmapSlot();
+    self->m_FileName = other.m_FileName;
+}
+
+static CKBitmapSlot &AssignCKBitmapSlot(CKBitmapSlot *self, const CKBitmapSlot &other) {
+    if (self == &other) {
+        return *self;
+    }
+
+    self->Flush();
+    self->m_FileName = other.m_FileName;
+    return *self;
+}
+
+static bool CKBitmapSlotHasDataBuffer(const CKBitmapSlot *self) {
+    return self->m_DataBuffer != nullptr;
+}
+
 void RegisterCKBitmapSlot(asIScriptEngine *engine) {
     int r = 0;
 
-    // r = engine->RegisterObjectProperty("CKBitmapSlot", "uintptr_t m_DataBuffer", asOFFSET(CKBitmapSlot, m_DataBuffer)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKBitmapSlot", "XString m_FileName", asOFFSET(CKBitmapSlot, m_FileName)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKBitmapSlot", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKBitmapSlot *self) { new(self) CKBitmapSlot(); }, (CKBitmapSlot*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKBitmapSlot", asBEHAVE_CONSTRUCT, "void f(const CKBitmapSlot &in other)", asFUNCTIONPR([](const CKBitmapSlot &slot, CKBitmapSlot *self) { new(self) CKBitmapSlot(slot); }, (const CKBitmapSlot &, CKBitmapSlot *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKBitmapSlot", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKBitmapSlot), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKBitmapSlot", asBEHAVE_CONSTRUCT, "void f(const CKBitmapSlot &in other)", asFUNCTION(ConstructCKBitmapSlotCopy), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKBitmapSlot", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKBitmapSlot *self) { self->~CKBitmapSlot(); }, (CKBitmapSlot *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKBitmapSlot", "CKBitmapSlot &opAssign(const CKBitmapSlot &in other)", asMETHODPR(CKBitmapSlot, operator=, (const CKBitmapSlot &), CKBitmapSlot &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBitmapSlot", "CKBitmapSlot &opAssign(const CKBitmapSlot &in other)", asFUNCTION(AssignCKBitmapSlot), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKBitmapSlot", "void Allocate(int, int, int)", asMETHOD(CKBitmapSlot, Allocate), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapSlot", "void Free()", asMETHOD(CKBitmapSlot, Free), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapSlot", "void Resize(VxImageDescEx & src, VxImageDescEx & dest)", asMETHOD(CKBitmapSlot, Resize), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapSlot", "void Flush()", asMETHOD(CKBitmapSlot, Flush), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKBitmapSlot", "NativePointer get_m_DataBuffer() const", asFUNCTIONPR([](const CKBitmapSlot *self) { return NativePointer(self->m_DataBuffer); }, (const CKBitmapSlot *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBitmapSlot", "void set_m_DataBuffer(NativePointer ptr)", asFUNCTIONPR([](CKBitmapSlot *self, NativePointer ptr) { self->m_DataBuffer = reinterpret_cast<unsigned long *>(ptr.Get()); }, (CKBitmapSlot *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBitmapSlot", "bool HasDataBuffer() const", asFUNCTION(CKBitmapSlotHasDataBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKMovieInfo
