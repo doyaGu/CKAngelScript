@@ -191,6 +191,7 @@ bool ExecuteCKParameterTypeDescProbe(asIScriptEngine *engine,
 bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKParameterLocal *parameter,
+                                  bool expectException,
                                   const char *label,
                                   std::string &error) {
     asIScriptContext *scriptContext = engine->RequestContext();
@@ -208,7 +209,12 @@ bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
     }
 
     bool ok = false;
-    if (r == asEXECUTION_FINISHED) {
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
         const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
         ok = returnCode == 0;
         if (!ok) {
@@ -3307,6 +3313,12 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (count <= 0) return 5;\n"
         "  if (directValue != expected) return 6;\n"
         "  return 0;\n"
+        "}\n"
+        "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
+        "  local.CopyValue(null);\n"
+        "}\n"
+        "void ProbeCKParameterCompatibleNull(CKParameterLocal@ local) {\n"
+        "  local.IsCompatibleWith(null);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -3330,7 +3342,9 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
 
     asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKParameterStringValue(CKParameter@, CKParameterOut@, CKParameterLocal@)");
     asIScriptFunction *genericString = module->GetFunctionByDecl("int ProbeCKParameterGenericStringValue(CKParameterLocal@)");
-    if (!probe || !genericString) {
+    asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
+    asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
+    if (!probe || !genericString || !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -3347,7 +3361,9 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     if (!ok) {
         error = "CKParameter generic string probe could not initialize the local string parameter.";
     } else {
-        ok = ExecuteCKParameterLocalProbe(engine, genericString, local, "CKParameter generic string probe", error);
+        ok = ExecuteCKParameterLocalProbe(engine, genericString, local, false, "CKParameter generic string probe", error) &&
+             ExecuteCKParameterLocalProbe(engine, copyValueNull, local, true, "CKParameter CopyValue null probe", error) &&
+             ExecuteCKParameterLocalProbe(engine, compatibleNull, local, true, "CKParameter IsCompatibleWith null probe", error);
     }
     context->DestroyObject(local);
 

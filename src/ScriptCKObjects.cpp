@@ -451,6 +451,28 @@ static int GetCKParameterStringValue(T *self, std::string &value, bool update) {
 }
 
 template <typename T>
+static CKERROR CopyCKParameterValue(T *self, CKParameter *param, bool updateParam) {
+    if (!self || !param) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKParameter.CopyValue requires a valid source parameter.");
+        }
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->CopyValue(param, updateParam);
+}
+
+template <typename T>
+static bool IsCKParameterCompatibleWith(T *self, CKParameter *param) {
+    if (!self || !param) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKParameter.IsCompatibleWith requires a valid parameter.");
+        }
+        return false;
+    }
+    return self->IsCompatibleWith(param) != FALSE;
+}
+
+template <typename T>
 static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -462,9 +484,9 @@ static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name
     // r = engine->RegisterObjectMethod(name, "CKERROR SetValue(NativePointer buf, int size = 0)", asFUNCTIONPR([](T *self, NativePointer buf, int size) { return self->SetValue(buf.Get(), size); }, (T *, NativePointer, int), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR GetValue(?&out value, bool update = true)", asFUNCTION(CKParameterGetValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR SetValue(?&in value)", asFUNCTION(CKParameterSetValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR CopyValue(CKParameter@ param, bool updateParam = true)", asFUNCTIONPR([](T *self, CKParameter *param, bool updateParam) { return self->CopyValue(param, updateParam); }, (T *, CKParameter *, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR CopyValue(CKParameter@ param, bool updateParam = true)", asFUNCTION(CopyCKParameterValue<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "bool IsCompatibleWith(CKParameter@ param)", asFUNCTIONPR([](T *self, CKParameter* param) -> bool { return self->IsCompatibleWith(param); }, (T *, CKParameter*), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool IsCompatibleWith(CKParameter@ param)", asFUNCTION(IsCKParameterCompatibleWith<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "int GetDataSize()", asMETHODPR(T, GetDataSize, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "NativePointer GetReadDataPtr(bool update = true)", asFUNCTIONPR([](T *self, bool update) { return NativePointer(self->GetReadDataPtr(update)); }, (T *, bool), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
