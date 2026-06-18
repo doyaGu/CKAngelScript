@@ -1057,6 +1057,34 @@ bool RunCKInterfaceManagerScriptSelfTest(CKContext *context, asIScriptEngine *en
     return true;
 }
 
+bool RunCKMidiManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKMidiManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *midiManagerType = engine->GetTypeInfoByDecl("CKMidiManager");
+    if (!midiManagerType) {
+        error = "CKMidiManager self-test could not find the registered type.";
+        return false;
+    }
+    if (midiManagerType->GetMethodByDecl("NativePointer Create(NativePointer hwnd)") == nullptr ||
+        midiManagerType->GetMethodByDecl("void Release(NativePointer source)") == nullptr ||
+        midiManagerType->GetMethodByDecl("CKERROR SetSoundFileName(NativePointer source, const string &in filename)") == nullptr ||
+        midiManagerType->GetMethodByDecl("string GetSoundFileName(NativePointer source)") == nullptr ||
+        midiManagerType->GetMethodByDecl("CKERROR Play(NativePointer source)") == nullptr ||
+        midiManagerType->GetMethodByDecl("CKERROR Pause(NativePointer source, bool pause = true)") == nullptr ||
+        midiManagerType->GetMethodByDecl("bool IsPlaying(NativePointer source)") == nullptr ||
+        midiManagerType->GetMethodByDecl("CKERROR Time(NativePointer source, CKDWORD &out ticks)") == nullptr ||
+        midiManagerType->GetMethodByDecl("CKDWORD MillisecsToTicks(NativePointer source, CKDWORD msOffset)") == nullptr ||
+        midiManagerType->GetMethodByDecl("CKDWORD TicksToMillisecs(NativePointer source, CKDWORD tkOffset)") == nullptr) {
+        error = "CKMidiManager self-test could not find expected guarded NativePointer methods.";
+        return false;
+    }
+
+    return true;
+}
+
 bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKObjectManager script self-test requires CKContext and AngelScript engine.";
@@ -1415,6 +1443,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKInterfaceManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKMidiManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {

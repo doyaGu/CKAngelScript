@@ -294,6 +294,141 @@ static bool ReadCKFloorAttributeValues(CKFloorManager *self,
     return result != FALSE;
 }
 
+static bool ValidateCKMidiManager(CKMidiManager *self) {
+    if (!self) {
+        SetActiveScriptException("CKMidiManager call requires a valid manager.");
+        return false;
+    }
+    return true;
+}
+
+static void *RequireCKMidiSource(CKMidiManager *self, NativePointer source) {
+    if (!ValidateCKMidiManager(self)) {
+        return nullptr;
+    }
+    void *nativeSource = source.Get();
+    if (!nativeSource) {
+        SetActiveScriptException("CKMidiManager source call requires a non-null source.");
+        return nullptr;
+    }
+    return nativeSource;
+}
+
+static NativePointer CreateCKMidiSource(CKMidiManager *self, NativePointer hwnd) {
+    if (!ValidateCKMidiManager(self)) {
+        return {};
+    }
+    return NativePointer(self->Create(hwnd.Get()));
+}
+
+static void ReleaseCKMidiSource(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        self->Release(nativeSource);
+    }
+}
+
+static CKERROR SetCKMidiSoundFileName(CKMidiManager *self, NativePointer source, const std::string &filename) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->SetSoundFileName(nativeSource, const_cast<CKSTRING>(filename.c_str()));
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static std::string GetCKMidiSoundFileName(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return ScriptStringify(self->GetSoundFileName(nativeSource));
+    }
+    return {};
+}
+
+static CKERROR PlayCKMidiSource(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->Play(nativeSource);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static CKERROR RestartCKMidiSource(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->Restart(nativeSource);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static CKERROR StopCKMidiSource(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->Stop(nativeSource);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static CKERROR PauseCKMidiSource(CKMidiManager *self, NativePointer source, bool pause) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->Pause(nativeSource, pause);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static bool IsCKMidiSourcePlaying(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->IsPlaying(nativeSource) != FALSE;
+    }
+    return false;
+}
+
+static bool IsCKMidiSourcePaused(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->IsPaused(nativeSource) != FALSE;
+    }
+    return false;
+}
+
+static CKERROR OpenCKMidiFile(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->OpenFile(nativeSource);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static CKERROR CloseCKMidiFile(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->CloseFile(nativeSource);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static CKERROR PrerollCKMidiSource(CKMidiManager *self, NativePointer source) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->Preroll(nativeSource);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static CKERROR GetCKMidiTime(CKMidiManager *self, NativePointer source, CKDWORD *ticks) {
+    if (!ticks) {
+        SetActiveScriptException("CKMidiManager.Time requires a valid output pointer.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->Time(nativeSource, ticks);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static CKDWORD CKMidiMillisecsToTicks(CKMidiManager *self, NativePointer source, CKDWORD msOffset) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->MillisecsToTicks(nativeSource, msOffset);
+    }
+    return 0;
+}
+
+static CKDWORD CKMidiTicksToMillisecs(CKMidiManager *self, NativePointer source, CKDWORD tickOffset) {
+    if (void *nativeSource = RequireCKMidiSource(self, source)) {
+        return self->TicksToMillisecs(nativeSource, tickOffset);
+    }
+    return 0;
+}
+
 static VxDriverDesc &MissingVxDriverDesc(const char *message) {
     static thread_local VxDriverDesc dummy{};
     dummy = VxDriverDesc{};
@@ -1028,25 +1163,25 @@ void RegisterCKMidiManager(asIScriptEngine *engine) {
 
     RegisterCKBaseManagerMembers<CKMidiManager>(engine, "CKMidiManager");
 
-    r = engine->RegisterObjectMethod("CKMidiManager", "NativePointer Create(NativePointer hwnd)", asFUNCTIONPR([](CKMidiManager *self, NativePointer hwnd) { return NativePointer(self->Create(hwnd.Get())); }, (CKMidiManager *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "void Release(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) { self->Release(source.Get()); }, (CKMidiManager *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "NativePointer Create(NativePointer hwnd)", asFUNCTIONPR(CreateCKMidiSource, (CKMidiManager *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "void Release(NativePointer source)", asFUNCTIONPR(ReleaseCKMidiSource, (CKMidiManager *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR SetSoundFileName(NativePointer source, const string &in filename)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source, const std::string &filename) { return self->SetSoundFileName(source.Get(), const_cast<CKSTRING>(filename.c_str())); }, (CKMidiManager *, NativePointer, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "string GetSoundFileName(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) -> std::string { return ScriptStringify(self->GetSoundFileName(source.Get())); }, (CKMidiManager *, NativePointer), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR SetSoundFileName(NativePointer source, const string &in filename)", asFUNCTIONPR(SetCKMidiSoundFileName, (CKMidiManager *, NativePointer, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "string GetSoundFileName(NativePointer source)", asFUNCTIONPR(GetCKMidiSoundFileName, (CKMidiManager *, NativePointer), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Play(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) { return self->Play(source.Get()); }, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Restart(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) { return self->Restart(source.Get()); }, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Stop(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) { return self->Stop(source.Get()); }, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Pause(NativePointer source, bool pause = true)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source, bool pause) { return self->Pause(source.Get(), pause); }, (CKMidiManager *, NativePointer, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "bool IsPlaying(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) -> bool { return self->IsPlaying(source.Get()); }, (CKMidiManager *, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "bool IsPaused(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) -> bool { return self->IsPaused(source.Get()); }, (CKMidiManager *, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Play(NativePointer source)", asFUNCTIONPR(PlayCKMidiSource, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Restart(NativePointer source)", asFUNCTIONPR(RestartCKMidiSource, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Stop(NativePointer source)", asFUNCTIONPR(StopCKMidiSource, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Pause(NativePointer source, bool pause = true)", asFUNCTIONPR(PauseCKMidiSource, (CKMidiManager *, NativePointer, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "bool IsPlaying(NativePointer source)", asFUNCTIONPR(IsCKMidiSourcePlaying, (CKMidiManager *, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "bool IsPaused(NativePointer source)", asFUNCTIONPR(IsCKMidiSourcePaused, (CKMidiManager *, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR OpenFile(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) { return self->OpenFile(source.Get()); }, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR CloseFile(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) { return self->CloseFile(source.Get()); }, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Preroll(NativePointer source)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source) { return self->Preroll(source.Get()); }, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Time(NativePointer source, CKDWORD &out ticks)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source, CKDWORD *ticks) { return self->Time(source.Get(), ticks); }, (CKMidiManager *, NativePointer, CKDWORD *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKDWORD MillisecsToTicks(NativePointer source, CKDWORD msOffset)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source, CKDWORD msOffset) { return self->MillisecsToTicks(source.Get(), msOffset); }, (CKMidiManager *, NativePointer, CKDWORD), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMidiManager", "CKDWORD TicksToMillisecs(NativePointer source, CKDWORD tkOffset)", asFUNCTIONPR([](CKMidiManager *self, NativePointer source, CKDWORD tkOffset) { return self->TicksToMillisecs(source.Get(), tkOffset); }, (CKMidiManager *, NativePointer, CKDWORD), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR OpenFile(NativePointer source)", asFUNCTIONPR(OpenCKMidiFile, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR CloseFile(NativePointer source)", asFUNCTIONPR(CloseCKMidiFile, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Preroll(NativePointer source)", asFUNCTIONPR(PrerollCKMidiSource, (CKMidiManager *, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKERROR Time(NativePointer source, CKDWORD &out ticks)", asFUNCTIONPR(GetCKMidiTime, (CKMidiManager *, NativePointer, CKDWORD *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKDWORD MillisecsToTicks(NativePointer source, CKDWORD msOffset)", asFUNCTIONPR(CKMidiMillisecsToTicks, (CKMidiManager *, NativePointer, CKDWORD), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMidiManager", "CKDWORD TicksToMillisecs(NativePointer source, CKDWORD tkOffset)", asFUNCTIONPR(CKMidiTicksToMillisecs, (CKMidiManager *, NativePointer, CKDWORD), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 void RegisterCKInputManager(asIScriptEngine *engine) {
