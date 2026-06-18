@@ -1099,13 +1099,28 @@ static bool CKUICallbackReasonUsesConsoleString(CKDWORD reason) {
     return reason == CKUIM_OUTTOCONSOLE || reason == CKUIM_OUTTOINFOBAR;
 }
 
+static bool IsOwnedCKUICallbackString(CKSTRING value) {
+    if (!value) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(g_CKUICallbackStringMutex);
+    return g_CKUICallbackOwnedStrings.find(value) != g_CKUICallbackOwnedStrings.end();
+}
+
+static bool ShouldDuplicateCKUICallbackString(const CKUICallbackStruct &value) {
+    return value.ConsoleString &&
+           (CKUICallbackReasonUsesConsoleString(value.Reason) || IsOwnedCKUICallbackString(value.ConsoleString));
+}
+
 static void ConstructCKUICallbackStruct(CKUICallbackStruct *self) {
     std::memset(self, 0, sizeof(CKUICallbackStruct));
 }
 
 static void ConstructCKUICallbackStructCopy(const CKUICallbackStruct &other, CKUICallbackStruct *self) {
+    const bool duplicateConsoleString = ShouldDuplicateCKUICallbackString(other);
     *self = other;
-    if (CKUICallbackReasonUsesConsoleString(other.Reason) && other.ConsoleString) {
+    if (duplicateConsoleString) {
         self->ConsoleString = DuplicateCKUICallbackString(other.ConsoleString);
     }
 }
@@ -1120,10 +1135,16 @@ static CKUICallbackStruct &AssignCKUICallbackStruct(CKUICallbackStruct *self, co
         return *self;
     }
 
+    CKSTRING consoleStringCopy = nullptr;
+    const bool duplicateConsoleString = ShouldDuplicateCKUICallbackString(other);
+    if (duplicateConsoleString) {
+        consoleStringCopy = DuplicateCKUICallbackString(other.ConsoleString);
+    }
+
     ReleaseCKUICallbackString(self->ConsoleString);
     *self = other;
-    if (CKUICallbackReasonUsesConsoleString(other.Reason) && other.ConsoleString) {
-        self->ConsoleString = DuplicateCKUICallbackString(other.ConsoleString);
+    if (duplicateConsoleString) {
+        self->ConsoleString = consoleStringCopy;
     }
     return *self;
 }
