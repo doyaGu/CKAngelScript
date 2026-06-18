@@ -1644,12 +1644,13 @@ void RegisterCKParameterTypeDesc(asIScriptEngine *engine) {
     // r = engine->RegisterObjectProperty("CKParameterTypeDesc", "uintptr_t CopyFunction", asOFFSET(CKParameterTypeDesc, CopyFunction)); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectProperty("CKParameterTypeDesc", "uintptr_t StringFunction", asOFFSET(CKParameterTypeDesc, StringFunction)); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectProperty("CKParameterTypeDesc", "uintptr_t UICreatorFunction", asOFFSET(CKParameterTypeDesc, UICreatorFunction)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKParameterTypeDesc", "CKPluginEntry &CreatorDll", asOFFSET(CKParameterTypeDesc, CreatorDll)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKParameterTypeDesc", "CKDWORD dwParam", asOFFSET(CKParameterTypeDesc, dwParam)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKParameterTypeDesc", "CKDWORD dwFlags", asOFFSET(CKParameterTypeDesc, dwFlags)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKParameterTypeDesc", "CKDWORD Cid", asOFFSET(CKParameterTypeDesc, Cid)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKParameterTypeDesc", "XBitArray DerivationMask", asOFFSET(CKParameterTypeDesc, DerivationMask)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKParameterTypeDesc", "CKGUID Saver_Manager", asOFFSET(CKParameterTypeDesc, Saver_Manager)); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "NativePointer get_CreatorDll() const", asFUNCTIONPR([](const CKParameterTypeDesc *self) { return NativePointer(self->CreatorDll); }, (const CKParameterTypeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_CreatorDll(NativePointer ptr)", asFUNCTIONPR([](CKParameterTypeDesc *self, NativePointer ptr) { self->CreatorDll = reinterpret_cast<CKPluginEntry *>(ptr.Get()); }, (CKParameterTypeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKParameterTypeDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKParameterTypeDesc *self) { new(self) CKParameterTypeDesc(); }, (CKParameterTypeDesc*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("CKParameterTypeDesc", asBEHAVE_CONSTRUCT, "void f(const CKParameterTypeDesc &in other)", asFUNCTIONPR([](const CKParameterTypeDesc &desc, CKParameterTypeDesc *self) { new(self) CKParameterTypeDesc(desc); }, (const CKParameterTypeDesc &, CKParameterTypeDesc *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);

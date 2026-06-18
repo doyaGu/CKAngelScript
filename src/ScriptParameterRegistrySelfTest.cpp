@@ -143,6 +143,50 @@ bool ExecuteCKStructStructProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKParameterTypeDescProbe(asIScriptEngine *engine,
+                                     asIScriptFunction *function,
+                                     CKContext *context,
+                                     bool expectException,
+                                     const char *label,
+                                     std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, context);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool RunCKEnumStructScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKEnumStruct script self-test requires an AngelScript engine.";
@@ -345,6 +389,72 @@ bool RunCKStructStructScriptSelfTest(asIScriptEngine *engine, std::string &error
     return ok;
 }
 
+bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKParameterTypeDescSelfTest";
+    const char *source =
+        "int ProbeParameterTypeDesc(CKContext@ ctx) {\n"
+        "  CKParameterTypeDesc desc;\n"
+        "  if (!desc.CreatorDll.IsNull()) return 1;\n"
+        "  NativePointer empty;\n"
+        "  desc.CreatorDll = empty;\n"
+        "  if (!desc.CreatorDll.IsNull()) return 2;\n"
+        "  CKParameterManager@ pm = ctx.GetParameterManager();\n"
+        "  if (pm is null) return 3;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMissingParameterType(CKContext@ ctx) {\n"
+        "  CKParameterManager@ pm = ctx.GetParameterManager();\n"
+        "  pm.GetParameterTypeDescription(-2147483647);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMissingParameterGuid(CKContext@ ctx) {\n"
+        "  CKParameterManager@ pm = ctx.GetParameterManager();\n"
+        "  CKGUID missing(0x7badc0de, 0x13572468);\n"
+        "  pm.GetParameterTypeDescription(missing);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKParameterTypeDesc self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-parameter-type-desc-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKParameterTypeDesc self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKParameterTypeDesc self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeParameterTypeDesc(CKContext@)");
+    asIScriptFunction *missingType = module->GetFunctionByDecl("int ProbeMissingParameterType(CKContext@)");
+    asIScriptFunction *missingGuid = module->GetFunctionByDecl("int ProbeMissingParameterGuid(CKContext@)");
+    if (!probe || !missingType || !missingGuid) {
+        engine->DiscardModule(moduleName);
+        error = "CKParameterTypeDesc self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKParameterTypeDesc CreatorDll probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, missingType, context, true, "CKParameterTypeDesc missing type probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, missingGuid, context, true, "CKParameterTypeDesc missing guid probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 } // namespace
 
 bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -431,6 +541,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKStructStructScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKParameterTypeDescScriptSelfTest(context, engine, error)) {
         return false;
     }
 
