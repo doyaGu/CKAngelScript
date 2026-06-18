@@ -3004,7 +3004,7 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKTCBRotationKey", "float easeto", asOFFSET(CKTCBRotationKey, easeto)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKTCBRotationKey", "float easefrom", asOFFSET(CKTCBRotationKey, easefrom)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKTCBRotationKey", asBEHAVE_CONSTRUCT, "void f(float time, VxQuaternion &in rot)", asFUNCTIONPR([](CKTCBRotationKey *self, float time, VxQuaternion &rot) { new (self) CKTCBRotationKey(time, rot); }, (CKTCBRotationKey *, float, VxQuaternion &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKTCBRotationKey", asBEHAVE_CONSTRUCT, "void f(float time, VxQuaternion &in rot, float t = 0, float c = 0, float b = 0, float easeTo = 0, float easeFrom = 0)", asFUNCTIONPR([](CKTCBRotationKey *self, float time, VxQuaternion &rot, float t, float c, float b, float easeTo, float easeFrom) { new (self) CKTCBRotationKey(time, rot, t, c, b, easeTo, easeFrom); }, (CKTCBRotationKey *, float, VxQuaternion &, float, float, float, float, float), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // CKBezierKeyFlags
     r = engine->RegisterObjectBehaviour("CKBezierKeyFlags", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKBezierKeyFlags *self) { new(self) CKBezierKeyFlags(); }, (CKBezierKeyFlags *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);

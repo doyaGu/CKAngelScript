@@ -1791,6 +1791,102 @@ bool RunCKTCBPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &err
     return ok;
 }
 
+bool RunCKTCBRotationKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKTCBRotationKey script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *tcbRotationKeyType = engine->GetTypeInfoByDecl("CKTCBRotationKey");
+    if (!tcbRotationKeyType) {
+        error = "CKTCBRotationKey self-test could not find the registered type.";
+        return false;
+    }
+    if (tcbRotationKeyType->GetMethodByDecl("CKKey opImplConv() const") == nullptr ||
+        tcbRotationKeyType->GetMethodByDecl("CKRotationKey opImplConv() const") == nullptr) {
+        error = "CKTCBRotationKey self-test could not find safe base value conversions.";
+        return false;
+    }
+    if (tcbRotationKeyType->GetMethodByDecl("float GetTime()") == nullptr ||
+        tcbRotationKeyType->GetMethodByDecl("const VxQuaternion& GetRotation()") == nullptr ||
+        tcbRotationKeyType->GetMethodByDecl("bool Compare(CKTCBRotationKey&in key, float threshold)") == nullptr) {
+        error = "CKTCBRotationKey self-test could not find expected non-const SDK declarations.";
+        return false;
+    }
+    if (tcbRotationKeyType->GetMethodByDecl("float GetTime() const") != nullptr ||
+        tcbRotationKeyType->GetMethodByDecl("const VxQuaternion& GetRotation() const") != nullptr ||
+        tcbRotationKeyType->GetMethodByDecl("bool Compare(CKTCBRotationKey&in key, float threshold) const") != nullptr) {
+        error = "CKTCBRotationKey self-test found stale const SDK declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKTCBRotationKeySelfTest";
+    const char *source =
+        "int ProbeTCBRotationKey() {\n"
+        "  VxQuaternion rot(0.0f, 0.0f, 0.0f, 1.0f);\n"
+        "  CKTCBRotationKey key(1.25f, rot, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f);\n"
+        "  if (key.GetTime() != 1.25f) return 1;\n"
+        "  if (key.tension != 0.1f || key.continuity != 0.2f || key.bias != 0.3f) return 2;\n"
+        "  if (key.easeto != 0.4f || key.easefrom != 0.5f) return 3;\n"
+        "  VxQuaternion got = key.GetRotation();\n"
+        "  if (got.x != 0.0f || got.y != 0.0f || got.z != 0.0f || got.w != 1.0f) return 4;\n"
+        "  CKTCBRotationKey defaults(2.0f, rot);\n"
+        "  if (defaults.tension != 0.0f || defaults.continuity != 0.0f || defaults.bias != 0.0f) return 5;\n"
+        "  if (defaults.easeto != 0.0f || defaults.easefrom != 0.0f) return 6;\n"
+        "  CKTCBRotationKey copy(key);\n"
+        "  if (!key.Compare(copy, 0.0f)) return 7;\n"
+        "  copy.tension = 0.9f;\n"
+        "  if (key.Compare(copy, 0.0f)) return 8;\n"
+        "  CKTCBRotationKey assigned;\n"
+        "  assigned = key;\n"
+        "  if (!key.Compare(assigned, 0.0f)) return 9;\n"
+        "  CKRotationKey rotationBase = key;\n"
+        "  if (rotationBase.GetTime() != 1.25f) return 10;\n"
+        "  VxQuaternion baseRot = rotationBase.GetRotation();\n"
+        "  if (baseRot.x != 0.0f || baseRot.y != 0.0f || baseRot.z != 0.0f || baseRot.w != 1.0f) return 11;\n"
+        "  CKKey baseKey = key;\n"
+        "  if (baseKey.GetTime() != 1.25f) return 12;\n"
+        "  key.SetTime(2.5f);\n"
+        "  if (key.GetTime() != 2.5f) return 13;\n"
+        "  VxQuaternion moved(0.1f, 0.2f, 0.3f, 0.4f);\n"
+        "  key.SetRotation(moved);\n"
+        "  got = key.GetRotation();\n"
+        "  if (got.x != 0.1f || got.y != 0.2f || got.z != 0.3f || got.w != 0.4f) return 14;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKTCBRotationKey self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-tcb-rotation-key-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTCBRotationKey self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTCBRotationKey self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeTCBRotationKey()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKTCBRotationKey self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKTCBRotationKey probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBezierPositionKey script self-test requires an AngelScript engine.";
@@ -2073,6 +2169,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKTCBPositionKeyScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKTCBRotationKeyScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKBezierPositionKeyScriptSelfTest(engine, error)) {
