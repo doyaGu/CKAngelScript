@@ -2877,6 +2877,18 @@ void RegisterCK2dCurve(asIScriptEngine *engine) {
 // CKKeyframeData
 
 template <typename T>
+static void ConstructCKKeyValue(T *self) {
+    new(self) T();
+}
+
+template <>
+void ConstructCKKeyValue(CKMorphKey *self) {
+    new(self) CKMorphKey();
+    self->PosArray = nullptr;
+    self->NormArray = nullptr;
+}
+
+template <typename T>
 static void RegisterCKKeyMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -2884,7 +2896,7 @@ static void RegisterCKKeyMembers(asIScriptEngine *engine, const char *name) {
 
     r = engine->RegisterObjectProperty(name, "float TimeStep", asOFFSET(T, TimeStep)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour(name, asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](T *self) { new(self) T(); }, (T *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour(name, asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR(ConstructCKKeyValue<T>, (T *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("void f(const %s &in other)", name);
     r = engine->RegisterObjectBehaviour(name, asBEHAVE_CONSTRUCT, decl.CStr(), asFUNCTIONPR([](const T &k, T *self) { new(self) T(k); }, (const T &, T *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -2968,6 +2980,52 @@ void RegisterCKAnimControllerMembers(asIScriptEngine *engine, const char *name) 
     }
 }
 
+static NativePointer GetCKMorphKeyPosArray(CKMorphKey *self) {
+    return NativePointer(self ? self->PosArray : nullptr);
+}
+
+static void SetCKMorphKeyPosArray(CKMorphKey *self, NativePointer pointer) {
+    if (self) {
+        self->PosArray = reinterpret_cast<VxVector *>(pointer.Get());
+    }
+}
+
+static NativePointer GetCKMorphKeyNormArray(CKMorphKey *self) {
+    return NativePointer(self ? self->NormArray : nullptr);
+}
+
+static void SetCKMorphKeyNormArray(CKMorphKey *self, NativePointer pointer) {
+    if (self) {
+        self->NormArray = reinterpret_cast<VxCompressedVector *>(pointer.Get());
+    }
+}
+
+static bool CompareCKMorphKey(CKMorphKey *self, CKMorphKey &key, int nbVertex, float threshold) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphKey.Compare called with a null self pointer.");
+        }
+        return false;
+    }
+    if (nbVertex < 0) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphKey.Compare requires a non-negative vertex count.");
+        }
+        return false;
+    }
+    if (nbVertex > 0) {
+        const bool hasPositionArrays = self->PosArray && key.PosArray;
+        const bool hasNormalArrays = self->NormArray && key.NormArray;
+        if ((self->PosArray || key.PosArray) && !hasPositionArrays) {
+            return false;
+        }
+        if ((self->NormArray || key.NormArray) && !hasNormalArrays) {
+            return false;
+        }
+    }
+    return self->Compare(key, nbVertex, threshold) != FALSE;
+}
+
 void RegisterCKKeyframeData(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3036,10 +3094,12 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     // CKMorphKey
     RegisterCKKeyMembers<CKMorphKey>(engine, "CKMorphKey");
 
-    r = engine->RegisterObjectProperty("CKMorphKey", "VxVector &PosArray", asOFFSET(CKMorphKey, PosArray)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKMorphKey", "VxCompressedVector &NormArray", asOFFSET(CKMorphKey, NormArray)); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphKey", "NativePointer GetPosArray() const", asFUNCTION(GetCKMorphKeyPosArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphKey", "void SetPosArray(NativePointer pointer)", asFUNCTION(SetCKMorphKeyPosArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphKey", "NativePointer GetNormArray() const", asFUNCTION(GetCKMorphKeyNormArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphKey", "void SetNormArray(NativePointer pointer)", asFUNCTION(SetCKMorphKeyNormArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMorphKey", "bool Compare(CKMorphKey &in key, int nbVertex, float threshold)", asFUNCTIONPR([](CKMorphKey *self, CKMorphKey &key, int nbVertex, float threshold) -> bool { return self->Compare(key, nbVertex, threshold); }, (CKMorphKey *, CKMorphKey &, int, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphKey", "bool Compare(CKMorphKey &in key, int nbVertex, float threshold)", asFUNCTION(CompareCKMorphKey), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // CKAnimController
     RegisterCKAnimControllerMembers<CKAnimController>(engine, "CKAnimController");

@@ -1965,6 +1965,111 @@ bool RunCKTCBRotationKeyScriptSelfTest(asIScriptEngine *engine, std::string &err
     return ok;
 }
 
+bool RunCKMorphKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKMorphKey script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *morphKeyType = engine->GetTypeInfoByDecl("CKMorphKey");
+    if (!morphKeyType) {
+        error = "CKMorphKey self-test could not find the registered type.";
+        return false;
+    }
+    for (asUINT i = 0; i < morphKeyType->GetPropertyCount(); ++i) {
+        const char *decl = morphKeyType->GetPropertyDeclaration(i, true);
+        const std::string propertyDecl = decl ? decl : "";
+        if (propertyDecl == "VxVector& PosArray" ||
+            propertyDecl == "VxCompressedVector& NormArray") {
+            error = "CKMorphKey self-test found stale raw pointer reference property.";
+            return false;
+        }
+    }
+    if (morphKeyType->GetMethodByDecl("NativePointer GetPosArray() const") == nullptr ||
+        morphKeyType->GetMethodByDecl("void SetPosArray(NativePointer pointer)") == nullptr ||
+        morphKeyType->GetMethodByDecl("NativePointer GetNormArray() const") == nullptr ||
+        morphKeyType->GetMethodByDecl("void SetNormArray(NativePointer pointer)") == nullptr) {
+        error = "CKMorphKey self-test could not find expected NativePointer array accessors.";
+        return false;
+    }
+    if (morphKeyType->GetMethodByDecl("CKKey opImplConv() const") == nullptr) {
+        error = "CKMorphKey self-test could not find safe CKKey value conversion.";
+        return false;
+    }
+    if (morphKeyType->GetMethodByDecl("float GetTime()") == nullptr ||
+        morphKeyType->GetMethodByDecl("bool Compare(CKMorphKey&in key, int nbVertex, float threshold)") == nullptr) {
+        error = "CKMorphKey self-test could not find expected non-const SDK declarations.";
+        return false;
+    }
+    if (morphKeyType->GetMethodByDecl("float GetTime() const") != nullptr ||
+        morphKeyType->GetMethodByDecl("bool Compare(CKMorphKey&in key, int nbVertex, float threshold) const") != nullptr) {
+        error = "CKMorphKey self-test found stale const SDK declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKMorphKeySelfTest";
+    const char *source =
+        "int ProbeMorphKey() {\n"
+        "  CKMorphKey key;\n"
+        "  if (key.GetTime() != 0.0f) return 1;\n"
+        "  if (!key.GetPosArray().IsNull()) return 2;\n"
+        "  if (!key.GetNormArray().IsNull()) return 3;\n"
+        "  NativePointer empty;\n"
+        "  key.SetPosArray(empty);\n"
+        "  key.SetNormArray(empty);\n"
+        "  if (!key.GetPosArray().IsNull() || !key.GetNormArray().IsNull()) return 4;\n"
+        "  key.SetTime(1.25f);\n"
+        "  CKMorphKey copy(key);\n"
+        "  if (copy.GetTime() != 1.25f) return 5;\n"
+        "  CKMorphKey assigned;\n"
+        "  assigned = key;\n"
+        "  if (assigned.GetTime() != 1.25f) return 6;\n"
+        "  if (!key.Compare(copy, 0, 0.0f)) return 7;\n"
+        "  CKKey baseKey = key;\n"
+        "  if (baseKey.GetTime() != 1.25f) return 8;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMorphKeyNegativeCount() {\n"
+        "  CKMorphKey left;\n"
+        "  CKMorphKey right;\n"
+        "  left.Compare(right, -1, 0.0f);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKMorphKey self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-morph-key-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMorphKey self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMorphKey self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeMorphKey()");
+    asIScriptFunction *negativeCount = module->GetFunctionByDecl("int ProbeMorphKeyNegativeCount()");
+    if (!probe || !negativeCount) {
+        engine->DiscardModule(moduleName);
+        error = "CKMorphKey self-test functions were not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKMorphKey probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, negativeCount, true, "CKMorphKey negative-count probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBezierPositionKey script self-test requires an AngelScript engine.";
@@ -2253,6 +2358,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKTCBRotationKeyScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKMorphKeyScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKBezierPositionKeyScriptSelfTest(engine, error)) {
