@@ -1300,6 +1300,124 @@ bool RunXGUIDArrayItScriptSelfTest(asIScriptEngine *engine, std::string &error) 
     return ok;
 }
 
+bool RunXImageArrayItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XImageArrayIt script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("XImageArrayIt");
+    if (!iteratorType) {
+        error = "XImageArrayIt self-test could not find the registered type.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("bool opEquals(const XImageArrayIt &in other) const") ||
+        !iteratorType->GetMethodByDecl("bool opNotEquals(const XImageArrayIt &in other) const")) {
+        error = "XImageArrayIt self-test could not find iterator comparison methods.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("XImageArray");
+    if (!arrayType) {
+        error = "XImageArrayIt self-test could not find XImageArray.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("XImageArrayIt Begin() const") ||
+        !arrayType->GetMethodByDecl("XImageArrayIt End() const")) {
+        error = "XImageArrayIt self-test could not find XImageArray iterator producers.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XImageArrayItSelfTest";
+    const char *source =
+        "int ProbeXImageArrayIt() {\n"
+        "  XImageArray values;\n"
+        "  VxImageDescEx first;\n"
+        "  first.Width = 64;\n"
+        "  first.Height = 32;\n"
+        "  first.BitsPerPixel = 16;\n"
+        "  VxImageDescEx second;\n"
+        "  second.Width = 128;\n"
+        "  second.Height = 16;\n"
+        "  second.BitsPerPixel = 32;\n"
+        "  values.PushBack(first);\n"
+        "  values.PushBack(second);\n"
+        "  XImageArrayIt begin = values.Begin();\n"
+        "  XImageArrayIt end = values.End();\n"
+        "  if (!begin.IsValid()) return 1;\n"
+        "  if (begin == end) return 2;\n"
+        "  if (begin.Get().Width != first.Width || begin.Get().Height != first.Height) return 3;\n"
+        "  begin.Get().Width = 96;\n"
+        "  if (values[0].Width != 96) return 4;\n"
+        "  XImageArrayIt copied(begin);\n"
+        "  if (!(copied == begin) || copied != begin) return 5;\n"
+        "  ++copied;\n"
+        "  if (copied == begin || !(copied != begin)) return 6;\n"
+        "  if (copied.Get().Width != second.Width || copied.Get().BitsPerPixel != second.BitsPerPixel) return 7;\n"
+        "  XImageArrayIt assigned;\n"
+        "  assigned = copied;\n"
+        "  if (!(assigned == copied)) return 8;\n"
+        "  ++assigned;\n"
+        "  if (!(assigned == end) || assigned != end) return 9;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectDefaultXImageArrayItGet() {\n"
+        "  XImageArrayIt it;\n"
+        "  it.Get();\n"
+        "}\n"
+        "void RejectDefaultXImageArrayItInc() {\n"
+        "  XImageArrayIt it;\n"
+        "  ++it;\n"
+        "}\n"
+        "void RejectDefaultXImageArrayItDec() {\n"
+        "  XImageArrayIt it;\n"
+        "  --it;\n"
+        "}\n"
+        "void RejectEmptyXImageArrayItGet() {\n"
+        "  XImageArray values;\n"
+        "  XImageArrayIt it = values.Begin();\n"
+        "  it.Get();\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XImageArrayIt self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ximagearrayit-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XImageArrayIt self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XImageArrayIt self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXImageArrayIt()");
+    asIScriptFunction *defaultGet = module->GetFunctionByDecl("void RejectDefaultXImageArrayItGet()");
+    asIScriptFunction *defaultInc = module->GetFunctionByDecl("void RejectDefaultXImageArrayItInc()");
+    asIScriptFunction *defaultDec = module->GetFunctionByDecl("void RejectDefaultXImageArrayItDec()");
+    asIScriptFunction *emptyGet = module->GetFunctionByDecl("void RejectEmptyXImageArrayItGet()");
+    if (!probe || !defaultGet || !defaultInc || !defaultDec || !emptyGet) {
+        engine->DiscardModule(moduleName);
+        error = "XImageArrayIt self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XImageArrayIt iterator probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultGet, true, "XImageArrayIt default Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultInc, true, "XImageArrayIt default increment rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultDec, true, "XImageArrayIt default decrement rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyGet, true, "XImageArrayIt empty Begin Get rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKAttributeDesc script self-test requires an AngelScript engine.";
@@ -5148,6 +5266,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunXGUIDArrayItScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXImageArrayItScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeDescScriptSelfTest(engine, error)) {
