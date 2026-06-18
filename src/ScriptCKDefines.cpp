@@ -2894,11 +2894,11 @@ static void RegisterCKKeyMembers(asIScriptEngine *engine, const char *name) {
     decl.Format("%s &opAssign(const %s &in)", name, name);
     r = engine->RegisterObjectMethod(name, decl.CStr(), asMETHODPR(T, operator=, (const T &), T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "float GetTime() const", asMETHODPR(T, GetTime, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float GetTime()", asMETHODPR(T, GetTime, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetTime(float t)", asMETHODPR(T, SetTime, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKKey") != 0) {
-        RegisterClassValueCast<T, CKKey>(engine, name, "CKKey");
+        r = RegisterClassValueCast<T, CKKey>(engine, name, "CKKey"); CKAS_CHECK_REGISTER(r);
     }
 }
 
@@ -2913,14 +2913,14 @@ static void RegisterCKRotationKeyMembers(asIScriptEngine *engine, const char *na
     r = engine->RegisterObjectProperty(name, "VxQuaternion Rot", asOFFSET(T, Rot)); CKAS_CHECK_REGISTER(r);
 
 
-    r = engine->RegisterObjectMethod(name, "const VxQuaternion &GetRotation() const", asMETHODPR(T, GetRotation, (), const VxQuaternion &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "const VxQuaternion &GetRotation()", asMETHODPR(T, GetRotation, (), const VxQuaternion &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetRotation(const VxQuaternion &in)", asMETHODPR(T, SetRotation, (const VxQuaternion &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    decl.Format("bool Compare(%s &in key, float threshold) const", name);
+    decl.Format("bool Compare(%s &in key, float threshold)", name);
     r = engine->RegisterObjectMethod(name, decl.CStr(), asFUNCTIONPR([](T *self, T &key, float threshold) -> bool { return self->Compare(key, threshold); }, (T *, T &, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKRotationKey") != 0) {
-        RegisterClassValueCast<T, CKRotationKey>(engine, name, "CKRotationKey");
+        r = RegisterClassValueCast<T, CKRotationKey>(engine, name, "CKRotationKey"); CKAS_CHECK_REGISTER(r);
     }
 }
 
@@ -2934,14 +2934,14 @@ static void RegisterCKPositionKeyMembers(asIScriptEngine *engine, const char *na
 
     r = engine->RegisterObjectProperty(name, "VxVector Pos", asOFFSET(T, Pos)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "const VxVector &GetPosition() const", asMETHODPR(T, GetPosition, (), const VxVector &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "const VxVector &GetPosition()", asMETHODPR(T, GetPosition, (), const VxVector &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetPosition(const VxVector &in)", asMETHODPR(T, SetPosition, (const VxVector &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    decl.Format("bool Compare(%s &in key, float threshold) const", name);
+    decl.Format("bool Compare(%s &in key, float threshold)", name);
     r = engine->RegisterObjectMethod(name, decl.CStr(), asFUNCTIONPR([](T *self, T &key, float threshold) -> bool { return self->Compare(key, threshold); }, (T *, T &, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKPositionKey") != 0) {
-        RegisterClassValueCast<T, CKPositionKey>(engine, name, "CKPositionKey");
+        r = RegisterClassValueCast<T, CKPositionKey>(engine, name, "CKPositionKey"); CKAS_CHECK_REGISTER(r);
     }
 }
 
@@ -2977,12 +2977,12 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     // CKRotationKey
     RegisterCKRotationKeyMembers<CKRotationKey>(engine, "CKRotationKey");
 
-    r = engine->RegisterObjectBehaviour("CKRotationKey", asBEHAVE_CONSTRUCT, "void f(float time, const VxQuaternion &in rot)", asFUNCTIONPR([](CKRotationKey *self, float time, VxQuaternion &rot) { new (self) CKRotationKey(time, rot); }, (CKRotationKey *, float, VxQuaternion &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKRotationKey", asBEHAVE_CONSTRUCT, "void f(float time, VxQuaternion &in rot)", asFUNCTIONPR([](CKRotationKey *self, float time, VxQuaternion &rot) { new (self) CKRotationKey(time, rot); }, (CKRotationKey *, float, VxQuaternion &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // CKPositionKey
     RegisterCKPositionKeyMembers<CKPositionKey>(engine, "CKPositionKey");
 
-    r = engine->RegisterObjectBehaviour("CKPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, const VxVector &in pos)", asFUNCTIONPR([](CKPositionKey *self, float time, VxVector &pos) { new (self) CKPositionKey(time, pos); }, (CKPositionKey *, float, VxVector &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, VxVector &in pos)", asFUNCTIONPR([](CKPositionKey *self, float time, VxVector &pos) { new (self) CKPositionKey(time, pos); }, (CKPositionKey *, float, VxVector &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // CKTCBPositionKey
     RegisterCKPositionKeyMembers<CKTCBPositionKey>(engine, "CKTCBPositionKey");
@@ -2993,7 +2993,7 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKTCBPositionKey", "float easeto", asOFFSET(CKTCBPositionKey, easeto)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKTCBPositionKey", "float easefrom", asOFFSET(CKTCBPositionKey, easefrom)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKTCBPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, const VxVector &in pos)", asFUNCTIONPR([](CKTCBPositionKey *self, float time, VxVector &pos) { new (self) CKTCBPositionKey(time, pos); }, (CKTCBPositionKey *, float, VxVector &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKTCBPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, VxVector &in pos)", asFUNCTIONPR([](CKTCBPositionKey *self, float time, VxVector &pos) { new (self) CKTCBPositionKey(time, pos); }, (CKTCBPositionKey *, float, VxVector &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // CKRotationKey
     RegisterCKRotationKeyMembers<CKTCBRotationKey>(engine, "CKTCBRotationKey");
@@ -3004,7 +3004,7 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKTCBRotationKey", "float easeto", asOFFSET(CKTCBRotationKey, easeto)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKTCBRotationKey", "float easefrom", asOFFSET(CKTCBRotationKey, easefrom)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKTCBRotationKey", asBEHAVE_CONSTRUCT, "void f(float time, const VxQuaternion &in rot)", asFUNCTIONPR([](CKTCBRotationKey *self, float time, VxQuaternion &rot) { new (self) CKTCBRotationKey(time, rot); }, (CKTCBRotationKey *, float, VxQuaternion &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKTCBRotationKey", asBEHAVE_CONSTRUCT, "void f(float time, VxQuaternion &in rot)", asFUNCTIONPR([](CKTCBRotationKey *self, float time, VxQuaternion &rot) { new (self) CKTCBRotationKey(time, rot); }, (CKTCBRotationKey *, float, VxQuaternion &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // CKBezierKeyFlags
     r = engine->RegisterObjectBehaviour("CKBezierKeyFlags", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKBezierKeyFlags *self) { new(self) CKBezierKeyFlags(); }, (CKBezierKeyFlags *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -3027,9 +3027,9 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKBezierPositionKey", "VxVector In", asOFFSET(CKBezierPositionKey, In)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKBezierPositionKey", "VxVector Out", asOFFSET(CKBezierPositionKey, Out)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKBezierPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, const VxVector &in pos, const CKBezierKeyFlags &in flags, const VxVector &in input, const VxVector &in output)", asFUNCTIONPR([](CKBezierPositionKey *self, float time, VxVector &pos, const CKBezierKeyFlags &flags, VxVector &in, VxVector &out) { new (self) CKBezierPositionKey(time, pos, flags, in, out); }, (CKBezierPositionKey *, float, VxVector &, const CKBezierKeyFlags &, VxVector &, VxVector &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKBezierPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, const VxVector &in pos, const CKBezierKeyFlags &in flags)", asFUNCTIONPR([](CKBezierPositionKey *self, float time, VxVector &pos, const CKBezierKeyFlags &flags) { new (self) CKBezierPositionKey(time, pos, flags); }, (CKBezierPositionKey *, float, VxVector &, const CKBezierKeyFlags &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKBezierPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, const VxVector &in pos, const VxVector &in input, const VxVector &in output)", asFUNCTIONPR([](CKBezierPositionKey *self, float time, VxVector &pos, VxVector &in, VxVector &out) { new (self) CKBezierPositionKey(time, pos, in, out); }, (CKBezierPositionKey *, float, VxVector &, VxVector &, VxVector &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKBezierPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, VxVector &in pos, const CKBezierKeyFlags &in flags, VxVector &in input, VxVector &in output)", asFUNCTIONPR([](CKBezierPositionKey *self, float time, VxVector &pos, const CKBezierKeyFlags &flags, VxVector &in, VxVector &out) { new (self) CKBezierPositionKey(time, pos, flags, in, out); }, (CKBezierPositionKey *, float, VxVector &, const CKBezierKeyFlags &, VxVector &, VxVector &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKBezierPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, VxVector &in pos, const CKBezierKeyFlags &in flags)", asFUNCTIONPR([](CKBezierPositionKey *self, float time, VxVector &pos, const CKBezierKeyFlags &flags) { new (self) CKBezierPositionKey(time, pos, flags); }, (CKBezierPositionKey *, float, VxVector &, const CKBezierKeyFlags &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKBezierPositionKey", asBEHAVE_CONSTRUCT, "void f(float time, VxVector &in pos, VxVector &in input, VxVector &in output)", asFUNCTIONPR([](CKBezierPositionKey *self, float time, VxVector &pos, VxVector &in, VxVector &out) { new (self) CKBezierPositionKey(time, pos, in, out); }, (CKBezierPositionKey *, float, VxVector &, VxVector &, VxVector &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKBezierPositionKey", "CKBezierKeyFlags &GetFlags()", asMETHODPR(CKBezierPositionKey, GetFlags, (), CKBezierKeyFlags &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -3039,7 +3039,7 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKMorphKey", "VxVector &PosArray", asOFFSET(CKMorphKey, PosArray)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKMorphKey", "VxCompressedVector &NormArray", asOFFSET(CKMorphKey, NormArray)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMorphKey", "bool Compare(CKMorphKey &in key, int nbVertex, float threshold) const", asFUNCTIONPR([](CKMorphKey *self, CKMorphKey &key, int nbVertex, float threshold) -> bool { return self->Compare(key, nbVertex, threshold); }, (CKMorphKey *, CKMorphKey &, int, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphKey", "bool Compare(CKMorphKey &in key, int nbVertex, float threshold)", asFUNCTIONPR([](CKMorphKey *self, CKMorphKey &key, int nbVertex, float threshold) -> bool { return self->Compare(key, nbVertex, threshold); }, (CKMorphKey *, CKMorphKey &, int, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // CKAnimController
     RegisterCKAnimControllerMembers<CKAnimController>(engine, "CKAnimController");

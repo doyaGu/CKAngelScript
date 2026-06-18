@@ -1512,6 +1512,112 @@ bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &erro
     return true;
 }
 
+bool RunCKBezierPositionKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKBezierPositionKey script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *keyType = engine->GetTypeInfoByDecl("CKKey");
+    asITypeInfo *positionKeyType = engine->GetTypeInfoByDecl("CKPositionKey");
+    asITypeInfo *bezierKeyType = engine->GetTypeInfoByDecl("CKBezierPositionKey");
+    if (!keyType || !positionKeyType || !bezierKeyType) {
+        error = "CKBezierPositionKey self-test could not find key types.";
+        return false;
+    }
+    if (keyType->GetMethodByDecl("CKBezierPositionKey opConv() const") != nullptr ||
+        positionKeyType->GetMethodByDecl("CKBezierPositionKey opConv() const") != nullptr) {
+        error = "CKBezierPositionKey self-test found stale unsafe base-to-derived value conversion.";
+        return false;
+    }
+    if (bezierKeyType->GetMethodByDecl("CKKey opImplConv() const") == nullptr ||
+        bezierKeyType->GetMethodByDecl("CKPositionKey opImplConv() const") == nullptr) {
+        error = "CKBezierPositionKey self-test could not find safe derived-to-base value conversions.";
+        return false;
+    }
+    if (bezierKeyType->GetMethodByDecl("float GetTime()") == nullptr ||
+        bezierKeyType->GetMethodByDecl("const VxVector& GetPosition()") == nullptr ||
+        bezierKeyType->GetMethodByDecl("bool Compare(CKBezierPositionKey&in key, float threshold)") == nullptr) {
+        error = "CKBezierPositionKey self-test could not find expected non-const SDK declarations.";
+        return false;
+    }
+    if (bezierKeyType->GetMethodByDecl("float GetTime() const") != nullptr ||
+        bezierKeyType->GetMethodByDecl("const VxVector& GetPosition() const") != nullptr ||
+        bezierKeyType->GetMethodByDecl("bool Compare(CKBezierPositionKey&in key, float threshold) const") != nullptr) {
+        error = "CKBezierPositionKey self-test found stale const SDK declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBezierPositionKeySelfTest";
+    const char *source =
+        "int ProbeBezierPositionKey() {\n"
+        "  VxVector pos(1.0f, 2.0f, 3.0f);\n"
+        "  VxVector input(0.1f, 0.2f, 0.3f);\n"
+        "  VxVector output(0.4f, 0.5f, 0.6f);\n"
+        "  CKBezierKeyFlags flags;\n"
+        "  flags.SetInTangentMode(BEZIER_KEY_TANGENTS);\n"
+        "  flags.SetOutTangentMode(BEZIER_KEY_TANGENTS);\n"
+        "  CKBezierPositionKey key(2.5f, pos, flags, input, output);\n"
+        "  if (key.GetTime() != 2.5f) return 1;\n"
+        "  VxVector got = key.GetPosition();\n"
+        "  if (got.x != 1.0f || got.y != 2.0f || got.z != 3.0f) return 2;\n"
+        "  if (key.Flags.GetInTangentMode() != BEZIER_KEY_TANGENTS) return 3;\n"
+        "  CKBezierPositionKey copy(key);\n"
+        "  if (!key.Compare(copy, 0.0f)) return 4;\n"
+        "  copy.Out.x = 9.0f;\n"
+        "  if (key.Compare(copy, 0.0f)) return 5;\n"
+        "  CKBezierPositionKey assigned;\n"
+        "  assigned = key;\n"
+        "  if (!key.Compare(assigned, 0.0f)) return 6;\n"
+        "  CKPositionKey positionBase = key;\n"
+        "  if (positionBase.GetTime() != 2.5f) return 7;\n"
+        "  VxVector basePos = positionBase.GetPosition();\n"
+        "  if (basePos.x != 1.0f || basePos.y != 2.0f || basePos.z != 3.0f) return 8;\n"
+        "  CKKey baseKey = key;\n"
+        "  if (baseKey.GetTime() != 2.5f) return 9;\n"
+        "  CKKey baseFromPosition = positionBase;\n"
+        "  if (baseFromPosition.GetTime() != 2.5f) return 10;\n"
+        "  key.SetTime(3.5f);\n"
+        "  if (key.GetTime() != 3.5f) return 11;\n"
+        "  VxVector moved(7.0f, 8.0f, 9.0f);\n"
+        "  key.SetPosition(moved);\n"
+        "  got = key.GetPosition();\n"
+        "  if (got.x != 7.0f || got.y != 8.0f || got.z != 9.0f) return 12;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBezierPositionKey self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-bezier-position-key-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBezierPositionKey self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBezierPositionKey self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeBezierPositionKey()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBezierPositionKey self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKBezierPositionKey probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKParameterTypeDesc script self-test requires CKContext and AngelScript engine.";
@@ -1679,6 +1785,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKDependenciesScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKBezierPositionKeyScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeManagerScriptSelfTest(context, engine, error)) {

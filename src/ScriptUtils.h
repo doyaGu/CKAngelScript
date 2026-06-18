@@ -15,17 +15,17 @@ B *ForceCast(A *a) {
     return (B *) a;
 }
 
+template<typename D, typename B>
+B CopyBaseValue(D *value) {
+    if (!value) return B();
+    return static_cast<B>(*value);
+}
+
 template <typename D, typename B>
-static void RegisterClassValueCast(asIScriptEngine *engine, const char *derived, const char *base) {
-    int r = 0;
-
-    std::string decl = derived;
-    decl.append(" opConv() const");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((ForceCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
-
-    decl = base;
+static int RegisterClassValueCast(asIScriptEngine *engine, const char *derived, const char *base) {
+    std::string decl = base;
     decl.append(" opImplConv() const");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ForceCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    return engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CopyBaseValue<D, B>), (D *), B), asCALL_CDECL_OBJLAST);
 }
 
 template <typename D, typename B>
