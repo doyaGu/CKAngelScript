@@ -2070,6 +2070,58 @@ bool RunCKMorphKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     return ok;
 }
 
+bool RunCKAnimControllerScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKAnimController script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *controllerType = engine->GetTypeInfoByDecl("CKAnimController");
+    if (!controllerType) {
+        error = "CKAnimController self-test could not find the registered type.";
+        return false;
+    }
+    if (controllerType->GetMethodByDecl("CKKey& GetKey(int index)") == nullptr ||
+        controllerType->GetMethodByDecl("bool Compare(CKAnimController@ control, float threshold = 0.0)") == nullptr ||
+        controllerType->GetMethodByDecl("bool Clone(CKAnimController@ control)") == nullptr) {
+        error = "CKAnimController self-test could not find expected guarded methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKAnimControllerSelfTest";
+    const char *source =
+        "void ProbeAnimControllerSurface(CKAnimController@ controller, CKKey &in key, NativePointer result) {\n"
+        "  if (controller is null) return;\n"
+        "  controller.AddKey(key);\n"
+        "  CKKey got = controller.GetKey(0);\n"
+        "  controller.Compare(controller);\n"
+        "  controller.Clone(controller);\n"
+        "  controller.Evaluate(0.0f, result);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKAnimController self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-anim-controller-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKAnimController self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKAnimController self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKMorphControllerScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKMorphController script self-test requires an AngelScript engine.";
@@ -2419,6 +2471,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKMorphKeyScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKAnimControllerScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKMorphControllerScriptSelfTest(engine, error)) {

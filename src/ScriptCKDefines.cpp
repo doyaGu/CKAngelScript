@@ -2958,6 +2958,66 @@ static void RegisterCKPositionKeyMembers(asIScriptEngine *engine, const char *na
     }
 }
 
+static CKKey &InvalidCKKey(const char *message) {
+    static thread_local CKKey dummy;
+    dummy = CKKey();
+    if (message) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException(message);
+        }
+    }
+    return dummy;
+}
+
+template<typename T>
+static CKKey &GetCKAnimControllerKey(T *self, int index) {
+    if (!self) {
+        return InvalidCKKey("CKAnimController.GetKey called with a null controller.");
+    }
+    if (index < 0 || index >= self->GetKeyCount()) {
+        return InvalidCKKey("CKAnimController.GetKey index out of range.");
+    }
+    CKKey *key = self->GetKey(index);
+    if (!key) {
+        return InvalidCKKey("CKAnimController.GetKey returned a null native key.");
+    }
+    return *key;
+}
+
+template<typename T>
+static bool CompareCKAnimController(T *self, CKAnimController *control, float threshold) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAnimController.Compare called with a null controller.");
+        }
+        return false;
+    }
+    if (!control) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAnimController.Compare requires a non-null controller.");
+        }
+        return false;
+    }
+    return self->Compare(control, threshold) != FALSE;
+}
+
+template<typename T>
+static bool CloneCKAnimController(T *self, CKAnimController *control) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAnimController.Clone called with a null controller.");
+        }
+        return false;
+    }
+    if (!control) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKAnimController.Clone requires a non-null controller.");
+        }
+        return false;
+    }
+    return self->Clone(control) != FALSE;
+}
+
 template<typename T>
 void RegisterCKAnimControllerMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
@@ -2965,13 +3025,13 @@ void RegisterCKAnimControllerMembers(asIScriptEngine *engine, const char *name) 
     if constexpr (!std::is_same_v<T, CKMorphController>) {
         r = engine->RegisterObjectMethod(name, "bool Evaluate(float timeStep, NativePointer res)", asFUNCTIONPR([](T *self, float timeStep, NativePointer res) -> bool { return self->Evaluate(timeStep, res.Get()); }, (T *, float, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
         r = engine->RegisterObjectMethod(name, "int AddKey(CKKey &in key)", asMETHODPR(T, AddKey, (CKKey *), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-        r = engine->RegisterObjectMethod(name, "CKKey &GetKey(int index)", asMETHODPR(T, GetKey, (int), CKKey *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "CKKey &GetKey(int index)", asFUNCTIONPR(GetCKAnimControllerKey<T>, (T *, int), CKKey &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     }
     r = engine->RegisterObjectMethod(name, "void RemoveKey(int index)", asMETHODPR(T, RemoveKey, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int DumpKeysTo(NativePointer buffer)", asFUNCTIONPR([](T *self, NativePointer buffer) -> int { return self->DumpKeysTo(buffer.Get()); }, (T *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int ReadKeysFrom(NativePointer buffer)", asFUNCTIONPR([](T *self, NativePointer buffer) -> int { return self->ReadKeysFrom(buffer.Get()); }, (T *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool Compare(CKAnimController@ control, float threshold = 0.0)", asFUNCTIONPR([](T *self, CKAnimController *control, float threshold) -> bool { return self->Compare(control, threshold); }, (T *, CKAnimController *, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool Clone(CKAnimController@ control)", asFUNCTIONPR([](T *self, CKAnimController *control) -> bool { return self->Clone(control); }, (T *, CKAnimController *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool Compare(CKAnimController@ control, float threshold = 0.0)", asFUNCTIONPR(CompareCKAnimController<T>, (T *, CKAnimController *, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool Clone(CKAnimController@ control)", asFUNCTIONPR(CloneCKAnimController<T>, (T *, CKAnimController *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "int GetKeyCount()", asMETHODPR(T, GetKeyCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKDWORD GetType()", asMETHODPR(T, GetType, (), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
