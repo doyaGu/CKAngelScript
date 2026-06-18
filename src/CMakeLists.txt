@@ -122,6 +122,11 @@ if (CKAS_BUILD_SELF_TESTS)
             ScriptAsyncSelfTest.cpp
             ScriptBridgeSelfTest.cpp
     )
+    if (CKAS_ENABLE_DYNCALL)
+        list(APPEND CKAS_SOURCES
+                ScriptDynLoadSelfTest.cpp
+        )
+    endif ()
 endif ()
 
 if (CKAS_ENABLE_API_EXPORT)

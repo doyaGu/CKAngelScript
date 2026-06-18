@@ -9,6 +9,10 @@
 #define CKAS_ENABLE_API_EXPORT 0
 #endif
 
+#ifndef CKAS_ENABLE_DYNCALL
+#define CKAS_ENABLE_DYNCALL 0
+#endif
+
 class CKContext;
 class ScriptManager;
 class asIScriptEngine;
@@ -28,6 +32,9 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
 bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptNativeMemorySelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error);
+#if CKAS_ENABLE_DYNCALL
+bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error);
+#endif
 
 namespace ScriptRuntimeMetadata {
 bool RunScriptRuntimeMetadataSelfTest(std::string &error);

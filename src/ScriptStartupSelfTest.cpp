@@ -144,6 +144,17 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
         return CKERR_INVALIDOPERATION;
     }
 
+#if CKAS_ENABLE_DYNCALL
+    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "dynload", std::string());
+    if (!RunScriptDynLoadSelfTest(manager ? manager->GetScriptEngine() : nullptr, error)) {
+        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+                                                             "dynload",
+                                                             "DynLoad",
+                                                             error);
+        return CKERR_INVALIDOPERATION;
+    }
+#endif
+
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "vx-bindings", std::string());
     if (!RunScriptVxBindingSelfTest(manager ? manager->GetScriptEngine() : nullptr, error)) {
         ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
