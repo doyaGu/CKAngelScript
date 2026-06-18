@@ -819,6 +819,69 @@ bool RunCKDependenciesScriptSelfTest(asIScriptEngine *engine, std::string &error
     return true;
 }
 
+bool RunCKTimeProfilerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKTimeProfiler script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKTimeProfilerSelfTest";
+    const char *source =
+        "int ProbeCKTimeProfiler(CKContext@ ctx) {\n"
+        "  CKTimeProfiler profiler(\"ckas-time-profiler\", ctx, -4);\n"
+        "  string longName = \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\";\n"
+        "  profiler(longName);\n"
+        "  profiler(\"second\");\n"
+        "  string dump;\n"
+        "  profiler.Dump(dump, \" / \");\n"
+        "  if (dump.findFirst(\"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV\") < 0) return 1;\n"
+        "  if (dump.findFirst(\"WXYZ0123456789\") >= 0) return 2;\n"
+        "  if (dump.findFirst(\"second\") < 0) return 3;\n"
+        "  if (dump.findFirst(\" / \") < 0) return 4;\n"
+        "  profiler.Reset();\n"
+        "  profiler.Dump(dump);\n"
+        "  if (dump.length() != 0) return 5;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKTimeProfilerNullContext() {\n"
+        "  CKTimeProfiler profiler(\"bad\", null);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKTimeProfiler self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-time-profiler-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTimeProfiler self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTimeProfiler self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKTimeProfiler(CKContext@)");
+    asIScriptFunction *nullContext = module->GetFunctionByDecl("int ProbeCKTimeProfilerNullContext()");
+    if (!probe || !nullContext) {
+        engine->DiscardModule(moduleName);
+        error = "CKTimeProfiler self-test functions were not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKTimeProfiler probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, nullContext, true, "CKTimeProfiler null-context probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKAttributeManager script self-test requires CKContext and AngelScript engine.";
@@ -2934,6 +2997,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKDependenciesScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKTimeProfilerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKKeyScriptSelfTest(engine, error)) {

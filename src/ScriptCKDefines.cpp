@@ -1,10 +1,13 @@
 #include "ScriptCKDefines.h"
 
+#include <algorithm>
 #include <cstring>
 #include <mutex>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "CKAll.h"
 
@@ -2306,16 +2309,178 @@ void RegisterCKAttributeCategoryDesc(asIScriptEngine *engine) {
 
 // CKTimeProfiler
 
+namespace {
+
+constexpr size_t kCKTimeProfilerMaxMarkNameLength = 48;
+constexpr size_t kCKTimeProfilerMaxDumpBuffer = 64 * 1024;
+
+struct CKTimeProfilerScriptState {
+    CKSTRING Title = nullptr;
+    std::vector<CKSTRING> Marks;
+    bool Constructed = false;
+};
+
+std::mutex g_CKTimeProfilerMutex;
+std::unordered_map<CKTimeProfiler *, CKTimeProfilerScriptState> g_CKTimeProfilerStates;
+
+static void SetCKTimeProfilerException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+static CKSTRING DuplicateCKTimeProfilerString(const std::string &value, size_t maxLength = 0) {
+    std::string copy = value;
+    if (maxLength > 0 && copy.length() > maxLength) {
+        copy.resize(maxLength);
+    }
+    return CKStrdup(const_cast<CKSTRING>(copy.c_str()));
+}
+
+static void ReleaseCKTimeProfilerMarkStorage(CKTimeProfilerScriptState &state) {
+    for (CKSTRING mark : state.Marks) {
+        CKDeletePointer(mark);
+    }
+    state.Marks.clear();
+}
+
+static void ConstructCKTimeProfiler(const std::string &title,
+                                    CKContext *context,
+                                    int startingCount,
+                                    CKTimeProfiler *self) {
+    if (!self) {
+        return;
+    }
+
+    if (!context) {
+        SetCKTimeProfilerException("CKTimeProfiler requires a non-null CKContext.");
+        std::lock_guard<std::mutex> lock(g_CKTimeProfilerMutex);
+        g_CKTimeProfilerStates[self] = CKTimeProfilerScriptState{};
+        return;
+    }
+
+    const int safeStartingCount = std::max(0, startingCount);
+    CKSTRING titleCopy = DuplicateCKTimeProfilerString(title);
+    new (self) CKTimeProfiler(titleCopy ? titleCopy : const_cast<CKSTRING>(""), context, safeStartingCount);
+
+    CKTimeProfilerScriptState state;
+    state.Title = titleCopy;
+    state.Constructed = true;
+
+    std::lock_guard<std::mutex> lock(g_CKTimeProfilerMutex);
+    auto it = g_CKTimeProfilerStates.find(self);
+    if (it != g_CKTimeProfilerStates.end()) {
+        ReleaseCKTimeProfilerMarkStorage(it->second);
+        CKDeletePointer(it->second.Title);
+        g_CKTimeProfilerStates.erase(it);
+    }
+    g_CKTimeProfilerStates.emplace(self, std::move(state));
+}
+
+static void DestructCKTimeProfiler(CKTimeProfiler *self) {
+    if (!self) {
+        return;
+    }
+
+    CKTimeProfilerScriptState state;
+    {
+        std::lock_guard<std::mutex> lock(g_CKTimeProfilerMutex);
+        auto it = g_CKTimeProfilerStates.find(self);
+        if (it == g_CKTimeProfilerStates.end()) {
+            return;
+        }
+        state = std::move(it->second);
+        g_CKTimeProfilerStates.erase(it);
+    }
+
+    if (state.Constructed) {
+        // CKTimeProfiler::~CKTimeProfiler dumps into a fixed 512-byte buffer. Clear
+        // script-owned marks first so destruction cannot overflow that SDK buffer.
+        self->Reset();
+        self->~CKTimeProfiler();
+    }
+
+    ReleaseCKTimeProfilerMarkStorage(state);
+    CKDeletePointer(state.Title);
+}
+
+static bool IsCKTimeProfilerConstructed(CKTimeProfiler *self) {
+    std::lock_guard<std::mutex> lock(g_CKTimeProfilerMutex);
+    auto it = g_CKTimeProfilerStates.find(self);
+    return it != g_CKTimeProfilerStates.end() && it->second.Constructed;
+}
+
+static size_t GetCKTimeProfilerMarkCount(CKTimeProfiler *self) {
+    std::lock_guard<std::mutex> lock(g_CKTimeProfilerMutex);
+    auto it = g_CKTimeProfilerStates.find(self);
+    return it != g_CKTimeProfilerStates.end() ? it->second.Marks.size() : 0;
+}
+
+static void ResetCKTimeProfiler(CKTimeProfiler *self) {
+    if (!IsCKTimeProfilerConstructed(self)) {
+        SetCKTimeProfilerException("CKTimeProfiler is not constructed.");
+        return;
+    }
+
+    self->Reset();
+
+    std::lock_guard<std::mutex> lock(g_CKTimeProfilerMutex);
+    auto it = g_CKTimeProfilerStates.find(self);
+    if (it != g_CKTimeProfilerStates.end()) {
+        ReleaseCKTimeProfilerMarkStorage(it->second);
+    }
+}
+
+static void MarkCKTimeProfiler(CKTimeProfiler *self, const std::string &name) {
+    if (!IsCKTimeProfilerConstructed(self)) {
+        SetCKTimeProfilerException("CKTimeProfiler is not constructed.");
+        return;
+    }
+
+    CKSTRING markName = DuplicateCKTimeProfilerString(name, kCKTimeProfilerMaxMarkNameLength);
+    (*self)(markName ? markName : const_cast<CKSTRING>(""));
+
+    std::lock_guard<std::mutex> lock(g_CKTimeProfilerMutex);
+    auto it = g_CKTimeProfilerStates.find(self);
+    if (it != g_CKTimeProfilerStates.end()) {
+        it->second.Marks.push_back(markName);
+    } else {
+        CKDeletePointer(markName);
+    }
+}
+
+static void DumpCKTimeProfiler(CKTimeProfiler *self, std::string &buffer, const std::string &separator) {
+    buffer.clear();
+    if (!IsCKTimeProfilerConstructed(self)) {
+        SetCKTimeProfilerException("CKTimeProfiler is not constructed.");
+        return;
+    }
+
+    const size_t markCount = GetCKTimeProfilerMarkCount(self);
+    const size_t required = 64 + markCount * (64 + separator.length());
+    if (required > kCKTimeProfilerMaxDumpBuffer) {
+        SetCKTimeProfilerException("CKTimeProfiler dump output is too large.");
+        return;
+    }
+
+    std::vector<char> output(std::max<size_t>(required, 1), '\0');
+    std::string separatorCopy = separator;
+    self->Dump(output.data(), const_cast<char *>(separatorCopy.c_str()));
+    buffer.assign(output.data());
+}
+
+} // namespace
+
 void RegisterCKTimeProfiler(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectBehaviour("CKTimeProfiler", asBEHAVE_CONSTRUCT, "void f(const string &in title, CKContext@ context, int startingCount = 4)", asFUNCTIONPR([](const std::string &iTitle, CKContext *iContext, int iStartingCount, CKTimeProfiler *self) { new(self) CKTimeProfiler(iTitle.c_str(), iContext, iStartingCount); }, (const std::string &, CKContext *, int, CKTimeProfiler *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKTimeProfiler", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKTimeProfiler *self) { self->~CKTimeProfiler(); }, (CKTimeProfiler *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKTimeProfiler", asBEHAVE_CONSTRUCT, "void f(const string &in title, CKContext@ context, int startingCount = 4)", asFUNCTION(ConstructCKTimeProfiler), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKTimeProfiler", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructCKTimeProfiler), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKTimeProfiler", "void opCall(const string &in str)", asFUNCTIONPR([](CKTimeProfiler *self, const std::string &str) { (*self)(str.c_str()); }, (CKTimeProfiler *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKTimeProfiler", "void opCall(const string &in str)", asFUNCTION(MarkCKTimeProfiler), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKTimeProfiler", "void Reset()", asMETHODPR(CKTimeProfiler, Reset, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKTimeProfiler", "void Dump(string &out buffer, const string &in separator = \" | \")", asFUNCTIONPR([](CKTimeProfiler *self, std::string &buffer, const std::string &separator) { self->Dump(const_cast<char*>(buffer.c_str()), const_cast<char*>(separator.c_str())); }, (CKTimeProfiler *, std::string &, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKTimeProfiler", "void Reset()", asFUNCTION(ResetCKTimeProfiler), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKTimeProfiler", "void Dump(string &out buffer, const string &in separator = \" | \")", asFUNCTION(DumpCKTimeProfiler), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKMessage
