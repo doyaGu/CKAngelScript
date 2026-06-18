@@ -841,7 +841,7 @@ static void RegisterDynCall(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("DynCall", "DynCall &Mode(int mode)", asMETHOD(DynCall, Mode), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("DynCall", "DynCall &BeginCallAggr(const DynAggregate&)", asMETHODPR(DynCall, BeginCallAggr, (const DynAggregate &), DynCall &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("DynCall", "DynCall &BeginCallAggr(const DynAggregate &in aggr)", asMETHODPR(DynCall, BeginCallAggr, (const DynAggregate &), DynCall &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("DynCall", "DynCall &ArgBool(bool value)", asFUNCTIONPR([](DynCall *self, bool value) -> DynCall & { return self->ArgBool(value); }, (DynCall *, bool), DynCall &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynCall", "DynCall &ArgChar(int8 value)", asMETHODPR(DynCall, ArgChar, (char), DynCall &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -866,7 +866,7 @@ static void RegisterDynCall(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("DynCall", "double CallDouble(NativePointer funcptr)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr) { return self->CallDouble(funcptr.Get()); }, (DynCall *, NativePointer), double), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynCall", "NativePointer CallPointer(NativePointer funcptr)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr) { return NativePointer(self->CallPointer(funcptr.Get())); }, (DynCall *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynCall", "string CallString(NativePointer funcptr)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr)  { return self->CallString(funcptr.Get()); }, (DynCall *, NativePointer), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("DynCall", "NativePointer CallAggregate(NativePointer, const DynAggregate &, NativePointer)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr, const DynAggregate &aggr, NativePointer ret) { return NativePointer(self->CallAggregate(funcptr.Get(), aggr, ret.Get())); }, (DynCall *, NativePointer, const DynAggregate &, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("DynCall", "NativePointer CallAggregate(NativePointer funcptr, const DynAggregate &in aggr, NativePointer ret)", asFUNCTIONPR([](DynCall *self, NativePointer funcptr, const DynAggregate &aggr, NativePointer ret) { return NativePointer(self->CallAggregate(funcptr.Get(), aggr, ret.Get())); }, (DynCall *, NativePointer, const DynAggregate &, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("DynCall", "int GetError() const", asFUNCTIONPR([](const DynCall *self) -> int { return self->GetError(); }, (const DynCall *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }

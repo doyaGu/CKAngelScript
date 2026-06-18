@@ -51,8 +51,29 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         return false;
     }
 
+    asITypeInfo *dynCallType = engine->GetTypeInfoByDecl("DynCall");
+    if (!dynCallType) {
+        error = "DynLoad self-test could not resolve DynCall type.";
+        return false;
+    }
+    if (!dynCallType->GetMethodByDecl("DynCall& BeginCallAggr(const DynAggregate&in)") ||
+        dynCallType->GetMethodByDecl("DynCall& BeginCallAggr(const DynAggregate&inout)")) {
+        error = "DynCall BeginCallAggr declaration direction is not const &in.";
+        return false;
+    }
+    if (!dynCallType->GetMethodByDecl("NativePointer CallAggregate(NativePointer, const DynAggregate&in, NativePointer)") ||
+        dynCallType->GetMethodByDecl("NativePointer CallAggregate(NativePointer, const DynAggregate&inout, NativePointer)")) {
+        error = "DynCall CallAggregate declaration direction is not const &in.";
+        return false;
+    }
+
     constexpr const char *moduleName = "__CKAS_DynLoadSelfTest";
     const std::string source =
+        "NativePointer FindExport(DynLibrary@ lib, const string &in name) {\n"
+        "  NativePointer symbol = lib.FindSymbol(name);\n"
+        "  if (symbol.IsNull()) symbol = lib.FindSymbol(\"_\" + name);\n"
+        "  return symbol;\n"
+        "}\n"
         "int RunDynSymbols() {\n"
         "  DynSymbols@ symbols = DynSymbols();\n"
         "  if (symbols is null) return 1;\n"
@@ -72,8 +93,7 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         "  if (!lib.Load(\"" + EscapeScriptString(modulePath) + "\")) return 3;\n"
         "  if (!lib.IsLoaded()) return 4;\n"
         "  if (lib.GetLibraryPath() == \"\") return 5;\n"
-        "  NativePointer version = lib.FindSymbol(\"CKAngelScriptGetApiVersion\");\n"
-        "  if (version.IsNull()) version = lib.FindSymbol(\"_CKAngelScriptGetApiVersion\");\n"
+        "  NativePointer version = FindExport(lib, \"CKAngelScriptGetApiVersion\");\n"
         "  if (version.IsNull()) return 6;\n"
         "  @lib = null;\n"
         "  DynCall@ call = DynCall();\n"
@@ -81,6 +101,24 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         "  int apiVersion = call.CallInt(version);\n"
         "  if (call.GetError() != DC_ERROR_NONE) return 8;\n"
         "  return apiVersion == " + std::to_string(CKAS_API_VERSION) + " ? 0 : 9;\n"
+        "}\n"
+        "int RunDynCall() {\n"
+        "  DynLibrary@ lib = DynLibrary();\n"
+        "  if (lib is null) return 1;\n"
+        "  if (!lib.Load(\"" + EscapeScriptString(modulePath) + "\")) return 2;\n"
+        "  NativePointer hasFeature = FindExport(lib, \"CKAngelScriptHasFeature\");\n"
+        "  if (hasFeature.IsNull()) return 3;\n"
+        "  NativePointer statusName = FindExport(lib, \"CKAngelScriptGetStatusName\");\n"
+        "  if (statusName.IsNull()) return 4;\n"
+        "  DynCall@ call = DynCall(4096);\n"
+        "  if (call is null) return 5;\n"
+        "  call.Mode(DC_CALL_C_DEFAULT).Reset().ArgInt(12);\n"
+        "  if (call.CallInt(hasFeature) == 0) return 6;\n"
+        "  if (call.GetError() != DC_ERROR_NONE) return 7;\n"
+        "  string name = call.Reset().ArgInt(0).CallString(statusName);\n"
+        "  if (call.GetError() != DC_ERROR_NONE) return 8;\n"
+        "  if (name != \"CKAS_OK\") return 9;\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -101,79 +139,46 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         return false;
     }
 
-    asIScriptFunction *function = module->GetFunctionByDecl("int RunDynSymbols()");
-    if (!function) {
-        error = "DynLoad DynSymbols self-test function was not compiled.";
-        return false;
-    }
-
-    asIScriptContext *context = engine->RequestContext();
-    if (!context) {
-        error = "DynLoad self-test could not create execution context.";
-        return false;
-    }
-
-    r = context->Prepare(function);
-    if (r >= 0) {
-        r = context->Execute();
-    }
-
-    bool ok = false;
-    if (r == asEXECUTION_FINISHED) {
-        const int returnCode = static_cast<int>(context->GetReturnDWord());
-        if (returnCode == 0) {
-            ok = true;
-        } else {
-            error = "DynLoad self-test returned " + std::to_string(returnCode) + ".";
+    auto executeIntFunction = [&](const char *decl, const char *label) -> bool {
+        asIScriptFunction *function = module->GetFunctionByDecl(decl);
+        if (!function) {
+            error = std::string("DynLoad ") + label + " self-test function was not compiled.";
+            return false;
         }
-    } else if (r == asEXECUTION_EXCEPTION) {
-        const char *exception = context->GetExceptionString();
-        error = "DynLoad self-test exception: ";
-        error += exception && exception[0] ? exception : "<empty>";
-    } else {
-        error = "DynLoad self-test execution failed with code " + std::to_string(r) + ".";
-    }
 
-    context->Unprepare();
-    engine->ReturnContext(context);
-    if (!ok) {
-        return false;
-    }
-
-    function = module->GetFunctionByDecl("int RunDynLibrary()");
-    if (!function) {
-        error = "DynLoad DynLibrary self-test function was not compiled.";
-        return false;
-    }
-
-    context = engine->RequestContext();
-    if (!context) {
-        error = "DynLoad self-test could not create DynLibrary execution context.";
-        return false;
-    }
-
-    r = context->Prepare(function);
-    if (r >= 0) {
-        r = context->Execute();
-    }
-
-    ok = false;
-    if (r == asEXECUTION_FINISHED) {
-        const int returnCode = static_cast<int>(context->GetReturnDWord());
-        if (returnCode == 0) {
-            ok = true;
-        } else {
-            error = "DynLibrary self-test returned " + std::to_string(returnCode) + ".";
+        asIScriptContext *context = engine->RequestContext();
+        if (!context) {
+            error = std::string("DynLoad self-test could not create ") + label + " execution context.";
+            return false;
         }
-    } else if (r == asEXECUTION_EXCEPTION) {
-        const char *exception = context->GetExceptionString();
-        error = "DynLibrary self-test exception: ";
-        error += exception && exception[0] ? exception : "<empty>";
-    } else {
-        error = "DynLibrary self-test execution failed with code " + std::to_string(r) + ".";
-    }
 
-    context->Unprepare();
-    engine->ReturnContext(context);
-    return ok;
+        int exec = context->Prepare(function);
+        if (exec >= 0) {
+            exec = context->Execute();
+        }
+
+        bool ok = false;
+        if (exec == asEXECUTION_FINISHED) {
+            const int returnCode = static_cast<int>(context->GetReturnDWord());
+            if (returnCode == 0) {
+                ok = true;
+            } else {
+                error = std::string(label) + " self-test returned " + std::to_string(returnCode) + ".";
+            }
+        } else if (exec == asEXECUTION_EXCEPTION) {
+            const char *exception = context->GetExceptionString();
+            error = std::string(label) + " self-test exception: ";
+            error += exception && exception[0] ? exception : "<empty>";
+        } else {
+            error = std::string(label) + " self-test execution failed with code " + std::to_string(exec) + ".";
+        }
+
+        context->Unprepare();
+        engine->ReturnContext(context);
+        return ok;
+    };
+
+    return executeIntFunction("int RunDynSymbols()", "DynSymbols") &&
+           executeIntFunction("int RunDynLibrary()", "DynLibrary") &&
+           executeIntFunction("int RunDynCall()", "DynCall");
 }
