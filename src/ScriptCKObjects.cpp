@@ -335,10 +335,17 @@ static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
 
     auto *self = static_cast<CKParameter *>(gen->GetObject());
     const int typeId = gen->GetArgTypeId(0);
-    void *buf = *static_cast<void **>(gen->GetAddressOfArg(0));
+    void *buf = gen->GetArgAddress(0);
     bool update = gen->GetArgByte(1);
 
     CKERROR err = CK_OK;
+
+    if (!buf) {
+        if (ctx)
+            ctx->SetException("CKParameter.GetValue requires a valid output reference");
+        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+        return;
+    }
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         if (ctx)
@@ -394,9 +401,16 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
 
     auto *self = static_cast<CKParameter *>(gen->GetObject());
     const int typeId = gen->GetArgTypeId(0);
-    void *buf = *static_cast<void **>(gen->GetAddressOfArg(0));
+    void *buf = gen->GetArgAddress(0);
 
     CKERROR err = CK_OK;
+
+    if (!buf) {
+        if (ctx)
+            ctx->SetException("CKParameter.SetValue requires a valid input reference");
+        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
+        return;
+    }
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         if (ctx)

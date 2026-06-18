@@ -3327,6 +3327,15 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (genericValue != expected) return 7;\n"
         "  return 0;\n"
         "}\n"
+        "int ProbeCKParameterGenericIntValue(CKParameterLocal@ local) {\n"
+        "  if (local is null) return 2;\n"
+        "  int source = 12345;\n"
+        "  if (local.SetValue(source) != CK_OK) return 3;\n"
+        "  int value = 0;\n"
+        "  if (local.GetValue(value) != CK_OK) return 4;\n"
+        "  if (value != source) return 5;\n"
+        "  return 0;\n"
+        "}\n"
         "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
         "  local.CopyValue(null);\n"
         "}\n"
@@ -3356,9 +3365,10 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKParameterStringValue(CKParameter@, CKParameterOut@, CKParameterLocal@)");
     asIScriptFunction *genericString = module->GetFunctionByDecl("int ProbeCKParameterGenericStringValue(CKParameterLocal@)");
     asIScriptFunction *setString = module->GetFunctionByDecl("int ProbeCKParameterSetStringValue(CKParameterLocal@)");
+    asIScriptFunction *genericInt = module->GetFunctionByDecl("int ProbeCKParameterGenericIntValue(CKParameterLocal@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
-    if (!probe || !genericString || !setString || !copyValueNull || !compatibleNull) {
+    if (!probe || !genericString || !setString || !genericInt || !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -3375,10 +3385,18 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     if (!ok) {
         error = "CKParameter generic string probe could not initialize the local string parameter.";
     } else {
-        ok = ExecuteCKParameterLocalProbe(engine, genericString, local, false, "CKParameter generic string probe", error) &&
+        CKParameterLocal *intLocal = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterGenericInt"), CKPGUID_INT, TRUE);
+        if (!intLocal) {
+            ok = false;
+            error = "CKParameter generic int probe could not create a local int parameter.";
+        } else {
+            ok = ExecuteCKParameterLocalProbe(engine, genericString, local, false, "CKParameter generic string probe", error) &&
              ExecuteCKParameterLocalProbe(engine, setString, local, false, "CKParameter SetStringValue probe", error) &&
+             ExecuteCKParameterLocalProbe(engine, genericInt, intLocal, false, "CKParameter generic int probe", error) &&
              ExecuteCKParameterLocalProbe(engine, copyValueNull, local, true, "CKParameter CopyValue null probe", error) &&
              ExecuteCKParameterLocalProbe(engine, compatibleNull, local, true, "CKParameter IsCompatibleWith null probe", error);
+            context->DestroyObject(intLocal);
+        }
     }
     context->DestroyObject(local);
 
