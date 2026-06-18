@@ -873,6 +873,18 @@ bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &erro
         error = "CKPluginManager self-test could not find expected reader option methods.";
         return false;
     }
+    if (pluginManagerType->GetMethodByDecl("int GetCategoryCount()") == nullptr ||
+        pluginManagerType->GetMethodByDecl("int GetPluginDllCount()") == nullptr ||
+        pluginManagerType->GetMethodByDecl("CKERROR Save(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags, CKGUID &readerGuid = void)") == nullptr) {
+        error = "CKPluginManager self-test could not find expected non-const/count/save declarations.";
+        return false;
+    }
+    if (pluginManagerType->GetMethodByDecl("int GetCategoryCount() const") != nullptr ||
+        pluginManagerType->GetMethodByDecl("int GetPluginDllCount() const") != nullptr ||
+        pluginManagerType->GetMethodByDecl("CKERROR Save(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS saveFlags, CKGUID &readerGuid = void)") != nullptr) {
+        error = "CKPluginManager self-test found stale count/save declarations.";
+        return false;
+    }
 
     return true;
 }
