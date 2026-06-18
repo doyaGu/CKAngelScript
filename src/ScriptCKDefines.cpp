@@ -1502,19 +1502,128 @@ void RegisterCKFlagsStruct(asIScriptEngine *engine) {
 
 // CKStructStruct
 
+static std::mutex g_CKStructStructOwnedMutex;
+static std::unordered_set<CKStructStruct *> g_CKStructStructOwnedValues;
+
+static void TrackCKStructStructValue(CKStructStruct *self) {
+    std::lock_guard<std::mutex> lock(g_CKStructStructOwnedMutex);
+    g_CKStructStructOwnedValues.insert(self);
+}
+
+static bool UntrackCKStructStructValue(CKStructStruct *self) {
+    std::lock_guard<std::mutex> lock(g_CKStructStructOwnedMutex);
+    return g_CKStructStructOwnedValues.erase(self) > 0;
+}
+
+static bool IsTrackedCKStructStructValue(CKStructStruct *self) {
+    std::lock_guard<std::mutex> lock(g_CKStructStructOwnedMutex);
+    return g_CKStructStructOwnedValues.find(self) != g_CKStructStructOwnedValues.end();
+}
+
+static void ReleaseCKStructStructStorage(CKStructStruct *self) {
+    if (!self) {
+        return;
+    }
+
+    if (self->Desc) {
+        for (int i = 0; i < self->NbData; ++i) {
+            CKDeletePointer(self->Desc[i]);
+        }
+        delete[] self->Desc;
+    }
+    delete[] self->Guids;
+
+    self->NbData = 0;
+    self->Guids = nullptr;
+    self->Desc = nullptr;
+}
+
+static void CopyCKStructStructStorage(CKStructStruct *self, const CKStructStruct &other) {
+    self->NbData = 0;
+    self->Guids = nullptr;
+    self->Desc = nullptr;
+
+    if (other.NbData <= 0) {
+        return;
+    }
+
+    self->NbData = other.NbData;
+    self->Guids = new CKGUID[other.NbData];
+    self->Desc = new CKSTRING[other.NbData];
+    for (int i = 0; i < other.NbData; ++i) {
+        self->Guids[i] = other.Guids ? other.Guids[i] : CKGUID();
+        self->Desc[i] = other.Desc && other.Desc[i] ? CKStrdup(other.Desc[i]) : nullptr;
+    }
+}
+
+static void ConstructCKStructStruct(CKStructStruct *self) {
+    self->NbData = 0;
+    self->Guids = nullptr;
+    self->Desc = nullptr;
+    TrackCKStructStructValue(self);
+}
+
+static void ConstructCKStructStructCopy(const CKStructStruct &other, CKStructStruct *self) {
+    CopyCKStructStructStorage(self, other);
+    TrackCKStructStructValue(self);
+}
+
+static void DestructCKStructStruct(CKStructStruct *self) {
+    if (UntrackCKStructStructValue(self)) {
+        ReleaseCKStructStructStorage(self);
+    }
+}
+
+static CKStructStruct &AssignCKStructStruct(CKStructStruct *self, const CKStructStruct &other) {
+    if (self == &other) {
+        return *self;
+    }
+
+    if (!IsTrackedCKStructStructValue(self)) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("Cannot assign to a borrowed CKStructStruct descriptor.");
+        }
+        return *self;
+    }
+
+    ReleaseCKStructStructStorage(self);
+    CopyCKStructStructStorage(self, other);
+    return *self;
+}
+
+static CKGUID GetCKStructStructGuid(const CKStructStruct *self, int index) {
+    if (!self || index < 0 || index >= self->NbData || !self->Guids) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKStructStruct sub-parameter index out of range.");
+        }
+        return CKGUID();
+    }
+    return self->Guids[index];
+}
+
+static std::string GetCKStructStructDescription(const CKStructStruct *self, int index) {
+    if (!self || index < 0 || index >= self->NbData || !self->Desc) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKStructStruct sub-parameter index out of range.");
+        }
+        return {};
+    }
+    return ScriptStringify(self->Desc[index]);
+}
+
 void RegisterCKStructStruct(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectBehaviour("CKStructStruct", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKStructStruct *self) { new(self) CKStructStruct(); }, (CKStructStruct*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKStructStruct", asBEHAVE_CONSTRUCT, "void f(const CKStructStruct &in other)", asFUNCTIONPR([](const CKStructStruct &info, CKStructStruct *self) { new(self) CKStructStruct(info); }, (const CKStructStruct &, CKStructStruct *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKStructStruct", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKStructStruct), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKStructStruct", asBEHAVE_CONSTRUCT, "void f(const CKStructStruct &in other)", asFUNCTION(ConstructCKStructStructCopy), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKStructStruct", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKStructStruct *self) { self->~CKStructStruct(); }, (CKStructStruct *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKStructStruct", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructCKStructStruct), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKStructStruct", "CKStructStruct &opAssign(const CKStructStruct &in other)", asMETHODPR(CKStructStruct, operator=, (const CKStructStruct &), CKStructStruct &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStructStruct", "CKStructStruct &opAssign(const CKStructStruct &in other)", asFUNCTION(AssignCKStructStruct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStructStruct", "int GetNumSubParam() const", asMETHOD(CKStructStruct, GetNumSubParam), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKStructStruct", "CKGUID &GetSubParamGuid(int index) const", asMETHOD(CKStructStruct, GetSubParamGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKStructStruct", "string GetSubParamDescription(int index) const", asFUNCTIONPR([](CKStructStruct *self, int index) -> std::string { return ScriptStringify(self->GetSubParamDescription(index)); }, (CKStructStruct *, int), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStructStruct", "CKGUID GetSubParamGuid(int index) const", asFUNCTION(GetCKStructStructGuid), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStructStruct", "string GetSubParamDescription(int index) const", asFUNCTION(GetCKStructStructDescription), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKParameterTypeDesc

@@ -99,6 +99,50 @@ bool ExecuteCKFlagsStructProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKStructStructProbe(asIScriptEngine *engine,
+                                asIScriptFunction *function,
+                                CKStructStruct &input,
+                                bool expectException,
+                                const char *label,
+                                std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, &input);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool RunCKEnumStructScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKEnumStruct script self-test requires an AngelScript engine.";
@@ -228,6 +272,79 @@ bool RunCKFlagsStructScriptSelfTest(asIScriptEngine *engine, std::string &error)
     return ok;
 }
 
+bool RunCKStructStructScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKStructStruct script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKStructStructSelfTest";
+    const char *source =
+        "bool SameGuid(const CKGUID &in lhs, const CKGUID &in rhs) {\n"
+        "  return lhs.d1 == rhs.d1 && lhs.d2 == rhs.d2;\n"
+        "}\n"
+        "int ProbeStructStruct(const CKStructStruct &in input) {\n"
+        "  if (input.GetNumSubParam() != 2) return 1;\n"
+        "  CKGUID first(0x11111111, 0x22222222);\n"
+        "  CKGUID second(0x33333333, 0x44444444);\n"
+        "  if (!SameGuid(input.GetSubParamGuid(0), first) || !SameGuid(input.GetSubParamGuid(1), second)) return 2;\n"
+        "  if (input.GetSubParamDescription(0) != \"First\" || input.GetSubParamDescription(1) != \"Second\") return 3;\n"
+        "  CKStructStruct copied(input);\n"
+        "  if (copied.GetNumSubParam() != 2 || !SameGuid(copied.GetSubParamGuid(1), second)) return 4;\n"
+        "  CKStructStruct assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.GetNumSubParam() != 2 || assigned.GetSubParamDescription(0) != \"First\") return 5;\n"
+        "  CKGUID guidValue = assigned.GetSubParamGuid(0);\n"
+        "  guidValue.d1 = 0;\n"
+        "  if (!SameGuid(assigned.GetSubParamGuid(0), first)) return 6;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeStructStructOutOfRange(const CKStructStruct &in input) {\n"
+        "  CKGUID guid = input.GetSubParamGuid(2);\n"
+        "  return int(guid.d1);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKStructStruct self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-struct-struct-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKStructStruct self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKStructStruct self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeStructStruct(const CKStructStruct &in)");
+    asIScriptFunction *outOfRange = module->GetFunctionByDecl("int ProbeStructStructOutOfRange(const CKStructStruct &in)");
+    if (!probe || !outOfRange) {
+        engine->DiscardModule(moduleName);
+        error = "CKStructStruct self-test functions were not found.";
+        return false;
+    }
+
+    CKGUID guids[2] = {CKGUID(0x11111111, 0x22222222), CKGUID(0x33333333, 0x44444444)};
+    CKSTRING descriptions[2] = {const_cast<CKSTRING>("First"), const_cast<CKSTRING>("Second")};
+    CKStructStruct input;
+    input.NbData = 2;
+    input.Guids = guids;
+    input.Desc = descriptions;
+
+    bool ok = ExecuteCKStructStructProbe(engine, probe, input, false, "CKStructStruct copy probe", error) &&
+              ExecuteCKStructStructProbe(engine, outOfRange, input, true, "CKStructStruct out-of-range probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 } // namespace
 
 bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -311,6 +428,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKFlagsStructScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKStructStructScriptSelfTest(engine, error)) {
         return false;
     }
 

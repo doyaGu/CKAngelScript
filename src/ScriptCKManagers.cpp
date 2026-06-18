@@ -83,6 +83,17 @@ static CKEnumStruct &MissingCKEnumStruct(const char *message) {
     return dummy;
 }
 
+static CKStructStruct &MissingCKStructStruct(const char *message) {
+    static thread_local CKStructStruct dummy;
+    dummy.NbData = 0;
+    dummy.Guids = nullptr;
+    dummy.Desc = nullptr;
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return dummy;
+}
+
 static CKFlagsStruct &GetCKFlagsDescByType(CKParameterManager *self, CKParameterType type) {
     if (self) {
         if (CKFlagsStruct *desc = self->GetFlagsDescByType(type)) {
@@ -99,6 +110,15 @@ static CKEnumStruct &GetCKEnumDescByType(CKParameterManager *self, CKParameterTy
         }
     }
     return MissingCKEnumStruct("CKParameterManager.GetEnumDescByType did not find an enum descriptor.");
+}
+
+static CKStructStruct &GetCKStructDescByType(CKParameterManager *self, CKParameterType type) {
+    if (self) {
+        if (CKStructStruct *desc = self->GetStructDescByType(type)) {
+            return *desc;
+        }
+    }
+    return MissingCKStructStruct("CKParameterManager.GetStructDescByType did not find a struct descriptor.");
 }
 
 void RegisterCKPluginManager(asIScriptEngine *engine) {
@@ -281,7 +301,7 @@ void RegisterCKParameterManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKParameterManager", "int GetNbStructDefined()", asMETHODPR(CKParameterManager, GetNbStructDefined, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "CKFlagsStruct &GetFlagsDescByType(CKParameterType type)", asFUNCTION(GetCKFlagsDescByType), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "CKEnumStruct &GetEnumDescByType(CKParameterType type)", asFUNCTION(GetCKEnumDescByType), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterManager", "CKStructStruct &GetStructDescByType(CKParameterType type)", asMETHODPR(CKParameterManager, GetStructDescByType, (CKParameterType), CKStructStruct*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterManager", "CKStructStruct &GetStructDescByType(CKParameterType type)", asFUNCTION(GetCKStructDescByType), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKParameterManager", "CKOperationType RegisterOperationType(CKGUID opGuid, const string &in name)", asFUNCTIONPR([](CKParameterManager *self, CKGUID opGuid, const std::string &name) { return self->RegisterOperationType(opGuid, const_cast<CKSTRING>(name.c_str())); }, (CKParameterManager *, CKGUID, const std::string &), CKOperationType), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR UnRegisterOperationType(CKGUID opGuid)", asMETHODPR(CKParameterManager, UnRegisterOperationType, (CKGUID), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
