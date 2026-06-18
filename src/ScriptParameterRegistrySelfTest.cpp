@@ -826,6 +826,78 @@ bool RunCKTimeManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine,
     return ok;
 }
 
+bool RunCKBehaviorManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKBehaviorManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *behaviorManagerType = engine->GetTypeInfoByDecl("CKBehaviorManager");
+    if (!behaviorManagerType) {
+        error = "CKBehaviorManager self-test could not find the registered type.";
+        return false;
+    }
+    if (behaviorManagerType->GetMethodByDecl("CKERROR Execute(float delta)") == nullptr ||
+        behaviorManagerType->GetMethodByDecl("int GetObjectsCount()") == nullptr ||
+        behaviorManagerType->GetMethodByDecl("CKBeObject@ GetObject(int pos)") == nullptr ||
+        behaviorManagerType->GetMethodByDecl("int GetBehaviorMaxIteration()") == nullptr ||
+        behaviorManagerType->GetMethodByDecl("void SetBehaviorMaxIteration(int n)") == nullptr) {
+        error = "CKBehaviorManager self-test could not find expected behavior manager methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBehaviorManagerSelfTest";
+    const char *source =
+        "int ProbeBehaviorManager(CKContext@ ctx) {\n"
+        "  CKBehaviorManager@ manager = ctx.GetBehaviorManager();\n"
+        "  if (manager is null) return 1;\n"
+        "  CKBaseManager@ base = manager;\n"
+        "  if (base is null) return 2;\n"
+        "  if (cast<CKBehaviorManager>(base) is null) return 3;\n"
+        "  int objectCount = manager.GetObjectsCount();\n"
+        "  if (objectCount < 0) return 4;\n"
+        "  int maxIteration = manager.GetBehaviorMaxIteration();\n"
+        "  if (maxIteration < 0) return 5;\n"
+        "  manager.SetBehaviorMaxIteration(maxIteration);\n"
+        "  if (objectCount > 0) {\n"
+        "    CKBeObject@ object = manager.GetObject(0);\n"
+        "    if (object is null) return 6;\n"
+        "  }\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBehaviorManager self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-behavior-manager-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorManager self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorManager self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeBehaviorManager(CKContext@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorManager self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKBehaviorManager accessors probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKObjectManager script self-test requires CKContext and AngelScript engine.";
@@ -1169,6 +1241,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKTimeManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBehaviorManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
