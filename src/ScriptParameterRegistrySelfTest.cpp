@@ -1600,10 +1600,57 @@ bool RunCKInputManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
         return false;
     }
     if (inputManagerType->GetMethodByDecl("int GetKeyName(CKDWORD key, string &out keyName)") == nullptr ||
-        inputManagerType->GetMethodByDecl("CKDWORD GetKeyFromName(const string &in keyName)") == nullptr) {
-        error = "CKInputManager self-test could not find expected key-name methods.";
+        inputManagerType->GetMethodByDecl("CKDWORD GetKeyFromName(const string &in keyName)") == nullptr ||
+        inputManagerType->GetMethodByDecl("void GetMouseButtonsState(CKBYTE &out left, CKBYTE &out right, CKBYTE &out middle, CKBYTE &out extra)") == nullptr) {
+        error = "CKInputManager self-test could not find expected key-name or mouse-state methods.";
         return false;
     }
+    if (inputManagerType->GetMethodByDecl("void GetMouseButtonsState(CKDWORD &out states)") != nullptr) {
+        error = "CKInputManager self-test found stale packed mouse-state declaration.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKInputManagerSelfTest";
+    const char *source =
+        "void ProbeCKInputManager(CKInputManager@ input) {\n"
+        "  if (input is null) return;\n"
+        "  string keyName;\n"
+        "  input.GetKeyName(0, keyName);\n"
+        "  input.GetKeyFromName(keyName);\n"
+        "  CKBYTE left = 0;\n"
+        "  CKBYTE right = 0;\n"
+        "  CKBYTE middle = 0;\n"
+        "  CKBYTE extra = 0;\n"
+        "  input.GetMouseButtonsState(left, right, middle, extra);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKInputManager self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-input-manager-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKInputManager self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKInputManager self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKInputManager(CKInputManager@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKInputManager self-test function was not found.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
 #else
     return true;
 #endif

@@ -79,6 +79,38 @@ static int GetCKInputKeyName(CKInputManager *self, CKDWORD key, std::string &key
     return result;
 }
 
+static void GetCKInputMouseButtonsState(CKInputManager *self,
+                                        CKBYTE *left,
+                                        CKBYTE *right,
+                                        CKBYTE *middle,
+                                        CKBYTE *extra) {
+    if (left) {
+        *left = 0;
+    }
+    if (right) {
+        *right = 0;
+    }
+    if (middle) {
+        *middle = 0;
+    }
+    if (extra) {
+        *extra = 0;
+    }
+    if (!self || !left || !right || !middle || !extra) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKInputManager.GetMouseButtonsState requires a valid manager and four output parameters.");
+        }
+        return;
+    }
+
+    CKBYTE states[4] = {};
+    self->GetMouseButtonsState(states);
+    *left = states[0];
+    *right = states[1];
+    *middle = states[2];
+    *extra = states[3];
+}
+
 static CKERROR SendCKMessage(CKMessageManager *self, CKMessage *message) {
     if (!self) {
         SetActiveScriptException("CKMessageManager.SendMessage requires a valid manager.");
@@ -1430,7 +1462,7 @@ void RegisterCKInputManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsMouseButtonDown(CK_MOUSEBUTTON button)", asFUNCTIONPR([](CKInputManager *self, CK_MOUSEBUTTON button) -> bool { return self->IsMouseButtonDown(button); }, (CKInputManager *, CK_MOUSEBUTTON), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsMouseClicked(CK_MOUSEBUTTON button)", asFUNCTIONPR([](CKInputManager *self, CK_MOUSEBUTTON button) -> bool { return self->IsMouseClicked(button); }, (CKInputManager *, CK_MOUSEBUTTON), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsMouseToggled(CK_MOUSEBUTTON button)", asFUNCTIONPR([](CKInputManager *self, CK_MOUSEBUTTON button) -> bool { return self->IsMouseToggled(button); }, (CKInputManager *, CK_MOUSEBUTTON), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKInputManager", "void GetMouseButtonsState(CKDWORD &out states)", asMETHODPR(CKInputManager, GetMouseButtonsState, (CKBYTE[4]), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKInputManager", "void GetMouseButtonsState(CKBYTE &out left, CKBYTE &out right, CKBYTE &out middle, CKBYTE &out extra)", asFUNCTION(GetCKInputMouseButtonsState), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "void GetMousePosition(Vx2DVector &out position, bool absolute = true)", asFUNCTIONPR([](CKInputManager *self, Vx2DVector &position, bool absolute) { self->GetMousePosition(position, absolute); }, (CKInputManager *, Vx2DVector &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "void GetMouseRelativePosition(VxVector &out position)", asMETHODPR(CKInputManager, GetMouseRelativePosition, (VxVector&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsMouseAttached()", asFUNCTIONPR([](CKInputManager *self) -> bool { return self->IsMouseAttached(); }, (CKInputManager *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
