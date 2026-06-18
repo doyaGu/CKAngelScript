@@ -276,6 +276,62 @@ bool ExecuteCKParameterInProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKParameterInSourceProbe(asIScriptEngine *engine,
+                                     asIScriptFunction *function,
+                                     CKParameterIn *parameter,
+                                     CKParameter *sourceA,
+                                     CKParameter *sourceB,
+                                     CKParameterIn *shared,
+                                     bool expectException,
+                                     const char *label,
+                                     std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, parameter);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, sourceA);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(2, sourceB);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(3, shared);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAttributeDescProbe(asIScriptEngine *engine,
                                  asIScriptFunction *function,
                                  bool expectException,
@@ -3492,6 +3548,39 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (pin.GetGUID() != guid) return 7;\n"
         "  return 0;\n"
         "}\n"
+        "int ProbeCKParameterInSourceGraph(CKParameterIn@ pin, CKParameter@ sourceA, CKParameter@ sourceB, CKParameterIn@ shared) {\n"
+        "  if (pin is null || sourceA is null || sourceB is null || shared is null) return 2;\n"
+        "  if (!pin.GetReadDataPtr().IsNull()) return 3;\n"
+        "  if (pin.GetDirectSource() !is null) return 4;\n"
+        "  if (pin.GetRealSource() !is null) return 5;\n"
+        "  if (pin.SetDirectSource(sourceA) != CK_OK) return 6;\n"
+        "  if (pin.GetDirectSource() !is sourceA) return 7;\n"
+        "  if (pin.GetRealSource() !is sourceA) return 8;\n"
+        "  NativePointer ptrA = pin.GetReadDataPtr();\n"
+        "  if (ptrA.IsNull()) return 9;\n"
+        "  int value = 0;\n"
+        "  if (ptrA.ReadInt(value) != 4 || value != 1111) return 10;\n"
+        "  if (pin.SetDirectSource(sourceB) != CK_OK) return 11;\n"
+        "  if (pin.GetDirectSource() !is sourceB) return 12;\n"
+        "  if (pin.GetRealSource() !is sourceB) return 13;\n"
+        "  NativePointer ptrB = pin.GetReadDataPtr();\n"
+        "  if (ptrB.IsNull() || ptrB == ptrA) return 14;\n"
+        "  value = 0;\n"
+        "  if (ptrB.ReadInt(value) != 4 || value != 2222) return 15;\n"
+        "  if (shared.SetDirectSource(sourceA) != CK_OK) return 16;\n"
+        "  if (pin.ShareSourceWith(shared) != CK_OK) return 17;\n"
+        "  if (pin.GetSharedSource() !is shared) return 18;\n"
+        "  if (pin.GetDirectSource() !is null) return 19;\n"
+        "  if (pin.GetRealSource() !is sourceA) return 20;\n"
+        "  value = 0;\n"
+        "  NativePointer ptrShared = pin.GetReadDataPtr();\n"
+        "  if (ptrShared.IsNull()) return 21;\n"
+        "  if (ptrShared.ReadInt(value) != 4 || value != 1111) return 22;\n"
+        "  return 0;\n"
+        "}\n"
+        "void ProbeCKParameterInShareNull(CKParameterIn@ pin, CKParameter@ sourceA, CKParameter@ sourceB, CKParameterIn@ shared) {\n"
+        "  pin.ShareSourceWith(null);\n"
+        "}\n"
         "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
         "  local.CopyValue(null);\n"
         "}\n"
@@ -3538,13 +3627,15 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *pinGetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetObjectHandle(CKParameterIn@)");
     asIScriptFunction *pinGetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetNonPodObject(CKParameterIn@)");
     asIScriptFunction *pinSetTypeGuid = module->GetFunctionByDecl("int ProbeCKParameterInSetTypeAndGuid(CKParameterIn@)");
+    asIScriptFunction *pinSourceGraph = module->GetFunctionByDecl("int ProbeCKParameterInSourceGraph(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
+    asIScriptFunction *pinShareNull = module->GetFunctionByDecl("void ProbeCKParameterInShareNull(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
         !genericSetScriptObject || !genericGetScriptObject || !genericSetObjectHandle || !genericGetObjectHandle ||
         !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
         !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
-        !pinSetTypeGuid || !copyValueNull || !compatibleNull) {
+        !pinSetTypeGuid || !pinSourceGraph || !pinShareNull || !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -3595,15 +3686,22 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         CKParameterLocal *sourceString = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterInSourceString"), CKPGUID_STRING, TRUE);
         CKParameterLocal *sourceInt = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterInSourceInt"), CKPGUID_INT, TRUE);
         CKParameterLocal *sourceVector = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterInSourceVector"), CKPGUID_VECTOR, TRUE);
+        CKParameterLocal *sourceGraphA = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterInSourceGraphA"), CKPGUID_INT, TRUE);
+        CKParameterLocal *sourceGraphB = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterInSourceGraphB"), CKPGUID_INT, TRUE);
         CKParameterIn *inputString = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInString"), CKPGUID_STRING, TRUE);
         CKParameterIn *inputInt = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInInt"), CKPGUID_INT, TRUE);
         CKParameterIn *inputVector = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInVector"), CKPGUID_VECTOR, TRUE);
         CKParameterIn *inputMissing = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInMissing"), CKPGUID_INT, TRUE);
-        if (!sourceString || !sourceInt || !sourceVector || !inputString || !inputInt || !inputVector || !inputMissing) {
+        CKParameterIn *inputGraph = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInGraph"), CKPGUID_INT, TRUE);
+        CKParameterIn *inputShared = context->CreateCKParameterIn(const_cast<CKSTRING>("__CKAS_CKParameterInShared"), CKPGUID_INT, TRUE);
+        if (!sourceString || !sourceInt || !sourceVector || !sourceGraphA || !sourceGraphB ||
+            !inputString || !inputInt || !inputVector || !inputMissing || !inputGraph || !inputShared) {
             ok = false;
             error = "CKParameterIn generic probe could not create its native parameters.";
         } else {
             int intValue = 2468;
+            int graphValueA = 1111;
+            int graphValueB = 2222;
             VxVector vectorValue;
             vectorValue.x = 4.0f;
             vectorValue.y = 5.0f;
@@ -3611,6 +3709,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
             if (sourceString->SetStringValue(const_cast<CKSTRING>("input text")) != CK_OK ||
                 sourceInt->SetValue(&intValue, sizeof(intValue)) != CK_OK ||
                 sourceVector->SetValue(&vectorValue, sizeof(vectorValue)) != CK_OK ||
+                sourceGraphA->SetValue(&graphValueA, sizeof(graphValueA)) != CK_OK ||
+                sourceGraphB->SetValue(&graphValueB, sizeof(graphValueB)) != CK_OK ||
                 inputString->SetDirectSource(sourceString) != CK_OK ||
                 inputInt->SetDirectSource(sourceInt) != CK_OK ||
                 inputVector->SetDirectSource(sourceVector) != CK_OK) {
@@ -3624,9 +3724,15 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                      ExecuteCKParameterInProbe(engine, pinGetScriptObject, inputString, true, "CKParameterIn generic script-object probe", error) &&
                      ExecuteCKParameterInProbe(engine, pinGetObjectHandle, inputString, true, "CKParameterIn generic object-handle probe", error) &&
                      ExecuteCKParameterInProbe(engine, pinGetNonPodObject, inputString, true, "CKParameterIn generic non-POD probe", error) &&
-                     ExecuteCKParameterInProbe(engine, pinSetTypeGuid, inputInt, false, "CKParameterIn SetType/SetGUID probe", error);
+                     ExecuteCKParameterInProbe(engine, pinSetTypeGuid, inputInt, false, "CKParameterIn SetType/SetGUID probe", error) &&
+                     ExecuteCKParameterInSourceProbe(engine, pinSourceGraph, inputGraph, sourceGraphA, sourceGraphB, inputShared, false, "CKParameterIn source graph probe", error) &&
+                     ExecuteCKParameterInSourceProbe(engine, pinShareNull, inputGraph, sourceGraphA, sourceGraphB, inputShared, true, "CKParameterIn ShareSourceWith null probe", error);
             }
         }
+        if (inputGraph)
+            context->DestroyObject(inputGraph);
+        if (inputShared)
+            context->DestroyObject(inputShared);
         if (inputMissing)
             context->DestroyObject(inputMissing);
         if (inputVector)
@@ -3641,6 +3747,10 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
             context->DestroyObject(sourceInt);
         if (sourceString)
             context->DestroyObject(sourceString);
+        if (sourceGraphB)
+            context->DestroyObject(sourceGraphB);
+        if (sourceGraphA)
+            context->DestroyObject(sourceGraphA);
     }
 
     engine->DiscardModule(moduleName);

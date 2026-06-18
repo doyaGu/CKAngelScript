@@ -279,6 +279,34 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
 }
 
 template <typename T>
+static NativePointer GetCKParameterInReadDataPtr(T *self) {
+    if (!self)
+        return {};
+    CKParameter *source = self->GetRealSource();
+    return source ? NativePointer(source->GetReadDataPtr()) : NativePointer();
+}
+
+template <typename T>
+static CKERROR SetCKParameterInDirectSource(T *self, CKParameter *param) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKParameterIn.SetDirectSource requires a valid input parameter.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->SetDirectSource(param);
+}
+
+template <typename T>
+static CKERROR ShareCKParameterInSourceWith(T *self, CKParameterIn *pin) {
+    if (!self || !pin) {
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKParameterIn.ShareSourceWith requires a non-null input parameter.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->ShareSourceWith(pin);
+}
+
+template <typename T>
 static void SetCKParameterInType(T *self, CKParameterType type, bool updateSource) {
     if (!self)
         return;
@@ -318,12 +346,12 @@ static void RegisterCKParameterInMembers(asIScriptEngine *engine, const char *na
 
     // r = engine->RegisterObjectMethod(name, "CKERROR GetValue(uintptr_t buf)", asMETHODPR(T, GetValue, (void *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR GetValue(?&out value)", asFUNCTION(CKParameterInGetValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "NativePointer GetReadDataPtr()", asFUNCTIONPR([](T *self) { return NativePointer(self->GetReadDataPtr()); }, (T *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "NativePointer GetReadDataPtr()", asFUNCTIONPR(GetCKParameterInReadDataPtr<T>, (T *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKParameterIn@ GetSharedSource()", asMETHODPR(T, GetSharedSource, (), CKParameterIn *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKParameter@ GetRealSource()", asMETHODPR(T, GetRealSource, (), CKParameter*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKParameter@ GetDirectSource()", asMETHODPR(T, GetDirectSource, (), CKParameter*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR SetDirectSource(CKParameter@ param)", asMETHODPR(T, SetDirectSource, (CKParameter*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR ShareSourceWith(CKParameterIn@ pin)", asMETHODPR(T, ShareSourceWith, (CKParameterIn *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR SetDirectSource(CKParameter@ param)", asFUNCTIONPR(SetCKParameterInDirectSource<T>, (T *, CKParameter *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR ShareSourceWith(CKParameterIn@ pin)", asFUNCTIONPR(ShareCKParameterInSourceWith<T>, (T *, CKParameterIn *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetType(CKParameterType type, bool updateSource = false)", asFUNCTIONPR(SetCKParameterInType<T>, (T *, CKParameterType, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetType(CKParameterType type, bool updateSource, const string &in newName)", asFUNCTIONPR(SetCKParameterInTypeNamed<T>, (T *, CKParameterType, bool, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetGUID(CKGUID guid, bool updateSource = false)", asFUNCTIONPR(SetCKParameterInGuid<T>, (T *, CKGUID, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
