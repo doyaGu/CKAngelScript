@@ -1748,6 +1748,36 @@ bool RunCKDataReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) 
         }
     }
 
+    asITypeInfo *dataReaderType = engine->GetTypeInfoByDecl("CKDataReader");
+    if (!dataReaderType ||
+        dataReaderType->GetMethodByDecl("CKBitmapReader@ opCast()") == nullptr ||
+        dataReaderType->GetMethodByDecl("CKModelReader@ opCast()") == nullptr ||
+        dataReaderType->GetMethodByDecl("CKSoundReader@ opCast()") == nullptr ||
+        dataReaderType->GetMethodByDecl("CKMovieReader@ opCast()") == nullptr ||
+        dataReaderType->GetMethodByDecl("const CKBitmapReader@ opCast() const") == nullptr ||
+        dataReaderType->GetMethodByDecl("const CKModelReader@ opCast() const") == nullptr ||
+        dataReaderType->GetMethodByDecl("const CKSoundReader@ opCast() const") == nullptr ||
+        dataReaderType->GetMethodByDecl("const CKMovieReader@ opCast() const") == nullptr) {
+        error = "CKDataReader self-test could not find expected checked derived cast declarations.";
+        return false;
+    }
+
+    const char *derivedReaderTypes[] = {
+        "CKModelReader",
+        "CKBitmapReader",
+        "CKSoundReader",
+        "CKMovieReader",
+    };
+    for (const char *readerTypeName : derivedReaderTypes) {
+        asITypeInfo *readerType = engine->GetTypeInfoByDecl(readerTypeName);
+        if (!readerType ||
+            readerType->GetMethodByDecl("CKDataReader@ opImplCast()") == nullptr ||
+            readerType->GetMethodByDecl("const CKDataReader@ opImplCast() const") == nullptr) {
+            error = std::string("CKDataReader self-test could not find base cast declarations on ") + readerTypeName + ".";
+            return false;
+        }
+    }
+
     constexpr const char *moduleName = "__CKAS_CKDataReaderSelfTest";
     const char *source =
         "void ProbeDataReaderInfo(CKDataReader@ data, CKModelReader@ model) {\n"
@@ -1758,6 +1788,18 @@ bool RunCKDataReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) 
         "  if (model !is null) {\n"
         "    CKPluginInfo modelInfo = model.GetReaderInfo();\n"
         "    modelInfo.m_Version = modelInfo.m_Version;\n"
+        "    CKDataReader@ modelBase = model;\n"
+        "    if (modelBase is null) return;\n"
+        "  }\n"
+        "  if (data !is null) {\n"
+        "    CKBitmapReader@ bitmap = cast<CKBitmapReader>(data);\n"
+        "    CKModelReader@ modelReader = cast<CKModelReader>(data);\n"
+        "    CKSoundReader@ sound = cast<CKSoundReader>(data);\n"
+        "    CKMovieReader@ movie = cast<CKMovieReader>(data);\n"
+        "    if (bitmap !is null) bitmap.GetReaderInfo();\n"
+        "    if (modelReader !is null) modelReader.GetReaderInfo();\n"
+        "    if (sound !is null) sound.GetReaderInfo();\n"
+        "    if (movie !is null) movie.GetReaderInfo();\n"
         "  }\n"
         "}\n";
 

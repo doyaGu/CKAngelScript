@@ -1733,10 +1733,77 @@ static void RegisterCKDataReaderMembers(asIScriptEngine *engine, const char *nam
     r = engine->RegisterObjectMethod(name, "int GetOptionsCount()", asMETHODPR(T, GetOptionsCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "string GetOptionDescription(int i)", asFUNCTIONPR([](T *self, int i) -> std::string { return ScriptStringify(self->GetOptionDescription(i)); }, (T *, int), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK_DATAREADER_FLAGS GetFlags()", asMETHODPR(T, GetFlags, (), CK_DATAREADER_FLAGS), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+}
 
-    if (strcmp(name, "CKDataReader") != 0) {
-        RegisterClassRefCast<T, CKDataReader>(engine, name, "CKDataReader");
+template <typename T>
+static CK_PLUGIN_TYPE CKDataReaderPluginType();
+
+template <>
+CK_PLUGIN_TYPE CKDataReaderPluginType<CKBitmapReader>() {
+    return CKPLUGIN_BITMAP_READER;
+}
+
+template <>
+CK_PLUGIN_TYPE CKDataReaderPluginType<CKModelReader>() {
+    return CKPLUGIN_MODEL_READER;
+}
+
+template <>
+CK_PLUGIN_TYPE CKDataReaderPluginType<CKSoundReader>() {
+    return CKPLUGIN_SOUND_READER;
+}
+
+template <>
+CK_PLUGIN_TYPE CKDataReaderPluginType<CKMovieReader>() {
+    return CKPLUGIN_MOVIE_READER;
+}
+
+template <typename T>
+static T *CastCKDataReaderTo(CKDataReader *reader) {
+    if (!reader) {
+        return nullptr;
     }
+
+    CKPluginInfo *info = reader->GetReaderInfo();
+    if (!info || info->m_Type != CKDataReaderPluginType<T>()) {
+        return nullptr;
+    }
+
+    return static_cast<T *>(reader);
+}
+
+template <typename T>
+static const T *CastConstCKDataReaderTo(const CKDataReader *reader) {
+    return CastCKDataReaderTo<T>(const_cast<CKDataReader *>(reader));
+}
+
+template <typename T>
+static CKDataReader *CastCKReaderToData(T *reader) {
+    return reader;
+}
+
+template <typename T>
+static const CKDataReader *CastConstCKReaderToData(const T *reader) {
+    return reader;
+}
+
+template <typename T>
+static void RegisterCKDataReaderCast(asIScriptEngine *engine, const char *derived) {
+    int r = 0;
+
+    std::string decl = derived;
+    decl.append("@ opCast()");
+    r = engine->RegisterObjectMethod("CKDataReader", decl.c_str(), asFUNCTIONPR((CastCKDataReaderTo<T>), (CKDataReader *), T *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+
+    decl = "CKDataReader@ opImplCast()";
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CastCKReaderToData<T>), (T *), CKDataReader *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+
+    decl = "const ";
+    decl.append(derived).append("@ opCast() const");
+    r = engine->RegisterObjectMethod("CKDataReader", decl.c_str(), asFUNCTIONPR((CastConstCKDataReaderTo<T>), (const CKDataReader *), const T *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+
+    decl = "const CKDataReader@ opImplCast() const";
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CastConstCKReaderToData<T>), (const T *), const CKDataReader *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 }
 
 static int SaveCKBitmapReaderMemory(CKBitmapReader *self, NativePointer *memory, CKBitmapProperties *bp) {
@@ -1857,6 +1924,7 @@ void RegisterCKModelReader(asIScriptEngine *engine) {
     int r = 0;
 
     RegisterCKDataReaderMembers<CKModelReader>(engine, "CKModelReader");
+    RegisterCKDataReaderCast<CKModelReader>(engine, "CKModelReader");
 
     r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Load(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD loadFlags, CKCharacter@ carac = null)", asFUNCTION(LoadCKModelReader), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Save(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD saveFlags)", asFUNCTION(SaveCKModelReader), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -1868,6 +1936,7 @@ void RegisterCKBitmapReader(asIScriptEngine *engine) {
     int r = 0;
 
     RegisterCKDataReaderMembers<CKBitmapReader>(engine, "CKBitmapReader");
+    RegisterCKDataReaderCast<CKBitmapReader>(engine, "CKBitmapReader");
 
     r = engine->RegisterObjectMethod("CKBitmapReader", "bool IsAlphaSaved(CKBitmapProperties@ bp)", asFUNCTIONPR([](CKBitmapReader *self, CKBitmapProperties *bp) -> bool { return self->IsAlphaSaved(bp); }, (CKBitmapReader *, CKBitmapProperties *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapReader", "void GetBitmapDefaultProperties(CKBitmapProperties@ &out bp)", asMETHODPR(CKBitmapReader, GetBitmapDefaultProperties, (CKBitmapProperties**), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1886,6 +1955,7 @@ void RegisterCKSoundReader(asIScriptEngine *engine) {
     int r = 0;
 
     RegisterCKDataReaderMembers<CKSoundReader>(engine, "CKSoundReader");
+    RegisterCKDataReaderCast<CKSoundReader>(engine, "CKSoundReader");
 
     r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR OpenFile(const string &in filename)", asFUNCTIONPR([](CKSoundReader *self, const std::string &filename) -> CKERROR { return self->OpenFile(const_cast<char *>(filename.c_str())); }, (CKSoundReader *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR Decode()", asMETHODPR(CKSoundReader, Decode, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1907,6 +1977,7 @@ void RegisterCKMovieReader(asIScriptEngine *engine) {
     int r = 0;
 
     RegisterCKDataReaderMembers<CKMovieReader>(engine, "CKMovieReader");
+    RegisterCKDataReaderCast<CKMovieReader>(engine, "CKMovieReader");
 
     r = engine->RegisterObjectMethod("CKMovieReader", "int GetMovieFrameCount()", asMETHODPR(CKMovieReader, GetMovieFrameCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMovieReader", "int GetMovieLength()", asMETHODPR(CKMovieReader, GetMovieLength, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
