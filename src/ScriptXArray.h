@@ -54,6 +54,53 @@ public:
     T *m_Ptr;
 };
 
+template<typename C>
+static bool CheckXIteratorValid(const C &self, const char *operation) {
+    if (self.IsValid()) {
+        return true;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        XString message;
+        message.Format("%s requires a valid iterator.", operation);
+        ctx->SetException(message.CStr());
+    }
+    return false;
+}
+
+template<typename C, typename T>
+static const T &GetXIteratorValueConst(const C &self) {
+    static const T empty = T();
+    if (!CheckXIteratorValid(self, "Iterator.Get")) {
+        return empty;
+    }
+    return *self;
+}
+
+template<typename C, typename T>
+static T &GetXIteratorValue(C &self) {
+    static T empty = T();
+    if (!CheckXIteratorValid(self, "Iterator.Get")) {
+        return empty;
+    }
+    return *self;
+}
+
+template<typename C>
+static C &IncrementXIterator(C &self) {
+    if (CheckXIteratorValid(self, "Iterator.opPreInc")) {
+        ++self;
+    }
+    return self;
+}
+
+template<typename C>
+static C &DecrementXIterator(C &self) {
+    if (CheckXIteratorValid(self, "Iterator.opPreDec")) {
+        --self;
+    }
+    return self;
+}
+
 template<typename C, typename T>
 void RegisterXIterator(asIScriptEngine *engine, const char *className, const char *elementType) {
     int r = 0;
@@ -82,16 +129,16 @@ void RegisterXIterator(asIScriptEngine *engine, const char *className, const cha
     r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTIONPR([](const C &self, const C &other) -> bool { return self != other; }, (const C &, const C &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("const %s &Get() const", elementType);
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator*, () const, const T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((GetXIteratorValueConst<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%s &Get()", elementType);
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator*, (), T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((GetXIteratorValue<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%s &opPreInc()", name.CStr());
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator++, (), C &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((IncrementXIterator<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%s &opPreDec()", name.CStr());
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator--, (), C &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((DecrementXIterator<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // decl.Format("%s opPostInc(int)", name.CStr());
     // r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(XIterator<T>, operator++, (int), XIterator<T> &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

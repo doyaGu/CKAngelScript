@@ -1182,6 +1182,124 @@ bool RunXClassIDArrayItScriptSelfTest(asIScriptEngine *engine, std::string &erro
     return ok;
 }
 
+bool RunXGUIDArrayItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XGUIDArrayIt script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("XGUIDArrayIt");
+    if (!iteratorType) {
+        error = "XGUIDArrayIt self-test could not find the registered type.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("bool opEquals(const XGUIDArrayIt &in other) const") ||
+        !iteratorType->GetMethodByDecl("bool opNotEquals(const XGUIDArrayIt &in other) const")) {
+        error = "XGUIDArrayIt self-test could not find iterator comparison methods.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("XGUIDArray");
+    if (!arrayType) {
+        error = "XGUIDArrayIt self-test could not find XGUIDArray.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("XGUIDArrayIt Begin() const") ||
+        !arrayType->GetMethodByDecl("XGUIDArrayIt End() const") ||
+        !arrayType->GetMethodByDecl("XGUIDArrayIt RBegin() const") ||
+        !arrayType->GetMethodByDecl("XGUIDArrayIt REnd() const")) {
+        error = "XGUIDArrayIt self-test could not find XGUIDArray iterator producers.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XGUIDArrayItSelfTest";
+    const char *source =
+        "int ProbeXGUIDArrayIt() {\n"
+        "  XGUIDArray values;\n"
+        "  CKGUID first(0x11111111, 0x22222222);\n"
+        "  CKGUID second(0x33333333, 0x44444444);\n"
+        "  values.PushBack(first);\n"
+        "  values.PushBack(second);\n"
+        "  XGUIDArrayIt begin = values.Begin();\n"
+        "  XGUIDArrayIt end = values.End();\n"
+        "  if (!begin.IsValid()) return 1;\n"
+        "  if (begin == end) return 2;\n"
+        "  if (!(begin.Get() == first)) return 3;\n"
+        "  XGUIDArrayIt copied(begin);\n"
+        "  if (!(copied == begin) || copied != begin) return 4;\n"
+        "  ++copied;\n"
+        "  if (copied == begin || !(copied != begin)) return 5;\n"
+        "  if (!(copied.Get() == second)) return 6;\n"
+        "  XGUIDArrayIt assigned;\n"
+        "  assigned = copied;\n"
+        "  if (!(assigned == copied)) return 7;\n"
+        "  ++assigned;\n"
+        "  if (!(assigned == end) || assigned != end) return 8;\n"
+        "  XGUIDArrayIt rbegin = values.RBegin();\n"
+        "  XGUIDArrayIt rend = values.REnd();\n"
+        "  if (rbegin == rend) return 9;\n"
+        "  if (!(rbegin.Get() == second)) return 10;\n"
+        "  --rbegin;\n"
+        "  if (!(rbegin.Get() == first)) return 11;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectDefaultXGUIDArrayItGet() {\n"
+        "  XGUIDArrayIt it;\n"
+        "  it.Get();\n"
+        "}\n"
+        "void RejectDefaultXGUIDArrayItInc() {\n"
+        "  XGUIDArrayIt it;\n"
+        "  ++it;\n"
+        "}\n"
+        "void RejectDefaultXGUIDArrayItDec() {\n"
+        "  XGUIDArrayIt it;\n"
+        "  --it;\n"
+        "}\n"
+        "void RejectEmptyXGUIDArrayItGet() {\n"
+        "  XGUIDArray values;\n"
+        "  XGUIDArrayIt it = values.Begin();\n"
+        "  it.Get();\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XGUIDArrayIt self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xguidarrayit-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XGUIDArrayIt self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XGUIDArrayIt self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXGUIDArrayIt()");
+    asIScriptFunction *defaultGet = module->GetFunctionByDecl("void RejectDefaultXGUIDArrayItGet()");
+    asIScriptFunction *defaultInc = module->GetFunctionByDecl("void RejectDefaultXGUIDArrayItInc()");
+    asIScriptFunction *defaultDec = module->GetFunctionByDecl("void RejectDefaultXGUIDArrayItDec()");
+    asIScriptFunction *emptyGet = module->GetFunctionByDecl("void RejectEmptyXGUIDArrayItGet()");
+    if (!probe || !defaultGet || !defaultInc || !defaultDec || !emptyGet) {
+        engine->DiscardModule(moduleName);
+        error = "XGUIDArrayIt self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XGUIDArrayIt iterator probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultGet, true, "XGUIDArrayIt default Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultInc, true, "XGUIDArrayIt default increment rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultDec, true, "XGUIDArrayIt default decrement rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyGet, true, "XGUIDArrayIt empty Begin Get rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKAttributeDesc script self-test requires an AngelScript engine.";
@@ -5027,6 +5145,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunXClassIDArrayItScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXGUIDArrayItScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeDescScriptSelfTest(engine, error)) {
