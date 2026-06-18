@@ -898,6 +898,99 @@ bool RunCKBehaviorManagerScriptSelfTest(CKContext *context, asIScriptEngine *eng
     return ok;
 }
 
+bool RunCKMessageManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKMessageManager script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *messageManagerType = engine->GetTypeInfoByDecl("CKMessageManager");
+    if (!messageManagerType) {
+        error = "CKMessageManager self-test could not find the registered type.";
+        return false;
+    }
+    if (messageManagerType->GetMethodByDecl("CKMessageType AddMessageType(const string &in msgName)") == nullptr ||
+        messageManagerType->GetMethodByDecl("string GetMessageTypeName(CKMessageType msgType)") == nullptr ||
+        messageManagerType->GetMethodByDecl("int GetMessageTypeCount()") == nullptr ||
+        messageManagerType->GetMethodByDecl("CKMessage@ SendMessageSingle(int MsgType, CKBeObject@ dest, CKBeObject@ sender = null)") == nullptr ||
+        messageManagerType->GetMethodByDecl("CKERROR RegisterWait(CKMessageType msgType, CKBehavior@ beh, int outputToActivate, CKBeObject@ obj)") == nullptr ||
+        messageManagerType->GetMethodByDecl("CKERROR UnRegisterWait(CKMessageType msgType, CKBehavior@ beh, int OutputToActivate)") == nullptr) {
+        error = "CKMessageManager self-test could not find expected message manager methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKMessageManagerSelfTest";
+    const char *source =
+        "int ProbeMessageManager(CKContext@ ctx) {\n"
+        "  CKMessageManager@ manager = ctx.GetMessageManager();\n"
+        "  if (manager is null) return 1;\n"
+        "  CKBaseManager@ base = manager;\n"
+        "  if (base is null) return 2;\n"
+        "  if (cast<CKMessageManager>(base) is null) return 3;\n"
+        "  if (manager.GetMessageTypeCount() < 0) return 4;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMessageManagerNullSingle(CKContext@ ctx) {\n"
+        "  CKMessageManager@ manager = ctx.GetMessageManager();\n"
+        "  manager.SendMessageSingle(0, null);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMessageManagerNullGroup(CKContext@ ctx) {\n"
+        "  CKMessageManager@ manager = ctx.GetMessageManager();\n"
+        "  manager.SendMessageGroup(0, null);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMessageManagerNullWait(CKContext@ ctx) {\n"
+        "  CKMessageManager@ manager = ctx.GetMessageManager();\n"
+        "  manager.RegisterWait(0, null, 0, null);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMessageManagerNullUnwait(CKContext@ ctx) {\n"
+        "  CKMessageManager@ manager = ctx.GetMessageManager();\n"
+        "  manager.UnRegisterWait(0, null, 0);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKMessageManager self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-message-manager-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMessageManager self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMessageManager self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeMessageManager(CKContext@)");
+    asIScriptFunction *nullSingle = module->GetFunctionByDecl("int ProbeMessageManagerNullSingle(CKContext@)");
+    asIScriptFunction *nullGroup = module->GetFunctionByDecl("int ProbeMessageManagerNullGroup(CKContext@)");
+    asIScriptFunction *nullWait = module->GetFunctionByDecl("int ProbeMessageManagerNullWait(CKContext@)");
+    asIScriptFunction *nullUnwait = module->GetFunctionByDecl("int ProbeMessageManagerNullUnwait(CKContext@)");
+    if (!probe || !nullSingle || !nullGroup || !nullWait || !nullUnwait) {
+        engine->DiscardModule(moduleName);
+        error = "CKMessageManager self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKMessageManager accessors probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, nullSingle, context, true, "CKMessageManager null single-message probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, nullGroup, context, true, "CKMessageManager null group-message probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, nullWait, context, true, "CKMessageManager null wait probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, nullUnwait, context, true, "CKMessageManager null unregister-wait probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKObjectManager script self-test requires CKContext and AngelScript engine.";
@@ -1244,6 +1337,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKBehaviorManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKMessageManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {

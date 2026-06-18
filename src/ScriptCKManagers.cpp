@@ -16,6 +16,12 @@ static CKPluginEntry &MissingCKPluginEntry(const char *message) {
     return dummy;
 }
 
+static void SetActiveScriptException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
 static CKPluginDll &MissingCKPluginDll(const char *message) {
     static thread_local CKPluginDll dummy;
     dummy.m_PluginInfoCount = 0;
@@ -71,6 +77,104 @@ static int GetCKInputKeyName(CKInputManager *self, CKDWORD key, std::string &key
     const int result = self->GetKeyName(key, buffer);
     keyName = buffer;
     return result;
+}
+
+static CKERROR SendCKMessage(CKMessageManager *self, CKMessage *message) {
+    if (!self) {
+        SetActiveScriptException("CKMessageManager.SendMessage requires a valid manager.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (!message) {
+        SetActiveScriptException("CKMessageManager.SendMessage requires a non-null message.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->SendMessage(message);
+}
+
+static CKMessage *SendCKMessageSingle(CKMessageManager *self, CKMessageType msgType, CKBeObject *dest, CKBeObject *sender) {
+    if (!self) {
+        SetActiveScriptException("CKMessageManager.SendMessageSingle requires a valid manager.");
+        return nullptr;
+    }
+    if (!dest) {
+        SetActiveScriptException("CKMessageManager.SendMessageSingle requires a non-null destination object.");
+        return nullptr;
+    }
+    return self->SendMessageSingle(msgType, dest, sender);
+}
+
+static CKMessage *SendCKMessageGroup(CKMessageManager *self, CKMessageType msgType, CKGroup *group, CKBeObject *sender) {
+    if (!self) {
+        SetActiveScriptException("CKMessageManager.SendMessageGroup requires a valid manager.");
+        return nullptr;
+    }
+    if (!group) {
+        SetActiveScriptException("CKMessageManager.SendMessageGroup requires a non-null group.");
+        return nullptr;
+    }
+    return self->SendMessageGroup(msgType, group, sender);
+}
+
+static CKERROR RegisterCKMessageWait(CKMessageManager *self,
+                                     CKMessageType msgType,
+                                     CKBehavior *behavior,
+                                     int outputToActivate,
+                                     CKBeObject *object) {
+    if (!self) {
+        SetActiveScriptException("CKMessageManager.RegisterWait requires a valid manager.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (!behavior || !object) {
+        SetActiveScriptException("CKMessageManager.RegisterWait requires non-null behavior and object handles.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->RegisterWait(msgType, behavior, outputToActivate, object);
+}
+
+static CKERROR RegisterCKMessageWaitByName(CKMessageManager *self,
+                                           const std::string &msgName,
+                                           CKBehavior *behavior,
+                                           int outputToActivate,
+                                           CKBeObject *object) {
+    if (!self) {
+        SetActiveScriptException("CKMessageManager.RegisterWait requires a valid manager.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (!behavior || !object) {
+        SetActiveScriptException("CKMessageManager.RegisterWait requires non-null behavior and object handles.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->RegisterWait(const_cast<CKSTRING>(msgName.c_str()), behavior, outputToActivate, object);
+}
+
+static CKERROR UnregisterCKMessageWait(CKMessageManager *self,
+                                       CKMessageType msgType,
+                                       CKBehavior *behavior,
+                                       int outputToActivate) {
+    if (!self) {
+        SetActiveScriptException("CKMessageManager.UnRegisterWait requires a valid manager.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (!behavior) {
+        SetActiveScriptException("CKMessageManager.UnRegisterWait requires a non-null behavior handle.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->UnRegisterWait(msgType, behavior, outputToActivate);
+}
+
+static CKERROR UnregisterCKMessageWaitByName(CKMessageManager *self,
+                                             const std::string &msgName,
+                                             CKBehavior *behavior,
+                                             int outputToActivate) {
+    if (!self) {
+        SetActiveScriptException("CKMessageManager.UnRegisterWait requires a valid manager.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (!behavior) {
+        SetActiveScriptException("CKMessageManager.UnRegisterWait requires a non-null behavior handle.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->UnRegisterWait(const_cast<CKSTRING>(msgName.c_str()), behavior, outputToActivate);
 }
 
 static VxDriverDesc &MissingVxDriverDesc(const char *message) {
@@ -565,16 +669,16 @@ void RegisterCKMessageManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMessageManager", "void RenameMessageType(const string &in oldName, const string &in newName)", asFUNCTIONPR([](CKMessageManager *self, const std::string &oldName, const std::string &newName) { self->RenameMessageType(const_cast<CKSTRING>(oldName.c_str()), const_cast<CKSTRING>(newName.c_str())); }, (CKMessageManager *, const std::string &, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR SendMessage(CKMessage@ msg)", asMETHODPR(CKMessageManager, SendMessage, (CKMessage*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR SendMessage(CKMessage@ msg)", asFUNCTIONPR(SendCKMessage, (CKMessageManager *, CKMessage *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
-    r = engine->RegisterObjectMethod("CKMessageManager", "CKMessage@ SendMessageSingle(int MsgType, CKBeObject@ dest, CKBeObject@ sender = null)", asMETHODPR(CKMessageManager, SendMessageSingle, (CKMessageType, CKBeObject *, CKBeObject *), CKMessage *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMessageManager", "CKMessage@ SendMessageGroup(int MsgType, CKGroup@ group, CKBeObject@ sender = null)", asMETHODPR(CKMessageManager, SendMessageGroup, (CKMessageType, CKGroup *, CKBeObject *), CKMessage*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMessageManager", "CKMessage@ SendMessageSingle(int MsgType, CKBeObject@ dest, CKBeObject@ sender = null)", asFUNCTIONPR(SendCKMessageSingle, (CKMessageManager *, CKMessageType, CKBeObject *, CKBeObject *), CKMessage *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMessageManager", "CKMessage@ SendMessageGroup(int MsgType, CKGroup@ group, CKBeObject@ sender = null)", asFUNCTIONPR(SendCKMessageGroup, (CKMessageManager *, CKMessageType, CKGroup *, CKBeObject *), CKMessage *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMessageManager", "CKMessage@ SendMessageBroadcast(int MsgType, int id = 0, CKBeObject@ sender = null)", asMETHODPR(CKMessageManager, SendMessageBroadcast, (CKMessageType, CK_CLASSID, CKBeObject *), CKMessage *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR RegisterWait(CKMessageType msgType, CKBehavior@ beh, int outputToActivate, CKBeObject@ obj)", asMETHODPR(CKMessageManager, RegisterWait, (CKMessageType, CKBehavior *, int, CKBeObject *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR RegisterWait(const string &in msgName, CKBehavior@ beh, int OutputToActivate, CKBeObject@ obj)", asFUNCTIONPR([](CKMessageManager *self, const std::string &msgName, CKBehavior *behav, int OutputToActivate, CKBeObject *obj) { return self->RegisterWait(const_cast<CKSTRING>(msgName.c_str()), behav, OutputToActivate, obj); }, (CKMessageManager *, const std::string &, CKBehavior *, int, CKBeObject *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR UnRegisterWait(CKMessageType msgType, CKBehavior@ beh, int OutputToActivate)", asMETHODPR(CKMessageManager, UnRegisterWait, (CKMessageType, CKBehavior *, int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR UnRegisterWait(const string &in msgName, CKBehavior@ beh, int OutputToActivate)", asFUNCTIONPR([](CKMessageManager *self, const std::string &msgName, CKBehavior *behav, int OutputToActivate) { return self->UnRegisterWait(const_cast<CKSTRING>(msgName.c_str()), behav, OutputToActivate); }, (CKMessageManager *, const std::string &, CKBehavior *, int), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR RegisterWait(CKMessageType msgType, CKBehavior@ beh, int outputToActivate, CKBeObject@ obj)", asFUNCTIONPR(RegisterCKMessageWait, (CKMessageManager *, CKMessageType, CKBehavior *, int, CKBeObject *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR RegisterWait(const string &in msgName, CKBehavior@ beh, int OutputToActivate, CKBeObject@ obj)", asFUNCTIONPR(RegisterCKMessageWaitByName, (CKMessageManager *, const std::string &, CKBehavior *, int, CKBeObject *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR UnRegisterWait(CKMessageType msgType, CKBehavior@ beh, int OutputToActivate)", asFUNCTIONPR(UnregisterCKMessageWait, (CKMessageManager *, CKMessageType, CKBehavior *, int), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR UnRegisterWait(const string &in msgName, CKBehavior@ beh, int OutputToActivate)", asFUNCTIONPR(UnregisterCKMessageWaitByName, (CKMessageManager *, const std::string &, CKBehavior *, int), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMessageManager", "CKERROR RegisterDefaultMessages()", asMETHODPR(CKMessageManager, RegisterDefaultMessages, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
