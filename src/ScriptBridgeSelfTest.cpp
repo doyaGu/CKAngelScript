@@ -499,20 +499,33 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (task is null || !task.IsValid()) return 983;\n";
     source += "    BehaviorRef@ behavior = task.Behavior();\n";
     source += "    if (behavior is null || !behavior.IsValid()) return 984;\n";
+    source += "    if (!behavior.valid || behavior.Error() != \"\") return 9841;\n";
+    source += "    if (behavior.Describe() == \"\" || behavior.Name() == \"\" || behavior.ClassId() == 0) return 9842;\n";
+    source += "    behavior.IsDynamic();\n";
     source += "    ObjectRef@ object = behavior;\n";
     source += "    if (object is null || object.Id() != behavior.Id()) return 985;\n";
     source += "    BehaviorLayout@ layout = behavior.Layout();\n";
     source += "    if (layout is null || layout.FindPin(\"pIn 0\") < 0) return 986;\n";
     source += "    BehaviorGraph@ graph = behavior.AsGraph();\n";
+    source += "    behavior.InputActive(0);\n";
     source += "    behavior.InputActive(input);\n";
+    source += "    behavior.OutputActive(0);\n";
     source += "    behavior.OutputActive(output);\n";
+    source += "    ParamRef@ pinByIndex = behavior.Pin(0);\n";
+    source += "    if (pinByIndex is null || !pinByIndex.IsValid()) return 9861;\n";
     source += "    ParamRef@ pinRef = behavior.Pin(pinSlot);\n";
     source += "    if (pinRef is null || !pinRef.IsValid()) return 987;\n";
+    source += "    ParamRef@ poutByIndex = behavior.Pout(0); if (poutByIndex !is null) { poutByIndex.IsValid(); }\n";
     source += "    if (poutSlot !is null && poutSlot.IsValid()) { ParamRef@ poutRef = behavior.Pout(poutSlot); if (poutRef is null || !poutRef.IsValid()) return 988; }\n";
+    source += "    ParamRef@ localByIndex = behavior.Local(0); if (localByIndex !is null) { localByIndex.IsValid(); }\n";
     source += "    if (localSlot !is null && localSlot.IsValid()) { behavior.Local(localSlot); }\n";
     source += "    GraphTask@ watch = behavior.Watch(0.01f);\n";
     source += "    if (watch is null || !watch.IsValid()) return 989;\n";
+    source += "    if (!behavior.Trigger(0, false)) return 9891;\n";
     source += "    if (!behavior.Trigger(input, false)) return 990;\n";
+    source += "    GraphTask@ startedByIndex = behavior.Start(0, false, 0.01f);\n";
+    source += "    if (startedByIndex is null || !startedByIndex.IsValid()) return 9901;\n";
+    source += "    startedByIndex.Cancel();\n";
     source += "    GraphTask@ started = behavior.Start(input, false, 0.01f);\n";
     source += "    if (started is null || !started.IsValid()) return 991;\n";
     source += "    int graphTaskResult = ProbeGraphTaskApi(ctx, behavior, started, input, output, poutSlot);\n";
@@ -2837,6 +2850,17 @@ static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine
         }
         if (behaviorQueryType->GetMethodByDecl("BehaviorQuery@ Target(CKBeObject@ target)")) {
             error = "BehaviorQuery.Target still exposes a raw CKBeObject handle.";
+            return false;
+        }
+        asITypeInfo *behaviorRefType = engine->GetTypeInfoByName("BehaviorRef");
+        if (!behaviorRefType ||
+            !behaviorRefType->GetMethodByDecl("ObjectRef@ opImplCast()") ||
+            !behaviorRefType->GetMethodByDecl("const ObjectRef@ opImplCast() const")) {
+            error = "BehaviorRef wrapper cast declaration self-test failed.";
+            return false;
+        }
+        if (behaviorRefType->GetMethodByDecl("CKObject@ Object() const")) {
+            error = "BehaviorRef still exposes a raw CKObject handle.";
             return false;
         }
         asITypeInfo *behaviorLinkType = engine->GetTypeInfoByName("BehaviorLinkRef");

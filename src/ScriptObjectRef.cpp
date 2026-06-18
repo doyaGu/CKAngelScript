@@ -144,6 +144,12 @@ ObjectRefIdentityOptions WithoutLegacyIdentityMethods() {
     return options;
 }
 
+ObjectRefIdentityOptions WithoutLegacyIdentityAndObjectMethods() {
+    ObjectRefIdentityOptions options = WithoutLegacyIdentityMethods();
+    options.object = false;
+    return options;
+}
+
 ObjectRefIdentityOptions WithoutIsValidAndDescribe() {
     ObjectRefIdentityOptions options;
     options.isValid = false;
@@ -395,7 +401,7 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
 void RegisterScriptObjectRefBridge(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
-    RegisterObjectRefType<BehaviorRef>(engine, "BehaviorRef", WithoutLegacyIdentityMethods());
+    RegisterObjectRefType<BehaviorRef>(engine, "BehaviorRef", WithoutLegacyIdentityAndObjectMethods());
     RegisterObjectRefType<ParamRef>(engine, "ParamRef", WithoutLegacyIdentityMethods());
     RegisterObjectRefType<ParamInRef>(engine, "ParamInRef");
     RegisterObjectRefType<ParamOutRef>(engine, "ParamOutRef");
