@@ -1815,6 +1815,35 @@ static CKERROR ReadCKMovieReaderFrame(CKMovieReader *self, int frame, CKMoviePro
     return self->ReadFrame(frame, prop);
 }
 
+static CKERROR LoadCKModelReader(CKModelReader *self,
+                                 CKContext *context,
+                                 const std::string &filename,
+                                 CKObjectArray *objArray,
+                                 CKDWORD loadFlags,
+                                 CKCharacter *carac) {
+    if (!self || !context || !objArray) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    std::string mutableFilename = filename;
+    mutableFilename.push_back('\0');
+    return self->Load(context, &mutableFilename[0], objArray, loadFlags, carac);
+}
+
+static CKERROR SaveCKModelReader(CKModelReader *self,
+                                 CKContext *context,
+                                 const std::string &filename,
+                                 CKObjectArray *objArray,
+                                 CKDWORD saveFlags) {
+    if (!self || !context || !objArray) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    std::string mutableFilename = filename;
+    mutableFilename.push_back('\0');
+    return self->Save(context, &mutableFilename[0], objArray, saveFlags);
+}
+
 void RegisterCKDataReader(asIScriptEngine *engine) {
     RegisterCKDataReaderMembers<CKDataReader>(engine, "CKDataReader");
 }
@@ -1826,8 +1855,8 @@ void RegisterCKModelReader(asIScriptEngine *engine) {
 
     RegisterCKDataReaderMembers<CKModelReader>(engine, "CKModelReader");
 
-    r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Load(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD loadFlags, CKCharacter@ carac = null)", asFUNCTIONPR([](CKModelReader *self, CKContext *context, const std::string &filename, CKObjectArray *objArray, CKDWORD loadFlags, CKCharacter *carac) { return self->Load(context, const_cast<CKSTRING>(filename.c_str()), objArray, loadFlags, carac); }, (CKModelReader*, CKContext *, const std::string&, CKObjectArray *, CKDWORD, CKCharacter*), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Save(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD saveFlags)", asFUNCTIONPR([](CKModelReader *self, CKContext *context, const std::string &filename, CKObjectArray *objArray, CKDWORD saveFlags) { return self->Save(context, const_cast<CKSTRING>(filename.c_str()), objArray, saveFlags); }, (CKModelReader*, CKContext *, const std::string&, CKObjectArray *, CKDWORD), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Load(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD loadFlags, CKCharacter@ carac = null)", asFUNCTION(LoadCKModelReader), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKModelReader", "CKERROR Save(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD saveFlags)", asFUNCTION(SaveCKModelReader), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKBitmapReader

@@ -1670,6 +1670,55 @@ bool RunCKMovieReaderScriptSelfTest(asIScriptEngine *engine, std::string &error)
     return true;
 }
 
+bool RunCKModelReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKModelReader script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *modelReaderType = engine->GetTypeInfoByDecl("CKModelReader");
+    if (!modelReaderType) {
+        error = "CKModelReader self-test could not find the registered type.";
+        return false;
+    }
+    if (modelReaderType->GetMethodByDecl("CKERROR Load(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD loadFlags, CKCharacter@ carac = null)") == nullptr ||
+        modelReaderType->GetMethodByDecl("CKERROR Save(CKContext@ context, const string &in filename, CKObjectArray@ objArray, CKDWORD saveFlags)") == nullptr) {
+        error = "CKModelReader self-test could not find expected load/save methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKModelReaderSelfTest";
+    const char *source =
+        "void ProbeModelReaderSurface(CKModelReader@ reader, CKContext@ ctx, CKObjectArray@ objects, CKCharacter@ carac) {\n"
+        "  if (reader is null) return;\n"
+        "  reader.Load(ctx, \"\", objects, 0);\n"
+        "  reader.Load(ctx, \"\", objects, 0, carac);\n"
+        "  reader.Save(ctx, \"\", objects, 0);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKModelReader self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-model-reader-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKModelReader self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKModelReader self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKKey script self-test requires an AngelScript engine.";
@@ -2865,6 +2914,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKMovieReaderScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKModelReaderScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKPluginManagerScriptSelfTest(engine, error)) {
