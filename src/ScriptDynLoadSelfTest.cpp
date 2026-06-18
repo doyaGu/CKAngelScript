@@ -67,6 +67,16 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         return false;
     }
 
+    asITypeInfo *dynCallbackType = engine->GetTypeInfoByDecl("DynCallback");
+    if (!dynCallbackType) {
+        error = "DynLoad self-test could not resolve DynCallback type.";
+        return false;
+    }
+    if ((dynCallbackType->GetFlags() & asOBJ_GC) == 0) {
+        error = "DynLoad self-test found DynCallback missing GC type flag.";
+        return false;
+    }
+
     constexpr const char *moduleName = "__CKAS_DynLoadSelfTest";
     const std::string source =
         "NativePointer FindExport(DynLibrary@ lib, const string &in name) {\n"
@@ -150,6 +160,32 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
         "  DynAggregate@ aggr = DynAggregate(1, 4);\n"
         "  aggr.AggregateField(aggr, 0);\n"
         "  return 1;\n"
+        "}\n"
+        "int8 DynArgsScalarHandler(NativePointer pcb, DynArgs &args, DynValue &result) {\n"
+        "  if (pcb.IsNull()) { result.SetInt(101); return DC_SIGCHAR_INT; }\n"
+        "  result.SetInt(args.ArgInt() + 7);\n"
+        "  return DC_SIGCHAR_INT;\n"
+        "}\n"
+        "int8 DynCallbackInitHandler(NativePointer pcb, DynArgs &args, DynValue &result) {\n"
+        "  if (pcb.IsNull()) { result.SetInt(102); return DC_SIGCHAR_INT; }\n"
+        "  result.SetInt(args.ArgInt() + 11);\n"
+        "  return DC_SIGCHAR_INT;\n"
+        "}\n"
+        "int RunDynCallback() {\n"
+        "  DynCallback@ scalarCb = DynCallback(\"i)i\", DynArgsScalarHandler);\n"
+        "  if (scalarCb is null) return 1;\n"
+        "  if (scalarCb.GetHandler() is null) return 2;\n"
+        "  DynCall@ call = DynCall();\n"
+        "  if (call is null) return 3;\n"
+        "  int scalar = call.Reset().ArgInt(35).CallInt(scalarCb.GetCallback());\n"
+        "  if (scalar != 42) return scalar;\n"
+        "  if (call.GetError() != DC_ERROR_NONE) return 4;\n"
+        "  scalarCb.Init(\"i)i\", DynCallbackInitHandler);\n"
+        "  if (scalarCb.GetHandler() is null) return 5;\n"
+        "  int rebound = call.Reset().ArgInt(31).CallInt(scalarCb.GetCallback());\n"
+        "  if (rebound != 42) return rebound;\n"
+        "  if (call.GetError() != DC_ERROR_NONE) return 6;\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -253,5 +289,6 @@ bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error) {
            executeIntFunction("int RunDynAggregate()", "DynAggregate") &&
            executeExpectedException("int RunDynAggregateOverflow()", "DynAggregate overflow", "field capacity exceeded") &&
            executeExpectedException("int RunDynAggregateAfterClose()", "DynAggregate after close", "closed DynAggregate") &&
-           executeExpectedException("int RunDynAggregateCycle()", "DynAggregate cycle", "nesting cycle");
+           executeExpectedException("int RunDynAggregateCycle()", "DynAggregate cycle", "nesting cycle") &&
+           executeIntFunction("int RunDynCallback()", "DynCallback");
 }

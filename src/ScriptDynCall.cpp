@@ -3,6 +3,7 @@
 #include <cassert>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <dyncall.h>
@@ -349,48 +350,54 @@ private:
 class DynCallback {
 public:
     static DynCallback *Create(const std::string &signature, asIScriptFunction *func) {
-        if (!func)
+        if (!func) {
+            SetActiveScriptException("DynCallback requires a handler.");
             return nullptr;
+        }
 
         void *self = asAllocMem(sizeof(DynCallback));
-        return new(self) DynCallback(signature, func);
+        auto *callback = new(self) DynCallback(signature, func);
+        callback->NotifyGarbageCollector();
+        return callback;
     }
 
     static DynCallback *Create(const std::string &signature, asIScriptFunction *func, const DynAggregate &aggregate) {
-        if (!func)
+        if (!func) {
+            SetActiveScriptException("DynCallback requires a handler.");
             return nullptr;
+        }
 
         void *self = asAllocMem(sizeof(DynCallback));
-        return new(self) DynCallback(signature, func, aggregate);
+        auto *callback = new(self) DynCallback(signature, func, aggregate);
+        callback->NotifyGarbageCollector();
+        return callback;
     }
 
-    DynCallback(const std::string &signature, asIScriptFunction *func) {
-        callback = dcbNewCallback(signature.c_str(), ScriptCallbackHandler, func);
+    DynCallback(std::string signature, asIScriptFunction *func)
+        : m_Signature(std::move(signature)) {
+        RetainHandler(func);
+        callback = dcbNewCallback(m_Signature.c_str(), ScriptCallbackHandler, m_Handler);
         if (!callback) {
-            auto *ctx = asGetActiveContext();
-            if (ctx)
-                ctx->SetException("Failed to create callback.");
-        } else if (func) {
-            func->AddRef();
+            ReleaseHandler();
+            SetActiveScriptException("Failed to create callback.");
         }
     }
 
-    DynCallback(const std::string &signature, asIScriptFunction *func, const DynAggregate &aggregate) {
-        callback = dcbNewCallback2(signature.c_str(), ScriptCallbackHandler, func, &aggregate.aggr);
+    DynCallback(std::string signature, asIScriptFunction *func, const DynAggregate &aggregate)
+        : m_Signature(std::move(signature)), m_Aggregate(&aggregate) {
+        RetainHandler(func);
+        aggregate.AddRef();
+        callback = dcbNewCallback2(m_Signature.c_str(), ScriptCallbackHandler, m_Handler, &aggregate.aggr);
         if (!callback) {
-            auto *ctx = asGetActiveContext();
-            if (ctx)
-                ctx->SetException("Failed to create callback.");
-        } else if (func) {
-            func->AddRef();
+            ReleaseAggregate();
+            ReleaseHandler();
+            SetActiveScriptException("Failed to create callback.");
         }
     }
 
     ~DynCallback() {
-        auto *handler = GetHandler();
-        if (handler) {
-            handler->Release();
-        }
+        ReleaseHandler();
+        ReleaseAggregate();
         if (callback) {
             dcbFreeCallback(callback);
         }
@@ -414,10 +421,12 @@ public:
     }
 
     int AddRef() const {
+        m_GCFlag = false;
         return m_RefCount.AddRef();
     }
 
     int Release() const {
+        m_GCFlag = false;
         const int r = m_RefCount.Release();
         if (r == 0) {
             std::atomic_thread_fence(std::memory_order_acquire);
@@ -425,6 +434,28 @@ public:
             asFreeMem(const_cast<DynCallback *>(this));
         }
         return r;
+    }
+
+    int GetRefCount() const {
+        return const_cast<RefCount &>(m_RefCount).GetCount();
+    }
+
+    void SetGCFlag() const {
+        m_GCFlag = true;
+    }
+
+    bool GetGCFlag() const {
+        return m_GCFlag;
+    }
+
+    void EnumReferences(asIScriptEngine *engine) const {
+        if (engine && m_Handler)
+            engine->GCEnumCallback(m_Handler);
+    }
+
+    void ReleaseAllReferences(asIScriptEngine *) {
+        ReleaseHandler();
+        ReinitCallbackUserData();
     }
 
     asILockableSharedBool *GetWeakRefFlag() {
@@ -435,49 +466,48 @@ public:
 
     void Init(const std::string &signature, asIScriptFunction *func) {
         if (!callback) {
-            auto *ctx = asGetActiveContext();
-            if (ctx)
-                ctx->SetException("Callback is not initialized.");
+            SetActiveScriptException("Callback is not initialized.");
+            return;
+        }
+        if (!func) {
+            SetActiveScriptException("DynCallback.Init requires a handler.");
             return;
         }
 
-        auto *handler = GetHandler();
-        if (handler) {
-            handler->Release();
-        }
-
-        if (func) {
-            func->AddRef();
-        }
-
-        dcbInitCallback(callback, signature.c_str(), ScriptCallbackHandler, func);
+        func->AddRef();
+        ReleaseHandler();
+        ReleaseAggregate();
+        m_Signature = signature;
+        m_Handler = func;
+        dcbInitCallback(callback, m_Signature.c_str(), ScriptCallbackHandler, m_Handler);
     }
 
     void Init(const std::string &signature, asIScriptFunction *func, const DynAggregate &aggregate) {
         if (!callback) {
-            auto *ctx = asGetActiveContext();
-            if (ctx)
-                ctx->SetException("Callback is not initialized.");
+            SetActiveScriptException("Callback is not initialized.");
+            return;
+        }
+        if (!func) {
+            SetActiveScriptException("DynCallback.Init requires a handler.");
             return;
         }
 
-        auto *handler = GetHandler();
-        if (handler) {
-            handler->Release();
-        }
-
-        if (func) {
-            func->AddRef();
-        }
-
-        dcbInitCallback2(callback, signature.c_str(), ScriptCallbackHandler, func, &aggregate.aggr);
+        func->AddRef();
+        aggregate.AddRef();
+        ReleaseHandler();
+        ReleaseAggregate();
+        m_Signature = signature;
+        m_Handler = func;
+        m_Aggregate = &aggregate;
+        dcbInitCallback2(callback, m_Signature.c_str(), ScriptCallbackHandler, m_Handler, &aggregate.aggr);
     }
 
     asIScriptFunction *GetHandler() const {
-        if (!callback) {
+        if (!m_Handler) {
             return nullptr;
         }
-        return static_cast<asIScriptFunction *>(dcbGetUserData(callback));
+        m_Handler->AddRef();
+        return m_Handler;
     }
 
     DCCallback *Get() const {
@@ -493,6 +523,12 @@ public:
         asIScriptContext *ctx = engine->RequestContext();
         if (!ctx)
             return DC_SIGCHAR_VOID;
+
+        auto finish = [engine, ctx](DCsigchar signature) {
+            ctx->Unprepare();
+            engine->ReturnContext(ctx);
+            return signature;
+        };
 
         int r = 0;
         if (func->GetFuncType() == asFUNC_DELEGATE) {
@@ -510,28 +546,77 @@ public:
             return DC_SIGCHAR_VOID;
         }
 
-        ctx->SetArgObject(0, &cb);
-        ctx->SetArgObject(1, args);
-        ctx->SetArgObject(2, result);
+        NativePointer callbackPointer(cb);
+        r = ctx->SetArgObject(0, &callbackPointer);
+        if (r < 0)
+            return finish(DC_SIGCHAR_VOID);
+        r = ctx->SetArgObject(1, args);
+        if (r < 0)
+            return finish(DC_SIGCHAR_VOID);
+        r = ctx->SetArgObject(2, result);
+        if (r < 0)
+            return finish(DC_SIGCHAR_VOID);
 
         r = ctx->Execute();
-        if (r != asEXECUTION_FINISHED) {
-            engine->ReturnContext(ctx);
-            return DC_SIGCHAR_VOID;
-        }
+        if (r != asEXECUTION_FINISHED)
+            return finish(DC_SIGCHAR_VOID);
 
         auto signature = static_cast<DCsigchar>(ctx->GetReturnByte());
-
-        engine->ReturnContext(ctx);
-
-        return signature;
+        return finish(signature);
     }
 
     DCCallback *callback;
 
 private:
+    void NotifyGarbageCollector() {
+        auto *ctx = asGetActiveContext();
+        if (!ctx)
+            return;
+
+        asIScriptEngine *engine = ctx->GetEngine();
+        if (!engine)
+            return;
+
+        if (asITypeInfo *type = engine->GetTypeInfoByDecl("DynCallback"))
+            engine->NotifyGarbageCollectorOfNewObject(this, type);
+    }
+
+    void ReleaseHandler() {
+        if (m_Handler) {
+            m_Handler->Release();
+            m_Handler = nullptr;
+        }
+    }
+
+    void RetainHandler(asIScriptFunction *handler) {
+        m_Handler = handler;
+        if (m_Handler)
+            m_Handler->AddRef();
+    }
+
+    void ReleaseAggregate() {
+        if (m_Aggregate) {
+            m_Aggregate->Release();
+            m_Aggregate = nullptr;
+        }
+    }
+
+    void ReinitCallbackUserData() {
+        if (!callback)
+            return;
+        if (m_Aggregate) {
+            dcbInitCallback2(callback, m_Signature.c_str(), ScriptCallbackHandler, nullptr, &m_Aggregate->aggr);
+        } else {
+            dcbInitCallback(callback, m_Signature.c_str(), ScriptCallbackHandler, nullptr);
+        }
+    }
+
     mutable RefCount m_RefCount;
     asILockableSharedBool *m_WeakRefFlag = nullptr;
+    mutable bool m_GCFlag = false;
+    std::string m_Signature;
+    asIScriptFunction *m_Handler = nullptr;
+    const DynAggregate *m_Aggregate = nullptr;
 };
 
 class DynLibrary {
@@ -1019,16 +1104,21 @@ static void RegisterDynCallback(asIScriptEngine *engine) {
 
     r = engine->RegisterFuncdef("int8 DynCallbackHandler(NativePointer pcb, DynArgs &args, DynValue &result)"); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectType("DynCallback", 0, asOBJ_REF); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_FACTORY, "DynCallback@ f(const string &in signature, DynCallbackHandler@ handler)", asFUNCTIONPR(DynCallback::Create, (const std::string &, asIScriptFunction *), DynCallback *), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_FACTORY, "DynCallback@ f(const string &in signature, DynCallbackHandler@ handler, const DynAggregate &in aggrs)", asFUNCTIONPR(DynCallback::Create, (const std::string &, asIScriptFunction *, const DynAggregate &), DynCallback *), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectType("DynCallback", 0, asOBJ_REF | asOBJ_GC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_FACTORY, "DynCallback@ f(const string &in signature, DynCallbackHandler@+ handler)", asFUNCTIONPR(DynCallback::Create, (const std::string &, asIScriptFunction *), DynCallback *), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_FACTORY, "DynCallback@ f(const string &in signature, DynCallbackHandler@+ handler, const DynAggregate &in aggrs)", asFUNCTIONPR(DynCallback::Create, (const std::string &, asIScriptFunction *, const DynAggregate &), DynCallback *), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_ADDREF, "void f()", asMETHOD(DynCallback, AddRef), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_RELEASE, "void f()", asMETHOD(DynCallback, Release), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_GET_WEAKREF_FLAG, "int &f()", asMETHOD(DynCallback, GetWeakRefFlag), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_GETREFCOUNT, "int f()", asMETHOD(DynCallback, GetRefCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_SETGCFLAG, "void f()", asMETHOD(DynCallback, SetGCFlag), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_GETGCFLAG, "bool f()", asMETHOD(DynCallback, GetGCFlag), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_ENUMREFS, "void f(int&in)", asMETHOD(DynCallback, EnumReferences), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("DynCallback", asBEHAVE_RELEASEREFS, "void f(int&in)", asMETHOD(DynCallback, ReleaseAllReferences), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("DynCallback", "void Init(const string &in signature, DynCallbackHandler@ handler)", asMETHODPR(DynCallback, Init, (const std::string &, asIScriptFunction *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("DynCallback", "void Init(const string &in signature, DynCallbackHandler@ handler, const DynAggregate &in aggrs)", asMETHODPR(DynCallback, Init, (const std::string &, asIScriptFunction *, const DynAggregate &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("DynCallback", "void Init(const string &in signature, DynCallbackHandler@+ handler)", asMETHODPR(DynCallback, Init, (const std::string &, asIScriptFunction *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("DynCallback", "void Init(const string &in signature, DynCallbackHandler@+ handler, const DynAggregate &in aggrs)", asMETHODPR(DynCallback, Init, (const std::string &, asIScriptFunction *, const DynAggregate &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("DynCallback", "NativePointer GetCallback() const", asFUNCTIONPR([](const DynCallback *cb) { return NativePointer(cb->Get()); }, (const DynCallback *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("DynCallback", "DynCallbackHandler@ GetHandler() const", asFUNCTIONPR([](const DynCallback *cb) { return cb->GetHandler(); }, (const DynCallback *), asIScriptFunction *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
