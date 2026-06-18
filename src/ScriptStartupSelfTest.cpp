@@ -76,7 +76,9 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     }
 
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "parameter-registry", std::string());
-    if (!RunScriptParameterRegistrySelfTest(manager ? manager->GetCKContext() : nullptr, error)) {
+    if (!RunScriptParameterRegistrySelfTest(manager ? manager->GetCKContext() : nullptr,
+                                            manager ? manager->GetScriptEngine() : nullptr,
+                                            error)) {
         ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
                                                              "parameter-registry",
                                                              "Parameter registry",

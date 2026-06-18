@@ -1250,19 +1250,128 @@ void RegisterCKPluginInfo(asIScriptEngine *engine) {
 
 // CKEnumStruct
 
+static std::mutex g_CKEnumStructOwnedMutex;
+static std::unordered_set<CKEnumStruct *> g_CKEnumStructOwnedValues;
+
+static void TrackCKEnumStructValue(CKEnumStruct *self) {
+    std::lock_guard<std::mutex> lock(g_CKEnumStructOwnedMutex);
+    g_CKEnumStructOwnedValues.insert(self);
+}
+
+static bool UntrackCKEnumStructValue(CKEnumStruct *self) {
+    std::lock_guard<std::mutex> lock(g_CKEnumStructOwnedMutex);
+    return g_CKEnumStructOwnedValues.erase(self) > 0;
+}
+
+static bool IsTrackedCKEnumStructValue(CKEnumStruct *self) {
+    std::lock_guard<std::mutex> lock(g_CKEnumStructOwnedMutex);
+    return g_CKEnumStructOwnedValues.find(self) != g_CKEnumStructOwnedValues.end();
+}
+
+static void ReleaseCKEnumStructStorage(CKEnumStruct *self) {
+    if (!self) {
+        return;
+    }
+
+    if (self->Desc) {
+        for (int i = 0; i < self->NbData; ++i) {
+            CKDeletePointer(self->Desc[i]);
+        }
+        delete[] self->Desc;
+    }
+    delete[] self->Vals;
+
+    self->NbData = 0;
+    self->Vals = nullptr;
+    self->Desc = nullptr;
+}
+
+static void CopyCKEnumStructStorage(CKEnumStruct *self, const CKEnumStruct &other) {
+    self->NbData = 0;
+    self->Vals = nullptr;
+    self->Desc = nullptr;
+
+    if (other.NbData <= 0) {
+        return;
+    }
+
+    self->NbData = other.NbData;
+    self->Vals = new int[other.NbData];
+    self->Desc = new CKSTRING[other.NbData];
+    for (int i = 0; i < other.NbData; ++i) {
+        self->Vals[i] = other.Vals ? other.Vals[i] : 0;
+        self->Desc[i] = other.Desc && other.Desc[i] ? CKStrdup(other.Desc[i]) : nullptr;
+    }
+}
+
+static void ConstructCKEnumStruct(CKEnumStruct *self) {
+    self->NbData = 0;
+    self->Vals = nullptr;
+    self->Desc = nullptr;
+    TrackCKEnumStructValue(self);
+}
+
+static void ConstructCKEnumStructCopy(const CKEnumStruct &other, CKEnumStruct *self) {
+    CopyCKEnumStructStorage(self, other);
+    TrackCKEnumStructValue(self);
+}
+
+static void DestructCKEnumStruct(CKEnumStruct *self) {
+    if (UntrackCKEnumStructValue(self)) {
+        ReleaseCKEnumStructStorage(self);
+    }
+}
+
+static CKEnumStruct &AssignCKEnumStruct(CKEnumStruct *self, const CKEnumStruct &other) {
+    if (self == &other) {
+        return *self;
+    }
+
+    if (!IsTrackedCKEnumStructValue(self)) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("Cannot assign to a borrowed CKEnumStruct descriptor.");
+        }
+        return *self;
+    }
+
+    ReleaseCKEnumStructStorage(self);
+    CopyCKEnumStructStorage(self, other);
+    return *self;
+}
+
+static int GetCKEnumStructValue(const CKEnumStruct *self, int index) {
+    if (!self || index < 0 || index >= self->NbData || !self->Vals) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKEnumStruct enum index out of range.");
+        }
+        return 0;
+    }
+    return self->Vals[index];
+}
+
+static std::string GetCKEnumStructDescription(const CKEnumStruct *self, int index) {
+    if (!self || index < 0 || index >= self->NbData || !self->Desc) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKEnumStruct enum index out of range.");
+        }
+        return {};
+    }
+    return ScriptStringify(self->Desc[index]);
+}
+
 void RegisterCKEnumStruct(asIScriptEngine *engine) {
     int r = 0;
 
-    r = engine->RegisterObjectBehaviour("CKEnumStruct", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKEnumStruct *self) { new(self) CKEnumStruct(); }, (CKEnumStruct*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("CKEnumStruct", asBEHAVE_CONSTRUCT, "void f(const CKEnumStruct &in other)", asFUNCTIONPR([](const CKEnumStruct &info, CKEnumStruct *self) { new(self) CKEnumStruct(info); }, (const CKEnumStruct &, CKEnumStruct *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKEnumStruct", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKEnumStruct), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKEnumStruct", asBEHAVE_CONSTRUCT, "void f(const CKEnumStruct &in other)", asFUNCTION(ConstructCKEnumStructCopy), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKEnumStruct", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKEnumStruct *self) { self->~CKEnumStruct(); }, (CKEnumStruct *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKEnumStruct", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(DestructCKEnumStruct), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKEnumStruct", "CKEnumStruct &opAssign(const CKEnumStruct &in other)", asMETHODPR(CKEnumStruct, operator=, (const CKEnumStruct &), CKEnumStruct &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKEnumStruct", "CKEnumStruct &opAssign(const CKEnumStruct &in other)", asFUNCTION(AssignCKEnumStruct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKEnumStruct", "int GetNumEnums() const", asMETHOD(CKEnumStruct, GetNumEnums), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKEnumStruct", "int GetEnumValue(int index) const", asMETHOD(CKEnumStruct, GetEnumValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKEnumStruct", "string GetEnumDescription(int index) const", asFUNCTIONPR([](CKEnumStruct *self, int index) -> std::string { return ScriptStringify(self->GetEnumDescription(index)); }, (CKEnumStruct *, int), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKEnumStruct", "int GetEnumValue(int index) const", asFUNCTION(GetCKEnumStructValue), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKEnumStruct", "string GetEnumDescription(int index) const", asFUNCTION(GetCKEnumStructDescription), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKFlagsStruct
