@@ -378,7 +378,7 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     // Core refs are registered with the raw CK object bindings. Bridge refs are
     // added later after their classes are visible, and Scene::* is registered last
     // because it returns both core and bridge refs.
-    RegisterObjectRefType<ObjectRef>(engine, "ObjectRef");
+    RegisterObjectRefType<ObjectRef>(engine, "ObjectRef", WithoutObjectMethod());
     RegisterObjectRefType<SceneObjectRef>(engine, "SceneObjectRef", WithoutObjectMethod());
     RegisterObjectRefType<Entity3DRef>(engine, "Entity3DRef", WithoutObjectMethod());
     RegisterObjectRefType<Entity2DRef>(engine, "Entity2DRef", WithoutObjectMethod());
