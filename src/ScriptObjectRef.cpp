@@ -386,7 +386,7 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     RegisterObjectRefType<TextureRef>(engine, "TextureRef", WithoutObjectMethod());
     RegisterObjectRefType<MeshRef>(engine, "MeshRef", WithoutObjectMethod());
     RegisterObjectRefType<SceneRef>(engine, "SceneRef", WithoutObjectMethod());
-    RegisterObjectRefType<LevelRef>(engine, "LevelRef");
+    RegisterObjectRefType<LevelRef>(engine, "LevelRef", WithoutObjectMethod());
 
     RegisterObjectRefCast<SceneObjectRef, ObjectRef>(engine, "SceneObjectRef", "ObjectRef");
     RegisterObjectRefCast<Entity3DRef, ObjectRef>(engine, "Entity3DRef", "ObjectRef");
@@ -399,8 +399,6 @@ void RegisterScriptObjectRefCore(asIScriptEngine *engine) {
     RegisterObjectRefCast<Entity3DRef, SceneObjectRef>(engine, "Entity3DRef", "SceneObjectRef");
     RegisterObjectRefCast<Entity2DRef, SceneObjectRef>(engine, "Entity2DRef", "SceneObjectRef");
     RegisterObjectRefCast<SceneRef, SceneObjectRef>(engine, "SceneRef", "SceneObjectRef");
-
-    RegisterObjectRefAccessor(engine, "LevelRef", "CKLevel@ Level() const", &LevelRef::Level);
 }
 
 void RegisterScriptObjectRefBridge(asIScriptEngine *engine) {
