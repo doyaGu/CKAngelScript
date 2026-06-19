@@ -487,6 +487,99 @@ bool ExecuteCKGroupProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCK2dEntityProbe(asIScriptEngine *engine,
+                            asIScriptFunction *function,
+                            CK2dEntity *entity,
+                            CK2dEntity *child,
+                            CKMaterial *material,
+                            bool expectException,
+                            const char *label,
+                            std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, entity);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, child);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(2, material);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCK2dEntityCopyNullProbe(asIScriptEngine *engine,
+                                    asITypeInfo *entityType,
+                                    CK2dEntity *entity,
+                                    CKDependenciesContext &dependencies,
+                                    std::string &error) {
+    asIScriptFunction *copyMethod = entityType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)");
+    if (!copyMethod) {
+        error = "CK2dEntity Copy(null) probe could not find Copy method.";
+        return false;
+    }
+
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = "CK2dEntity Copy(null) probe could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(copyMethod);
+    if (r >= 0) {
+        r = scriptContext->SetObject(entity);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, nullptr);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, &dependencies);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    const bool ok = r == asEXECUTION_EXCEPTION;
+    if (!ok) {
+        error = "CK2dEntity Copy(null) probe expected a script exception, got code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAnimControllerProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKAnimController *positionController,
@@ -5141,6 +5234,175 @@ bool RunCKGroupScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::
     return ok;
 }
 
+bool RunCK2dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CK2dEntity script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *entityType = engine->GetTypeInfoByDecl("CK2dEntity");
+    if (!entityType) {
+        error = "CK2dEntity self-test could not find the registered type.";
+        return false;
+    }
+    if (entityType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr) {
+        error = "CK2dEntity self-test found unsafe inherited ApplyPatchForOlderVersion array-pointer binding.";
+        return false;
+    }
+    if (!entityType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)") ||
+        !entityType->GetMethodByDecl("int GetPosition(Vx2DVector&out vect, bool hom = false, CK2dEntity@ ref = null)") ||
+        !entityType->GetMethodByDecl("void SetPosition(const Vx2DVector&in vect, bool hom = false, bool keepChildren = false, CK2dEntity@ ref = null)") ||
+        !entityType->GetMethodByDecl("bool SetParent(CK2dEntity@ parent)") ||
+        !entityType->GetMethodByDecl("CK2dEntity@ GetParent() const") ||
+        !entityType->GetMethodByDecl("CK2dEntity@ GetChild(int i) const") ||
+        !entityType->GetMethodByDecl("CK2dEntity@ HierarchyParser(CK2dEntity@ current) const") ||
+        !entityType->GetMethodByDecl("void SetMaterial(CKMaterial@ mat)") ||
+        !entityType->GetMethodByDecl("CKMaterial@ GetMaterial()") ||
+        !entityType->GetMethodByDecl("bool AddPreRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback, bool temporary = false)") ||
+        !entityType->GetMethodByDecl("bool RemovePreRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
+        !entityType->GetMethodByDecl("bool SetRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
+        !entityType->GetMethodByDecl("bool RemoveRenderCallBack()") ||
+        !entityType->GetMethodByDecl("bool AddPostRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback, bool temporary = false)") ||
+        !entityType->GetMethodByDecl("bool RemovePostRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
+        !entityType->GetMethodByDecl("void RemoveAllCallbacks()") ||
+        !entityType->GetMethodByDecl("NativePointer GetAppData()") ||
+        !entityType->GetMethodByDecl("void SetAppData(NativePointer data)")) {
+        error = "CK2dEntity self-test could not find expected object methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CK2dEntitySelfTest";
+    const char *source =
+        "bool CK2dEntityRenderCallback(CKRenderContext@ dev, CKRenderObject@ entity) {\n"
+        "  return entity !is null;\n"
+        "}\n"
+        "int ProbeCK2dEntitySurface(CK2dEntity@ entity, CK2dEntity@ child, CKMaterial@ material) {\n"
+        "  if (entity is null || child is null || material is null) return 2;\n"
+        "  CKObject@ asObject = entity;\n"
+        "  CKSceneObject@ asSceneObject = entity;\n"
+        "  CKBeObject@ asBeObject = entity;\n"
+        "  CKRenderObject@ asRenderObject = entity;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null) return 3;\n"
+        "  if (cast<CK2dEntity>(asObject) !is entity) return 4;\n"
+        "  if (cast<CK2dEntity>(asRenderObject) !is entity) return 5;\n"
+        "  entity.SetName(\"__CKAS_CK2dEntitySelfTest\", false);\n"
+        "  if (entity.GetName() == \"\") return 6;\n"
+        "  entity.SetPosition(Vx2DVector(12.0f, 34.0f));\n"
+        "  Vx2DVector pos;\n"
+        "  if (entity.GetPosition(pos) != CK_OK) return 7;\n"
+        "  if (pos.x != 12.0f || pos.y != 34.0f) return 8;\n"
+        "  entity.SetSize(Vx2DVector(48.0f, 64.0f));\n"
+        "  Vx2DVector size;\n"
+        "  entity.GetSize(size);\n"
+        "  if (size.x != 48.0f || size.y != 64.0f) return 9;\n"
+        "  VxRect rect(1.0f, 2.0f, 9.0f, 10.0f);\n"
+        "  entity.SetRect(rect);\n"
+        "  VxRect gotRect;\n"
+        "  entity.GetRect(gotRect);\n"
+        "  if (gotRect.left != 1.0f || gotRect.top != 2.0f || gotRect.right != 9.0f || gotRect.bottom != 10.0f) return 10;\n"
+        "  VxRect src(0.0f, 0.0f, 16.0f, 16.0f);\n"
+        "  entity.SetSourceRect(src);\n"
+        "  entity.UseSourceRect(true);\n"
+        "  if (!entity.IsUsingSourceRect()) return 11;\n"
+        "  entity.SetPickable(false);\n"
+        "  if (entity.IsPickable()) return 12;\n"
+        "  entity.SetPickable(true);\n"
+        "  entity.SetBackground(true);\n"
+        "  if (!entity.IsBackground()) return 13;\n"
+        "  entity.SetBackground(false);\n"
+        "  entity.SetClipToParent(true);\n"
+        "  if (!entity.IsClipToParent()) return 14;\n"
+        "  entity.SetClipToParent(false);\n"
+        "  entity.EnableRatioOffset(true);\n"
+        "  if (!entity.IsRatioOffset()) return 15;\n"
+        "  entity.EnableRatioOffset(false);\n"
+        "  if (!child.SetParent(entity)) return 16;\n"
+        "  if (child.GetParent() !is entity) return 17;\n"
+        "  if (entity.GetChildrenCount() < 1) return 18;\n"
+        "  if (entity.GetChild(0) !is child) return 19;\n"
+        "  if (entity.HierarchyParser(null) !is child) return 20;\n"
+        "  if (!child.SetParent(null)) return 21;\n"
+        "  if (child.GetParent() !is null) return 22;\n"
+        "  entity.SetMaterial(material);\n"
+        "  if (entity.GetMaterial() !is material) return 23;\n"
+        "  entity.SetMaterial(null);\n"
+        "  if (entity.GetMaterial() !is null) return 24;\n"
+        "  entity.SetHomogeneousCoordinates(true);\n"
+        "  if (!entity.IsHomogeneousCoordinates()) return 25;\n"
+        "  entity.SetHomogeneousCoordinates(false);\n"
+        "  entity.EnableClipToCamera(true);\n"
+        "  if (!entity.IsClippedToCamera()) return 26;\n"
+        "  entity.EnableClipToCamera(false);\n"
+        "  entity.SetZOrder(7);\n"
+        "  if (entity.GetZOrder() != 7) return 27;\n"
+        "  entity.GetExtents(src, gotRect);\n"
+        "  entity.SetExtents(src, gotRect);\n"
+        "  if (!entity.GetAppData().IsNull()) return 28;\n"
+        "  entity.SetAppData(NativePointer());\n"
+        "  if (!entity.AddPreRenderCallBack(CK2dEntityRenderCallback)) return 29;\n"
+        "  if (!entity.RemovePreRenderCallBack(CK2dEntityRenderCallback)) return 30;\n"
+        "  if (!entity.AddPostRenderCallBack(CK2dEntityRenderCallback)) return 31;\n"
+        "  if (!entity.RemovePostRenderCallBack(CK2dEntityRenderCallback)) return 34;\n"
+        "  entity.RemoveAllCallbacks();\n"
+        "  if (!entity.SetRenderCallBack(CK2dEntityRenderCallback)) return 32;\n"
+        "  if (!entity.RemoveRenderCallBack()) return 33;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CK2dEntity self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck2dentity-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CK2dEntity self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CK2dEntity self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCK2dEntitySurface(CK2dEntity@, CK2dEntity@, CKMaterial@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CK2dEntity self-test function was not found.";
+        return false;
+    }
+
+    CK2dEntity *entity = CK2dEntity::Cast(context->CreateObject(
+        CKCID_SPRITE, const_cast<CKSTRING>("__CKAS_CK2dEntitySelfTestEntity"), CK_OBJECTCREATION_DYNAMIC));
+    CK2dEntity *child = CK2dEntity::Cast(context->CreateObject(
+        CKCID_SPRITE, const_cast<CKSTRING>("__CKAS_CK2dEntitySelfTestChild"), CK_OBJECTCREATION_DYNAMIC));
+    CKMaterial *material = CKMaterial::Cast(context->CreateObject(
+        CKCID_MATERIAL, const_cast<CKSTRING>("__CKAS_CK2dEntitySelfTestMaterial"), CK_OBJECTCREATION_DYNAMIC));
+    if (!entity || !child || !material) {
+        if (material) context->DestroyObject(material);
+        if (child) context->DestroyObject(child);
+        if (entity) context->DestroyObject(entity);
+        engine->DiscardModule(moduleName);
+        error = "CK2dEntity self-test could not create temporary objects.";
+        return false;
+    }
+
+    CKDependenciesContext dependencies(context);
+    const bool ok = ExecuteCK2dEntityProbe(engine, probe, entity, child, material, false, "CK2dEntity surface probe", error) &&
+                    ExecuteCK2dEntityCopyNullProbe(engine, entityType, entity, dependencies, error);
+
+    child->SetParent(nullptr);
+    entity->RemoveAllCallbacks();
+    context->DestroyObject(material);
+    context->DestroyObject(child);
+    context->DestroyObject(entity);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKBehavior script self-test requires CKContext and AngelScript engine.";
@@ -8807,6 +9069,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKGroupScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCK2dEntityScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBehaviorScriptSelfTest(context, engine, error)) {
