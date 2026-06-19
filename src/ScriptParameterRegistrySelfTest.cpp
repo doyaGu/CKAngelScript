@@ -967,6 +967,58 @@ bool ExecuteCKParameterOutDestinationProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKParameterOutOwnerProbe(asIScriptEngine *engine,
+                                     asIScriptFunction *function,
+                                     CKBehavior *owner,
+                                     CKParameterOut *parameter,
+                                     CKParameterOut *replacement,
+                                     bool expectException,
+                                     const char *label,
+                                     std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, owner);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, parameter);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(2, replacement);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKStateChunkProbe(asIScriptEngine *engine,
                               asIScriptFunction *function,
                               CKStateChunk *chunk,
@@ -7524,6 +7576,26 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "void ProbeCKParameterOutGetDestinationInvalid(CKParameterOut@ outp, CKParameter@ destA, CKParameter@ destB) {\n"
         "  outp.GetDestination(-1);\n"
         "}\n"
+        "int ProbeCKParameterOutOwnerGraph(CKBehavior@ owner, CKParameterOut@ outp, CKParameterOut@ replacement) {\n"
+        "  if (owner is null || outp is null || replacement is null) return 2;\n"
+        "  if (owner.GetOutputParameterCount() < 2) return 3;\n"
+        "  int pos = owner.GetOutputParameterPosition(outp);\n"
+        "  if (pos < 0) return 4;\n"
+        "  if (owner.GetOutputParameter(pos) !is outp) return 5;\n"
+        "  int value = 27182;\n"
+        "  if (outp.SetValue(value) != CK_OK) return 6;\n"
+        "  int read = 0;\n"
+        "  if (outp.GetValue(read) != CK_OK || read != value) return 7;\n"
+        "  CKParameterOut@ old = owner.ReplaceOutputParameter(pos, replacement);\n"
+        "  if (old !is outp) return 8;\n"
+        "  if (owner.GetOutputParameter(pos) !is replacement) return 9;\n"
+        "  CKParameterOut@ removed = owner.RemoveOutputParameter(pos);\n"
+        "  if (removed !is replacement) return 10;\n"
+        "  owner.AddOutputParameter(outp);\n"
+        "  pos = owner.GetOutputParameterPosition(outp);\n"
+        "  if (pos < 0 || owner.GetOutputParameter(pos) !is outp) return 11;\n"
+        "  return 0;\n"
+        "}\n"
         "void ProbeCKParameterCopyValueNull(CKParameterLocal@ local) {\n"
         "  local.CopyValue(null);\n"
         "}\n"
@@ -7584,6 +7656,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *outAddNull = module->GetFunctionByDecl("void ProbeCKParameterOutAddNull(CKParameterOut@, CKParameter@, CKParameter@)");
     asIScriptFunction *outRemoveNull = module->GetFunctionByDecl("void ProbeCKParameterOutRemoveNull(CKParameterOut@, CKParameter@, CKParameter@)");
     asIScriptFunction *outGetInvalid = module->GetFunctionByDecl("void ProbeCKParameterOutGetDestinationInvalid(CKParameterOut@, CKParameter@, CKParameter@)");
+    asIScriptFunction *outOwnerGraph = module->GetFunctionByDecl("int ProbeCKParameterOutOwnerGraph(CKBehavior@, CKParameterOut@, CKParameterOut@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
@@ -7593,7 +7666,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
         !pinSetTypeGuid || !pinSourceGraph || !pinShareNull || !pinSetOwnerNull || !pinSetOwnerInvalid ||
         !pinSetOwnerValid || !operationBasics || !operationOwner || !operationOwnerNull || !outDestinations || !outAddNull || !outRemoveNull ||
-        !outGetInvalid || !copyValueNull || !compatibleNull) {
+        !outGetInvalid || !outOwnerGraph || !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
         return false;
@@ -7794,6 +7867,24 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
             if (owner) {
                 context->DestroyObject(owner);
             }
+        }
+    }
+
+    if (ok) {
+        CKBehavior *owner = CKBehavior::Cast(context->CreateObject(
+            CKCID_BEHAVIOR,
+            const_cast<CKSTRING>("__CKAS_CKParameterOutOwnerProbeBehavior"),
+            CK_OBJECTCREATION_DYNAMIC));
+        CKParameterOut *ownedOut = owner ? owner->CreateOutputParameter(const_cast<CKSTRING>("__CKAS_CKParameterOutOwned"), CKPGUID_INT) : nullptr;
+        CKParameterOut *replacementOut = owner ? owner->CreateOutputParameter(const_cast<CKSTRING>("__CKAS_CKParameterOutReplacement"), CKPGUID_INT) : nullptr;
+        if (!owner || !ownedOut || !replacementOut) {
+            ok = false;
+            error = "CKParameterOut owner graph probe could not create its native behavior outputs.";
+        } else {
+            ok = ExecuteCKParameterOutOwnerProbe(engine, outOwnerGraph, owner, ownedOut, replacementOut, false, "CKParameterOut owner graph probe", error);
+        }
+        if (owner) {
+            context->DestroyObject(owner);
         }
     }
 
