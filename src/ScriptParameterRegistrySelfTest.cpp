@@ -2,6 +2,7 @@
 
 #include "angelscript.h"
 
+#include "CKAll.h"
 #include "CKAttributeManager.h"
 #include "CKStateChunk.h"
 #include "CKParameterOperation.h"
@@ -202,6 +203,54 @@ bool ExecuteNoArgIntProbe(asIScriptEngine *engine,
     }
 
     int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCKObjectProbe(asIScriptEngine *engine,
+                          asIScriptFunction *function,
+                          CKContext *context,
+                          CKObject *object,
+                          bool expectException,
+                          const char *label,
+                          std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, context);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, object);
+    }
     if (r >= 0) {
         r = scriptContext->Execute();
     }
@@ -3775,6 +3824,93 @@ bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engin
     return true;
 }
 
+bool RunCKObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKObject script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *objectType = engine->GetTypeInfoByDecl("CKObject");
+    if (!objectType) {
+        error = "CKObject self-test could not find the registered type.";
+        return false;
+    }
+    if (!objectType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)") ||
+        !objectType->GetMethodByDecl("NativePointer GetAppData()") ||
+        !objectType->GetMethodByDecl("void SetAppData(NativePointer data)") ||
+        !objectType->GetMethodByDecl("CKObject@ CKGetObject(CK_ID id)") ||
+        !objectType->GetMethodByDecl("CKBeObject@ opCast()")) {
+        error = "CKObject self-test could not find expected object methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKObjectSelfTest";
+    const char *source =
+        "int ProbeCKObjectSurface(CKContext@ ctx, CKObject@ obj) {\n"
+        "  if (ctx is null || obj is null) return 2;\n"
+        "  CK_ID id = obj.GetID();\n"
+        "  if (id == 0) return 3;\n"
+        "  if (obj.GetCKContext() !is ctx) return 4;\n"
+        "  if (obj.CKGetObject(id) !is obj) return 5;\n"
+        "  obj.SetName(\"__CKAS_CKObjectSelfTest\");\n"
+        "  if (obj.GetName() != \"__CKAS_CKObjectSelfTest\") return 6;\n"
+        "  NativePointer appData = obj.GetAppData();\n"
+        "  if (!appData.IsNull()) return 7;\n"
+        "  obj.SetAppData(appData);\n"
+        "  CKBeObject@ beObject = cast<CKBeObject@>(obj);\n"
+        "  if (beObject is null) return 8;\n"
+        "  CKObject@ asObject = beObject;\n"
+        "  if (asObject !is obj) return 9;\n"
+        "  if (obj.GetClassID() != CKCID_BEOBJECT) return 10;\n"
+        "  obj.ModifyObjectFlags(0, 0);\n"
+        "  obj.IsVisible();\n"
+        "  obj.IsDynamic();\n"
+        "  obj.GetMemoryOccupation();\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKObject self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckobject-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKObject self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKObject self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKObjectSurface(CKContext@, CKObject@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKObject self-test functions were not found.";
+        return false;
+    }
+
+    CKObject *object = context->CreateObject(CKCID_BEOBJECT,
+                                             const_cast<CKSTRING>("__CKAS_CKObjectSelfTest"),
+                                             CK_OBJECTCREATION_DYNAMIC);
+    if (!object) {
+        engine->DiscardModule(moduleName);
+        error = "CKObject self-test could not create a temporary CKBeObject.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKObjectProbe(engine, probe, context, object, false, "CKObject surface probe", error);
+
+    context->DestroyObject(object);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKPathManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKPathManager script self-test requires CKContext and AngelScript engine.";
@@ -6612,6 +6748,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKWaveSoundScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKObjectScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
