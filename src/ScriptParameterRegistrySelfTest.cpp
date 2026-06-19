@@ -579,6 +579,95 @@ bool ExecuteCKMorphControllerProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKAnimationProbe(asIScriptEngine *engine,
+                             asIScriptFunction *function,
+                             CKAnimation *animation,
+                             CKAnimation *other,
+                             bool expectException,
+                             const char *label,
+                             std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, animation);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, other);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCKAnimationCopyNullProbe(asIScriptEngine *engine,
+                                     asITypeInfo *animationType,
+                                     CKAnimation *animation,
+                                     CKDependenciesContext &dependencies,
+                                     std::string &error) {
+    asIScriptFunction *copyMethod = animationType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)");
+    if (!copyMethod) {
+        error = "CKAnimation Copy(null) probe could not find Copy method.";
+        return false;
+    }
+
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = "CKAnimation Copy(null) probe could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(copyMethod);
+    if (r >= 0) {
+        r = scriptContext->SetObject(animation);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, nullptr);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, &dependencies);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    const bool ok = r == asEXECUTION_EXCEPTION;
+    if (!ok) {
+        error = "CKAnimation Copy(null) probe expected a script exception, got code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKBehaviorLinkProbe(asIScriptEngine *engine,
                                 asIScriptFunction *function,
                                 CKBehavior *root,
@@ -7299,7 +7388,11 @@ bool RunCKObjectAnimationScriptSelfTest(asIScriptEngine *engine, std::string &er
     return true;
 }
 
-bool RunCKAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+bool RunCKAnimationScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context) {
+        error = "CKAnimation script self-test requires a CKContext.";
+        return false;
+    }
     if (!engine) {
         error = "CKAnimation script self-test requires an AngelScript engine.";
         return false;
@@ -7311,17 +7404,56 @@ bool RunCKAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
         return false;
     }
     if (animationType->GetMethodByDecl("CKAnimation@ CreateMergedAnimation(CKAnimation@ anim2, bool dynamic = false)") == nullptr ||
-        animationType->GetMethodByDecl("float CreateTransition(CKAnimation@ input, CKAnimation@ output, CKDWORD outTransitionMode, float length = 6.0, float frameTo = 0)") == nullptr) {
+        animationType->GetMethodByDecl("float CreateTransition(CKAnimation@ input, CKAnimation@ output, CKDWORD outTransitionMode, float length = 6.0, float frameTo = 0)") == nullptr ||
+        animationType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)") == nullptr) {
         error = "CKAnimation self-test could not find expected guarded methods.";
         return false;
     }
 
     constexpr const char *moduleName = "__CKAS_CKAnimationSelfTest";
     const char *source =
-        "void ProbeAnimationSurface(CKAnimation@ anim, CKAnimation@ other) {\n"
-        "  if (anim is null || other is null) return;\n"
-        "  CKAnimation@ merged = anim.CreateMergedAnimation(other);\n"
-        "  anim.CreateTransition(anim, other, 0);\n"
+        "int ProbeAnimationSurface(CKAnimation@ anim, CKAnimation@ other) {\n"
+        "  if (anim is null || other is null) return 1;\n"
+        "  if (cast<CKKeyedAnimation>(anim) is null) return 2;\n"
+        "  CKObject@ asObject = anim;\n"
+        "  CKSceneObject@ asSceneObject = anim;\n"
+        "  if (asObject is null || asSceneObject is null) return 3;\n"
+        "  anim.SetName(\"__CKAS_CKAnimationSurface\", false);\n"
+        "  if (anim.GetName() == \"\") return 4;\n"
+        "  anim.SetLength(12.0f);\n"
+        "  if (anim.GetLength() < 0.0f) return 5;\n"
+        "  anim.SetFrame(1.0f);\n"
+        "  anim.SetStep(0.25f);\n"
+        "  anim.SetCurrentStep(0.5f);\n"
+        "  anim.GetFrame(); anim.GetStep(); anim.GetNextFrame(16.0f);\n"
+        "  anim.LinkToFrameRate(true, 24.0f);\n"
+        "  if (!anim.IsLinkedToFrameRate()) return 6;\n"
+        "  anim.LinkToFrameRate(false);\n"
+        "  anim.SetTransitionMode(CK_TRANSITION_FROMANIMATION);\n"
+        "  anim.GetTransitionMode();\n"
+        "  anim.SetSecondaryAnimationMode(CKSECONDARYANIMATION_FROMANIMATION);\n"
+        "  anim.GetSecondaryAnimationMode();\n"
+        "  anim.SetCanBeInterrupt(true);\n"
+        "  if (!anim.CanBeInterrupt()) return 7;\n"
+        "  anim.SetCharacterOrientation(true);\n"
+        "  anim.DoesCharacterTakeOrientation();\n"
+        "  anim.SetFlags(CKANIMATION_CANBEBREAK);\n"
+        "  if ((anim.GetFlags() & CKANIMATION_CANBEBREAK) == 0) return 8;\n"
+        "  anim.SetMergeFactor(0.25f);\n"
+        "  anim.GetMergeFactor(); anim.IsMerged();\n"
+        "  if (anim.GetCharacter() !is null) return 9;\n"
+        "  if (anim.GetRootEntity() !is null) return 10;\n"
+        "  if (!anim.GetAppData().IsNull()) return 11;\n"
+        "  anim.SetAppData(NativePointer());\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeAnimationMergeNull(CKAnimation@ anim, CKAnimation@ other) {\n"
+        "  anim.CreateMergedAnimation(null);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeAnimationTransitionNull(CKAnimation@ anim, CKAnimation@ other) {\n"
+        "  anim.CreateTransition(anim, null, 0);\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -7343,8 +7475,37 @@ bool RunCKAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
         return false;
     }
 
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeAnimationSurface(CKAnimation@, CKAnimation@)");
+    asIScriptFunction *mergeNull = module->GetFunctionByDecl("int ProbeAnimationMergeNull(CKAnimation@, CKAnimation@)");
+    asIScriptFunction *transitionNull = module->GetFunctionByDecl("int ProbeAnimationTransitionNull(CKAnimation@, CKAnimation@)");
+    if (!probe || !mergeNull || !transitionNull) {
+        engine->DiscardModule(moduleName);
+        error = "CKAnimation self-test functions were not found.";
+        return false;
+    }
+
+    CKAnimation *animation = CKAnimation::Cast(context->CreateObject(
+        CKCID_KEYEDANIMATION, const_cast<CKSTRING>("__CKAS_CKAnimationSelfTestA"), CK_OBJECTCREATION_DYNAMIC));
+    CKAnimation *other = CKAnimation::Cast(context->CreateObject(
+        CKCID_KEYEDANIMATION, const_cast<CKSTRING>("__CKAS_CKAnimationSelfTestB"), CK_OBJECTCREATION_DYNAMIC));
+    if (!animation || !other) {
+        if (other) context->DestroyObject(other);
+        if (animation) context->DestroyObject(animation);
+        engine->DiscardModule(moduleName);
+        error = "CKAnimation self-test could not create native keyed animations.";
+        return false;
+    }
+
+    CKDependenciesContext dependencies(context);
+    const bool ok = ExecuteCKAnimationProbe(engine, probe, animation, other, false, "CKAnimation probe", error) &&
+                    ExecuteCKAnimationCopyNullProbe(engine, animationType, animation, dependencies, error) &&
+                    ExecuteCKAnimationProbe(engine, mergeNull, animation, other, true, "CKAnimation merge-null probe", error) &&
+                    ExecuteCKAnimationProbe(engine, transitionNull, animation, other, true, "CKAnimation transition-null probe", error);
+
+    context->DestroyObject(other);
+    context->DestroyObject(animation);
     engine->DiscardModule(moduleName);
-    return true;
+    return ok;
 }
 
 bool RunCKKeyedAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
@@ -8591,7 +8752,7 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunCKObjectAnimationScriptSelfTest(engine, error)) {
         return false;
     }
-    if (!RunCKAnimationScriptSelfTest(engine, error)) {
+    if (!RunCKAnimationScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKKeyedAnimationScriptSelfTest(engine, error)) {
