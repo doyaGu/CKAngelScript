@@ -335,7 +335,7 @@ public:
     void ReleaseCKObjectData(CK_ID id);
     void ClearCKObjectData();
     void TrackCKObjectCallback(CK_ID id, asIScriptFunction *func);
-    void UntrackCKObjectCallback(CK_ID id, asIScriptFunction *func);
+    bool UntrackCKObjectCallback(CK_ID id, asIScriptFunction *func);
     void ReleaseCKObjectCallbacks(CK_ID id);
 
     ScriptComponentState *GetOrCreateComponentState(CKBehavior *behavior);

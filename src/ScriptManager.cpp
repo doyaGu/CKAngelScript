@@ -3472,16 +3472,18 @@ void ScriptManager::TrackCKObjectCallback(CK_ID id, asIScriptFunction *func) {
     }
 }
 
-void ScriptManager::UntrackCKObjectCallback(CK_ID id, asIScriptFunction *func) {
+bool ScriptManager::UntrackCKObjectCallback(CK_ID id, asIScriptFunction *func) {
     auto it = m_CKObjectCallbackMap.find(id);
     if (it == m_CKObjectCallbackMap.end()) {
-        return;
+        return false;
     }
 
     auto &callbacks = it->second;
+    bool removed = false;
     for (auto cb = callbacks.begin(); cb != callbacks.end(); ++cb) {
         if (*cb == func) {
             callbacks.erase(cb);
+            removed = true;
             break;
         }
     }
@@ -3489,6 +3491,7 @@ void ScriptManager::UntrackCKObjectCallback(CK_ID id, asIScriptFunction *func) {
     if (callbacks.empty()) {
         m_CKObjectCallbackMap.erase(it);
     }
+    return removed;
 }
 
 void ScriptManager::ReleaseCKObjectCallbacks(CK_ID id) {

@@ -7685,6 +7685,15 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
         error = "CKRenderContext self-test could not find output GetPixelFormat declaration.";
         return false;
     }
+    if (renderContextType->GetMethodByDecl("void AddPreRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)") == nullptr ||
+        renderContextType->GetMethodByDecl("void RemovePreRenderCallBack(CK_RENDERCALLBACK@ callback)") == nullptr ||
+        renderContextType->GetMethodByDecl("void AddPostRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)") == nullptr ||
+        renderContextType->GetMethodByDecl("void RemovePostRenderCallBack(CK_RENDERCALLBACK@ callback)") == nullptr ||
+        renderContextType->GetMethodByDecl("void AddPostSpriteRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)") == nullptr ||
+        renderContextType->GetMethodByDecl("void RemovePostSpriteRenderCallBack(CK_RENDERCALLBACK@ callback)") == nullptr) {
+        error = "CKRenderContext self-test could not find expected callback declarations.";
+        return false;
+    }
     if (renderContextType->GetMethodByDecl("VX_PIXELFORMAT GetPixelFormat(int &in bpp = void, int &in zbpp = void, int &in stencilBpp = void)") != nullptr) {
         error = "CKRenderContext self-test found stale input GetPixelFormat declaration.";
         return false;
@@ -7692,6 +7701,8 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
 
     constexpr const char *moduleName = "__CKAS_CKRenderContextSelfTest";
     const char *source =
+        "void CKAS_RenderContextCallback(CKRenderContext@ dev) {\n"
+        "}\n"
         "int ProbeCKRenderContextPixelFormat(CKContext@ ctx) {\n"
         "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
         "  if (dev is null) return 1;\n"
@@ -7702,6 +7713,26 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
         "  dev.GetPixelFormat();\n"
         "  if (bpp == -123 && zbpp == -456 && stencil == -789) return 2;\n"
         "  return 0;\n"
+        "}\n"
+        "int ProbeCKRenderContextCallbacks(CKContext@ ctx) {\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev is null) return 1;\n"
+        "  dev.RemovePreRenderCallBack(CKAS_RenderContextCallback);\n"
+        "  dev.AddPreRenderCallBack(CKAS_RenderContextCallback);\n"
+        "  dev.RemovePreRenderCallBack(CKAS_RenderContextCallback);\n"
+        "  dev.RemovePostRenderCallBack(CKAS_RenderContextCallback);\n"
+        "  dev.AddPostRenderCallBack(CKAS_RenderContextCallback);\n"
+        "  dev.RemovePostRenderCallBack(CKAS_RenderContextCallback);\n"
+        "  dev.RemovePostSpriteRenderCallBack(CKAS_RenderContextCallback);\n"
+        "  dev.AddPostSpriteRenderCallBack(CKAS_RenderContextCallback);\n"
+        "  dev.RemovePostSpriteRenderCallBack(CKAS_RenderContextCallback);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKRenderContextTemporaryCallback(CKContext@ ctx) {\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev is null) return 1;\n"
+        "  dev.AddPreRenderCallBack(CKAS_RenderContextCallback, true);\n"
+        "  return 2;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -7724,13 +7755,17 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
     }
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKRenderContextPixelFormat(CKContext@)");
-    if (!probe) {
+    asIScriptFunction *callbacks = module->GetFunctionByDecl("int ProbeCKRenderContextCallbacks(CKContext@)");
+    asIScriptFunction *temporary = module->GetFunctionByDecl("int ProbeCKRenderContextTemporaryCallback(CKContext@)");
+    if (!probe || !callbacks || !temporary) {
         engine->DiscardModule(moduleName);
-        error = "CKRenderContext self-test function was not found.";
+        error = "CKRenderContext self-test functions were not found.";
         return false;
     }
 
-    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKRenderContext GetPixelFormat probe", error);
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKRenderContext GetPixelFormat probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, callbacks, context, false, "CKRenderContext callback registration probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, temporary, context, true, "CKRenderContext temporary callback probe", error);
 
     engine->DiscardModule(moduleName);
     return ok;

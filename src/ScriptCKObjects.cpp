@@ -893,6 +893,105 @@ static void CKRenderContext_RenderCallback(CKRenderContext *dev, void *data) {
     }
 }
 
+static void ReleaseTrackedScriptCallback(asIScriptFunction *scriptFunc) {
+    if (!scriptFunc) {
+        return;
+    }
+    if (IsMarkedAsReleasedOnce(scriptFunc)) {
+        ClearReleasedOnceMark(scriptFunc);
+        return;
+    }
+    if (IsMarkedAsTemporary(scriptFunc)) {
+        ClearTemporaryMark(scriptFunc);
+    }
+    scriptFunc->Release();
+}
+
+static ScriptManager *PrepareCKRenderContextCallback(CKRenderContext *self,
+                                                     asIScriptFunction *scriptFunc,
+                                                     bool temporary,
+                                                     const char *methodName) {
+    if (!self) {
+        SetCKRenderBindingException("CKRenderContext callback registration requires a valid render context.");
+        return nullptr;
+    }
+    if (!scriptFunc) {
+        return nullptr;
+    }
+    if (temporary) {
+        std::string message = std::string(methodName) + " temporary callbacks are not supported from script.";
+        SetCKRenderBindingException(message.c_str());
+        return nullptr;
+    }
+    return ScriptManager::GetManager(scriptFunc->GetEngine());
+}
+
+static void CKRenderContextAddPreRenderCallBack(CKRenderContext *self, asIScriptFunction *scriptFunc, bool temporary) {
+    ScriptManager *manager = PrepareCKRenderContextCallback(self, scriptFunc, temporary, "CKRenderContext.AddPreRenderCallBack");
+    if (!manager) {
+        return;
+    }
+    scriptFunc->AddRef();
+    self->AddPreRenderCallBack(CKRenderContext_RenderCallback, scriptFunc, FALSE);
+    manager->TrackCKObjectCallback(self->GetID(), scriptFunc);
+}
+
+static void CKRenderContextRemovePreRenderCallBack(CKRenderContext *self, asIScriptFunction *scriptFunc) {
+    if (!self || !scriptFunc) {
+        return;
+    }
+    self->RemovePreRenderCallBack(CKRenderContext_RenderCallback, scriptFunc);
+    if (ScriptManager *manager = ScriptManager::GetManager(self->GetCKContext())) {
+        if (manager->UntrackCKObjectCallback(self->GetID(), scriptFunc)) {
+            ReleaseTrackedScriptCallback(scriptFunc);
+        }
+    }
+}
+
+static void CKRenderContextAddPostRenderCallBack(CKRenderContext *self, asIScriptFunction *scriptFunc, bool temporary) {
+    ScriptManager *manager = PrepareCKRenderContextCallback(self, scriptFunc, temporary, "CKRenderContext.AddPostRenderCallBack");
+    if (!manager) {
+        return;
+    }
+    scriptFunc->AddRef();
+    self->AddPostRenderCallBack(CKRenderContext_RenderCallback, scriptFunc, FALSE);
+    manager->TrackCKObjectCallback(self->GetID(), scriptFunc);
+}
+
+static void CKRenderContextRemovePostRenderCallBack(CKRenderContext *self, asIScriptFunction *scriptFunc) {
+    if (!self || !scriptFunc) {
+        return;
+    }
+    self->RemovePostRenderCallBack(CKRenderContext_RenderCallback, scriptFunc);
+    if (ScriptManager *manager = ScriptManager::GetManager(self->GetCKContext())) {
+        if (manager->UntrackCKObjectCallback(self->GetID(), scriptFunc)) {
+            ReleaseTrackedScriptCallback(scriptFunc);
+        }
+    }
+}
+
+static void CKRenderContextAddPostSpriteRenderCallBack(CKRenderContext *self, asIScriptFunction *scriptFunc, bool temporary) {
+    ScriptManager *manager = PrepareCKRenderContextCallback(self, scriptFunc, temporary, "CKRenderContext.AddPostSpriteRenderCallBack");
+    if (!manager) {
+        return;
+    }
+    scriptFunc->AddRef();
+    self->AddPostSpriteRenderCallBack(CKRenderContext_RenderCallback, scriptFunc, FALSE);
+    manager->TrackCKObjectCallback(self->GetID(), scriptFunc);
+}
+
+static void CKRenderContextRemovePostSpriteRenderCallBack(CKRenderContext *self, asIScriptFunction *scriptFunc) {
+    if (!self || !scriptFunc) {
+        return;
+    }
+    self->RemovePostSpriteRenderCallBack(CKRenderContext_RenderCallback, scriptFunc);
+    if (ScriptManager *manager = ScriptManager::GetManager(self->GetCKContext())) {
+        if (manager->UntrackCKObjectCallback(self->GetID(), scriptFunc)) {
+            ReleaseTrackedScriptCallback(scriptFunc);
+        }
+    }
+}
+
 void RegisterCKRenderContext(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -922,36 +1021,18 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
 
     // r = engine->RegisterObjectMethod("CKRenderContext", "void AddPreRenderCallBack(uintptr_t, uintptr_t, bool = false)", asMETHODPR(CKRenderContext, AddPreRenderCallBack, (CK_RENDERCALLBACK, void *, CKBOOL), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePreRenderCallBack(uintptr_t, uintptr_t)", asMETHODPR(CKRenderContext, RemovePreRenderCallBack, (CK_RENDERCALLBACK, void *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "void AddPreRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)", asFUNCTIONPR([](CKRenderContext *self, asIScriptFunction *scriptFunc, bool temporary) {
-        if (!scriptFunc) return;
-        scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); self->AddPreRenderCallBack(CKRenderContext_RenderCallback, scriptFunc, temporary);
-    }, (CKRenderContext *, asIScriptFunction *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePreRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTIONPR([](CKRenderContext *self, asIScriptFunction *scriptFunc) {
-        if (!scriptFunc) return;
-        self->RemovePreRenderCallBack(CKRenderContext_RenderCallback, scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); }
-    }, (CKRenderContext *, asIScriptFunction *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void AddPreRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)", asFUNCTION(CKRenderContextAddPreRenderCallBack), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePreRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTION(CKRenderContextRemovePreRenderCallBack), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // r = engine->RegisterObjectMethod("CKRenderContext", "void AddPostRenderCallBack(uintptr_t, uintptr_t, bool = false, bool = false)", asMETHODPR(CKRenderContext, AddPostRenderCallBack, (CK_RENDERCALLBACK, void *, CKBOOL, CKBOOL), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePostRenderCallBack(uintptr_t, uintptr_t)", asMETHODPR(CKRenderContext, RemovePostRenderCallBack, (CK_RENDERCALLBACK, void *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "void AddPostRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)", asFUNCTIONPR([](CKRenderContext *self, asIScriptFunction *scriptFunc, bool temporary) {
-        if (!scriptFunc) return;
-        scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); self->AddPostRenderCallBack(CKRenderContext_RenderCallback, scriptFunc, temporary);
-    }, (CKRenderContext *, asIScriptFunction *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePostRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTIONPR([](CKRenderContext *self, asIScriptFunction *scriptFunc) {
-        if (!scriptFunc) return;
-        self->RemovePostRenderCallBack(CKRenderContext_RenderCallback, scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); }
-    }, (CKRenderContext *, asIScriptFunction *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void AddPostRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)", asFUNCTION(CKRenderContextAddPostRenderCallBack), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePostRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTION(CKRenderContextRemovePostRenderCallBack), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // r = engine->RegisterObjectMethod("CKRenderContext", "void AddPostSpriteRenderCallBack(uintptr_t, uintptr_t, bool = false)", asMETHODPR(CKRenderContext, AddPostSpriteRenderCallBack, (CK_RENDERCALLBACK, void *, CKBOOL), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePostSpriteRenderCallBack(uintptr_t, uintptr_t)", asMETHODPR(CKRenderContext, RemovePostSpriteRenderCallBack, (CK_RENDERCALLBACK, void *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "void AddPostSpriteRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)", asFUNCTIONPR([](CKRenderContext *self, asIScriptFunction *scriptFunc, bool temporary) {
-        if (!scriptFunc) return;
-        scriptFunc->AddRef(); if (temporary) MarkAsTemporary(scriptFunc); self->AddPostSpriteRenderCallBack(CKRenderContext_RenderCallback, scriptFunc, temporary);
-    }, (CKRenderContext *, asIScriptFunction *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePostSpriteRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTIONPR([](CKRenderContext *self, asIScriptFunction *scriptFunc) {
-        if (!scriptFunc) return;
-        self->RemovePostSpriteRenderCallBack(CKRenderContext_RenderCallback, scriptFunc); if (IsMarkedAsReleasedOnce(scriptFunc)) ClearReleasedOnceMark(scriptFunc); else { if (IsMarkedAsTemporary(scriptFunc)) ClearTemporaryMark(scriptFunc); scriptFunc->Release(); }
-    }, (CKRenderContext *, asIScriptFunction *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void AddPostSpriteRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)", asFUNCTION(CKRenderContextAddPostSpriteRenderCallBack), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePostSpriteRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTION(CKRenderContextRemovePostSpriteRenderCallBack), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "VxDrawPrimitiveData &GetDrawPrimitiveStructure(CKRST_DPFLAGS flags, int vretexCount)", asMETHODPR(CKRenderContext, GetDrawPrimitiveStructure, (CKRST_DPFLAGS, int), VxDrawPrimitiveData *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "CKWORD &GetDrawPrimitiveIndices(int indicesCount)", asMETHODPR(CKRenderContext, GetDrawPrimitiveIndices, (int), CKWORD*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
