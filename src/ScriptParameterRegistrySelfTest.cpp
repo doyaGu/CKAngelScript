@@ -9896,7 +9896,100 @@ bool RunCKPathManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine,
         return false;
     }
 
-    return true;
+    constexpr const char *moduleName = "__CKAS_CKPathManagerSelfTest";
+    const char *source =
+        "void RemovePathCategoryIfPresent(CKPathManager@ paths, XString name) {\n"
+        "  int existing = paths.GetCategoryIndex(name);\n"
+        "  if (existing >= 0) paths.RemoveCategory(existing);\n"
+        "}\n"
+        "int FailPathProbe(CKPathManager@ paths, XString categoryName, XString renamedCategoryName, int code) {\n"
+        "  if (paths !is null) {\n"
+        "    RemovePathCategoryIfPresent(paths, categoryName);\n"
+        "    RemovePathCategoryIfPresent(paths, renamedCategoryName);\n"
+        "  }\n"
+        "  return code;\n"
+        "}\n"
+        "int ProbeCKPathManagerSurface(CKContext@ ctx) {\n"
+        "  if (ctx is null) return 2;\n"
+        "  CKPathManager@ paths = ctx.GetPathManager();\n"
+        "  if (paths is null) return 3;\n"
+        "  XString categoryName(\"__CKAS_PathSmoke\");\n"
+        "  XString renamedCategoryName(\"__CKAS_PathSmokeRenamed\");\n"
+        "  RemovePathCategoryIfPresent(paths, categoryName);\n"
+        "  RemovePathCategoryIfPresent(paths, renamedCategoryName);\n"
+        "  int baseCount = paths.GetCategoryCount();\n"
+        "  int category = paths.AddCategory(categoryName);\n"
+        "  if (category < 0) return FailPathProbe(paths, categoryName, renamedCategoryName, 4);\n"
+        "  if (paths.GetCategoryCount() != baseCount + 1) return FailPathProbe(paths, categoryName, renamedCategoryName, 5);\n"
+        "  XString readCategory;\n"
+        "  if (paths.GetCategoryName(category, readCategory) != CK_OK || readCategory != categoryName) return FailPathProbe(paths, categoryName, renamedCategoryName, 6);\n"
+        "  if (paths.GetCategoryIndex(categoryName) != category) return FailPathProbe(paths, categoryName, renamedCategoryName, 7);\n"
+        "  if (paths.RenameCategory(category, renamedCategoryName) != CK_OK) return FailPathProbe(paths, categoryName, renamedCategoryName, 8);\n"
+        "  if (paths.GetCategoryIndex(renamedCategoryName) != category) return FailPathProbe(paths, categoryName, renamedCategoryName, 9);\n"
+        "  XString firstPath(\"C:\\\\__ckas_path_probe_a\\\\\");\n"
+        "  XString secondPath(\"C:\\\\__ckas_path_probe_b\\\\\");\n"
+        "  XString renamedPath(\"C:\\\\__ckas_path_probe_c\\\\\");\n"
+        "  int firstIndex = paths.AddPath(category, firstPath);\n"
+        "  int secondIndex = paths.AddPath(category, secondPath);\n"
+        "  if (firstIndex < 0 || secondIndex < 0) return FailPathProbe(paths, categoryName, renamedCategoryName, 10);\n"
+        "  if (paths.GetPathCount(category) != 2) return FailPathProbe(paths, categoryName, renamedCategoryName, 11);\n"
+        "  XString readPath;\n"
+        "  if (paths.GetPathName(category, firstIndex, readPath) != CK_OK || readPath != firstPath) return FailPathProbe(paths, categoryName, renamedCategoryName, 12);\n"
+        "  if (paths.GetPathIndex(category, secondPath) != secondIndex) return FailPathProbe(paths, categoryName, renamedCategoryName, 13);\n"
+        "  if (paths.RenamePath(category, firstIndex, renamedPath) != CK_OK) return FailPathProbe(paths, categoryName, renamedCategoryName, 14);\n"
+        "  if (paths.GetPathIndex(category, renamedPath) != firstIndex) return FailPathProbe(paths, categoryName, renamedCategoryName, 15);\n"
+        "  if (paths.SwapPaths(category, firstIndex, secondIndex) != CK_OK) return FailPathProbe(paths, categoryName, renamedCategoryName, 16);\n"
+        "  if (paths.GetPathName(category, secondIndex, readPath) != CK_OK || readPath != renamedPath) return FailPathProbe(paths, categoryName, renamedCategoryName, 17);\n"
+        "  XString absolutePath(\"C:\\\\__ckas_path_probe\");\n"
+        "  XString uncPath(\"\\\\\\\\server\\\\share\\\\file.txt\");\n"
+        "  XString urlPath(\"http://example.invalid/file.txt\");\n"
+        "  XString relativePath(\"relative\\\\file.txt\");\n"
+        "  if (!paths.PathIsAbsolute(absolutePath)) return FailPathProbe(paths, categoryName, renamedCategoryName, 18);\n"
+        "  if (!paths.PathIsUNC(uncPath)) return FailPathProbe(paths, categoryName, renamedCategoryName, 19);\n"
+        "  if (!paths.PathIsURL(urlPath)) return FailPathProbe(paths, categoryName, renamedCategoryName, 20);\n"
+        "  paths.PathIsFile(relativePath);\n"
+        "  XString spaced(\"alpha beta\");\n"
+        "  XString escaped;\n"
+        "  paths.AddEscapedSpace(spaced, escaped);\n"
+        "  XString unescaped;\n"
+        "  paths.RemoveEscapedSpace(escaped, unescaped);\n"
+        "  if (paths.RemovePath(category, secondIndex) != CK_OK) return FailPathProbe(paths, categoryName, renamedCategoryName, 21);\n"
+        "  if (paths.RemovePath(category, firstIndex) != CK_OK) return FailPathProbe(paths, categoryName, renamedCategoryName, 22);\n"
+        "  if (paths.RemoveCategory(category) != CK_OK) return FailPathProbe(paths, categoryName, renamedCategoryName, 23);\n"
+        "  if (paths.GetCategoryIndex(renamedCategoryName) >= 0) return FailPathProbe(paths, categoryName, renamedCategoryName, 24);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPathManager self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckpathmanager-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPathManager self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPathManager self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPathManagerSurface(CKContext@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKPathManager self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKPathManager surface probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
 }
 
 bool RunCKInputManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
