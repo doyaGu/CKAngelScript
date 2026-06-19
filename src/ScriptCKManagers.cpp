@@ -175,6 +175,47 @@ static CKERROR SaveCKPluginManagerFile(CKPluginManager *self,
     return self->Save(context, MutableCKString(fileNameBuffer, fileName), objects, saveFlags, readerGuid);
 }
 
+static CKERROR RegisterCKParameterOperationFunction(CKParameterManager *self,
+                                                    const CKGUID &operation,
+                                                    const CKGUID &paramRes,
+                                                    const CKGUID &param1,
+                                                    const CKGUID &param2,
+                                                    NativePointer op) {
+    CKGUID operationCopy = operation;
+    CKGUID paramResCopy = paramRes;
+    CKGUID param1Copy = param1;
+    CKGUID param2Copy = param2;
+    return self->RegisterOperationFunction(operationCopy,
+                                           paramResCopy,
+                                           param1Copy,
+                                           param2Copy,
+                                           reinterpret_cast<CK_PARAMETEROPERATION>(op.Get()));
+}
+
+static NativePointer GetCKParameterOperationFunction(CKParameterManager *self,
+                                                     const CKGUID &operation,
+                                                     const CKGUID &paramRes,
+                                                     const CKGUID &param1,
+                                                     const CKGUID &param2) {
+    CKGUID operationCopy = operation;
+    CKGUID paramResCopy = paramRes;
+    CKGUID param1Copy = param1;
+    CKGUID param2Copy = param2;
+    return NativePointer(self->GetOperationFunction(operationCopy, paramResCopy, param1Copy, param2Copy));
+}
+
+static CKERROR UnregisterCKParameterOperationFunction(CKParameterManager *self,
+                                                      const CKGUID &operation,
+                                                      const CKGUID &paramRes,
+                                                      const CKGUID &param1,
+                                                      const CKGUID &param2) {
+    CKGUID operationCopy = operation;
+    CKGUID paramResCopy = paramRes;
+    CKGUID param1Copy = param1;
+    CKGUID param2Copy = param2;
+    return self->UnRegisterOperationFunction(operationCopy, paramResCopy, param1Copy, param2Copy);
+}
+
 static int GetCKInputKeyName(CKInputManager *self, CKDWORD key, std::string &keyName) {
     keyName.clear();
     if (!self) {
@@ -1203,9 +1244,9 @@ void RegisterCKParameterManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR UnRegisterOperationType(CKGUID opGuid)", asMETHODPR(CKParameterManager, UnRegisterOperationType, (CKGUID), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR UnRegisterOperationType(CKOperationType opCode)", asMETHODPR(CKParameterManager, UnRegisterOperationType, (CKOperationType), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR RegisterOperationFunction(const CKGUID &in operation, const CKGUID &in paramRes, const CKGUID &in param1, const CKGUID &in param2, NativePointer op)", asFUNCTIONPR([](CKParameterManager* self, const CKGUID &operation, const CKGUID &paramRes, const CKGUID &param1, const CKGUID &param2, NativePointer op) { return self->RegisterOperationFunction(const_cast<CKGUID&>(operation), const_cast<CKGUID&>(paramRes), const_cast<CKGUID&>(param1), const_cast<CKGUID&>(param2), reinterpret_cast<CK_PARAMETEROPERATION>(op.Get())); }, (CKParameterManager *, const CKGUID &, const CKGUID &, const CKGUID &, const CKGUID &, NativePointer), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterManager", "NativePointer GetOperationFunction(const CKGUID &in operation, const CKGUID &in paramRes, const CKGUID &in param1, const CKGUID &in param2)", asFUNCTIONPR([](CKParameterManager* self, const CKGUID &operation, const CKGUID &paramRes, const CKGUID &param1, const CKGUID &param2) { return NativePointer(self->GetOperationFunction(const_cast<CKGUID&>(operation), const_cast<CKGUID&>(paramRes), const_cast<CKGUID&>(param1), const_cast<CKGUID&>(param2))); }, (CKParameterManager *, const CKGUID &, const CKGUID &, const CKGUID &, const CKGUID &), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR UnRegisterOperationFunction(const CKGUID &in operation, const CKGUID &in paramRes, const CKGUID &in param1, const CKGUID &in param2)", asMETHODPR(CKParameterManager, UnRegisterOperationFunction, (CKGUID &, CKGUID &, CKGUID &, CKGUID &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR RegisterOperationFunction(const CKGUID &in operation, const CKGUID &in paramRes, const CKGUID &in param1, const CKGUID &in param2, NativePointer op)", asFUNCTION(RegisterCKParameterOperationFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterManager", "NativePointer GetOperationFunction(const CKGUID &in operation, const CKGUID &in paramRes, const CKGUID &in param1, const CKGUID &in param2)", asFUNCTION(GetCKParameterOperationFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR UnRegisterOperationFunction(const CKGUID &in operation, const CKGUID &in paramRes, const CKGUID &in param1, const CKGUID &in param2)", asFUNCTION(UnregisterCKParameterOperationFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKParameterManager", "CKGUID OperationCodeToGuid(CKOperationType type)", asMETHODPR(CKParameterManager, OperationCodeToGuid, (CKOperationType), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "string OperationCodeToName(CKOperationType type)", asFUNCTIONPR([](CKParameterManager *self, CKOperationType type) -> std::string { return ScriptStringify(self->OperationCodeToName(type)); }, (CKParameterManager *, CKOperationType), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
