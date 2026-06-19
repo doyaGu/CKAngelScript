@@ -3696,8 +3696,8 @@ void RegisterCKSpriteMembers(asIScriptEngine *engine, const char *name) {
 
     r = engine->RegisterObjectMethod(name, "CK_TEXTURE_SAVEOPTIONS GetSaveOptions()", asMETHODPR(T, GetSaveOptions, (), CK_BITMAP_SAVEOPTIONS), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetSaveOptions(CK_TEXTURE_SAVEOPTIONS options)", asMETHODPR(T, SetSaveOptions, (CK_BITMAP_SAVEOPTIONS), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKBitmapProperties &GetSaveFormat()", asMETHODPR(T, GetSaveFormat, (), CKBitmapProperties*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetSaveFormat(CKBitmapProperties &in format)", asMETHODPR(T, SetSaveFormat, (CKBitmapProperties*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKBitmapProperties@ GetSaveFormat()", asMETHODPR(T, GetSaveFormat, (), CKBitmapProperties*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetSaveFormat(CKBitmapProperties@ format)", asMETHODPR(T, SetSaveFormat, (CKBitmapProperties*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "void SetPickThreshold(int pt)", asMETHODPR(T, SetPickThreshold, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetPickThreshold()", asMETHODPR(T, GetPickThreshold, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

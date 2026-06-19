@@ -7989,6 +7989,27 @@ bool RunCK2dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         return false;
     }
 
+    asITypeInfo *spriteType = engine->GetTypeInfoByDecl("CKSprite");
+    asITypeInfo *spriteTextType = engine->GetTypeInfoByDecl("CKSpriteText");
+    if (!spriteType || !spriteTextType) {
+        error = "CK2dEntity self-test could not find registered CKSprite types.";
+        return false;
+    }
+    if (spriteType->GetMethodByDecl("CKBitmapProperties &GetSaveFormat()") ||
+        spriteType->GetMethodByDecl("void SetSaveFormat(CKBitmapProperties &in format)") ||
+        spriteTextType->GetMethodByDecl("CKBitmapProperties &GetSaveFormat()") ||
+        spriteTextType->GetMethodByDecl("void SetSaveFormat(CKBitmapProperties &in format)")) {
+        error = "CK2dEntity self-test found stale CKSprite save-format reference bindings.";
+        return false;
+    }
+    if (!spriteType->GetMethodByDecl("CKBitmapProperties@ GetSaveFormat()") ||
+        !spriteType->GetMethodByDecl("void SetSaveFormat(CKBitmapProperties@ format)") ||
+        !spriteTextType->GetMethodByDecl("CKBitmapProperties@ GetSaveFormat()") ||
+        !spriteTextType->GetMethodByDecl("void SetSaveFormat(CKBitmapProperties@ format)")) {
+        error = "CK2dEntity self-test could not find expected CKSprite save-format handle bindings.";
+        return false;
+    }
+
     constexpr const char *moduleName = "__CKAS_CK2dEntitySelfTest";
     const char *source =
         "int ProbeCK2dEntitySurface(CK2dEntity@ entity, CK2dEntity@ child, CKMaterial@ material) {\n"
@@ -8054,6 +8075,11 @@ bool RunCK2dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         "  entity.SetExtents(src, gotRect);\n"
         "  if (!entity.GetAppData().IsNull()) return 28;\n"
         "  entity.SetAppData(NativePointer());\n"
+        "  CKSprite@ sprite = cast<CKSprite>(entity);\n"
+        "  if (sprite is null) return 29;\n"
+        "  if (sprite.GetSaveFormat() !is null) return 30;\n"
+        "  sprite.SetSaveFormat(null);\n"
+        "  if (sprite.GetSaveFormat() !is null) return 31;\n"
         "  return 0;\n"
         "}\n";
 
