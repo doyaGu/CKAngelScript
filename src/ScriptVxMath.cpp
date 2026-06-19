@@ -838,6 +838,18 @@ static void RegisterVxMathGlobalVariables(asIScriptEngine *engine) {
     r = engine->RegisterGlobalProperty("const float CKRST_MAX_STAGES", (void*)&g_CKRST_MAX_STAGES); CKAS_CHECK_REGISTER(r);
 }
 
+static WIN_HANDLE VxWindowFromPointWrapper(const CKPOINT &pt) {
+    return VxWindowFromPoint(pt);
+}
+
+static bool VxScreenToClientWrapper(WIN_HANDLE win, CKPOINT &pt) {
+    return VxScreenToClient(win, &pt) != FALSE;
+}
+
+static bool VxClientToScreenWrapper(WIN_HANDLE win, CKPOINT &pt) {
+    return VxClientToScreen(win, &pt) != FALSE;
+}
+
 static bool VxTransformBox2DBool(const VxMatrix &worldProjectionMat, const VxBbox &box, VxRect &screenSize, VxRect &extents, VXCLIP_FLAGS &orClipFlags, VXCLIP_FLAGS &andClipFlags) {
     return VxTransformBox2D(worldProjectionMat, box, &screenSize, &extents, orClipFlags, andClipFlags) != FALSE;
 }
@@ -1059,6 +1071,16 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (pathSplitter.GetName() != \"name\" || pathSplitter.GetExtension() != \".ext\") return 871;\n"
         "  CKPathMaker pathMaker(\"\", \"\", pathSplitter.GetName(), pathSplitter.GetExtension());\n"
         "  if (pathMaker.GetFileName() != \"name.ext\") return 872;\n"
+        "  CKPOINT point;\n"
+        "  point.x = 12;\n"
+        "  point.y = 34;\n"
+        "  if (point.x != 12 || point.y != 34) return 873;\n"
+        "  CKPOINT copiedPoint(point);\n"
+        "  if (copiedPoint.x != 12 || copiedPoint.y != 34) return 874;\n"
+        "  CKPOINT assignedPoint;\n"
+        "  assignedPoint = copiedPoint;\n"
+        "  if (assignedPoint.x != 12 || assignedPoint.y != 34) return 875;\n"
+        "  VxWindowFromPoint(point);\n"
         "  Vx2DCapsDesc caps2d;\n"
         "  caps2d.Family = CKRST_DIRECTX;\n"
         "  caps2d.MaxVideoMemory = 0x01020304;\n"
@@ -1857,6 +1879,25 @@ bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error) {
         error = "CKPathSplitter incorrectly exposes CKPathMaker.GetFileName.";
         return false;
     }
+    if (!engine->GetGlobalFunctionByDecl("WIN_HANDLE VxWindowFromPoint(const CKPOINT &in pt)") ||
+        !engine->GetGlobalFunctionByDecl("bool VxScreenToClient(WIN_HANDLE win, CKPOINT &inout pt)") ||
+        !engine->GetGlobalFunctionByDecl("bool VxClientToScreen(WIN_HANDLE win, CKPOINT &inout pt)")) {
+        error = "CKPOINT window function declarations are not registered with safe point passing.";
+        return false;
+    }
+    for (asUINT i = 0; i < engine->GetGlobalFunctionCount(); ++i) {
+        asIScriptFunction *function = engine->GetGlobalFunctionByIndex(i);
+        if (!function) {
+            continue;
+        }
+        const std::string decl = function->GetDeclaration();
+        if (decl == "WIN_HANDLE VxWindowFromPoint(CKPOINT&in)" ||
+            decl == "bool VxScreenToClient(WIN_HANDLE, CKPOINT&out)" ||
+            decl == "bool VxClientToScreen(WIN_HANDLE, CKPOINT&out)") {
+            error = "CKPOINT window function self-test found stale unsafe declaration: " + decl + ".";
+            return false;
+        }
+    }
     asITypeInfo *directoryParserType = engine->GetTypeInfoByDecl("CKDirectoryParser");
     if (!directoryParserType) {
         error = "CKDirectoryParser type is not registered.";
@@ -2481,11 +2522,11 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool VxSetEnvironmentVariable(const string &in envName, const string &in envValue)", asFUNCTION(VxSetEnvironmentVariableWrapper), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Window functions
-    r = engine->RegisterGlobalFunction("WIN_HANDLE VxWindowFromPoint(CKPOINT &in pt)", asFUNCTION(VxWindowFromPoint), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("WIN_HANDLE VxWindowFromPoint(const CKPOINT &in pt)", asFUNCTION(VxWindowFromPointWrapper), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool VxGetClientRect(WIN_HANDLE win, CKRECT &out rect)", asFUNCTION(VxGetClientRect), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool VxGetWindowRect(WIN_HANDLE win, CKRECT &out rect)", asFUNCTION(VxGetWindowRect), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxScreenToClient(WIN_HANDLE win, CKPOINT &out pt)", asFUNCTION(VxScreenToClient), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxClientToScreen(WIN_HANDLE win, CKPOINT &out pt)", asFUNCTION(VxClientToScreen), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxScreenToClient(WIN_HANDLE win, CKPOINT &inout pt)", asFUNCTION(VxScreenToClientWrapper), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxClientToScreen(WIN_HANDLE win, CKPOINT &inout pt)", asFUNCTION(VxClientToScreenWrapper), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("WIN_HANDLE VxSetParent(WIN_HANDLE child, WIN_HANDLE parent)", asFUNCTION(VxSetParent), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("WIN_HANDLE VxGetParent(WIN_HANDLE win)", asFUNCTION(VxGetParent), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool VxMoveWindow(WIN_HANDLE win, int x, int y, int width, int height, bool repaint)", asFUNCTION(VxMoveWindow), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
