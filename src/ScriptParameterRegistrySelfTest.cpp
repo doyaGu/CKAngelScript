@@ -7685,6 +7685,13 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
         error = "CKRenderContext self-test could not find output GetPixelFormat declaration.";
         return false;
     }
+    if (renderContextType->GetMethodByDecl("void AddObject(CKRenderObject@ ojb)") == nullptr ||
+        renderContextType->GetMethodByDecl("void AddObjectWithHierarchy(CKRenderObject@ obj)") == nullptr ||
+        renderContextType->GetMethodByDecl("void RemoveObject(CKRenderObject@ obj)") == nullptr ||
+        renderContextType->GetMethodByDecl("bool IsObjectAttached(CKRenderObject@ obj)") == nullptr) {
+        error = "CKRenderContext self-test could not find expected object attachment declarations.";
+        return false;
+    }
     if (renderContextType->GetMethodByDecl("void AddPreRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)") == nullptr ||
         renderContextType->GetMethodByDecl("void RemovePreRenderCallBack(CK_RENDERCALLBACK@ callback)") == nullptr ||
         renderContextType->GetMethodByDecl("void AddPostRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)") == nullptr ||
@@ -7733,6 +7740,34 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
         "  if (dev is null) return 1;\n"
         "  dev.AddPreRenderCallBack(CKAS_RenderContextCallback, true);\n"
         "  return 2;\n"
+        "}\n"
+        "int ProbeCKRenderContextAddObjectNull(CKContext@ ctx) {\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev is null) return 1;\n"
+        "  CKRenderObject@ none = null;\n"
+        "  dev.AddObject(none);\n"
+        "  return 2;\n"
+        "}\n"
+        "int ProbeCKRenderContextAddObjectHierarchyNull(CKContext@ ctx) {\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev is null) return 1;\n"
+        "  CKRenderObject@ none = null;\n"
+        "  dev.AddObjectWithHierarchy(none);\n"
+        "  return 2;\n"
+        "}\n"
+        "int ProbeCKRenderContextRemoveObjectNull(CKContext@ ctx) {\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev is null) return 1;\n"
+        "  CKRenderObject@ none = null;\n"
+        "  dev.RemoveObject(none);\n"
+        "  return 2;\n"
+        "}\n"
+        "int ProbeCKRenderContextIsObjectAttachedNull(CKContext@ ctx) {\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev is null) return 1;\n"
+        "  CKRenderObject@ none = null;\n"
+        "  dev.IsObjectAttached(none);\n"
+        "  return 2;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -7757,7 +7792,12 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKRenderContextPixelFormat(CKContext@)");
     asIScriptFunction *callbacks = module->GetFunctionByDecl("int ProbeCKRenderContextCallbacks(CKContext@)");
     asIScriptFunction *temporary = module->GetFunctionByDecl("int ProbeCKRenderContextTemporaryCallback(CKContext@)");
-    if (!probe || !callbacks || !temporary) {
+    asIScriptFunction *addObjectNull = module->GetFunctionByDecl("int ProbeCKRenderContextAddObjectNull(CKContext@)");
+    asIScriptFunction *addObjectHierarchyNull = module->GetFunctionByDecl("int ProbeCKRenderContextAddObjectHierarchyNull(CKContext@)");
+    asIScriptFunction *removeObjectNull = module->GetFunctionByDecl("int ProbeCKRenderContextRemoveObjectNull(CKContext@)");
+    asIScriptFunction *isObjectAttachedNull = module->GetFunctionByDecl("int ProbeCKRenderContextIsObjectAttachedNull(CKContext@)");
+    if (!probe || !callbacks || !temporary || !addObjectNull || !addObjectHierarchyNull ||
+        !removeObjectNull || !isObjectAttachedNull) {
         engine->DiscardModule(moduleName);
         error = "CKRenderContext self-test functions were not found.";
         return false;
@@ -7765,7 +7805,11 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
 
     const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKRenderContext GetPixelFormat probe", error) &&
                     ExecuteCKParameterTypeDescProbe(engine, callbacks, context, false, "CKRenderContext callback registration probe", error) &&
-                    ExecuteCKParameterTypeDescProbe(engine, temporary, context, true, "CKRenderContext temporary callback probe", error);
+                    ExecuteCKParameterTypeDescProbe(engine, temporary, context, true, "CKRenderContext temporary callback probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, addObjectNull, context, true, "CKRenderContext AddObject null probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, addObjectHierarchyNull, context, true, "CKRenderContext AddObjectWithHierarchy null probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, removeObjectNull, context, true, "CKRenderContext RemoveObject null probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, isObjectAttachedNull, context, true, "CKRenderContext IsObjectAttached null probe", error);
 
     engine->DiscardModule(moduleName);
     return ok;

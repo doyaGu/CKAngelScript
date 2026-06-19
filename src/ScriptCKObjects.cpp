@@ -854,6 +854,38 @@ static VX_PIXELFORMAT CKRenderContextGetPixelFormat(CKRenderContext *self, int *
     return self->GetPixelFormat(bpp, zbpp, stencilBpp);
 }
 
+static void CKRenderContextAddObject(CKRenderContext *self, CKRenderObject *object) {
+    if (!self || !object) {
+        SetCKRenderBindingException("CKRenderContext.AddObject requires a non-null CKRenderObject.");
+        return;
+    }
+    self->AddObject(object);
+}
+
+static void CKRenderContextAddObjectWithHierarchy(CKRenderContext *self, CKRenderObject *object) {
+    if (!self || !object) {
+        SetCKRenderBindingException("CKRenderContext.AddObjectWithHierarchy requires a non-null CKRenderObject.");
+        return;
+    }
+    self->AddObjectWithHierarchy(object);
+}
+
+static void CKRenderContextRemoveObject(CKRenderContext *self, CKRenderObject *object) {
+    if (!self || !object) {
+        SetCKRenderBindingException("CKRenderContext.RemoveObject requires a non-null CKRenderObject.");
+        return;
+    }
+    self->RemoveObject(object);
+}
+
+static bool CKRenderContextIsObjectAttached(CKRenderContext *self, CKRenderObject *object) {
+    if (!self || !object) {
+        SetCKRenderBindingException("CKRenderContext.IsObjectAttached requires a non-null CKRenderObject.");
+        return false;
+    }
+    return self->IsObjectAttached(object);
+}
+
 static void CKRenderContext_RenderCallback(CKRenderContext *dev, void *data) {
     auto *func = static_cast<asIScriptFunction *>(data);
     if (!func)
@@ -999,10 +1031,10 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
 
     RegisterCKObjectMembers<CKRenderContext>(engine, "CKRenderContext");
 
-    r = engine->RegisterObjectMethod("CKRenderContext", "void AddObject(CKRenderObject@ ojb)", asMETHODPR(CKRenderContext, AddObject, (CKRenderObject *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "void AddObjectWithHierarchy(CKRenderObject@ obj)", asMETHODPR(CKRenderContext, AddObjectWithHierarchy, (CKRenderObject *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "void RemoveObject(CKRenderObject@ obj)", asMETHODPR(CKRenderContext, RemoveObject, (CKRenderObject *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "bool IsObjectAttached(CKRenderObject@ obj)", asFUNCTIONPR([](CKRenderContext *self, CKRenderObject *obj) -> bool { return self->IsObjectAttached(obj); }, (CKRenderContext *, CKRenderObject *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void AddObject(CKRenderObject@ ojb)", asFUNCTION(CKRenderContextAddObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void AddObjectWithHierarchy(CKRenderObject@ obj)", asFUNCTION(CKRenderContextAddObjectWithHierarchy), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "void RemoveObject(CKRenderObject@ obj)", asFUNCTION(CKRenderContextRemoveObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "bool IsObjectAttached(CKRenderObject@ obj)", asFUNCTION(CKRenderContextIsObjectAttached), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "const XObjectArray &Compute3dRootObjects()", asMETHODPR(CKRenderContext, Compute3dRootObjects, (), const XObjectArray&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "const XObjectArray &Compute2dRootObjects()", asMETHODPR(CKRenderContext, Compute2dRootObjects, (), const XObjectArray&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
