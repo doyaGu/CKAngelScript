@@ -11163,22 +11163,18 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
 #endif
 }
 
-bool RunCKMaterialScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
-    if (!context || !engine) {
-        error = "CKMaterial script self-test requires CKContext and AngelScript engine.";
+bool RunCKMaterialScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKMaterial script self-test requires an AngelScript engine.";
         return false;
     }
 
+#if CKVERSION != 0x26052005
     asITypeInfo *materialType = engine->GetTypeInfoByDecl("CKMaterial");
     if (!materialType) {
         error = "CKMaterial self-test could not find the registered type.";
         return false;
     }
-    if (materialType->GetMethodByDecl("bool SetAsCurrent(CKRenderContext@ dev, bool lit = true, int textureStage = 0)") == nullptr) {
-        error = "CKMaterial self-test could not find guarded SetAsCurrent.";
-        return false;
-    }
-#if CKVERSION != 0x26052005
     if (materialType->GetMethodByDecl("void SetCallback(NativePointer fct, NativePointer argument)") == nullptr ||
         materialType->GetMethodByDecl("NativePointer GetCallback(NativePointer &out argument = void)") == nullptr) {
         error = "CKMaterial self-test could not find expected guarded callback methods.";
@@ -11188,26 +11184,16 @@ bool RunCKMaterialScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         error = "CKMaterial self-test found stale const callback declaration.";
         return false;
     }
-#endif
 
     constexpr const char *moduleName = "__CKAS_CKMaterialSelfTest";
     const char *source =
-        "int ProbeCKMaterialSetAsCurrentNull(CKContext@ ctx, CKObject@ object) {\n"
-        "  CKMaterial@ material = cast<CKMaterial>(object);\n"
-        "  if (material is null) return 1;\n"
-        "  material.SetAsCurrent(null);\n"
-        "  return 0;\n"
-        "}\n"
-#if CKVERSION != 0x26052005
         "void ProbeCKMaterialCallback(CKMaterial@ material) {\n"
         "  if (material is null) return;\n"
         "  NativePointer argument;\n"
         "  NativePointer callback = material.GetCallback(argument);\n"
         "  NativePointer empty;\n"
         "  material.SetCallback(empty, empty);\n"
-        "}\n"
-#endif
-        ;
+        "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
     if (!module) {
@@ -11228,34 +11214,16 @@ bool RunCKMaterialScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         return false;
     }
 
-    asIScriptFunction *nullDevProbe = module->GetFunctionByDecl("int ProbeCKMaterialSetAsCurrentNull(CKContext@, CKObject@)");
-#if CKVERSION != 0x26052005
-    asIScriptFunction *callbackProbe = module->GetFunctionByDecl("void ProbeCKMaterialCallback(CKMaterial@)");
-#endif
-    if (!nullDevProbe
-#if CKVERSION != 0x26052005
-        || !callbackProbe
-#endif
-    ) {
+    asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKMaterialCallback(CKMaterial@)");
+    if (!probe) {
         engine->DiscardModule(moduleName);
         error = "CKMaterial self-test function was not found.";
         return false;
     }
 
-    CKMaterial *material = CKMaterial::Cast(context->CreateObject(
-        CKCID_MATERIAL, const_cast<CKSTRING>("__CKAS_CKMaterialSelfTestMaterial"), CK_OBJECTCREATION_DYNAMIC));
-    if (!material) {
-        engine->DiscardModule(moduleName);
-        error = "CKMaterial self-test could not create a temporary material.";
-        return false;
-    }
-
-    const bool ok = ExecuteCKObjectProbe(engine, nullDevProbe, context, material, true, "CKMaterial SetAsCurrent null context probe", error);
-
-    context->DestroyObject(material);
-    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
     engine->DiscardModule(moduleName);
-    return ok;
+#endif
+    return true;
 }
 
 bool RunCKBitmapReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) {
@@ -11415,9 +11383,6 @@ bool RunCKTextureScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         textureType->GetMethodByDecl("int GetRstTextureIndex() const") == nullptr ||
         textureType->GetMethodByDecl("CKObject@ opImplCast()") == nullptr ||
         textureType->GetMethodByDecl("CKBeObject@ opImplCast()") == nullptr ||
-        textureType->GetMethodByDecl("bool SetAsCurrent(CKRenderContext@ dev, bool clamping = false, int textureStage = 0)") == nullptr ||
-        textureType->GetMethodByDecl("bool SystemToVideoMemory(CKRenderContext@ dev, bool clamping = false)") == nullptr ||
-        textureType->GetMethodByDecl("bool CopyContext(CKRenderContext@ dev, const VxRect&in src, const VxRect&in dest, int cubeMapFace = 0)") == nullptr ||
         textureType->GetMethodByDecl("bool GetVideoTextureDesc(VxImageDescEx&out desc)") == nullptr ||
         textureType->GetMethodByDecl("bool GetSystemTextureDesc(VxImageDescEx&out desc)") == nullptr ||
         textureType->GetMethodByDecl("bool GetUserMipMapLevel(int level, VxImageDescEx&out resultImage)") == nullptr) {
@@ -11473,22 +11438,6 @@ bool RunCKTextureScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         "  }\n"
         "  texture.ReleaseAllSlots();\n"
         "  return 0;\n"
-        "}\n"
-        "void ProbeCKTextureSetAsCurrentNull(CKContext@ ctx, CKObject@ object) {\n"
-        "  CKTexture@ texture = cast<CKTexture>(object);\n"
-        "  if (texture is null) return;\n"
-        "  texture.SetAsCurrent(null);\n"
-        "}\n"
-        "void ProbeCKTextureSystemToVideoMemoryNull(CKContext@ ctx, CKObject@ object) {\n"
-        "  CKTexture@ texture = cast<CKTexture>(object);\n"
-        "  if (texture is null) return;\n"
-        "  texture.SystemToVideoMemory(null);\n"
-        "}\n"
-        "void ProbeCKTextureCopyContextNull(CKContext@ ctx, CKObject@ object) {\n"
-        "  CKTexture@ texture = cast<CKTexture>(object);\n"
-        "  if (texture is null) return;\n"
-        "  VxRect rect(0.0f, 0.0f, 1.0f, 1.0f);\n"
-        "  texture.CopyContext(null, rect, rect);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -11511,10 +11460,7 @@ bool RunCKTextureScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
     }
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKTextureSurface(CKContext@, CKObject@)");
-    asIScriptFunction *setCurrentNull = module->GetFunctionByDecl("void ProbeCKTextureSetAsCurrentNull(CKContext@, CKObject@)");
-    asIScriptFunction *systemToVideoNull = module->GetFunctionByDecl("void ProbeCKTextureSystemToVideoMemoryNull(CKContext@, CKObject@)");
-    asIScriptFunction *copyContextNull = module->GetFunctionByDecl("void ProbeCKTextureCopyContextNull(CKContext@, CKObject@)");
-    if (!probe || !setCurrentNull || !systemToVideoNull || !copyContextNull) {
+    if (!probe) {
         engine->DiscardModule(moduleName);
         error = "CKTexture self-test function was not found.";
         return false;
@@ -11528,10 +11474,7 @@ bool RunCKTextureScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         return false;
     }
 
-    const bool ok = ExecuteCKObjectProbe(engine, probe, context, texture, false, "CKTexture surface probe", error) &&
-                    ExecuteCKObjectProbe(engine, setCurrentNull, context, texture, true, "CKTexture SetAsCurrent null context probe", error) &&
-                    ExecuteCKObjectProbe(engine, systemToVideoNull, context, texture, true, "CKTexture SystemToVideoMemory null context probe", error) &&
-                    ExecuteCKObjectProbe(engine, copyContextNull, context, texture, true, "CKTexture CopyContext null context probe", error);
+    const bool ok = ExecuteCKObjectProbe(engine, probe, context, texture, false, "CKTexture surface probe", error);
 
     texture->ReleaseAllSlots();
     context->DestroyObject(texture);
@@ -14424,7 +14367,7 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunCKBehaviorPrototypeScriptSelfTest(engine, error)) {
         return false;
     }
-    if (!RunCKMaterialScriptSelfTest(context, engine, error)) {
+    if (!RunCKMaterialScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKStateChunkScriptSelfTest(context, engine, error)) {

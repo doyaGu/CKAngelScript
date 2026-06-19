@@ -2282,38 +2282,6 @@ static NativePointer GetCKMaterialCallback(CKMaterial *self, NativePointer *argu
     return NativePointer(reinterpret_cast<void *>(callback));
 }
 
-static bool CKMaterialSetAsCurrent(CKMaterial *self, CKRenderContext *dev, bool lit, int textureStage) {
-    if (!self || !dev) {
-        SetCKRenderBindingException("CKMaterial.SetAsCurrent requires a non-null CKRenderContext.");
-        return false;
-    }
-    return self->SetAsCurrent(dev, lit, textureStage) != FALSE;
-}
-
-static bool CKTextureSetAsCurrent(CKTexture *self, CKRenderContext *dev, bool clamping, int textureStage) {
-    if (!self || !dev) {
-        SetCKRenderBindingException("CKTexture.SetAsCurrent requires a non-null CKRenderContext.");
-        return false;
-    }
-    return self->SetAsCurrent(dev, clamping, textureStage) != FALSE;
-}
-
-static bool CKTextureSystemToVideoMemory(CKTexture *self, CKRenderContext *dev, bool clamping) {
-    if (!self || !dev) {
-        SetCKRenderBindingException("CKTexture.SystemToVideoMemory requires a non-null CKRenderContext.");
-        return false;
-    }
-    return self->SystemToVideoMemory(dev, clamping) != FALSE;
-}
-
-static bool CKTextureCopyContext(CKTexture *self, CKRenderContext *dev, VxRect &src, VxRect &dest, int cubeMapFace) {
-    if (!self || !dev) {
-        SetCKRenderBindingException("CKTexture.CopyContext requires a non-null CKRenderContext.");
-        return false;
-    }
-    return self->CopyContext(dev, &src, &dest, cubeMapFace) != FALSE;
-}
-
 void RegisterCKMaterial(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -2382,7 +2350,7 @@ void RegisterCKMaterial(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMaterial", "void SetShadeMode(VXSHADE_MODE shadeMode)", asMETHODPR(CKMaterial, SetShadeMode, (VXSHADE_MODE), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMaterial", "VXSHADE_MODE GetShadeMode() const", asMETHODPR(CKMaterial, GetShadeMode, (), VXSHADE_MODE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMaterial", "bool SetAsCurrent(CKRenderContext@ dev, bool lit = true, int textureStage = 0)", asFUNCTION(CKMaterialSetAsCurrent), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMaterial", "bool SetAsCurrent(CKRenderContext@ dev, bool lit = true, int textureStage = 0)", asFUNCTIONPR([](CKMaterial *mat, CKRenderContext *dev, bool lit, int textureStage) -> bool { return mat->SetAsCurrent(dev, lit, textureStage); }, (CKMaterial *, CKRenderContext *, bool, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKMaterial", "bool IsAlphaTransparent() const", asFUNCTIONPR([](CKMaterial *mat) -> bool { return mat->IsAlphaTransparent(); }, (CKMaterial *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
@@ -2500,12 +2468,12 @@ void RegisterCKTexture(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKTexture", "bool LoadImage(const string &in name, int slot = 0)", asFUNCTIONPR([](CKTexture *texture, const std::string &name, int slot) -> bool { return texture->LoadImage(const_cast<CKSTRING>(name.c_str()), slot); }, (CKTexture *, const std::string &, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKTexture", "bool LoadMovie(const string &in name)", asFUNCTIONPR([](CKTexture *texture, const std::string &name) -> bool { return texture->LoadMovie(const_cast<CKSTRING>(name.c_str())); }, (CKTexture *, const std::string &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKTexture", "bool SetAsCurrent(CKRenderContext@ dev, bool clamping = false, int textureStage = 0)", asFUNCTION(CKTextureSetAsCurrent), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKTexture", "bool SetAsCurrent(CKRenderContext@ dev, bool clamping = false, int textureStage = 0)", asFUNCTIONPR([](CKTexture *self, CKRenderContext *dev, bool clamping, int textureStage) -> bool { return self->SetAsCurrent(dev, clamping, textureStage); }, (CKTexture *, CKRenderContext *, bool, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKTexture", "bool Restore(bool clamp = false)", asFUNCTIONPR([](CKTexture *self, bool clamp) -> bool { return self->Restore(clamp); }, (CKTexture *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKTexture", "bool SystemToVideoMemory(CKRenderContext@ dev, bool clamping = false)", asFUNCTION(CKTextureSystemToVideoMemory), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKTexture", "bool SystemToVideoMemory(CKRenderContext@ dev, bool clamping = false)", asFUNCTIONPR([](CKTexture *self, CKRenderContext *dev, bool clamping) -> bool { return self->SystemToVideoMemory(dev, clamping); }, (CKTexture *, CKRenderContext *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKTexture", "bool FreeVideoMemory()", asFUNCTIONPR([](CKTexture *self) -> bool { return self->FreeVideoMemory(); }, (CKTexture *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKTexture", "bool IsInVideoMemory() const", asFUNCTIONPR([](CKTexture *self) -> bool { return self->IsInVideoMemory(); }, (CKTexture *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKTexture", "bool CopyContext(CKRenderContext@ dev, const VxRect &in src, const VxRect &in dest, int cubeMapFace = 0)", asFUNCTION(CKTextureCopyContext), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKTexture", "bool CopyContext(CKRenderContext@ dev, const VxRect &in src, const VxRect &in dest, int cubeMapFace = 0)", asFUNCTIONPR([](CKTexture *self, CKRenderContext *dev, VxRect &src, VxRect &dest, int cubeMapFace) -> bool { return self->CopyContext(dev, &src, &dest, cubeMapFace); }, (CKTexture *, CKRenderContext *, VxRect &, VxRect &, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKTexture", "bool UseMipmap(bool useMipmap)", asFUNCTIONPR([](CKTexture *self, bool useMipmap) -> bool { return self->UseMipmap(useMipmap); }, (CKTexture *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKTexture", "int GetMipmapCount() const", asMETHODPR(CKTexture, GetMipmapCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKTexture", "bool GetVideoTextureDesc(VxImageDescEx &out desc)", asFUNCTIONPR([](CKTexture *self, VxImageDescEx &desc) -> bool { return self->GetVideoTextureDesc(desc); }, (CKTexture *, VxImageDescEx &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
