@@ -2580,6 +2580,246 @@ bool RunCKSquareScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     return ok;
 }
 
+bool RunCKStatsScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKStats script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *statsType = engine->GetTypeInfoByDecl("CKStats");
+    if (!statsType) {
+        error = "CKStats self-test could not find the registered type.";
+        return false;
+    }
+    if (!statsType->GetMethodByDecl("CKStats& opAssign(const CKStats &in other)") ||
+        !statsType->GetMethodByDecl("float GetUserProfile(int index) const") ||
+        !statsType->GetMethodByDecl("void SetUserProfile(int index, float value)")) {
+        error = "CKStats self-test could not find assignment or user profile methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKStatsSelfTest";
+    const char *source =
+        "int ProbeCKStats() {\n"
+        "  CKStats stats;\n"
+        "  stats.TotalFrameTime = 16.0f;\n"
+        "  stats.RenderTime = 7.0f;\n"
+        "  stats.BehaviorsExecuted = 3;\n"
+        "  stats.BehaviorDelayedLinks = 2;\n"
+        "  stats.SetUserProfile(0, 1.5f);\n"
+        "  stats.SetUserProfile(1, 2.5f);\n"
+        "  if (stats.GetUserProfile(0) != 1.5f || stats.GetUserProfile(1) != 2.5f) return 1;\n"
+        "  CKStats copied(stats);\n"
+        "  if (copied.TotalFrameTime != 16.0f || copied.RenderTime != 7.0f) return 2;\n"
+        "  if (copied.BehaviorsExecuted != 3 || copied.BehaviorDelayedLinks != 2) return 3;\n"
+        "  if (copied.GetUserProfile(0) != 1.5f || copied.GetUserProfile(1) != 2.5f) return 4;\n"
+        "  CKStats assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.TotalFrameTime != 16.0f || assigned.GetUserProfile(1) != 2.5f) return 5;\n"
+        "  copied.SetUserProfile(0, 9.5f);\n"
+        "  copied.RenderTime = 11.0f;\n"
+        "  if (assigned.GetUserProfile(0) != 1.5f || assigned.RenderTime != 7.0f) return 6;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKStatsGetUserProfileLow() {\n"
+        "  CKStats stats;\n"
+        "  stats.GetUserProfile(-1);\n"
+        "}\n"
+        "void RejectCKStatsSetUserProfileHigh() {\n"
+        "  CKStats stats;\n"
+        "  stats.SetUserProfile(1000, 1.0f);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKStats self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckstats-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKStats self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKStats self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKStats()");
+    asIScriptFunction *getLow = module->GetFunctionByDecl("void RejectCKStatsGetUserProfileLow()");
+    asIScriptFunction *setHigh = module->GetFunctionByDecl("void RejectCKStatsSetUserProfileHigh()");
+    if (!probe || !getLow || !setHigh) {
+        engine->DiscardModule(moduleName);
+        error = "CKStats self-test functions were not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKStats value probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, getLow, true, "CKStats low user profile rejection probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, setHigh, true, "CKStats high user profile rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCKPluginEntryBehaviorsDataScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKPluginEntryBehaviorsData script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *dataType = engine->GetTypeInfoByDecl("CKPluginEntryBehaviorsData");
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("XGUIDArray");
+    if (!dataType || !arrayType) {
+        error = "CKPluginEntryBehaviorsData self-test could not find required registered types.";
+        return false;
+    }
+    bool hasBehaviorGuidProperty = false;
+    for (asUINT i = 0; i < dataType->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        if (dataType->GetProperty(i, &propertyName) >= 0 && propertyName && std::strcmp(propertyName, "m_BehaviorsGUID") == 0) {
+            hasBehaviorGuidProperty = true;
+            break;
+        }
+    }
+    if (!hasBehaviorGuidProperty ||
+        !dataType->GetMethodByDecl("CKPluginEntryBehaviorsData& opAssign(const CKPluginEntryBehaviorsData &in other)") ||
+        !arrayType->GetMethodByDecl("void PushBack(const CKGUID &in o)") ||
+        !arrayType->GetMethodByDecl("int Size() const")) {
+        error = "CKPluginEntryBehaviorsData self-test could not find expected members.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKPluginEntryBehaviorsDataSelfTest";
+    const char *source =
+        "int ProbeCKPluginEntryBehaviorsData() {\n"
+        "  CKGUID first(0x11111111, 0x22222222);\n"
+        "  CKGUID second(0x33333333, 0x44444444);\n"
+        "  CKPluginEntryBehaviorsData data;\n"
+        "  if (data.m_BehaviorsGUID.Size() != 0) return 1;\n"
+        "  data.m_BehaviorsGUID.PushBack(first);\n"
+        "  if (data.m_BehaviorsGUID.Size() != 1 || !(data.m_BehaviorsGUID[0] == first)) return 2;\n"
+        "  CKPluginEntryBehaviorsData copied(data);\n"
+        "  if (copied.m_BehaviorsGUID.Size() != 1 || !(copied.m_BehaviorsGUID[0] == first)) return 3;\n"
+        "  copied.m_BehaviorsGUID.PushBack(second);\n"
+        "  if (copied.m_BehaviorsGUID.Size() != 2 || data.m_BehaviorsGUID.Size() != 1) return 4;\n"
+        "  CKPluginEntryBehaviorsData assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.m_BehaviorsGUID.Size() != 2) return 5;\n"
+        "  if (!(assigned.m_BehaviorsGUID[0] == first) || !(assigned.m_BehaviorsGUID[1] == second)) return 6;\n"
+        "  copied.m_BehaviorsGUID[0] = second;\n"
+        "  if (!(assigned.m_BehaviorsGUID[0] == first)) return 7;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPluginEntryBehaviorsData self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-plugin-entry-behaviors-data-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginEntryBehaviorsData self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginEntryBehaviorsData self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPluginEntryBehaviorsData()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginEntryBehaviorsData self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKPluginEntryBehaviorsData value probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+#if CKVERSION == 0x13022002
+bool RunCKPICKRESULTScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKPICKRESULT script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *pickType = engine->GetTypeInfoByDecl("CKPICKRESULT");
+    if (!pickType) {
+        error = "CKPICKRESULT self-test could not find the registered type.";
+        return false;
+    }
+    if (!pickType->GetMethodByDecl("CKPICKRESULT& opAssign(const CKPICKRESULT &in other)")) {
+        error = "CKPICKRESULT self-test could not find assignment method.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKPICKRESULTSelfTest";
+    const char *source =
+        "int ProbeCKPICKRESULT() {\n"
+        "  CKPICKRESULT result;\n"
+        "  result.IntersectionPoint = VxVector(1.0f, 2.0f, 3.0f);\n"
+        "  result.IntersectionNormal = VxVector(0.0f, 1.0f, 0.0f);\n"
+        "  result.TexU = 0.25f;\n"
+        "  result.TexV = 0.75f;\n"
+        "  result.Distance = 42.0f;\n"
+        "  result.FaceIndex = 5;\n"
+        "  result.Sprite = 1234;\n"
+        "  CKPICKRESULT copied(result);\n"
+        "  if (copied.IntersectionPoint.x != 1.0f || copied.IntersectionPoint.y != 2.0f || copied.IntersectionPoint.z != 3.0f) return 1;\n"
+        "  if (copied.IntersectionNormal.y != 1.0f) return 2;\n"
+        "  if (copied.TexU != 0.25f || copied.TexV != 0.75f || copied.Distance != 42.0f) return 3;\n"
+        "  if (copied.FaceIndex != 5 || copied.Sprite != 1234) return 4;\n"
+        "  CKPICKRESULT assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.Distance != 42.0f || assigned.FaceIndex != 5 || assigned.Sprite != 1234) return 5;\n"
+        "  copied.Distance = 7.0f;\n"
+        "  copied.Sprite = 77;\n"
+        "  if (assigned.Distance != 42.0f || assigned.Sprite != 1234) return 6;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPICKRESULT self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckpickresult-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPICKRESULT self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPICKRESULT self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPICKRESULT()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKPICKRESULT self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKPICKRESULT value probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+#endif
+
 bool RunCKDataRowItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKDataRowIt script self-test requires an AngelScript engine.";
@@ -11815,6 +12055,17 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunCKSquareScriptSelfTest(engine, error)) {
         return false;
     }
+    if (!RunCKStatsScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKPluginEntryBehaviorsDataScriptSelfTest(engine, error)) {
+        return false;
+    }
+#if CKVERSION == 0x13022002
+    if (!RunCKPICKRESULTScriptSelfTest(engine, error)) {
+        return false;
+    }
+#endif
     if (!RunCKDataRowItScriptSelfTest(engine, error)) {
         return false;
     }
