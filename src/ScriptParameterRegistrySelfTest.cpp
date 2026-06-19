@@ -627,6 +627,54 @@ bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKParameterLocalOwnerProbe(asIScriptEngine *engine,
+                                       asIScriptFunction *function,
+                                       CKBehavior *owner,
+                                       CKParameterLocal *parameter,
+                                       bool expectException,
+                                       const char *label,
+                                       std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, owner);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, parameter);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKParameterInProbe(asIScriptEngine *engine,
                                asIScriptFunction *function,
                                CKParameterIn *parameter,
@@ -7279,6 +7327,24 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (value != blocked) return 10;\n"
         "  return 0;\n"
         "}\n"
+        "int ProbeCKParameterLocalOwnerGraph(CKBehavior@ owner, CKParameterLocal@ local) {\n"
+        "  if (owner is null || local is null) return 2;\n"
+        "  if (owner.GetLocalParameterCount() < 1) return 3;\n"
+        "  int pos = owner.GetLocalParameterPosition(local);\n"
+        "  if (pos < 0) return 4;\n"
+        "  if (owner.GetLocalParameter(pos) !is local) return 5;\n"
+        "  int value = 31415;\n"
+        "  if (local.SetValue(value) != CK_OK) return 6;\n"
+        "  int read = 0;\n"
+        "  if (local.GetValue(read) != CK_OK || read != value) return 7;\n"
+        "  CKParameterLocal@ removed = owner.RemoveLocalParameter(pos);\n"
+        "  if (removed !is local) return 8;\n"
+        "  if (owner.GetLocalParameterPosition(local) >= 0) return 9;\n"
+        "  owner.AddLocalParameter(local);\n"
+        "  pos = owner.GetLocalParameterPosition(local);\n"
+        "  if (pos < 0 || owner.GetLocalParameter(pos) !is local) return 10;\n"
+        "  return 0;\n"
+        "}\n"
         "class CKParameterGenericRejected { int value; }\n"
         "void ProbeCKParameterGenericSetScriptObject(CKParameterLocal@ local) {\n"
         "  CKParameterGenericRejected rejected;\n"
@@ -7491,6 +7557,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *genericInt = module->GetFunctionByDecl("int ProbeCKParameterGenericIntValue(CKParameterLocal@)");
     asIScriptFunction *genericVector = module->GetFunctionByDecl("int ProbeCKParameterGenericVectorValue(CKParameterLocal@)");
     asIScriptFunction *localMyselfState = module->GetFunctionByDecl("int ProbeCKParameterLocalMyselfState(CKParameterLocal@)");
+    asIScriptFunction *localOwnerGraph = module->GetFunctionByDecl("int ProbeCKParameterLocalOwnerGraph(CKBehavior@, CKParameterLocal@)");
     asIScriptFunction *genericSetScriptObject = module->GetFunctionByDecl("void ProbeCKParameterGenericSetScriptObject(CKParameterLocal@)");
     asIScriptFunction *genericGetScriptObject = module->GetFunctionByDecl("void ProbeCKParameterGenericGetScriptObject(CKParameterLocal@)");
     asIScriptFunction *genericSetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterGenericSetObjectHandle(CKParameterLocal@)");
@@ -7520,7 +7587,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
     if (!probe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
-        !localMyselfState ||
+        !localMyselfState || !localOwnerGraph ||
         !genericSetScriptObject || !genericGetScriptObject || !genericSetObjectHandle || !genericGetObjectHandle ||
         !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
         !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
@@ -7580,6 +7647,23 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         }
     }
     context->DestroyObject(local);
+
+    if (ok) {
+        CKBehavior *owner = CKBehavior::Cast(context->CreateObject(
+            CKCID_BEHAVIOR,
+            const_cast<CKSTRING>("__CKAS_CKParameterLocalOwnerProbeBehavior"),
+            CK_OBJECTCREATION_DYNAMIC));
+        CKParameterLocal *ownedLocal = owner ? owner->CreateLocalParameter(const_cast<CKSTRING>("__CKAS_CKParameterLocalOwned"), CKPGUID_INT) : nullptr;
+        if (!owner || !ownedLocal) {
+            ok = false;
+            error = "CKParameterLocal owner graph probe could not create its native behavior local.";
+        } else {
+            ok = ExecuteCKParameterLocalOwnerProbe(engine, localOwnerGraph, owner, ownedLocal, false, "CKParameterLocal owner graph probe", error);
+        }
+        if (owner) {
+            context->DestroyObject(owner);
+        }
+    }
 
     if (ok) {
         CKParameterLocal *sourceString = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterInSourceString"), CKPGUID_STRING, TRUE);
