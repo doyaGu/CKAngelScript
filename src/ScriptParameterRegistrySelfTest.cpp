@@ -4050,6 +4050,102 @@ bool RunCKWaveSoundScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     return ok;
 }
 
+bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKContext script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *contextType = engine->GetTypeInfoByDecl("CKContext");
+    if (!contextType) {
+        error = "CKContext self-test could not find the registered type.";
+        return false;
+    }
+    if (contextType->GetMethodByDecl("CKObject@ CreateObject(CK_CLASSID cid, const string &in name = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE &out res = void)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR DestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)") == nullptr ||
+        contextType->GetMethodByDecl("CKObject@ GetObject(CK_ID id)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR Load(int size, NativePointer buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR GetFileInfo(int size, NativePointer buffer, CKFileInfo &out fileInfo)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR LoadAnimationOnCharacter(int size, NativePointer buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)") == nullptr) {
+        error = "CKContext self-test could not find expected object and guarded buffer methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKContextSelfTest";
+    const char *source =
+        "int ProbeCKContextSurface(CKContext@ ctx) {\n"
+        "  if (ctx is null) return 2;\n"
+        "  int beforeCount = ctx.GetObjectCount();\n"
+        "  CK_LOADMODE mode = CKLOAD_INVALID;\n"
+        "  CKObject@ obj = ctx.CreateObject(CKCID_BEOBJECT, \"__CKAS_CKContextSelfTest\", CK_OBJECTCREATION_DYNAMIC, mode);\n"
+        "  if (obj is null) return 3;\n"
+        "  if (obj.GetCKContext() !is ctx) return 4;\n"
+        "  if (obj.GetClassID() != CKCID_BEOBJECT) return 5;\n"
+        "  if (mode == CKLOAD_INVALID) return 6;\n"
+        "  CK_ID id = obj.GetID();\n"
+        "  if (ctx.GetObject(id) !is obj) return 7;\n"
+        "  if (ctx.GetObjectByName(\"__CKAS_CKContextSelfTest\") !is obj) return 8;\n"
+        "  if (ctx.GetObjectByNameAndClass(\"__CKAS_CKContextSelfTest\", CKCID_BEOBJECT) !is obj) return 9;\n"
+        "  if (ctx.GetObjectByNameAndParentClass(\"__CKAS_CKContextSelfTest\", CKCID_OBJECT, null) !is obj) return 10;\n"
+        "  if (ctx.GetObjectSize(obj) < 0) return 11;\n"
+        "  if (ctx.GetObjectsCountByClassID(CKCID_BEOBJECT) <= 0) return 12;\n"
+        "  if (ctx.GetRenderManager() is null || ctx.GetParameterManager() is null) return 13;\n"
+        "  if (ctx.GetManagerCount() <= 0) return 14;\n"
+        "  CKDependencies deps;\n"
+        "  if (ctx.DestroyObject(obj, 0, deps) != CK_OK) return 15;\n"
+        "  if (ctx.GetObject(id) !is null) return 16;\n"
+        "  if (ctx.GetObjectCount() > beforeCount + 1) return 17;\n"
+        "  return 0;\n"
+        "}\n"
+        "void ProbeCKContextLoadNullBuffer(CKContext@ ctx) {\n"
+        "  ctx.Load(1, NativePointer(), null);\n"
+        "}\n"
+        "void ProbeCKContextFileInfoNullBuffer(CKContext@ ctx) {\n"
+        "  CKFileInfo info;\n"
+        "  ctx.GetFileInfo(1, NativePointer(), info);\n"
+        "}\n"
+        "void ProbeCKContextAnimationNullBuffer(CKContext@ ctx) {\n"
+        "  ctx.LoadAnimationOnCharacter(1, NativePointer(), null, null);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKContext self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckcontext-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKContext self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKContext self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKContextSurface(CKContext@)");
+    asIScriptFunction *loadNull = module->GetFunctionByDecl("void ProbeCKContextLoadNullBuffer(CKContext@)");
+    asIScriptFunction *fileInfoNull = module->GetFunctionByDecl("void ProbeCKContextFileInfoNullBuffer(CKContext@)");
+    asIScriptFunction *animationNull = module->GetFunctionByDecl("void ProbeCKContextAnimationNullBuffer(CKContext@)");
+    if (!probe || !loadNull || !fileInfoNull || !animationNull) {
+        engine->DiscardModule(moduleName);
+        error = "CKContext self-test functions were not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKContext surface probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, loadNull, context, true, "CKContext Load null-buffer probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, fileInfoNull, context, true, "CKContext GetFileInfo null-buffer probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, animationNull, context, true, "CKContext LoadAnimationOnCharacter null-buffer probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKObjectManager script self-test requires CKContext and AngelScript engine.";
@@ -7367,6 +7463,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKWaveSoundScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKContextScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectScriptSelfTest(context, engine, error)) {
