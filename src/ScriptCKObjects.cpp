@@ -4512,6 +4512,15 @@ void RegisterCKCurve(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKCurve", "void Update()", asMETHODPR(CKCurve, Update, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
+static bool CKGridHasCompatibleClass(CKGrid *self, CK3dEntity *entity) {
+    if (!self || !entity) {
+        SetCK3dEntityBindingException("CKGrid.HasCompatibleClass requires a non-null CK3dEntity.");
+        return false;
+    }
+
+    return self->HasCompatibleClass(entity);
+}
+
 void RegisterCKGrid(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -4538,7 +4547,7 @@ void RegisterCKGrid(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR AddClassification(const string &in name)", asFUNCTIONPR([](CKGrid *self, const std::string &name) { return self->AddClassificationByName(const_cast<char *>(name.c_str())); }, (CKGrid *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR RemoveClassification(int classification)", asMETHODPR(CKGrid, RemoveClassification, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR RemoveClassification(const string &in name)", asFUNCTIONPR([](CKGrid *self, const std::string &name) { return self->RemoveClassificationByName(const_cast<char *>(name.c_str())); }, (CKGrid *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "bool HasCompatibleClass(CK3dEntity@ entity)", asFUNCTIONPR([](CKGrid *self, CK3dEntity *entity) -> bool { return self->HasCompatibleClass(entity); }, (CKGrid *, CK3dEntity *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "bool HasCompatibleClass(CK3dEntity@ entity)", asFUNCTION(CKGridHasCompatibleClass), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGrid", "void SetGridPriority(int priority)", asMETHODPR(CKGrid, SetGridPriority, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "int GetGridPriority()", asMETHODPR(CKGrid, GetGridPriority, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
