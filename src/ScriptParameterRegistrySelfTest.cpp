@@ -379,6 +379,58 @@ bool ExecuteCKSceneObjectProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKBeObjectProbe(asIScriptEngine *engine,
+                            asIScriptFunction *function,
+                            CKBeObject *object,
+                            CKBehavior *behavior,
+                            CKGroup *group,
+                            bool expectException,
+                            const char *label,
+                            std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, object);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, behavior);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(2, group);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKGroupProbe(asIScriptEngine *engine,
                          asIScriptFunction *function,
                          CKGroup *group,
@@ -4653,6 +4705,139 @@ bool RunCKSceneObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine,
     return ok;
 }
 
+bool RunCKBeObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKBeObject script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *beObjectType = engine->GetTypeInfoByDecl("CKBeObject");
+    if (!beObjectType) {
+        error = "CKBeObject self-test could not find the registered type.";
+        return false;
+    }
+    if (beObjectType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr) {
+        error = "CKBeObject self-test found unsafe ApplyPatchForOlderVersion array-pointer binding.";
+        return false;
+    }
+    if (!beObjectType->GetMethodByDecl("void ExecuteBehaviors(float delta)") ||
+        !beObjectType->GetMethodByDecl("bool IsInGroup(CKGroup@ group)") ||
+        !beObjectType->GetMethodByDecl("bool HasAttribute(CKAttributeType attribType)") ||
+        !beObjectType->GetMethodByDecl("int GetAttributeCount()") ||
+        !beObjectType->GetMethodByDecl("CKParameterOut@ GetAttributeParameterByIndex(int index)") ||
+        !beObjectType->GetMethodByDecl("CKERROR AddScript(CKBehavior@ ckb)") ||
+        !beObjectType->GetMethodByDecl("CKBehavior@ RemoveScript(CK_ID id)") ||
+        !beObjectType->GetMethodByDecl("CKBehavior@ RemoveScript(int pos)") ||
+        !beObjectType->GetMethodByDecl("CKERROR RemoveAllScripts()") ||
+        !beObjectType->GetMethodByDecl("CKBehavior@ GetScript(int pos)") ||
+        !beObjectType->GetMethodByDecl("int GetScriptCount()") ||
+        !beObjectType->GetMethodByDecl("int GetPriority()") ||
+        !beObjectType->GetMethodByDecl("void SetPriority(int priority)") ||
+        !beObjectType->GetMethodByDecl("int GetLastFrameMessageCount()") ||
+        !beObjectType->GetMethodByDecl("CKMessage@ GetLastFrameMessage(int pos)") ||
+        !beObjectType->GetMethodByDecl("void SetAsWaitingForMessages(bool wait = true)") ||
+        !beObjectType->GetMethodByDecl("bool IsWaitingForMessages()") ||
+        !beObjectType->GetMethodByDecl("int CallBehaviorCallbackFunction(CKDWORD message, CKGUID &in behGuid = void)") ||
+        !beObjectType->GetMethodByDecl("float GetLastExecutionTime()")) {
+        error = "CKBeObject self-test could not find expected object methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBeObjectSelfTest";
+    const char *source =
+        "int ProbeCKBeObjectSurface(CKBeObject@ object, CKBehavior@ behavior, CKGroup@ group) {\n"
+        "  if (object is null || behavior is null || group is null) return 2;\n"
+        "  if (object.GetClassID() != CKCID_BEOBJECT) return 3;\n"
+        "  if (group.AddObject(object) != CK_OK) return 4;\n"
+        "  if (!object.IsInGroup(group)) return 5;\n"
+        "  group.Clear();\n"
+        "  if (object.IsInGroup(group)) return 6;\n"
+        "  int priority = object.GetPriority();\n"
+        "  object.SetPriority(priority + 1);\n"
+        "  if (object.GetPriority() != priority + 1) return 7;\n"
+        "  object.SetPriority(priority);\n"
+        "  object.SetAsWaitingForMessages(true);\n"
+        "  if (!object.IsWaitingForMessages()) return 8;\n"
+        "  object.SetAsWaitingForMessages(false);\n"
+        "  if (object.IsWaitingForMessages()) return 9;\n"
+        "  object.GetLastFrameMessageCount();\n"
+        "  object.GetLastExecutionTime();\n"
+        "  object.ExecuteBehaviors(0.0f);\n"
+        "  if (object.GetScriptCount() != 0) return 10;\n"
+        "  if (object.AddScript(behavior) != CK_OK) return 11;\n"
+        "  if (object.GetScriptCount() != 1) return 12;\n"
+        "  if (object.GetScript(0) !is behavior) return 13;\n"
+        "  CK_ID id = behavior.GetID();\n"
+        "  CKBehavior@ removedById = object.RemoveScript(id);\n"
+        "  if (removedById !is behavior) return 14;\n"
+        "  if (object.GetScriptCount() != 0) return 15;\n"
+        "  if (object.AddScript(behavior) != CK_OK) return 16;\n"
+        "  CKBehavior@ removedByPos = object.RemoveScript(0);\n"
+        "  if (removedByPos !is behavior) return 17;\n"
+        "  if (object.AddScript(behavior) != CK_OK) return 18;\n"
+        "  if (object.RemoveAllScripts() != CK_OK) return 19;\n"
+        "  if (object.GetScriptCount() != 0) return 20;\n"
+        "  object.GetAttributeCount();\n"
+        "  CKObject@ asObject = object;\n"
+        "  if (cast<CKBeObject@>(asObject) !is object) return 21;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBeObject self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckbeobject-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBeObject self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBeObject self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKBeObjectSurface(CKBeObject@, CKBehavior@, CKGroup@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBeObject self-test function was not found.";
+        return false;
+    }
+
+    CKBeObject *object = CKBeObject::Cast(context->CreateObject(CKCID_BEOBJECT,
+                                                                const_cast<CKSTRING>("__CKAS_CKBeObjectSelfTestObject"),
+                                                                CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR,
+                                                                  const_cast<CKSTRING>("__CKAS_CKBeObjectSelfTestBehavior"),
+                                                                  CK_OBJECTCREATION_DYNAMIC));
+    CKGroup *group = CKGroup::Cast(context->CreateObject(CKCID_GROUP,
+                                                        const_cast<CKSTRING>("__CKAS_CKBeObjectSelfTestGroup"),
+                                                        CK_OBJECTCREATION_DYNAMIC));
+    if (!object || !behavior || !group) {
+        if (group) context->DestroyObject(group);
+        if (behavior) context->DestroyObject(behavior);
+        if (object) context->DestroyObject(object);
+        engine->DiscardModule(moduleName);
+        error = "CKBeObject self-test could not create temporary objects.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKBeObjectProbe(engine, probe, object, behavior, group, false, "CKBeObject surface probe", error);
+
+    group->Clear();
+    object->RemoveAllScripts();
+    context->DestroyObject(group);
+    context->DestroyObject(behavior);
+    context->DestroyObject(object);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKGroupScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKGroup script self-test requires CKContext and AngelScript engine.";
@@ -8215,6 +8400,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKSceneObjectScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBeObjectScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKGroupScriptSelfTest(context, engine, error)) {

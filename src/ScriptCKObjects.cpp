@@ -1956,7 +1956,6 @@ static void RegisterCKBeObjectMembers(asIScriptEngine *engine, const char *name)
     r = engine->RegisterObjectMethod(name, "bool IsWaitingForMessages()", asFUNCTIONPR([](T *self) -> bool { return self->IsWaitingForMessages(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int CallBehaviorCallbackFunction(CKDWORD message, CKGUID &in behGuid = void)", asMETHODPR(T, CallBehaviorCallbackFunction, (CKDWORD, CKGUID*), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "float GetLastExecutionTime()", asMETHODPR(T, GetLastExecutionTime, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)", asMETHODPR(T, ApplyPatchForOlderVersion, (int, CKFileObject*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKBeObject") != 0) {
         RegisterCKObjectCast<T, CKBeObject>(engine, name, "CKBeObject");
