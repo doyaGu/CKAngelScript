@@ -2310,6 +2310,116 @@ bool RunCKPathEntryVectorScriptSelfTest(asIScriptEngine *engine, std::string &er
     return ok;
 }
 
+bool RunCKPathEntryVectorItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKPATHENTRYVECTORIt script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("CKPATHENTRYVECTORIt");
+    if (!iteratorType) {
+        error = "CKPATHENTRYVECTORIt self-test could not find the registered type.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("bool opEquals(const CKPATHENTRYVECTORIt &in other) const") ||
+        !iteratorType->GetMethodByDecl("bool opNotEquals(const CKPATHENTRYVECTORIt &in other) const")) {
+        error = "CKPATHENTRYVECTORIt self-test could not find iterator comparison methods.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("CKPATHENTRYVECTOR");
+    if (!arrayType) {
+        error = "CKPATHENTRYVECTORIt self-test could not find CKPATHENTRYVECTOR.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("CKPATHENTRYVECTORIt Begin() const") ||
+        !arrayType->GetMethodByDecl("CKPATHENTRYVECTORIt End() const")) {
+        error = "CKPATHENTRYVECTORIt self-test could not find CKPATHENTRYVECTOR iterator producers.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKPATHENTRYVECTORItSelfTest";
+    const char *source =
+        "int ProbeCKPathEntryVectorIt() {\n"
+        "  CKPATHENTRYVECTOR values;\n"
+        "  values.PushBack(XString(\"first\"));\n"
+        "  values.PushBack(XString(\"second\"));\n"
+        "  CKPATHENTRYVECTORIt begin = values.Begin();\n"
+        "  CKPATHENTRYVECTORIt end = values.End();\n"
+        "  if (!begin.IsValid()) return 1;\n"
+        "  if (begin == end) return 2;\n"
+        "  if (!(begin.Get() == XString(\"first\"))) return 3;\n"
+        "  begin.Get() = XString(\"changed\");\n"
+        "  if (!(values[0] == XString(\"changed\"))) return 4;\n"
+        "  CKPATHENTRYVECTORIt copied(begin);\n"
+        "  if (!(copied == begin) || copied != begin) return 5;\n"
+        "  ++copied;\n"
+        "  if (copied == begin || !(copied != begin)) return 6;\n"
+        "  if (!(copied.Get() == XString(\"second\"))) return 7;\n"
+        "  CKPATHENTRYVECTORIt assigned;\n"
+        "  assigned = copied;\n"
+        "  if (!(assigned == copied)) return 8;\n"
+        "  ++assigned;\n"
+        "  if (!(assigned == end) || assigned != end) return 9;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectDefaultCKPathEntryVectorItGet() {\n"
+        "  CKPATHENTRYVECTORIt it;\n"
+        "  it.Get();\n"
+        "}\n"
+        "void RejectDefaultCKPathEntryVectorItInc() {\n"
+        "  CKPATHENTRYVECTORIt it;\n"
+        "  ++it;\n"
+        "}\n"
+        "void RejectDefaultCKPathEntryVectorItDec() {\n"
+        "  CKPATHENTRYVECTORIt it;\n"
+        "  --it;\n"
+        "}\n"
+        "void RejectEmptyCKPathEntryVectorItGet() {\n"
+        "  CKPATHENTRYVECTOR values;\n"
+        "  CKPATHENTRYVECTORIt it = values.Begin();\n"
+        "  it.Get();\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPATHENTRYVECTORIt self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckpathentryvectorit-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPATHENTRYVECTORIt self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPATHENTRYVECTORIt self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPathEntryVectorIt()");
+    asIScriptFunction *defaultGet = module->GetFunctionByDecl("void RejectDefaultCKPathEntryVectorItGet()");
+    asIScriptFunction *defaultInc = module->GetFunctionByDecl("void RejectDefaultCKPathEntryVectorItInc()");
+    asIScriptFunction *defaultDec = module->GetFunctionByDecl("void RejectDefaultCKPathEntryVectorItDec()");
+    asIScriptFunction *emptyGet = module->GetFunctionByDecl("void RejectEmptyCKPathEntryVectorItGet()");
+    if (!probe || !defaultGet || !defaultInc || !defaultDec || !emptyGet) {
+        engine->DiscardModule(moduleName);
+        error = "CKPATHENTRYVECTORIt self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKPATHENTRYVECTORIt iterator probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultGet, true, "CKPATHENTRYVECTORIt default Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultInc, true, "CKPATHENTRYVECTORIt default increment rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultDec, true, "CKPATHENTRYVECTORIt default decrement rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyGet, true, "CKPATHENTRYVECTORIt empty Begin Get rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKAttributeDesc script self-test requires an AngelScript engine.";
@@ -6185,6 +6295,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKPathEntryVectorScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKPathEntryVectorItScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeDescScriptSelfTest(engine, error)) {
