@@ -29,7 +29,7 @@ static int RegisterClassValueCast(asIScriptEngine *engine, const char *derived, 
 }
 
 template <typename D, typename B>
-static void RegisterClassRefCast(asIScriptEngine *engine, const char *derived, const char *base) {
+static int RegisterClassRefCast(asIScriptEngine *engine, const char *derived, const char *base) {
     // This is only for raw CK SDK wrapper inheritance where the native object
     // layout is guaranteed by CK. High-level ObjectRef handles use checked
     // dynamic casts in ScriptObjectRef.cpp instead.
@@ -37,19 +37,22 @@ static void RegisterClassRefCast(asIScriptEngine *engine, const char *derived, c
 
     std::string decl = derived;
     decl.append("@ opCast()");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((ForceCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((ForceCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST);
+    if (r < 0) return r;
 
     decl = base;
     decl.append("@ opImplCast()");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ForceCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ForceCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST);
+    if (r < 0) return r;
 
     decl = "const ";
     decl.append(derived).append("@ opCast() const");
-    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((ForceCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(base, decl.c_str(), asFUNCTIONPR((ForceCast<B, D>), (B *), D *), asCALL_CDECL_OBJLAST);
+    if (r < 0) return r;
 
     decl = "const ";
     decl.append(base).append("@ opImplCast() const");
-    r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ForceCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST); assert( r >= 0 );
+    return engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((ForceCast<D, B>), (D *), B *), asCALL_CDECL_OBJLAST);
 }
 
 inline std::string ScriptStringify(const char *str) {

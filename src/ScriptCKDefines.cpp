@@ -13,6 +13,7 @@
 
 #include "ScriptUtils.h"
 #include "ScriptXArray.h"
+#include "ScriptNativeBuffer.h"
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
 #include "ScriptCKVertexBuffer.h"
@@ -3708,6 +3709,42 @@ static CKKey &InvalidCKKey(const char *message) {
     return dummy;
 }
 
+static void SetCKAnimControllerException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+static bool IsCKAnimControllerVectorType(CKDWORD type) {
+    const CKDWORD baseType = type & CKANIMATION_CONTROLLER_MASK;
+    return baseType == CKANIMATION_CONTROLLER_POS || baseType == CKANIMATION_CONTROLLER_SCL;
+}
+
+static bool IsCKAnimControllerQuaternionType(CKDWORD type) {
+    const CKDWORD baseType = type & CKANIMATION_CONTROLLER_MASK;
+    return baseType == CKANIMATION_CONTROLLER_ROT || baseType == CKANIMATION_CONTROLLER_SCLAXIS;
+}
+
+static bool IsCKAnimControllerExactPositionKeyType(CKDWORD type) {
+    return type == CKANIMATION_LINPOS_CONTROL || type == CKANIMATION_LINSCL_CONTROL;
+}
+
+static bool IsCKAnimControllerExactRotationKeyType(CKDWORD type) {
+    return type == CKANIMATION_LINROT_CONTROL || type == CKANIMATION_LINSCLAXIS_CONTROL;
+}
+
+static bool IsCKAnimControllerExactTCBPositionKeyType(CKDWORD type) {
+    return type == CKANIMATION_TCBPOS_CONTROL || type == CKANIMATION_TCBSCL_CONTROL;
+}
+
+static bool IsCKAnimControllerExactTCBRotationKeyType(CKDWORD type) {
+    return type == CKANIMATION_TCBROT_CONTROL || type == CKANIMATION_TCBSCLAXIS_CONTROL;
+}
+
+static bool IsCKAnimControllerExactBezierPositionKeyType(CKDWORD type) {
+    return type == CKANIMATION_BEZIERPOS_CONTROL || type == CKANIMATION_BEZIERSCL_CONTROL;
+}
+
 template<typename T>
 static CKKey &GetCKAnimControllerKey(T *self, int index) {
     if (!self) {
@@ -3724,17 +3761,114 @@ static CKKey &GetCKAnimControllerKey(T *self, int index) {
 }
 
 template<typename T>
+static bool EvaluateCKAnimControllerVector(T *self, float timeStep, VxVector &result) {
+    if (!self) {
+        SetCKAnimControllerException("CKAnimController.EvaluateVector called with a null controller.");
+        return false;
+    }
+    if (!IsCKAnimControllerVectorType(self->GetType())) {
+        SetCKAnimControllerException("CKAnimController.EvaluateVector requires a position or scale controller.");
+        return false;
+    }
+    return self->Evaluate(timeStep, &result) != FALSE;
+}
+
+template<typename T>
+static bool EvaluateCKAnimControllerQuaternion(T *self, float timeStep, VxQuaternion &result) {
+    if (!self) {
+        SetCKAnimControllerException("CKAnimController.EvaluateQuaternion called with a null controller.");
+        return false;
+    }
+    if (!IsCKAnimControllerQuaternionType(self->GetType())) {
+        SetCKAnimControllerException("CKAnimController.EvaluateQuaternion requires a rotation or scale-axis controller.");
+        return false;
+    }
+    return self->Evaluate(timeStep, &result) != FALSE;
+}
+
+template<typename T, typename KeyT, bool (*AcceptType)(CKDWORD)>
+static int AddTypedCKAnimControllerKey(T *self, KeyT &key) {
+    if (!self) {
+        SetCKAnimControllerException("CKAnimController typed AddKey called with a null controller.");
+        return -1;
+    }
+    if (!AcceptType(self->GetType())) {
+        SetCKAnimControllerException("CKAnimController typed AddKey received a key incompatible with the controller type.");
+        return -1;
+    }
+    return self->AddKey(&key);
+}
+
+template<typename T>
+static int DumpCKAnimControllerKeysTo(T *self, NativeBuffer *buffer) {
+    if (!self) {
+        SetCKAnimControllerException("CKAnimController.DumpKeysTo called with a null controller.");
+        return 0;
+    }
+
+    const int required = self->DumpKeysTo(nullptr);
+    if (!buffer) {
+        return required;
+    }
+    if (required < 0) {
+        return required;
+    }
+    if (buffer->Size() < static_cast<size_t>(required)) {
+        SetCKAnimControllerException("CKAnimController.DumpKeysTo requires a NativeBuffer large enough for the serialized keys.");
+        return 0;
+    }
+    return self->DumpKeysTo(buffer->Data());
+}
+
+template<typename T>
+static NativeBuffer *DumpCKAnimControllerKeys(T *self) {
+    if (!self) {
+        SetCKAnimControllerException("CKAnimController.DumpKeys called with a null controller.");
+        return nullptr;
+    }
+
+    const int required = self->DumpKeysTo(nullptr);
+    if (required < 0) {
+        return nullptr;
+    }
+
+    NativeBuffer *buffer = NativeBuffer::Create(static_cast<size_t>(required));
+    if (!buffer || (required > 0 && !buffer->Data())) {
+        if (buffer) {
+            buffer->Release();
+        }
+        return nullptr;
+    }
+
+    const int written = self->DumpKeysTo(buffer->Data());
+    if (written < 0 || written > required) {
+        buffer->Release();
+        return nullptr;
+    }
+    return buffer;
+}
+
+template<typename T>
+static int ReadCKAnimControllerKeysFrom(T *self, NativeBuffer *buffer) {
+    if (!self) {
+        SetCKAnimControllerException("CKAnimController.ReadKeysFrom called with a null controller.");
+        return 0;
+    }
+    if (!buffer || !buffer->IsValid()) {
+        SetCKAnimControllerException("CKAnimController.ReadKeysFrom requires a valid NativeBuffer.");
+        return 0;
+    }
+    return self->ReadKeysFrom(buffer->Data());
+}
+
+template<typename T>
 static bool CompareCKAnimController(T *self, CKAnimController *control, float threshold) {
     if (!self) {
-        if (asIScriptContext *ctx = asGetActiveContext()) {
-            ctx->SetException("CKAnimController.Compare called with a null controller.");
-        }
+        SetCKAnimControllerException("CKAnimController.Compare called with a null controller.");
         return false;
     }
     if (!control) {
-        if (asIScriptContext *ctx = asGetActiveContext()) {
-            ctx->SetException("CKAnimController.Compare requires a non-null controller.");
-        }
+        SetCKAnimControllerException("CKAnimController.Compare requires a non-null controller.");
         return false;
     }
     return self->Compare(control, threshold) != FALSE;
@@ -3743,15 +3877,11 @@ static bool CompareCKAnimController(T *self, CKAnimController *control, float th
 template<typename T>
 static bool CloneCKAnimController(T *self, CKAnimController *control) {
     if (!self) {
-        if (asIScriptContext *ctx = asGetActiveContext()) {
-            ctx->SetException("CKAnimController.Clone called with a null controller.");
-        }
+        SetCKAnimControllerException("CKAnimController.Clone called with a null controller.");
         return false;
     }
     if (!control) {
-        if (asIScriptContext *ctx = asGetActiveContext()) {
-            ctx->SetException("CKAnimController.Clone requires a non-null controller.");
-        }
+        SetCKAnimControllerException("CKAnimController.Clone requires a non-null controller.");
         return false;
     }
     return self->Clone(control) != FALSE;
@@ -3762,13 +3892,19 @@ void RegisterCKAnimControllerMembers(asIScriptEngine *engine, const char *name) 
     int r = 0;
 
     if constexpr (!std::is_same_v<T, CKMorphController>) {
-        r = engine->RegisterObjectMethod(name, "bool Evaluate(float timeStep, NativePointer res)", asFUNCTIONPR([](T *self, float timeStep, NativePointer res) -> bool { return self->Evaluate(timeStep, res.Get()); }, (T *, float, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-        r = engine->RegisterObjectMethod(name, "int AddKey(CKKey &in key)", asMETHODPR(T, AddKey, (CKKey *), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "bool EvaluateVector(float timeStep, VxVector &out result)", asFUNCTIONPR(EvaluateCKAnimControllerVector<T>, (T *, float, VxVector &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "bool EvaluateQuaternion(float timeStep, VxQuaternion &out result)", asFUNCTIONPR(EvaluateCKAnimControllerQuaternion<T>, (T *, float, VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "int AddPositionKey(CKPositionKey &in key)", asFUNCTIONPR((AddTypedCKAnimControllerKey<T, CKPositionKey, IsCKAnimControllerExactPositionKeyType>), (T *, CKPositionKey &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "int AddRotationKey(CKRotationKey &in key)", asFUNCTIONPR((AddTypedCKAnimControllerKey<T, CKRotationKey, IsCKAnimControllerExactRotationKeyType>), (T *, CKRotationKey &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "int AddTCBPositionKey(CKTCBPositionKey &in key)", asFUNCTIONPR((AddTypedCKAnimControllerKey<T, CKTCBPositionKey, IsCKAnimControllerExactTCBPositionKeyType>), (T *, CKTCBPositionKey &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "int AddTCBRotationKey(CKTCBRotationKey &in key)", asFUNCTIONPR((AddTypedCKAnimControllerKey<T, CKTCBRotationKey, IsCKAnimControllerExactTCBRotationKeyType>), (T *, CKTCBRotationKey &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+        r = engine->RegisterObjectMethod(name, "int AddBezierPositionKey(CKBezierPositionKey &in key)", asFUNCTIONPR((AddTypedCKAnimControllerKey<T, CKBezierPositionKey, IsCKAnimControllerExactBezierPositionKeyType>), (T *, CKBezierPositionKey &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
         r = engine->RegisterObjectMethod(name, "CKKey &GetKey(int index)", asFUNCTIONPR(GetCKAnimControllerKey<T>, (T *, int), CKKey &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     }
     r = engine->RegisterObjectMethod(name, "void RemoveKey(int index)", asMETHODPR(T, RemoveKey, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "int DumpKeysTo(NativePointer buffer)", asFUNCTIONPR([](T *self, NativePointer buffer) -> int { return self->DumpKeysTo(buffer.Get()); }, (T *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "int ReadKeysFrom(NativePointer buffer)", asFUNCTIONPR([](T *self, NativePointer buffer) -> int { return self->ReadKeysFrom(buffer.Get()); }, (T *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "int DumpKeysTo(NativeBuffer@ buffer = null)", asFUNCTIONPR(DumpCKAnimControllerKeysTo<T>, (T *, NativeBuffer *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "NativeBuffer@ DumpKeys()", asFUNCTIONPR(DumpCKAnimControllerKeys<T>, (T *), NativeBuffer *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "int ReadKeysFrom(NativeBuffer@ buffer)", asFUNCTIONPR(ReadCKAnimControllerKeysFrom<T>, (T *, NativeBuffer *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool Compare(CKAnimController@ control, float threshold = 0.0)", asFUNCTIONPR(CompareCKAnimController<T>, (T *, CKAnimController *, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool Clone(CKAnimController@ control)", asFUNCTIONPR(CloneCKAnimController<T>, (T *, CKAnimController *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
@@ -3778,7 +3914,7 @@ void RegisterCKAnimControllerMembers(asIScriptEngine *engine, const char *name) 
     r = engine->RegisterObjectMethod(name, "float GetLength()", asMETHODPR(T, GetLength, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKAnimController") != 0) {
-        RegisterClassRefCast<T, CKAnimController>(engine, name, "CKAnimController");
+        r = RegisterClassRefCast<T, CKAnimController>(engine, name, "CKAnimController"); CKAS_CHECK_REGISTER(r);
     }
 }
 

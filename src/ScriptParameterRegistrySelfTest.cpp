@@ -487,6 +487,54 @@ bool ExecuteCKGroupProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKAnimControllerProbe(asIScriptEngine *engine,
+                                  asIScriptFunction *function,
+                                  CKAnimController *positionController,
+                                  CKAnimController *rotationController,
+                                  bool expectException,
+                                  const char *label,
+                                  std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, positionController);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, rotationController);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKBehaviorLinkProbe(asIScriptEngine *engine,
                                 asIScriptFunction *function,
                                 CKBehavior *root,
@@ -6894,7 +6942,11 @@ bool RunCKMorphKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     return ok;
 }
 
-bool RunCKAnimControllerScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+bool RunCKAnimControllerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context) {
+        error = "CKAnimController script self-test requires a CKContext.";
+        return false;
+    }
     if (!engine) {
         error = "CKAnimController script self-test requires an AngelScript engine.";
         return false;
@@ -6905,7 +6957,21 @@ bool RunCKAnimControllerScriptSelfTest(asIScriptEngine *engine, std::string &err
         error = "CKAnimController self-test could not find the registered type.";
         return false;
     }
-    if (controllerType->GetMethodByDecl("CKKey& GetKey(int index)") == nullptr ||
+    if (controllerType->GetMethodByDecl("bool Evaluate(float timeStep, NativePointer res)") != nullptr ||
+        controllerType->GetMethodByDecl("int AddKey(CKKey&in key)") != nullptr ||
+        controllerType->GetMethodByDecl("int DumpKeysTo(NativePointer buffer)") != nullptr ||
+        controllerType->GetMethodByDecl("int ReadKeysFrom(NativePointer buffer)") != nullptr) {
+        error = "CKAnimController self-test found stale raw-pointer or base-key declarations.";
+        return false;
+    }
+    if (controllerType->GetMethodByDecl("bool EvaluateVector(float timeStep, VxVector&out result)") == nullptr ||
+        controllerType->GetMethodByDecl("bool EvaluateQuaternion(float timeStep, VxQuaternion&out result)") == nullptr ||
+        controllerType->GetMethodByDecl("int AddPositionKey(CKPositionKey&in key)") == nullptr ||
+        controllerType->GetMethodByDecl("int AddRotationKey(CKRotationKey&in key)") == nullptr ||
+        controllerType->GetMethodByDecl("NativeBuffer@ DumpKeys()") == nullptr ||
+        controllerType->GetMethodByDecl("int DumpKeysTo(NativeBuffer@ buffer = null)") == nullptr ||
+        controllerType->GetMethodByDecl("int ReadKeysFrom(NativeBuffer@ buffer)") == nullptr ||
+        controllerType->GetMethodByDecl("CKKey& GetKey(int index)") == nullptr ||
         controllerType->GetMethodByDecl("bool Compare(CKAnimController@ control, float threshold = 0.0)") == nullptr ||
         controllerType->GetMethodByDecl("bool Clone(CKAnimController@ control)") == nullptr) {
         error = "CKAnimController self-test could not find expected guarded methods.";
@@ -6914,13 +6980,49 @@ bool RunCKAnimControllerScriptSelfTest(asIScriptEngine *engine, std::string &err
 
     constexpr const char *moduleName = "__CKAS_CKAnimControllerSelfTest";
     const char *source =
-        "void ProbeAnimControllerSurface(CKAnimController@ controller, CKKey &in key, NativePointer result) {\n"
-        "  if (controller is null) return;\n"
-        "  controller.AddKey(key);\n"
-        "  CKKey got = controller.GetKey(0);\n"
-        "  controller.Compare(controller);\n"
-        "  controller.Clone(controller);\n"
-        "  controller.Evaluate(0.0f, result);\n"
+        "int ProbeAnimControllerSurface(CKAnimController@ posController, CKAnimController@ rotController) {\n"
+        "  if (posController is null || rotController is null) return 1;\n"
+        "  if (posController.GetType() != CKANIMATION_LINPOS_CONTROL) return 2;\n"
+        "  if (rotController.GetType() != CKANIMATION_LINROT_CONTROL) return 3;\n"
+        "  VxVector pos(1.0f, 2.0f, 3.0f);\n"
+        "  CKPositionKey posKey(0.0f, pos);\n"
+        "  if (posController.AddPositionKey(posKey) < 0) return 4;\n"
+        "  if (posController.GetKeyCount() != 1) return 5;\n"
+        "  CKKey gotPos = posController.GetKey(0);\n"
+        "  if (gotPos.TimeStep != 0.0f) return 6;\n"
+        "  VxVector evaluatedPos;\n"
+        "  if (!posController.EvaluateVector(0.0f, evaluatedPos)) return 7;\n"
+        "  int needed = posController.DumpKeysTo(null);\n"
+        "  if (needed <= 0) return 8;\n"
+        "  NativeBuffer@ explicitDump = NativeBuffer(needed);\n"
+        "  if (posController.DumpKeysTo(explicitDump) != needed) return 9;\n"
+        "  NativeBuffer@ ownedDump = posController.DumpKeys();\n"
+        "  if (ownedDump is null || ownedDump.Size() != uint(needed)) return 10;\n"
+        "  if (!posController.Compare(posController)) return 11;\n"
+        "  if (!posController.Clone(posController)) return 12;\n"
+        "  posController.RemoveKey(0);\n"
+        "  if (posController.GetKeyCount() != 0) return 13;\n"
+        "  if (posController.ReadKeysFrom(ownedDump) != needed) return 14;\n"
+        "  if (posController.GetKeyCount() != 1) return 15;\n"
+        "  VxQuaternion rot;\n"
+        "  rot.FromEulerAngles(0.0f, 0.0f, 0.0f);\n"
+        "  CKRotationKey rotKey(0.0f, rot);\n"
+        "  if (rotController.AddRotationKey(rotKey) < 0) return 16;\n"
+        "  VxQuaternion evaluatedRot;\n"
+        "  if (!rotController.EvaluateQuaternion(0.0f, evaluatedRot)) return 17;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeAnimControllerMismatchedKey(CKAnimController@ posController, CKAnimController@ rotController) {\n"
+        "  VxQuaternion rot;\n"
+        "  rot.FromEulerAngles(0.0f, 0.0f, 0.0f);\n"
+        "  CKRotationKey rotKey(0.0f, rot);\n"
+        "  posController.AddRotationKey(rotKey);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeAnimControllerSmallDump(CKAnimController@ posController, CKAnimController@ rotController) {\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(1);\n"
+        "  posController.DumpKeysTo(tooSmall);\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -6942,8 +7044,39 @@ bool RunCKAnimControllerScriptSelfTest(asIScriptEngine *engine, std::string &err
         return false;
     }
 
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeAnimControllerSurface(CKAnimController@, CKAnimController@)");
+    asIScriptFunction *mismatchedKey = module->GetFunctionByDecl("int ProbeAnimControllerMismatchedKey(CKAnimController@, CKAnimController@)");
+    asIScriptFunction *smallDump = module->GetFunctionByDecl("int ProbeAnimControllerSmallDump(CKAnimController@, CKAnimController@)");
+    if (!probe || !mismatchedKey || !smallDump) {
+        engine->DiscardModule(moduleName);
+        error = "CKAnimController self-test functions were not found.";
+        return false;
+    }
+
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKAnimControllerSelfTest"), CK_OBJECTCREATION_DYNAMIC));
+    if (!animation) {
+        engine->DiscardModule(moduleName);
+        error = "CKAnimController self-test could not create a CKObjectAnimation.";
+        return false;
+    }
+
+    CKAnimController *positionController = animation->CreateController(CKANIMATION_LINPOS_CONTROL);
+    CKAnimController *rotationController = animation->CreateController(CKANIMATION_LINROT_CONTROL);
+    if (!positionController || !rotationController) {
+        context->DestroyObject(animation);
+        engine->DiscardModule(moduleName);
+        error = "CKAnimController self-test could not create native controllers.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAnimControllerProbe(engine, probe, positionController, rotationController, false, "CKAnimController probe", error) &&
+                    ExecuteCKAnimControllerProbe(engine, mismatchedKey, positionController, rotationController, true, "CKAnimController mismatched-key probe", error) &&
+                    ExecuteCKAnimControllerProbe(engine, smallDump, positionController, rotationController, true, "CKAnimController small-dump probe", error);
+
+    context->DestroyObject(animation);
     engine->DiscardModule(moduleName);
-    return true;
+    return ok;
 }
 
 bool RunCKMorphControllerScriptSelfTest(asIScriptEngine *engine, std::string &error) {
@@ -8342,7 +8475,7 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunCKMorphKeyScriptSelfTest(engine, error)) {
         return false;
     }
-    if (!RunCKAnimControllerScriptSelfTest(engine, error)) {
+    if (!RunCKAnimControllerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKMorphControllerScriptSelfTest(engine, error)) {
