@@ -2746,6 +2746,245 @@ bool RunCKPluginEntryBehaviorsDataScriptSelfTest(asIScriptEngine *engine, std::s
     return ok;
 }
 
+bool RunCKPluginInfoScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKPluginInfo script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *infoType = engine->GetTypeInfoByDecl("CKPluginInfo");
+    if (!infoType) {
+        error = "CKPluginInfo self-test could not find the registered type.";
+        return false;
+    }
+    if (!infoType->GetMethodByDecl("NativePointer get_m_InitInstanceFct() const") ||
+        !infoType->GetMethodByDecl("void set_m_InitInstanceFct(NativePointer ptr)") ||
+        !infoType->GetMethodByDecl("NativePointer get_m_ExitInstanceFct() const") ||
+        !infoType->GetMethodByDecl("void set_m_ExitInstanceFct(NativePointer ptr)") ||
+        !infoType->GetMethodByDecl("CKPluginInfo& opAssign(const CKPluginInfo &in other)")) {
+        error = "CKPluginInfo self-test could not find expected guarded callback methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKPluginInfoSelfTest";
+    const char *source =
+        "int ProbeCKPluginInfo() {\n"
+        "  CKPluginInfo info;\n"
+        "  if (info.m_GUID.d1 != 0 || info.m_GUID.d2 != 0) return 1;\n"
+        "  if (info.m_Version != 0) return 2;\n"
+        "  if (!info.m_InitInstanceFct.IsNull() || !info.m_ExitInstanceFct.IsNull()) return 3;\n"
+        "  info.m_GUID = CKGUID(0x11111111, 0x22222222);\n"
+        "  info.m_Version = 42;\n"
+        "  info.m_InitInstanceFct = NativePointer();\n"
+        "  info.m_ExitInstanceFct = NativePointer(uintptr_t(0));\n"
+        "  CKPluginInfo copied(info);\n"
+        "  if (copied.m_GUID.d1 != 0x11111111 || copied.m_GUID.d2 != 0x22222222) return 4;\n"
+        "  if (copied.m_Version != 42 || !copied.m_InitInstanceFct.IsNull() || !copied.m_ExitInstanceFct.IsNull()) return 5;\n"
+        "  CKPluginInfo assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.m_Version != 42 || assigned.m_GUID.d1 != 0x11111111) return 6;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKPluginInfoInitPointerWrite() {\n"
+        "  CKPluginInfo info;\n"
+        "  info.m_InitInstanceFct = NativePointer(uintptr_t(1));\n"
+        "}\n"
+        "void RejectCKPluginInfoExitPointerWrite() {\n"
+        "  CKPluginInfo info;\n"
+        "  info.m_ExitInstanceFct = NativePointer(uintptr_t(1));\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPluginInfo self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-plugin-info-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginInfo self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginInfo self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPluginInfo()");
+    asIScriptFunction *rejectInit = module->GetFunctionByDecl("void RejectCKPluginInfoInitPointerWrite()");
+    asIScriptFunction *rejectExit = module->GetFunctionByDecl("void RejectCKPluginInfoExitPointerWrite()");
+    if (!probe || !rejectInit || !rejectExit) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginInfo self-test functions were not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKPluginInfo value probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, rejectInit, true, "CKPluginInfo init callback rejection probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, rejectExit, true, "CKPluginInfo exit callback rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCKPluginEntryReadersDataScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKPluginEntryReadersData script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *readerType = engine->GetTypeInfoByDecl("CKPluginEntryReadersData");
+    if (!readerType) {
+        error = "CKPluginEntryReadersData self-test could not find the registered type.";
+        return false;
+    }
+    if (!readerType->GetMethodByDecl("NativePointer get_m_GetReaderFct() const") ||
+        !readerType->GetMethodByDecl("void set_m_GetReaderFct(NativePointer ptr)") ||
+        !readerType->GetMethodByDecl("CKPluginEntryReadersData& opAssign(const CKPluginEntryReadersData &in other)")) {
+        error = "CKPluginEntryReadersData self-test could not find expected guarded callback methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKPluginEntryReadersDataSelfTest";
+    const char *source =
+        "int ProbeCKPluginEntryReadersData() {\n"
+        "  CKPluginEntryReadersData data;\n"
+        "  if (data.m_SettingsParameterGuid.d1 != 0 || data.m_SettingsParameterGuid.d2 != 0) return 1;\n"
+        "  if (data.m_OptionCount != 0 || data.m_ReaderFlags != 0) return 2;\n"
+        "  if (!data.m_GetReaderFct.IsNull()) return 3;\n"
+        "  data.m_SettingsParameterGuid = CKGUID(0x33333333, 0x44444444);\n"
+        "  data.m_OptionCount = 3;\n"
+        "  data.m_ReaderFlags = CK_DATAREADER_FILELOAD;\n"
+        "  data.m_GetReaderFct = NativePointer();\n"
+        "  CKPluginEntryReadersData copied(data);\n"
+        "  if (copied.m_SettingsParameterGuid.d1 != 0x33333333 || copied.m_OptionCount != 3) return 4;\n"
+        "  if (copied.m_ReaderFlags != CK_DATAREADER_FILELOAD || !copied.m_GetReaderFct.IsNull()) return 5;\n"
+        "  CKPluginEntryReadersData assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.m_OptionCount != 3 || assigned.m_SettingsParameterGuid.d2 != 0x44444444) return 6;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKPluginEntryReadersDataFactoryWrite() {\n"
+        "  CKPluginEntryReadersData data;\n"
+        "  data.m_GetReaderFct = NativePointer(uintptr_t(1));\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPluginEntryReadersData self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-plugin-entry-readers-data-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginEntryReadersData self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginEntryReadersData self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPluginEntryReadersData()");
+    asIScriptFunction *rejectFactory = module->GetFunctionByDecl("void RejectCKPluginEntryReadersDataFactoryWrite()");
+    if (!probe || !rejectFactory) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginEntryReadersData self-test functions were not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKPluginEntryReadersData value probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, rejectFactory, true, "CKPluginEntryReadersData factory rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCKPluginEntryScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKPluginEntry script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *entryType = engine->GetTypeInfoByDecl("CKPluginEntry");
+    if (!entryType) {
+        error = "CKPluginEntry self-test could not find the registered type.";
+        return false;
+    }
+    if (!entryType->GetMethodByDecl("bool HasReadersInfo() const") ||
+        !entryType->GetMethodByDecl("bool HasBehaviorsInfo() const") ||
+        !entryType->GetMethodByDecl("const CKPluginEntryReadersData& get_m_ReadersInfo() const") ||
+        !entryType->GetMethodByDecl("const CKPluginEntryBehaviorsData& get_m_BehaviorsInfo() const") ||
+        !entryType->GetMethodByDecl("CKPluginEntry& opAssign(const CKPluginEntry &in other)")) {
+        error = "CKPluginEntry self-test could not find guarded metadata accessors.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKPluginEntrySelfTest";
+    const char *source =
+        "int ProbeCKPluginEntry() {\n"
+        "  CKPluginEntry entry;\n"
+        "  if (entry.HasReadersInfo() || entry.HasBehaviorsInfo()) return 1;\n"
+        "  entry.m_PluginDllIndex = 7;\n"
+        "  entry.m_PositionInDll = 8;\n"
+        "  entry.m_PluginInfo.m_Version = 9;\n"
+        "  CKPluginEntry copied(entry);\n"
+        "  if (copied.m_PluginDllIndex != 7 || copied.m_PositionInDll != 8) return 2;\n"
+        "  if (copied.m_PluginInfo.m_Version != 9) return 3;\n"
+        "  if (copied.HasReadersInfo() || copied.HasBehaviorsInfo()) return 4;\n"
+        "  CKPluginEntry assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.m_PluginDllIndex != 7 || assigned.m_PluginInfo.m_Version != 9) return 5;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKPluginEntryReadersInfoAccess() {\n"
+        "  CKPluginEntry entry;\n"
+        "  entry.m_ReadersInfo.m_OptionCount;\n"
+        "}\n"
+        "void RejectCKPluginEntryBehaviorsInfoAccess() {\n"
+        "  CKPluginEntry entry;\n"
+        "  entry.m_BehaviorsInfo.m_BehaviorsGUID.Size();\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPluginEntry self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-plugin-entry-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginEntry self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginEntry self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPluginEntry()");
+    asIScriptFunction *rejectReaders = module->GetFunctionByDecl("void RejectCKPluginEntryReadersInfoAccess()");
+    asIScriptFunction *rejectBehaviors = module->GetFunctionByDecl("void RejectCKPluginEntryBehaviorsInfoAccess()");
+    if (!probe || !rejectReaders || !rejectBehaviors) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginEntry self-test functions were not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKPluginEntry value probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, rejectReaders, true, "CKPluginEntry readers info rejection probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, rejectBehaviors, true, "CKPluginEntry behaviors info rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 #if CKVERSION == 0x13022002
 bool RunCKPICKRESULTScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
@@ -12059,6 +12298,15 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKPluginEntryBehaviorsDataScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKPluginInfoScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKPluginEntryReadersDataScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKPluginEntryScriptSelfTest(engine, error)) {
         return false;
     }
 #if CKVERSION == 0x13022002

@@ -1271,6 +1271,35 @@ void RegisterCKClassDesc(asIScriptEngine *engine) {
 
 // CKPluginInfo
 
+static bool RejectNonNullPluginCallbackPointer(const NativePointer &ptr, const char *message) {
+    if (ptr.IsNull()) {
+        return false;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return true;
+}
+
+static void SetCKPluginInfoInitInstanceFct(CKPluginInfo *self, NativePointer ptr) {
+    if (RejectNonNullPluginCallbackPointer(ptr, "CKPluginInfo.m_InitInstanceFct only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->m_InitInstanceFct = nullptr;
+}
+
+static void SetCKPluginInfoExitInstanceFct(CKPluginInfo *self, NativePointer ptr) {
+    if (RejectNonNullPluginCallbackPointer(ptr, "CKPluginInfo.m_ExitInstanceFct only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->m_ExitInstanceFct = nullptr;
+}
+
+static void ConstructCKPluginInfo(CKPluginInfo *self) {
+    std::memset(self, 0, sizeof(CKPluginInfo));
+    new(self) CKPluginInfo();
+}
+
 void RegisterCKPluginInfo(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1280,11 +1309,9 @@ void RegisterCKPluginInfo(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKPluginInfo", "XString m_Author", asOFFSET(CKPluginInfo, m_Author)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKPluginInfo", "XString m_Summary", asOFFSET(CKPluginInfo, m_Summary)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKPluginInfo", "CKDWORD m_Version", asOFFSET(CKPluginInfo, m_Version)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKPluginInfo", "uintptr_t m_InitInstanceFct", asOFFSET(CKPluginInfo, m_InitInstanceFct)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKPluginInfo", "CK_PLUGIN_TYPE m_Type", asOFFSET(CKPluginInfo, m_Type)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKPluginInfo", "uintptr_t m_ExitInstanceFct", asOFFSET(CKPluginInfo, m_ExitInstanceFct)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectBehaviour("CKPluginInfo", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKPluginInfo *self) { new(self) CKPluginInfo(); }, (CKPluginInfo*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("CKPluginInfo", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKPluginInfo), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("CKPluginInfo", asBEHAVE_CONSTRUCT, "void f(const CKPluginInfo &in other)", asFUNCTIONPR([](const CKPluginInfo &info, CKPluginInfo *self) { new(self) CKPluginInfo(info); }, (const CKPluginInfo &, CKPluginInfo *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKPluginInfo", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPluginInfo *self) { self->~CKPluginInfo(); }, (CKPluginInfo *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -1292,10 +1319,10 @@ void RegisterCKPluginInfo(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKPluginInfo", "CKPluginInfo &opAssign(const CKPluginInfo &in other)", asMETHODPR(CKPluginInfo, operator=, (const CKPluginInfo &), CKPluginInfo &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginInfo", "NativePointer get_m_InitInstanceFct() const", asFUNCTIONPR([](const CKPluginInfo *self) { return NativePointer(self->m_InitInstanceFct); }, (const CKPluginInfo *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginInfo", "void set_m_InitInstanceFct(NativePointer ptr)", asFUNCTIONPR([](CKPluginInfo *self, NativePointer ptr) { self->m_InitInstanceFct = reinterpret_cast<CK_INITINSTANCEFCT>(ptr.Get()); }, (CKPluginInfo *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginInfo", "void set_m_InitInstanceFct(NativePointer ptr)", asFUNCTION(SetCKPluginInfoInitInstanceFct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginInfo", "NativePointer get_m_ExitInstanceFct() const", asFUNCTIONPR([](const CKPluginInfo *self) { return NativePointer(self->m_ExitInstanceFct); }, (const CKPluginInfo *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginInfo", "void set_m_ExitInstanceFct(NativePointer ptr)", asFUNCTIONPR([](CKPluginInfo *self, NativePointer ptr) { self->m_ExitInstanceFct = reinterpret_cast<CK_EXITINSTANCEFCT>(ptr.Get()); }, (CKPluginInfo *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginInfo", "void set_m_ExitInstanceFct(NativePointer ptr)", asFUNCTION(SetCKPluginInfoExitInstanceFct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKEnumStruct
@@ -2068,7 +2095,12 @@ void RegisterCKPluginEntryReadersData(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKPluginEntryReadersData", "CKPluginEntryReadersData &opAssign(const CKPluginEntryReadersData &in other)", asMETHODPR(CKPluginEntryReadersData, operator=, (const CKPluginEntryReadersData &), CKPluginEntryReadersData &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginEntryReadersData", "NativePointer get_m_GetReaderFct() const", asFUNCTIONPR([](const CKPluginEntryReadersData *self) { return NativePointer(self->m_GetReaderFct); }, (const CKPluginEntryReadersData *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginEntryReadersData", "void set_m_GetReaderFct(NativePointer ptr)", asFUNCTIONPR([](CKPluginEntryReadersData *self, NativePointer ptr) { self->m_GetReaderFct = reinterpret_cast<CKReaderGetReaderFunction>(ptr.Get()); }, (CKPluginEntryReadersData *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginEntryReadersData", "void set_m_GetReaderFct(NativePointer ptr)", asFUNCTIONPR([](CKPluginEntryReadersData *self, NativePointer ptr) {
+        if (RejectNonNullPluginCallbackPointer(ptr, "CKPluginEntryReadersData.m_GetReaderFct only accepts a null NativePointer from script.")) {
+            return;
+        }
+        self->m_GetReaderFct = nullptr;
+    }, (CKPluginEntryReadersData *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
 }
 
@@ -2089,14 +2121,43 @@ void RegisterCKPluginEntryBehaviorsData(asIScriptEngine *engine) {
 
 // CKPluginEntry
 
+static bool HasCKPluginEntryReadersInfo(const CKPluginEntry *self) {
+    return self && self->m_ReadersInfo;
+}
+
+static bool HasCKPluginEntryBehaviorsInfo(const CKPluginEntry *self) {
+    return self && self->m_BehaviorsInfo;
+}
+
+static const CKPluginEntryReadersData &GetCKPluginEntryReadersInfo(const CKPluginEntry *self) {
+    static thread_local CKPluginEntryReadersData dummy;
+    if (self && self->m_ReadersInfo) {
+        return *self->m_ReadersInfo;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException("CKPluginEntry.m_ReadersInfo is null for this plugin entry.");
+    }
+    return dummy;
+}
+
+static const CKPluginEntryBehaviorsData &GetCKPluginEntryBehaviorsInfo(const CKPluginEntry *self) {
+    static thread_local CKPluginEntryBehaviorsData dummy;
+    dummy.m_BehaviorsGUID.Clear();
+    if (self && self->m_BehaviorsInfo) {
+        return *self->m_BehaviorsInfo;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException("CKPluginEntry.m_BehaviorsInfo is null for this plugin entry.");
+    }
+    return dummy;
+}
+
 void RegisterCKPluginEntry(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectProperty("CKPluginEntry", "int m_PluginDllIndex", asOFFSET(CKPluginEntry, m_PluginDllIndex)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKPluginEntry", "int m_PositionInDll", asOFFSET(CKPluginEntry, m_PositionInDll)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKPluginEntry", "CKPluginInfo m_PluginInfo", asOFFSET(CKPluginEntry, m_PluginInfo)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKPluginEntry", "CKPluginEntryReadersData &m_ReadersInfo", asOFFSET(CKPluginEntry, m_ReadersInfo)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKPluginEntry", "CKPluginEntryBehaviorsData &m_BehaviorsInfo", asOFFSET(CKPluginEntry, m_BehaviorsInfo)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKPluginEntry", "int m_Active", asOFFSET(CKPluginEntry, m_Active)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKPluginEntry", "int m_IndexInCategory", asOFFSET(CKPluginEntry, m_IndexInCategory)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKPluginEntry", "int m_NeededByFile", asOFFSET(CKPluginEntry, m_NeededByFile)); CKAS_CHECK_REGISTER(r);
@@ -2107,6 +2168,11 @@ void RegisterCKPluginEntry(asIScriptEngine *engine) {
     r = engine->RegisterObjectBehaviour("CKPluginEntry", asBEHAVE_DESTRUCT, "void f()", asFUNCTIONPR([](CKPluginEntry *self) { self->~CKPluginEntry(); }, (CKPluginEntry *self), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginEntry", "CKPluginEntry &opAssign(const CKPluginEntry &in other)", asMETHODPR(CKPluginEntry, operator=, (const CKPluginEntry &), CKPluginEntry &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+
+    r = engine->RegisterObjectMethod("CKPluginEntry", "bool HasReadersInfo() const", asFUNCTION(HasCKPluginEntryReadersInfo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginEntry", "bool HasBehaviorsInfo() const", asFUNCTION(HasCKPluginEntryBehaviorsInfo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginEntry", "const CKPluginEntryReadersData &get_m_ReadersInfo() const", asFUNCTION(GetCKPluginEntryReadersInfo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginEntry", "const CKPluginEntryBehaviorsData &get_m_BehaviorsInfo() const", asFUNCTION(GetCKPluginEntryBehaviorsInfo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKPluginCategory
