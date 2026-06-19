@@ -980,6 +980,27 @@ void RegisterCKGUID(asIScriptEngine *engine) {
 
 // VxEffectDescription
 
+static bool RejectNativeCallbackPointerWrite(const NativePointer &ptr, const char *message) {
+    if (ptr.IsNull()) {
+        return false;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return true;
+}
+
+static void SetVxEffectDescriptionCallback(VxEffectDescription *self, NativePointer ptr) {
+    if (RejectNativeCallbackPointerWrite(ptr, "VxEffectDescription.SetCallback only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->SetCallback = nullptr;
+}
+
+static void SetVxEffectDescriptionCallbackArg(VxEffectDescription *self, NativePointer ptr) {
+    self->CallbackArg = ptr.Get();
+}
+
 void RegisterVxEffectDescription(asIScriptEngine *engine) {
     int r = 0;
 
@@ -992,8 +1013,6 @@ void RegisterVxEffectDescription(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("VxEffectDescription", "XString Tex1Description", asOFFSET(VxEffectDescription, Tex1Description)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("VxEffectDescription", "XString Tex2Description", asOFFSET(VxEffectDescription, Tex2Description)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("VxEffectDescription", "XString Tex3Description", asOFFSET(VxEffectDescription, Tex3Description)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("VxEffectDescription", "uintptr_t SetCallback", asOFFSET(VxEffectDescription, SetCallback)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("VxEffectDescription", "uintptr_t CallbackArg", asOFFSET(VxEffectDescription, CallbackArg)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("VxEffectDescription", "CKGUID ParameterType", asOFFSET(VxEffectDescription, ParameterType)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("VxEffectDescription", "XString ParameterDescription", asOFFSET(VxEffectDescription, ParameterDescription)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("VxEffectDescription", "XString ParameterDefaultValue", asOFFSET(VxEffectDescription, ParameterDefaultValue)); CKAS_CHECK_REGISTER(r);
@@ -1006,10 +1025,10 @@ void RegisterVxEffectDescription(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxEffectDescription", "VxEffectDescription &opAssign(const VxEffectDescription &in other)", asMETHODPR(VxEffectDescription, operator=, (const VxEffectDescription &), VxEffectDescription &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxEffectDescription", "NativePointer get_SetCallback() const", asFUNCTIONPR([](const VxEffectDescription *self) { return NativePointer(self->SetCallback); }, (const VxEffectDescription *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxEffectDescription", "void set_SetCallback(NativePointer ptr)", asFUNCTIONPR([](VxEffectDescription *self, NativePointer ptr) { self->SetCallback = reinterpret_cast<CK_EFFECTCALLBACK>(ptr.Get()); }, (VxEffectDescription *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxEffectDescription", "void set_SetCallback(NativePointer ptr)", asFUNCTION(SetVxEffectDescriptionCallback), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxEffectDescription", "NativePointer get_CallbackArg() const", asFUNCTIONPR([](const VxEffectDescription *self) { return NativePointer(self->CallbackArg); }, (const VxEffectDescription *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("VxEffectDescription", "void set_CallbackArg(NativePointer ptr)", asFUNCTIONPR([](VxEffectDescription *self, NativePointer ptr) { self->CallbackArg = ptr.Get(); }, (VxEffectDescription *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxEffectDescription", "void set_CallbackArg(NativePointer ptr)", asFUNCTION(SetVxEffectDescriptionCallbackArg), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKBehaviorContext
@@ -2193,6 +2212,13 @@ void RegisterCKPluginCategory(asIScriptEngine *engine) {
 
 // CKOperationDesc
 
+static void SetCKOperationDescFunction(CKOperationDesc *self, NativePointer ptr) {
+    if (RejectNativeCallbackPointerWrite(ptr, "CKOperationDesc.Fct only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->Fct = nullptr;
+}
+
 void RegisterCKOperationDesc(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2200,7 +2226,6 @@ void RegisterCKOperationDesc(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKOperationDesc", "CKGUID P1Guid", asOFFSET(CKOperationDesc, P1Guid)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKOperationDesc", "CKGUID P2Guid", asOFFSET(CKOperationDesc, P2Guid)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKOperationDesc", "CKGUID ResGuid", asOFFSET(CKOperationDesc, ResGuid)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKOperationDesc", "uintptr_t Fct", asOFFSET(CKOperationDesc, Fct)); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKOperationDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKOperationDesc *self) { new(self) CKOperationDesc(); }, (CKOperationDesc*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("CKOperationDesc", asBEHAVE_CONSTRUCT, "void f(const CKOperationDesc &in other)", asFUNCTIONPR([](const CKOperationDesc &desc, CKOperationDesc *self) { new(self) CKOperationDesc(desc); }, (const CKOperationDesc &, CKOperationDesc *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -2210,7 +2235,7 @@ void RegisterCKOperationDesc(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKOperationDesc", "CKOperationDesc &opAssign(const CKOperationDesc &in other)", asMETHODPR(CKOperationDesc, operator=, (const CKOperationDesc &), CKOperationDesc &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKOperationDesc", "NativePointer get_Fct() const", asFUNCTIONPR([](const CKOperationDesc *self) { return NativePointer(self->Fct); }, (const CKOperationDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKOperationDesc", "void set_Fct(NativePointer ptr)", asFUNCTIONPR([](CKOperationDesc *self, NativePointer ptr) { self->Fct = reinterpret_cast<CK_PARAMETEROPERATION>(ptr.Get()); }, (CKOperationDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKOperationDesc", "void set_Fct(NativePointer ptr)", asFUNCTION(SetCKOperationDescFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKAttributeVal

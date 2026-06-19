@@ -5150,6 +5150,175 @@ bool RunCK2dCurveScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     return true;
 }
 
+bool RunVxEffectDescriptionScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "VxEffectDescription script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *effectType = engine->GetTypeInfoByDecl("VxEffectDescription");
+    if (!effectType) {
+        error = "VxEffectDescription type is not registered.";
+        return false;
+    }
+    for (asUINT i = 0; i < effectType->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        if (effectType->GetProperty(i, &propertyName) >= 0 && propertyName &&
+            (std::strcmp(propertyName, "SetCallback") == 0 || std::strcmp(propertyName, "CallbackArg") == 0)) {
+            error = "VxEffectDescription still exposes direct callback pointer properties.";
+            return false;
+        }
+    }
+    if (!effectType->GetMethodByDecl("NativePointer get_SetCallback() const") ||
+        !effectType->GetMethodByDecl("void set_SetCallback(NativePointer ptr)") ||
+        !effectType->GetMethodByDecl("NativePointer get_CallbackArg() const") ||
+        !effectType->GetMethodByDecl("void set_CallbackArg(NativePointer ptr)")) {
+        error = "VxEffectDescription callback NativePointer accessors are not registered.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_VxEffectDescriptionSelfTest";
+    const char *source =
+        "int ProbeVxEffectDescription() {\n"
+        "  VxEffectDescription desc;\n"
+        "  NativePointer empty;\n"
+        "  desc.SetCallback = empty;\n"
+        "  desc.CallbackArg = empty;\n"
+        "  if (!desc.SetCallback.IsNull() || !desc.CallbackArg.IsNull()) return 1;\n"
+        "  NativePointer arg;\n"
+        "  arg += 1;\n"
+        "  desc.CallbackArg = arg;\n"
+        "  if (desc.CallbackArg.IsNull()) return 2;\n"
+        "  desc.Summary = \"effect-summary\";\n"
+        "  desc.MaxTextureCount = 2;\n"
+        "  VxEffectDescription copied(desc);\n"
+        "  if (copied.Summary != \"effect-summary\" || !copied.SetCallback.IsNull() || copied.CallbackArg.IsNull()) return 3;\n"
+        "  VxEffectDescription assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.MaxTextureCount != 2 || assigned.CallbackArg.IsNull()) return 4;\n"
+        "  assigned.CallbackArg = empty;\n"
+        "  if (!assigned.CallbackArg.IsNull()) return 5;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectVxEffectDescriptionSetCallback() {\n"
+        "  VxEffectDescription desc;\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  desc.SetCallback = ptr;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "VxEffectDescription self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("vx-effect-description-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "VxEffectDescription self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "VxEffectDescription self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeVxEffectDescription()");
+    asIScriptFunction *rejectCallback = module->GetFunctionByDecl("void RejectVxEffectDescriptionSetCallback()");
+    if (!probe || !rejectCallback) {
+        engine->DiscardModule(moduleName);
+        error = "VxEffectDescription self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "VxEffectDescription value probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, rejectCallback, true, "VxEffectDescription SetCallback rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCKOperationDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKOperationDesc script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *operationType = engine->GetTypeInfoByDecl("CKOperationDesc");
+    if (!operationType) {
+        error = "CKOperationDesc type is not registered.";
+        return false;
+    }
+    for (asUINT i = 0; i < operationType->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        if (operationType->GetProperty(i, &propertyName) >= 0 && propertyName && std::strcmp(propertyName, "Fct") == 0) {
+            error = "CKOperationDesc still exposes direct function pointer property.";
+            return false;
+        }
+    }
+    if (!operationType->GetMethodByDecl("NativePointer get_Fct() const") ||
+        !operationType->GetMethodByDecl("void set_Fct(NativePointer ptr)")) {
+        error = "CKOperationDesc Fct NativePointer accessors are not registered.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKOperationDescSelfTest";
+    const char *source =
+        "int ProbeCKOperationDesc() {\n"
+        "  CKOperationDesc desc;\n"
+        "  NativePointer empty;\n"
+        "  desc.Fct = empty;\n"
+        "  if (!desc.Fct.IsNull()) return 1;\n"
+        "  desc.OpGuid = CKGUID(1, 2);\n"
+        "  CKOperationDesc copied(desc);\n"
+        "  if (copied.OpGuid != desc.OpGuid || !copied.Fct.IsNull()) return 2;\n"
+        "  CKOperationDesc assigned;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.OpGuid != desc.OpGuid || !assigned.Fct.IsNull()) return 3;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKOperationDescFct() {\n"
+        "  CKOperationDesc desc;\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  desc.Fct = ptr;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKOperationDesc self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-operation-desc-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKOperationDesc self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKOperationDesc self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKOperationDesc()");
+    asIScriptFunction *rejectFct = module->GetFunctionByDecl("void RejectCKOperationDescFct()");
+    if (!probe || !rejectFct) {
+        engine->DiscardModule(moduleName);
+        error = "CKOperationDesc self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKOperationDesc value probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, rejectFct, true, "CKOperationDesc Fct rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKDependenciesScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKDependencies script self-test requires an AngelScript engine.";
@@ -12403,6 +12572,12 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCK2dCurveScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunVxEffectDescriptionScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKOperationDescScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKDependenciesScriptSelfTest(engine, error)) {
