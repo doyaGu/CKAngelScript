@@ -2002,6 +2002,116 @@ bool RunXObjectDeclarationArrayItScriptSelfTest(asIScriptEngine *engine, std::st
     return ok;
 }
 
+bool RunXStringArrayItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XStringArrayIt script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("XStringArrayIt");
+    if (!iteratorType) {
+        error = "XStringArrayIt self-test could not find the registered type.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("bool opEquals(const XStringArrayIt &in other) const") ||
+        !iteratorType->GetMethodByDecl("bool opNotEquals(const XStringArrayIt &in other) const")) {
+        error = "XStringArrayIt self-test could not find iterator comparison methods.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("XStringArray");
+    if (!arrayType) {
+        error = "XStringArrayIt self-test could not find XStringArray.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("XStringArrayIt Begin() const") ||
+        !arrayType->GetMethodByDecl("XStringArrayIt End() const")) {
+        error = "XStringArrayIt self-test could not find XStringArray iterator producers.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XStringArrayItSelfTest";
+    const char *source =
+        "int ProbeXStringArrayIt() {\n"
+        "  XStringArray values;\n"
+        "  values.PushBack(XString(\"first\"));\n"
+        "  values.PushBack(XString(\"second\"));\n"
+        "  XStringArrayIt begin = values.Begin();\n"
+        "  XStringArrayIt end = values.End();\n"
+        "  if (!begin.IsValid()) return 1;\n"
+        "  if (begin == end) return 2;\n"
+        "  if (!(begin.Get() == XString(\"first\"))) return 3;\n"
+        "  begin.Get() = XString(\"changed\");\n"
+        "  if (!(values[0] == XString(\"changed\"))) return 4;\n"
+        "  XStringArrayIt copied(begin);\n"
+        "  if (!(copied == begin) || copied != begin) return 5;\n"
+        "  ++copied;\n"
+        "  if (copied == begin || !(copied != begin)) return 6;\n"
+        "  if (!(copied.Get() == XString(\"second\"))) return 7;\n"
+        "  XStringArrayIt assigned;\n"
+        "  assigned = copied;\n"
+        "  if (!(assigned == copied)) return 8;\n"
+        "  ++assigned;\n"
+        "  if (!(assigned == end) || assigned != end) return 9;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectDefaultXStringArrayItGet() {\n"
+        "  XStringArrayIt it;\n"
+        "  it.Get();\n"
+        "}\n"
+        "void RejectDefaultXStringArrayItInc() {\n"
+        "  XStringArrayIt it;\n"
+        "  ++it;\n"
+        "}\n"
+        "void RejectDefaultXStringArrayItDec() {\n"
+        "  XStringArrayIt it;\n"
+        "  --it;\n"
+        "}\n"
+        "void RejectEmptyXStringArrayItGet() {\n"
+        "  XStringArray values;\n"
+        "  XStringArrayIt it = values.Begin();\n"
+        "  it.Get();\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XStringArrayIt self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xstringarrayit-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XStringArrayIt self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XStringArrayIt self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXStringArrayIt()");
+    asIScriptFunction *defaultGet = module->GetFunctionByDecl("void RejectDefaultXStringArrayItGet()");
+    asIScriptFunction *defaultInc = module->GetFunctionByDecl("void RejectDefaultXStringArrayItInc()");
+    asIScriptFunction *defaultDec = module->GetFunctionByDecl("void RejectDefaultXStringArrayItDec()");
+    asIScriptFunction *emptyGet = module->GetFunctionByDecl("void RejectEmptyXStringArrayItGet()");
+    if (!probe || !defaultGet || !defaultInc || !defaultDec || !emptyGet) {
+        engine->DiscardModule(moduleName);
+        error = "XStringArrayIt self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XStringArrayIt iterator probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultGet, true, "XStringArrayIt default Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultInc, true, "XStringArrayIt default increment rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultDec, true, "XStringArrayIt default decrement rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyGet, true, "XStringArrayIt empty Begin Get rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKAttributeDesc script self-test requires an AngelScript engine.";
@@ -5868,6 +5978,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunXObjectDeclarationArrayItScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXStringArrayItScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeDescScriptSelfTest(engine, error)) {

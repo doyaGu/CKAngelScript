@@ -2,6 +2,8 @@
 #define CK_SCRIPTXSARRAY_H
 
 #include <angelscript.h>
+#include <type_traits>
+#include <utility>
 
 #include "XString.h"
 #include "XArray.h"
@@ -353,7 +355,7 @@ void RegisterXSArray(asIScriptEngine *engine, const char *className, const char 
 }
 
 template<typename C, typename T>
-void RegisterXClassArray(asIScriptEngine *engine, const char *className, const char *elementType) {
+void RegisterXClassArray(asIScriptEngine *engine, const char *className, const char *elementType, bool registerIteratorProducers = false) {
     int r = 0;
     XString decl;
 
@@ -414,11 +416,16 @@ void RegisterXClassArray(asIScriptEngine *engine, const char *className, const c
     decl.Format("%s &Back()", elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, Back, (), T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    // decl.Format("%sIt Begin() const", className);
-    // r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return XIterator<T>(array.Begin()); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    if constexpr (std::is_convertible_v<decltype(std::declval<const C &>().Begin()), T *> &&
+                  std::is_convertible_v<decltype(std::declval<const C &>().End()), T *>) {
+        if (registerIteratorProducers) {
+            decl.Format("%sIt Begin() const", className);
+            r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return XIterator<T>(array.Begin()); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    // decl.Format("%sIt End() const", className);
-    // r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return XIterator<T>(array.End()); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+            decl.Format("%sIt End() const", className);
+            r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &array) -> XIterator<T> { return XIterator<T>(array.End()); }, (const C &), XIterator<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+        }
+    }
 
     r = engine->RegisterObjectMethod(className, "int Size() const", asMETHODPR(C, Size, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(className, "int Allocated() const", asMETHODPR(C, Allocated, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
