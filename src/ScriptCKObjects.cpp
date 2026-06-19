@@ -3799,27 +3799,31 @@ void RegisterCKCurvePoint(asIScriptEngine *engine) {
 
     RegisterCK3dEntityMembers<CKCurvePoint>(engine, "CKCurvePoint");
 
-    r = engine->RegisterObjectMethod("CKCurvePoint", "CKCurve@ GetCurve() const", asMETHODPR(CKCurvePoint, GetCurve, (), CKCurve*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurvePoint", "CKCurve@ GetCurve()", asMETHODPR(CKCurvePoint, GetCurve, (), CKCurve*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKCurvePoint", "float GetBias() const", asMETHODPR(CKCurvePoint, GetBias, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurvePoint", "float GetBias()", asMETHODPR(CKCurvePoint, GetBias, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCurvePoint", "void SetBias(float b)", asMETHODPR(CKCurvePoint, SetBias, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKCurvePoint", "float GetTension() const", asMETHODPR(CKCurvePoint, GetTension, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurvePoint", "float GetTension()", asMETHODPR(CKCurvePoint, GetTension, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCurvePoint", "void SetTension(float t)", asMETHODPR(CKCurvePoint, SetTension, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKCurvePoint", "float GetContinuity() const", asMETHODPR(CKCurvePoint, GetContinuity, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurvePoint", "float GetContinuity()", asMETHODPR(CKCurvePoint, GetContinuity, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCurvePoint", "void SetContinuity(float c)", asMETHODPR(CKCurvePoint, SetContinuity, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKCurvePoint", "bool IsLinear() const", asFUNCTIONPR([](CKCurvePoint *self) -> bool { return self->IsLinear(); }, (CKCurvePoint*), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurvePoint", "bool IsLinear()", asFUNCTIONPR([](CKCurvePoint *self) -> bool { return self->IsLinear(); }, (CKCurvePoint*), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCurvePoint", "void SetLinear(bool linear = false)", asFUNCTIONPR([](CKCurvePoint *self, bool linear) { self->SetLinear(linear); }, (CKCurvePoint*, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKCurvePoint", "void UseTCB(bool use = true)", asFUNCTIONPR([](CKCurvePoint *self, bool use) { self->UseTCB(use); }, (CKCurvePoint*, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKCurvePoint", "bool IsTCB() const", asFUNCTIONPR([](CKCurvePoint *self) -> bool { return self->IsTCB(); }, (CKCurvePoint*), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurvePoint", "bool IsTCB()", asFUNCTIONPR([](CKCurvePoint *self) -> bool { return self->IsTCB(); }, (CKCurvePoint*), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKCurvePoint", "float GetLength() const", asMETHODPR(CKCurvePoint, GetLength, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurvePoint", "float GetLength()", asMETHODPR(CKCurvePoint, GetLength, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKCurvePoint", "void GetTangents(VxVector &out input, VxVector &out output) const", asMETHODPR(CKCurvePoint, GetTangents, (VxVector *, VxVector *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKCurvePoint", "void SetTangents(const VxVector &in input, const VxVector &in output)", asMETHODPR(CKCurvePoint, SetTangents, (VxVector *, VxVector *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurvePoint", "void GetTangents(VxVector &out input, VxVector &out output)", asMETHODPR(CKCurvePoint, GetTangents, (VxVector *, VxVector *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurvePoint", "void SetTangents(const VxVector &in input, const VxVector &in output)", asFUNCTIONPR([](CKCurvePoint *self, const VxVector *input, const VxVector *output) {
+        VxVector inputCopy = input ? *input : VxVector();
+        VxVector outputCopy = output ? *output : VxVector();
+        self->SetTangents(&inputCopy, &outputCopy);
+    }, (CKCurvePoint *, const VxVector *, const VxVector *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKCurvePoint", "void NotifyUpdate()", asMETHODPR(CKCurvePoint, NotifyUpdate, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
