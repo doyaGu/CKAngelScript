@@ -1205,7 +1205,7 @@ static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
     auto *self = static_cast<CKBehavior *>(gen->GetObject());
     int pos = gen->GetArgDWord(0);
     const int typeId = gen->GetArgTypeId(1);
-    void *buf = *static_cast<void **>(gen->GetAddressOfArg(1));
+    void *buf = gen->GetArgAddress(1);
 
     CKERROR err = CK_OK;
 
@@ -1314,7 +1314,7 @@ static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
     auto *self = static_cast<CKBehavior *>(gen->GetObject());
     int pos = gen->GetArgDWord(0);
     const int typeId = gen->GetArgTypeId(1);
-    void *buf = *static_cast<void **>(gen->GetAddressOfArg(1));
+    void *buf = gen->GetArgAddress(1);
 
     CKERROR err = CK_OK;
 
@@ -1460,7 +1460,7 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR InitFctPtrFromGuid(CKGUID guid)", asMETHODPR(CKBehavior, InitFctPtrFromGuid, (CKGUID), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKERROR InitFctPtrFromPrototype(CKBehaviorPrototype &in proto)", asMETHODPR(CKBehavior, InitFctPtrFromPrototype, (CKBehaviorPrototype*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKGUID GetPrototypeGuid()", asMETHODPR(CKBehavior, GetPrototypeGuid, (), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehavior", "CKBehaviorPrototype &GetPrototype()", asMETHODPR(CKBehavior, GetPrototype, (), CKBehaviorPrototype *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "CKBehaviorPrototype@ GetPrototype()", asMETHODPR(CKBehavior, GetPrototype, (), CKBehaviorPrototype *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "string GetPrototypeName()", asFUNCTIONPR([](CKBehavior *self) -> std::string { return ScriptStringify(self->GetPrototypeName()); }, (CKBehavior *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "CKDWORD GetVersion()", asMETHODPR(CKBehavior, GetVersion, (), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "void SetVersion(CKDWORD version)", asMETHODPR(CKBehavior, SetVersion, (CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

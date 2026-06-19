@@ -4257,6 +4257,98 @@ bool RunCKObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std:
     return ok;
 }
 
+bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKBehavior script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *behaviorType = engine->GetTypeInfoByDecl("CKBehavior");
+    if (!behaviorType) {
+        error = "CKBehavior self-test could not find the registered type.";
+        return false;
+    }
+    if (!behaviorType->GetMethodByDecl("CKBehaviorPrototype@ GetPrototype()") ||
+        behaviorType->GetMethodByDecl("CKBehaviorPrototype &GetPrototype()") ||
+        !behaviorType->GetMethodByDecl("CKERROR GetInputParameterValue(int pos, ?&out value)") ||
+        !behaviorType->GetMethodByDecl("CKERROR GetOutputParameterValue(int pos, ?&out value)") ||
+        !behaviorType->GetMethodByDecl("CKERROR SetOutputParameterValue(int pos, ?&in value)") ||
+        !behaviorType->GetMethodByDecl("CKERROR GetLocalParameterValue(int pos, ?&out value)") ||
+        !behaviorType->GetMethodByDecl("CKERROR SetLocalParameterValue(int pos, ?&in value)") ||
+        !behaviorType->GetMethodByDecl("NativePointer GetInputParameterReadDataPtr(int pos)") ||
+        !behaviorType->GetMethodByDecl("NativePointer GetOutputParameterWriteDataPtr(int pos)") ||
+        !behaviorType->GetMethodByDecl("NativePointer GetLocalParameterReadDataPtr(int pos)") ||
+        !behaviorType->GetMethodByDecl("NativePointer GetLocalParameterWriteDataPtr(int pos)") ||
+        !behaviorType->GetMethodByDecl("CKERROR SetOutputParameterObject(int pos, CKObject@ obj)") ||
+        !behaviorType->GetMethodByDecl("CKObject@ GetOutputParameterObject(int pos)") ||
+        !behaviorType->GetMethodByDecl("CKERROR SetLocalParameterObject(int pos, CKObject@ obj)") ||
+        !behaviorType->GetMethodByDecl("CKObject@ GetLocalParameterObject(int pos)")) {
+        error = "CKBehavior self-test could not find expected object methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBehaviorSelfTest";
+    const char *source =
+        "int ProbeCKBehaviorSurface(CKBehavior@ behavior, CKBeObject@ owner, CKObject@ payload) {\n"
+        "  if (behavior is null || owner is null || payload is null) return 2;\n"
+        "  behavior.SetName(\"__CKAS_CKBehaviorSelfTest\");\n"
+        "  if (behavior.GetName() != \"__CKAS_CKBehaviorSelfTest\") return 3;\n"
+        "  if (behavior.GetInputCount() < 1 || behavior.GetOutputCount() < 1) return 6;\n"
+        "  if (behavior.GetInput(0) is null || behavior.GetOutput(0) is null) return 7;\n"
+        "  behavior.ActivateInput(0, true);\n"
+        "  if (!behavior.IsInputActive(0)) return 8;\n"
+        "  behavior.ActivateInput(0, false);\n"
+        "  behavior.ActivateOutput(0, true);\n"
+        "  if (!behavior.IsOutputActive(0)) return 9;\n"
+        "  behavior.ActivateOutput(0, false);\n"
+        "  int outValue = 41;\n"
+        "  if (behavior.SetOutputParameterValue(0, outValue) != CK_OK) return 11;\n"
+        "  outValue = 0;\n"
+        "  if (behavior.GetOutputParameterValue(0, outValue) != CK_OK || outValue != 41) return 12;\n"
+        "  string outText = \"behavior-output\";\n"
+        "  if (behavior.SetOutputParameterValue(1, outText) != CK_OK) return 13;\n"
+        "  outText = \"\";\n"
+        "  if (behavior.GetOutputParameterValue(1, outText) != CK_OK || outText != \"behavior-output\") return 14;\n"
+        "  int localValue = 23;\n"
+        "  if (behavior.SetLocalParameterValue(0, localValue) != CK_OK) return 15;\n"
+        "  localValue = 0;\n"
+        "  if (behavior.GetLocalParameterValue(0, localValue) != CK_OK || localValue != 23) return 16;\n"
+        "  string localText = \"behavior-local\";\n"
+        "  if (behavior.SetLocalParameterValue(1, localText) != CK_OK) return 17;\n"
+        "  localText = \"\";\n"
+        "  if (behavior.GetLocalParameterValue(1, localText) != CK_OK || localText != \"behavior-local\") return 18;\n"
+        "  if (behavior.GetOutputParameterWriteDataPtr(0).IsNull()) return 24;\n"
+        "  if (behavior.GetLocalParameterReadDataPtr(0).IsNull()) return 25;\n"
+        "  if (behavior.GetLocalParameterWriteDataPtr(0).IsNull()) return 26;\n"
+        "  if (behavior.GetInputParameter(0) is null || behavior.GetOutputParameter(0) is null || behavior.GetLocalParameter(0) is null) return 27;\n"
+        "  behavior.GetFlags();\n"
+        "  behavior.GetType();\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBehavior self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckbehavior-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehavior self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehavior self-test script failed to build.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKBehaviorIOScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKBehaviorIO script self-test requires CKContext and AngelScript engine.";
@@ -7469,6 +7561,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKObjectScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBehaviorScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBehaviorIOScriptSelfTest(context, engine, error)) {
