@@ -1,6 +1,8 @@
 #include "ScriptCKManagers.h"
 
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "CKAll.h"
@@ -440,6 +442,43 @@ static bool ValidateCKMidiManager(CKMidiManager *self) {
     return true;
 }
 
+using CKMidiSourceSet = std::unordered_set<void *>;
+
+static std::unordered_map<CKMidiManager *, CKMidiSourceSet> &TrackedCKMidiSources() {
+    static std::unordered_map<CKMidiManager *, CKMidiSourceSet> sources;
+    return sources;
+}
+
+static void TrackCKMidiSource(CKMidiManager *self, void *source) {
+    if (self && source) {
+        TrackedCKMidiSources()[self].insert(source);
+    }
+}
+
+static bool IsTrackedCKMidiSource(CKMidiManager *self, void *source) {
+    if (!self || !source) {
+        return false;
+    }
+    auto &trackedSources = TrackedCKMidiSources();
+    auto it = trackedSources.find(self);
+    return it != trackedSources.end() && it->second.find(source) != it->second.end();
+}
+
+static void UntrackCKMidiSource(CKMidiManager *self, void *source) {
+    if (!self || !source) {
+        return;
+    }
+    auto &trackedSources = TrackedCKMidiSources();
+    auto it = trackedSources.find(self);
+    if (it == trackedSources.end()) {
+        return;
+    }
+    it->second.erase(source);
+    if (it->second.empty()) {
+        trackedSources.erase(it);
+    }
+}
+
 static void *RequireCKMidiSource(CKMidiManager *self, NativePointer source) {
     if (!ValidateCKMidiManager(self)) {
         return nullptr;
@@ -449,6 +488,10 @@ static void *RequireCKMidiSource(CKMidiManager *self, NativePointer source) {
         SetActiveScriptException("CKMidiManager source call requires a non-null source.");
         return nullptr;
     }
+    if (!IsTrackedCKMidiSource(self, nativeSource)) {
+        SetActiveScriptException("CKMidiManager source was not created by this manager or has already been released.");
+        return nullptr;
+    }
     return nativeSource;
 }
 
@@ -456,12 +499,15 @@ static NativePointer CreateCKMidiSource(CKMidiManager *self, NativePointer hwnd)
     if (!ValidateCKMidiManager(self)) {
         return {};
     }
-    return NativePointer(self->Create(hwnd.Get()));
+    void *source = self->Create(hwnd.Get());
+    TrackCKMidiSource(self, source);
+    return NativePointer(source);
 }
 
 static void ReleaseCKMidiSource(CKMidiManager *self, NativePointer source) {
     if (void *nativeSource = RequireCKMidiSource(self, source)) {
         self->Release(nativeSource);
+        UntrackCKMidiSource(self, nativeSource);
     }
 }
 
