@@ -5319,6 +5319,104 @@ bool RunCKOperationDescScriptSelfTest(asIScriptEngine *engine, std::string &erro
     return ok;
 }
 
+bool RunCKClassDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKClassDesc script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *classType = engine->GetTypeInfoByDecl("CKClassDesc");
+    if (!classType) {
+        error = "CKClassDesc type is not registered.";
+        return false;
+    }
+    for (asUINT i = 0; i < classType->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        if (classType->GetProperty(i, &propertyName) >= 0 && propertyName &&
+            (std::strcmp(propertyName, "RegisterFct") == 0 ||
+             std::strcmp(propertyName, "CreationFct") == 0 ||
+             std::strcmp(propertyName, "NameFct") == 0 ||
+             std::strcmp(propertyName, "DependsFct") == 0 ||
+             std::strcmp(propertyName, "DependsCountFct") == 0)) {
+            error = "CKClassDesc still exposes direct callback pointer properties.";
+            return false;
+        }
+    }
+    if (!classType->GetMethodByDecl("void set_RegisterFct(NativePointer ptr)") ||
+        !classType->GetMethodByDecl("void set_CreationFct(NativePointer ptr)") ||
+        !classType->GetMethodByDecl("void set_NameFct(NativePointer ptr)") ||
+        !classType->GetMethodByDecl("void set_DependsFct(NativePointer ptr)") ||
+        !classType->GetMethodByDecl("void set_DependsCountFct(NativePointer ptr)")) {
+        error = "CKClassDesc callback NativePointer setters are not registered.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKClassDescSelfTest";
+    const char *source =
+        "int ProbeCKClassDesc() {\n"
+        "  CKClassDesc desc;\n"
+        "  NativePointer empty;\n"
+        "  desc.RegisterFct = empty;\n"
+        "  desc.CreationFct = empty;\n"
+        "  desc.NameFct = empty;\n"
+        "  desc.DependsFct = empty;\n"
+        "  desc.DependsCountFct = empty;\n"
+        "  CKClassDesc copied(desc);\n"
+        "  CKClassDesc assigned;\n"
+        "  assigned = copied;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKClassDescRegisterFct() { CKClassDesc d; NativePointer p; p += 1; d.RegisterFct = p; }\n"
+        "void RejectCKClassDescCreationFct() { CKClassDesc d; NativePointer p; p += 1; d.CreationFct = p; }\n"
+        "void RejectCKClassDescNameFct() { CKClassDesc d; NativePointer p; p += 1; d.NameFct = p; }\n"
+        "void RejectCKClassDescDependsFct() { CKClassDesc d; NativePointer p; p += 1; d.DependsFct = p; }\n"
+        "void RejectCKClassDescDependsCountFct() { CKClassDesc d; NativePointer p; p += 1; d.DependsCountFct = p; }\n"
+        "void RejectCKClassDescToNotifyBounds() { CKClassDesc d; d.GetToNotify(0); }\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKClassDesc self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-class-desc-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKClassDesc self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKClassDesc self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKClassDesc()");
+    asIScriptFunction *rejectRegister = module->GetFunctionByDecl("void RejectCKClassDescRegisterFct()");
+    asIScriptFunction *rejectCreation = module->GetFunctionByDecl("void RejectCKClassDescCreationFct()");
+    asIScriptFunction *rejectName = module->GetFunctionByDecl("void RejectCKClassDescNameFct()");
+    asIScriptFunction *rejectDepends = module->GetFunctionByDecl("void RejectCKClassDescDependsFct()");
+    asIScriptFunction *rejectDependsCount = module->GetFunctionByDecl("void RejectCKClassDescDependsCountFct()");
+    asIScriptFunction *toNotifyBounds = module->GetFunctionByDecl("void RejectCKClassDescToNotifyBounds()");
+    if (!probe || !rejectRegister || !rejectCreation || !rejectName || !rejectDepends ||
+        !rejectDependsCount || !toNotifyBounds) {
+        engine->DiscardModule(moduleName);
+        error = "CKClassDesc self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKClassDesc value probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, rejectRegister, true, "CKClassDesc RegisterFct rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, rejectCreation, true, "CKClassDesc CreationFct rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, rejectName, true, "CKClassDesc NameFct rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, rejectDepends, true, "CKClassDesc DependsFct rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, rejectDependsCount, true, "CKClassDesc DependsCountFct rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, toNotifyBounds, true, "CKClassDesc ToNotify bounds probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKDependenciesScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKDependencies script self-test requires an AngelScript engine.";
@@ -12345,6 +12443,13 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
         "  NativePointer empty;\n"
         "  desc.CreatorDll = empty;\n"
         "  if (!desc.CreatorDll.IsNull()) return 2;\n"
+        "  desc.CreateDefaultFunction = empty;\n"
+        "  desc.DeleteFunction = empty;\n"
+        "  desc.SaveLoadFunction = empty;\n"
+        "  desc.CheckFunction = empty;\n"
+        "  desc.CopyFunction = empty;\n"
+        "  desc.StringFunction = empty;\n"
+        "  desc.UICreatorFunction = empty;\n"
         "  CKParameterManager@ pm = ctx.GetParameterManager();\n"
         "  if (pm is null) return 3;\n"
         "  return 0;\n"
@@ -12359,7 +12464,15 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
         "  CKGUID missing(0x7badc0de, 0x13572468);\n"
         "  pm.GetParameterTypeDescription(missing);\n"
         "  return 0;\n"
-        "}\n";
+        "}\n"
+        "void RejectParameterTypeCreatorDll(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.CreatorDll = p; }\n"
+        "void RejectParameterTypeCreateDefaultFunction(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.CreateDefaultFunction = p; }\n"
+        "void RejectParameterTypeDeleteFunction(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.DeleteFunction = p; }\n"
+        "void RejectParameterTypeSaveLoadFunction(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.SaveLoadFunction = p; }\n"
+        "void RejectParameterTypeCheckFunction(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.CheckFunction = p; }\n"
+        "void RejectParameterTypeCopyFunction(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.CopyFunction = p; }\n"
+        "void RejectParameterTypeStringFunction(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.StringFunction = p; }\n"
+        "void RejectParameterTypeUICreatorFunction(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.UICreatorFunction = p; }\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
     if (!module) {
@@ -12383,7 +12496,16 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeParameterTypeDesc(CKContext@)");
     asIScriptFunction *missingType = module->GetFunctionByDecl("int ProbeMissingParameterType(CKContext@)");
     asIScriptFunction *missingGuid = module->GetFunctionByDecl("int ProbeMissingParameterGuid(CKContext@)");
-    if (!probe || !missingType || !missingGuid) {
+    asIScriptFunction *rejectCreatorDll = module->GetFunctionByDecl("void RejectParameterTypeCreatorDll(CKContext@)");
+    asIScriptFunction *rejectCreateDefault = module->GetFunctionByDecl("void RejectParameterTypeCreateDefaultFunction(CKContext@)");
+    asIScriptFunction *rejectDelete = module->GetFunctionByDecl("void RejectParameterTypeDeleteFunction(CKContext@)");
+    asIScriptFunction *rejectSaveLoad = module->GetFunctionByDecl("void RejectParameterTypeSaveLoadFunction(CKContext@)");
+    asIScriptFunction *rejectCheck = module->GetFunctionByDecl("void RejectParameterTypeCheckFunction(CKContext@)");
+    asIScriptFunction *rejectCopy = module->GetFunctionByDecl("void RejectParameterTypeCopyFunction(CKContext@)");
+    asIScriptFunction *rejectString = module->GetFunctionByDecl("void RejectParameterTypeStringFunction(CKContext@)");
+    asIScriptFunction *rejectUICreator = module->GetFunctionByDecl("void RejectParameterTypeUICreatorFunction(CKContext@)");
+    if (!probe || !missingType || !missingGuid || !rejectCreatorDll || !rejectCreateDefault ||
+        !rejectDelete || !rejectSaveLoad || !rejectCheck || !rejectCopy || !rejectString || !rejectUICreator) {
         engine->DiscardModule(moduleName);
         error = "CKParameterTypeDesc self-test functions were not found.";
         return false;
@@ -12391,7 +12513,15 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
 
     bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKParameterTypeDesc CreatorDll probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, missingType, context, true, "CKParameterTypeDesc missing type probe", error) &&
-              ExecuteCKParameterTypeDescProbe(engine, missingGuid, context, true, "CKParameterTypeDesc missing guid probe", error);
+              ExecuteCKParameterTypeDescProbe(engine, missingGuid, context, true, "CKParameterTypeDesc missing guid probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, rejectCreatorDll, context, true, "CKParameterTypeDesc CreatorDll rejection probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, rejectCreateDefault, context, true, "CKParameterTypeDesc CreateDefaultFunction rejection probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, rejectDelete, context, true, "CKParameterTypeDesc DeleteFunction rejection probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, rejectSaveLoad, context, true, "CKParameterTypeDesc SaveLoadFunction rejection probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, rejectCheck, context, true, "CKParameterTypeDesc CheckFunction rejection probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, rejectCopy, context, true, "CKParameterTypeDesc CopyFunction rejection probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, rejectString, context, true, "CKParameterTypeDesc StringFunction rejection probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, rejectUICreator, context, true, "CKParameterTypeDesc UICreatorFunction rejection probe", error);
 
     engine->DiscardModule(moduleName);
     return ok;
@@ -12578,6 +12708,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKOperationDescScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKClassDescScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKDependenciesScriptSelfTest(engine, error)) {

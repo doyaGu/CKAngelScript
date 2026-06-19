@@ -38,6 +38,8 @@ static const int g_CKOBJECT_PRIORITYMIN = CKOBJECT_PRIORITYMIN;
 static const int g_CKBEHAVIOR_PRIORITYMAX = CKBEHAVIOR_PRIORITYMAX;
 static const int g_CKBEHAVIOR_PRIORITYMIN = CKBEHAVIOR_PRIORITYMIN;
 
+static CKClassDesc &CKGetClassDescChecked(CK_CLASSID cid);
+
 static std::string CKStruprString(const std::string &value) {
     std::string copy = value;
     if (!copy.empty()) {
@@ -646,7 +648,7 @@ void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("CKBehaviorPrototype@ CreateCKBehaviorPrototypeRunTime(const string &in name)", asFUNCTIONPR([](const std::string &name) { return CreateCKBehaviorPrototypeRunTime(const_cast<CKSTRING>(name.c_str())); }, (const std::string &), CKBehaviorPrototype *), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterGlobalFunction("int CKGetClassCount()", asFUNCTION(CKGetClassCount), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("CKClassDesc &CKGetClassDesc(CK_CLASSID cid)", asFUNCTION(CKGetClassDesc), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("CKClassDesc &CKGetClassDesc(CK_CLASSID cid)", asFUNCTION(CKGetClassDescChecked), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("string CKClassIDToString(CK_CLASSID cid)", asFUNCTIONPR([](CK_CLASSID cid) -> std::string { return ScriptStringify(CKClassIDToString(cid)); }, (CK_CLASSID), std::string), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("CK_CLASSID CKStringToClassID(const string &in className)", asFUNCTIONPR([](const std::string &className) { return CKStringToClassID(const_cast<CKSTRING>(className.c_str())); }, (const std::string &), CK_CLASSID), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
@@ -1217,6 +1219,22 @@ void RegisterCKUICallbackStruct(asIScriptEngine *engine) {
 
 // CKClassDesc
 
+static CKClassDesc &MissingCKClassDesc(const char *message) {
+    static thread_local CKClassDesc dummy;
+    dummy = CKClassDesc();
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return dummy;
+}
+
+static CKClassDesc &CKGetClassDescChecked(CK_CLASSID cid) {
+    if (CKClassDesc *desc = CKGetClassDesc(cid)) {
+        return *desc;
+    }
+    return MissingCKClassDesc("CKGetClassDesc did not find a matching class.");
+}
+
 static CK_CLASSID CKClassDescGetToNotify(const CKClassDesc &desc, int index) {
     if (index < 0 || index >= desc.ToNotify.Size()) {
         // Set a script exception
@@ -1237,6 +1255,41 @@ static void CKClassDescSetToNotify(CKClassDesc &desc, int index, CK_CLASSID valu
         return;
     }
     desc.ToNotify[index] = value;
+}
+
+static bool RejectNativeFunctionPointerInstall(const NativePointer &ptr, const char *message) {
+    if (ptr.IsNull()) {
+        return false;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return true;
+}
+
+static void SetCKClassDescRegisterFct(CKClassDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKClassDesc.RegisterFct is read-only from script.");
+}
+
+static void SetCKClassDescCreationFct(CKClassDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKClassDesc.CreationFct is read-only from script.");
+}
+
+static void SetCKClassDescNameFct(CKClassDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKClassDesc.NameFct is read-only from script.");
+}
+
+static void SetCKClassDescDependsFct(CKClassDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKClassDesc.DependsFct is read-only from script.");
+}
+
+static void SetCKClassDescDependsCountFct(CKClassDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKClassDesc.DependsCountFct is read-only from script.");
 }
 
 void RegisterCKClassDesc(asIScriptEngine *engine) {
@@ -1273,19 +1326,19 @@ void RegisterCKClassDesc(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKClassDesc", "void SetToNotify(int index, CK_CLASSID cid)", asFUNCTION(CKClassDescSetToNotify), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKClassDesc", "NativePointer get_RegisterFct() const", asFUNCTIONPR([](const CKClassDesc *self) { return NativePointer(self->RegisterFct); }, (const CKClassDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKClassDesc", "void set_RegisterFct(NativePointer ptr)", asFUNCTIONPR([](CKClassDesc *self, NativePointer ptr) { self->RegisterFct = reinterpret_cast<CKCLASSREGISTERFCT>(ptr.Get()); }, (CKClassDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKClassDesc", "void set_RegisterFct(NativePointer ptr)", asFUNCTION(SetCKClassDescRegisterFct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKClassDesc", "NativePointer get_CreationFct() const", asFUNCTIONPR([](const CKClassDesc *self) { return NativePointer(self->CreationFct); }, (const CKClassDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKClassDesc", "void set_CreationFct(NativePointer ptr)", asFUNCTIONPR([](CKClassDesc *self, NativePointer ptr) { self->CreationFct = reinterpret_cast<CKCLASSCREATIONFCT>(ptr.Get()); }, (CKClassDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKClassDesc", "void set_CreationFct(NativePointer ptr)", asFUNCTION(SetCKClassDescCreationFct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKClassDesc", "NativePointer get_NameFct() const", asFUNCTIONPR([](const CKClassDesc *self) { return NativePointer(self->NameFct); }, (const CKClassDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKClassDesc", "void set_NameFct(NativePointer ptr)", asFUNCTIONPR([](CKClassDesc *self, NativePointer ptr) { self->NameFct = reinterpret_cast<CKCLASSNAMEFCT>(ptr.Get()); }, (CKClassDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKClassDesc", "void set_NameFct(NativePointer ptr)", asFUNCTION(SetCKClassDescNameFct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKClassDesc", "NativePointer get_DependsFct() const", asFUNCTIONPR([](const CKClassDesc *self) { return NativePointer(self->DependsFct); }, (const CKClassDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKClassDesc", "void set_DependsFct(NativePointer ptr)", asFUNCTIONPR([](CKClassDesc *self, NativePointer ptr) { self->DependsFct = reinterpret_cast<CKCLASSDEPENDENCIESFCT>(ptr.Get()); }, (CKClassDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKClassDesc", "void set_DependsFct(NativePointer ptr)", asFUNCTION(SetCKClassDescDependsFct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKClassDesc", "NativePointer get_DependsCountFct() const", asFUNCTIONPR([](const CKClassDesc *self) { return NativePointer(self->DependsCountFct); }, (const CKClassDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKClassDesc", "void set_DependsCountFct(NativePointer ptr)", asFUNCTIONPR([](CKClassDesc *self, NativePointer ptr) { self->DependsCountFct = reinterpret_cast<CKCLASSDEPENDENCIESCOUNTFCT>(ptr.Get()); }, (CKClassDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKClassDesc", "void set_DependsCountFct(NativePointer ptr)", asFUNCTION(SetCKClassDescDependsCountFct), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKPluginInfo
@@ -1724,6 +1777,46 @@ void RegisterCKStructStruct(asIScriptEngine *engine) {
 
 // CKParameterTypeDesc
 
+static void SetCKParameterTypeDescCreatorDll(CKParameterTypeDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CreatorDll is read-only from script.");
+}
+
+static void SetCKParameterTypeDescCreateDefaultFunction(CKParameterTypeDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CreateDefaultFunction is read-only from script.");
+}
+
+static void SetCKParameterTypeDescDeleteFunction(CKParameterTypeDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.DeleteFunction is read-only from script.");
+}
+
+static void SetCKParameterTypeDescSaveLoadFunction(CKParameterTypeDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.SaveLoadFunction is read-only from script.");
+}
+
+static void SetCKParameterTypeDescCheckFunction(CKParameterTypeDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CheckFunction is read-only from script.");
+}
+
+static void SetCKParameterTypeDescCopyFunction(CKParameterTypeDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CopyFunction is read-only from script.");
+}
+
+static void SetCKParameterTypeDescStringFunction(CKParameterTypeDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.StringFunction is read-only from script.");
+}
+
+static void SetCKParameterTypeDescUICreatorFunction(CKParameterTypeDesc *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.UICreatorFunction is read-only from script.");
+}
+
 void RegisterCKParameterTypeDesc(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1746,7 +1839,7 @@ void RegisterCKParameterTypeDesc(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKParameterTypeDesc", "XBitArray DerivationMask", asOFFSET(CKParameterTypeDesc, DerivationMask)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKParameterTypeDesc", "CKGUID Saver_Manager", asOFFSET(CKParameterTypeDesc, Saver_Manager)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterTypeDesc", "NativePointer get_CreatorDll() const", asFUNCTIONPR([](const CKParameterTypeDesc *self) { return NativePointer(self->CreatorDll); }, (const CKParameterTypeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_CreatorDll(NativePointer ptr)", asFUNCTIONPR([](CKParameterTypeDesc *self, NativePointer ptr) { self->CreatorDll = reinterpret_cast<CKPluginEntry *>(ptr.Get()); }, (CKParameterTypeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_CreatorDll(NativePointer ptr)", asFUNCTION(SetCKParameterTypeDescCreatorDll), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("CKParameterTypeDesc", asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](CKParameterTypeDesc *self) { new(self) CKParameterTypeDesc(); }, (CKParameterTypeDesc*), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("CKParameterTypeDesc", asBEHAVE_CONSTRUCT, "void f(const CKParameterTypeDesc &in other)", asFUNCTIONPR([](const CKParameterTypeDesc &desc, CKParameterTypeDesc *self) { new(self) CKParameterTypeDesc(desc); }, (const CKParameterTypeDesc &, CKParameterTypeDesc *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -1756,25 +1849,25 @@ void RegisterCKParameterTypeDesc(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKParameterTypeDesc", "CKParameterTypeDesc &opAssign(const CKParameterTypeDesc &in other)", asMETHODPR(CKParameterTypeDesc, operator=, (const CKParameterTypeDesc &), CKParameterTypeDesc &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKParameterTypeDesc", "NativePointer get_CreateDefaultFunction() const", asFUNCTIONPR([](const CKParameterTypeDesc *self) { return NativePointer(self->CreateDefaultFunction); }, (const CKParameterTypeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_CreateDefaultFunction(NativePointer ptr)", asFUNCTIONPR([](CKParameterTypeDesc *self, NativePointer ptr) { self->CreateDefaultFunction = reinterpret_cast<CK_PARAMETERCREATEDEFAULTFUNCTION>(ptr.Get()); }, (CKParameterTypeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_CreateDefaultFunction(NativePointer ptr)", asFUNCTION(SetCKParameterTypeDescCreateDefaultFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKParameterTypeDesc", "NativePointer get_DeleteFunction() const", asFUNCTIONPR([](const CKParameterTypeDesc *self) { return NativePointer(self->DeleteFunction); }, (const CKParameterTypeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_DeleteFunction(NativePointer ptr)", asFUNCTIONPR([](CKParameterTypeDesc *self, NativePointer ptr) { self->DeleteFunction = reinterpret_cast<CK_PARAMETERDELETEFUNCTION>(ptr.Get()); }, (CKParameterTypeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_DeleteFunction(NativePointer ptr)", asFUNCTION(SetCKParameterTypeDescDeleteFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKParameterTypeDesc", "NativePointer get_SaveLoadFunction() const", asFUNCTIONPR([](const CKParameterTypeDesc *self) { return NativePointer(self->SaveLoadFunction); }, (const CKParameterTypeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_SaveLoadFunction(NativePointer ptr)", asFUNCTIONPR([](CKParameterTypeDesc *self, NativePointer ptr) { self->SaveLoadFunction = reinterpret_cast<CK_PARAMETERSAVELOADFUNCTION>(ptr.Get()); }, (CKParameterTypeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_SaveLoadFunction(NativePointer ptr)", asFUNCTION(SetCKParameterTypeDescSaveLoadFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKParameterTypeDesc", "NativePointer get_CheckFunction() const", asFUNCTIONPR([](const CKParameterTypeDesc *self) { return NativePointer(self->CheckFunction); }, (const CKParameterTypeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_CheckFunction(NativePointer ptr)", asFUNCTIONPR([](CKParameterTypeDesc *self, NativePointer ptr) { self->CheckFunction = reinterpret_cast<CK_PARAMETERCHECKFUNCTION>(ptr.Get()); }, (CKParameterTypeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_CheckFunction(NativePointer ptr)", asFUNCTION(SetCKParameterTypeDescCheckFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKParameterTypeDesc", "NativePointer get_CopyFunction() const", asFUNCTIONPR([](const CKParameterTypeDesc *self) { return NativePointer(self->CopyFunction); }, (const CKParameterTypeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_CopyFunction(NativePointer ptr)", asFUNCTIONPR([](CKParameterTypeDesc *self, NativePointer ptr) { self->CopyFunction = reinterpret_cast<CK_PARAMETERCOPYFUNCTION>(ptr.Get()); }, (CKParameterTypeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_CopyFunction(NativePointer ptr)", asFUNCTION(SetCKParameterTypeDescCopyFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKParameterTypeDesc", "NativePointer get_StringFunction() const", asFUNCTIONPR([](const CKParameterTypeDesc *self) { return NativePointer(self->StringFunction); }, (const CKParameterTypeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_StringFunction(NativePointer ptr)", asFUNCTIONPR([](CKParameterTypeDesc *self, NativePointer ptr) { self->StringFunction = reinterpret_cast<CK_PARAMETERSTRINGFUNCTION>(ptr.Get()); }, (CKParameterTypeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_StringFunction(NativePointer ptr)", asFUNCTION(SetCKParameterTypeDescStringFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKParameterTypeDesc", "NativePointer get_UICreatorFunction() const", asFUNCTIONPR([](const CKParameterTypeDesc *self) { return NativePointer(self->UICreatorFunction); }, (const CKParameterTypeDesc *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_UICreatorFunction(NativePointer ptr)", asFUNCTIONPR([](CKParameterTypeDesc *self, NativePointer ptr) { self->UICreatorFunction = reinterpret_cast<CK_PARAMETERUICREATORFUNCTION>(ptr.Get()); }, (CKParameterTypeDesc *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterTypeDesc", "void set_UICreatorFunction(NativePointer ptr)", asFUNCTION(SetCKParameterTypeDescUICreatorFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKBitmapProperties
