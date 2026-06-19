@@ -104,6 +104,23 @@ static void SetCKBitmapPropertiesData(CKBitmapProperties *self, NativePointer pt
     }
 }
 
+static NativePointer GetCKMoviePropertiesData(const CKMovieProperties *self) {
+    return NativePointer(self ? self->m_Data : nullptr);
+}
+
+static void SetCKMoviePropertiesData(CKMovieProperties *self, NativePointer ptr) {
+    if (ptr.IsNull()) {
+        if (self) {
+            self->m_Data = nullptr;
+        }
+        return;
+    }
+
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException("CKMovieProperties.m_Data only accepts a null NativePointer from script.");
+    }
+}
+
 static const int g_CKM_BASE = CKM_BASE;
 static const int g_CKM_BEHAVIORPRESAVE = CKM_BEHAVIORPRESAVE;
 static const int g_CKM_BEHAVIORDELETE = CKM_BEHAVIORDELETE;
@@ -1944,8 +1961,8 @@ void RegisterCKMovieProperties(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKMovieProperties", "VxImageDescEx m_Format", asOFFSET(CKMovieProperties, m_Format)); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectProperty("CKMovieProperties", "NativePointer m_Data", asOFFSET(CKMovieProperties, m_Data)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKMovieProperties", "NativePointer get_m_Data() const", asFUNCTIONPR([](const CKMovieProperties *self) { return NativePointer(self->m_Data); }, (const CKMovieProperties *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMovieProperties", "void set_m_Data(NativePointer ptr)", asFUNCTIONPR([](CKMovieProperties *self, NativePointer ptr) { self->m_Data = ptr.Get(); }, (CKMovieProperties *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMovieProperties", "NativePointer get_m_Data() const", asFUNCTION(GetCKMoviePropertiesData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMovieProperties", "void set_m_Data(NativePointer ptr)", asFUNCTION(SetCKMoviePropertiesData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKDataReader

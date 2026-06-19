@@ -11532,6 +11532,122 @@ bool RunCKBitmapPropertiesScriptSelfTest(CKContext *context, asIScriptEngine *en
     return true;
 }
 
+bool RunCKMoviePropertiesScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKMovieProperties script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *propertiesType = engine->GetTypeInfoByDecl("CKMovieProperties");
+    if (!propertiesType) {
+        error = "CKMovieProperties self-test could not find the registered type.";
+        return false;
+    }
+    for (asUINT i = 0; i < propertiesType->GetPropertyCount(); ++i) {
+        const char *decl = propertiesType->GetPropertyDeclaration(i, true);
+        const std::string propertyDecl = decl ? decl : "";
+        if (propertyDecl == "NativePointer m_Data" ||
+            propertyDecl == "uint64 m_Data" ||
+            propertyDecl == "uint m_Data") {
+            error = "CKMovieProperties self-test found stale raw m_Data property.";
+            return false;
+        }
+    }
+    if (propertiesType->GetMethodByDecl("NativePointer get_m_Data() const") == nullptr ||
+        propertiesType->GetMethodByDecl("void set_m_Data(NativePointer ptr)") == nullptr) {
+        error = "CKMovieProperties self-test could not find guarded m_Data accessors.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKMoviePropertiesSelfTest";
+    const char *source =
+        "int ProbeMovieProperties(CKMovieProperties@ properties) {\n"
+        "  if (properties is null) return 1;\n"
+        "  NativePointer empty;\n"
+        "  properties.m_Data = empty;\n"
+        "  if (!properties.m_Data.IsNull()) return 2;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectMoviePropertiesDataWrite(CKMovieProperties@ properties) {\n"
+        "  if (properties is null) return;\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  properties.m_Data = ptr;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKMovieProperties self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-movie-properties-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMovieProperties self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMovieProperties self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeMovieProperties(CKMovieProperties@)");
+    asIScriptFunction *rejectDataWrite = module->GetFunctionByDecl("void RejectMoviePropertiesDataWrite(CKMovieProperties@)");
+    if (!probe || !rejectDataWrite) {
+        engine->DiscardModule(moduleName);
+        error = "CKMovieProperties self-test functions were not found.";
+        return false;
+    }
+
+    auto executeProbe = [&](asIScriptFunction *function, bool expectException, const char *label) -> bool {
+        CKMovieProperties properties;
+        asIScriptContext *scriptContext = engine->RequestContext();
+        if (!scriptContext) {
+            error = std::string(label) + " could not create an execution context.";
+            return false;
+        }
+
+        int r = scriptContext->Prepare(function);
+        if (r >= 0) {
+            r = scriptContext->SetArgObject(0, &properties);
+        }
+        if (r >= 0) {
+            r = scriptContext->Execute();
+        }
+
+        bool ok = false;
+        if (expectException) {
+            ok = r == asEXECUTION_EXCEPTION;
+            if (!ok) {
+                error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+            }
+        } else if (r == asEXECUTION_FINISHED) {
+            const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+            ok = returnCode == 0;
+            if (!ok) {
+                error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+            }
+        } else if (r == asEXECUTION_EXCEPTION) {
+            const char *exception = scriptContext->GetExceptionString();
+            error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+        } else {
+            error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+        }
+
+        scriptContext->Unprepare();
+        engine->ReturnContext(scriptContext);
+        return ok;
+    };
+
+    const bool ok = executeProbe(probe, false, "CKMovieProperties probe") &&
+                    executeProbe(rejectDataWrite, true, "CKMovieProperties data write rejection probe");
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKTextureScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKTexture script self-test requires CKContext and AngelScript engine.";
@@ -14527,6 +14643,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKBitmapPropertiesScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKMoviePropertiesScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKTextureScriptSelfTest(context, engine, error)) {
