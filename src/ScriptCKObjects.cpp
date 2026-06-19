@@ -3860,41 +3860,38 @@ void RegisterCKLightMembers(asIScriptEngine *engine, const char *name) {
     RegisterCK3dEntityMembers<T>(engine, name);
 
     r = engine->RegisterObjectMethod(name, "void SetColor(const VxColor &in c)", asMETHODPR(T, SetColor, (const VxColor&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "const VxColor &GetColor() const", asMETHODPR(T, GetColor, (), const VxColor&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "const VxColor &GetColor()", asMETHODPR(T, GetColor, (), const VxColor&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "void SetConstantAttenuation(float value)", asMETHODPR(T, SetConstantAttenuation, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetLinearAttenuation(float value)", asMETHODPR(T, SetLinearAttenuation, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetQuadraticAttenuation(float value)", asMETHODPR(T, SetQuadraticAttenuation, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "float GetConstantAttenuation() const", asMETHODPR(T, GetConstantAttenuation, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "float GetLinearAttenuation() const", asMETHODPR(T, GetLinearAttenuation, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "float GetQuadraticAttenuation() const", asMETHODPR(T, GetQuadraticAttenuation, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float GetConstantAttenuation()", asMETHODPR(T, GetConstantAttenuation, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float GetLinearAttenuation()", asMETHODPR(T, GetLinearAttenuation, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float GetQuadraticAttenuation()", asMETHODPR(T, GetQuadraticAttenuation, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "VXLIGHT_TYPE GetType() const", asMETHODPR(T, GetType, (), VXLIGHT_TYPE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "VXLIGHT_TYPE GetType()", asMETHODPR(T, GetType, (), VXLIGHT_TYPE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetType(VXLIGHT_TYPE type)", asMETHODPR(T, SetType, (VXLIGHT_TYPE), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "float GetRange() const", asMETHODPR(T, GetRange, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float GetRange()", asMETHODPR(T, GetRange, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetRange(float value)", asMETHODPR(T, SetRange, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "float GetHotSpot() const", asMETHODPR(T, GetHotSpot, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "float GetFallOff() const", asMETHODPR(T, GetFallOff, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float GetHotSpot()", asMETHODPR(T, GetHotSpot, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float GetFallOff()", asMETHODPR(T, GetFallOff, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetHotSpot(float value)", asMETHODPR(T, SetHotSpot, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetFallOff(float value)", asMETHODPR(T, SetFallOff, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "float GetFallOffShape() const", asMETHODPR(T, GetFallOffShape, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float GetFallOffShape()", asMETHODPR(T, GetFallOffShape, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetFallOffShape(float value)", asMETHODPR(T, SetFallOffShape, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "void Active(bool active)", asFUNCTIONPR([](T *self, bool active) { self->Active(active); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool GetActivity() const", asFUNCTIONPR([](T *self) -> bool { return self->GetActivity(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool GetActivity()", asFUNCTIONPR([](T *self) -> bool { return self->GetActivity(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetSpecularFlag(bool specular)", asFUNCTIONPR([](T *self, bool specular) { self->SetSpecularFlag(specular); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool GetSpecularFlag() const", asFUNCTIONPR([](T *self) -> bool { return self->GetSpecularFlag(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool GetSpecularFlag()", asFUNCTIONPR([](T *self) -> bool { return self->GetSpecularFlag(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "CK3dEntity@ GetTarget() const", asMETHODPR(T, GetTarget, (), CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetTarget(CK3dEntity@ target)", asMETHODPR(T, SetTarget, (CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod(name, "float GetLightPower() const", asMETHODPR(T, GetLightPower, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "float GetLightPower()", asMETHODPR(T, GetLightPower, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetLightPower(float power = 1.0)", asMETHODPR(T, SetLightPower, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    if (strcmp(name, name) != 0) {
-        RegisterCKObjectCast<T, CKLight>(engine, name, name);
+    if (strcmp(name, "CKLight") != 0) {
+        RegisterCKObjectCast<T, CKLight>(engine, name, "CKLight");
     }
 }
 
@@ -3907,7 +3904,12 @@ void RegisterCKLight(asIScriptEngine *engine) {
 void RegisterCKTargetLight(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
+    int r = 0;
+
     RegisterCKLightMembers<CKTargetLight>(engine, "CKTargetLight");
+
+    r = engine->RegisterObjectMethod("CKTargetLight", "CK3dEntity@ GetTarget()", asMETHODPR(CKTargetLight, GetTarget, (), CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKTargetLight", "void SetTarget(CK3dEntity@ target)", asMETHODPR(CKTargetLight, SetTarget, (CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
 static CKERROR RejectCKCharacterCall(const char *message) {

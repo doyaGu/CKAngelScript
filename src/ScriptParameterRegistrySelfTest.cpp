@@ -871,6 +871,96 @@ bool ExecuteCKCameraCopyNullProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKLightProbe(asIScriptEngine *engine,
+                         asIScriptFunction *function,
+                         CKLight *light,
+                         CKMesh *mesh,
+                         CKObjectAnimation *animation,
+                         bool expectException,
+                         const char *label,
+                         std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) r = scriptContext->SetArgObject(0, light);
+    if (r >= 0) r = scriptContext->SetArgObject(1, mesh);
+    if (r >= 0) r = scriptContext->SetArgObject(2, animation);
+    if (r >= 0) r = scriptContext->Execute();
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCKTargetLightProbe(asIScriptEngine *engine,
+                               asIScriptFunction *function,
+                               CKTargetLight *light,
+                               CK3dEntity *target,
+                               CKMesh *mesh,
+                               CKObjectAnimation *animation,
+                               bool expectException,
+                               const char *label,
+                               std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) r = scriptContext->SetArgObject(0, light);
+    if (r >= 0) r = scriptContext->SetArgObject(1, target);
+    if (r >= 0) r = scriptContext->SetArgObject(2, mesh);
+    if (r >= 0) r = scriptContext->SetArgObject(3, animation);
+    if (r >= 0) r = scriptContext->Execute();
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKCurveProbe(asIScriptEngine *engine,
                          asIScriptFunction *function,
                          CKCurve *curve,
@@ -6527,6 +6617,338 @@ bool RunCKCameraScriptSelfTest(CKContext *context, asIScriptEngine *engine, std:
     return ok;
 }
 
+bool RunCKLightScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKLight script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *lightType = engine->GetTypeInfoByDecl("CKLight");
+    if (!lightType) {
+        error = "CKLight self-test could not find the registered type.";
+        return false;
+    }
+    if (lightType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
+        lightType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        lightType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        lightType->GetMethodByDecl("const VxColor& GetColor() const") != nullptr ||
+        lightType->GetMethodByDecl("VXLIGHT_TYPE GetType() const") != nullptr ||
+        lightType->GetMethodByDecl("float GetRange() const") != nullptr ||
+        lightType->GetMethodByDecl("float GetHotSpot() const") != nullptr ||
+        lightType->GetMethodByDecl("bool GetActivity() const") != nullptr ||
+        lightType->GetMethodByDecl("CK3dEntity@ GetTarget() const") != nullptr ||
+        lightType->GetMethodByDecl("void SetTarget(CK3dEntity@ target)") != nullptr ||
+        lightType->GetMethodByDecl("float GetLightPower() const") != nullptr) {
+        error = "CKLight self-test found stale unsafe, target, or const-drift declarations.";
+        return false;
+    }
+    if (!lightType->GetMethodByDecl("const VxColor& GetColor()") ||
+        !lightType->GetMethodByDecl("float GetConstantAttenuation()") ||
+        !lightType->GetMethodByDecl("float GetLinearAttenuation()") ||
+        !lightType->GetMethodByDecl("float GetQuadraticAttenuation()") ||
+        !lightType->GetMethodByDecl("VXLIGHT_TYPE GetType()") ||
+        !lightType->GetMethodByDecl("float GetRange()") ||
+        !lightType->GetMethodByDecl("float GetHotSpot()") ||
+        !lightType->GetMethodByDecl("float GetFallOff()") ||
+        !lightType->GetMethodByDecl("float GetFallOffShape()") ||
+        !lightType->GetMethodByDecl("bool GetActivity()") ||
+        !lightType->GetMethodByDecl("bool GetSpecularFlag()") ||
+        !lightType->GetMethodByDecl("float GetLightPower()") ||
+        !lightType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !lightType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !lightType->GetMethodByDecl("bool SetRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
+        !lightType->GetMethodByDecl("NativePointer GetAppData()")) {
+        error = "CKLight self-test could not find expected light methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKLightSelfTest";
+    const char *source =
+        "bool CloseEnough(float a, float b) {\n"
+        "  float d = a - b;\n"
+        "  return d > -0.0001f && d < 0.0001f;\n"
+        "}\n"
+        "int ProbeCKLightSurface(CKLight@ light, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  if (light is null || mesh is null || animation is null) return 1;\n"
+        "  CKObject@ asObject = light;\n"
+        "  CKSceneObject@ asSceneObject = light;\n"
+        "  CKBeObject@ asBeObject = light;\n"
+        "  CKRenderObject@ asRenderObject = light;\n"
+        "  CK3dEntity@ asEntity = light;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null) return 2;\n"
+        "  if (cast<CKLight>(asObject) !is light) return 3;\n"
+        "  if (cast<CKLight>(asRenderObject) !is light) return 4;\n"
+        "  if (cast<CKLight>(asEntity) !is light) return 5;\n"
+        "  light.SetName(\"__CKAS_CKLightSelfTest\", false);\n"
+        "  if (light.GetName() == \"\") return 6;\n"
+        "  light.SetColor(VxColor(0.1f, 0.2f, 0.3f, 1.0f));\n"
+        "  VxColor color = light.GetColor();\n"
+        "  if (!CloseEnough(color.r, 0.1f) || !CloseEnough(color.g, 0.2f) || !CloseEnough(color.b, 0.3f)) return 7;\n"
+        "  light.SetConstantAttenuation(1.0f);\n"
+        "  light.SetLinearAttenuation(0.25f);\n"
+        "  light.SetQuadraticAttenuation(0.125f);\n"
+        "  if (!CloseEnough(light.GetConstantAttenuation(), 1.0f)) return 8;\n"
+        "  if (!CloseEnough(light.GetLinearAttenuation(), 0.25f)) return 9;\n"
+        "  if (!CloseEnough(light.GetQuadraticAttenuation(), 0.125f)) return 10;\n"
+        "  VXLIGHT_TYPE oldType = light.GetType();\n"
+        "  light.SetType(oldType);\n"
+        "  if (light.GetType() != oldType) return 11;\n"
+        "  light.SetRange(42.0f);\n"
+        "  if (!CloseEnough(light.GetRange(), 42.0f)) return 12;\n"
+        "  light.SetHotSpot(0.25f);\n"
+        "  light.SetFallOff(0.5f);\n"
+        "  light.SetFallOffShape(0.75f);\n"
+        "  if (!CloseEnough(light.GetHotSpot(), 0.25f)) return 13;\n"
+        "  if (!CloseEnough(light.GetFallOff(), 0.5f)) return 14;\n"
+        "  if (!CloseEnough(light.GetFallOffShape(), 0.75f)) return 15;\n"
+        "  light.Active(true);\n"
+        "  if (!light.GetActivity()) return 16;\n"
+        "  light.Active(false);\n"
+        "  if (light.GetActivity()) return 17;\n"
+        "  light.Active(true);\n"
+        "  light.SetSpecularFlag(true);\n"
+        "  if (!light.GetSpecularFlag()) return 18;\n"
+        "  light.SetSpecularFlag(false);\n"
+        "  if (light.GetSpecularFlag()) return 19;\n"
+        "  light.SetLightPower(1.5f);\n"
+        "  if (!CloseEnough(light.GetLightPower(), 1.5f)) return 20;\n"
+        "  light.SetPosition(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  VxVector pos;\n"
+        "  light.GetPosition(pos);\n"
+        "  if (pos.x != 1.0f || pos.y != 2.0f || pos.z != 3.0f) return 21;\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  source.Reset();\n"
+        "  NativeBuffer@ transformed = NativeBuffer(24);\n"
+        "  light.TransformMany(transformed, source, 2);\n"
+        "  if (light.AddMesh(mesh) != CK_OK) return 22;\n"
+        "  light.SetCurrentMesh(mesh);\n"
+        "  if (light.GetCurrentMesh() !is mesh) return 23;\n"
+        "  if (light.RemoveMesh(mesh) != CK_OK) return 24;\n"
+        "  light.AddObjectAnimation(animation);\n"
+        "  if (light.GetObjectAnimationCount() < 1) return 25;\n"
+        "  light.RemoveObjectAnimation(animation);\n"
+        "  if (!light.GetAppData().IsNull()) return 26;\n"
+        "  light.SetAppData(NativePointer());\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKLightSmallTransform(CKLight@ light, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  light.TransformMany(tooSmall, source, 2);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKLight self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("cklight-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKLight self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKLight self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKLightSurface(CKLight@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCKLightSmallTransform(CKLight@, CKMesh@, CKObjectAnimation@)");
+    if (!probe || !smallTransform) {
+        engine->DiscardModule(moduleName);
+        error = "CKLight self-test functions were not found.";
+        return false;
+    }
+
+    CKLight *light = CKLight::Cast(context->CreateObject(
+        CKCID_LIGHT, const_cast<CKSTRING>("__CKAS_CKLightSelfTestLight"), CK_OBJECTCREATION_DYNAMIC));
+    CKMesh *mesh = CKMesh::Cast(context->CreateObject(
+        CKCID_MESH, const_cast<CKSTRING>("__CKAS_CKLightSelfTestMesh"), CK_OBJECTCREATION_DYNAMIC));
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKLightSelfTestAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    if (!light || !mesh || !animation) {
+        if (animation) context->DestroyObject(animation);
+        if (mesh) context->DestroyObject(mesh);
+        if (light) context->DestroyObject(light);
+        engine->DiscardModule(moduleName);
+        error = "CKLight self-test could not create temporary objects.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKLightProbe(engine, probe, light, mesh, animation, false, "CKLight surface probe", error) &&
+                    ExecuteCKLightProbe(engine, smallTransform, light, mesh, animation, true, "CKLight small TransformMany probe", error);
+
+    light->RemoveAllCallbacks();
+    light->RemoveMesh(mesh);
+    light->RemoveObjectAnimation(animation);
+    context->DestroyObject(animation);
+    context->DestroyObject(mesh);
+    context->DestroyObject(light);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCKTargetLightScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKTargetLight script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *targetLightType = engine->GetTypeInfoByDecl("CKTargetLight");
+    if (!targetLightType) {
+        error = "CKTargetLight self-test could not find the registered type.";
+        return false;
+    }
+    if (targetLightType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
+        targetLightType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        targetLightType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        targetLightType->GetMethodByDecl("CK3dEntity@ GetTarget() const") != nullptr ||
+        targetLightType->GetMethodByDecl("float GetLightPower() const") != nullptr ||
+        targetLightType->GetMethodByDecl("VXLIGHT_TYPE GetType() const") != nullptr) {
+        error = "CKTargetLight self-test found stale unsafe or const-drift declarations.";
+        return false;
+    }
+    if (!targetLightType->GetMethodByDecl("CK3dEntity@ GetTarget()") ||
+        !targetLightType->GetMethodByDecl("void SetTarget(CK3dEntity@ target)") ||
+        !targetLightType->GetMethodByDecl("CKLight@ opImplCast()") ||
+        !targetLightType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !targetLightType->GetMethodByDecl("const VxColor& GetColor()") ||
+        !targetLightType->GetMethodByDecl("VXLIGHT_TYPE GetType()") ||
+        !targetLightType->GetMethodByDecl("float GetLightPower()") ||
+        !targetLightType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !targetLightType->GetMethodByDecl("NativePointer GetAppData()")) {
+        error = "CKTargetLight self-test could not find expected target-light methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKTargetLightSelfTest";
+    const char *source =
+        "bool CloseEnough(float a, float b) {\n"
+        "  float d = a - b;\n"
+        "  return d > -0.0001f && d < 0.0001f;\n"
+        "}\n"
+        "int ProbeCKTargetLightSurface(CKTargetLight@ light, CK3dEntity@ target, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  if (light is null || target is null || mesh is null || animation is null) return 1;\n"
+        "  CKObject@ asObject = light;\n"
+        "  CKSceneObject@ asSceneObject = light;\n"
+        "  CKBeObject@ asBeObject = light;\n"
+        "  CKRenderObject@ asRenderObject = light;\n"
+        "  CK3dEntity@ asEntity = light;\n"
+        "  CKLight@ asLight = light;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null || asLight is null) return 2;\n"
+        "  if (cast<CKTargetLight>(asObject) !is light) return 3;\n"
+        "  if (cast<CKTargetLight>(asRenderObject) !is light) return 4;\n"
+        "  if (cast<CKTargetLight>(asEntity) !is light) return 5;\n"
+        "  if (cast<CKTargetLight>(asLight) !is light) return 6;\n"
+        "  light.SetTarget(target);\n"
+        "  if (light.GetTarget() !is target) return 7;\n"
+        "  light.SetColor(VxColor(0.2f, 0.3f, 0.4f, 1.0f));\n"
+        "  VxColor color = light.GetColor();\n"
+        "  if (!CloseEnough(color.r, 0.2f) || !CloseEnough(color.g, 0.3f) || !CloseEnough(color.b, 0.4f)) return 8;\n"
+        "  VXLIGHT_TYPE oldType = light.GetType();\n"
+        "  light.SetType(oldType);\n"
+        "  if (light.GetType() != oldType) return 9;\n"
+        "  light.SetLightPower(0.75f);\n"
+        "  if (!CloseEnough(light.GetLightPower(), 0.75f)) return 10;\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  source.Reset();\n"
+        "  NativeBuffer@ transformed = NativeBuffer(24);\n"
+        "  light.TransformMany(transformed, source, 2);\n"
+        "  if (light.AddMesh(mesh) != CK_OK) return 11;\n"
+        "  light.SetCurrentMesh(mesh);\n"
+        "  if (light.GetCurrentMesh() !is mesh) return 12;\n"
+        "  if (light.RemoveMesh(mesh) != CK_OK) return 13;\n"
+        "  light.AddObjectAnimation(animation);\n"
+        "  if (light.GetObjectAnimationCount() < 1) return 14;\n"
+        "  light.RemoveObjectAnimation(animation);\n"
+        "  if (!light.GetAppData().IsNull()) return 15;\n"
+        "  light.SetAppData(NativePointer());\n"
+        "  light.SetTarget(null);\n"
+        "  if (light.GetTarget() !is null) return 16;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKTargetLightSmallTransform(CKTargetLight@ light, CK3dEntity@ target, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  light.TransformMany(tooSmall, source, 2);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKTargetLight self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("cktargetlight-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTargetLight self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTargetLight self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKTargetLightSurface(CKTargetLight@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCKTargetLightSmallTransform(CKTargetLight@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    if (!probe || !smallTransform) {
+        engine->DiscardModule(moduleName);
+        error = "CKTargetLight self-test functions were not found.";
+        return false;
+    }
+
+    CKTargetLight *light = CKTargetLight::Cast(context->CreateObject(
+        CKCID_TARGETLIGHT, const_cast<CKSTRING>("__CKAS_CKTargetLightSelfTestLight"), CK_OBJECTCREATION_DYNAMIC));
+    CK3dEntity *target = CK3dEntity::Cast(context->CreateObject(
+        CKCID_3DOBJECT, const_cast<CKSTRING>("__CKAS_CKTargetLightSelfTestTarget"), CK_OBJECTCREATION_DYNAMIC));
+    CKMesh *mesh = CKMesh::Cast(context->CreateObject(
+        CKCID_MESH, const_cast<CKSTRING>("__CKAS_CKTargetLightSelfTestMesh"), CK_OBJECTCREATION_DYNAMIC));
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKTargetLightSelfTestAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    if (!light || !target || !mesh || !animation) {
+        if (animation) context->DestroyObject(animation);
+        if (mesh) context->DestroyObject(mesh);
+        if (target) context->DestroyObject(target);
+        if (light) context->DestroyObject(light);
+        engine->DiscardModule(moduleName);
+        error = "CKTargetLight self-test could not create temporary objects.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKTargetLightProbe(engine, probe, light, target, mesh, animation, false, "CKTargetLight surface probe", error) &&
+                    ExecuteCKTargetLightProbe(engine, smallTransform, light, target, mesh, animation, true, "CKTargetLight small TransformMany probe", error);
+
+    light->RemoveAllCallbacks();
+    light->RemoveMesh(mesh);
+    light->RemoveObjectAnimation(animation);
+    light->SetTarget(nullptr);
+    context->DestroyObject(animation);
+    context->DestroyObject(mesh);
+    context->DestroyObject(target);
+    context->DestroyObject(light);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKCurveScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKCurve script self-test requires CKContext and AngelScript engine.";
@@ -10882,6 +11304,12 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKCameraScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKLightScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKTargetLightScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKCurveScriptSelfTest(context, engine, error)) {
