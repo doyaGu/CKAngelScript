@@ -4,6 +4,8 @@ param(
     [string]$ValidationDir = "",
     [int]$PlayerSeconds = 60,
     [int]$LogTailLines = 40,
+    [ValidateSet("Normal", "Hidden", "Minimized", "Maximized")]
+    [string]$PlayerWindowStyle = "Minimized",
     [switch]$IncludeLogTail,
     [switch]$SkipInstall,
     [switch]$SkipPlayer,
@@ -398,7 +400,7 @@ if (-not $SkipPlayer) {
     $waitResult = $null
     $closeResult = $null
     try {
-        $process = Start-Process -FilePath $player -WorkingDirectory $bin -PassThru
+        $process = Start-Process -FilePath $player -WorkingDirectory $bin -WindowStyle $PlayerWindowStyle -PassThru
         $waitResult = Wait-StartupSelfTestMarker `
             -StartupSelfTestMarker $startupSelfTestMarker `
             -Process $process `

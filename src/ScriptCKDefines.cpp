@@ -40,6 +40,9 @@ static const int g_CKBEHAVIOR_PRIORITYMIN = CKBEHAVIOR_PRIORITYMIN;
 
 static CKClassDesc &CKGetClassDescChecked(CK_CLASSID cid);
 
+static std::mutex g_CKBitmapPropertiesOwnedMutex;
+static std::unordered_set<CKBitmapProperties *> g_CKBitmapPropertiesOwned;
+
 static std::string CKStruprString(const std::string &value) {
     std::string copy = value;
     if (!copy.empty()) {
@@ -54,6 +57,49 @@ static std::string CKStrlwrString(const std::string &value) {
         CKStrlwr(&copy[0]);
     }
     return copy;
+}
+
+static CKBitmapProperties *CKCopyBitmapPropertiesForScript(CKBitmapProperties *bp) {
+    CKBitmapProperties *copy = CKCopyBitmapProperties(bp);
+    if (copy) {
+        std::lock_guard<std::mutex> lock(g_CKBitmapPropertiesOwnedMutex);
+        g_CKBitmapPropertiesOwned.insert(copy);
+    }
+    return copy;
+}
+
+static void CKDeleteBitmapPropertiesForScript(CKBitmapProperties *bp) {
+    if (!bp) {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_CKBitmapPropertiesOwnedMutex);
+        auto it = g_CKBitmapPropertiesOwned.find(bp);
+        if (it == g_CKBitmapPropertiesOwned.end()) {
+            if (asIScriptContext *ctx = asGetActiveContext()) {
+                ctx->SetException("CKDeleteBitmapProperties only accepts handles returned by CKCopyBitmapProperties.");
+            }
+            return;
+        }
+        g_CKBitmapPropertiesOwned.erase(it);
+    }
+
+    CKDeleteBitmapProperties(bp);
+}
+
+static NativePointer GetCKBitmapPropertiesData(const CKBitmapProperties *self) {
+    return NativePointer(self ? self->m_Data : nullptr);
+}
+
+static void SetCKBitmapPropertiesData(CKBitmapProperties *self, NativePointer ptr) {
+    if (ptr.IsNull()) {
+        return;
+    }
+
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException("CKBitmapProperties.m_Data only accepts a null NativePointer from script.");
+    }
 }
 
 static const int g_CKM_BASE = CKM_BASE;
@@ -688,8 +734,8 @@ void RegisterCKGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("NativePointer CKStrlwr(NativePointer str)", asFUNCTIONPR([](NativePointer str) { return NativePointer(CKStrlwr(str.Get())); }, (NativePointer), NativePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("string CKStrlwr(const string &in str)", asFUNCTION(CKStrlwrString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterGlobalFunction("CKBitmapProperties@ CKCopyBitmapProperties(CKBitmapProperties@ bp)", asFUNCTION(CKCopyBitmapProperties), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void CKDeleteBitmapProperties(CKBitmapProperties@ bp)", asFUNCTION(CKDeletePointer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("CKBitmapProperties@ CKCopyBitmapProperties(CKBitmapProperties@ bp)", asFUNCTION(CKCopyBitmapPropertiesForScript), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void CKDeleteBitmapProperties(CKBitmapProperties@ bp)", asFUNCTION(CKDeleteBitmapPropertiesForScript), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterGlobalFunction("void CKCopyDefaultClassDependencies(CKDependencies &out d, CK_DEPENDENCIES_OPMODE mode)", asFUNCTION(CKCopyDefaultClassDependencies), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("CKDependencies CKGetDefaultClassDependencies(CK_DEPENDENCIES_OPMODE mode)", asFUNCTION(CopyDefaultClassDependenciesValue), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
@@ -1881,8 +1927,8 @@ void RegisterCKBitmapProperties(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKBitmapProperties", "VxImageDescEx m_Format", asOFFSET(CKBitmapProperties, m_Format)); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectProperty("CKBitmapProperties", "uintptr_t m_Data", asOFFSET(CKBitmapProperties, m_Data)); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKBitmapProperties", "NativePointer get_m_Data() const", asFUNCTIONPR([](const CKBitmapProperties *self) { return NativePointer(self->m_Data); }, (const CKBitmapProperties *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBitmapProperties", "void set_m_Data(NativePointer ptr)", asFUNCTIONPR([](CKBitmapProperties *self, NativePointer ptr) { self->m_Data = ptr.Get(); }, (CKBitmapProperties *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBitmapProperties", "NativePointer get_m_Data() const", asFUNCTION(GetCKBitmapPropertiesData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBitmapProperties", "void set_m_Data(NativePointer ptr)", asFUNCTION(SetCKBitmapPropertiesData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKMovieProperties

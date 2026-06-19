@@ -10187,6 +10187,96 @@ bool RunCKBitmapReaderScriptSelfTest(asIScriptEngine *engine, std::string &error
     return true;
 }
 
+bool RunCKBitmapPropertiesScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKBitmapProperties script self-test requires a CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *propertiesType = engine->GetTypeInfoByDecl("CKBitmapProperties");
+    if (!propertiesType) {
+        error = "CKBitmapProperties self-test could not find the registered type.";
+        return false;
+    }
+    for (asUINT i = 0; i < propertiesType->GetPropertyCount(); ++i) {
+        const char *decl = propertiesType->GetPropertyDeclaration(i, true);
+        const std::string propertyDecl = decl ? decl : "";
+        if (propertyDecl == "NativePointer m_Data" ||
+            propertyDecl == "uint64 m_Data" ||
+            propertyDecl == "uint m_Data") {
+            error = "CKBitmapProperties self-test found stale raw m_Data property.";
+            return false;
+        }
+    }
+    if (propertiesType->GetMethodByDecl("NativePointer get_m_Data() const") == nullptr ||
+        propertiesType->GetMethodByDecl("void set_m_Data(NativePointer ptr)") == nullptr) {
+        error = "CKBitmapProperties self-test could not find guarded m_Data accessors.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBitmapPropertiesSelfTest";
+    const char *source =
+        "int ProbeBitmapProperties(CKContext@ ctx) {\n"
+        "  CKBitmapProperties@ borrowed = ctx.GetGlobalImagesSaveFormat();\n"
+        "  if (borrowed is null) return 1;\n"
+        "  CKBitmapProperties@ copy = CKCopyBitmapProperties(borrowed);\n"
+        "  NativePointer empty;\n"
+        "  borrowed.m_Data = empty;\n"
+        "  NativePointer data = borrowed.m_Data;\n"
+        "  if (copy !is null) CKDeleteBitmapProperties(copy);\n"
+        "  CKDeleteBitmapProperties(null);\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectBitmapPropertiesBorrowedDelete(CKContext@ ctx) {\n"
+        "  CKBitmapProperties@ borrowed = ctx.GetGlobalImagesSaveFormat();\n"
+        "  CKDeleteBitmapProperties(borrowed);\n"
+        "}\n"
+        "void RejectBitmapPropertiesDataWrite(CKContext@ ctx) {\n"
+        "  CKBitmapProperties@ borrowed = ctx.GetGlobalImagesSaveFormat();\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  borrowed.m_Data = ptr;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBitmapProperties self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-bitmap-properties-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBitmapProperties self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBitmapProperties self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeBitmapProperties(CKContext@)");
+    asIScriptFunction *rejectBorrowed = module->GetFunctionByDecl("void RejectBitmapPropertiesBorrowedDelete(CKContext@)");
+    asIScriptFunction *rejectDataWrite = module->GetFunctionByDecl("void RejectBitmapPropertiesDataWrite(CKContext@)");
+    if (!probe || !rejectBorrowed || !rejectDataWrite) {
+        engine->DiscardModule(moduleName);
+        error = "CKBitmapProperties self-test functions were not found.";
+        return false;
+    }
+
+    if (!ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKBitmapProperties probe", error) ||
+        !ExecuteCKParameterTypeDescProbe(engine, rejectBorrowed, context, true, "CKBitmapProperties borrowed delete rejection probe", error) ||
+        !ExecuteCKParameterTypeDescProbe(engine, rejectDataWrite, context, true, "CKBitmapProperties data write rejection probe", error)) {
+        engine->DiscardModule(moduleName);
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKBitmapSlotScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBitmapSlot script self-test requires an AngelScript engine.";
@@ -12953,6 +13043,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKRenderManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBitmapPropertiesScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBitmapSlotScriptSelfTest(engine, error)) {
