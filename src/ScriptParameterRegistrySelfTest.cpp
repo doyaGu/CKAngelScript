@@ -6965,6 +6965,101 @@ bool RunCKGroupScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::
     return ok;
 }
 
+bool RunCKRenderObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKRenderObject script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *renderObjectType = engine->GetTypeInfoByDecl("CKRenderObject");
+    if (!renderObjectType) {
+        error = "CKRenderObject self-test could not find the registered type.";
+        return false;
+    }
+    if (renderObjectType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr) {
+        error = "CKRenderObject self-test found unsafe inherited ApplyPatchForOlderVersion array-pointer binding.";
+        return false;
+    }
+    if (!renderObjectType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)") ||
+        !renderObjectType->GetMethodByDecl("CKObject@ opImplCast()") ||
+        !renderObjectType->GetMethodByDecl("CKSceneObject@ opImplCast()") ||
+        !renderObjectType->GetMethodByDecl("CKBeObject@ opImplCast()") ||
+        !renderObjectType->GetMethodByDecl("bool IsInRenderContext(CKRenderContext@ context)") ||
+        !renderObjectType->GetMethodByDecl("bool IsRootObject()") ||
+        !renderObjectType->GetMethodByDecl("bool IsToBeRendered()") ||
+        !renderObjectType->GetMethodByDecl("void SetZOrder(int z)") ||
+        !renderObjectType->GetMethodByDecl("int GetZOrder()") ||
+        !renderObjectType->GetMethodByDecl("bool IsToBeRenderedLast()") ||
+        !renderObjectType->GetMethodByDecl("bool AddPreRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback, bool temporary = false)") ||
+        !renderObjectType->GetMethodByDecl("bool RemovePreRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
+        !renderObjectType->GetMethodByDecl("bool SetRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
+        !renderObjectType->GetMethodByDecl("bool RemoveRenderCallBack()") ||
+        !renderObjectType->GetMethodByDecl("bool AddPostRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback, bool temporary = false)") ||
+        !renderObjectType->GetMethodByDecl("bool RemovePostRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
+        !renderObjectType->GetMethodByDecl("void RemoveAllCallbacks()") ||
+        !renderObjectType->GetMethodByDecl("NativePointer GetAppData()") ||
+        !renderObjectType->GetMethodByDecl("void SetAppData(NativePointer data)")) {
+        error = "CKRenderObject self-test could not find expected object methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKRenderObjectSelfTest";
+    const char *source =
+        "CKBOOL ProbeCKRenderObjectCallback(CKRenderContext@ context, CKRenderObject@ object) {\n"
+        "  return context !is null && object !is null;\n"
+        "}\n"
+        "int ProbeCKRenderObjectSurface(CKContext@ ctx, CKObject@ object) {\n"
+        "  if (ctx is null || object is null) return 2;\n"
+        "  CKRenderObject@ renderObject = cast<CKRenderObject@>(object);\n"
+        "  if (renderObject is null) return 3;\n"
+        "  CKObject@ asObject = renderObject;\n"
+        "  CKSceneObject@ asSceneObject = renderObject;\n"
+        "  CKBeObject@ asBeObject = renderObject;\n"
+        "  if (asObject !is object || asSceneObject is null || asBeObject is null) return 4;\n"
+        "  if (cast<CKRenderObject@>(asObject) !is renderObject) return 5;\n"
+        "  if (renderObject.GetCKContext() !is ctx) return 6;\n"
+        "  renderObject.SetZOrder(9);\n"
+        "  if (renderObject.GetZOrder() != 9) return 7;\n"
+        "  renderObject.IsInRenderContext(null);\n"
+        "  renderObject.IsRootObject();\n"
+        "  renderObject.IsToBeRendered();\n"
+        "  renderObject.IsToBeRenderedLast();\n"
+        "  renderObject.RemoveAllCallbacks();\n"
+        "  if (!renderObject.GetAppData().IsNull()) return 8;\n"
+        "  renderObject.SetAppData(NativePointer());\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKRenderObject self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckrenderobject-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKRenderObject self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKRenderObject self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *callback = module->GetFunctionByDecl("CKBOOL ProbeCKRenderObjectCallback(CKRenderContext@, CKRenderObject@)");
+    if (!callback) {
+        engine->DiscardModule(moduleName);
+        error = "CKRenderObject self-test functions were not found.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCK2dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CK2dEntity script self-test requires CKContext and AngelScript engine.";
@@ -13196,6 +13291,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKGroupScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKRenderObjectScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCK2dEntityScriptSelfTest(context, engine, error)) {
