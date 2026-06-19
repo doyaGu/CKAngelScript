@@ -382,21 +382,24 @@ static void FillCKGridWithObjectShapeInt(CKGridManager *self, CK3dEntity *entity
     if (!ValidateCKGridShapeFill(self, entity)) {
         return;
     }
-    self->FillGridWithObjectShape(entity, layerType, const_cast<int *>(&fillVal));
+    int fillValCopy = fillVal;
+    self->FillGridWithObjectShape(entity, layerType, &fillValCopy);
 }
 
 static void FillCKGridWithObjectShapeFloat(CKGridManager *self, CK3dEntity *entity, int layerType, const float &fillVal) {
     if (!ValidateCKGridShapeFill(self, entity)) {
         return;
     }
-    self->FillGridWithObjectShape(entity, layerType, const_cast<float *>(&fillVal));
+    float fillValCopy = fillVal;
+    self->FillGridWithObjectShape(entity, layerType, &fillValCopy);
 }
 
 static void FillCKGridWithObjectShapeSquare(CKGridManager *self, CK3dEntity *entity, int layerType, const CKSquare &fillVal) {
     if (!ValidateCKGridShapeFill(self, entity)) {
         return;
     }
-    self->FillGridWithObjectShape(entity, layerType, const_cast<CKSquare *>(&fillVal));
+    CKSquare fillValCopy = fillVal;
+    self->FillGridWithObjectShape(entity, layerType, &fillValCopy);
 }
 
 static void FillCKGridWithObjectShapeInt(CKGridManager *self,
@@ -407,7 +410,8 @@ static void FillCKGridWithObjectShapeInt(CKGridManager *self,
     if (!ValidateCKGridShapeFill(self, entity)) {
         return;
     }
-    self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, const_cast<int *>(&fillVal));
+    int fillValCopy = fillVal;
+    self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, &fillValCopy);
 }
 
 static void FillCKGridWithObjectShapeFloat(CKGridManager *self,
@@ -418,7 +422,8 @@ static void FillCKGridWithObjectShapeFloat(CKGridManager *self,
     if (!ValidateCKGridShapeFill(self, entity)) {
         return;
     }
-    self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, const_cast<float *>(&fillVal));
+    float fillValCopy = fillVal;
+    self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, &fillValCopy);
 }
 
 static void FillCKGridWithObjectShapeSquare(CKGridManager *self,
@@ -429,7 +434,8 @@ static void FillCKGridWithObjectShapeSquare(CKGridManager *self,
     if (!ValidateCKGridShapeFill(self, entity)) {
         return;
     }
-    self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, const_cast<CKSquare *>(&fillVal));
+    CKSquare fillValCopy = fillVal;
+    self->FillGridWithObjectShape(entity, solidLayerType, shapeLayerType, &fillValCopy);
 }
 
 static int DoCKInterfaceRenameDialog(CKInterfaceManager *self, std::string &name, CK_CLASSID cid) {
