@@ -10371,6 +10371,124 @@ bool RunCKBitmapPropertiesScriptSelfTest(CKContext *context, asIScriptEngine *en
     return true;
 }
 
+bool RunCKTextureScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKTexture script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *textureType = engine->GetTypeInfoByDecl("CKTexture");
+    if (!textureType) {
+        error = "CKTexture self-test could not find the registered type.";
+        return false;
+    }
+    if (textureType->GetMethodByDecl("bool IsInVideoMemory() const") == nullptr ||
+        textureType->GetMethodByDecl("int GetMipmapCount() const") == nullptr ||
+        textureType->GetMethodByDecl("VX_PIXELFORMAT GetVideoPixelFormat() const") == nullptr ||
+        textureType->GetMethodByDecl("VX_PIXELFORMAT GetDesiredVideoFormat() const") == nullptr ||
+        textureType->GetMethodByDecl("int GetRstTextureIndex() const") == nullptr ||
+        textureType->GetMethodByDecl("CKObject@ opImplCast()") == nullptr ||
+        textureType->GetMethodByDecl("CKBeObject@ opImplCast()") == nullptr ||
+        textureType->GetMethodByDecl("bool GetVideoTextureDesc(VxImageDescEx&out desc)") == nullptr ||
+        textureType->GetMethodByDecl("bool GetSystemTextureDesc(VxImageDescEx&out desc)") == nullptr ||
+        textureType->GetMethodByDecl("bool GetUserMipMapLevel(int level, VxImageDescEx&out resultImage)") == nullptr) {
+        error = "CKTexture self-test could not find expected texture methods.";
+        return false;
+    }
+
+    asITypeInfo *objectType = engine->GetTypeInfoByDecl("CKObject");
+    if (!objectType) {
+        error = "CKTexture self-test could not find CKObject.";
+        return false;
+    }
+    if (objectType->GetMethodByDecl("CKTexture@ opCast()") == nullptr) {
+        error = "CKTexture self-test could not find expected checked CKObject cast.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKTextureSelfTest";
+    const char *source =
+        "int ProbeCKTextureSurface(CKContext@ ctx, CKObject@ object) {\n"
+        "  if (ctx is null || object is null) return 1;\n"
+        "  CKTexture@ texture = cast<CKTexture>(object);\n"
+        "  if (texture is null) return 2;\n"
+        "  CKObject@ asObject = texture;\n"
+        "  CKBeObject@ asBeObject = texture;\n"
+        "  if (asObject is null || asBeObject is null) return 3;\n"
+        "  if (!texture.CreateImage(2, 2, 32, 0)) return 4;\n"
+        "  if (texture.GetWidth() != 2 || texture.m_Width != 2) return 5;\n"
+        "  if (texture.GetHeight() != 2 || texture.m_Height != 2) return 6;\n"
+        "  texture.IsInVideoMemory();\n"
+        "  texture.UseMipmap(false);\n"
+        "  texture.GetMipmapCount();\n"
+        "  VX_PIXELFORMAT videoFormat = texture.GetVideoPixelFormat();\n"
+        "  texture.SetDesiredVideoFormat(videoFormat);\n"
+        "  texture.GetDesiredVideoFormat();\n"
+        "  texture.GetRstTextureIndex();\n"
+        "  VxImageDescEx systemDesc;\n"
+        "  bool systemOk = texture.GetSystemTextureDesc(systemDesc);\n"
+        "  if (systemOk && (!systemDesc.Image.IsNull() || !systemDesc.ColorMap.IsNull() || systemDesc.ColorMapEntries != 0 || systemDesc.BytesPerColorEntry != 0)) return 7;\n"
+        "  VxImageDescEx videoDesc;\n"
+        "  bool videoOk = texture.GetVideoTextureDesc(videoDesc);\n"
+        "  if (videoOk && (!videoDesc.Image.IsNull() || !videoDesc.ColorMap.IsNull() || videoDesc.ColorMapEntries != 0 || videoDesc.BytesPerColorEntry != 0)) return 8;\n"
+        "  VxImageDescEx mipDesc;\n"
+        "  bool mipOk = texture.GetUserMipMapLevel(0, mipDesc);\n"
+        "  if (mipOk && (!mipDesc.Image.IsNull() || !mipDesc.ColorMap.IsNull() || mipDesc.ColorMapEntries != 0 || mipDesc.BytesPerColorEntry != 0)) return 9;\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev !is null) {\n"
+        "    texture.SystemToVideoMemory(dev, false);\n"
+        "    texture.SetAsCurrent(dev, false, 0);\n"
+        "    VxRect rect(0.0f, 0.0f, 1.0f, 1.0f);\n"
+        "    texture.CopyContext(dev, rect, rect, 0);\n"
+        "    texture.FreeVideoMemory();\n"
+        "  }\n"
+        "  texture.ReleaseAllSlots();\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKTexture self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-texture-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTexture self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTexture self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKTextureSurface(CKContext@, CKObject@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKTexture self-test function was not found.";
+        return false;
+    }
+
+    CKTexture *texture = CKTexture::Cast(context->CreateObject(
+        CKCID_TEXTURE, const_cast<CKSTRING>("__CKAS_CKTextureSelfTestTexture"), CK_OBJECTCREATION_DYNAMIC));
+    if (!texture) {
+        engine->DiscardModule(moduleName);
+        error = "CKTexture self-test could not create a temporary texture.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKObjectProbe(engine, probe, context, texture, false, "CKTexture surface probe", error);
+
+    texture->ReleaseAllSlots();
+    context->DestroyObject(texture);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBitmapSlotScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKBitmapSlot script self-test requires an AngelScript engine.";
@@ -13144,6 +13262,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKBitmapPropertiesScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKTextureScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBitmapSlotScriptSelfTest(engine, error)) {
