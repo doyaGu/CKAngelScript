@@ -379,6 +379,62 @@ bool ExecuteCKSceneObjectProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKGroupProbe(asIScriptEngine *engine,
+                         asIScriptFunction *function,
+                         CKGroup *group,
+                         CKBeObject *first,
+                         CKBeObject *second,
+                         CKBeObject *third,
+                         bool expectException,
+                         const char *label,
+                         std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, group);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, first);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(2, second);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(3, third);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKBehaviorLinkProbe(asIScriptEngine *engine,
                                 asIScriptFunction *function,
                                 CKBehavior *root,
@@ -4449,6 +4505,128 @@ bool RunCKSceneObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine,
     return ok;
 }
 
+bool RunCKGroupScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKGroup script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *groupType = engine->GetTypeInfoByDecl("CKGroup");
+    if (!groupType) {
+        error = "CKGroup self-test could not find the registered type.";
+        return false;
+    }
+    if (!groupType->GetMethodByDecl("CKERROR AddObject(CKBeObject@ obj)") ||
+        !groupType->GetMethodByDecl("CKERROR AddObjectFront(CKBeObject@ obj)") ||
+        !groupType->GetMethodByDecl("CKERROR InsertObjectAt(CKBeObject@ obj, int pos)") ||
+        !groupType->GetMethodByDecl("CKBeObject@ RemoveObject(int pos)") ||
+        !groupType->GetMethodByDecl("void RemoveObject(CKBeObject@ obj)") ||
+        !groupType->GetMethodByDecl("void Clear()") ||
+        !groupType->GetMethodByDecl("void MoveObjectUp(CKBeObject@ obj)") ||
+        !groupType->GetMethodByDecl("void MoveObjectDown(CKBeObject@ obj)") ||
+        !groupType->GetMethodByDecl("CKBeObject@ GetObject(int)") ||
+        !groupType->GetMethodByDecl("int GetObjectCount()") ||
+        !groupType->GetMethodByDecl("CK_CLASSID GetCommonClassID()") ||
+        !groupType->GetMethodByDecl("NativePointer GetAppData()") ||
+        !groupType->GetMethodByDecl("void SetAppData(NativePointer data)") ||
+        !groupType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)")) {
+        error = "CKGroup self-test could not find expected object methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKGroupSelfTest";
+    const char *source =
+        "int ProbeCKGroupSurface(CKGroup@ group, CKBeObject@ first, CKBeObject@ second, CKBeObject@ third) {\n"
+        "  if (group is null || first is null || second is null || third is null) return 2;\n"
+        "  if (group.GetClassID() != CKCID_GROUP) return 3;\n"
+        "  if (group.GetObjectCount() != 0) return 4;\n"
+        "  if (group.AddObject(first) != CK_OK) return 5;\n"
+        "  if (group.AddObjectFront(second) != CK_OK) return 6;\n"
+        "  if (group.GetObjectCount() != 2) return 7;\n"
+        "  if (group.GetObject(0) !is second || group.GetObject(1) !is first) return 8;\n"
+        "  if (!first.IsInGroup(group) || !second.IsInGroup(group)) return 9;\n"
+        "  if (group.InsertObjectAt(third, 1) != CK_OK) return 10;\n"
+        "  if (group.GetObjectCount() != 3) return 11;\n"
+        "  if (group.GetObject(1) !is third) return 12;\n"
+        "  CKBeObject@ removed = group.RemoveObject(1);\n"
+        "  if (removed !is third || group.GetObjectCount() != 2) return 13;\n"
+        "  if (third.IsInGroup(group)) return 14;\n"
+        "  if (group.AddObject(third) != CK_OK) return 15;\n"
+        "  group.MoveObjectUp(third);\n"
+        "  group.MoveObjectDown(second);\n"
+        "  if (!first.IsInGroup(group) || !second.IsInGroup(group) || !third.IsInGroup(group)) return 20;\n"
+        "  group.RemoveObject(first);\n"
+        "  if (first.IsInGroup(group) || group.GetObjectCount() != 2) return 16;\n"
+        "  group.Clear();\n"
+        "  if (group.GetObjectCount() != 0) return 17;\n"
+        "  NativePointer appData = group.GetAppData();\n"
+        "  if (!appData.IsNull()) return 18;\n"
+        "  group.SetAppData(appData);\n"
+        "  CKObject@ asObject = group;\n"
+        "  if (cast<CKGroup@>(asObject) !is group) return 19;\n"
+        "  group.GetCommonClassID();\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKGroup self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckgroup-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKGroup self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKGroup self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKGroupSurface(CKGroup@, CKBeObject@, CKBeObject@, CKBeObject@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKGroup self-test function was not found.";
+        return false;
+    }
+
+    CKGroup *group = CKGroup::Cast(context->CreateObject(CKCID_GROUP,
+                                                        const_cast<CKSTRING>("__CKAS_CKGroupSelfTestGroup"),
+                                                        CK_OBJECTCREATION_DYNAMIC));
+    CKBeObject *first = CKBeObject::Cast(context->CreateObject(CKCID_BEOBJECT,
+                                                               const_cast<CKSTRING>("__CKAS_CKGroupSelfTestFirst"),
+                                                               CK_OBJECTCREATION_DYNAMIC));
+    CKBeObject *second = CKBeObject::Cast(context->CreateObject(CKCID_BEOBJECT,
+                                                                const_cast<CKSTRING>("__CKAS_CKGroupSelfTestSecond"),
+                                                                CK_OBJECTCREATION_DYNAMIC));
+    CKBeObject *third = CKBeObject::Cast(context->CreateObject(CKCID_BEOBJECT,
+                                                               const_cast<CKSTRING>("__CKAS_CKGroupSelfTestThird"),
+                                                               CK_OBJECTCREATION_DYNAMIC));
+    if (!group || !first || !second || !third) {
+        if (group) context->DestroyObject(group);
+        if (first) context->DestroyObject(first);
+        if (second) context->DestroyObject(second);
+        if (third) context->DestroyObject(third);
+        engine->DiscardModule(moduleName);
+        error = "CKGroup self-test could not create temporary group objects.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKGroupProbe(engine, probe, group, first, second, third, false, "CKGroup surface probe", error);
+
+    group->Clear();
+    context->DestroyObject(group);
+    context->DestroyObject(first);
+    context->DestroyObject(second);
+    context->DestroyObject(third);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKBehavior script self-test requires CKContext and AngelScript engine.";
@@ -7784,6 +7962,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKSceneObjectScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKGroupScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBehaviorScriptSelfTest(context, engine, error)) {
