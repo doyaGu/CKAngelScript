@@ -618,13 +618,8 @@ void RegisterXClassArray(asIScriptEngine *engine,
     r = engine->RegisterObjectMethod(className, "void PopBack()", asMETHODPR(C, PopBack, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(className, "void PopFront()", asMETHODPR(C, PopFront, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    if constexpr (GuardElementAccess) {
-        decl.Format("bool RemoveAt(int pos, %s &out old)", elementType);
-        r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((RemoveXClassArrayValueAt<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    } else {
-        decl.Format("%s &RemoveAt(int pos)", elementType);
-        r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, RemoveAt, (int), T *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    }
+    decl.Format("bool RemoveAt(int pos, %s &out old)", elementType);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((RemoveXClassArrayValueAt<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     if constexpr (RegisterComparableMethods) {
         decl.Format("void FastRemove(const %s &in o)", elementType);

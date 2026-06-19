@@ -5153,6 +5153,100 @@ bool RunCKPathCategoryVectorScriptSelfTest(asIScriptEngine *engine, std::string 
     return ok;
 }
 
+bool RunXClassArrayRemoveAtScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XClassArray RemoveAt script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *classInfoArrayType = engine->GetTypeInfoByDecl("XClassInfoArray");
+    if (!classInfoArrayType) {
+        error = "XClassArray RemoveAt self-test could not find XClassInfoArray.";
+        return false;
+    }
+    if (!classInfoArrayType->GetMethodByDecl("bool RemoveAt(int pos, CKClassDesc &out old)") ||
+        classInfoArrayType->GetMethodByDecl("CKClassDesc& RemoveAt(int pos)")) {
+        error = "XClassInfoArray self-test found stale or missing RemoveAt declarations.";
+        return false;
+    }
+
+    asITypeInfo *pluginDepsArrayType = engine->GetTypeInfoByDecl("XFilePluginDependenciesArray");
+    if (!pluginDepsArrayType) {
+        error = "XClassArray RemoveAt self-test could not find XFilePluginDependenciesArray.";
+        return false;
+    }
+    if (!pluginDepsArrayType->GetMethodByDecl("bool RemoveAt(int pos, CKFilePluginDependencies &out old)") ||
+        pluginDepsArrayType->GetMethodByDecl("CKFilePluginDependencies& RemoveAt(int pos)")) {
+        error = "XFilePluginDependenciesArray self-test found stale or missing RemoveAt declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XClassArrayRemoveAtSelfTest";
+    const char *source =
+        "int ProbeXClassInfoArrayRemoveAt() {\n"
+        "  XClassInfoArray values;\n"
+        "  CKClassDesc first;\n"
+        "  CKClassDesc second;\n"
+        "  first.Done = 11;\n"
+        "  second.Done = 22;\n"
+        "  values.PushBack(first);\n"
+        "  values.PushBack(second);\n"
+        "  CKClassDesc old;\n"
+        "  if (!values.RemoveAt(0, old) || old.Done != 11) return 1;\n"
+        "  if (values.Size() != 1 || values[0].Done != 22) return 2;\n"
+        "  if (values.RemoveAt(-1, old)) return 3;\n"
+        "  if (values.RemoveAt(99, old)) return 4;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeXFilePluginDependenciesArrayRemoveAt() {\n"
+        "  XFilePluginDependenciesArray values;\n"
+        "  CKFilePluginDependencies first;\n"
+        "  CKFilePluginDependencies second;\n"
+        "  first.m_PluginCategory = 11;\n"
+        "  second.m_PluginCategory = 22;\n"
+        "  values.PushBack(first);\n"
+        "  values.PushBack(second);\n"
+        "  CKFilePluginDependencies old;\n"
+        "  if (!values.RemoveAt(0, old) || old.m_PluginCategory != 11) return 1;\n"
+        "  if (values.Size() != 1 || values[0].m_PluginCategory != 22) return 2;\n"
+        "  if (values.RemoveAt(-1, old)) return 3;\n"
+        "  if (values.RemoveAt(99, old)) return 4;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XClassArray RemoveAt self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xclassarray-removeat-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XClassArray RemoveAt self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XClassArray RemoveAt self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *classInfoProbe = module->GetFunctionByDecl("int ProbeXClassInfoArrayRemoveAt()");
+    asIScriptFunction *pluginDepsProbe = module->GetFunctionByDecl("int ProbeXFilePluginDependenciesArrayRemoveAt()");
+    if (!classInfoProbe || !pluginDepsProbe) {
+        engine->DiscardModule(moduleName);
+        error = "XClassArray RemoveAt self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, classInfoProbe, false, "XClassInfoArray RemoveAt probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, pluginDepsProbe, false, "XFilePluginDependenciesArray RemoveAt probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKPathCategoryVectorItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKPATHCATEGORYVECTORIt script self-test requires an AngelScript engine.";
@@ -14101,6 +14195,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKPathCategoryVectorScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXClassArrayRemoveAtScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKPathCategoryVectorItScriptSelfTest(engine, error)) {
