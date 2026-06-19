@@ -9294,6 +9294,21 @@ bool RunCKGridScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::s
         error = "CKGrid self-test could not find the registered type.";
         return false;
     }
+    asITypeInfo *layerType = engine->GetTypeInfoByDecl("CKLayer");
+    if (!layerType) {
+        error = "CKLayer self-test could not find the registered type.";
+        return false;
+    }
+    if (layerType->GetMethodByDecl("CKSquare &GetSquareArray()") != nullptr ||
+        layerType->GetMethodByDecl("void SetSquareArray(CKSquare &sqArray)") != nullptr) {
+        error = "CKLayer self-test found stale reference square-array declarations.";
+        return false;
+    }
+    if (layerType->GetMethodByDecl("NativePointer GetSquareArray()") == nullptr ||
+        layerType->GetMethodByDecl("void SetSquareArray(NativePointer sqArray)") == nullptr) {
+        error = "CKLayer self-test could not find pointer square-array declarations.";
+        return false;
+    }
     if (gridType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
         gridType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
         gridType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
@@ -9370,6 +9385,11 @@ bool RunCKGridScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::s
         "  if (grid.GetOrientationMode() != orientation) return 9;\n"
         "  CKLayer@ defaultLayer = grid.AddDefaultLayer();\n"
         "  CKLayer@ namedLayer = grid.AddLayer(\"__ckas_missing_grid_layer\");\n"
+        "  if (defaultLayer !is null) {\n"
+        "    NativePointer squares = defaultLayer.GetSquareArray();\n"
+        "    if (squares.IsNull()) return 15;\n"
+        "    defaultLayer.SetSquareArray(squares);\n"
+        "  }\n"
         "  grid.GetLayerCount();\n"
         "  grid.GetLayerByIndex(0);\n"
         "  grid.GetLayer(0);\n"

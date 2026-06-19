@@ -1276,8 +1276,8 @@ void RegisterCKLayer(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKLayer", "bool SetValue2(int x, int y, NativePointer val)", asFUNCTIONPR([](CKLayer *layer, int x, int y, NativePointer val) -> bool { return layer->SetValue2(x, y, val.Get()); }, (CKLayer *, int, int, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLayer", "bool GetValue2(int x, int y, NativePointer val)", asFUNCTIONPR([](CKLayer *layer, int x, int y, NativePointer val) -> bool { return layer->GetValue2(x, y, val.Get()); }, (CKLayer *, int, int, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKLayer", "CKSquare &GetSquareArray()", asMETHODPR(CKLayer, GetSquareArray, (), CKSquare*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKLayer", "void SetSquareArray(CKSquare &sqArray)", asMETHODPR(CKLayer, SetSquareArray, (CKSquare*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLayer", "NativePointer GetSquareArray()", asFUNCTIONPR([](CKLayer *self) { return NativePointer(self->GetSquareArray()); }, (CKLayer *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLayer", "void SetSquareArray(NativePointer sqArray)", asFUNCTIONPR([](CKLayer *self, NativePointer sqArray) { self->SetSquareArray(reinterpret_cast<CKSquare *>(sqArray.Get())); }, (CKLayer *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKLayer", "void SetVisible(bool vis = true)", asFUNCTIONPR([](CKLayer *self, bool vis) { self->SetVisible(vis); }, (CKLayer *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKLayer", "bool IsVisible()", asFUNCTIONPR([](CKLayer *layer) -> bool { return layer->IsVisible(); }, (CKLayer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
