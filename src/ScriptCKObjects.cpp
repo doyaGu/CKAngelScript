@@ -626,6 +626,18 @@ static NativeBuffer *GetCKParameterWriteData(T *self) {
 }
 
 template <typename T>
+static CKParameterTypeDesc &GetCKParameterTypeDesc(T *self) {
+    if (CKParameterTypeDesc *desc = self->GetParameterType()) {
+        return *desc;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException("CKParameter.GetParameterType has no parameter type descriptor.");
+    }
+    static CKParameterTypeDesc missingDesc{};
+    return missingDesc;
+}
+
+template <typename T>
 static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
@@ -662,7 +674,7 @@ static void RegisterCKParameterMembers(asIScriptEngine *engine, const char *name
 
     // r = engine->RegisterObjectMethod(name, "CKERROR CreateDefaultValue()", asMETHODPR(T, CreateDefaultValue, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod(name, "void MessageDeleteAfterUse(bool act)", asFUNCTIONPR([](T *obj, bool act) { obj->MessageDeleteAfterUse(act); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKParameterTypeDesc &GetParameterType()", asMETHODPR(T, GetParameterType, (), CKParameterTypeDesc*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKParameterTypeDesc &GetParameterType()", asFUNCTION(GetCKParameterTypeDesc<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod(name, "bool IsCandidateForFixedSize(CKParameterTypeDesc &in type)", asFUNCTIONPR([](T *obj, CKParameterTypeDesc &type) { return obj->IsCandidateForFixedSize(&type); }, (T *, CKParameterTypeDesc &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKParameter") != 0) {
