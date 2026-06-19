@@ -10161,7 +10161,7 @@ bool RunCKBitmapReaderScriptSelfTest(asIScriptEngine *engine, std::string &error
         "  NativePointer memory;\n"
         "  if (reader is null) return;\n"
         "  int result = reader.SaveMemory(memory, bp);\n"
-        "  if (result == 0) reader.ReleaseMemory(memory);\n"
+        "  if (result > 0) reader.ReleaseMemory(memory);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -10538,6 +10538,10 @@ bool RunCKDataReaderScriptSelfTest(asIScriptEngine *engine, std::string &error) 
         }
         if (readerType->GetMethodByDecl("CKPluginInfo &GetReaderInfo()") != nullptr) {
             error = std::string("CKDataReader self-test found stale reference GetReaderInfo on ") + readerTypeName + ".";
+            return false;
+        }
+        if (readerType->GetMethodByDecl("void Release()") != nullptr) {
+            error = std::string("CKDataReader self-test found stale raw Release on ") + readerTypeName + ".";
             return false;
         }
     }
