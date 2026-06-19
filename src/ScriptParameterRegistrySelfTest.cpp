@@ -331,6 +331,62 @@ bool ExecuteCKBehaviorIOProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKBehaviorLinkProbe(asIScriptEngine *engine,
+                                asIScriptFunction *function,
+                                CKBehavior *root,
+                                CKBehaviorLink *link,
+                                CKBehaviorIO *sourceOutput,
+                                CKBehaviorIO *targetInput,
+                                bool expectException,
+                                const char *label,
+                                std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, root);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, link);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(2, sourceOutput);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(3, targetInput);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKParameterLocal *parameter,
@@ -4073,6 +4129,147 @@ bool RunCKBehaviorIOScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
     return ok;
 }
 
+bool RunCKBehaviorLinkScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKBehaviorLink script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *linkType = engine->GetTypeInfoByDecl("CKBehaviorLink");
+    asITypeInfo *behaviorType = engine->GetTypeInfoByDecl("CKBehavior");
+    if (!linkType || !behaviorType) {
+        error = "CKBehaviorLink self-test could not find the registered behavior types.";
+        return false;
+    }
+    if (!linkType->GetMethodByDecl("CKERROR SetOutBehaviorIO(CKBehaviorIO@ ckbioin)") ||
+        !linkType->GetMethodByDecl("CKERROR SetInBehaviorIO(CKBehaviorIO@ ckbioout)") ||
+        !linkType->GetMethodByDecl("CKBehaviorIO@ GetOutBehaviorIO()") ||
+        !linkType->GetMethodByDecl("CKBehaviorIO@ GetInBehaviorIO()") ||
+        !linkType->GetMethodByDecl("int GetActivationDelay()") ||
+        !linkType->GetMethodByDecl("void SetActivationDelay(int delay)") ||
+        !linkType->GetMethodByDecl("void ResetActivationDelay()") ||
+        !linkType->GetMethodByDecl("void SetInitialActivationDelay(int delay)") ||
+        !linkType->GetMethodByDecl("int GetInitialActivationDelay()") ||
+        !linkType->GetMethodByDecl("CKDWORD GetFlags()") ||
+        !linkType->GetMethodByDecl("void SetFlags(CKDWORD flags)") ||
+        !linkType->GetMethodByDecl("NativePointer GetAppData()") ||
+        !linkType->GetMethodByDecl("void SetAppData(NativePointer data)")) {
+        error = "CKBehaviorLink self-test could not find expected object methods.";
+        return false;
+    }
+    if (!behaviorType->GetMethodByDecl("CKBehaviorLink@ GetSubBehaviorLink(int pos)") ||
+        !behaviorType->GetMethodByDecl("CKERROR AddSubBehaviorLink(CKBehaviorLink@ cbkl)")) {
+        error = "CKBehaviorLink self-test could not find expected owner behavior link methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBehaviorLinkSelfTest";
+    const char *source =
+        "int ProbeCKBehaviorLinkSurface(CKBehavior@ root, CKBehaviorLink@ link, CKBehaviorIO@ sourceOutput, CKBehaviorIO@ targetInput) {\n"
+        "  if (root is null || link is null || sourceOutput is null || targetInput is null) return 2;\n"
+        "  if (root.GetSubBehaviorLink(0) !is link) return 3;\n"
+        "  if (link.GetInBehaviorIO() !is sourceOutput) return 4;\n"
+        "  if (link.GetOutBehaviorIO() !is targetInput) return 5;\n"
+        "  if (link.SetInBehaviorIO(sourceOutput) != CK_OK) return 6;\n"
+        "  if (link.SetOutBehaviorIO(targetInput) != CK_OK) return 7;\n"
+        "  if (link.GetInBehaviorIO() !is sourceOutput || link.GetOutBehaviorIO() !is targetInput) return 8;\n"
+        "  link.SetName(\"__CKAS_CKBehaviorLinkSelfTest\");\n"
+        "  if (link.GetName() != \"__CKAS_CKBehaviorLinkSelfTest\") return 9;\n"
+        "  link.SetActivationDelay(2);\n"
+        "  if (link.GetActivationDelay() != 2) return 10;\n"
+        "  link.ResetActivationDelay();\n"
+        "  link.SetInitialActivationDelay(1);\n"
+        "  if (link.GetInitialActivationDelay() != 1) return 11;\n"
+        "  CKDWORD flags = link.GetFlags();\n"
+        "  link.SetFlags(flags);\n"
+        "  if (link.GetFlags() != flags) return 12;\n"
+        "  NativePointer appData = link.GetAppData();\n"
+        "  if (!appData.IsNull()) return 13;\n"
+        "  link.SetAppData(appData);\n"
+        "  if (link.CKGetObject(link.GetID()) !is link) return 14;\n"
+        "  if (link.GetClassID() != CKCID_BEHAVIORLINK) return 15;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBehaviorLink self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckbehaviorlink-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorLink self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorLink self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKBehaviorLinkSurface(CKBehavior@, CKBehaviorLink@, CKBehaviorIO@, CKBehaviorIO@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorLink self-test function was not found.";
+        return false;
+    }
+
+    CKBehavior *root = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, const_cast<CKSTRING>("__CKAS_CKBehaviorLinkRoot"), CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *sourceBehavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, const_cast<CKSTRING>("__CKAS_CKBehaviorLinkSource"), CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *targetBehavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR, const_cast<CKSTRING>("__CKAS_CKBehaviorLinkTarget"), CK_OBJECTCREATION_DYNAMIC));
+    CKBehaviorLink *link = CKBehaviorLink::Cast(context->CreateObject(CKCID_BEHAVIORLINK, const_cast<CKSTRING>("__CKAS_CKBehaviorLinkSelfTest"), CK_OBJECTCREATION_DYNAMIC));
+    if (!root || !sourceBehavior || !targetBehavior || !link) {
+        if (link) context->DestroyObject(link);
+        if (targetBehavior) context->DestroyObject(targetBehavior);
+        if (sourceBehavior) context->DestroyObject(sourceBehavior);
+        if (root) context->DestroyObject(root);
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorLink self-test could not create temporary graph objects.";
+        return false;
+    }
+
+    root->UseGraph();
+    CKBehaviorIO *sourceOutput = sourceBehavior->CreateOutput(const_cast<CKSTRING>("Out"));
+    CKBehaviorIO *targetInput = targetBehavior->CreateInput(const_cast<CKSTRING>("In"));
+    CKERROR err = root->AddSubBehavior(sourceBehavior);
+    if (err == CK_OK) {
+        err = root->AddSubBehavior(targetBehavior);
+    }
+    if (err == CK_OK && sourceOutput && targetInput) {
+        err = link->SetInBehaviorIO(sourceOutput);
+    }
+    if (err == CK_OK) {
+        err = link->SetOutBehaviorIO(targetInput);
+    }
+    if (err == CK_OK) {
+        err = root->AddSubBehaviorLink(link);
+    }
+    if (err != CK_OK || !sourceOutput || !targetInput) {
+        context->DestroyObject(link);
+        context->DestroyObject(targetBehavior);
+        context->DestroyObject(sourceBehavior);
+        context->DestroyObject(root);
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorLink self-test could not prepare the temporary graph.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKBehaviorLinkProbe(engine, probe, root, link, sourceOutput, targetInput, false, "CKBehaviorLink surface probe", error);
+
+    root->RemoveSubBehaviorLink(link);
+    root->RemoveSubBehavior(sourceBehavior);
+    root->RemoveSubBehavior(targetBehavior);
+    context->DestroyObject(link);
+    context->DestroyObject(targetBehavior);
+    context->DestroyObject(sourceBehavior);
+    context->DestroyObject(root);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKPathManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKPathManager script self-test requires CKContext and AngelScript engine.";
@@ -6916,6 +7113,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKBehaviorIOScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBehaviorLinkScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
