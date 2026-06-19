@@ -5034,6 +5034,11 @@ void RegisterCKObjectArray(asIScriptEngine *engine) {
 
 // CKObjectDeclaration
 
+static void SetCKObjectDeclarationCreationFunction(CKObjectDeclaration *self, NativePointer ptr) {
+    (void)self;
+    RejectNativeFunctionPointerInstall(ptr, "CKObjectDeclaration.SetCreationFunction is read-only from script.");
+}
+
 void RegisterCKObjectDeclaration(asIScriptEngine *engine) {
     int r = 0;
 
@@ -5042,7 +5047,7 @@ void RegisterCKObjectDeclaration(asIScriptEngine *engine) {
     // r = engine->RegisterObjectProperty("CKObjectDeclaration", "uintptr_t m_CreationFunction", offsetof(CKObjectDeclaration, m_CreationFunction)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKObjectDeclaration", "CKDWORD m_Version", offsetof(CKObjectDeclaration, m_Version)); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectProperty("CKObjectDeclaration", "uintptr_t m_Description", offsetof(CKObjectDeclaration, m_Description)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKObjectDeclaration", "CKBehaviorPrototype@ m_Proto", offsetof(CKObjectDeclaration, m_Proto)); CKAS_CHECK_REGISTER(r);
+    // m_Proto is owned by the global declaration table and must not be script-writable.
     r = engine->RegisterObjectProperty("CKObjectDeclaration", "int m_Type", offsetof(CKObjectDeclaration, m_Type)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKObjectDeclaration", "CKGUID m_AuthorGuid", offsetof(CKObjectDeclaration, m_AuthorGuid)); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectProperty("CKObjectDeclaration", "uintptr_t m_AuthorName", offsetof(CKObjectDeclaration, m_AuthorName)); CKAS_CHECK_REGISTER(r);
@@ -5062,7 +5067,7 @@ void RegisterCKObjectDeclaration(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "void NeedManager(CKGUID manager)", asMETHODPR(CKObjectDeclaration, NeedManager, (CKGUID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetCreationFunction(NativePointer f)", asFUNCTIONPR([](CKObjectDeclaration *self, NativePointer f) { self->SetCreationFunction(reinterpret_cast<CKDLL_CREATEPROTOFUNCTION>(f.Get())); }, (CKObjectDeclaration *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetCreationFunction(NativePointer f)", asFUNCTION(SetCKObjectDeclarationCreationFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "NativePointer GetCreationFunction()", asFUNCTIONPR([](CKObjectDeclaration *self) { return NativePointer(self->GetCreationFunction()); }, (CKObjectDeclaration *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetAuthorGuid(CKGUID guid)", asMETHODPR(CKObjectDeclaration, SetAuthorGuid, (CKGUID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -5086,7 +5091,6 @@ void RegisterCKObjectDeclaration(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetPluginIndex(int)", asMETHODPR(CKObjectDeclaration, SetPluginIndex, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "CKBehaviorPrototype@ GetProto()", asMETHODPR(CKObjectDeclaration, GetProto, (), CKBehaviorPrototype*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKObjectDeclaration", "void SetProto(CKBehaviorPrototype@ proto)", asMETHODPR(CKObjectDeclaration, SetProto, (CKBehaviorPrototype*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "int GetManagerNeededCount()", asMETHODPR(CKObjectDeclaration, GetManagerNeededCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectDeclaration", "CKGUID GetManagerNeeded(int index)", asMETHODPR(CKObjectDeclaration, GetManagerNeeded, (int), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

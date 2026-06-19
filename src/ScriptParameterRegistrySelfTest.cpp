@@ -5417,6 +5417,92 @@ bool RunCKClassDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     return ok;
 }
 
+bool RunCKObjectDeclarationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKObjectDeclaration script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *declType = engine->GetTypeInfoByDecl("CKObjectDeclaration");
+    if (!declType) {
+        error = "CKObjectDeclaration type is not registered.";
+        return false;
+    }
+    for (asUINT i = 0; i < declType->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        if (declType->GetProperty(i, &propertyName) >= 0 && propertyName && std::strcmp(propertyName, "m_Proto") == 0) {
+            error = "CKObjectDeclaration still exposes writable m_Proto.";
+            return false;
+        }
+    }
+    if (declType->GetMethodByDecl("void SetProto(CKBehaviorPrototype@ proto)")) {
+        error = "CKObjectDeclaration still exposes SetProto.";
+        return false;
+    }
+    if (!declType->GetMethodByDecl("CKBehaviorPrototype@ GetProto()") ||
+        !declType->GetMethodByDecl("NativePointer GetCreationFunction()") ||
+        !declType->GetMethodByDecl("void SetCreationFunction(NativePointer f)")) {
+        error = "CKObjectDeclaration read-only prototype/creation accessors are not registered.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKObjectDeclarationSelfTest";
+    const char *source =
+        "int ProbeCKObjectDeclaration() {\n"
+        "  int count = CKGetPrototypeDeclarationCount();\n"
+        "  if (count <= 0) return 0;\n"
+        "  CKObjectDeclaration@ decl = CKGetPrototypeDeclaration(0);\n"
+        "  if (decl is null) return 1;\n"
+        "  NativePointer empty;\n"
+        "  decl.SetCreationFunction(empty);\n"
+        "  decl.GetCreationFunction();\n"
+        "  decl.GetProto();\n"
+        "  decl.GetName();\n"
+        "  decl.GetDescription();\n"
+        "  decl.GetAuthorName();\n"
+        "  decl.GetCategory();\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKObjectDeclarationCreationFunction() {\n"
+        "  CKObjectDeclaration@ decl = CKGetPrototypeDeclaration(0);\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  decl.SetCreationFunction(ptr);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKObjectDeclaration self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-object-declaration-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKObjectDeclaration self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKObjectDeclaration self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKObjectDeclaration()");
+    asIScriptFunction *rejectCreation = module->GetFunctionByDecl("void RejectCKObjectDeclarationCreationFunction()");
+    if (!probe || !rejectCreation) {
+        engine->DiscardModule(moduleName);
+        error = "CKObjectDeclaration self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKObjectDeclaration value probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, rejectCreation, true, "CKObjectDeclaration creation-function rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKDependenciesScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKDependencies script self-test requires an AngelScript engine.";
@@ -12711,6 +12797,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKClassDescScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKObjectDeclarationScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKDependenciesScriptSelfTest(engine, error)) {
