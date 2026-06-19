@@ -535,6 +535,50 @@ bool ExecuteCKAnimControllerProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKMorphControllerProbe(asIScriptEngine *engine,
+                                   asIScriptFunction *function,
+                                   CKMorphController *controller,
+                                   bool expectException,
+                                   const char *label,
+                                   std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, controller);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKBehaviorLinkProbe(asIScriptEngine *engine,
                                 asIScriptFunction *function,
                                 CKBehavior *root,
@@ -7079,7 +7123,11 @@ bool RunCKAnimControllerScriptSelfTest(CKContext *context, asIScriptEngine *engi
     return ok;
 }
 
-bool RunCKMorphControllerScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+bool RunCKMorphControllerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context) {
+        error = "CKMorphController script self-test requires a CKContext.";
+        return false;
+    }
     if (!engine) {
         error = "CKMorphController script self-test requires an AngelScript engine.";
         return false;
@@ -7093,25 +7141,56 @@ bool RunCKMorphControllerScriptSelfTest(asIScriptEngine *engine, std::string &er
     if (morphControllerType->GetMethodByDecl("bool Evaluate(float timeStep, NativePointer res)") != nullptr ||
         morphControllerType->GetMethodByDecl("int AddKey(CKKey&in key)") != nullptr ||
         morphControllerType->GetMethodByDecl("int AddKey(CKKey&in key, bool allocateNormals)") != nullptr ||
+        morphControllerType->GetMethodByDecl("bool Evaluate(float timeStep, int vertexCount, NativePointer vertexPtr, CKDWORD vertexStride, NativePointer normalPtr)") != nullptr ||
         morphControllerType->GetMethodByDecl("CKKey& GetKey(int index)") != nullptr) {
-        error = "CKMorphController self-test found stale inherited base-key methods.";
+        error = "CKMorphController self-test found stale raw-pointer or inherited base-key methods.";
         return false;
     }
     if (morphControllerType->GetMethodByDecl("int AddMorphKey(CKMorphKey&in key, bool allocateNormals = true)") == nullptr ||
         morphControllerType->GetMethodByDecl("CKMorphKey& GetMorphKey(int index)") == nullptr ||
-        morphControllerType->GetMethodByDecl("bool Evaluate(float timeStep, int vertexCount, NativePointer vertexPtr, CKDWORD vertexStride, NativePointer normalPtr)") == nullptr) {
+        morphControllerType->GetMethodByDecl("bool Evaluate(float timeStep, int vertexCount, NativeBuffer@ vertices, CKDWORD vertexStride, NativeBuffer@ normals = null)") == nullptr ||
+        morphControllerType->GetMethodByDecl("NativeBuffer@ DumpKeys()") == nullptr ||
+        morphControllerType->GetMethodByDecl("int DumpKeysTo(NativeBuffer@ buffer = null)") == nullptr ||
+        morphControllerType->GetMethodByDecl("int ReadKeysFrom(NativeBuffer@ buffer)") == nullptr) {
         error = "CKMorphController self-test could not find expected morph-specific methods.";
         return false;
     }
 
     constexpr const char *moduleName = "__CKAS_CKMorphControllerSelfTest";
     const char *source =
-        "void ProbeMorphControllerSurface(CKMorphController@ controller, CKMorphKey &in key, NativePointer vertexPtr, NativePointer normalPtr) {\n"
-        "  if (controller is null) return;\n"
-        "  controller.AddMorphKey(key);\n"
-        "  controller.AddMorphKey(key, false);\n"
+        "int ProbeMorphControllerSurface(CKMorphController@ controller) {\n"
+        "  if (controller is null) return 1;\n"
+        "  if (controller.GetType() != CKANIMATION_MORPH_CONTROL) return 2;\n"
+        "  controller.SetMorphVertexCount(2);\n"
+        "  NativeBuffer@ sourceVertices = NativeBuffer(24);\n"
+        "  VxVector first(1.0f, 2.0f, 3.0f);\n"
+        "  VxVector second(4.0f, 5.0f, 6.0f);\n"
+        "  if (sourceVertices.Write(first) != 12) return 3;\n"
+        "  if (sourceVertices.Write(second) != 12) return 4;\n"
+        "  sourceVertices.Reset();\n"
+        "  CKMorphKey key;\n"
+        "  key.TimeStep = 0.0f;\n"
+        "  key.SetPosArray(sourceVertices.ToPointer());\n"
+        "  if (controller.AddMorphKey(key, false) < 0) return 5;\n"
+        "  if (controller.GetKeyCount() != 1) return 6;\n"
         "  CKMorphKey got = controller.GetMorphKey(0);\n"
-        "  controller.Evaluate(0.0f, 0, vertexPtr, 12, normalPtr);\n"
+        "  if (got.TimeStep != 0.0f) return 7;\n"
+        "  NativeBuffer@ outVertices = NativeBuffer(24);\n"
+        "  if (!controller.Evaluate(0.0f, 2, outVertices, 12, null)) return 8;\n"
+        "  NativeBuffer@ dumped = controller.DumpKeys();\n"
+        "  if (dumped is null || dumped.Size() == 0) return 9;\n"
+        "  int needed = controller.DumpKeysTo(null);\n"
+        "  if (needed <= 0 || dumped.Size() != uint(needed)) return 10;\n"
+        "  controller.RemoveKey(0);\n"
+        "  if (controller.GetKeyCount() != 0) return 11;\n"
+        "  if (controller.ReadKeysFrom(dumped) != needed) return 12;\n"
+        "  if (controller.GetKeyCount() != 1) return 13;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMorphControllerSmallEvaluate(CKMorphController@ controller) {\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  controller.Evaluate(0.0f, 2, tooSmall, 12, null);\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -7133,8 +7212,36 @@ bool RunCKMorphControllerScriptSelfTest(asIScriptEngine *engine, std::string &er
         return false;
     }
 
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeMorphControllerSurface(CKMorphController@)");
+    asIScriptFunction *smallEvaluate = module->GetFunctionByDecl("int ProbeMorphControllerSmallEvaluate(CKMorphController@)");
+    if (!probe || !smallEvaluate) {
+        engine->DiscardModule(moduleName);
+        error = "CKMorphController self-test functions were not found.";
+        return false;
+    }
+
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKMorphControllerSelfTest"), CK_OBJECTCREATION_DYNAMIC));
+    if (!animation) {
+        engine->DiscardModule(moduleName);
+        error = "CKMorphController self-test could not create a CKObjectAnimation.";
+        return false;
+    }
+
+    CKMorphController *controller = static_cast<CKMorphController *>(animation->CreateController(CKANIMATION_MORPH_CONTROL));
+    if (!controller) {
+        context->DestroyObject(animation);
+        engine->DiscardModule(moduleName);
+        error = "CKMorphController self-test could not create a native morph controller.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKMorphControllerProbe(engine, probe, controller, false, "CKMorphController probe", error) &&
+                    ExecuteCKMorphControllerProbe(engine, smallEvaluate, controller, true, "CKMorphController small-evaluate probe", error);
+
+    context->DestroyObject(animation);
     engine->DiscardModule(moduleName);
-    return true;
+    return ok;
 }
 
 bool RunCKObjectAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
@@ -8478,7 +8585,7 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunCKAnimControllerScriptSelfTest(context, engine, error)) {
         return false;
     }
-    if (!RunCKMorphControllerScriptSelfTest(engine, error)) {
+    if (!RunCKMorphControllerScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectAnimationScriptSelfTest(engine, error)) {

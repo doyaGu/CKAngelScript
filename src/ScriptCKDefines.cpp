@@ -4010,9 +4010,9 @@ static CKMorphKey &GetCKMorphControllerKey(CKMorphController *self, int index) {
 static bool EvaluateCKMorphController(CKMorphController *self,
                                       float timeStep,
                                       int vertexCount,
-                                      NativePointer vertexPtr,
+                                      NativeBuffer *vertices,
                                       CKDWORD vertexStride,
-                                      NativePointer normalPtr) {
+                                      NativeBuffer *normals) {
     if (!self) {
         if (asIScriptContext *ctx = asGetActiveContext()) {
             ctx->SetException("CKMorphController.Evaluate called with a null controller.");
@@ -4025,7 +4025,7 @@ static bool EvaluateCKMorphController(CKMorphController *self,
         }
         return false;
     }
-    if (vertexCount > 0 && !vertexPtr.Get()) {
+    if (vertexCount > 0 && !vertices) {
         if (asIScriptContext *ctx = asGetActiveContext()) {
             ctx->SetException("CKMorphController.Evaluate requires a vertex output buffer when vertexCount is positive.");
         }
@@ -4037,11 +4037,29 @@ static bool EvaluateCKMorphController(CKMorphController *self,
         }
         return false;
     }
+    if (vertexCount > 0) {
+        const size_t requiredVertexBytes = static_cast<size_t>(vertexCount - 1) * vertexStride + sizeof(VxVector);
+        if (!vertices->IsValid() || vertices->Size() < requiredVertexBytes) {
+            if (asIScriptContext *ctx = asGetActiveContext()) {
+                ctx->SetException("CKMorphController.Evaluate vertex output buffer is too small.");
+            }
+            return false;
+        }
+        if (normals) {
+            const size_t requiredNormalBytes = static_cast<size_t>(vertexCount) * sizeof(VxCompressedVector);
+            if (!normals->IsValid() || normals->Size() < requiredNormalBytes) {
+                if (asIScriptContext *ctx = asGetActiveContext()) {
+                    ctx->SetException("CKMorphController.Evaluate normal output buffer is too small.");
+                }
+                return false;
+            }
+        }
+    }
     return self->Evaluate(timeStep,
                           vertexCount,
-                          vertexPtr.Get(),
+                          vertices ? vertices->Data() : nullptr,
                           vertexStride,
-                          reinterpret_cast<VxCompressedVector *>(normalPtr.Get())) != FALSE;
+                          normals ? reinterpret_cast<VxCompressedVector *>(normals->Data()) : nullptr) != FALSE;
 }
 
 void RegisterCKKeyframeData(asIScriptEngine *engine) {
@@ -4128,7 +4146,7 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMorphController", "int AddKey(float timeStep, bool allocateNormals)", asFUNCTIONPR([](CKMorphController *self, float timeStep, bool allocateNormals) { return self->AddKey(timeStep, allocateNormals); }, (CKMorphController *, float, bool), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMorphController", "int AddMorphKey(CKMorphKey &in key, bool allocateNormals = true)", asFUNCTION(AddCKMorphControllerKey), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMorphController", "CKMorphKey &GetMorphKey(int index)", asFUNCTION(GetCKMorphControllerKey), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKMorphController", "bool Evaluate(float timeStep, int vertexCount, NativePointer vertexPtr, CKDWORD vertexStride, NativePointer normalPtr)", asFUNCTION(EvaluateCKMorphController), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphController", "bool Evaluate(float timeStep, int vertexCount, NativeBuffer@ vertices, CKDWORD vertexStride, NativeBuffer@ normals = null)", asFUNCTION(EvaluateCKMorphController), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMorphController", "void SetMorphVertexCount(int count)", asMETHODPR(CKMorphController, SetMorphVertexCount, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
