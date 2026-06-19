@@ -331,6 +331,54 @@ bool ExecuteCKBehaviorIOProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKSceneObjectProbe(asIScriptEngine *engine,
+                               asIScriptFunction *function,
+                               CKSceneObject *object,
+                               CKScene *scene,
+                               bool expectException,
+                               const char *label,
+                               std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, object);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, scene);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKBehaviorLinkProbe(asIScriptEngine *engine,
                                 asIScriptFunction *function,
                                 CKBehavior *root,
@@ -4257,6 +4305,102 @@ bool RunCKObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std:
     return ok;
 }
 
+bool RunCKSceneObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKSceneObject script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *sceneObjectType = engine->GetTypeInfoByDecl("CKSceneObject");
+    if (!sceneObjectType) {
+        error = "CKSceneObject self-test could not find the registered type.";
+        return false;
+    }
+    if (!sceneObjectType->GetMethodByDecl("bool IsActiveInScene(CKScene@ scene)") ||
+        !sceneObjectType->GetMethodByDecl("bool IsActiveInCurrentScene()") ||
+        !sceneObjectType->GetMethodByDecl("bool IsInScene(CKScene@ scene)") ||
+        !sceneObjectType->GetMethodByDecl("int GetSceneInCount()") ||
+        !sceneObjectType->GetMethodByDecl("CKScene@ GetSceneIn(int index)") ||
+        !sceneObjectType->GetMethodByDecl("NativePointer GetAppData()") ||
+        !sceneObjectType->GetMethodByDecl("void SetAppData(NativePointer data)") ||
+        !sceneObjectType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)")) {
+        error = "CKSceneObject self-test could not find expected object methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKSceneObjectSelfTest";
+    const char *source =
+        "int ProbeCKSceneObjectSurface(CKSceneObject@ object, CKScene@ scene) {\n"
+        "  if (object is null || scene is null) return 2;\n"
+        "  if (!object.IsInScene(scene)) return 3;\n"
+        "  if (object.GetSceneInCount() < 1) return 4;\n"
+        "  bool found = false;\n"
+        "  for (int i = 0; i < object.GetSceneInCount(); ++i) {\n"
+        "    if (object.GetSceneIn(i) is scene) found = true;\n"
+        "  }\n"
+        "  if (!found) return 5;\n"
+        "  object.IsActiveInScene(scene);\n"
+        "  object.IsActiveInCurrentScene();\n"
+        "  NativePointer appData = object.GetAppData();\n"
+        "  if (!appData.IsNull()) return 6;\n"
+        "  object.SetAppData(appData);\n"
+        "  CKObject@ asObject = object;\n"
+        "  if (cast<CKSceneObject@>(asObject) !is object) return 7;\n"
+        "  if (object.GetClassID() != CKCID_BEOBJECT) return 8;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKSceneObject self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("cksceneobject-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSceneObject self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSceneObject self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKSceneObjectSurface(CKSceneObject@, CKScene@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKSceneObject self-test function was not found.";
+        return false;
+    }
+
+    CKScene *scene = CKScene::Cast(context->CreateObject(CKCID_SCENE,
+                                                        const_cast<CKSTRING>("__CKAS_CKSceneObjectSelfTestScene"),
+                                                        CK_OBJECTCREATION_DYNAMIC));
+    CKBeObject *beObject = CKBeObject::Cast(context->CreateObject(CKCID_BEOBJECT,
+                                                                  const_cast<CKSTRING>("__CKAS_CKSceneObjectSelfTestObject"),
+                                                                  CK_OBJECTCREATION_DYNAMIC));
+    CKSceneObject *sceneObject = CKSceneObject::Cast(beObject);
+    if (!scene || !beObject || !sceneObject) {
+        if (beObject) context->DestroyObject(beObject);
+        if (scene) context->DestroyObject(scene);
+        engine->DiscardModule(moduleName);
+        error = "CKSceneObject self-test could not create temporary scene objects.";
+        return false;
+    }
+
+    scene->AddObjectToScene(sceneObject, TRUE);
+    const bool ok = ExecuteCKSceneObjectProbe(engine, probe, sceneObject, scene, false, "CKSceneObject surface probe", error);
+
+    scene->RemoveObjectFromScene(sceneObject, TRUE);
+    context->DestroyObject(beObject);
+    context->DestroyObject(scene);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKBehavior script self-test requires CKContext and AngelScript engine.";
@@ -7561,6 +7705,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKObjectScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKSceneObjectScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBehaviorScriptSelfTest(context, engine, error)) {
