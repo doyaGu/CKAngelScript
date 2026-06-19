@@ -2779,7 +2779,7 @@ static void CKDataArrayGetElementValueGeneric(asIScriptGeneric *gen) {
     const int typeId = gen->GetArgTypeId(2);
     void *buf = *static_cast<void **>(gen->GetAddressOfArg(2));
 
-    CKERROR err = CK_OK;
+    bool ok = false;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         if (ctx)
@@ -2805,15 +2805,15 @@ static void CKDataArrayGetElementValueGeneric(asIScriptGeneric *gen) {
         if (strcmp(type->GetName(), "string") == 0) {
             std::string &str = *static_cast<std::string *>(buf);
             char value[4096] = {};
-            if (self->GetElementStringValue(i, c, value))
+            if (self->GetElementStringValue(i, c, value)) {
                 str = value;
-            else
-                err = CKERR_INVALIDPARAMETER;
+                ok = true;
+            }
         } else {
             int size = engine->GetSizeOfPrimitiveType(typeId);
             if (size == 0) {
                 if (type->GetFlags() & asOBJ_POD) {
-                    err = self->GetElementValue(i, c, buf);
+                    ok = self->GetElementValue(i, c, buf) != FALSE;
                 } else {
                     if (ctx)
                         ctx->SetException("Cannot read non-POD objects from buffer");
@@ -2825,11 +2825,11 @@ static void CKDataArrayGetElementValueGeneric(asIScriptGeneric *gen) {
     } else {
         int size = engine->GetSizeOfPrimitiveType(typeId);
         if (size != 0) {
-            err = self->GetElementValue(i, c, buf);
+            ok = self->GetElementValue(i, c, buf) != FALSE;
         }
     }
 
-    gen->SetReturnByte(err == CK_OK ? 1 : 0);
+    gen->SetReturnByte(ok ? 1 : 0);
 }
 
 static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
@@ -2842,7 +2842,7 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
     const int typeId = gen->GetArgTypeId(2);
     void *buf = *static_cast<void **>(gen->GetAddressOfArg(2));
 
-    CKERROR err = CK_OK;
+    bool ok = false;
 
     if (typeId & asTYPEID_SCRIPTOBJECT) {
         if (ctx)
@@ -2867,12 +2867,12 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
 
         if (strcmp(type->GetName(), "string") == 0) {
             std::string &str = *static_cast<std::string *>(buf);
-            err = self->SetElementStringValue(i, c, str.data());
+            ok = self->SetElementStringValue(i, c, str.data()) != FALSE;
         } else {
             int size = engine->GetSizeOfPrimitiveType(typeId);
             if (size == 0) {
                 if (type->GetFlags() & asOBJ_POD) {
-                    err = self->SetElementValue(i, c, buf);
+                    ok = self->SetElementValue(i, c, buf) != FALSE;
                 } else {
                     if (ctx)
                         ctx->SetException("Cannot write non-POD objects to buffer");
@@ -2884,11 +2884,11 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
     } else {
         int size = engine->GetSizeOfPrimitiveType(typeId);
         if (size != 0) {
-            err = self->SetElementValue(i, c, buf);
+            ok = self->SetElementValue(i, c, buf) != FALSE;
         }
     }
 
-    gen->SetReturnByte(err == CK_OK ? 1 : 0);
+    gen->SetReturnByte(ok ? 1 : 0);
 }
 
 void RegisterCKDataArray(asIScriptEngine *engine) {

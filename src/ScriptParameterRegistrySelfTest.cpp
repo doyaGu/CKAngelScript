@@ -387,6 +387,54 @@ bool ExecuteCKBehaviorLinkProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKDataArrayProbe(asIScriptEngine *engine,
+                             asIScriptFunction *function,
+                             CKDataArray *array,
+                             CKObject *object,
+                             bool expectException,
+                             const char *label,
+                             std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, array);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, object);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKParameterLocal *parameter,
@@ -4270,6 +4318,124 @@ bool RunCKBehaviorLinkScriptSelfTest(CKContext *context, asIScriptEngine *engine
     return ok;
 }
 
+bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKDataArray script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("CKDataArray");
+    if (!arrayType) {
+        error = "CKDataArray self-test could not find the registered type.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("bool SetElementValue(int i, int c, ?&in value)") ||
+        !arrayType->GetMethodByDecl("bool GetElementValue(int i, int c, ?&out value)") ||
+        !arrayType->GetMethodByDecl("NativePointer GetElement(int i, int c)") ||
+        !arrayType->GetMethodByDecl("CKObject@ GetElementObject(int i, int c)") ||
+        !arrayType->GetMethodByDecl("bool SetElementObject(int i, int c, CKObject@ obj)") ||
+        !arrayType->GetMethodByDecl("CKDataRow &GetRow(int n)") ||
+        !arrayType->GetMethodByDecl("CKDataRow &InsertRow(int n = -1)") ||
+        !arrayType->GetMethodByDecl("void RemoveRow(int row)") ||
+        !arrayType->GetMethodByDecl("void Clear(bool params = true)") ||
+        !arrayType->GetMethodByDecl("NativePointer GetAppData()") ||
+        !arrayType->GetMethodByDecl("void SetAppData(NativePointer data)")) {
+        error = "CKDataArray self-test could not find expected object methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKDataArraySelfTest";
+    const char *source =
+        "int ProbeCKDataArraySurface(CKDataArray@ array, CKObject@ object) {\n"
+        "  if (array is null || object is null) return 2;\n"
+        "  if (array.GetClassID() != CKCID_DATAARRAY) return 3;\n"
+        "  if (array.GetColumnCount() != 3) return 4;\n"
+        "  if (array.GetRowCount() != 1) return 5;\n"
+        "  if (array.GetColumnName(0) != \"Int\" || array.GetColumnName(1) != \"Text\") return 6;\n"
+        "  CKDWORD intValue = 42;\n"
+        "  if (!array.SetElementValue(0, 0, intValue)) return 7;\n"
+        "  CKDWORD intRead = 0;\n"
+        "  if (!array.GetElementValue(0, 0, intRead) || intRead != 42) return 8;\n"
+        "  string textValue = \"ckas\";\n"
+        "  if (!array.SetElementValue(0, 1, textValue)) return 9;\n"
+        "  string textRead;\n"
+        "  if (!array.GetElementValue(0, 1, textRead) || textRead != \"ckas\") return 10;\n"
+        "  if (!array.SetElementObject(0, 2, object)) return 11;\n"
+        "  if (array.GetElementObject(0, 2) !is object) return 12;\n"
+        "  NativePointer element = array.GetElement(0, 0);\n"
+        "  if (element.IsNull()) return 13;\n"
+        "  int nearest = -1;\n"
+        "  if (!array.GetNearest(0, element, nearest) || nearest != 0) return 14;\n"
+        "  if (array.GetRow(0).Size() != 3) return 15;\n"
+        "  if (array.InsertRow(-1).Size() != 3 || array.GetRowCount() != 2) return 16;\n"
+        "  array.RemoveRow(1);\n"
+        "  if (array.GetRowCount() != 1) return 17;\n"
+        "  NativePointer appData = array.GetAppData();\n"
+        "  if (!appData.IsNull()) return 18;\n"
+        "  array.SetAppData(appData);\n"
+        "  if (array.CKGetObject(array.GetID()) !is array) return 19;\n"
+        "  array.Clear();\n"
+        "  if (array.GetRowCount() != 0) return 20;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKDataArray self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckdataarray-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKDataArray self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKDataArray self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKDataArraySurface(CKDataArray@, CKObject@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKDataArray self-test function was not found.";
+        return false;
+    }
+
+    CKDataArray *array = CKDataArray::Cast(context->CreateObject(CKCID_DATAARRAY,
+                                                                  const_cast<CKSTRING>("__CKAS_CKDataArraySelfTest"),
+                                                                  CK_OBJECTCREATION_DYNAMIC));
+    CKObject *object = context->CreateObject(CKCID_BEOBJECT,
+                                             const_cast<CKSTRING>("__CKAS_CKDataArrayObject"),
+                                             CK_OBJECTCREATION_DYNAMIC);
+    if (!array || !object) {
+        if (object) {
+            context->DestroyObject(object);
+        }
+        if (array) {
+            context->DestroyObject(array);
+        }
+        engine->DiscardModule(moduleName);
+        error = "CKDataArray self-test could not create temporary objects.";
+        return false;
+    }
+
+    array->InsertColumn(-1, CKARRAYTYPE_INT, const_cast<CKSTRING>("Int"));
+    array->InsertColumn(-1, CKARRAYTYPE_STRING, const_cast<CKSTRING>("Text"));
+    array->InsertColumn(-1, CKARRAYTYPE_OBJECT, const_cast<CKSTRING>("Object"));
+    array->AddRow();
+
+    const bool ok = ExecuteCKDataArrayProbe(engine, probe, array, object, false, "CKDataArray surface probe", error);
+
+    context->DestroyObject(object);
+    context->DestroyObject(array);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKPathManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKPathManager script self-test requires CKContext and AngelScript engine.";
@@ -7116,6 +7282,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKBehaviorLinkScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKDataArrayScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
