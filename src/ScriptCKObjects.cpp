@@ -3906,6 +3906,88 @@ void RegisterCKTargetLight(asIScriptEngine *engine) {
     RegisterCKLightMembers<CKTargetLight>(engine, "CKTargetLight");
 }
 
+static CKERROR RejectCKCharacterCall(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return CKERR_INVALIDPARAMETER;
+}
+
+static CKERROR CKCharacterAddBodyPart(CKCharacter *self, CKBodyPart *part) {
+    if (!self || !part) {
+        return RejectCKCharacterCall("CKCharacter.AddBodyPart requires a non-null body part.");
+    }
+    return self->AddBodyPart(part);
+}
+
+static CKERROR CKCharacterRemoveBodyPart(CKCharacter *self, CKBodyPart *part) {
+    if (!self || !part) {
+        return RejectCKCharacterCall("CKCharacter.RemoveBodyPart requires a non-null body part.");
+    }
+    return self->RemoveBodyPart(part);
+}
+
+static CKERROR CKCharacterSetRootBodyPart(CKCharacter *self, CKBodyPart *part) {
+    if (!self || !part) {
+        return RejectCKCharacterCall("CKCharacter.SetRootBodyPart requires a non-null body part.");
+    }
+    return self->SetRootBodyPart(part);
+}
+
+static CKERROR CKCharacterAddAnimation(CKCharacter *self, CKAnimation *animation) {
+    if (!self || !animation) {
+        return RejectCKCharacterCall("CKCharacter.AddAnimation requires a non-null animation.");
+    }
+    return self->AddAnimation(animation);
+}
+
+static CKERROR CKCharacterRemoveAnimation(CKCharacter *self, CKAnimation *animation) {
+    if (!self || !animation) {
+        return RejectCKCharacterCall("CKCharacter.RemoveAnimation requires a non-null animation.");
+    }
+    return self->RemoveAnimation(animation);
+}
+
+static CKERROR CKCharacterSetActiveAnimation(CKCharacter *self, CKAnimation *animation) {
+    if (!self || !animation) {
+        return RejectCKCharacterCall("CKCharacter.SetActiveAnimation requires a non-null animation.");
+    }
+    return self->SetActiveAnimation(animation);
+}
+
+static CKERROR CKCharacterSetNextActiveAnimation(CKCharacter *self, CKAnimation *animation, CKDWORD transitionMode, float warpLength) {
+    if (!self || !animation) {
+        return RejectCKCharacterCall("CKCharacter.SetNextActiveAnimation requires a non-null animation.");
+    }
+    return self->SetNextActiveAnimation(animation, transitionMode, warpLength);
+}
+
+static CKERROR CKCharacterPlaySecondaryAnimation(CKCharacter *self,
+                                                 CKAnimation *animation,
+                                                 float startingFrame,
+                                                 CK_SECONDARYANIMATION_FLAGS playFlags,
+                                                 float warpLength,
+                                                 int loopCount) {
+    if (!self || !animation) {
+        return RejectCKCharacterCall("CKCharacter.PlaySecondaryAnimation requires a non-null animation.");
+    }
+    return self->PlaySecondaryAnimation(animation, startingFrame, playFlags, warpLength, loopCount);
+}
+
+static CKERROR CKCharacterStopSecondaryAnimation(CKCharacter *self, CKAnimation *animation, bool warp, float warpLength) {
+    if (!self || !animation) {
+        return RejectCKCharacterCall("CKCharacter.StopSecondaryAnimation requires a non-null animation.");
+    }
+    return self->StopSecondaryAnimation(animation, warp, warpLength);
+}
+
+static CKERROR CKCharacterStopSecondaryAnimationWarpLength(CKCharacter *self, CKAnimation *animation, float warpLength) {
+    if (!self || !animation) {
+        return RejectCKCharacterCall("CKCharacter.StopSecondaryAnimation requires a non-null animation.");
+    }
+    return self->StopSecondaryAnimation(animation, warpLength);
+}
+
 void RegisterCKCharacter(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -3913,31 +3995,32 @@ void RegisterCKCharacter(asIScriptEngine *engine) {
 
     RegisterCK3dEntityMembers<CKCharacter>(engine, "CKCharacter");
 
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR AddBodyPart(CKBodyPart@ part)", asMETHODPR(CKCharacter, AddBodyPart, (CKBodyPart *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR RemoveBodyPart(CKBodyPart@ part)", asMETHODPR(CKCharacter, RemoveBodyPart, (CKBodyPart *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR AddBodyPart(CKBodyPart@ part)", asFUNCTION(CKCharacterAddBodyPart), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR RemoveBodyPart(CKBodyPart@ part)", asFUNCTION(CKCharacterRemoveBodyPart), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "CKBodyPart@ GetRootBodyPart()", asMETHODPR(CKCharacter, GetRootBodyPart, (), CKBodyPart*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR SetRootBodyPart(CKBodyPart@ part)", asMETHODPR(CKCharacter, SetRootBodyPart, (CKBodyPart *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR SetRootBodyPart(CKBodyPart@ part)", asFUNCTION(CKCharacterSetRootBodyPart), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "CKBodyPart@ GetBodyPart(int index)", asMETHODPR(CKCharacter, GetBodyPart, (int), CKBodyPart *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "int GetBodyPartCount()", asMETHODPR(CKCharacter, GetBodyPartCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR AddAnimation(CKAnimation@ anim)", asMETHODPR(CKCharacter, AddAnimation, (CKAnimation *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR RemoveAnimation(CKAnimation@ anim)", asMETHODPR(CKCharacter, RemoveAnimation, (CKAnimation *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR AddAnimation(CKAnimation@ anim)", asFUNCTION(CKCharacterAddAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR RemoveAnimation(CKAnimation@ anim)", asFUNCTION(CKCharacterRemoveAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "CKAnimation@ GetAnimation(int index)", asMETHODPR(CKCharacter, GetAnimation, (int), CKAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "int GetAnimationCount()", asMETHODPR(CKCharacter, GetAnimationCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "CKAnimation@ GetWarper()", asMETHODPR(CKCharacter, GetWarper, (), CKAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKCharacter", "CKAnimation@ GetActiveAnimation()", asMETHODPR(CKCharacter, GetActiveAnimation, (), CKAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "CKAnimation@ GetNextActiveAnimation()", asMETHODPR(CKCharacter, GetNextActiveAnimation, (), CKAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR SetActiveAnimation(CKAnimation@ anim)", asMETHODPR(CKCharacter, SetActiveAnimation, (CKAnimation *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR SetNextActiveAnimation(CKAnimation@ anim, CKDWORD transitionMode, float warpLength = 0.0)", asMETHODPR(CKCharacter, SetNextActiveAnimation, (CKAnimation *, CKDWORD, float), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR SetActiveAnimation(CKAnimation@ anim)", asFUNCTION(CKCharacterSetActiveAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR SetNextActiveAnimation(CKAnimation@ anim, CKDWORD transitionMode, float warpLength = 0.0)", asFUNCTION(CKCharacterSetNextActiveAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKCharacter", "void ProcessAnimation(float delta = 1.0)", asMETHODPR(CKCharacter, ProcessAnimation, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "void SetAutomaticProcess(bool process = true)", asFUNCTIONPR([](CKCharacter *self, bool process) { self->SetAutomaticProcess(process); }, (CKCharacter *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "bool IsAutomaticProcess()", asFUNCTIONPR([](CKCharacter *self) -> bool { return self->IsAutomaticProcess(); }, (CKCharacter *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "void GetEstimatedVelocity(float delta, VxVector &out velocity)", asMETHODPR(CKCharacter, GetEstimatedVelocity, (float, VxVector *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR PlaySecondaryAnimation(CKAnimation@ anim, float startingFrame = 0.0, CK_SECONDARYANIMATION_FLAGS playFlags = CKSECONDARYANIMATION_ONESHOT, float warpLength = 5.0, int loopCount = 0)", asMETHODPR(CKCharacter, PlaySecondaryAnimation, (CKAnimation *, float, CK_SECONDARYANIMATION_FLAGS, float, int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR StopSecondaryAnimation(CKAnimation@ anim, bool warp = false, float warpLength = 5.0)", asFUNCTIONPR([](CKCharacter *self, CKAnimation *anim, bool warp, float warpLength) -> CKERROR { return self->StopSecondaryAnimation(anim, warp, warpLength); }, (CKCharacter *, CKAnimation *, bool, float), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR PlaySecondaryAnimation(CKAnimation@ anim, float startingFrame = 0.0, CK_SECONDARYANIMATION_FLAGS playFlags = CKSECONDARYANIMATION_ONESHOT, float warpLength = 5.0, int loopCount = 0)", asFUNCTION(CKCharacterPlaySecondaryAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR StopSecondaryAnimation(CKAnimation@ anim, bool warp = false, float warpLength = 5.0)", asFUNCTION(CKCharacterStopSecondaryAnimation), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCharacter", "CKERROR StopSecondaryAnimation(CKAnimation@ anim, float warpLength)", asFUNCTION(CKCharacterStopSecondaryAnimationWarpLength), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "int GetSecondaryAnimationsCount()", asMETHODPR(CKCharacter, GetSecondaryAnimationsCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "CKAnimation@ GetSecondaryAnimation(int index)", asMETHODPR(CKCharacter, GetSecondaryAnimation, (int), CKAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCharacter", "void FlushSecondaryAnimations()", asMETHODPR(CKCharacter, FlushSecondaryAnimations, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

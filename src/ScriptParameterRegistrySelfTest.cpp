@@ -958,6 +958,89 @@ bool ExecuteCKCurveCopyNullProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKCharacterProbe(asIScriptEngine *engine,
+                             asIScriptFunction *function,
+                             CKCharacter *character,
+                             CKBodyPart *bodyPart,
+                             CKAnimation *animation,
+                             CK3dEntity *floorRef,
+                             CKMesh *mesh,
+                             CKObjectAnimation *objectAnimation,
+                             bool expectException,
+                             const char *label,
+                             std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) r = scriptContext->SetArgObject(0, character);
+    if (r >= 0) r = scriptContext->SetArgObject(1, bodyPart);
+    if (r >= 0) r = scriptContext->SetArgObject(2, animation);
+    if (r >= 0) r = scriptContext->SetArgObject(3, floorRef);
+    if (r >= 0) r = scriptContext->SetArgObject(4, mesh);
+    if (r >= 0) r = scriptContext->SetArgObject(5, objectAnimation);
+    if (r >= 0) r = scriptContext->Execute();
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCKCharacterCopyNullProbe(asIScriptEngine *engine,
+                                     asITypeInfo *characterType,
+                                     CKCharacter *character,
+                                     CKDependenciesContext &dependencies,
+                                     std::string &error) {
+    asIScriptFunction *copyMethod = characterType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)");
+    if (!copyMethod) {
+        error = "CKCharacter Copy(null) probe could not find Copy method.";
+        return false;
+    }
+
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = "CKCharacter Copy(null) probe could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(copyMethod);
+    if (r >= 0) r = scriptContext->SetObject(character);
+    if (r >= 0) r = scriptContext->SetArgObject(0, nullptr);
+    if (r >= 0) r = scriptContext->SetArgObject(1, &dependencies);
+    if (r >= 0) r = scriptContext->Execute();
+
+    const bool ok = r == asEXECUTION_EXCEPTION;
+    if (!ok) {
+        error = "CKCharacter Copy(null) probe expected a script exception, got code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAnimControllerProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKAnimController *positionController,
@@ -6499,6 +6582,220 @@ bool RunCKCurveScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::
     return ok;
 }
 
+bool RunCKCharacterScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKCharacter script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *characterType = engine->GetTypeInfoByDecl("CKCharacter");
+    if (!characterType) {
+        error = "CKCharacter self-test could not find the registered type.";
+        return false;
+    }
+    if (characterType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
+        characterType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        characterType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr) {
+        error = "CKCharacter self-test found stale unsafe inherited declarations.";
+        return false;
+    }
+    if (!characterType->GetMethodByDecl("CKERROR AddBodyPart(CKBodyPart@ part)") ||
+        !characterType->GetMethodByDecl("CKERROR RemoveBodyPart(CKBodyPart@ part)") ||
+        !characterType->GetMethodByDecl("CKERROR SetRootBodyPart(CKBodyPart@ part)") ||
+        !characterType->GetMethodByDecl("CKERROR AddAnimation(CKAnimation@ anim)") ||
+        !characterType->GetMethodByDecl("CKERROR RemoveAnimation(CKAnimation@ anim)") ||
+        !characterType->GetMethodByDecl("CKERROR SetActiveAnimation(CKAnimation@ anim)") ||
+        !characterType->GetMethodByDecl("CKERROR SetNextActiveAnimation(CKAnimation@ anim, CKDWORD transitionMode, float warpLength = 0.0)") ||
+        !characterType->GetMethodByDecl("CKERROR PlaySecondaryAnimation(CKAnimation@ anim, float startingFrame = 0.0, CK_SECONDARYANIMATION_FLAGS playFlags = CKSECONDARYANIMATION_ONESHOT, float warpLength = 5.0, int loopCount = 0)") ||
+        !characterType->GetMethodByDecl("CKERROR StopSecondaryAnimation(CKAnimation@ anim, bool warp = false, float warpLength = 5.0)") ||
+        !characterType->GetMethodByDecl("CKERROR StopSecondaryAnimation(CKAnimation@ anim, float warpLength)") ||
+        !characterType->GetMethodByDecl("void GetWarperParameters(CKDWORD&out transitionMode, CKAnimation@&out animSrc, float&out frameSrc, CKAnimation@&out animDest, float&out frameDest)") ||
+        !characterType->GetMethodByDecl("void GetEstimatedVelocity(float delta, VxVector&out velocity)") ||
+        !characterType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !characterType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !characterType->GetMethodByDecl("NativePointer GetAppData()")) {
+        error = "CKCharacter self-test could not find expected character methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKCharacterSelfTest";
+    const char *source =
+        "bool CKCharacterHasBodyPart(CKCharacter@ character, CKBodyPart@ part) {\n"
+        "  for (int i = 0; i < character.GetBodyPartCount(); ++i) {\n"
+        "    if (character.GetBodyPart(i) is part) return true;\n"
+        "  }\n"
+        "  return false;\n"
+        "}\n"
+        "bool CKCharacterHasAnimation(CKCharacter@ character, CKAnimation@ animation) {\n"
+        "  for (int i = 0; i < character.GetAnimationCount(); ++i) {\n"
+        "    if (character.GetAnimation(i) is animation) return true;\n"
+        "  }\n"
+        "  return false;\n"
+        "}\n"
+        "int ProbeCKCharacterSurface(CKCharacter@ character, CKBodyPart@ bodyPart, CKAnimation@ animation, CK3dEntity@ floorRef, CKMesh@ mesh, CKObjectAnimation@ objectAnimation) {\n"
+        "  if (character is null || bodyPart is null || animation is null || floorRef is null || mesh is null || objectAnimation is null) return 1;\n"
+        "  CKObject@ asObject = character;\n"
+        "  CKSceneObject@ asSceneObject = character;\n"
+        "  CKBeObject@ asBeObject = character;\n"
+        "  CKRenderObject@ asRenderObject = character;\n"
+        "  CK3dEntity@ asEntity = character;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null) return 2;\n"
+        "  if (cast<CKCharacter>(asObject) !is character) return 3;\n"
+        "  if (cast<CKCharacter>(asEntity) !is character) return 4;\n"
+        "  if (character.AddBodyPart(bodyPart) != CK_OK) return 5;\n"
+        "  if (!CKCharacterHasBodyPart(character, bodyPart)) return 6;\n"
+        "  character.SetRootBodyPart(bodyPart);\n"
+        "  character.GetRootBodyPart();\n"
+        "  if (character.AddAnimation(animation) != CK_OK) return 7;\n"
+        "  if (!CKCharacterHasAnimation(character, animation)) return 8;\n"
+        "  character.SetActiveAnimation(animation);\n"
+        "  character.GetActiveAnimation();\n"
+        "  character.SetNextActiveAnimation(animation, 0, 0.0f);\n"
+        "  character.GetNextActiveAnimation();\n"
+        "  character.PlaySecondaryAnimation(animation);\n"
+        "  character.GetSecondaryAnimationsCount();\n"
+        "  character.GetSecondaryAnimation(0);\n"
+        "  character.StopSecondaryAnimation(animation, false, 5.0f);\n"
+        "  character.StopSecondaryAnimation(animation, 5.0f);\n"
+        "  character.FlushSecondaryAnimations();\n"
+        "  character.ProcessAnimation(0.0f);\n"
+        "  character.SetAutomaticProcess(false);\n"
+        "  if (character.IsAutomaticProcess()) return 9;\n"
+        "  character.SetAutomaticProcess(true);\n"
+        "  VxVector velocity;\n"
+        "  character.GetEstimatedVelocity(1.0f, velocity);\n"
+        "  character.SetFloorReferenceObject(floorRef);\n"
+        "  character.GetFloorReferenceObject();\n"
+        "  character.SetFloorReferenceObject(null);\n"
+        "  character.SetAnimationLevelOfDetail(0.5f);\n"
+        "  float lod = character.GetAnimationLevelOfDetail();\n"
+        "  if (lod < 0.0f || lod > 1.0f) return 10;\n"
+        "  CKDWORD transitionMode = 0;\n"
+        "  CKAnimation@ src;\n"
+        "  CKAnimation@ dest;\n"
+        "  float frameSrc = 0.0f;\n"
+        "  float frameDest = 0.0f;\n"
+        "  character.GetWarperParameters(transitionMode, src, frameSrc, dest, frameDest);\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  source.Reset();\n"
+        "  NativeBuffer@ transformed = NativeBuffer(24);\n"
+        "  character.TransformMany(transformed, source, 2);\n"
+        "  if (character.AddMesh(mesh) != CK_OK) return 11;\n"
+        "  character.SetCurrentMesh(mesh);\n"
+        "  if (character.GetCurrentMesh() !is mesh) return 12;\n"
+        "  if (character.RemoveMesh(mesh) != CK_OK) return 13;\n"
+        "  character.AddObjectAnimation(objectAnimation);\n"
+        "  if (character.GetObjectAnimationCount() < 1) return 14;\n"
+        "  character.RemoveObjectAnimation(objectAnimation);\n"
+        "  if (!character.GetAppData().IsNull()) return 15;\n"
+        "  character.SetAppData(NativePointer());\n"
+        "  character.RemoveAnimation(animation);\n"
+        "  character.RemoveBodyPart(bodyPart);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKCharacterSmallTransform(CKCharacter@ character, CKBodyPart@ bodyPart, CKAnimation@ animation, CK3dEntity@ floorRef, CKMesh@ mesh, CKObjectAnimation@ objectAnimation) {\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  character.TransformMany(tooSmall, source, 2);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKCharacterNullBodyPart(CKCharacter@ character, CKBodyPart@ bodyPart, CKAnimation@ animation, CK3dEntity@ floorRef, CKMesh@ mesh, CKObjectAnimation@ objectAnimation) {\n"
+        "  character.AddBodyPart(null);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKCharacterNullAnimation(CKCharacter@ character, CKBodyPart@ bodyPart, CKAnimation@ animation, CK3dEntity@ floorRef, CKMesh@ mesh, CKObjectAnimation@ objectAnimation) {\n"
+        "  character.AddAnimation(null);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKCharacterNullSecondaryStop(CKCharacter@ character, CKBodyPart@ bodyPart, CKAnimation@ animation, CK3dEntity@ floorRef, CKMesh@ mesh, CKObjectAnimation@ objectAnimation) {\n"
+        "  character.StopSecondaryAnimation(null, 5.0f);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKCharacter self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckcharacter-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKCharacter self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKCharacter self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *surface = module->GetFunctionByDecl("int ProbeCKCharacterSurface(CKCharacter@, CKBodyPart@, CKAnimation@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCKCharacterSmallTransform(CKCharacter@, CKBodyPart@, CKAnimation@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *nullBodyPart = module->GetFunctionByDecl("int ProbeCKCharacterNullBodyPart(CKCharacter@, CKBodyPart@, CKAnimation@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *nullAnimation = module->GetFunctionByDecl("int ProbeCKCharacterNullAnimation(CKCharacter@, CKBodyPart@, CKAnimation@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *nullSecondaryStop = module->GetFunctionByDecl("int ProbeCKCharacterNullSecondaryStop(CKCharacter@, CKBodyPart@, CKAnimation@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    if (!surface || !smallTransform || !nullBodyPart || !nullAnimation || !nullSecondaryStop) {
+        engine->DiscardModule(moduleName);
+        error = "CKCharacter self-test functions were not found.";
+        return false;
+    }
+
+    CKCharacter *character = CKCharacter::Cast(context->CreateObject(
+        CKCID_CHARACTER, const_cast<CKSTRING>("__CKAS_CKCharacterSelfTestCharacter"), CK_OBJECTCREATION_DYNAMIC));
+    CKBodyPart *bodyPart = CKBodyPart::Cast(context->CreateObject(
+        CKCID_BODYPART, const_cast<CKSTRING>("__CKAS_CKCharacterSelfTestBodyPart"), CK_OBJECTCREATION_DYNAMIC));
+    CKAnimation *animation = CKAnimation::Cast(context->CreateObject(
+        CKCID_KEYEDANIMATION, const_cast<CKSTRING>("__CKAS_CKCharacterSelfTestAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    CK3dEntity *floorRef = CK3dEntity::Cast(context->CreateObject(
+        CKCID_3DOBJECT, const_cast<CKSTRING>("__CKAS_CKCharacterSelfTestFloorRef"), CK_OBJECTCREATION_DYNAMIC));
+    CKMesh *mesh = CKMesh::Cast(context->CreateObject(
+        CKCID_MESH, const_cast<CKSTRING>("__CKAS_CKCharacterSelfTestMesh"), CK_OBJECTCREATION_DYNAMIC));
+    CKObjectAnimation *objectAnimation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKCharacterSelfTestObjectAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    if (!character || !bodyPart || !animation || !floorRef || !mesh || !objectAnimation) {
+        if (objectAnimation) context->DestroyObject(objectAnimation);
+        if (mesh) context->DestroyObject(mesh);
+        if (floorRef) context->DestroyObject(floorRef);
+        if (animation) context->DestroyObject(animation);
+        if (bodyPart) context->DestroyObject(bodyPart);
+        if (character) context->DestroyObject(character);
+        engine->DiscardModule(moduleName);
+        error = "CKCharacter self-test could not create temporary objects.";
+        return false;
+    }
+
+    CKDependenciesContext dependencies(context);
+    const bool ok = ExecuteCKCharacterProbe(engine, surface, character, bodyPart, animation, floorRef, mesh, objectAnimation, false, "CKCharacter surface probe", error) &&
+                    ExecuteCKCharacterProbe(engine, smallTransform, character, bodyPart, animation, floorRef, mesh, objectAnimation, true, "CKCharacter small TransformMany probe", error) &&
+                    ExecuteCKCharacterProbe(engine, nullBodyPart, character, bodyPart, animation, floorRef, mesh, objectAnimation, true, "CKCharacter null body-part probe", error) &&
+                    ExecuteCKCharacterProbe(engine, nullAnimation, character, bodyPart, animation, floorRef, mesh, objectAnimation, true, "CKCharacter null animation probe", error) &&
+                    ExecuteCKCharacterProbe(engine, nullSecondaryStop, character, bodyPart, animation, floorRef, mesh, objectAnimation, true, "CKCharacter null StopSecondaryAnimation probe", error) &&
+                    ExecuteCKCharacterCopyNullProbe(engine, characterType, character, dependencies, error);
+
+    character->RemoveAllCallbacks();
+    character->FlushSecondaryAnimations();
+    character->RemoveAnimation(animation);
+    character->RemoveBodyPart(bodyPart);
+    character->RemoveMesh(mesh);
+    character->RemoveObjectAnimation(objectAnimation);
+    character->SetFloorReferenceObject(nullptr);
+    context->DestroyObject(objectAnimation);
+    context->DestroyObject(mesh);
+    context->DestroyObject(floorRef);
+    context->DestroyObject(animation);
+    context->DestroyObject(bodyPart);
+    context->DestroyObject(character);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKBehavior script self-test requires CKContext and AngelScript engine.";
@@ -10180,6 +10477,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKCurveScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKCharacterScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBehaviorScriptSelfTest(context, engine, error)) {
