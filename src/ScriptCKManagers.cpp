@@ -7,6 +7,8 @@
 
 #include "CKAll.h"
 
+#include "add_on/scriptarray/scriptarray.h"
+
 #include "ScriptUtils.h"
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
@@ -998,6 +1000,55 @@ static CKStructStruct &GetCKStructDescByType(CKParameterManager *self, CKParamet
     return MissingCKStructStruct("CKParameterManager.GetStructDescByType did not find a struct descriptor.");
 }
 
+static CScriptArray *GetCKAvailableOperationsDesc(CKParameterManager *self,
+                                                  const CKGUID &opGuid,
+                                                  CKParameterOut *res,
+                                                  CKParameterIn *p1,
+                                                  CKParameterIn *p2) {
+    if (!self) {
+        SetActiveScriptException("CKParameterManager.GetAvailableOperationsDesc requires a valid manager.");
+        return nullptr;
+    }
+
+    asIScriptContext *ctx = asGetActiveContext();
+    asIScriptEngine *engine = ctx ? ctx->GetEngine() : nullptr;
+    asITypeInfo *arrayType = engine ? engine->GetTypeInfoByDecl("array<CKOperationDesc>") : nullptr;
+    if (!arrayType) {
+        SetActiveScriptException("array<CKOperationDesc> is not registered.");
+        return nullptr;
+    }
+
+    const int count = self->GetAvailableOperationsDesc(opGuid, res, p1, p2, nullptr);
+    if (count < 0) {
+        SetActiveScriptException("CKParameterManager.GetAvailableOperationsDesc returned an invalid count.");
+        return nullptr;
+    }
+
+    std::vector<CKOperationDesc> descriptions(static_cast<std::size_t>(count));
+    int filled = count;
+    if (count > 0) {
+        filled = self->GetAvailableOperationsDesc(opGuid, res, p1, p2, descriptions.data());
+        if (filled < 0) {
+            SetActiveScriptException("CKParameterManager.GetAvailableOperationsDesc failed while filling results.");
+            return nullptr;
+        }
+        if (filled < count) {
+            descriptions.resize(static_cast<std::size_t>(filled));
+        }
+    }
+
+    CScriptArray *array = CScriptArray::Create(arrayType, static_cast<asUINT>(descriptions.size()));
+    if (!array) {
+        SetActiveScriptException("CKParameterManager.GetAvailableOperationsDesc failed to create result array.");
+        return nullptr;
+    }
+
+    for (asUINT i = 0; i < static_cast<asUINT>(descriptions.size()); ++i) {
+        array->SetValue(i, &descriptions[i]);
+    }
+    return array;
+}
+
 static void SetCKAttributeManagerCallbackFunction(CKAttributeManager *self,
                                                   CKAttributeType attribType,
                                                   NativePointer callback,
@@ -1269,7 +1320,7 @@ void RegisterCKParameterManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKParameterManager", "CKGUID OperationNameToGuid(const string &in name)", asFUNCTIONPR([](CKParameterManager *self, const std::string &name) { return self->OperationNameToGuid(const_cast<CKSTRING>(name.c_str())); }, (CKParameterManager *, const std::string &), CKGUID), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "int OperationNameToCode(const string &in name)", asFUNCTIONPR([](CKParameterManager *self, const std::string &name) { return self->OperationNameToCode(const_cast<CKSTRING>(name.c_str())); }, (CKParameterManager *, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKParameterManager", "int GetAvailableOperationsDesc(const CKGUID &in opGuid, CKParameterOut@ res, CKParameterIn@ p1, CKParameterIn@ p2, CKOperationDesc &out list)", asMETHODPR(CKParameterManager, GetAvailableOperationsDesc, (const CKGUID&, CKParameterOut *, CKParameterIn*, CKParameterIn*, CKOperationDesc*), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterManager", "array<CKOperationDesc>@ GetAvailableOperationsDesc(const CKGUID &in opGuid, CKParameterOut@ res = null, CKParameterIn@ p1 = null, CKParameterIn@ p2 = null)", asFUNCTION(GetCKAvailableOperationsDesc), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "int GetParameterOperationCount()", asMETHODPR(CKParameterManager, GetParameterOperationCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "bool IsParameterTypeToBeShown(CKParameterType type)", asFUNCTIONPR([](CKParameterManager *self, CKParameterType type) -> bool { return self->IsParameterTypeToBeShown(type); }, (CKParameterManager *, CKParameterType), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "bool IsParameterTypeToBeShown(CKGUID guid)", asFUNCTIONPR([](CKParameterManager *self, CKGUID guid) -> bool { return self->IsParameterTypeToBeShown(guid); }, (CKParameterManager *, CKGUID), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

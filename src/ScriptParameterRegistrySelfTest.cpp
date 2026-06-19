@@ -13909,6 +13909,11 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
         error = "CKParameterManager operation function GUID input declarations are not registered.";
         return false;
     }
+    if (parameterManagerType->GetMethodByDecl("array<CKOperationDesc>@ GetAvailableOperationsDesc(const CKGUID &in opGuid, CKParameterOut@ res = null, CKParameterIn@ p1 = null, CKParameterIn@ p2 = null)") == nullptr ||
+        parameterManagerType->GetMethodByDecl("int GetAvailableOperationsDesc(const CKGUID &in opGuid, CKParameterOut@ res, CKParameterIn@ p1, CKParameterIn@ p2, CKOperationDesc &out list)") != nullptr) {
+        error = "CKParameterManager operation description array declaration is stale or missing.";
+        return false;
+    }
 
     constexpr const char *moduleName = "__CKAS_CKParameterTypeDescSelfTest";
     const char *source =
@@ -13959,6 +13964,15 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
         "  if (param1.opCmp(param1Copy) != 0 || param2.opCmp(param2Copy) != 0) return 3;\n"
         "  return 0;\n"
         "}\n"
+        "int ProbeAvailableOperationDescriptions(CKContext@ ctx) {\n"
+        "  CKParameterManager@ pm = ctx.GetParameterManager();\n"
+        "  if (pm is null) return 1;\n"
+        "  CKGUID anyOperation;\n"
+        "  array<CKOperationDesc>@ descriptions = pm.GetAvailableOperationsDesc(anyOperation, null, null, null);\n"
+        "  if (descriptions is null) return 2;\n"
+        "  descriptions.length();\n"
+        "  return 0;\n"
+        "}\n"
         "void RejectParameterTypeCreatorDll(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.CreatorDll = p; }\n"
         "void RejectParameterTypeCreateDefaultFunction(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.CreateDefaultFunction = p; }\n"
         "void RejectParameterTypeDeleteFunction(CKContext@) { CKParameterTypeDesc d; NativePointer p; p += 1; d.DeleteFunction = p; }\n"
@@ -13991,6 +14005,7 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
     asIScriptFunction *missingType = module->GetFunctionByDecl("int ProbeMissingParameterType(CKContext@)");
     asIScriptFunction *missingGuid = module->GetFunctionByDecl("int ProbeMissingParameterGuid(CKContext@)");
     asIScriptFunction *operationGuidInputs = module->GetFunctionByDecl("int ProbeOperationFunctionGuidInputs(CKContext@)");
+    asIScriptFunction *operationDescriptions = module->GetFunctionByDecl("int ProbeAvailableOperationDescriptions(CKContext@)");
     asIScriptFunction *rejectCreatorDll = module->GetFunctionByDecl("void RejectParameterTypeCreatorDll(CKContext@)");
     asIScriptFunction *rejectCreateDefault = module->GetFunctionByDecl("void RejectParameterTypeCreateDefaultFunction(CKContext@)");
     asIScriptFunction *rejectDelete = module->GetFunctionByDecl("void RejectParameterTypeDeleteFunction(CKContext@)");
@@ -13999,7 +14014,7 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
     asIScriptFunction *rejectCopy = module->GetFunctionByDecl("void RejectParameterTypeCopyFunction(CKContext@)");
     asIScriptFunction *rejectString = module->GetFunctionByDecl("void RejectParameterTypeStringFunction(CKContext@)");
     asIScriptFunction *rejectUICreator = module->GetFunctionByDecl("void RejectParameterTypeUICreatorFunction(CKContext@)");
-    if (!probe || !missingType || !missingGuid || !operationGuidInputs || !rejectCreatorDll || !rejectCreateDefault ||
+    if (!probe || !missingType || !missingGuid || !operationGuidInputs || !operationDescriptions || !rejectCreatorDll || !rejectCreateDefault ||
         !rejectDelete || !rejectSaveLoad || !rejectCheck || !rejectCopy || !rejectString || !rejectUICreator) {
         engine->DiscardModule(moduleName);
         error = "CKParameterTypeDesc self-test functions were not found.";
@@ -14010,6 +14025,7 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
               ExecuteCKParameterTypeDescProbe(engine, missingType, context, true, "CKParameterTypeDesc missing type probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, missingGuid, context, true, "CKParameterTypeDesc missing guid probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, operationGuidInputs, context, false, "CKParameterManager operation GUID input probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, operationDescriptions, context, false, "CKParameterManager operation description array probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, rejectCreatorDll, context, true, "CKParameterTypeDesc CreatorDll rejection probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, rejectCreateDefault, context, true, "CKParameterTypeDesc CreateDefaultFunction rejection probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, rejectDelete, context, true, "CKParameterTypeDesc DeleteFunction rejection probe", error) &&
