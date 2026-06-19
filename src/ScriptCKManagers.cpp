@@ -228,6 +228,14 @@ static int GetCKInputKeyName(CKInputManager *self, CKDWORD key, std::string &key
     return result;
 }
 
+static bool IsCKInputKeyDown(CKInputManager *self, CKDWORD key, CKDWORD *stamp) {
+    return self->IsKeyDown(key, stamp);
+}
+
+static bool IsCKInputKeyToggled(CKInputManager *self, CKDWORD key, CKDWORD *stamp) {
+    return self->IsKeyToggled(key, stamp);
+}
+
 static void GetCKInputMouseButtonsState(CKInputManager *self,
                                         CKBYTE *left,
                                         CKBYTE *right,
@@ -1634,9 +1642,9 @@ void RegisterCKInputManager(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKInputManager", "void EnableKeyboardRepetition(bool enable = true)", asFUNCTIONPR([](CKInputManager *self, bool enable) { self->EnableKeyboardRepetition(enable); }, (CKInputManager *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyboardRepetitionEnabled()", asFUNCTIONPR([](CKInputManager *self) -> bool { return self->IsKeyboardRepetitionEnabled(); }, (CKInputManager *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyDown(CKDWORD key, CKDWORD &out stamp = 0)", asFUNCTIONPR([](CKInputManager *self, CKDWORD key, CKDWORD &stamp) -> bool { return self->IsKeyDown(key, &stamp); }, (CKInputManager *, CKDWORD, CKDWORD &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyDown(CKDWORD key, CKDWORD &out stamp = void)", asFUNCTION(IsCKInputKeyDown), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyUp(CKDWORD key)", asFUNCTIONPR([](CKInputManager *self, CKDWORD key) -> bool { return self->IsKeyUp(key); }, (CKInputManager *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyToggled(CKDWORD key, CKDWORD &out stamp = 0)", asFUNCTIONPR([](CKInputManager *self, CKDWORD key, CKDWORD &stamp) -> bool { return self->IsKeyToggled(key, &stamp); }, (CKInputManager *, CKDWORD, CKDWORD &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyToggled(CKDWORD key, CKDWORD &out stamp = void)", asFUNCTION(IsCKInputKeyToggled), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKInputManager", "int GetKeyName(CKDWORD key, string &out keyName)", asFUNCTION(GetCKInputKeyName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "CKDWORD GetKeyFromName(const string &in keyName)", asFUNCTIONPR([](CKInputManager *self, const std::string &keyName) { return self->GetKeyFromName(const_cast<CKSTRING>(keyName.c_str())); }, (CKInputManager *, const std::string &), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

@@ -10610,14 +10610,22 @@ bool RunCKInputManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
         error = "CKInputManager self-test could not find the registered type.";
         return false;
     }
+    asIScriptFunction *isKeyDown = inputManagerType->GetMethodByDecl("bool IsKeyDown(CKDWORD key, CKDWORD &out stamp = void)");
+    asIScriptFunction *isKeyToggled = inputManagerType->GetMethodByDecl("bool IsKeyToggled(CKDWORD key, CKDWORD &out stamp = void)");
     if (inputManagerType->GetMethodByDecl("int GetKeyName(CKDWORD key, string &out keyName)") == nullptr ||
         inputManagerType->GetMethodByDecl("CKDWORD GetKeyFromName(const string &in keyName)") == nullptr ||
+        isKeyDown == nullptr ||
+        isKeyToggled == nullptr ||
         inputManagerType->GetMethodByDecl("void GetMouseButtonsState(CKBYTE &out left, CKBYTE &out right, CKBYTE &out middle, CKBYTE &out extra)") == nullptr) {
-        error = "CKInputManager self-test could not find expected key-name or mouse-state methods.";
+        error = "CKInputManager self-test could not find expected key or mouse-state methods.";
         return false;
     }
-    if (inputManagerType->GetMethodByDecl("void GetMouseButtonsState(CKDWORD &out states)") != nullptr) {
-        error = "CKInputManager self-test found stale packed mouse-state declaration.";
+    const std::string isKeyDownDecl = isKeyDown->GetDeclaration(false, false, true);
+    const std::string isKeyToggledDecl = isKeyToggled->GetDeclaration(false, false, true);
+    if (isKeyDownDecl.find("stamp = void") == std::string::npos ||
+        isKeyToggledDecl.find("stamp = void") == std::string::npos ||
+        inputManagerType->GetMethodByDecl("void GetMouseButtonsState(CKDWORD &out states)") != nullptr) {
+        error = "CKInputManager self-test found stale key or mouse-state declaration.";
         return false;
     }
 
@@ -10628,6 +10636,11 @@ bool RunCKInputManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
         "  string keyName;\n"
         "  input.GetKeyName(0, keyName);\n"
         "  input.GetKeyFromName(keyName);\n"
+        "  input.IsKeyDown(0);\n"
+        "  input.IsKeyToggled(0);\n"
+        "  CKDWORD stamp = 0;\n"
+        "  input.IsKeyDown(0, stamp);\n"
+        "  input.IsKeyToggled(0, stamp);\n"
         "  CKBYTE left = 0;\n"
         "  CKBYTE right = 0;\n"
         "  CKBYTE middle = 0;\n"
