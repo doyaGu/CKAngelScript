@@ -279,6 +279,58 @@ bool ExecuteCKObjectProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKBehaviorIOProbe(asIScriptEngine *engine,
+                              asIScriptFunction *function,
+                              CKBehavior *behavior,
+                              CKBehaviorIO *input,
+                              CKBehaviorIO *output,
+                              bool expectException,
+                              const char *label,
+                              std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, behavior);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, input);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(2, output);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKParameterLocal *parameter,
@@ -3911,6 +3963,116 @@ bool RunCKObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std:
     return ok;
 }
 
+bool RunCKBehaviorIOScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKBehaviorIO script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *behaviorIoType = engine->GetTypeInfoByDecl("CKBehaviorIO");
+    asITypeInfo *behaviorType = engine->GetTypeInfoByDecl("CKBehavior");
+    if (!behaviorIoType || !behaviorType) {
+        error = "CKBehaviorIO self-test could not find the registered behavior types.";
+        return false;
+    }
+    if (!behaviorIoType->GetMethodByDecl("void SetType(int type)") ||
+        !behaviorIoType->GetMethodByDecl("int GetType()") ||
+        !behaviorIoType->GetMethodByDecl("void Activate(bool active = true)") ||
+        !behaviorIoType->GetMethodByDecl("bool IsActive()") ||
+        !behaviorIoType->GetMethodByDecl("CKBehavior@ GetOwner()") ||
+        !behaviorIoType->GetMethodByDecl("void SetOwner(CKBehavior@ owner)") ||
+        !behaviorIoType->GetMethodByDecl("NativePointer GetAppData()") ||
+        !behaviorIoType->GetMethodByDecl("void SetAppData(NativePointer data)")) {
+        error = "CKBehaviorIO self-test could not find expected object methods.";
+        return false;
+    }
+    if (!behaviorType->GetMethodByDecl("CKBehaviorIO@ GetInput(int pos)") ||
+        !behaviorType->GetMethodByDecl("CKBehaviorIO@ GetOutput(int pos)") ||
+        !behaviorType->GetMethodByDecl("int GetInputPosition(CKBehaviorIO@ pbio)") ||
+        !behaviorType->GetMethodByDecl("int GetOutputPosition(CKBehaviorIO@ pbio)")) {
+        error = "CKBehaviorIO self-test could not find expected owner behavior methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBehaviorIOSelfTest";
+    const char *source =
+        "int ProbeCKBehaviorIOSurface(CKBehavior@ owner, CKBehaviorIO@ input, CKBehaviorIO@ output) {\n"
+        "  if (owner is null || input is null || output is null) return 2;\n"
+        "  if (input.GetOwner() !is owner || output.GetOwner() !is owner) return 3;\n"
+        "  if (owner.GetInput(0) !is input) return 4;\n"
+        "  if (owner.GetOutput(0) !is output) return 5;\n"
+        "  if (owner.GetInputPosition(input) != 0 || owner.GetOutputPosition(output) != 0) return 6;\n"
+        "  input.SetName(\"__CKAS_CKBehaviorIOInput\");\n"
+        "  if (input.GetName() != \"__CKAS_CKBehaviorIOInput\") return 7;\n"
+        "  int oldType = input.GetType();\n"
+        "  input.SetType(oldType);\n"
+        "  if (input.GetType() != oldType) return 8;\n"
+        "  input.Activate(true);\n"
+        "  if (!input.IsActive()) return 9;\n"
+        "  input.Activate(false);\n"
+        "  if (input.IsActive()) return 10;\n"
+        "  NativePointer appData = input.GetAppData();\n"
+        "  if (!appData.IsNull()) return 11;\n"
+        "  input.SetAppData(appData);\n"
+        "  if (input.CKGetObject(input.GetID()) !is input) return 12;\n"
+        "  input.SetOwner(owner);\n"
+        "  if (input.GetOwner() !is owner) return 13;\n"
+        "  output.Activate();\n"
+        "  if (!output.IsActive()) return 14;\n"
+        "  output.Activate(false);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBehaviorIO self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckbehaviorio-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorIO self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorIO self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKBehaviorIOSurface(CKBehavior@, CKBehaviorIO@, CKBehaviorIO@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorIO self-test function was not found.";
+        return false;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR,
+                                                                   const_cast<CKSTRING>("__CKAS_CKBehaviorIOSelfTest"),
+                                                                   CK_OBJECTCREATION_DYNAMIC));
+    if (!behavior) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorIO self-test could not create a temporary CKBehavior.";
+        return false;
+    }
+    CKBehaviorIO *input = behavior->CreateInput(const_cast<CKSTRING>("__CKAS_CKBehaviorIOInput"));
+    CKBehaviorIO *output = behavior->CreateOutput(const_cast<CKSTRING>("__CKAS_CKBehaviorIOOutput"));
+    if (!input || !output) {
+        context->DestroyObject(behavior);
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorIO self-test could not create temporary behavior IOs.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKBehaviorIOProbe(engine, probe, behavior, input, output, false, "CKBehaviorIO surface probe", error);
+
+    context->DestroyObject(behavior);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKPathManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKPathManager script self-test requires CKContext and AngelScript engine.";
@@ -6751,6 +6913,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKObjectScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBehaviorIOScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectManagerScriptSelfTest(context, engine, error)) {
