@@ -10464,6 +10464,7 @@ bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         !arrayType->GetMethodByDecl("bool SetElementObject(int i, int c, CKObject@ obj)") ||
         !arrayType->GetMethodByDecl("CKDataRow &GetRow(int n)") ||
         !arrayType->GetMethodByDecl("CKDataRow &InsertRow(int n = -1)") ||
+        !arrayType->GetMethodByDecl("CKDataRow &FindRow(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startIndex = 0)") ||
         !arrayType->GetMethodByDecl("void RemoveRow(int row)") ||
         !arrayType->GetMethodByDecl("void Clear(bool params = true)") ||
         !arrayType->GetMethodByDecl("NativePointer GetAppData()") ||
@@ -10495,16 +10496,26 @@ bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  int nearest = -1;\n"
         "  if (!array.GetNearest(0, element, nearest) || nearest != 0) return 14;\n"
         "  if (array.GetRow(0).Size() != 3) return 15;\n"
-        "  if (array.InsertRow(-1).Size() != 3 || array.GetRowCount() != 2) return 16;\n"
+        "  if (array.FindRow(0, CKEQUAL, intValue).Size() != 3) return 16;\n"
+        "  if (array.InsertRow(-1).Size() != 3 || array.GetRowCount() != 2) return 17;\n"
         "  array.RemoveRow(1);\n"
-        "  if (array.GetRowCount() != 1) return 17;\n"
+        "  if (array.GetRowCount() != 1) return 18;\n"
         "  NativePointer appData = array.GetAppData();\n"
-        "  if (!appData.IsNull()) return 18;\n"
+        "  if (!appData.IsNull()) return 19;\n"
         "  array.SetAppData(appData);\n"
-        "  if (array.CKGetObject(array.GetID()) !is array) return 19;\n"
+        "  if (array.CKGetObject(array.GetID()) !is array) return 20;\n"
         "  array.Clear();\n"
-        "  if (array.GetRowCount() != 0) return 20;\n"
+        "  if (array.GetRowCount() != 0) return 21;\n"
         "  return 0;\n"
+        "}\n"
+        "void RejectCKDataArrayGetRowInvalid(CKDataArray@ array, CKObject@ object) {\n"
+        "  array.GetRow(-1);\n"
+        "}\n"
+        "void RejectCKDataArrayInsertRowInvalid(CKDataArray@ array, CKObject@ object) {\n"
+        "  array.InsertRow(-2);\n"
+        "}\n"
+        "void RejectCKDataArrayFindRowMissing(CKDataArray@ array, CKObject@ object) {\n"
+        "  array.FindRow(0, CKEQUAL, 999999);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -10527,7 +10538,10 @@ bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     }
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKDataArraySurface(CKDataArray@, CKObject@)");
-    if (!probe) {
+    asIScriptFunction *invalidGetRow = module->GetFunctionByDecl("void RejectCKDataArrayGetRowInvalid(CKDataArray@, CKObject@)");
+    asIScriptFunction *invalidInsertRow = module->GetFunctionByDecl("void RejectCKDataArrayInsertRowInvalid(CKDataArray@, CKObject@)");
+    asIScriptFunction *missingFindRow = module->GetFunctionByDecl("void RejectCKDataArrayFindRowMissing(CKDataArray@, CKObject@)");
+    if (!probe || !invalidGetRow || !invalidInsertRow || !missingFindRow) {
         engine->DiscardModule(moduleName);
         error = "CKDataArray self-test function was not found.";
         return false;
@@ -10556,7 +10570,10 @@ bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     array->InsertColumn(-1, CKARRAYTYPE_OBJECT, const_cast<CKSTRING>("Object"));
     array->AddRow();
 
-    const bool ok = ExecuteCKDataArrayProbe(engine, probe, array, object, false, "CKDataArray surface probe", error);
+    const bool ok = ExecuteCKDataArrayProbe(engine, probe, array, object, false, "CKDataArray surface probe", error) &&
+                    ExecuteCKDataArrayProbe(engine, invalidGetRow, array, object, true, "CKDataArray invalid GetRow probe", error) &&
+                    ExecuteCKDataArrayProbe(engine, invalidInsertRow, array, object, true, "CKDataArray invalid InsertRow probe", error) &&
+                    ExecuteCKDataArrayProbe(engine, missingFindRow, array, object, true, "CKDataArray missing FindRow probe", error);
 
     context->DestroyObject(object);
     context->DestroyObject(array);

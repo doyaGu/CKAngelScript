@@ -2984,6 +2984,47 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
     gen->SetReturnByte(ok ? 1 : 0);
 }
 
+static CKDataRow &MissingCKDataRow(const char *message) {
+    static thread_local CKDataRow dummy;
+    dummy.Clear();
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return dummy;
+}
+
+static CKDataRow &GetCKDataArrayRow(CKDataArray *self, int n) {
+    if (self) {
+        if (CKDataRow *row = self->GetRow(n)) {
+            return *row;
+        }
+    }
+    return MissingCKDataRow("CKDataArray.GetRow row index is out of range.");
+}
+
+static CKDataRow &InsertCKDataArrayRow(CKDataArray *self, int n) {
+    if (self) {
+        if (CKDataRow *row = self->InsertRow(n)) {
+            return *row;
+        }
+    }
+    return MissingCKDataRow("CKDataArray.InsertRow row index is out of range.");
+}
+
+static CKDataRow &FindCKDataArrayRow(CKDataArray *self,
+                                     int c,
+                                     CK_COMPOPERATOR op,
+                                     CKDWORD key,
+                                     int size,
+                                     int startIndex) {
+    if (self) {
+        if (CKDataRow *row = self->FindRow(c, op, key, size, startIndex)) {
+            return *row;
+        }
+    }
+    return MissingCKDataRow("CKDataArray.FindRow did not find a matching row.");
+}
+
 void RegisterCKDataArray(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -3029,12 +3070,12 @@ void RegisterCKDataArray(asIScriptEngine *engine) {
 
     // Rows Functions
     r = engine->RegisterObjectMethod("CKDataArray", "int GetRowCount()", asMETHODPR(CKDataArray, GetRowCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &GetRow(int n)", asMETHODPR(CKDataArray, GetRow, (int), CKDataRow *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &GetRow(int n)", asFUNCTION(GetCKDataArrayRow), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "void AddRow()", asMETHODPR(CKDataArray, AddRow, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &InsertRow(int n = -1)", asMETHODPR(CKDataArray, InsertRow, (int), CKDataRow *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &InsertRow(int n = -1)", asFUNCTION(InsertCKDataArrayRow), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "bool TestRow(int row, int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0)", asFUNCTIONPR([](CKDataArray *self, int row, int c, CK_COMPOPERATOR op, CKDWORD key, int size) -> bool { return self->TestRow(row, c, op, key, size); }, (CKDataArray *, int, int, CK_COMPOPERATOR, CKDWORD, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "int FindRowIndex(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startingIndex = 0)", asMETHODPR(CKDataArray, FindRowIndex, (int, CK_COMPOPERATOR, CKDWORD, int, int), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &FindRow(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startIndex = 0)", asMETHODPR(CKDataArray, FindRow, (int, CK_COMPOPERATOR, CKDWORD, int, int), CKDataRow *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &FindRow(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startIndex = 0)", asFUNCTION(FindCKDataArrayRow), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "void RemoveRow(int row)", asMETHODPR(CKDataArray, RemoveRow, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "void MoveRow(int rSrc, int rDest)", asMETHODPR(CKDataArray, MoveRow, (int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "void SwapRows(int i1, int i2)", asMETHODPR(CKDataArray, SwapRows, (int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
