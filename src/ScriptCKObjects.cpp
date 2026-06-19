@@ -3238,6 +3238,7 @@ static CKBOOL CKRenderObject_Callback(CKRenderContext *dev, CKRenderObject *ent,
     ctx->SetArgObject(1, ent);
 
     r = ctx->Execute();
+    const CKBOOL result = r == asEXECUTION_FINISHED && ctx->GetReturnDWord() != 0 ? TRUE : FALSE;
 
     engine->ReturnContext(ctx);
 
@@ -3247,7 +3248,7 @@ static CKBOOL CKRenderObject_Callback(CKRenderContext *dev, CKRenderObject *ent,
         func->Release();
     }
 
-    return r == asEXECUTION_FINISHED;
+    return result;
 }
 
 template <typename T>
@@ -3509,6 +3510,82 @@ void RegisterCKSpriteText(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKSpriteText", "CKSPRITETEXT_ALIGNMENT GetAlign()", asMETHODPR(CKSpriteText, GetAlign, (), CKSPRITETEXT_ALIGNMENT), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
+static bool CheckCK3dEntityVectorBuffer(NativeBuffer *buffer, int count, const char *method, const char *label) {
+    if (count < 0) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException((std::string(method) + " requires a non-negative vector count.").c_str());
+        }
+        return false;
+    }
+
+    if (count == 0) {
+        return true;
+    }
+
+    if (!buffer || !buffer->IsValid()) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException((std::string(method) + " requires a valid " + label + " NativeBuffer.").c_str());
+        }
+        return false;
+    }
+
+    const size_t requiredBytes = static_cast<size_t>(count) * sizeof(VxVector);
+    if (buffer->Size() < requiredBytes) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException((std::string(method) + " " + label + " NativeBuffer is too small.").c_str());
+        }
+        return false;
+    }
+
+    return true;
+}
+
+template <typename T>
+static void TransformManyCK3dEntity(const T *self, NativeBuffer *dest, NativeBuffer *src, int count, CK3dEntity *ref) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CK3dEntity.TransformMany called with a null entity.");
+        }
+        return;
+    }
+    if (!CheckCK3dEntityVectorBuffer(dest, count, "CK3dEntity.TransformMany", "destination") ||
+        !CheckCK3dEntityVectorBuffer(src, count, "CK3dEntity.TransformMany", "source")) {
+        return;
+    }
+
+    if (count == 0) {
+        return;
+    }
+
+    self->TransformMany(reinterpret_cast<VxVector *>(dest->Data()),
+                        reinterpret_cast<const VxVector *>(src->Data()),
+                        count,
+                        ref);
+}
+
+template <typename T>
+static void InverseTransformManyCK3dEntity(const T *self, NativeBuffer *dest, NativeBuffer *src, int count, CK3dEntity *ref) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CK3dEntity.InverseTransformMany called with a null entity.");
+        }
+        return;
+    }
+    if (!CheckCK3dEntityVectorBuffer(dest, count, "CK3dEntity.InverseTransformMany", "destination") ||
+        !CheckCK3dEntityVectorBuffer(src, count, "CK3dEntity.InverseTransformMany", "source")) {
+        return;
+    }
+
+    if (count == 0) {
+        return;
+    }
+
+    self->InverseTransformMany(reinterpret_cast<VxVector *>(dest->Data()),
+                               reinterpret_cast<const VxVector *>(src->Data()),
+                               count,
+                               ref);
+}
+
 template <typename T>
 void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     assert(engine != nullptr);
@@ -3610,8 +3687,8 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void InverseTransform(VxVector &out dest, const VxVector&in src, CK3dEntity@ ref = null) const", asMETHODPR(T, InverseTransform, (VxVector *, const VxVector *, CK3dEntity *) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void TransformVector(VxVector &out dest, const VxVector&in src, CK3dEntity@ ref = null) const", asMETHODPR(T, TransformVector, (VxVector *, const VxVector *, CK3dEntity *) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void InverseTransformVector(VxVector &out dest, const VxVector &in src, CK3dEntity@ ref = null) const", asMETHODPR(T, InverseTransformVector, (VxVector *, const VxVector *, CK3dEntity *) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void TransformMany(VxVector &out dest, const VxVector &in src, int count, CK3dEntity@ ref = null) const", asMETHODPR(T, TransformMany, (VxVector *, const VxVector *, int, CK3dEntity *) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void InverseTransformMany(VxVector &out dest, const VxVector &in src, int count, CK3dEntity@ ref = null) const", asMETHODPR(T, InverseTransformMany, (VxVector *, const VxVector *, int, CK3dEntity *) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const", asFUNCTIONPR(TransformManyCK3dEntity<T>, (const T *, NativeBuffer *, NativeBuffer *, int, CK3dEntity *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void InverseTransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const", asFUNCTIONPR(InverseTransformManyCK3dEntity<T>, (const T *, NativeBuffer *, NativeBuffer *, int, CK3dEntity *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void ChangeReferential(CK3dEntity@ ref = null)", asMETHODPR(T, ChangeReferential, (CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKPlace@ GetReferencePlace() const", asMETHODPR(T, GetReferencePlace, () const, CKPlace *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -3634,8 +3711,8 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
 
     r = engine->RegisterObjectMethod(name, "float GetRadius()", asMETHODPR(T, GetRadius, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    if (strcmp(name, name) != 0) {
-        RegisterCKObjectCast<T, CK3dEntity>(engine, name, name);
+    if (strcmp(name, "CK3dEntity") != 0) {
+        RegisterCKObjectCast<T, CK3dEntity>(engine, name, "CK3dEntity");
     }
 }
 
