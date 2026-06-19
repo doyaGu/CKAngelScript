@@ -1041,6 +1041,83 @@ bool ExecuteCKCharacterCopyNullProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKBodyPartProbe(asIScriptEngine *engine,
+                            asIScriptFunction *function,
+                            CKBodyPart *bodyPart,
+                            CKCharacter *character,
+                            CKAnimation *animation,
+                            bool expectException,
+                            const char *label,
+                            std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) r = scriptContext->SetArgObject(0, bodyPart);
+    if (r >= 0) r = scriptContext->SetArgObject(1, character);
+    if (r >= 0) r = scriptContext->SetArgObject(2, animation);
+    if (r >= 0) r = scriptContext->Execute();
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCKBodyPartCopyNullProbe(asIScriptEngine *engine,
+                                    asITypeInfo *bodyPartType,
+                                    CKBodyPart *bodyPart,
+                                    CKDependenciesContext &dependencies,
+                                    std::string &error) {
+    asIScriptFunction *copyMethod = bodyPartType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)");
+    if (!copyMethod) {
+        error = "CKBodyPart Copy(null) probe could not find Copy method.";
+        return false;
+    }
+
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = "CKBodyPart Copy(null) probe could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(copyMethod);
+    if (r >= 0) r = scriptContext->SetObject(bodyPart);
+    if (r >= 0) r = scriptContext->SetArgObject(0, nullptr);
+    if (r >= 0) r = scriptContext->SetArgObject(1, &dependencies);
+    if (r >= 0) r = scriptContext->Execute();
+
+    const bool ok = r == asEXECUTION_EXCEPTION;
+    if (!ok) {
+        error = "CKBodyPart Copy(null) probe expected a script exception, got code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAnimControllerProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKAnimController *positionController,
@@ -6796,6 +6873,120 @@ bool RunCKCharacterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     return ok;
 }
 
+bool RunCKBodyPartScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKBodyPart script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *bodyPartType = engine->GetTypeInfoByDecl("CKBodyPart");
+    if (!bodyPartType) {
+        error = "CKBodyPart self-test could not find the registered type.";
+        return false;
+    }
+    if (bodyPartType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
+        bodyPartType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        bodyPartType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr) {
+        error = "CKBodyPart self-test found stale unsafe inherited declarations.";
+        return false;
+    }
+    if (!bodyPartType->GetMethodByDecl("CKCharacter@ GetCharacter() const") ||
+        !bodyPartType->GetMethodByDecl("void SetExclusiveAnimation(const CKAnimation@ anim)") ||
+        !bodyPartType->GetMethodByDecl("CKAnimation@ GetExclusiveAnimation() const") ||
+        !bodyPartType->GetMethodByDecl("void GetRotationJoint(CKIkJoint&out rotJoint) const") ||
+        !bodyPartType->GetMethodByDecl("void SetRotationJoint(const CKIkJoint&in rotJoint)") ||
+        !bodyPartType->GetMethodByDecl("CKERROR FitToJoint()") ||
+        !bodyPartType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !bodyPartType->GetMethodByDecl("CK3dObject@ opImplCast()") ||
+        !bodyPartType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !bodyPartType->GetMethodByDecl("NativePointer GetAppData()")) {
+        error = "CKBodyPart self-test could not find expected body-part methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKBodyPartSelfTest";
+    const char *source =
+        "int ProbeCKBodyPartSurface(CKBodyPart@ part, CKCharacter@ character, CKAnimation@ animation) {\n"
+        "  if (part is null || character is null || animation is null) return 1;\n"
+        "  CKObject@ asObject = part;\n"
+        "  CKSceneObject@ asSceneObject = part;\n"
+        "  CKBeObject@ asBeObject = part;\n"
+        "  CKRenderObject@ asRenderObject = part;\n"
+        "  CK3dEntity@ asEntity = part;\n"
+        "  CK3dObject@ as3dObject = part;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null || as3dObject is null) return 2;\n"
+        "  if (cast<CKBodyPart>(asObject) !is part) return 3;\n"
+        "  if (cast<CKBodyPart>(asEntity) !is part) return 4;\n"
+        "  if (cast<CKBodyPart>(as3dObject) !is part) return 5;\n"
+        "  if (character.AddBodyPart(part) != CK_OK) return 6;\n"
+        "  if (part.GetCharacter() !is character) return 7;\n"
+        "  character.SetRootBodyPart(part);\n"
+        "  part.SetExclusiveAnimation(animation);\n"
+        "  if (part.GetExclusiveAnimation() !is animation) return 8;\n"
+        "  part.SetExclusiveAnimation(null);\n"
+        "  if (part.GetExclusiveAnimation() !is null) return 9;\n"
+        "  if (!part.GetAppData().IsNull()) return 10;\n"
+        "  part.SetAppData(NativePointer());\n"
+        "  character.RemoveBodyPart(part);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKBodyPart self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckbodypart-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBodyPart self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBodyPart self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *surface = module->GetFunctionByDecl("int ProbeCKBodyPartSurface(CKBodyPart@, CKCharacter@, CKAnimation@)");
+    if (!surface) {
+        engine->DiscardModule(moduleName);
+        error = "CKBodyPart self-test functions were not found.";
+        return false;
+    }
+
+    CKBodyPart *bodyPart = CKBodyPart::Cast(context->CreateObject(
+        CKCID_BODYPART, const_cast<CKSTRING>("__CKAS_CKBodyPartSelfTestBodyPart"), CK_OBJECTCREATION_DYNAMIC));
+    CKCharacter *character = CKCharacter::Cast(context->CreateObject(
+        CKCID_CHARACTER, const_cast<CKSTRING>("__CKAS_CKBodyPartSelfTestCharacter"), CK_OBJECTCREATION_DYNAMIC));
+    CKAnimation *animation = CKAnimation::Cast(context->CreateObject(
+        CKCID_KEYEDANIMATION, const_cast<CKSTRING>("__CKAS_CKBodyPartSelfTestAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    if (!bodyPart || !character || !animation) {
+        if (animation) context->DestroyObject(animation);
+        if (character) context->DestroyObject(character);
+        if (bodyPart) context->DestroyObject(bodyPart);
+        engine->DiscardModule(moduleName);
+        error = "CKBodyPart self-test could not create temporary objects.";
+        return false;
+    }
+
+    CKDependenciesContext dependencies(context);
+    const bool ok = ExecuteCKBodyPartProbe(engine, surface, bodyPart, character, animation, false, "CKBodyPart surface probe", error) &&
+                    ExecuteCKBodyPartCopyNullProbe(engine, bodyPartType, bodyPart, dependencies, error);
+
+    bodyPart->RemoveAllCallbacks();
+    bodyPart->SetExclusiveAnimation(nullptr);
+    character->RemoveBodyPart(bodyPart);
+    context->DestroyObject(animation);
+    context->DestroyObject(character);
+    context->DestroyObject(bodyPart);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKBehavior script self-test requires CKContext and AngelScript engine.";
@@ -10480,6 +10671,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKCharacterScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKBodyPartScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBehaviorScriptSelfTest(context, engine, error)) {
