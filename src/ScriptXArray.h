@@ -407,7 +407,7 @@ void RegisterXSArray(asIScriptEngine *engine, const char *className, const char 
     r = engine->RegisterObjectMethod(className, "int GetMemoryOccupation(bool addStatic = false) const", asMETHODPR(XSArray<T>, GetMemoryOccupation, (XBOOL) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
-template<typename C, typename T, bool GuardElementAccess = false>
+template<typename C, typename T, bool GuardElementAccess = false, bool RegisterComparableMethods = true>
 void RegisterXClassArray(asIScriptEngine *engine,
                          const char *className,
                          const char *elementType,
@@ -463,11 +463,13 @@ void RegisterXClassArray(asIScriptEngine *engine,
         r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, RemoveAt, (int), T *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     }
 
-    decl.Format("void FastRemove(const %s &in o)", elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, FastRemove, (const T &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    if constexpr (RegisterComparableMethods) {
+        decl.Format("void FastRemove(const %s &in o)", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, FastRemove, (const T &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    decl.Format("int GetPosition(const %s &in o) const", elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, GetPosition, (const T &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+        decl.Format("int GetPosition(const %s &in o) const", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, GetPosition, (const T &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    }
 
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod(className, "void Swap(int pos1, int pos2)", asMETHODPR(C, Swap, (int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
