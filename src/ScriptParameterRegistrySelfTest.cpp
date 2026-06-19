@@ -6261,8 +6261,11 @@ bool RunCKSoundManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
         "  manager.SetType(source, CK_WAVESOUND_BACKGROUND);\n"
         "  CK_WAVESOUND_TYPE type = manager.GetType(source);\n"
         "  manager.UpdateSettings(source, CK_WAVESOUND_SETTINGS_GAIN, settings, false);\n"
+        "  manager.UpdateSettings(source, CK_WAVESOUND_SETTINGS_GAIN, settings, true);\n"
         "  manager.Update3DSettings(source, CK_WAVESOUND_3DSETTINGS_POSITION, settings3d, false);\n"
+        "  manager.Update3DSettings(source, CK_WAVESOUND_3DSETTINGS_POSITION, settings3d, true);\n"
         "  manager.UpdateListenerSettings(CK_WAVESOUND_3DSETTINGS_POSITION, listener, false);\n"
+        "  manager.UpdateListenerSettings(CK_WAVESOUND_3DSETTINGS_POSITION, listener, true);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -6293,6 +6296,91 @@ bool RunCKSoundManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
 
     engine->DiscardModule(moduleName);
     return true;
+}
+
+bool RunCKListenerSettingsScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKListenerSettings script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *settingsType = engine->GetTypeInfoByDecl("CKListenerSettings");
+    if (!settingsType) {
+        error = "CKListenerSettings self-test could not find the registered type.";
+        return false;
+    }
+    if (settingsType->GetPropertyCount() != 6 ||
+        settingsType->GetMethodByDecl("CKListenerSettings &opAssign(const CKListenerSettings &in other)") == nullptr) {
+        error = "CKListenerSettings self-test found an unexpected value surface.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKListenerSettingsSelfTest";
+    const char *source =
+        "bool Same(float lhs, float rhs) {\n"
+        "  return lhs > rhs - 0.0001f && lhs < rhs + 0.0001f;\n"
+        "}\n"
+        "int ProbeCKListenerSettings() {\n"
+        "  CKListenerSettings settings;\n"
+        "  if (!Same(settings.m_DistanceFactor, 1.0f)) return 1;\n"
+        "  if (!Same(settings.m_DopplerFactor, 1.0f)) return 2;\n"
+        "  if (!Same(settings.m_RollOff, 1.0f)) return 3;\n"
+        "  if (!Same(settings.m_GlobalGain, 1.0f)) return 4;\n"
+        "  if (!Same(settings.m_PriorityBias, 1.0f)) return 5;\n"
+        "  if (settings.m_SoftwareSources != 16) return 6;\n"
+        "  settings.m_DistanceFactor = 2.0f;\n"
+        "  settings.m_DopplerFactor = 3.0f;\n"
+        "  settings.m_RollOff = 4.0f;\n"
+        "  settings.m_GlobalGain = 5.0f;\n"
+        "  settings.m_PriorityBias = 6.0f;\n"
+        "  settings.m_SoftwareSources = 7;\n"
+        "  CKListenerSettings copied(settings);\n"
+        "  if (!Same(copied.m_DistanceFactor, 2.0f)) return 7;\n"
+        "  if (!Same(copied.m_DopplerFactor, 3.0f)) return 8;\n"
+        "  if (!Same(copied.m_RollOff, 4.0f)) return 9;\n"
+        "  if (!Same(copied.m_GlobalGain, 5.0f)) return 10;\n"
+        "  if (!Same(copied.m_PriorityBias, 6.0f)) return 11;\n"
+        "  if (copied.m_SoftwareSources != 7) return 12;\n"
+        "  CKListenerSettings assigned;\n"
+        "  assigned = copied;\n"
+        "  if (!Same(assigned.m_DistanceFactor, 2.0f)) return 14;\n"
+        "  if (!Same(assigned.m_DopplerFactor, 3.0f)) return 15;\n"
+        "  if (!Same(assigned.m_RollOff, 4.0f)) return 16;\n"
+        "  if (!Same(assigned.m_GlobalGain, 5.0f)) return 17;\n"
+        "  if (!Same(assigned.m_PriorityBias, 6.0f)) return 18;\n"
+        "  if (assigned.m_SoftwareSources != 7) return 19;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKListenerSettings self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-listener-settings-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKListenerSettings self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKListenerSettings self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKListenerSettings()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKListenerSettings self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteNoArgIntProbe(engine, probe, false, "CKListenerSettings value probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
 }
 
 bool RunCKWaveSoundScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -13270,6 +13358,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKMidiManagerScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKListenerSettingsScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKSoundManagerScriptSelfTest(context, engine, error)) {
