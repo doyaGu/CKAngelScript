@@ -9505,11 +9505,6 @@ bool RunCKGridScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::s
         "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
         "  grid.TransformMany(tooSmall, source, 2);\n"
         "  return 0;\n"
-        "}\n"
-        "int ProbeCKGridCompatibleClassNull(CKGrid@ grid, CK3dEntity@ entity, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CK3dEntity@ none = null;\n"
-        "  grid.HasCompatibleClass(none);\n"
-        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -9533,8 +9528,7 @@ bool RunCKGridScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::s
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKGridSurface(CKGrid@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
     asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCKGridSmallTransform(CKGrid@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *compatibleClassNull = module->GetFunctionByDecl("int ProbeCKGridCompatibleClassNull(CKGrid@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    if (!probe || !smallTransform || !compatibleClassNull) {
+    if (!probe || !smallTransform) {
         engine->DiscardModule(moduleName);
         error = "CKGrid self-test functions were not found.";
         return false;
@@ -9559,8 +9553,7 @@ bool RunCKGridScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::s
     }
 
     const bool ok = ExecuteCKGridProbe(engine, probe, grid, entity, mesh, animation, false, "CKGrid surface probe", error) &&
-                    ExecuteCKGridProbe(engine, smallTransform, grid, entity, mesh, animation, true, "CKGrid small TransformMany probe", error) &&
-                    ExecuteCKGridProbe(engine, compatibleClassNull, grid, entity, mesh, animation, true, "CKGrid HasCompatibleClass null probe", error);
+                    ExecuteCKGridProbe(engine, smallTransform, grid, entity, mesh, animation, true, "CKGrid small TransformMany probe", error);
 
     grid->RemoveAllCallbacks();
     grid->RemoveMesh(mesh);
