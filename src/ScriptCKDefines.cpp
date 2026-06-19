@@ -4824,15 +4824,10 @@ void RegisterCKFileObject(asIScriptEngine *engine) {
 
 // CKStateChunk
 
-static void SetCKDefinesScriptException(const char *message) {
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        ctx->SetException(message);
-    }
-}
-
 static CKObject *ReadCKStateChunkObject(CKStateChunk *self, CKContext *context) {
     if (!self || !context) {
-        SetCKDefinesScriptException("CKStateChunk.ReadObject requires a non-null CKContext.");
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKStateChunk.ReadObject requires a non-null CKContext.");
         return nullptr;
     }
     return self->ReadObject(context);
@@ -4841,40 +4836,18 @@ static CKObject *ReadCKStateChunkObject(CKStateChunk *self, CKContext *context) 
 static const XObjectPointerArray &ReadCKStateChunkXObjectArray(CKStateChunk *self, CKContext *context) {
     static XObjectPointerArray empty;
     if (!self || !context) {
-        SetCKDefinesScriptException("CKStateChunk.ReadXObjectArray requires a non-null CKContext.");
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKStateChunk.ReadXObjectArray requires a non-null CKContext.");
         empty.Clear();
         return empty;
     }
     return self->ReadXObjectArray(context);
 }
 
-static void WriteCKStateChunkObjectArray(CKStateChunk *self, CKObjectArray *objArray, CKContext *context) {
-    if (!self || !objArray) {
-        SetCKDefinesScriptException("CKStateChunk.WriteObjectArray requires a non-null CKObjectArray.");
-        return;
-    }
-    self->WriteObjectArray(objArray, context);
-}
-
-static void ReadCKStateChunkObjectArray(CKStateChunk *self, CKObjectArray *objArray) {
-    if (!self || !objArray) {
-        SetCKDefinesScriptException("CKStateChunk.ReadObjectArray requires a non-null CKObjectArray.");
-        return;
-    }
-    self->ReadObjectArray(objArray);
-}
-
-static int RemapCKStateChunkObjects(CKStateChunk *self, CKContext *context, CKDependenciesContext *depContext) {
-    if (!self || !context) {
-        SetCKDefinesScriptException("CKStateChunk.RemapObjects requires a non-null CKContext.");
-        return 0;
-    }
-    return self->RemapObjects(context, depContext);
-}
-
 static int ReadCKStateChunkString(CKStateChunk *self, std::string &str) {
     if (!self) {
-        SetCKDefinesScriptException("CKStateChunk.ReadString requires a valid state chunk.");
+        if (asIScriptContext *ctx = asGetActiveContext())
+            ctx->SetException("CKStateChunk.ReadString requires a valid state chunk.");
         return 0;
     }
 
@@ -4936,7 +4909,7 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteGuid(CKGUID data)", asMETHODPR(CKStateChunk, WriteGuid, (CKGUID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteVector(const VxVector &in v)", asMETHODPR(CKStateChunk, WriteVector, (const VxVector &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteMatrix(const VxMatrix &in mat)", asMETHODPR(CKStateChunk, WriteMatrix, (const VxMatrix &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteObjectArray(CKObjectArray@ objArray, CKContext@ context = null)", asFUNCTION(WriteCKStateChunkObjectArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "void WriteObjectArray(CKObjectArray@ objArray, CKContext@ context = null)", asMETHODPR(CKStateChunk, WriteObjectArray, (CKObjectArray *, CKContext *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteSubChunk(CKStateChunk@ sub)", asMETHODPR(CKStateChunk, WriteSubChunk, (CKStateChunk*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteBitmap(BITMAP_HANDLE bitmap, const string &in ext = void)", asFUNCTIONPR([](CKStateChunk *self, BITMAP_HANDLE bitmap, const std::string &ext) { self->WriteBitmap(bitmap, ext.empty() ? nullptr : const_cast<CKSTRING>(ext.c_str())); }, (CKStateChunk *, BITMAP_HANDLE, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteReaderBitmap(const VxImageDescEx &in desc, CKBitmapReader@ reader, CKBitmapProperties@ bp)", asMETHODPR(CKStateChunk, WriteReaderBitmap, (const VxImageDescEx&, CKBitmapReader *, CKBitmapProperties *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -4989,7 +4962,7 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
 #endif
     r = engine->RegisterObjectMethod("CKStateChunk", "const XObjectArray &ReadXObjectArray()", asMETHODPR(CKStateChunk, ReadXObjectArray, (), const XObjectArray &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "const XObjectPointerArray &ReadXObjectArray(CKContext@ context)", asFUNCTION(ReadCKStateChunkXObjectArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKStateChunk", "void ReadObjectArray(CKObjectArray@ objArray)", asFUNCTION(ReadCKStateChunkObjectArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "void ReadObjectArray(CKObjectArray@ objArray)", asMETHODPR(CKStateChunk, ReadObjectArray, (CKObjectArray *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "CKObjectArray@ ReadObjectArray()", asMETHODPR(CKStateChunk, ReadObjectArray, (), CKObjectArray *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer(NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer buffer) { self->ReadAndFillBuffer(buffer.Get()); }, (CKStateChunk *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -5015,7 +4988,7 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
 #endif
     r = engine->RegisterObjectMethod("CKStateChunk", "bool ReadReaderBitmap(const VxImageDescEx &in desc)", asFUNCTIONPR([](CKStateChunk *self, const VxImageDescEx &desc) -> bool { return self->ReadReaderBitmap(desc); }, (CKStateChunk *, const VxImageDescEx &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "int RemapObject(CK_ID oldID, CK_ID newID)", asMETHODPR(CKStateChunk, RemapObject, (CK_ID, CK_ID), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKStateChunk", "int RemapObjects(CKContext@ context, CKDependenciesContext@ depContext = null)", asFUNCTION(RemapCKStateChunkObjects), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "int RemapObjects(CKContext@ context, CKDependenciesContext@ depContext = null)", asMETHODPR(CKStateChunk, RemapObjects, (CKContext *, CKDependenciesContext *), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "int RemapManagerInt(CKGUID manager, NativePointer conversionTable, int nbEntries)", asFUNCTIONPR([](CKStateChunk *self, CKGUID manager, NativePointer conversionTable, int nbEntries) { return self->RemapManagerInt(manager, reinterpret_cast<int*>(conversionTable.Get()), nbEntries); }, (CKStateChunk *, CKGUID, NativePointer, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "int RemapParameterInt(CKGUID parameterType, NativePointer conversionTable, int nbEntries)", asFUNCTIONPR([](CKStateChunk *self, CKGUID parameterType, NativePointer conversionTable, int nbEntries) { return self->RemapParameterInt(parameterType, reinterpret_cast<int*>(conversionTable.Get()), nbEntries); }, (CKStateChunk *, CKGUID, NativePointer, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
@@ -5136,37 +5109,13 @@ void RegisterCKDebugContext(asIScriptEngine *engine) {
 
 // CKObjectArray
 
-static CKObject *CKObjectArrayGetData(CKObjectArray *self, CKContext *context) {
-    if (!self || !context) {
-        SetCKDefinesScriptException("CKObjectArray.GetData requires a non-null CKContext.");
-        return nullptr;
-    }
-    return self->GetData(context);
-}
-
-static CKERROR CKObjectArrayAppend(CKObjectArray *self, CKObjectArray *objArray) {
-    if (!self || !objArray) {
-        SetCKDefinesScriptException("CKObjectArray.Append requires a non-null CKObjectArray.");
-        return CKERR_INVALIDPARAMETER;
-    }
-    return self->Append(objArray);
-}
-
-static bool CKObjectArrayCheck(CKObjectArray *self, CKContext *context) {
-    if (!self || !context) {
-        SetCKDefinesScriptException("CKObjectArray.Check requires a non-null CKContext.");
-        return false;
-    }
-    return self->Check(context) != FALSE;
-}
-
 void RegisterCKObjectArray(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectMethod("CKObjectArray", "int GetCount()", asMETHODPR(CKObjectArray, GetCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectArray", "int GetCurrentPos()", asMETHODPR(CKObjectArray, GetCurrentPos, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKObjectArray", "CKObject@ GetData(CKContext@ context)", asFUNCTION(CKObjectArrayGetData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectArray", "CKObject@ GetData(CKContext@ context)", asMETHODPR(CKObjectArray, GetData, (CKContext *), CKObject *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectArray", "CK_ID GetDataId()", asMETHODPR(CKObjectArray, GetDataId, (), CK_ID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKObjectArray", "CK_ID SetDataId(CK_ID id)", asMETHODPR(CKObjectArray, SetDataId, (CK_ID), CK_ID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -5200,7 +5149,7 @@ void RegisterCKObjectArray(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectArray", "bool AddIfNotHere(CK_ID id)", asFUNCTIONPR([](CKObjectArray *self, CK_ID id) -> bool { return self->AddIfNotHere(id); }, (CKObjectArray *, CK_ID), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKObjectArray", "bool AddIfNotHereSorted(CK_ID id, OBJECTARRAYCMPFCT cmpFc, CKContext@ context)", asFUNCTIONPR([](CKObjectArray *self, CK_ID id, OBJECTARRAYCMPFCT cmpFc, CKContext *context) -> bool { return self->AddIfNotHereSorted(id, cmpFc, context); }, (CKObjectArray *, CK_ID, OBJECTARRAYCMPFCT, CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKObjectArray", "CKERROR Append(CKObjectArray@ objArray)", asFUNCTION(CKObjectArrayAppend), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectArray", "CKERROR Append(CKObjectArray@ objArray)", asMETHODPR(CKObjectArray, Append, (CKObjectArray *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKObjectArray", "CK_ID RemoveFront()", asMETHODPR(CKObjectArray, RemoveFront, (), CK_ID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectArray", "CK_ID RemoveRear()", asMETHODPR(CKObjectArray, RemoveRear, (), CK_ID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -5216,7 +5165,7 @@ void RegisterCKObjectArray(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectArray", "void SwapCurrentWithNext()", asMETHODPR(CKObjectArray, SwapCurrentWithNext, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectArray", "void SwapCurrentWithPrevious()", asMETHODPR(CKObjectArray, SwapCurrentWithPrevious, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKObjectArray", "bool Check(CKContext@ context)", asFUNCTION(CKObjectArrayCheck), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectArray", "bool Check(CKContext@ context)", asFUNCTIONPR([](CKObjectArray *self, CKContext *context) -> bool { return self->Check(context); }, (CKObjectArray *, CKContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // r = engine->RegisterObjectMethod("CKObjectArray", "void Sort(OBJECTARRAYCMPFCT cmpFct, CKContext@ context)", asMETHODPR(CKObjectArray, Sort, (OBJECTARRAYCMPFCT, CKContext *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKObjectArray", "void InsertSorted(CKObject@ obj, OBJECTARRAYCMPFCT cmpFct, CKContext@ context)", asMETHODPR(CKObjectArray, InsertSorted, (CKObject *, OBJECTARRAYCMPFCT, CKContext *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
