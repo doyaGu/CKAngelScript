@@ -7,12 +7,6 @@
 
 namespace {
 
-void SetXObjectArrayException(const char *message) {
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        ctx->SetException(message);
-    }
-}
-
 template <typename T>
 bool CKBoolToBool(T value) {
     return value != FALSE;
@@ -20,87 +14,71 @@ bool CKBoolToBool(T value) {
 
 template <typename T>
 bool XObjectPointerArrayAddIfNotHere(T *self, CKObject *obj) {
-    return self && CKBoolToBool(self->AddIfNotHere(obj));
+    return CKBoolToBool(self->AddIfNotHere(obj));
 }
 
 template <typename T>
 bool XObjectPointerArrayFindObject(const T *self, CKObject *obj) {
-    return self && CKBoolToBool(self->FindObject(obj));
+    return CKBoolToBool(self->FindObject(obj));
 }
 
 template <typename T>
 bool XObjectPointerArrayCheck(T *self) {
-    return self && CKBoolToBool(self->Check());
+    return CKBoolToBool(self->Check());
 }
 
 void XSObjectArrayConvertToObjects(const XSObjectArray *self, CKContext *context, XSObjectPointerArray &objArray) {
-    if (!self || !context) {
-        SetXObjectArrayException("XSObjectArray.ConvertToObjects requires a non-null CKContext.");
-        return;
-    }
     self->ConvertToObjects(context, objArray);
 }
 
 void XObjectArrayConvertToObjects(const XObjectArray *self, CKContext *context, XObjectPointerArray &objArray) {
-    if (!self || !context) {
-        SetXObjectArrayException("XObjectArray.ConvertToObjects requires a non-null CKContext.");
-        return;
-    }
     self->ConvertToObjects(context, objArray);
 }
 
 template <typename T>
-bool XObjectArrayCheckWithContext(T *self, CKContext *context, const char *message) {
-    if (!self || !context) {
-        SetXObjectArrayException(message);
-        return false;
-    }
+bool XObjectArrayCheckWithContext(T *self, CKContext *context) {
     return CKBoolToBool(self->Check(context));
 }
 
 bool XSObjectArrayCheck(XSObjectArray *self, CKContext *context) {
-    return XObjectArrayCheckWithContext(self, context, "XSObjectArray.Check requires a non-null CKContext.");
+    return XObjectArrayCheckWithContext(self, context);
 }
 
 bool XObjectArrayCheck(XObjectArray *self, CKContext *context) {
-    return XObjectArrayCheckWithContext(self, context, "XObjectArray.Check requires a non-null CKContext.");
+    return XObjectArrayCheckWithContext(self, context);
 }
 
 template <typename T>
 bool XObjectArrayAddIfNotHereId(T *self, CK_ID id) {
-    return self && CKBoolToBool(self->AddIfNotHere(id));
+    return CKBoolToBool(self->AddIfNotHere(id));
 }
 
 template <typename T>
 bool XObjectArrayAddIfNotHereObject(T *self, CKObject *obj) {
-    return self && CKBoolToBool(self->AddIfNotHere(obj));
+    return CKBoolToBool(self->AddIfNotHere(obj));
 }
 
 template <typename T>
-CKObject *XObjectArrayGetObjectWithContext(const T *self, CKContext *context, unsigned int index, const char *message) {
-    if (!self || !context) {
-        SetXObjectArrayException(message);
-        return nullptr;
-    }
+CKObject *XObjectArrayGetObjectWithContext(const T *self, CKContext *context, unsigned int index) {
     return self->GetObject(context, index);
 }
 
 CKObject *XSObjectArrayGetObject(const XSObjectArray *self, CKContext *context, unsigned int index) {
-    return XObjectArrayGetObjectWithContext(self, context, index, "XSObjectArray.GetObject requires a non-null CKContext.");
+    return XObjectArrayGetObjectWithContext(self, context, index);
 }
 
 CKObject *XObjectArrayGetObject(const XObjectArray *self, CKContext *context, unsigned int index) {
-    return XObjectArrayGetObjectWithContext(self, context, index, "XObjectArray.GetObject requires a non-null CKContext.");
+    return XObjectArrayGetObjectWithContext(self, context, index);
 }
 
 template <typename T>
 bool XObjectArrayFindObject(const T *self, CKObject *obj) {
-    return self && CKBoolToBool(self->FindObject(obj));
+    return CKBoolToBool(self->FindObject(obj));
 }
 
 template <typename T>
 bool XObjectArrayFindID(const T *self, CK_ID id) {
-    return self && CKBoolToBool(self->FindID(id));
+    return CKBoolToBool(self->FindID(id));
 }
 
 } // namespace
