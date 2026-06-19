@@ -1,5 +1,6 @@
 #include "ScriptSelfTests.h"
 
+#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -186,6 +187,14 @@ bool RunScriptNativeMemorySelfTest(CKContext *context, asIScriptEngine *engine, 
         "  uint tooLarge = 0x99999999;\n"
         "  if (smallBuffer.Write(tooLarge) != 0 || smallBuffer.CursorPos() != 0) return 46;\n"
         "  if (smallBuffer.Read(tooLarge) != 0 || smallBuffer.CursorPos() != 0) return 47;\n"
+        "  string fileName = \"ckas-native-memory-selftest.bin\";\n"
+        "  NativeBuffer@ fileBuffer = NativeBuffer(4);\n"
+        "  if (fileBuffer.WriteUInt(0x2468ACE0) != 4 || !fileBuffer.Seek(0)) return 48;\n"
+        "  if (fileBuffer.Save(fileName, 4) != 4) return 49;\n"
+        "  NativeBuffer@ loadedBuffer = NativeBuffer(4);\n"
+        "  if (loadedBuffer.Load(fileName, 4) != 4 || !loadedBuffer.Seek(0)) return 50;\n"
+        "  uint loadedValue = 0;\n"
+        "  if (loadedBuffer.ReadUInt(loadedValue) != 4 || loadedValue != 0x2468ACE0) return 51;\n"
         "  return 0;\n"
         "}\n"
         "void RejectBufferWriteObject() { NativeBuffer@ buffer = NativeBuffer(16); NativeMemoryRejectBox box; buffer.Write(box); }\n"
@@ -251,6 +260,7 @@ bool RunScriptNativeMemorySelfTest(CKContext *context, asIScriptEngine *engine, 
                                          error);
     }
 
+    std::remove("ckas-native-memory-selftest.bin");
     engine->GarbageCollect(asGC_FULL_CYCLE);
     manager->UnloadModule(moduleName, nullptr);
     return ok;

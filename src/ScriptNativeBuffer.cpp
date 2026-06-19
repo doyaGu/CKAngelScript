@@ -447,6 +447,14 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
     gen->SetReturnDWord(size);
 }
 
+static size_t NativeBufferLoadFile(NativeBuffer *self, const std::string &filename, size_t size, int offset) {
+    return self->Load(filename.c_str(), size, offset);
+}
+
+static size_t NativeBufferSaveFile(NativeBuffer *self, const std::string &filename, size_t size) {
+    return self->Save(filename.c_str(), size);
+}
+
 void RegisterNativeBuffer(asIScriptEngine *engine) {
     int r = 0;
 
@@ -504,6 +512,6 @@ void RegisterNativeBuffer(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("NativeBuffer", "NativeBuffer@ Extract(size_t size)", asMETHODPR(NativeBuffer, Extract, (size_t), NativeBuffer *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("NativeBuffer", "NativePointer ToPointer() const", asMETHODPR(NativeBuffer, ToPointer, () const, NativePointer), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Load(const string &in filename, size_t size, int offset = 0)", asMETHODPR(NativeBuffer, Load, (const char *, size_t, int), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Save(const string &in filename, size_t size)", asMETHODPR(NativeBuffer, Save, (const char *, size_t), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Load(const string &in filename, size_t size, int offset = 0)", asFUNCTION(NativeBufferLoadFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativeBuffer", "size_t Save(const string &in filename, size_t size)", asFUNCTION(NativeBufferSaveFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
