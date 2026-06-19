@@ -871,6 +871,93 @@ bool ExecuteCKCameraCopyNullProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKCurveProbe(asIScriptEngine *engine,
+                         asIScriptFunction *function,
+                         CKCurve *curve,
+                         CKCurve *otherCurve,
+                         CKCurvePoint *point0,
+                         CKCurvePoint *point1,
+                         CKCurvePoint *point2,
+                         CKCurvePoint *otherPoint,
+                         CKMesh *mesh,
+                         CKObjectAnimation *animation,
+                         bool expectException,
+                         const char *label,
+                         std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) r = scriptContext->SetArgObject(0, curve);
+    if (r >= 0) r = scriptContext->SetArgObject(1, otherCurve);
+    if (r >= 0) r = scriptContext->SetArgObject(2, point0);
+    if (r >= 0) r = scriptContext->SetArgObject(3, point1);
+    if (r >= 0) r = scriptContext->SetArgObject(4, point2);
+    if (r >= 0) r = scriptContext->SetArgObject(5, otherPoint);
+    if (r >= 0) r = scriptContext->SetArgObject(6, mesh);
+    if (r >= 0) r = scriptContext->SetArgObject(7, animation);
+    if (r >= 0) r = scriptContext->Execute();
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCKCurveCopyNullProbe(asIScriptEngine *engine,
+                                 asITypeInfo *curveType,
+                                 CKCurve *curve,
+                                 CKDependenciesContext &dependencies,
+                                 std::string &error) {
+    asIScriptFunction *copyMethod = curveType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)");
+    if (!copyMethod) {
+        error = "CKCurve Copy(null) probe could not find Copy method.";
+        return false;
+    }
+
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = "CKCurve Copy(null) probe could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(copyMethod);
+    if (r >= 0) r = scriptContext->SetObject(curve);
+    if (r >= 0) r = scriptContext->SetArgObject(0, nullptr);
+    if (r >= 0) r = scriptContext->SetArgObject(1, &dependencies);
+    if (r >= 0) r = scriptContext->Execute();
+
+    const bool ok = r == asEXECUTION_EXCEPTION;
+    if (!ok) {
+        error = "CKCurve Copy(null) probe expected a script exception, got code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAnimControllerProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKAnimController *positionController,
@@ -6203,6 +6290,215 @@ bool RunCKCameraScriptSelfTest(CKContext *context, asIScriptEngine *engine, std:
     return ok;
 }
 
+bool RunCKCurveScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKCurve script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *curveType = engine->GetTypeInfoByDecl("CKCurve");
+    if (!curveType) {
+        error = "CKCurve self-test could not find the registered type.";
+        return false;
+    }
+    if (curveType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
+        curveType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        curveType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr) {
+        error = "CKCurve self-test found stale unsafe inherited declarations.";
+        return false;
+    }
+    if (!curveType->GetMethodByDecl("CKERROR AddControlPoint(CKCurvePoint@ pt)") ||
+        !curveType->GetMethodByDecl("CKERROR InsertControlPoint(CKCurvePoint@ prev, CKCurvePoint@ pt)") ||
+        !curveType->GetMethodByDecl("CKERROR RemoveControlPoint(CKCurvePoint@ pt, bool removeAll = false)") ||
+        !curveType->GetMethodByDecl("CKERROR GetTangents(CKCurvePoint@ pt, VxVector&out input, VxVector&out output) const") ||
+        !curveType->GetMethodByDecl("CKERROR SetTangents(CKCurvePoint@ pt, VxVector&in input, VxVector&in output)") ||
+        !curveType->GetMethodByDecl("CKERROR GetTangents(int index, VxVector&out input, VxVector&out output) const") ||
+        !curveType->GetMethodByDecl("CKERROR SetTangents(int index, VxVector&in input, VxVector&in output)") ||
+        !curveType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !curveType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !curveType->GetMethodByDecl("bool SetRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
+        !curveType->GetMethodByDecl("NativePointer GetAppData()")) {
+        error = "CKCurve self-test could not find expected curve methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKCurveSelfTest";
+    const char *source =
+        "bool CKCurveHasPoint(CKCurve@ curve, CKCurvePoint@ point) {\n"
+        "  for (int i = 0; i < curve.GetControlPointCount(); ++i) {\n"
+        "    if (curve.GetControlPoint(i) is point) return true;\n"
+        "  }\n"
+        "  return false;\n"
+        "}\n"
+        "int ProbeCKCurveSurface(CKCurve@ curve, CKCurve@ otherCurve, CKCurvePoint@ p0, CKCurvePoint@ p1, CKCurvePoint@ p2, CKCurvePoint@ otherPoint, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  if (curve is null || otherCurve is null || p0 is null || p1 is null || p2 is null || otherPoint is null || mesh is null || animation is null) return 1;\n"
+        "  CKObject@ asObject = curve;\n"
+        "  CKSceneObject@ asSceneObject = curve;\n"
+        "  CKBeObject@ asBeObject = curve;\n"
+        "  CKRenderObject@ asRenderObject = curve;\n"
+        "  CK3dEntity@ asEntity = curve;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null) return 2;\n"
+        "  if (cast<CKCurve>(asObject) !is curve) return 3;\n"
+        "  if (cast<CKCurve>(asEntity) !is curve) return 4;\n"
+        "  p0.SetPosition(VxVector(0.0f, 0.0f, 0.0f));\n"
+        "  p1.SetPosition(VxVector(1.0f, 0.0f, 0.0f));\n"
+        "  p2.SetPosition(VxVector(0.5f, 1.0f, 0.0f));\n"
+        "  if (curve.AddControlPoint(p0) != CK_OK) return 5;\n"
+        "  if (curve.AddControlPoint(p1) != CK_OK) return 6;\n"
+        "  if (curve.InsertControlPoint(p0, p2) != CK_OK) return 7;\n"
+        "  if (curve.GetControlPointCount() != 3) return 8;\n"
+        "  if (!CKCurveHasPoint(curve, p0)) return 9;\n"
+        "  if (!CKCurveHasPoint(curve, p2)) return 10;\n"
+        "  if (p0.GetCurve() !is curve || p2.GetCurve() !is curve) return 11;\n"
+        "  curve.Open();\n"
+        "  if (!curve.IsOpen()) return 12;\n"
+        "  curve.Close();\n"
+        "  if (curve.IsOpen()) return 13;\n"
+        "  curve.SetFittingCoeff(0.25f);\n"
+        "  if (curve.GetFittingCoeff() < 0.24f || curve.GetFittingCoeff() > 0.26f) return 14;\n"
+        "  if (curve.SetStepCount(8) != CK_OK) return 15;\n"
+        "  if (curve.GetStepCount() != 8) return 16;\n"
+        "  curve.SetColor(VxColor(0.1f, 0.2f, 0.3f, 1.0f));\n"
+        "  curve.GetColor();\n"
+        "  VxVector tin(0.0f, 1.0f, 0.0f);\n"
+        "  VxVector tout(1.0f, 0.0f, 0.0f);\n"
+        "  if (curve.SetTangents(0, tin, tout) != CK_OK) return 17;\n"
+        "  VxVector gotIn;\n"
+        "  VxVector gotOut;\n"
+        "  if (curve.GetTangents(0, gotIn, gotOut) != CK_OK) return 18;\n"
+        "  if (curve.SetTangents(p2, tin, tout) != CK_OK) return 19;\n"
+        "  if (curve.GetTangents(p2, gotIn, gotOut) != CK_OK) return 20;\n"
+        "  curve.Update();\n"
+        "  VxVector pos;\n"
+        "  VxVector dir;\n"
+        "  if (curve.GetPos(0.5f, pos, dir) != CK_OK) return 21;\n"
+        "  if (curve.GetLocalPos(0.5f, pos, dir) != CK_OK) return 22;\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  source.Reset();\n"
+        "  NativeBuffer@ transformed = NativeBuffer(24);\n"
+        "  curve.TransformMany(transformed, source, 2);\n"
+        "  if (curve.AddMesh(mesh) != CK_OK) return 23;\n"
+        "  curve.SetCurrentMesh(mesh);\n"
+        "  if (curve.GetCurrentMesh() !is mesh) return 24;\n"
+        "  if (curve.RemoveMesh(mesh) != CK_OK) return 25;\n"
+        "  curve.AddObjectAnimation(animation);\n"
+        "  if (curve.GetObjectAnimationCount() < 1) return 26;\n"
+        "  curve.RemoveObjectAnimation(animation);\n"
+        "  if (!curve.GetAppData().IsNull()) return 27;\n"
+        "  curve.SetAppData(NativePointer());\n"
+        "  if (curve.RemoveControlPoint(p2) != CK_OK) return 28;\n"
+        "  if (curve.GetControlPointCount() != 2) return 29;\n"
+        "  if (curve.RemoveAllControlPoints() != CK_OK) return 30;\n"
+        "  if (curve.GetControlPointCount() != 0) return 31;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKCurveSmallTransform(CKCurve@ curve, CKCurve@ otherCurve, CKCurvePoint@ p0, CKCurvePoint@ p1, CKCurvePoint@ p2, CKCurvePoint@ otherPoint, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  curve.TransformMany(tooSmall, source, 2);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKCurveNullPoint(CKCurve@ curve, CKCurve@ otherCurve, CKCurvePoint@ p0, CKCurvePoint@ p1, CKCurvePoint@ p2, CKCurvePoint@ otherPoint, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  curve.AddControlPoint(null);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKCurveCrossCurvePoint(CKCurve@ curve, CKCurve@ otherCurve, CKCurvePoint@ p0, CKCurvePoint@ p1, CKCurvePoint@ p2, CKCurvePoint@ otherPoint, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  if (otherCurve.AddControlPoint(otherPoint) != CK_OK) return 1;\n"
+        "  VxVector tin(0.0f, 1.0f, 0.0f);\n"
+        "  VxVector tout(1.0f, 0.0f, 0.0f);\n"
+        "  curve.SetTangents(otherPoint, tin, tout);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKCurve self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckcurve-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKCurve self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKCurve self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *surface = module->GetFunctionByDecl("int ProbeCKCurveSurface(CKCurve@, CKCurve@, CKCurvePoint@, CKCurvePoint@, CKCurvePoint@, CKCurvePoint@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCKCurveSmallTransform(CKCurve@, CKCurve@, CKCurvePoint@, CKCurvePoint@, CKCurvePoint@, CKCurvePoint@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *nullPoint = module->GetFunctionByDecl("int ProbeCKCurveNullPoint(CKCurve@, CKCurve@, CKCurvePoint@, CKCurvePoint@, CKCurvePoint@, CKCurvePoint@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *crossCurvePoint = module->GetFunctionByDecl("int ProbeCKCurveCrossCurvePoint(CKCurve@, CKCurve@, CKCurvePoint@, CKCurvePoint@, CKCurvePoint@, CKCurvePoint@, CKMesh@, CKObjectAnimation@)");
+    if (!surface || !smallTransform || !nullPoint || !crossCurvePoint) {
+        engine->DiscardModule(moduleName);
+        error = "CKCurve self-test functions were not found.";
+        return false;
+    }
+
+    CKCurve *curve = CKCurve::Cast(context->CreateObject(
+        CKCID_CURVE, const_cast<CKSTRING>("__CKAS_CKCurveSelfTestCurve"), CK_OBJECTCREATION_DYNAMIC));
+    CKCurve *otherCurve = CKCurve::Cast(context->CreateObject(
+        CKCID_CURVE, const_cast<CKSTRING>("__CKAS_CKCurveSelfTestOtherCurve"), CK_OBJECTCREATION_DYNAMIC));
+    CKCurvePoint *point0 = CKCurvePoint::Cast(context->CreateObject(
+        CKCID_CURVEPOINT, const_cast<CKSTRING>("__CKAS_CKCurveSelfTestPoint0"), CK_OBJECTCREATION_DYNAMIC));
+    CKCurvePoint *point1 = CKCurvePoint::Cast(context->CreateObject(
+        CKCID_CURVEPOINT, const_cast<CKSTRING>("__CKAS_CKCurveSelfTestPoint1"), CK_OBJECTCREATION_DYNAMIC));
+    CKCurvePoint *point2 = CKCurvePoint::Cast(context->CreateObject(
+        CKCID_CURVEPOINT, const_cast<CKSTRING>("__CKAS_CKCurveSelfTestPoint2"), CK_OBJECTCREATION_DYNAMIC));
+    CKCurvePoint *otherPoint = CKCurvePoint::Cast(context->CreateObject(
+        CKCID_CURVEPOINT, const_cast<CKSTRING>("__CKAS_CKCurveSelfTestOtherPoint"), CK_OBJECTCREATION_DYNAMIC));
+    CKMesh *mesh = CKMesh::Cast(context->CreateObject(
+        CKCID_MESH, const_cast<CKSTRING>("__CKAS_CKCurveSelfTestMesh"), CK_OBJECTCREATION_DYNAMIC));
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKCurveSelfTestAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    if (!curve || !otherCurve || !point0 || !point1 || !point2 || !otherPoint || !mesh || !animation) {
+        if (animation) context->DestroyObject(animation);
+        if (mesh) context->DestroyObject(mesh);
+        if (otherPoint) context->DestroyObject(otherPoint);
+        if (point2) context->DestroyObject(point2);
+        if (point1) context->DestroyObject(point1);
+        if (point0) context->DestroyObject(point0);
+        if (otherCurve) context->DestroyObject(otherCurve);
+        if (curve) context->DestroyObject(curve);
+        engine->DiscardModule(moduleName);
+        error = "CKCurve self-test could not create temporary objects.";
+        return false;
+    }
+
+    CKDependenciesContext dependencies(context);
+    const bool ok = ExecuteCKCurveProbe(engine, surface, curve, otherCurve, point0, point1, point2, otherPoint, mesh, animation, false, "CKCurve surface probe", error) &&
+                    ExecuteCKCurveProbe(engine, smallTransform, curve, otherCurve, point0, point1, point2, otherPoint, mesh, animation, true, "CKCurve small TransformMany probe", error) &&
+                    ExecuteCKCurveProbe(engine, nullPoint, curve, otherCurve, point0, point1, point2, otherPoint, mesh, animation, true, "CKCurve null point probe", error) &&
+                    ExecuteCKCurveProbe(engine, crossCurvePoint, curve, otherCurve, point0, point1, point2, otherPoint, mesh, animation, true, "CKCurve cross-curve point probe", error) &&
+                    ExecuteCKCurveCopyNullProbe(engine, curveType, curve, dependencies, error);
+
+    curve->RemoveAllCallbacks();
+    curve->RemoveAllControlPoints();
+    curve->RemoveMesh(mesh);
+    curve->RemoveObjectAnimation(animation);
+    otherCurve->RemoveAllCallbacks();
+    otherCurve->RemoveAllControlPoints();
+    context->DestroyObject(animation);
+    context->DestroyObject(mesh);
+    context->DestroyObject(otherPoint);
+    context->DestroyObject(point2);
+    context->DestroyObject(point1);
+    context->DestroyObject(point0);
+    context->DestroyObject(otherCurve);
+    context->DestroyObject(curve);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKBehavior script self-test requires CKContext and AngelScript engine.";
@@ -9881,6 +10177,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKCameraScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKCurveScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBehaviorScriptSelfTest(context, engine, error)) {
