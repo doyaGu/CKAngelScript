@@ -5,10 +5,11 @@ param(
     [int]$PlayerSeconds = 60,
     [int]$LogTailLines = 40,
     [ValidateSet("Normal", "Hidden", "Minimized", "Maximized")]
-    [string]$PlayerWindowStyle = "Minimized",
+    [string]$PlayerWindowStyle = "Hidden",
     [switch]$IncludeLogTail,
     [switch]$SkipInstall,
     [switch]$SkipPlayer,
+    [switch]$NoModIsolation,
     [string]$ExportScriptApi = ""
 )
 
@@ -180,6 +181,69 @@ function Stop-BallanceValidationPlayer {
         ExitCode = if ($Process.HasExited) { $Process.ExitCode } else { $null }
         ClosedByTest = $closedByTest
         KilledByTest = $killedByTest
+    }
+}
+
+function Suspend-BallanceValidationMods {
+    param(
+        [string]$BallanceRoot
+    )
+
+    $mods = Join-Path $BallanceRoot "ModLoader\Mods"
+    if (-not (Test-Path -LiteralPath $mods)) {
+        return [pscustomobject]@{
+            ModsDir = $mods
+            StashDir = $null
+            Moved = @()
+        }
+    }
+
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
+    $stash = Join-Path $mods "__ckas_validation_stash_$stamp"
+    New-Item -ItemType Directory -Force -Path $stash | Out-Null
+
+    $moved = @()
+    Get-ChildItem -LiteralPath $mods -Force | Where-Object {
+        $_.FullName -ne $stash -and
+        $_.Name -notlike "__ckas_validation_stash_*" -and
+        $_.Name -notlike "*.bak"
+    } | ForEach-Object {
+        Move-Item -LiteralPath $_.FullName -Destination $stash
+        $moved += $_.Name
+    }
+
+    if ($moved.Count -eq 0) {
+        Remove-Item -LiteralPath $stash -ErrorAction SilentlyContinue
+        $stash = $null
+    }
+
+    return [pscustomobject]@{
+        ModsDir = $mods
+        StashDir = $stash
+        Moved = $moved
+    }
+}
+
+function Restore-BallanceValidationMods {
+    param(
+        [pscustomobject]$Isolation
+    )
+
+    if ($null -eq $Isolation -or [string]::IsNullOrWhiteSpace($Isolation.StashDir)) {
+        return
+    }
+
+    foreach ($name in @($Isolation.Moved)) {
+        $src = Join-Path $Isolation.StashDir $name
+        $dst = Join-Path $Isolation.ModsDir $name
+        if (Test-Path -LiteralPath $src) {
+            Move-Item -LiteralPath $src -Destination $dst
+        }
+    }
+
+    if ((Test-Path -LiteralPath $Isolation.StashDir) -and
+        -not (Get-ChildItem -LiteralPath $Isolation.StashDir -Force)) {
+        Remove-Item -LiteralPath $Isolation.StashDir
     }
 }
 
@@ -379,6 +443,7 @@ if ($missing.Count -gt 0) {
 }
 
 $playerResult = $null
+$modIsolationResult = $null
 if (-not $SkipPlayer) {
     if (-not (Test-Path -LiteralPath $player)) {
         throw "Player.exe was not found: $player"
@@ -399,6 +464,9 @@ if (-not $SkipPlayer) {
     $process = $null
     $waitResult = $null
     $closeResult = $null
+    if (-not $NoModIsolation) {
+        $modIsolationResult = Suspend-BallanceValidationMods -BallanceRoot $BallanceRoot
+    }
     try {
         $process = Start-Process -FilePath $player -WorkingDirectory $bin -WindowStyle $PlayerWindowStyle -PassThru
         $waitResult = Wait-StartupSelfTestMarker `
@@ -427,6 +495,7 @@ if (-not $SkipPlayer) {
             $env:CKAS_EXPORT_SCRIPT_API = $oldExportScriptApi
         }
         $closeResult = Stop-BallanceValidationPlayer -Process $process
+        Restore-BallanceValidationMods -Isolation $modIsolationResult
     }
 
     $playerResult = [pscustomobject]@{
@@ -494,6 +563,19 @@ $result = [ordered]@{
     StartupSelfTestMarker = if (Test-Path -LiteralPath $startupSelfTestMarker) { $startupSelfTestMarker } else { $null }
     AngelScriptLog = if (Test-Path -LiteralPath $angelScriptLog) { $angelScriptLog } else { $null }
     PlayerLog = if (Test-Path -LiteralPath $playerLog) { $playerLog } else { $null }
+    ModIsolation = if ($null -ne $modIsolationResult) {
+        [pscustomobject]@{
+            Enabled = -not $NoModIsolation
+            ModsDir = $modIsolationResult.ModsDir
+            Moved = $modIsolationResult.Moved
+        }
+    } else {
+        [pscustomobject]@{
+            Enabled = -not $NoModIsolation -and -not $SkipPlayer
+            ModsDir = Join-Path $BallanceRoot "ModLoader\Mods"
+            Moved = @()
+        }
+    }
     Player = $playerResult
     ScriptApi = $scriptApiResult
 }
