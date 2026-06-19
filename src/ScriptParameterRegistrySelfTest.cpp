@@ -715,6 +715,54 @@ bool ExecuteCKParameterOperationProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKParameterOperationOwnerProbe(asIScriptEngine *engine,
+                                           asIScriptFunction *function,
+                                           CKParameterOperation *operation,
+                                           CKBehavior *owner,
+                                           bool expectException,
+                                           const char *label,
+                                           std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, operation);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, owner);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKParameterOutDestinationProbe(asIScriptEngine *engine,
                                            asIScriptFunction *function,
                                            CKParameterOut *parameter,
@@ -7134,6 +7182,19 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (!guid.IsValid()) return 7;\n"
         "  CKERROR err = op.DoOperation();\n"
         "  if (err != CK_OK && err != CKERR_NOTINITIALIZED) return 8;\n"
+        "  op.Reconstruct(\"__CKAS_CKParameterOperationReconstruct\", guid, CKPGUID_INT, CKPGUID_INT, CKPGUID_INT);\n"
+        "  if (op.GetInParameter1() is null) return 9;\n"
+        "  if (op.GetInParameter2() is null) return 10;\n"
+        "  if (op.GetOutParameter() is null) return 11;\n"
+        "  if (!op.HasOperationFunction()) return 12;\n"
+        "  CKERROR errAfter = op.DoOperation();\n"
+        "  if (errAfter != CK_OK && errAfter != CKERR_NOTINITIALIZED) return 13;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKParameterOperationOwner(CKParameterOperation@ op, CKBehavior@ owner) {\n"
+        "  if (op is null || owner is null) return 2;\n"
+        "  op.SetOwner(owner);\n"
+        "  if (op.GetOwner() !is owner) return 3;\n"
         "  return 0;\n"
         "}\n"
         "void ProbeCKParameterOperationSetOwnerNull(CKParameterOperation@ op) {\n"
@@ -7217,6 +7278,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *pinSetOwnerNull = module->GetFunctionByDecl("void ProbeCKParameterInSetOwnerNull(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
     asIScriptFunction *pinSetOwnerInvalid = module->GetFunctionByDecl("void ProbeCKParameterInSetOwnerInvalid(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
     asIScriptFunction *operationBasics = module->GetFunctionByDecl("int ProbeCKParameterOperationBasics(CKParameterOperation@)");
+    asIScriptFunction *operationOwner = module->GetFunctionByDecl("int ProbeCKParameterOperationOwner(CKParameterOperation@, CKBehavior@)");
     asIScriptFunction *operationOwnerNull = module->GetFunctionByDecl("void ProbeCKParameterOperationSetOwnerNull(CKParameterOperation@)");
     asIScriptFunction *outDestinations = module->GetFunctionByDecl("int ProbeCKParameterOutDestinations(CKParameterOut@, CKParameter@, CKParameter@)");
     asIScriptFunction *outAddNull = module->GetFunctionByDecl("void ProbeCKParameterOutAddNull(CKParameterOut@, CKParameter@, CKParameter@)");
@@ -7230,7 +7292,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
         !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
         !pinSetTypeGuid || !pinSourceGraph || !pinShareNull || !pinSetOwnerNull || !pinSetOwnerInvalid ||
-        !operationBasics || !operationOwnerNull || !outDestinations || !outAddNull || !outRemoveNull ||
+        !operationBasics || !operationOwner || !operationOwnerNull || !outDestinations || !outAddNull || !outRemoveNull ||
         !outGetInvalid || !copyValueNull || !compatibleNull) {
         engine->DiscardModule(moduleName);
         error = "CKParameter self-test function was not found.";
@@ -7368,15 +7430,29 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                 CKPGUID_INT,
                 CKPGUID_INT,
                 CKPGUID_INT);
+            CKBehavior *owner = CKBehavior::Cast(context->CreateObject(
+                CKCID_BEHAVIOR,
+                const_cast<CKSTRING>("__CKAS_CKParameterOperationOwnerProbe"),
+                CK_OBJECTCREATION_DYNAMIC));
             if (!operation) {
                 ok = false;
                 error = "CKParameterOperation probe could not create its native operation.";
+            } else if (!owner) {
+                ok = false;
+                error = "CKParameterOperation probe could not create its native owner behavior.";
             } else {
                 ok = ExecuteCKParameterOperationProbe(engine, operationBasics, operation, false, "CKParameterOperation basics probe", error) &&
+                     ExecuteCKParameterOperationOwnerProbe(engine, operationOwner, operation, owner, false, "CKParameterOperation owner probe", error) &&
                      ExecuteCKParameterOperationProbe(engine, operationOwnerNull, operation, true, "CKParameterOperation SetOwner null probe", error);
             }
             if (operation) {
+                if (owner) {
+                    owner->RemoveParameterOperation(operation);
+                }
                 context->DestroyObject(operation);
+            }
+            if (owner) {
+                context->DestroyObject(owner);
             }
         }
     }
