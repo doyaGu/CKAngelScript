@@ -2420,6 +2420,120 @@ bool RunCKPathCategoryVectorScriptSelfTest(asIScriptEngine *engine, std::string 
     return ok;
 }
 
+bool RunCKPathCategoryVectorItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKPATHCATEGORYVECTORIt script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("CKPATHCATEGORYVECTORIt");
+    if (!iteratorType) {
+        error = "CKPATHCATEGORYVECTORIt self-test could not find the registered type.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("bool opEquals(const CKPATHCATEGORYVECTORIt &in other) const") ||
+        !iteratorType->GetMethodByDecl("bool opNotEquals(const CKPATHCATEGORYVECTORIt &in other) const")) {
+        error = "CKPATHCATEGORYVECTORIt self-test could not find iterator comparison methods.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("CKPATHCATEGORYVECTOR");
+    if (!arrayType) {
+        error = "CKPATHCATEGORYVECTORIt self-test could not find CKPATHCATEGORYVECTOR.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("CKPATHCATEGORYVECTORIt Begin() const") ||
+        !arrayType->GetMethodByDecl("CKPATHCATEGORYVECTORIt End() const")) {
+        error = "CKPATHCATEGORYVECTORIt self-test could not find CKPATHCATEGORYVECTOR iterator producers.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKPATHCATEGORYVECTORItSelfTest";
+    const char *source =
+        "int ProbeCKPathCategoryVectorIt() {\n"
+        "  CKPATHCATEGORYVECTOR values;\n"
+        "  CKPATHCATEGORY first;\n"
+        "  CKPATHCATEGORY second;\n"
+        "  first.m_Name = XString(\"first\");\n"
+        "  second.m_Name = XString(\"second\");\n"
+        "  values.PushBack(first);\n"
+        "  values.PushBack(second);\n"
+        "  CKPATHCATEGORYVECTORIt begin = values.Begin();\n"
+        "  CKPATHCATEGORYVECTORIt end = values.End();\n"
+        "  if (!begin.IsValid()) return 1;\n"
+        "  if (begin == end) return 2;\n"
+        "  if (!(begin.Get().m_Name == XString(\"first\"))) return 3;\n"
+        "  begin.Get().m_Name = XString(\"changed\");\n"
+        "  if (!(values[0].m_Name == XString(\"changed\"))) return 4;\n"
+        "  CKPATHCATEGORYVECTORIt copied(begin);\n"
+        "  if (!(copied == begin) || copied != begin) return 5;\n"
+        "  ++copied;\n"
+        "  if (copied == begin || !(copied != begin)) return 6;\n"
+        "  if (!(copied.Get().m_Name == XString(\"second\"))) return 7;\n"
+        "  CKPATHCATEGORYVECTORIt assigned;\n"
+        "  assigned = copied;\n"
+        "  if (!(assigned == copied)) return 8;\n"
+        "  ++assigned;\n"
+        "  if (!(assigned == end) || assigned != end) return 9;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectDefaultCKPathCategoryVectorItGet() {\n"
+        "  CKPATHCATEGORYVECTORIt it;\n"
+        "  it.Get();\n"
+        "}\n"
+        "void RejectDefaultCKPathCategoryVectorItInc() {\n"
+        "  CKPATHCATEGORYVECTORIt it;\n"
+        "  ++it;\n"
+        "}\n"
+        "void RejectDefaultCKPathCategoryVectorItDec() {\n"
+        "  CKPATHCATEGORYVECTORIt it;\n"
+        "  --it;\n"
+        "}\n"
+        "void RejectEmptyCKPathCategoryVectorItGet() {\n"
+        "  CKPATHCATEGORYVECTOR values;\n"
+        "  CKPATHCATEGORYVECTORIt it = values.Begin();\n"
+        "  it.Get();\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPATHCATEGORYVECTORIt self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckpathcategoryvectorit-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPATHCATEGORYVECTORIt self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPATHCATEGORYVECTORIt self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPathCategoryVectorIt()");
+    asIScriptFunction *defaultGet = module->GetFunctionByDecl("void RejectDefaultCKPathCategoryVectorItGet()");
+    asIScriptFunction *defaultInc = module->GetFunctionByDecl("void RejectDefaultCKPathCategoryVectorItInc()");
+    asIScriptFunction *defaultDec = module->GetFunctionByDecl("void RejectDefaultCKPathCategoryVectorItDec()");
+    asIScriptFunction *emptyGet = module->GetFunctionByDecl("void RejectEmptyCKPathCategoryVectorItGet()");
+    if (!probe || !defaultGet || !defaultInc || !defaultDec || !emptyGet) {
+        engine->DiscardModule(moduleName);
+        error = "CKPATHCATEGORYVECTORIt self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKPATHCATEGORYVECTORIt iterator probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultGet, true, "CKPATHCATEGORYVECTORIt default Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultInc, true, "CKPATHCATEGORYVECTORIt default increment rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultDec, true, "CKPATHCATEGORYVECTORIt default decrement rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyGet, true, "CKPATHCATEGORYVECTORIt empty Begin Get rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKPathEntryVectorItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKPATHENTRYVECTORIt script self-test requires an AngelScript engine.";
@@ -6408,6 +6522,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKPathCategoryVectorScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKPathCategoryVectorItScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKPathEntryVectorItScriptSelfTest(engine, error)) {
