@@ -2506,6 +2506,80 @@ bool RunCKGUIDScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     return ok;
 }
 
+bool RunCKSquareScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKSquare script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *squareType = engine->GetTypeInfoByDecl("CKSquare");
+    if (!squareType) {
+        error = "CKSquare self-test could not find the registered type.";
+        return false;
+    }
+    bool hasValueProperty = false;
+    for (asUINT i = 0; i < squareType->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        if (squareType->GetProperty(i, &propertyName) >= 0 && propertyName && std::strcmp(propertyName, "val") == 0) {
+            hasValueProperty = true;
+            break;
+        }
+    }
+    if (!hasValueProperty ||
+        !squareType->GetMethodByDecl("CKSquare& opAssign(const CKSquare &in other)")) {
+        error = "CKSquare self-test could not find expected property or assignment method.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKSquareSelfTest";
+    const char *source =
+        "int ProbeCKSquare() {\n"
+        "  CKSquare square;\n"
+        "  square.val = 0x12345678;\n"
+        "  if (square.val != 0x12345678) return 1;\n"
+        "  CKSquare copied(square);\n"
+        "  if (copied.val != 0x12345678) return 2;\n"
+        "  CKSquare assigned;\n"
+        "  assigned.val = 7;\n"
+        "  assigned = copied;\n"
+        "  if (assigned.val != 0x12345678) return 3;\n"
+        "  copied.val = 0x87654321;\n"
+        "  if (assigned.val != 0x12345678) return 4;\n"
+        "  if (copied.val != 0x87654321) return 5;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKSquare self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("cksquare-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSquare self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSquare self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKSquare()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKSquare self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKSquare value probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKDataRowItScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKDataRowIt script self-test requires an AngelScript engine.";
@@ -6695,6 +6769,161 @@ bool RunCKCameraScriptSelfTest(CKContext *context, asIScriptEngine *engine, std:
     const bool ok = ExecuteCKCameraProbe(engine, probe, camera, target, mesh, animation, false, "CKCamera surface probe", error) &&
                     ExecuteCKCameraProbe(engine, smallTransform, camera, target, mesh, animation, true, "CKCamera small TransformMany probe", error) &&
                     ExecuteCKCameraCopyNullProbe(engine, cameraType, camera, dependencies, error);
+
+    camera->RemoveAllCallbacks();
+    camera->RemoveMesh(mesh);
+    camera->RemoveObjectAnimation(animation);
+    camera->SetTarget(nullptr);
+    context->DestroyObject(animation);
+    context->DestroyObject(mesh);
+    context->DestroyObject(target);
+    context->DestroyObject(camera);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCKTargetCameraScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKTargetCamera script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *targetCameraType = engine->GetTypeInfoByDecl("CKTargetCamera");
+    if (!targetCameraType) {
+        error = "CKTargetCamera self-test could not find the registered type.";
+        return false;
+    }
+    if (targetCameraType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
+        targetCameraType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        targetCameraType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        targetCameraType->GetMethodByDecl("CK3dEntity@ GetTarget() const") != nullptr) {
+        error = "CKTargetCamera self-test found stale unsafe inherited or const-drift declarations.";
+        return false;
+    }
+    if (!targetCameraType->GetMethodByDecl("CK3dEntity@ GetTarget()") ||
+        !targetCameraType->GetMethodByDecl("void SetTarget(CK3dEntity@ target)") ||
+        !targetCameraType->GetMethodByDecl("CKCamera@ opImplCast()") ||
+        !targetCameraType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !targetCameraType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !targetCameraType->GetMethodByDecl("NativePointer GetAppData()")) {
+        error = "CKTargetCamera self-test could not find expected target-camera methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKTargetCameraSelfTest";
+    const char *source =
+        "bool CloseEnough(float a, float b) {\n"
+        "  float d = a - b;\n"
+        "  return d > -0.0001f && d < 0.0001f;\n"
+        "}\n"
+        "int ProbeCKTargetCameraSurface(CKTargetCamera@ camera, CK3dEntity@ target, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  if (camera is null || target is null || mesh is null || animation is null) return 1;\n"
+        "  CKObject@ asObject = camera;\n"
+        "  CKSceneObject@ asSceneObject = camera;\n"
+        "  CKBeObject@ asBeObject = camera;\n"
+        "  CKRenderObject@ asRenderObject = camera;\n"
+        "  CK3dEntity@ asEntity = camera;\n"
+        "  CKCamera@ asCamera = camera;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null || asCamera is null) return 2;\n"
+        "  if (cast<CKTargetCamera>(asObject) !is camera) return 3;\n"
+        "  if (cast<CKTargetCamera>(asRenderObject) !is camera) return 4;\n"
+        "  if (cast<CKTargetCamera>(asEntity) !is camera) return 5;\n"
+        "  if (cast<CKTargetCamera>(asCamera) !is camera) return 6;\n"
+        "  camera.SetTarget(target);\n"
+        "  if (camera.GetTarget() !is target) return 7;\n"
+        "  camera.SetFrontPlane(0.5f);\n"
+        "  camera.SetBackPlane(500.0f);\n"
+        "  if (!CloseEnough(camera.GetFrontPlane(), 0.5f) || !CloseEnough(camera.GetBackPlane(), 500.0f)) return 8;\n"
+        "  camera.SetFov(0.75f);\n"
+        "  if (!CloseEnough(camera.GetFov(), 0.75f)) return 9;\n"
+        "  int projection = camera.GetProjectionType();\n"
+        "  camera.SetProjectionType(projection);\n"
+        "  if (camera.GetProjectionType() != projection) return 10;\n"
+        "  camera.SetAspectRatio(4, 3);\n"
+        "  int width = 0;\n"
+        "  int height = 0;\n"
+        "  camera.GetAspectRatio(width, height);\n"
+        "  if (width != 4 || height != 3) return 11;\n"
+        "  VxMatrix projectionMatrix;\n"
+        "  camera.ComputeProjectionMatrix(projectionMatrix);\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  source.Reset();\n"
+        "  NativeBuffer@ transformed = NativeBuffer(24);\n"
+        "  camera.TransformMany(transformed, source, 2);\n"
+        "  if (camera.AddMesh(mesh) != CK_OK) return 12;\n"
+        "  camera.SetCurrentMesh(mesh);\n"
+        "  if (camera.GetCurrentMesh() !is mesh) return 13;\n"
+        "  if (camera.RemoveMesh(mesh) != CK_OK) return 14;\n"
+        "  camera.AddObjectAnimation(animation);\n"
+        "  if (camera.GetObjectAnimationCount() < 1) return 15;\n"
+        "  camera.RemoveObjectAnimation(animation);\n"
+        "  if (!camera.GetAppData().IsNull()) return 16;\n"
+        "  camera.SetAppData(NativePointer());\n"
+        "  camera.SetTarget(null);\n"
+        "  if (camera.GetTarget() !is null) return 17;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKTargetCameraSmallTransform(CKTargetCamera@ camera, CK3dEntity@ target, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  camera.TransformMany(tooSmall, source, 2);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKTargetCamera self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("cktargetcamera-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTargetCamera self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKTargetCamera self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKTargetCameraSurface(CKTargetCamera@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCKTargetCameraSmallTransform(CKTargetCamera@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    if (!probe || !smallTransform) {
+        engine->DiscardModule(moduleName);
+        error = "CKTargetCamera self-test functions were not found.";
+        return false;
+    }
+
+    CKTargetCamera *camera = CKTargetCamera::Cast(context->CreateObject(
+        CKCID_TARGETCAMERA, const_cast<CKSTRING>("__CKAS_CKTargetCameraSelfTestCamera"), CK_OBJECTCREATION_DYNAMIC));
+    CK3dEntity *target = CK3dEntity::Cast(context->CreateObject(
+        CKCID_3DOBJECT, const_cast<CKSTRING>("__CKAS_CKTargetCameraSelfTestTarget"), CK_OBJECTCREATION_DYNAMIC));
+    CKMesh *mesh = CKMesh::Cast(context->CreateObject(
+        CKCID_MESH, const_cast<CKSTRING>("__CKAS_CKTargetCameraSelfTestMesh"), CK_OBJECTCREATION_DYNAMIC));
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKTargetCameraSelfTestAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    if (!camera || !target || !mesh || !animation) {
+        if (animation) context->DestroyObject(animation);
+        if (mesh) context->DestroyObject(mesh);
+        if (target) context->DestroyObject(target);
+        if (camera) context->DestroyObject(camera);
+        engine->DiscardModule(moduleName);
+        error = "CKTargetCamera self-test could not create temporary objects.";
+        return false;
+    }
+
+    CKDependenciesContext dependencies(context);
+    const bool ok = ExecuteCKCameraProbe(engine, probe, camera, target, mesh, animation, false, "CKTargetCamera surface probe", error) &&
+                    ExecuteCKCameraProbe(engine, smallTransform, camera, target, mesh, animation, true, "CKTargetCamera small TransformMany probe", error) &&
+                    ExecuteCKCameraCopyNullProbe(engine, targetCameraType, camera, dependencies, error);
 
     camera->RemoveAllCallbacks();
     camera->RemoveMesh(mesh);
@@ -11583,6 +11812,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunCKGUIDScriptSelfTest(engine, error)) {
         return false;
     }
+    if (!RunCKSquareScriptSelfTest(engine, error)) {
+        return false;
+    }
     if (!RunCKDataRowItScriptSelfTest(engine, error)) {
         return false;
     }
@@ -11743,6 +11975,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKCameraScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKTargetCameraScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKLightScriptSelfTest(context, engine, error)) {
