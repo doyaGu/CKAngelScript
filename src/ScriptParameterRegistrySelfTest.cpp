@@ -2190,6 +2190,54 @@ bool ExecuteCKStateChunkProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKObjectArrayProbe(asIScriptEngine *engine,
+                               asIScriptFunction *function,
+                               CKObjectArray *objects,
+                               CKContext *context,
+                               bool expectException,
+                               const char *label,
+                               std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, objects);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, context);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAttributeDescProbe(asIScriptEngine *engine,
                                  asIScriptFunction *function,
                                  bool expectException,
@@ -12826,12 +12874,27 @@ bool RunCKStateChunkScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
     }
     if (stateChunkType->GetMethodByDecl("int ReadString(string &out str)") == nullptr ||
         stateChunkType->GetMethodByDecl("CKObject@ ReadObject(CKContext@ context)") == nullptr ||
-        stateChunkType->GetMethodByDecl("const XObjectPointerArray &ReadXObjectArray(CKContext@ context)") == nullptr) {
+        stateChunkType->GetMethodByDecl("const XObjectPointerArray &ReadXObjectArray(CKContext@ context)") == nullptr ||
+        stateChunkType->GetMethodByDecl("void WriteObjectArray(CKObjectArray@ objArray, CKContext@ context = null)") == nullptr ||
+        stateChunkType->GetMethodByDecl("void ReadObjectArray(CKObjectArray@ objArray)") == nullptr ||
+        stateChunkType->GetMethodByDecl("int RemapObjects(CKContext@ context, CKDependenciesContext@ depContext = null)") == nullptr) {
         error = "CKStateChunk self-test could not find the guarded read declarations.";
         return false;
     }
     if (stateChunkType->GetMethodByDecl("void AddChunkAndDelete(CKStateChunk@ chunk)") != nullptr) {
         error = "CKStateChunk self-test found stale AddChunkAndDelete declaration.";
+        return false;
+    }
+
+    asITypeInfo *objectArrayType = engine->GetTypeInfoByDecl("CKObjectArray");
+    if (!objectArrayType) {
+        error = "CKObjectArray self-test could not find the registered type.";
+        return false;
+    }
+    if (objectArrayType->GetMethodByDecl("CKObject@ GetData(CKContext@ context)") == nullptr ||
+        objectArrayType->GetMethodByDecl("CKERROR Append(CKObjectArray@ objArray)") == nullptr ||
+        objectArrayType->GetMethodByDecl("bool Check(CKContext@ context)") == nullptr) {
+        error = "CKObjectArray self-test could not find the guarded object array declarations.";
         return false;
     }
 
@@ -12851,6 +12914,24 @@ bool RunCKStateChunkScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
         "}\n"
         "void ProbeCKStateChunkReadXObjectArrayNull(CKStateChunk@ chunk, CKContext@ context) {\n"
         "  chunk.ReadXObjectArray(null);\n"
+        "}\n"
+        "void ProbeCKStateChunkWriteObjectArrayNull(CKStateChunk@ chunk, CKContext@ context) {\n"
+        "  chunk.WriteObjectArray(null, context);\n"
+        "}\n"
+        "void ProbeCKStateChunkReadObjectArrayNull(CKStateChunk@ chunk, CKContext@ context) {\n"
+        "  chunk.ReadObjectArray(null);\n"
+        "}\n"
+        "void ProbeCKStateChunkRemapObjectsNull(CKStateChunk@ chunk, CKContext@ context) {\n"
+        "  chunk.RemapObjects(null);\n"
+        "}\n"
+        "void ProbeCKObjectArrayGetDataNull(CKObjectArray@ objects, CKContext@ context) {\n"
+        "  objects.GetData(null);\n"
+        "}\n"
+        "void ProbeCKObjectArrayAppendNull(CKObjectArray@ objects, CKContext@ context) {\n"
+        "  objects.Append(null);\n"
+        "}\n"
+        "void ProbeCKObjectArrayCheckNull(CKObjectArray@ objects, CKContext@ context) {\n"
+        "  objects.Check(null);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -12875,7 +12956,14 @@ bool RunCKStateChunkScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
     asIScriptFunction *readString = module->GetFunctionByDecl("int ProbeCKStateChunkReadString(CKStateChunk@, CKContext@)");
     asIScriptFunction *readObjectNull = module->GetFunctionByDecl("void ProbeCKStateChunkReadObjectNull(CKStateChunk@, CKContext@)");
     asIScriptFunction *readXObjectArrayNull = module->GetFunctionByDecl("void ProbeCKStateChunkReadXObjectArrayNull(CKStateChunk@, CKContext@)");
-    if (!readString || !readObjectNull || !readXObjectArrayNull) {
+    asIScriptFunction *writeObjectArrayNull = module->GetFunctionByDecl("void ProbeCKStateChunkWriteObjectArrayNull(CKStateChunk@, CKContext@)");
+    asIScriptFunction *readObjectArrayNull = module->GetFunctionByDecl("void ProbeCKStateChunkReadObjectArrayNull(CKStateChunk@, CKContext@)");
+    asIScriptFunction *remapObjectsNull = module->GetFunctionByDecl("void ProbeCKStateChunkRemapObjectsNull(CKStateChunk@, CKContext@)");
+    asIScriptFunction *objectArrayGetDataNull = module->GetFunctionByDecl("void ProbeCKObjectArrayGetDataNull(CKObjectArray@, CKContext@)");
+    asIScriptFunction *objectArrayAppendNull = module->GetFunctionByDecl("void ProbeCKObjectArrayAppendNull(CKObjectArray@, CKContext@)");
+    asIScriptFunction *objectArrayCheckNull = module->GetFunctionByDecl("void ProbeCKObjectArrayCheckNull(CKObjectArray@, CKContext@)");
+    if (!readString || !readObjectNull || !readXObjectArrayNull || !writeObjectArrayNull || !readObjectArrayNull ||
+        !remapObjectsNull || !objectArrayGetDataNull || !objectArrayAppendNull || !objectArrayCheckNull) {
         engine->DiscardModule(moduleName);
         error = "CKStateChunk self-test function was not found.";
         return false;
@@ -12888,14 +12976,29 @@ bool RunCKStateChunkScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
         return false;
     }
 
+    CKObjectArray *objects = CreateCKObjectArray();
+    if (!objects) {
+        DeleteCKStateChunk(chunk);
+        engine->DiscardModule(moduleName);
+        error = "CKObjectArray self-test could not create a native object array.";
+        return false;
+    }
+
     chunk->StartWrite();
     chunk->WriteString(const_cast<CKSTRING>("ckas-statechunk"));
     chunk->CloseChunk();
 
     const bool ok = ExecuteCKStateChunkProbe(engine, readString, chunk, context, false, "CKStateChunk ReadString probe", error) &&
                     ExecuteCKStateChunkProbe(engine, readObjectNull, chunk, context, true, "CKStateChunk ReadObject null context probe", error) &&
-                    ExecuteCKStateChunkProbe(engine, readXObjectArrayNull, chunk, context, true, "CKStateChunk ReadXObjectArray null context probe", error);
+                    ExecuteCKStateChunkProbe(engine, readXObjectArrayNull, chunk, context, true, "CKStateChunk ReadXObjectArray null context probe", error) &&
+                    ExecuteCKStateChunkProbe(engine, writeObjectArrayNull, chunk, context, true, "CKStateChunk WriteObjectArray null array probe", error) &&
+                    ExecuteCKStateChunkProbe(engine, readObjectArrayNull, chunk, context, true, "CKStateChunk ReadObjectArray null array probe", error) &&
+                    ExecuteCKStateChunkProbe(engine, remapObjectsNull, chunk, context, true, "CKStateChunk RemapObjects null context probe", error) &&
+                    ExecuteCKObjectArrayProbe(engine, objectArrayGetDataNull, objects, context, true, "CKObjectArray GetData null context probe", error) &&
+                    ExecuteCKObjectArrayProbe(engine, objectArrayAppendNull, objects, context, true, "CKObjectArray Append null array probe", error) &&
+                    ExecuteCKObjectArrayProbe(engine, objectArrayCheckNull, objects, context, true, "CKObjectArray Check null context probe", error);
 
+    DeleteCKObjectArray(objects);
     DeleteCKStateChunk(chunk);
     engine->DiscardModule(moduleName);
     return ok;
