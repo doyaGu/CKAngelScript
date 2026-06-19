@@ -3866,7 +3866,7 @@ static void RegisterVxColor(asIScriptEngine *engine) {
     // Methods
     r = engine->RegisterObjectMethod("VxColor", "VxColor &opAssign(const VxColor &in color)", asMETHODPR(VxColor, operator=, (const VxColor &), VxColor &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("VxColor", "bool opEquals(const VxColor &in color) const", asFUNCTIONPR(operator==, (const VxColor &, const VxColor &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxColor", "bool opEquals(const VxColor &in color) const", asFUNCTIONPR([](const VxColor &lhs, const VxColor &rhs) -> bool { return lhs == rhs; }, (const VxColor &, const VxColor &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxColor", "VxColor &opAddAssign(const VxColor &in color)", asMETHODPR(VxColor, operator+=, (const VxColor &), VxColor &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxColor", "VxColor &opSubAssign(const VxColor &in color)", asMETHODPR(VxColor, operator-=, (const VxColor &), VxColor &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

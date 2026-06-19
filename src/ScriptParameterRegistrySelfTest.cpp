@@ -5706,6 +5706,66 @@ bool RunCK2dCurveScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     return true;
 }
 
+bool RunVxColorScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "VxColor script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *colorType = engine->GetTypeInfoByDecl("VxColor");
+    if (!colorType) {
+        error = "VxColor type is not registered.";
+        return false;
+    }
+    if (!colorType->GetMethodByDecl("bool opEquals(const VxColor &in color) const")) {
+        error = "VxColor bool opEquals declaration is not registered.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_VxColorSelfTest";
+    const char *source =
+        "int ProbeVxColorEquals() {\n"
+        "  VxColor a(0.1f, 0.2f, 0.3f, 1.0f);\n"
+        "  VxColor b(0.1f, 0.2f, 0.3f, 1.0f);\n"
+        "  VxColor c(0.1f, 0.2f, 0.4f, 1.0f);\n"
+        "  if (!(a == b)) return 1;\n"
+        "  if (a == c) return 2;\n"
+        "  bool equal = a.opEquals(b);\n"
+        "  if (!equal) return 3;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "VxColor self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("vx-color-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "VxColor self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "VxColor self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeVxColorEquals()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "VxColor self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "VxColor equality probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunVxEffectDescriptionScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "VxEffectDescription script self-test requires an AngelScript engine.";
@@ -13997,6 +14057,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCK2dCurveScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunVxColorScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunVxEffectDescriptionScriptSelfTest(engine, error)) {
