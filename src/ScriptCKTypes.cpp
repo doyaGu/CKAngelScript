@@ -290,7 +290,7 @@ void RegisterCKContainers(asIScriptEngine *engine) {
     RegisterXClassArray<XClassArray<XString>, XString, true>(engine, "XStringArray", "XString", true);
     RegisterXClassArray<XClassArray<CKFilePluginDependencies>, CKFilePluginDependencies>(engine, "XFilePluginDependenciesArray", "CKFilePluginDependencies");
 
-    RegisterXClassArray<CKPATHENTRYVECTOR, XString>(engine, "CKPATHENTRYVECTOR", "XString");
+    RegisterXClassArray<CKPATHENTRYVECTOR, XString, true>(engine, "CKPATHENTRYVECTOR", "XString");
     RegisterXClassArray<CKPATHCATEGORYVECTOR, XString>(engine, "CKPATHCATEGORYVECTOR", "CKPATHCATEGORY");
 
     RegisterXHashTable<XManagerHashTable, CKBaseManager *, CKGUID>(engine, "XManagerHashTable", "CKGUID", "CKBaseManager@");
