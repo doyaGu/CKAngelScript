@@ -3956,8 +3956,8 @@ void RegisterCK3dObjectMembers(asIScriptEngine *engine, const char *name) {
 
     RegisterCK3dEntityMembers<T>(engine, name);
 
-    if (strcmp(name, name) != 0) {
-        RegisterCKObjectCast<T, CK3dObject>(engine, name, name);
+    if (strcmp(name, "CK3dObject") != 0) {
+        RegisterCKObjectCast<T, CK3dObject>(engine, name, "CK3dObject");
     }
 }
 

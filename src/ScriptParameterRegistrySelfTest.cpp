@@ -677,6 +677,103 @@ bool ExecuteCK3dEntityCopyNullProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCK3dObjectProbe(asIScriptEngine *engine,
+                            asIScriptFunction *function,
+                            CK3dObject *object,
+                            CK3dObject *child,
+                            CKMesh *mesh,
+                            CKObjectAnimation *animation,
+                            bool expectException,
+                            const char *label,
+                            std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, object);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, child);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(2, mesh);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(3, animation);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCK3dObjectCopyNullProbe(asIScriptEngine *engine,
+                                    asITypeInfo *objectType,
+                                    CK3dObject *object,
+                                    CKDependenciesContext &dependencies,
+                                    std::string &error) {
+    asIScriptFunction *copyMethod = objectType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)");
+    if (!copyMethod) {
+        error = "CK3dObject Copy(null) probe could not find Copy method.";
+        return false;
+    }
+
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = "CK3dObject Copy(null) probe could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(copyMethod);
+    if (r >= 0) {
+        r = scriptContext->SetObject(object);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, nullptr);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, &dependencies);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    const bool ok = r == asEXECUTION_EXCEPTION;
+    if (!ok) {
+        error = "CK3dObject Copy(null) probe expected a script exception, got code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAnimControllerProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKAnimController *positionController,
@@ -5496,7 +5593,7 @@ bool RunCK2dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
     context->DestroyObject(material);
     context->DestroyObject(child);
     context->DestroyObject(entity);
-    engine->GarbageCollect(asGC_FULL_CYCLE);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
     engine->DiscardModule(moduleName);
     return ok;
 }
@@ -5705,7 +5802,162 @@ bool RunCK3dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
     context->DestroyObject(mesh);
     context->DestroyObject(child);
     context->DestroyObject(entity);
-    engine->GarbageCollect(asGC_FULL_CYCLE);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCK3dObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CK3dObject script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *objectType = engine->GetTypeInfoByDecl("CK3dObject");
+    if (!objectType) {
+        error = "CK3dObject self-test could not find the registered type.";
+        return false;
+    }
+    if (objectType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
+        objectType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        objectType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr) {
+        error = "CK3dObject self-test found stale unsafe inherited declarations.";
+        return false;
+    }
+    if (!objectType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)") ||
+        !objectType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !objectType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !objectType->GetMethodByDecl("void InverseTransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !objectType->GetMethodByDecl("bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true)") ||
+        !objectType->GetMethodByDecl("CKERROR AddMesh(CKMesh@ mesh)") ||
+        !objectType->GetMethodByDecl("void AddObjectAnimation(CKObjectAnimation@ anim)") ||
+        !objectType->GetMethodByDecl("bool SetRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
+        !objectType->GetMethodByDecl("NativePointer GetAppData()")) {
+        error = "CK3dObject self-test could not find expected inherited methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CK3dObjectSelfTest";
+    const char *source =
+        "bool CK3dObjectRenderCallback(CKRenderContext@ dev, CKRenderObject@ entity) {\n"
+        "  return entity !is null;\n"
+        "}\n"
+        "int ProbeCK3dObjectSurface(CK3dObject@ object, CK3dObject@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  if (object is null || child is null || mesh is null || animation is null) return 1;\n"
+        "  CKObject@ asObject = object;\n"
+        "  CKSceneObject@ asSceneObject = object;\n"
+        "  CKBeObject@ asBeObject = object;\n"
+        "  CKRenderObject@ asRenderObject = object;\n"
+        "  CK3dEntity@ asEntity = object;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null) return 2;\n"
+        "  if (cast<CK3dObject>(asObject) !is object) return 3;\n"
+        "  if (cast<CK3dObject>(asRenderObject) !is object) return 4;\n"
+        "  if (cast<CK3dObject>(asEntity) !is object) return 5;\n"
+        "  object.SetName(\"__CKAS_CK3dObjectSelfTest\", false);\n"
+        "  if (object.GetName() == \"\") return 6;\n"
+        "  object.SetPosition(VxVector(7.0f, 8.0f, 9.0f));\n"
+        "  VxVector pos;\n"
+        "  object.GetPosition(pos);\n"
+        "  if (pos.x != 7.0f || pos.y != 8.0f || pos.z != 9.0f) return 7;\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  source.Reset();\n"
+        "  NativeBuffer@ transformed = NativeBuffer(24);\n"
+        "  object.TransformMany(transformed, source, 2);\n"
+        "  transformed.Reset();\n"
+        "  object.InverseTransformMany(source, transformed, 2);\n"
+        "  if (!child.SetParent(object)) return 8;\n"
+        "  if (child.GetParent() !is object) return 9;\n"
+        "  if (object.GetChildrenCount() < 1) return 10;\n"
+        "  if (!object.RemoveChild(child)) return 11;\n"
+        "  if (object.AddMesh(mesh) != CK_OK) return 12;\n"
+        "  object.SetCurrentMesh(mesh);\n"
+        "  if (object.GetCurrentMesh() !is mesh) return 13;\n"
+        "  if (object.RemoveMesh(mesh) != CK_OK) return 14;\n"
+        "  object.AddObjectAnimation(animation);\n"
+        "  if (object.GetObjectAnimationCount() < 1) return 15;\n"
+        "  if (object.GetObjectAnimation(0) !is animation) return 16;\n"
+        "  object.RemoveObjectAnimation(animation);\n"
+        "  if (!object.GetAppData().IsNull()) return 17;\n"
+        "  object.SetAppData(NativePointer());\n"
+        "  if (!object.AddPreRenderCallBack(CK3dObjectRenderCallback)) return 18;\n"
+        "  if (!object.RemovePreRenderCallBack(CK3dObjectRenderCallback)) return 19;\n"
+        "  if (!object.AddPostRenderCallBack(CK3dObjectRenderCallback)) return 20;\n"
+        "  if (!object.RemovePostRenderCallBack(CK3dObjectRenderCallback)) return 21;\n"
+        "  if (!object.SetRenderCallBack(CK3dObjectRenderCallback)) return 22;\n"
+        "  if (!object.RemoveRenderCallBack()) return 23;\n"
+        "  object.RemoveAllCallbacks();\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCK3dObjectSmallTransform(CK3dObject@ object, CK3dObject@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  object.InverseTransformMany(tooSmall, source, 2);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CK3dObject self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck3dobject-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CK3dObject self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CK3dObject self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCK3dObjectSurface(CK3dObject@, CK3dObject@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCK3dObjectSmallTransform(CK3dObject@, CK3dObject@, CKMesh@, CKObjectAnimation@)");
+    if (!probe || !smallTransform) {
+        engine->DiscardModule(moduleName);
+        error = "CK3dObject self-test functions were not found.";
+        return false;
+    }
+
+    CK3dObject *object = CK3dObject::Cast(context->CreateObject(
+        CKCID_3DOBJECT, const_cast<CKSTRING>("__CKAS_CK3dObjectSelfTestObject"), CK_OBJECTCREATION_DYNAMIC));
+    CK3dObject *child = CK3dObject::Cast(context->CreateObject(
+        CKCID_3DOBJECT, const_cast<CKSTRING>("__CKAS_CK3dObjectSelfTestChild"), CK_OBJECTCREATION_DYNAMIC));
+    CKMesh *mesh = CKMesh::Cast(context->CreateObject(
+        CKCID_MESH, const_cast<CKSTRING>("__CKAS_CK3dObjectSelfTestMesh"), CK_OBJECTCREATION_DYNAMIC));
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CK3dObjectSelfTestAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    if (!object || !child || !mesh || !animation) {
+        if (animation) context->DestroyObject(animation);
+        if (mesh) context->DestroyObject(mesh);
+        if (child) context->DestroyObject(child);
+        if (object) context->DestroyObject(object);
+        engine->DiscardModule(moduleName);
+        error = "CK3dObject self-test could not create temporary objects.";
+        return false;
+    }
+
+    CKDependenciesContext dependencies(context);
+    const bool ok = ExecuteCK3dObjectProbe(engine, probe, object, child, mesh, animation, false, "CK3dObject surface probe", error) &&
+                    ExecuteCK3dObjectProbe(engine, smallTransform, object, child, mesh, animation, true, "CK3dObject small TransformMany probe", error) &&
+                    ExecuteCK3dObjectCopyNullProbe(engine, objectType, object, dependencies, error);
+
+    child->SetParent(nullptr);
+    object->RemoveAllCallbacks();
+    object->RemoveMesh(mesh);
+    object->RemoveObjectAnimation(animation);
+    context->DestroyObject(animation);
+    context->DestroyObject(mesh);
+    context->DestroyObject(child);
+    context->DestroyObject(object);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
     engine->DiscardModule(moduleName);
     return ok;
 }
@@ -9382,6 +9634,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCK3dEntityScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCK3dObjectScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKBehaviorScriptSelfTest(context, engine, error)) {
