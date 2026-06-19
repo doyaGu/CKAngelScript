@@ -5866,6 +5866,7 @@ bool RunCKTimeManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine,
         "  float renderWait = 0.0f;\n"
         "  float behaviorWait = 0.0f;\n"
         "  time.GetTimeToWaitForLimits(renderWait, behaviorWait);\n"
+        "  time.ResetChronos(false, false);\n"
         "  if (time.GetTimeScaleFactor() <= 0.0f) return 4;\n"
         "  if (time.GetMinimumDeltaTime() < 0.0f) return 5;\n"
         "  if (time.GetMaximumDeltaTime() < 0.0f) return 6;\n"
