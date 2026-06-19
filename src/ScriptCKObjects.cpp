@@ -2202,98 +2202,6 @@ void RegisterCKScene(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKScene", "CKERROR Merge(CKScene@ mergedScene, CKLevel@ fromLevel = null)", asMETHODPR(CKScene, Merge, (CKScene *, CKLevel*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
-static CKERROR RejectCKLevelCall(const char *message) {
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        ctx->SetException(message);
-    }
-    return CKERR_INVALIDPARAMETER;
-}
-
-static CKERROR CKLevelAddObject(CKLevel *level, CKObject *object) {
-    if (!level || !object) {
-        return RejectCKLevelCall("CKLevel.AddObject requires a non-null CKObject.");
-    }
-    return level->AddObject(object);
-}
-
-static CKERROR CKLevelRemoveObject(CKLevel *level, CKObject *object) {
-    if (!level || !object) {
-        return RejectCKLevelCall("CKLevel.RemoveObject requires a non-null CKObject.");
-    }
-    return level->RemoveObject(object);
-}
-
-static CKERROR CKLevelAddPlace(CKLevel *level, CKPlace *place) {
-    if (!level || !place) {
-        return RejectCKLevelCall("CKLevel.AddPlace requires a non-null CKPlace.");
-    }
-    return level->AddPlace(place);
-}
-
-static CKERROR CKLevelRemovePlace(CKLevel *level, CKPlace *place) {
-    if (!level || !place) {
-        return RejectCKLevelCall("CKLevel.RemovePlace requires a non-null CKPlace.");
-    }
-    return level->RemovePlace(place);
-}
-
-static CKERROR CKLevelAddScene(CKLevel *level, CKScene *scene) {
-    if (!level || !scene) {
-        return RejectCKLevelCall("CKLevel.AddScene requires a non-null CKScene.");
-    }
-    return level->AddScene(scene);
-}
-
-static CKERROR CKLevelRemoveScene(CKLevel *level, CKScene *scene) {
-    if (!level || !scene) {
-        return RejectCKLevelCall("CKLevel.RemoveScene requires a non-null CKScene.");
-    }
-    return level->RemoveScene(scene);
-}
-
-static CKERROR CKLevelSetNextActiveScene(CKLevel *level,
-                                         CKScene *scene,
-                                         CK_SCENEOBJECTACTIVITY_FLAGS active,
-                                         CK_SCENEOBJECTRESET_FLAGS reset) {
-    if (!level || !scene) {
-        return RejectCKLevelCall("CKLevel.SetNextActiveScene requires a non-null CKScene.");
-    }
-    return level->SetNextActiveScene(scene, active, reset);
-}
-
-static CKERROR CKLevelLaunchScene(CKLevel *level,
-                                  CKScene *scene,
-                                  CK_SCENEOBJECTACTIVITY_FLAGS active,
-                                  CK_SCENEOBJECTRESET_FLAGS reset) {
-    if (!level || !scene) {
-        return RejectCKLevelCall("CKLevel.LaunchScene requires a non-null CKScene.");
-    }
-    return level->LaunchScene(scene, active, reset);
-}
-
-static void CKLevelAddRenderContext(CKLevel *level, CKRenderContext *dev, bool main) {
-    if (!level || !dev) {
-        RejectCKLevelCall("CKLevel.AddRenderContext requires a non-null CKRenderContext.");
-        return;
-    }
-    level->AddRenderContext(dev, main);
-}
-
-static void CKLevelRemoveRenderContext(CKLevel *level, CKRenderContext *dev) {
-    if (!level || !dev) {
-        RejectCKLevelCall("CKLevel.RemoveRenderContext requires a non-null CKRenderContext.");
-        return;
-    }
-    level->RemoveRenderContext(dev);
-}
-
-static CKERROR CKLevelMerge(CKLevel *level, CKLevel *mergedLevel, bool asScene) {
-    if (!level || !mergedLevel) {
-        return RejectCKLevelCall("CKLevel.Merge requires a non-null CKLevel.");
-    }
-    return level->Merge(mergedLevel, asScene);
-}
-
 void RegisterCKLevel(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -2302,8 +2210,8 @@ void RegisterCKLevel(asIScriptEngine *engine) {
     RegisterCKBeObjectMembers<CKLevel>(engine, "CKLevel");
 
     // Object Management
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR AddObject(CKObject@ obj)", asFUNCTION(CKLevelAddObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR RemoveObject(CKObject@ obj)", asFUNCTION(CKLevelRemoveObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR AddObject(CKObject@ obj)", asMETHODPR(CKLevel, AddObject, (CKObject*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR RemoveObject(CKObject@ obj)", asMETHODPR(CKLevel, RemoveObject, (CKObject*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "CKERROR RemoveObject(CK_ID id)", asMETHODPR(CKLevel, RemoveObject, (CK_ID), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "void BeginAddSequence(bool begin)", asFUNCTIONPR([](CKLevel *level, bool begin) { level->BeginAddSequence(begin); }, (CKLevel *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "void BeginRemoveSequence(bool begin)", asFUNCTIONPR([](CKLevel *level, bool begin) { level->BeginRemoveSequence(begin); }, (CKLevel *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -2312,27 +2220,27 @@ void RegisterCKLevel(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKLevel", "const XObjectPointerArray &ComputeObjectList(CK_CLASSID cid, bool derived = true)", asFUNCTIONPR([](CKLevel *level, CK_CLASSID cid, bool derived) -> const XObjectPointerArray & { return level->ComputeObjectList(cid, derived); }, (CKLevel *, CK_CLASSID, bool), const XObjectPointerArray &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Place Management
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR AddPlace(CKPlace@ place)", asFUNCTION(CKLevelAddPlace), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR RemovePlace(CKPlace@ place)", asFUNCTION(CKLevelRemovePlace), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR AddPlace(CKPlace@ place)", asMETHODPR(CKLevel, AddPlace, (CKPlace *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR RemovePlace(CKPlace@ place)", asMETHODPR(CKLevel, RemovePlace, (CKPlace *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "CKPlace@ RemovePlace(int pos)", asMETHODPR(CKLevel, RemovePlace, (int), CKPlace *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "CKPlace@ GetPlace(int pos)", asMETHODPR(CKLevel, GetPlace, (int), CKPlace *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "int GetPlaceCount()", asMETHODPR(CKLevel, GetPlaceCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Scene Management
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR AddScene(CKScene@ scene)", asFUNCTION(CKLevelAddScene), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR RemoveScene(CKScene@ scene)", asFUNCTION(CKLevelRemoveScene), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR AddScene(CKScene@ scene)", asMETHODPR(CKLevel, AddScene, (CKScene *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR RemoveScene(CKScene@ scene)", asMETHODPR(CKLevel, RemoveScene, (CKScene *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "CKScene@ RemoveScene(int pos)", asMETHODPR(CKLevel, RemoveScene, (int), CKScene *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "CKScene@ GetScene(int pos)", asMETHODPR(CKLevel, GetScene, (int), CKScene *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "int GetSceneCount()", asMETHODPR(CKLevel, GetSceneCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Active Scene
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR SetNextActiveScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)", asFUNCTION(CKLevelSetNextActiveScene), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR LaunchScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)", asFUNCTION(CKLevelLaunchScene), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR SetNextActiveScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)", asMETHODPR(CKLevel, SetNextActiveScene, (CKScene *, CK_SCENEOBJECTACTIVITY_FLAGS, CK_SCENEOBJECTRESET_FLAGS), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR LaunchScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)", asMETHODPR(CKLevel, LaunchScene, (CKScene *, CK_SCENEOBJECTACTIVITY_FLAGS, CK_SCENEOBJECTRESET_FLAGS), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "CKScene@ GetCurrentScene()", asMETHODPR(CKLevel, GetCurrentScene, (), CKScene *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Render Context functions
-    r = engine->RegisterObjectMethod("CKLevel", "void AddRenderContext(CKRenderContext@ dev, bool main = false)", asFUNCTION(CKLevelAddRenderContext), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKLevel", "void RemoveRenderContext(CKRenderContext@ dev)", asFUNCTION(CKLevelRemoveRenderContext), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "void AddRenderContext(CKRenderContext@ dev, bool main = false)", asFUNCTIONPR([](CKLevel *level, CKRenderContext *dev, bool main) { level->AddRenderContext(dev, main); }, (CKLevel *, CKRenderContext *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "void RemoveRenderContext(CKRenderContext@ dev)", asMETHODPR(CKLevel, RemoveRenderContext, (CKRenderContext*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "int GetRenderContextCount()", asMETHODPR(CKLevel, GetRenderContextCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLevel", "CKRenderContext@ GetRenderContext(int count)", asMETHODPR(CKLevel, GetRenderContext, (int), CKRenderContext*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -2340,7 +2248,7 @@ void RegisterCKLevel(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKLevel", "CKScene@ GetLevelScene()", asMETHODPR(CKLevel, GetLevelScene, (), CKScene *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Merge
-    r = engine->RegisterObjectMethod("CKLevel", "CKERROR Merge(CKLevel@ mergedLevel, bool asScene)", asFUNCTION(CKLevelMerge), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLevel", "CKERROR Merge(CKLevel@ mergedLevel, bool asScene)", asFUNCTIONPR([](CKLevel *level, CKLevel *mergedLevel, bool asScene) { return level->Merge(mergedLevel, asScene); }, (CKLevel *, CKLevel *, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 void RegisterCKGroup(asIScriptEngine *engine) {
