@@ -3752,11 +3752,11 @@ void RegisterCKCameraMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void ResetRoll()", asMETHODPR(T, ResetRoll, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void Roll(float angle)", asMETHODPR(T, Roll, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "CK3dEntity@ GetTarget() const", asMETHODPR(T, GetTarget, (), CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CK3dEntity@ GetTarget()", asMETHODPR(T, GetTarget, (), CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetTarget(CK3dEntity@ target)", asMETHODPR(T, SetTarget, (CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    if (strcmp(name, name) != 0) {
-        RegisterCKObjectCast<T, CKCamera>(engine, name, name);
+    if (strcmp(name, "CKCamera") != 0) {
+        RegisterCKObjectCast<T, CKCamera>(engine, name, "CKCamera");
     }
 }
 
