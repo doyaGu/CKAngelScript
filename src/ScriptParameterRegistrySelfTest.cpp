@@ -9855,11 +9855,6 @@ bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &erro
         error = "CKPluginManager self-test could not find the registered type.";
         return false;
     }
-    if (pluginManagerType->GetMethodByDecl("bool SetReaderOptionData(CKContext@ context, NativePointer data, CKParameterOut@ param, CKFileExtension ext, CKGUID &in guid = void)") == nullptr ||
-        pluginManagerType->GetMethodByDecl("CKParameterOut@ GetReaderOptionData(CKContext@ context, NativePointer data, CKFileExtension ext, CKGUID &in guid = void)") == nullptr) {
-        error = "CKPluginManager self-test could not find expected reader option methods.";
-        return false;
-    }
     if (pluginManagerType->GetMethodByDecl("int GetCategoryCount()") == nullptr ||
         pluginManagerType->GetMethodByDecl("int GetPluginDllCount()") == nullptr ||
         pluginManagerType->GetMethodByDecl("CKERROR Save(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags, CKGUID &readerGuid = void)") == nullptr) {
@@ -9872,8 +9867,107 @@ bool RunCKPluginManagerScriptSelfTest(asIScriptEngine *engine, std::string &erro
         error = "CKPluginManager self-test found stale count/save declarations.";
         return false;
     }
+    if (pluginManagerType->GetMethodByDecl("CKPluginEntry FindComponent(CKGUID component, int catIdx = -1)") == nullptr ||
+        pluginManagerType->GetMethodByDecl("CKPluginDll GetPluginDllInfo(int idx)") == nullptr ||
+        pluginManagerType->GetMethodByDecl("CKPluginDll GetPluginDllInfo(const string &in name, int &out idx = void)") == nullptr ||
+        pluginManagerType->GetMethodByDecl("CKPluginEntry GetPluginInfo(int catIdx, int pluginIdx)") == nullptr) {
+        error = "CKPluginManager self-test could not find expected metadata value-return methods.";
+        return false;
+    }
+    if (pluginManagerType->GetMethodByDecl("CKPluginEntry &FindComponent(CKGUID component, int catIdx = -1)") != nullptr ||
+        pluginManagerType->GetMethodByDecl("CKPluginDll &GetPluginDllInfo(int idx)") != nullptr ||
+        pluginManagerType->GetMethodByDecl("CKPluginDll &GetPluginDllInfo(const string &in name, int &out idx = void)") != nullptr ||
+        pluginManagerType->GetMethodByDecl("CKPluginEntry &GetPluginInfo(int catIdx, int pluginIdx)") != nullptr) {
+        error = "CKPluginManager self-test found stale manager-owned reference metadata declarations.";
+        return false;
+    }
+    if (pluginManagerType->GetMethodByDecl("CKBitmapReader@ GetBitmapReader(CKFileExtension &in ext, CKGUID &in preferredGUID = void)") != nullptr ||
+        pluginManagerType->GetMethodByDecl("CKSoundReader@ GetSoundReader(CKFileExtension &in ext, CKGUID &in preferredGUID = void)") != nullptr ||
+        pluginManagerType->GetMethodByDecl("CKModelReader@ GetModelReader(CKFileExtension &in ext, CKGUID &in preferredGUID = void)") != nullptr ||
+        pluginManagerType->GetMethodByDecl("CKMovieReader@ GetMovieReader(CKFileExtension &in ext, CKGUID &in preferredGUID = void)") != nullptr) {
+        error = "CKPluginManager self-test found stale no-count reader acquisition declarations.";
+        return false;
+    }
+    if (pluginManagerType->GetMethodByDecl("bool SetReaderOptionData(CKContext@ context, NativePointer data, CKParameterOut@ param, CKFileExtension ext, CKGUID &in guid = void)") != nullptr ||
+        pluginManagerType->GetMethodByDecl("CKParameterOut@ GetReaderOptionData(CKContext@ context, NativePointer data, CKFileExtension ext, CKGUID &in guid = void)") != nullptr) {
+        error = "CKPluginManager self-test found stale raw reader option data declarations.";
+        return false;
+    }
 
-    return true;
+    constexpr const char *moduleName = "__CKAS_CKPluginManagerSelfTest";
+    const char *source =
+        "int ProbeCKPluginManagerSurface() {\n"
+        "  CKPluginManager@ manager = CKGetPluginManager();\n"
+        "  if (manager is null) return 1;\n"
+        "  if (manager.GetCategoryCount() < 0) return 2;\n"
+        "  if (manager.GetPluginDllCount() < 0) return 3;\n"
+        "  int idx = manager.GetCategoryIndex(\"__ckas_missing_category__\");\n"
+        "  if (idx < -1) return 4;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKPluginManagerMissingDllByIndex() {\n"
+        "  CKPluginManager@ manager = CKGetPluginManager();\n"
+        "  CKPluginDll dll = manager.GetPluginDllInfo(-1);\n"
+        "}\n"
+        "void RejectCKPluginManagerMissingDllByName() {\n"
+        "  CKPluginManager@ manager = CKGetPluginManager();\n"
+        "  int idx = -2;\n"
+        "  CKPluginDll dll = manager.GetPluginDllInfo(\"__ckas_missing_plugin_dll__\", idx);\n"
+        "}\n"
+        "void RejectCKPluginManagerMissingPluginInfo() {\n"
+        "  CKPluginManager@ manager = CKGetPluginManager();\n"
+        "  CKPluginEntry entry = manager.GetPluginInfo(-1, -1);\n"
+        "}\n"
+        "void RejectCKPluginManagerMissingComponent() {\n"
+        "  CKPluginManager@ manager = CKGetPluginManager();\n"
+        "  CKGUID guid;\n"
+        "  CKPluginEntry entry = manager.FindComponent(guid, -99999);\n"
+        "}\n"
+        "void RejectCKPluginManagerInvalidCategoryName() {\n"
+        "  CKPluginManager@ manager = CKGetPluginManager();\n"
+        "  string name = manager.GetCategoryName(-1);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPluginManager self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-plugin-manager-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginManager self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginManager self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPluginManagerSurface()");
+    asIScriptFunction *missingDllByIndex = module->GetFunctionByDecl("void RejectCKPluginManagerMissingDllByIndex()");
+    asIScriptFunction *missingDllByName = module->GetFunctionByDecl("void RejectCKPluginManagerMissingDllByName()");
+    asIScriptFunction *missingPluginInfo = module->GetFunctionByDecl("void RejectCKPluginManagerMissingPluginInfo()");
+    asIScriptFunction *missingComponent = module->GetFunctionByDecl("void RejectCKPluginManagerMissingComponent()");
+    asIScriptFunction *invalidCategoryName = module->GetFunctionByDecl("void RejectCKPluginManagerInvalidCategoryName()");
+    if (!probe || !missingDllByIndex || !missingDllByName || !missingPluginInfo || !missingComponent || !invalidCategoryName) {
+        engine->DiscardModule(moduleName);
+        error = "CKPluginManager self-test functions were not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKPluginManager surface probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, missingDllByIndex, true, "CKPluginManager missing DLL index probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, missingDllByName, true, "CKPluginManager missing DLL name probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, missingPluginInfo, true, "CKPluginManager missing plugin info probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, missingComponent, true, "CKPluginManager missing component probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, invalidCategoryName, true, "CKPluginManager invalid category name probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
 }
 
 bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &error) {

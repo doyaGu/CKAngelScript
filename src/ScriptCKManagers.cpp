@@ -1,6 +1,7 @@
 #include "ScriptCKManagers.h"
 
 #include <string>
+#include <vector>
 
 #include "CKAll.h"
 
@@ -9,63 +10,167 @@
 #include "ScriptRegistration.h"
 #include "ScriptCKVertexBuffer.h"
 
-static CKPluginEntry &MissingCKPluginEntry(const char *message) {
-    static thread_local CKPluginEntry dummy;
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        ctx->SetException(message);
-    }
-    return dummy;
-}
-
 static void SetActiveScriptException(const char *message) {
     if (asIScriptContext *ctx = asGetActiveContext()) {
         ctx->SetException(message);
     }
 }
 
-static CKPluginDll &MissingCKPluginDll(const char *message) {
-    static thread_local CKPluginDll dummy;
+static CKSTRING MutableCKString(std::vector<char> &buffer, const std::string &text) {
+    buffer.assign(text.begin(), text.end());
+    buffer.push_back('\0');
+    return buffer.data();
+}
+
+static CKPluginEntry MissingCKPluginEntry(const char *message) {
+    SetActiveScriptException(message);
+    return CKPluginEntry();
+}
+
+static CKPluginDll MissingCKPluginDll(const char *message) {
+    CKPluginDll dummy;
     dummy.m_PluginInfoCount = 0;
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        ctx->SetException(message);
-    }
+    SetActiveScriptException(message);
     return dummy;
 }
 
-static CKPluginEntry &FindCKPluginComponent(CKPluginManager *self, CKGUID component, int catIdx) {
-    if (self) {
-        if (CKPluginEntry *entry = self->FindComponent(component, catIdx)) {
-            return *entry;
-        }
+static int ParseCKPlugins(CKPluginManager *self, const std::string &directory) {
+    if (!self) {
+        SetActiveScriptException("CKPluginManager.ParsePlugins requires a valid manager.");
+        return 0;
+    }
+    std::vector<char> directoryBuffer;
+    return self->ParsePlugins(MutableCKString(directoryBuffer, directory));
+}
+
+static CKERROR RegisterCKPlugin(CKPluginManager *self, const std::string &plugin) {
+    if (!self) {
+        SetActiveScriptException("CKPluginManager.RegisterPlugin requires a valid manager.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    std::vector<char> pluginBuffer;
+    return self->RegisterPlugin(MutableCKString(pluginBuffer, plugin));
+}
+
+static CKPluginEntry FindCKPluginComponent(CKPluginManager *self, CKGUID component, int catIdx) {
+    if (!self) {
+        return MissingCKPluginEntry("CKPluginManager.FindComponent requires a valid manager.");
+    }
+    if (catIdx < -1 || catIdx >= self->GetCategoryCount()) {
+        return MissingCKPluginEntry("CKPluginManager.FindComponent category index is out of range.");
+    }
+    if (CKPluginEntry *entry = self->FindComponent(component, catIdx)) {
+        return *entry;
     }
     return MissingCKPluginEntry("CKPluginManager.FindComponent did not find a matching plugin entry.");
 }
 
-static CKPluginDll &GetCKPluginDllInfoByIndex(CKPluginManager *self, int idx) {
-    if (self) {
-        if (CKPluginDll *dll = self->GetPluginDllInfo(idx)) {
-            return *dll;
-        }
+static int AddCKPluginCategory(CKPluginManager *self, const std::string &category) {
+    if (!self) {
+        SetActiveScriptException("CKPluginManager.AddCategory requires a valid manager.");
+        return -1;
+    }
+    std::vector<char> categoryBuffer;
+    return self->AddCategory(MutableCKString(categoryBuffer, category));
+}
+
+static std::string GetCKPluginCategoryName(CKPluginManager *self, int index) {
+    if (!self) {
+        SetActiveScriptException("CKPluginManager.GetCategoryName requires a valid manager.");
+        return "";
+    }
+    if (index < 0 || index >= self->GetCategoryCount()) {
+        SetActiveScriptException("CKPluginManager.GetCategoryName index is out of range.");
+        return "";
+    }
+    return ScriptStringify(self->GetCategoryName(index));
+}
+
+static int GetCKPluginCategoryIndex(CKPluginManager *self, const std::string &category) {
+    if (!self) {
+        SetActiveScriptException("CKPluginManager.GetCategoryIndex requires a valid manager.");
+        return -1;
+    }
+    std::vector<char> categoryBuffer;
+    return self->GetCategoryIndex(MutableCKString(categoryBuffer, category));
+}
+
+static CKERROR RenameCKPluginCategory(CKPluginManager *self, int catIdx, const std::string &newName) {
+    if (!self) {
+        SetActiveScriptException("CKPluginManager.RenameCategory requires a valid manager.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    std::vector<char> nameBuffer;
+    return self->RenameCategory(catIdx, MutableCKString(nameBuffer, newName));
+}
+
+static CKPluginDll GetCKPluginDllInfoByIndex(CKPluginManager *self, int idx) {
+    if (!self) {
+        return MissingCKPluginDll("CKPluginManager.GetPluginDllInfo requires a valid manager.");
+    }
+    if (idx < 0 || idx >= self->GetPluginDllCount()) {
+        return MissingCKPluginDll("CKPluginManager.GetPluginDllInfo index is out of range.");
+    }
+    if (CKPluginDll *dll = self->GetPluginDllInfo(idx)) {
+        return *dll;
     }
     return MissingCKPluginDll("CKPluginManager.GetPluginDllInfo index is out of range.");
 }
 
-static CKPluginDll &GetCKPluginDllInfoByName(CKPluginManager *self, const std::string &name, int *idx) {
-    if (self) {
-        if (CKPluginDll *dll = self->GetPluginDllInfo(const_cast<CKSTRING>(name.c_str()), idx)) {
-            return *dll;
-        }
+static CKPluginDll GetCKPluginDllInfoByName(CKPluginManager *self, const std::string &name, int *idx) {
+    if (!self) {
+        return MissingCKPluginDll("CKPluginManager.GetPluginDllInfo requires a valid manager.");
+    }
+    std::vector<char> nameBuffer;
+    if (CKPluginDll *dll = self->GetPluginDllInfo(MutableCKString(nameBuffer, name), idx)) {
+        return *dll;
     }
     return MissingCKPluginDll("CKPluginManager.GetPluginDllInfo did not find a matching plugin DLL.");
 }
 
-static CKPluginEntry &GetCKPluginInfo(CKPluginManager *self, int catIdx, int pluginIdx) {
-    if (self) {
-        if (CKPluginEntry *entry = self->GetPluginInfo(catIdx, pluginIdx)) {
-            return *entry;
-        }
+static CKPluginEntry GetCKPluginInfo(CKPluginManager *self, int catIdx, int pluginIdx) {
+    if (!self) {
+        return MissingCKPluginEntry("CKPluginManager.GetPluginInfo requires a valid manager.");
+    }
+    if (catIdx < 0 || catIdx >= self->GetCategoryCount()) {
+        return MissingCKPluginEntry("CKPluginManager.GetPluginInfo category index is out of range.");
+    }
+    if (pluginIdx < 0 || pluginIdx >= self->GetPluginCount(catIdx)) {
+        return MissingCKPluginEntry("CKPluginManager.GetPluginInfo plugin index is out of range.");
+    }
+    if (CKPluginEntry *entry = self->GetPluginInfo(catIdx, pluginIdx)) {
+        return *entry;
     }
     return MissingCKPluginEntry("CKPluginManager.GetPluginInfo index is out of range.");
+}
+
+static CKERROR LoadCKPluginManagerFile(CKPluginManager *self,
+                                       CKContext *context,
+                                       const std::string &fileName,
+                                       CKObjectArray *objects,
+                                       CK_LOAD_FLAGS loadFlags,
+                                       CKCharacter *carac,
+                                       CKGUID *readerGuid) {
+    if (!self || !context || !objects) {
+        SetActiveScriptException("CKPluginManager.Load requires a valid manager, context, and object array.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    std::vector<char> fileNameBuffer;
+    return self->Load(context, MutableCKString(fileNameBuffer, fileName), objects, loadFlags, carac, readerGuid);
+}
+
+static CKERROR SaveCKPluginManagerFile(CKPluginManager *self,
+                                       CKContext *context,
+                                       const std::string &fileName,
+                                       CKObjectArray *objects,
+                                       CKDWORD saveFlags,
+                                       CKGUID *readerGuid) {
+    if (!self || !context || !objects) {
+        SetActiveScriptException("CKPluginManager.Save requires a valid manager, context, and object array.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    std::vector<char> fileNameBuffer;
+    return self->Save(context, MutableCKString(fileNameBuffer, fileName), objects, saveFlags, readerGuid);
 }
 
 static int GetCKInputKeyName(CKInputManager *self, CKDWORD key, std::string &keyName) {
@@ -816,36 +921,31 @@ void RegisterCKPluginManager(asIScriptEngine *engine) {
 
     int r = 0;
 
-    r = engine->RegisterObjectMethod("CKPluginManager", "int ParsePlugins(const string &in directory)", asFUNCTIONPR([](CKPluginManager *self, const std::string &directory) { return self->ParsePlugins(const_cast<CKSTRING>(directory.c_str())); }, (CKPluginManager *, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR RegisterPlugin(const string &in plugin)", asFUNCTIONPR([](CKPluginManager *self, const std::string &plugin) { return self->RegisterPlugin(const_cast<CKSTRING>(plugin.c_str())); }, (CKPluginManager *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginEntry &FindComponent(CKGUID component, int catIdx = -1)", asFUNCTION(FindCKPluginComponent), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "int ParsePlugins(const string &in directory)", asFUNCTION(ParseCKPlugins), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR RegisterPlugin(const string &in plugin)", asFUNCTION(RegisterCKPlugin), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginEntry FindComponent(CKGUID component, int catIdx = -1)", asFUNCTION(FindCKPluginComponent), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKPluginManager", "int AddCategory(const string &in category)", asFUNCTIONPR([](CKPluginManager *self, const std::string &category) { return self->AddCategory(const_cast<CKSTRING>(category.c_str())); }, (CKPluginManager *, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "int AddCategory(const string &in category)", asFUNCTION(AddCKPluginCategory), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR RemoveCategory(int catIdx)", asMETHODPR(CKPluginManager, RemoveCategory, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPluginManager", "int GetCategoryCount()", asMETHODPR(CKPluginManager, GetCategoryCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "string GetCategoryName(int index)", asFUNCTIONPR([](CKPluginManager *self, int index) -> std::string { return self->GetCategoryName(index); }, (CKPluginManager *, int), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "int GetCategoryIndex(const string &in category)", asFUNCTIONPR([](CKPluginManager *self, const std::string &category) { return self->GetCategoryIndex(const_cast<CKSTRING>(category.c_str())); }, (CKPluginManager *, const std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR RenameCategory(int catIdx, const string &in newName)", asFUNCTIONPR([](CKPluginManager *self, int catIdx, const std::string &newName) { return self->RenameCategory(catIdx, const_cast<CKSTRING>(newName.c_str())); }, (CKPluginManager *, int, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "string GetCategoryName(int index)", asFUNCTION(GetCKPluginCategoryName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "int GetCategoryIndex(const string &in category)", asFUNCTION(GetCKPluginCategoryIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR RenameCategory(int catIdx, const string &in newName)", asFUNCTION(RenameCKPluginCategory), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginManager", "int GetPluginDllCount()", asMETHODPR(CKPluginManager, GetPluginDllCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginDll &GetPluginDllInfo(int idx)", asFUNCTION(GetCKPluginDllInfoByIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginDll &GetPluginDllInfo(const string &in name, int &out idx = void)", asFUNCTION(GetCKPluginDllInfoByName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginDll GetPluginDllInfo(int idx)", asFUNCTION(GetCKPluginDllInfoByIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginDll GetPluginDllInfo(const string &in name, int &out idx = void)", asFUNCTION(GetCKPluginDllInfoByName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR UnLoadPluginDll(int idx)", asMETHODPR(CKPluginManager, UnLoadPluginDll, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR ReLoadPluginDll(int idx)", asMETHODPR(CKPluginManager, ReLoadPluginDll, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPluginManager", "int GetPluginCount(int catIdx)", asMETHODPR(CKPluginManager, GetPluginCount, (int), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginEntry &GetPluginInfo(int catIdx, int pluginIdx)", asFUNCTION(GetCKPluginInfo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKPluginEntry GetPluginInfo(int catIdx, int pluginIdx)", asFUNCTION(GetCKPluginInfo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKPluginManager", "bool SetReaderOptionData(CKContext@ context, NativePointer data, CKParameterOut @param, CKFileExtension ext, CKGUID &in guid = void)", asFUNCTIONPR([](CKPluginManager *self, CKContext *context, NativePointer data, CKParameterOut *param, CKFileExtension ext, CKGUID *guid) -> bool { return self->SetReaderOptionData(context, data.Get(), param, ext, guid); }, (CKPluginManager *, CKContext *, NativePointer, CKParameterOut *, CKFileExtension, CKGUID *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKParameterOut@ GetReaderOptionData(CKContext@ context, NativePointer data, CKFileExtension ext, CKGUID &in guid = void)", asFUNCTIONPR([](CKPluginManager *self, CKContext *context, NativePointer data, CKFileExtension ext, CKGUID *guid) { return self->GetReaderOptionData(context, data.Get(), ext, guid); }, (CKPluginManager *, CKContext *, NativePointer, CKFileExtension, CKGUID *), CKParameterOut *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    // CKPluginManager reader factories return caller-owned no-count readers. They are
+    // not script-visible until the binding has a wrapper that can own and release them.
 
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKBitmapReader@ GetBitmapReader(CKFileExtension &in ext, CKGUID &in preferredGUID = void)",asMETHODPR(CKPluginManager, GetBitmapReader, (CKFileExtension &, CKGUID *), CKBitmapReader *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKSoundReader@ GetSoundReader(CKFileExtension &in ext, CKGUID &in preferredGUID = void)",asMETHODPR(CKPluginManager, GetSoundReader, (CKFileExtension &, CKGUID *), CKSoundReader *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKModelReader@ GetModelReader(CKFileExtension &in ext, CKGUID &in preferredGUID = void)",asMETHODPR(CKPluginManager, GetModelReader, (CKFileExtension &, CKGUID *), CKModelReader *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKMovieReader@ GetMovieReader(CKFileExtension &in ext, CKGUID &in preferredGUID = void)",asMETHODPR(CKPluginManager, GetMovieReader, (CKFileExtension &, CKGUID *), CKMovieReader *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR Load(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags, CKCharacter@ carac = null, CKGUID &readerGuid = void)", asFUNCTIONPR([](CKPluginManager *self, CKContext *context, const std::string &fileName, CKObjectArray *objects, CK_LOAD_FLAGS loadFlags, CKCharacter *carac, CKGUID *readerGuid) { return self->Load(context, const_cast<CKSTRING>(fileName.c_str()), objects, loadFlags, carac, readerGuid); }, (CKPluginManager *, CKContext *, const std::string &, CKObjectArray *, CK_LOAD_FLAGS, CKCharacter *, CKGUID *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR Save(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags, CKGUID &readerGuid = void)", asFUNCTIONPR([](CKPluginManager *self, CKContext *context, const std::string &fileName, CKObjectArray *objects, CKDWORD saveFlags, CKGUID *readerGuid) { return self->Save(context, const_cast<CKSTRING>(fileName.c_str()), objects, saveFlags, readerGuid); }, (CKPluginManager *, CKContext *, const std::string &, CKObjectArray *, CKDWORD, CKGUID *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR Load(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags, CKCharacter@ carac = null, CKGUID &readerGuid = void)", asFUNCTION(LoadCKPluginManagerFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR Save(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags, CKGUID &readerGuid = void)", asFUNCTION(SaveCKPluginManagerFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Not existing in Virtools 2.1
     // r = engine->RegisterObjectMethod("CKPluginManager", "void ReleaseAllPlugins()", asMETHODPR(CKPluginManager, ReleaseAllPlugins, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
