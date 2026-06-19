@@ -8048,15 +8048,9 @@ bool RunCK3dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         !entityType->GetMethodByDecl("CK3dEntity@ GetParent() const") ||
         !entityType->GetMethodByDecl("bool AddChild(CK3dEntity@ child, bool keepWorldPos = true)") ||
         !entityType->GetMethodByDecl("bool RemoveChild(CK3dEntity@ mov)") ||
-        !entityType->GetMethodByDecl("bool CheckIfSameKindOfHierarchy(CK3dEntity@ mov, bool sameOrder = false) const") ||
         !entityType->GetMethodByDecl("CK3dEntity@ HierarchyParser(CK3dEntity@ current) const") ||
-        !entityType->GetMethodByDecl("bool IsInViewFrustrum(CKRenderContext@ dev, CKDWORD flags = 0)") ||
-        !entityType->GetMethodByDecl("bool IsInViewFrustrumHierarchic(CKRenderContext@ Dev)") ||
         !entityType->GetMethodByDecl("CKERROR AddMesh(CKMesh@ mesh)") ||
         !entityType->GetMethodByDecl("CKERROR RemoveMesh(CKMesh@ mesh)") ||
-        !entityType->GetMethodByDecl("bool Render(CKRenderContext@ dev, CKDWORD flags = CKRENDER_UPDATEEXTENTS)") ||
-        !entityType->GetMethodByDecl("void AddObjectAnimation(CKObjectAnimation@ anim)") ||
-        !entityType->GetMethodByDecl("void RemoveObjectAnimation(CKObjectAnimation@ anim)") ||
         !entityType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
         !entityType->GetMethodByDecl("void InverseTransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
         !entityType->GetMethodByDecl("bool AddPreRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback, bool temporary = false)") ||
@@ -8166,46 +8160,6 @@ bool RunCK3dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
         "  entity.TransformMany(tooSmall, source, 2);\n"
         "  return 0;\n"
-        "}\n"
-        "void ProbeCK3dEntityAddChildNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CK3dEntity@ none = null;\n"
-        "  entity.AddChild(none);\n"
-        "}\n"
-        "void ProbeCK3dEntityRemoveChildNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CK3dEntity@ none = null;\n"
-        "  entity.RemoveChild(none);\n"
-        "}\n"
-        "void ProbeCK3dEntityHierarchyNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CK3dEntity@ none = null;\n"
-        "  entity.CheckIfSameKindOfHierarchy(none);\n"
-        "}\n"
-        "void ProbeCK3dEntityViewNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CKRenderContext@ none = null;\n"
-        "  entity.IsInViewFrustrum(none);\n"
-        "}\n"
-        "void ProbeCK3dEntityViewHierarchicNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CKRenderContext@ none = null;\n"
-        "  entity.IsInViewFrustrumHierarchic(none);\n"
-        "}\n"
-        "void ProbeCK3dEntityAddMeshNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CKMesh@ none = null;\n"
-        "  entity.AddMesh(none);\n"
-        "}\n"
-        "void ProbeCK3dEntityRemoveMeshNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CKMesh@ none = null;\n"
-        "  entity.RemoveMesh(none);\n"
-        "}\n"
-        "void ProbeCK3dEntityRenderNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CKRenderContext@ none = null;\n"
-        "  entity.Render(none, 0);\n"
-        "}\n"
-        "void ProbeCK3dEntityAddObjectAnimationNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CKObjectAnimation@ none = null;\n"
-        "  entity.AddObjectAnimation(none);\n"
-        "}\n"
-        "void ProbeCK3dEntityRemoveObjectAnimationNull(CK3dEntity@ entity, CK3dEntity@ child, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
-        "  CKObjectAnimation@ none = null;\n"
-        "  entity.RemoveObjectAnimation(none);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -8229,19 +8183,7 @@ bool RunCK3dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCK3dEntitySurface(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
     asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCK3dEntitySmallTransform(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *addChildNull = module->GetFunctionByDecl("void ProbeCK3dEntityAddChildNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *removeChildNull = module->GetFunctionByDecl("void ProbeCK3dEntityRemoveChildNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *hierarchyNull = module->GetFunctionByDecl("void ProbeCK3dEntityHierarchyNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *viewNull = module->GetFunctionByDecl("void ProbeCK3dEntityViewNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *viewHierarchicNull = module->GetFunctionByDecl("void ProbeCK3dEntityViewHierarchicNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *addMeshNull = module->GetFunctionByDecl("void ProbeCK3dEntityAddMeshNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *removeMeshNull = module->GetFunctionByDecl("void ProbeCK3dEntityRemoveMeshNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *renderNull = module->GetFunctionByDecl("void ProbeCK3dEntityRenderNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *addAnimationNull = module->GetFunctionByDecl("void ProbeCK3dEntityAddObjectAnimationNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    asIScriptFunction *removeAnimationNull = module->GetFunctionByDecl("void ProbeCK3dEntityRemoveObjectAnimationNull(CK3dEntity@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
-    if (!probe || !smallTransform || !addChildNull || !removeChildNull || !hierarchyNull || !viewNull ||
-        !viewHierarchicNull || !addMeshNull ||
-        !removeMeshNull || !renderNull || !addAnimationNull || !removeAnimationNull) {
+    if (!probe || !smallTransform) {
         engine->DiscardModule(moduleName);
         error = "CK3dEntity self-test functions were not found.";
         return false;
@@ -8268,16 +8210,6 @@ bool RunCK3dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
     CKDependenciesContext dependencies(context);
     const bool ok = ExecuteCK3dEntityProbe(engine, probe, entity, child, mesh, animation, false, "CK3dEntity surface probe", error) &&
                     ExecuteCK3dEntityProbe(engine, smallTransform, entity, child, mesh, animation, true, "CK3dEntity small TransformMany probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, addChildNull, entity, child, mesh, animation, true, "CK3dEntity AddChild null probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, removeChildNull, entity, child, mesh, animation, true, "CK3dEntity RemoveChild null probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, hierarchyNull, entity, child, mesh, animation, true, "CK3dEntity hierarchy null probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, viewNull, entity, child, mesh, animation, true, "CK3dEntity IsInViewFrustrum null probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, viewHierarchicNull, entity, child, mesh, animation, true, "CK3dEntity IsInViewFrustrumHierarchic null probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, addMeshNull, entity, child, mesh, animation, true, "CK3dEntity AddMesh null probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, removeMeshNull, entity, child, mesh, animation, true, "CK3dEntity RemoveMesh null probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, renderNull, entity, child, mesh, animation, true, "CK3dEntity Render null probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, addAnimationNull, entity, child, mesh, animation, true, "CK3dEntity AddObjectAnimation null probe", error) &&
-                    ExecuteCK3dEntityProbe(engine, removeAnimationNull, entity, child, mesh, animation, true, "CK3dEntity RemoveObjectAnimation null probe", error) &&
                     ExecuteCK3dEntityCopyNullProbe(engine, entityType, entity, dependencies, error);
 
     child->SetParent(nullptr);

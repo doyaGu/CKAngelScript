@@ -3774,102 +3774,6 @@ static void InverseTransformManyCK3dEntity(const T *self, NativeBuffer *dest, Na
                                ref);
 }
 
-static void SetCK3dEntityBindingException(const char *message) {
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        ctx->SetException(message);
-    }
-}
-
-template <typename T>
-static bool CK3dEntityAddChild(T *self, CK3dEntity *child, bool keepWorldPos) {
-    if (!self || !child) {
-        SetCK3dEntityBindingException("CK3dEntity.AddChild requires a non-null child.");
-        return false;
-    }
-    return self->AddChild(child, keepWorldPos) != FALSE;
-}
-
-template <typename T>
-static bool CK3dEntityRemoveChild(T *self, CK3dEntity *child) {
-    if (!self || !child) {
-        SetCK3dEntityBindingException("CK3dEntity.RemoveChild requires a non-null child.");
-        return false;
-    }
-    return self->RemoveChild(child) != FALSE;
-}
-
-template <typename T>
-static bool CK3dEntityCheckIfSameKindOfHierarchy(T *self, CK3dEntity *other, bool sameOrder) {
-    if (!self || !other) {
-        SetCK3dEntityBindingException("CK3dEntity.CheckIfSameKindOfHierarchy requires a non-null entity.");
-        return false;
-    }
-    return self->CheckIfSameKindOfHierarchy(other, sameOrder) != FALSE;
-}
-
-template <typename T>
-static bool CK3dEntityIsInViewFrustrum(T *self, CKRenderContext *dev, CKDWORD flags) {
-    if (!self || !dev) {
-        SetCK3dEntityBindingException("CK3dEntity.IsInViewFrustrum requires a non-null CKRenderContext.");
-        return false;
-    }
-    return self->IsInViewFrustrum(dev, flags) != FALSE;
-}
-
-template <typename T>
-static bool CK3dEntityIsInViewFrustrumHierarchic(T *self, CKRenderContext *dev) {
-    if (!self || !dev) {
-        SetCK3dEntityBindingException("CK3dEntity.IsInViewFrustrumHierarchic requires a non-null CKRenderContext.");
-        return false;
-    }
-    return self->IsInViewFrustrumHierarchic(dev) != FALSE;
-}
-
-template <typename T>
-static CKERROR CK3dEntityAddMesh(T *self, CKMesh *mesh) {
-    if (!self || !mesh) {
-        SetCK3dEntityBindingException("CK3dEntity.AddMesh requires a non-null CKMesh.");
-        return CKERR_INVALIDPARAMETER;
-    }
-    return self->AddMesh(mesh);
-}
-
-template <typename T>
-static CKERROR CK3dEntityRemoveMesh(T *self, CKMesh *mesh) {
-    if (!self || !mesh) {
-        SetCK3dEntityBindingException("CK3dEntity.RemoveMesh requires a non-null CKMesh.");
-        return CKERR_INVALIDPARAMETER;
-    }
-    return self->RemoveMesh(mesh);
-}
-
-template <typename T>
-static bool CK3dEntityRender(T *self, CKRenderContext *dev, CKDWORD flags) {
-    if (!self || !dev) {
-        SetCK3dEntityBindingException("CK3dEntity.Render requires a non-null CKRenderContext.");
-        return false;
-    }
-    return self->Render(dev, flags) != FALSE;
-}
-
-template <typename T>
-static void CK3dEntityAddObjectAnimation(T *self, CKObjectAnimation *animation) {
-    if (!self || !animation) {
-        SetCK3dEntityBindingException("CK3dEntity.AddObjectAnimation requires a non-null CKObjectAnimation.");
-        return;
-    }
-    self->AddObjectAnimation(animation);
-}
-
-template <typename T>
-static void CK3dEntityRemoveObjectAnimation(T *self, CKObjectAnimation *animation) {
-    if (!self || !animation) {
-        SetCK3dEntityBindingException("CK3dEntity.RemoveObjectAnimation requires a non-null CKObjectAnimation.");
-        return;
-    }
-    self->RemoveObjectAnimation(animation);
-}
-
 template <typename T>
 void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     assert(engine != nullptr);
@@ -3884,10 +3788,10 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "bool SetParent(CK3dEntity@ parent, bool keepWorldPos = true)", asFUNCTIONPR([](T *self, CK3dEntity *parent, bool keepWorldPos) -> bool { return self->SetParent(parent, keepWorldPos); }, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK3dEntity@ GetParent() const", asFUNCTIONPR([](T *self) -> CK3dEntity * { return self->GetParent(); }, (T *), CK3dEntity *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "bool AddChild(CK3dEntity@ child, bool keepWorldPos = true)", asFUNCTIONPR(CK3dEntityAddChild<T>, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool AddChild(CK3dEntity@ child, bool keepWorldPos = true)", asFUNCTIONPR([](T *self, CK3dEntity *child, bool keepWorldPos) -> bool { return self->AddChild(child, keepWorldPos); }, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool AddChildren(const XObjectPointerArray &in children, bool keepWorldPos = true)", asFUNCTIONPR([](T *self, const XObjectPointerArray &children, bool keepWorldPos) -> bool { return self->AddChildren(children, keepWorldPos); }, (T *, const XObjectPointerArray &, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool RemoveChild(CK3dEntity@ mov)", asFUNCTIONPR(CK3dEntityRemoveChild<T>, (T *, CK3dEntity *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool CheckIfSameKindOfHierarchy(CK3dEntity@ mov, bool sameOrder = false) const", asFUNCTIONPR(CK3dEntityCheckIfSameKindOfHierarchy<T>, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool RemoveChild(CK3dEntity@ mov)", asFUNCTIONPR([](T *self, CK3dEntity *mov) -> bool { return self->RemoveChild(mov); }, (T *, CK3dEntity *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool CheckIfSameKindOfHierarchy(CK3dEntity@ mov, bool sameOrder = false) const", asFUNCTIONPR([](T *self, CK3dEntity *mov, bool sameOrder) -> bool { return self->CheckIfSameKindOfHierarchy(mov, sameOrder); }, (T *, CK3dEntity *, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CK3dEntity@ HierarchyParser(CK3dEntity@ current) const", asMETHODPR(T, HierarchyParser, (CK3dEntity *) const, CK3dEntity *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CKDWORD GetFlags() const", asMETHODPR(T, GetFlags, () const, CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -3901,8 +3805,8 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "bool AreRenderChannelsVisible() const", asFUNCTIONPR([](const T *self) -> bool { return self->AreRenderChannelsVisible(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
 
-    r = engine->RegisterObjectMethod(name, "bool IsInViewFrustrum(CKRenderContext@ dev, CKDWORD flags = 0)", asFUNCTIONPR(CK3dEntityIsInViewFrustrum<T>, (T *, CKRenderContext *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "bool IsInViewFrustrumHierarchic(CKRenderContext@ Dev)", asFUNCTIONPR(CK3dEntityIsInViewFrustrumHierarchic<T>, (T *, CKRenderContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool IsInViewFrustrum(CKRenderContext@ dev, CKDWORD flags = 0)", asFUNCTIONPR([](T *self, CKRenderContext *dev, CKDWORD flags) -> bool { return self->IsInViewFrustrum(dev, flags); }, (T *, CKRenderContext *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool IsInViewFrustrumHierarchic(CKRenderContext@ Dev)", asFUNCTIONPR([](T *self, CKRenderContext *Dev) -> bool { return self->IsInViewFrustrumHierarchic(Dev); }, (T *, CKRenderContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "void IgnoreAnimations(bool ignore = true)", asFUNCTIONPR([](T *self, bool ignore) { self->IgnoreAnimations(ignore); }, (T *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool AreAnimationIgnored() const", asFUNCTIONPR([](const T *self) -> bool { return self->AreAnimationIgnored(); }, (const T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -3921,8 +3825,8 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "CKMesh@ SetCurrentMesh(CKMesh@ m, bool addIfNotHere = true)", asFUNCTIONPR([](T *self, CKMesh *m, bool addIfNotHere) -> CKMesh* { return self->SetCurrentMesh(m, addIfNotHere); }, (T *, CKMesh *, bool), CKMesh *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetMeshCount() const", asMETHODPR(T, GetMeshCount, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKMesh@ GetMesh(int pos) const", asMETHODPR(T, GetMesh, (int) const, CKMesh*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR AddMesh(CKMesh@ mesh)", asFUNCTIONPR(CK3dEntityAddMesh<T>, (T *, CKMesh *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR RemoveMesh(CKMesh@ mesh)", asFUNCTIONPR(CK3dEntityRemoveMesh<T>, (T *, CKMesh *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR AddMesh(CKMesh@ mesh)", asMETHODPR(T, AddMesh, (CKMesh*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR RemoveMesh(CKMesh@ mesh)", asMETHODPR(T, RemoveMesh, (CKMesh*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "void LookAt(const VxVector &in pos, CK3dEntity@ ref = null, bool keepChildren = false)", asFUNCTIONPR([](T *self, const VxVector &pos, CK3dEntity *ref, bool keepChildren) { self->LookAt(&pos, ref, keepChildren); }, (T *, const VxVector &, CK3dEntity *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
@@ -3954,7 +3858,7 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "bool ConstructLocalMatrix(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat)", asFUNCTIONPR([](T *self, const VxVector &pos, const VxVector &scale, const VxQuaternion &quat) -> bool { return self->ConstructLocalMatrix(&pos, &scale, &quat); }, (T *, const VxVector &, const VxVector &, const VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool ConstructLocalMatrixEx(const VxVector &in pos, const VxVector &in scale, const VxQuaternion &in quat, const VxQuaternion &in shear, float sign)", asFUNCTIONPR([](T *self, const VxVector &pos, const VxVector &scale, const VxQuaternion &quat, const VxQuaternion &shear, float sign) -> bool { return self->ConstructLocalMatrixEx(&pos, &scale, &quat, &shear, sign); }, (T *, const VxVector &, const VxVector &, const VxQuaternion &, const VxQuaternion &, float), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "bool Render(CKRenderContext@ dev, CKDWORD flags = CKRENDER_UPDATEEXTENTS)", asFUNCTIONPR(CK3dEntityRender<T>, (T *, CKRenderContext *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool Render(CKRenderContext@ dev, CKDWORD flags = CKRENDER_UPDATEEXTENTS)", asFUNCTIONPR([](T *self, CKRenderContext *dev, CKDWORD flags) -> bool { return self->Render(dev, flags); }, (T *, CKRenderContext *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "int RayIntersection(const VxVector &in pos1, const VxVector &in pos2, VxIntersectionDesc &out desc, CK3dEntity@ ref, CK_RAYINTERSECTION options = CKRAYINTERSECTION_DEFAULT)", asMETHODPR(T, RayIntersection, (const VxVector *, const VxVector *, VxIntersectionDesc *, CK3dEntity *, CK_RAYINTERSECTION), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void GetRenderExtents(VxRect &out rect) const", asMETHODPR(T, GetRenderExtents, (VxRect&) const, void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -3977,8 +3881,8 @@ void RegisterCK3dEntityMembers(asIScriptEngine *engine, const char *name) {
 
     r = engine->RegisterObjectMethod(name, "CKPlace@ GetReferencePlace() const", asMETHODPR(T, GetReferencePlace, () const, CKPlace *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void AddObjectAnimation(CKObjectAnimation@ anim)", asFUNCTIONPR(CK3dEntityAddObjectAnimation<T>, (T *, CKObjectAnimation *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void RemoveObjectAnimation(CKObjectAnimation@ anim)", asFUNCTIONPR(CK3dEntityRemoveObjectAnimation<T>, (T *, CKObjectAnimation *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void AddObjectAnimation(CKObjectAnimation@ anim)", asMETHODPR(T, AddObjectAnimation, (CKObjectAnimation *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void RemoveObjectAnimation(CKObjectAnimation@ anim)", asMETHODPR(T, RemoveObjectAnimation, (CKObjectAnimation *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKObjectAnimation@ GetObjectAnimation(int index) const", asMETHODPR(T, GetObjectAnimation, (int) const, CKObjectAnimation *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int GetObjectAnimationCount() const", asMETHODPR(T, GetObjectAnimationCount, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
