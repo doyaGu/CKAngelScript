@@ -990,8 +990,8 @@ void RegisterCKPluginManager(asIScriptEngine *engine) {
     // CKPluginManager reader factories return caller-owned no-count readers. They are
     // not script-visible until the binding has a wrapper that can own and release them.
 
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR Load(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags, CKCharacter@ carac = null, CKGUID &readerGuid = void)", asFUNCTION(LoadCKPluginManagerFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR Save(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags, CKGUID &readerGuid = void)", asFUNCTION(SaveCKPluginManagerFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR Load(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags, CKCharacter@ carac = null, CKGUID &out readerGuid = void)", asFUNCTION(LoadCKPluginManagerFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPluginManager", "CKERROR Save(CKContext@ context, const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags, CKGUID &out readerGuid = void)", asFUNCTION(SaveCKPluginManagerFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Not existing in Virtools 2.1
     // r = engine->RegisterObjectMethod("CKPluginManager", "void ReleaseAllPlugins()", asMETHODPR(CKPluginManager, ReleaseAllPlugins, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
