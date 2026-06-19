@@ -7670,6 +7670,72 @@ bool RunCKGroupScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::
     return ok;
 }
 
+bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKRenderContext script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *renderContextType = engine->GetTypeInfoByDecl("CKRenderContext");
+    if (!renderContextType) {
+        error = "CKRenderContext self-test could not find the registered type.";
+        return false;
+    }
+    if (renderContextType->GetMethodByDecl("VX_PIXELFORMAT GetPixelFormat(int &out bpp = void, int &out zbpp = void, int &out stencilBpp = void)") == nullptr) {
+        error = "CKRenderContext self-test could not find output GetPixelFormat declaration.";
+        return false;
+    }
+    if (renderContextType->GetMethodByDecl("VX_PIXELFORMAT GetPixelFormat(int &in bpp = void, int &in zbpp = void, int &in stencilBpp = void)") != nullptr) {
+        error = "CKRenderContext self-test found stale input GetPixelFormat declaration.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKRenderContextSelfTest";
+    const char *source =
+        "int ProbeCKRenderContextPixelFormat(CKContext@ ctx) {\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev is null) return 1;\n"
+        "  int bpp = -123;\n"
+        "  int zbpp = -456;\n"
+        "  int stencil = -789;\n"
+        "  VX_PIXELFORMAT format = dev.GetPixelFormat(bpp, zbpp, stencil);\n"
+        "  dev.GetPixelFormat();\n"
+        "  if (bpp == -123 && zbpp == -456 && stencil == -789) return 2;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKRenderContext self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-render-context-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKRenderContext self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKRenderContext self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKRenderContextPixelFormat(CKContext@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKRenderContext self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKRenderContext GetPixelFormat probe", error);
+
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKRenderObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKRenderObject script self-test requires CKContext and AngelScript engine.";
@@ -14222,6 +14288,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKGroupScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKRenderContextScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKRenderObjectScriptSelfTest(context, engine, error)) {

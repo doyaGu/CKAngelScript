@@ -840,6 +840,20 @@ void RegisterCKBehaviorIO(asIScriptEngine *engine) {
     // r = engine->RegisterObjectMethod("CKBehaviorIO", "void SortLinks()", asMETHODPR(CKBehaviorIO, SortLinks, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
+static void SetCKRenderBindingException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+static VX_PIXELFORMAT CKRenderContextGetPixelFormat(CKRenderContext *self, int *bpp, int *zbpp, int *stencilBpp) {
+    if (!self) {
+        SetCKRenderBindingException("CKRenderContext.GetPixelFormat requires a valid render context.");
+        return static_cast<VX_PIXELFORMAT>(0);
+    }
+    return self->GetPixelFormat(bpp, zbpp, stencilBpp);
+}
+
 static void CKRenderContext_RenderCallback(CKRenderContext *dev, void *data) {
     auto *func = static_cast<asIScriptFunction *>(data);
     if (!func)
@@ -967,7 +981,7 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKRenderContext", "void SetViewRect(const VxRect &in rect)", asMETHODPR(CKRenderContext, SetViewRect, (VxRect&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "void GetViewRect(VxRect &out rect)", asMETHODPR(CKRenderContext, GetViewRect, (VxRect&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKRenderContext", "VX_PIXELFORMAT GetPixelFormat(int &in bpp = void, int &in zbpp = void, int &in stencilBpp = void)", asMETHODPR(CKRenderContext, GetPixelFormat, (int*, int*, int*), VX_PIXELFORMAT), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "VX_PIXELFORMAT GetPixelFormat(int &out bpp = void, int &out zbpp = void, int &out stencilBpp = void)", asFUNCTION(CKRenderContextGetPixelFormat), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "void SetState(VXRENDERSTATETYPE state, CKDWORD value)", asMETHODPR(CKRenderContext, SetState, (VXRENDERSTATETYPE, CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "CKDWORD GetState(VXRENDERSTATETYPE state)", asMETHODPR(CKRenderContext, GetState, (VXRENDERSTATETYPE), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -2185,12 +2199,6 @@ static NativePointer GetCKMaterialCallback(CKMaterial *self, NativePointer *argu
         *argument = NativePointer(rawArgument);
     }
     return NativePointer(reinterpret_cast<void *>(callback));
-}
-
-static void SetCKRenderBindingException(const char *message) {
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        ctx->SetException(message);
-    }
 }
 
 static bool CKMaterialSetAsCurrent(CKMaterial *self, CKRenderContext *dev, bool lit, int textureStage) {
