@@ -5,6 +5,31 @@
 #include <cstdio>
 #include "ScriptRegistration.h"
 
+namespace {
+
+void RetainNativeBufferOwner(void *owner) {
+    if (owner) {
+        static_cast<NativeBuffer *>(owner)->AddRef();
+    }
+}
+
+void ReleaseNativeBufferOwner(void *owner) {
+    if (owner) {
+        static_cast<NativeBuffer *>(owner)->Release();
+    }
+}
+
+char *ResolveNativeBufferOwner(void *owner, intptr_t offset) {
+    auto *buffer = static_cast<NativeBuffer *>(owner);
+    if (!buffer) {
+        return nullptr;
+    }
+    char *data = buffer->Data();
+    return data ? data + offset : nullptr;
+}
+
+} // namespace
+
 NativeBuffer::NativeBuffer(size_t size) {
     m_Buffer = static_cast<char *>(asAllocMem(size));
     m_Size = size;
@@ -12,7 +37,15 @@ NativeBuffer::NativeBuffer(size_t size) {
     m_Owned = true;
 }
 
-NativeBuffer::NativeBuffer(void *buffer, size_t size): m_Buffer(static_cast<char *>(buffer)), m_Size(size), m_CursorPos(0), m_Owned(false) {}
+NativeBuffer::NativeBuffer(void *buffer, size_t size)
+    : m_Buffer(static_cast<char *>(buffer)),
+      m_Size(size),
+      m_CursorPos(0),
+      m_Owned(false),
+      m_BackingPointer(buffer) {}
+
+NativeBuffer::NativeBuffer(NativePointer ptr, size_t size)
+    : m_Buffer(ptr.Get()), m_Size(size), m_CursorPos(0), m_Owned(false), m_BackingPointer(ptr) {}
 
 NativeBuffer::~NativeBuffer() {
     if (m_Owned && m_Buffer) {
@@ -52,60 +85,66 @@ asILockableSharedBool *NativeBuffer::GetWeakRefFlag() {
 
 char &NativeBuffer::operator[](size_t index) {
     static char dummy = 0;
-    if (!m_Buffer || index >= m_Size) {
+    char *data = Data();
+    if (!data || index >= m_Size) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Index out of bounds");
         return dummy;
     }
-    return m_Buffer[index];
+    return data[index];
 }
 
 const char &NativeBuffer::operator[](size_t index) const {
     static constexpr char dummy = 0;
-    if (!m_Buffer || index >= m_Size) {
+    char *data = Data();
+    if (!data || index >= m_Size) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Index out of bounds");
         return dummy;
     }
-    return m_Buffer[index];
+    return data[index];
 }
 
 asBYTE &NativeBuffer::ByteAt(size_t index) {
     static asBYTE dummy = 0;
-    if (!m_Buffer || index >= m_Size) {
+    char *data = Data();
+    if (!data || index >= m_Size) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Index out of bounds");
         return dummy;
     }
-    return *reinterpret_cast<asBYTE *>(&m_Buffer[index]);
+    return *reinterpret_cast<asBYTE *>(&data[index]);
 }
 
 const asBYTE &NativeBuffer::ByteAt(size_t index) const {
     static constexpr asBYTE dummy = 0;
-    if (!m_Buffer || index >= m_Size) {
+    char *data = Data();
+    if (!data || index >= m_Size) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Index out of bounds");
         return dummy;
     }
-    return *reinterpret_cast<const asBYTE *>(&m_Buffer[index]);
+    return *reinterpret_cast<const asBYTE *>(&data[index]);
 }
 
 size_t NativeBuffer::Write(void *x, size_t size) {
-    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !x)
+    char *data = Data();
+    if (!data || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !x)
         return 0;
-    memcpy(&m_Buffer[m_CursorPos], x, size);
+    memcpy(&data[m_CursorPos], x, size);
     m_CursorPos += size;
     return size;
 }
 
 size_t NativeBuffer::Read(void *x, size_t size) {
-    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !x)
+    char *data = Data();
+    if (!data || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !x)
         return 0;
-    memcpy(x, &m_Buffer[m_CursorPos], size);
+    memcpy(x, &data[m_CursorPos], size);
     m_CursorPos += size;
     return size;
 }
@@ -122,12 +161,13 @@ size_t NativeBuffer::WriteString(const std::string &str) {
 }
 
 size_t NativeBuffer::ReadString(char *outStr, size_t maxSize) {
-    if (!m_Buffer || m_CursorPos >= m_Size || !outStr || maxSize == 0)
+    char *data = Data();
+    if (!data || m_CursorPos >= m_Size || !outStr || maxSize == 0)
         return 0;
 
     size_t i = 0;
     for (; i < maxSize - 1 && m_CursorPos < m_Size; ++i) {
-        outStr[i] = m_Buffer[m_CursorPos++];
+        outStr[i] = data[m_CursorPos++];
         if (outStr[i] == '\0') {
             return i + 1;
         }
@@ -138,13 +178,14 @@ size_t NativeBuffer::ReadString(char *outStr, size_t maxSize) {
 }
 
 size_t NativeBuffer::ReadString(std::string &str) {
-    if (!m_Buffer || m_CursorPos >= m_Size)
+    char *data = Data();
+    if (!data || m_CursorPos >= m_Size)
         return 0;
 
     size_t count = 0;
     str.clear();
     while (m_CursorPos < m_Size) {
-        const char c = m_Buffer[m_CursorPos++];
+        const char c = data[m_CursorPos++];
         if (c == '\0')
             break;
         ++count;
@@ -155,10 +196,11 @@ size_t NativeBuffer::ReadString(std::string &str) {
 }
 
 bool NativeBuffer::Fill(int value, size_t size) {
-    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
+    char *data = Data();
+    if (!data || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
         return false;
 
-    memset(&m_Buffer[m_CursorPos], value, size);
+    memset(&data[m_CursorPos], value, size);
     m_CursorPos += size;
     return true;
 }
@@ -177,17 +219,19 @@ bool NativeBuffer::Skip(size_t offset) {
 }
 
 int NativeBuffer::Compare(const NativeBuffer &other, size_t size) const {
-    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
+    char *data = Data();
+    if (!data || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
         return -1;
     if (other.CursorPos() > other.Size() || size > other.Size() - other.CursorPos())
         return 1;
     if (size > 0 && !other.Cursor())
         return 1;
-    return memcmp(&m_Buffer[m_CursorPos], other.Cursor(), size);
+    return memcmp(&data[m_CursorPos], other.Cursor(), size);
 }
 
 size_t NativeBuffer::Merge(const NativeBuffer &other, bool truncate) {
-    if (!m_Buffer || m_CursorPos > m_Size || other.CursorPos() > other.Size())
+    char *data = Data();
+    if (!data || m_CursorPos > m_Size || other.CursorPos() > other.Size())
         return 0;
 
     size_t size = other.Size() - other.CursorPos();
@@ -203,13 +247,14 @@ size_t NativeBuffer::Merge(const NativeBuffer &other, bool truncate) {
         return 0;
     }
 
-    memcpy(&m_Buffer[m_CursorPos], other.Cursor(), size);
+    memcpy(&data[m_CursorPos], other.Cursor(), size);
     m_CursorPos += size;
     return size;
 }
 
 NativeBuffer *NativeBuffer::Extract(size_t size) {
-    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
+    char *data = Data();
+    if (!data || m_CursorPos > m_Size || size > m_Size - m_CursorPos)
         return nullptr;
 
     auto *buffer = Create(size);
@@ -220,20 +265,25 @@ NativeBuffer *NativeBuffer::Extract(size_t size) {
         return nullptr;
     }
     if (size > 0) {
-        memcpy(buffer->m_Buffer, &m_Buffer[m_CursorPos], size);
+        memcpy(buffer->m_Buffer, &data[m_CursorPos], size);
     }
     m_CursorPos += size;
     return buffer;
 }
 
 NativePointer NativeBuffer::ToPointer() const {
-    if (!m_Buffer || m_CursorPos > m_Size)
+    if (!Data() || m_CursorPos >= m_Size)
         return NativePointer();
-    return NativePointer(&m_Buffer[m_CursorPos]);
+    return NativePointer(const_cast<NativeBuffer *>(this),
+                         RetainNativeBufferOwner,
+                         ReleaseNativeBufferOwner,
+                         ResolveNativeBufferOwner,
+                         static_cast<intptr_t>(m_CursorPos));
 }
 
 size_t NativeBuffer::Load(const char *filename, size_t size, int offset) {
-    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !filename || offset < 0)
+    char *data = Data();
+    if (!data || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !filename || offset < 0)
         return 0;
 
     FILE *fp = fopen(filename, "rb");
@@ -244,21 +294,22 @@ size_t NativeBuffer::Load(const char *filename, size_t size, int offset) {
         fclose(fp);
         return 0;
     }
-    size = fread(&m_Buffer[m_CursorPos], sizeof(char), size, fp);
+    size = fread(&data[m_CursorPos], sizeof(char), size, fp);
     fclose(fp);
     m_CursorPos += size;
     return size;
 }
 
 size_t NativeBuffer::Save(const char *filename, size_t size) {
-    if (!m_Buffer || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !filename)
+    char *data = Data();
+    if (!data || m_CursorPos > m_Size || size > m_Size - m_CursorPos || !filename)
         return 0;
 
     FILE *fp = fopen(filename, "wb");
     if (!fp)
         return 0;
 
-    size = fwrite(&m_Buffer[m_CursorPos], sizeof(char), size, fp);
+    size = fwrite(&data[m_CursorPos], sizeof(char), size, fp);
     fclose(fp);
     m_CursorPos += size;
     return size;
@@ -322,6 +373,8 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
         size = engine->GetSizeOfPrimitiveType(typeId);
         if (size != 0 && self->CursorPos() <= self->Size() && size <= self->Size() - self->CursorPos()) {
             size = self->Write(addr, size);
+        } else {
+            size = 0;
         }
     }
 
@@ -386,6 +439,8 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
         size = engine->GetSizeOfPrimitiveType(typeId);
         if (size != 0 && self->CursorPos() <= self->Size() && size <= self->Size() - self->CursorPos()) {
             size = self->Read(addr, size);
+        } else {
+            size = 0;
         }
     }
 
@@ -398,7 +453,7 @@ void RegisterNativeBuffer(asIScriptEngine *engine) {
     r = engine->RegisterObjectType("NativeBuffer", 0, asOBJ_REF); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_FACTORY, "NativeBuffer@ f(size_t size)", asFUNCTIONPR(NativeBuffer::Create, (size_t), NativeBuffer *), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_FACTORY, "NativeBuffer@ f(uintptr_t buf, size_t size)", asFUNCTIONPR(NativeBuffer::Create, (void *, size_t), NativeBuffer *), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_FACTORY, "NativeBuffer@ f(NativePointer ptr, size_t size)", asFUNCTIONPR([](NativePointer ptr, size_t size) { return NativeBuffer::Create(ptr.Get(), size); }, (NativePointer, size_t), NativeBuffer *), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_FACTORY, "NativeBuffer@ f(NativePointer ptr, size_t size)", asFUNCTIONPR(NativeBuffer::Create, (NativePointer, size_t), NativeBuffer *), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_ADDREF, "void f()", asMETHOD(NativeBuffer, AddRef), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("NativeBuffer", asBEHAVE_RELEASE, "void f()", asMETHOD(NativeBuffer, Release), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

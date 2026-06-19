@@ -7,32 +7,60 @@
 #include <add_on/scriptarray/scriptarray.h>
 #include "ScriptRegistration.h"
 
+namespace {
+
+void RetainScriptArrayOwner(void *owner) {
+    if (owner) {
+        static_cast<CScriptArray *>(owner)->AddRef();
+    }
+}
+
+void ReleaseScriptArrayOwner(void *owner) {
+    if (owner) {
+        static_cast<CScriptArray *>(owner)->Release();
+    }
+}
+
+char *ResolveScriptArrayOwner(void *owner, intptr_t offset) {
+    auto *array = static_cast<CScriptArray *>(owner);
+    if (!array) {
+        return nullptr;
+    }
+    char *buffer = static_cast<char *>(array->GetBuffer());
+    return buffer ? buffer + offset : nullptr;
+}
+
+} // namespace
+
 std::string NativePointer::ToString() const {
-    return fmt::format("0x{:X}", reinterpret_cast<uintptr_t>(m_Ptr));
+    return fmt::format("0x{:X}", ToUInt());
 }
 
 size_t NativePointer::Write(void *x, size_t size) {
-    if (!m_Ptr) return 0;
+    char *ptr = Get();
+    if (!ptr) return 0;
     if (!x) return 0;
     if (size == 0) return 0;
-    memcpy(m_Ptr, x, size);
+    memcpy(ptr, x, size);
     return size;
 }
 
 size_t NativePointer::Read(void *x, size_t size) {
-    if (!m_Ptr) return 0;
+    char *ptr = Get();
+    if (!ptr) return 0;
     if (!x) return 0;
     if (size == 0) return 0;
-    memcpy(x, m_Ptr, size);
+    memcpy(x, ptr, size);
     return size;
 }
 
 size_t NativePointer::WriteString(const char *str) {
-    if (!m_Ptr) return 0;
+    char *ptr = Get();
+    if (!ptr) return 0;
     if (!str) return 0;
     size_t len = strlen(str);
     if (len == 0) return 0;
-    memcpy(m_Ptr, str, len + 1);
+    memcpy(ptr, str, len + 1);
     return len + 1;
 }
 
@@ -41,28 +69,31 @@ size_t NativePointer::WriteString(const std::string &str) {
 }
 
 size_t NativePointer::ReadString(char *outStr, size_t maxSize) {
-    if (!m_Ptr) return 0;
+    char *ptr = Get();
+    if (!ptr) return 0;
     if (!outStr) return 0;
     if (maxSize == 0) return 0;
-    size_t len = strlen(m_Ptr);
+    size_t len = strlen(ptr);
     if (len == 0) return 0;
     if (len + 1 > maxSize) return 0;
-    memcpy(outStr, m_Ptr, len + 1);
+    memcpy(outStr, ptr, len + 1);
     return len + 1;
 }
 
 size_t NativePointer::ReadString(std::string &str) {
-    if (!m_Ptr) return 0;
-    size_t len = strlen(m_Ptr);
+    char *ptr = Get();
+    if (!ptr) return 0;
+    size_t len = strlen(ptr);
     if (len == 0) return 0;
-    str.assign(m_Ptr, len);
+    str.assign(ptr, len);
     return len + 1;
 }
 
 bool NativePointer::Fill(int value, size_t size) {
-    if (!m_Ptr) return false;
+    char *ptr = Get();
+    if (!ptr) return false;
     if (size == 0) return false;
-    memset(m_Ptr, value, size);
+    memset(ptr, value, size);
     return true;
 }
 
@@ -83,7 +114,10 @@ static void ConstructNativePointerGeneric(asIScriptGeneric *gen) {
     asITypeInfo *type = engine->GetTypeInfoById(typeId);
     if (type && strcmp(type->GetName(), "array") == 0) {
         auto *array = static_cast<CScriptArray *>(addr);
-        new (gen->GetObject()) NativePointer(array ? array->GetBuffer() : nullptr);
+        new (gen->GetObject()) NativePointer(array,
+                                             RetainScriptArrayOwner,
+                                             ReleaseScriptArrayOwner,
+                                             ResolveScriptArrayOwner);
     } else {
         new (gen->GetObject()) NativePointer(addr);
     }

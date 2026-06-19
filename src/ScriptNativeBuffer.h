@@ -20,8 +20,14 @@ public:
         return new(self) NativeBuffer(buffer, size);
     }
 
+    static NativeBuffer *Create(NativePointer ptr, size_t size) {
+        void *self = asAllocMem(sizeof(NativeBuffer));
+        return new(self) NativeBuffer(ptr, size);
+    }
+
     explicit NativeBuffer(size_t size);
     NativeBuffer(void *buffer, size_t size);
+    NativeBuffer(NativePointer ptr, size_t size);
     ~NativeBuffer();
 
     NativeBuffer(const NativeBuffer &other) = delete;
@@ -30,7 +36,7 @@ public:
     NativeBuffer &operator=(NativeBuffer &&) noexcept = delete;
 
     bool operator==(const NativeBuffer &rhs) const {
-        return m_Buffer == rhs.m_Buffer && m_Size == rhs.m_Size;
+        return Data() == rhs.Data() && m_Size == rhs.m_Size;
     }
 
     bool operator!=(const NativeBuffer &rhs) const {
@@ -84,13 +90,16 @@ public:
     bool Skip(size_t offset);
     void Reset() { m_CursorPos = 0; }
 
-    char *Data() const { return m_Buffer; }
+    char *Data() const { return m_Owned ? m_Buffer : m_BackingPointer.Get(); }
     size_t Size() const { return m_Size; }
-    char *Cursor() const { return m_Buffer && m_CursorPos <= m_Size ? &m_Buffer[m_CursorPos] : nullptr; }
+    char *Cursor() const {
+        char *data = Data();
+        return data && m_CursorPos <= m_Size ? &data[m_CursorPos] : nullptr;
+    }
     size_t CursorPos() const { return m_CursorPos; }
 
-    bool IsValid() const { return m_Buffer != nullptr && m_Size > 0; }
-    bool IsEmpty() const { return m_Buffer == nullptr || m_Size == 0; }
+    bool IsValid() const { return Data() != nullptr && m_Size > 0; }
+    bool IsEmpty() const { return Data() == nullptr || m_Size == 0; }
 
     int Compare(const NativeBuffer &other, size_t size) const;
     size_t Merge(const NativeBuffer &other, bool truncate = false);
@@ -105,6 +114,7 @@ private:
     size_t m_Size;
     size_t m_CursorPos;
     bool m_Owned;
+    NativePointer m_BackingPointer;
     mutable RefCount m_RefCount;
     asILockableSharedBool *m_WeakRefFlag = nullptr;
 };
