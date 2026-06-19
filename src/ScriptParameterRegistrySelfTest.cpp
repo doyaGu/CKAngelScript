@@ -2985,6 +2985,71 @@ bool RunCKPluginEntryScriptSelfTest(asIScriptEngine *engine, std::string &error)
     return ok;
 }
 
+bool RunCKFileExtensionScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKFileExtension script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *extensionType = engine->GetTypeInfoByDecl("CKFileExtension");
+    if (!extensionType) {
+        error = "CKFileExtension self-test could not find the registered type.";
+        return false;
+    }
+    if (extensionType->GetMethodByDecl("string opImplConv() const") == nullptr) {
+        error = "CKFileExtension self-test could not find the string conversion method.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKFileExtensionSelfTest";
+    const char *source =
+        "int ProbeCKFileExtension() {\n"
+        "  CKFileExtension empty;\n"
+        "  string emptyText = empty;\n"
+        "  if (emptyText != \"\") return 1;\n"
+        "  CKFileExtension bmp(\"bmp\");\n"
+        "  string bmpText = bmp;\n"
+        "  if (bmpText != \"bmp\") return 2;\n"
+        "  CKFileExtension dotted(\".jpeg\");\n"
+        "  string dottedText = dotted;\n"
+        "  if (dottedText != \"jpe\") return 3;\n"
+        "  CKFileExtension upper(\"WAV\");\n"
+        "  string upperText = upper;\n"
+        "  if (upperText != \"WAV\") return 4;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKFileExtension self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-file-extension-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKFileExtension self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKFileExtension self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKFileExtension()");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKFileExtension self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKFileExtension value probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 #if CKVERSION == 0x13022002
 bool RunCKPICKRESULTScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
@@ -13210,6 +13275,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKPluginEntryScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKFileExtensionScriptSelfTest(engine, error)) {
         return false;
     }
 #if CKVERSION == 0x13022002
