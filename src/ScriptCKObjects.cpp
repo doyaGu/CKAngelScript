@@ -3975,6 +3975,33 @@ void RegisterCKTargetCamera(asIScriptEngine *engine) {
     RegisterCKCameraMembers<CKTargetCamera>(engine, "CKTargetCamera");
 }
 
+static void CKPlaceAddPortal(CKPlace *self, CKPlace *place, CK3dEntity *portal) {
+    if (!self || !place || !portal) {
+        SetCK3dEntityBindingException("CKPlace.AddPortal requires non-null CKPlace and CK3dEntity handles.");
+        return;
+    }
+
+    self->AddPortal(place, portal);
+}
+
+static void CKPlaceRemovePortal(CKPlace *self, CKPlace *place, CK3dEntity *portal) {
+    if (!self || !place || !portal) {
+        SetCK3dEntityBindingException("CKPlace.RemovePortal requires non-null CKPlace and CK3dEntity handles.");
+        return;
+    }
+
+    self->RemovePortal(place, portal);
+}
+
+static bool CKPlaceComputeBestFitBBox(CKPlace *self, CKPlace *p2, VxMatrix &bBoxMatrix) {
+    if (!self || !p2) {
+        SetCK3dEntityBindingException("CKPlace.ComputeBestFitBBox requires a non-null CKPlace.");
+        return false;
+    }
+
+    return self->ComputeBestFitBBox(p2, bBoxMatrix);
+}
+
 void RegisterCKPlace(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -3985,14 +4012,14 @@ void RegisterCKPlace(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKPlace", "CKCamera@ GetDefaultCamera() const", asMETHODPR(CKPlace, GetDefaultCamera, (), CKCamera *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPlace", "void SetDefaultCamera(CKCamera@ cam)", asMETHODPR(CKPlace, SetDefaultCamera, (CKCamera *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKPlace", "void AddPortal(CKPlace@ place, CK3dEntity@ portal)", asMETHODPR(CKPlace, AddPortal, (CKPlace *, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPlace", "void RemovePortal(CKPlace@ place, CK3dEntity@ portal)", asMETHODPR(CKPlace, RemovePortal, (CKPlace *, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPlace", "void AddPortal(CKPlace@ place, CK3dEntity@ portal)", asFUNCTION(CKPlaceAddPortal), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPlace", "void RemovePortal(CKPlace@ place, CK3dEntity@ portal)", asFUNCTION(CKPlaceRemovePortal), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPlace", "int GetPortalCount() const", asMETHODPR(CKPlace, GetPortalCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKPlace", "CKPlace@ GetPortal(int i, CK3dEntity@ &out portal)", asMETHODPR(CKPlace, GetPortal, (int, CK3dEntity **), CKPlace *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPlace", "VxRect &ViewportClip()", asMETHODPR(CKPlace, ViewportClip, (), VxRect&), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKPlace", "bool ComputeBestFitBBox(CKPlace@ p2, VxMatrix &out bBoxMatrix)", asFUNCTIONPR([](CKPlace *self, CKPlace *p2, VxMatrix &bBoxMatrix) -> bool { return self->ComputeBestFitBBox(p2, bBoxMatrix); }, (CKPlace *, CKPlace *, VxMatrix &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPlace", "bool ComputeBestFitBBox(CKPlace@ p2, VxMatrix &out bBoxMatrix)", asFUNCTION(CKPlaceComputeBestFitBBox), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 void RegisterCKCurvePoint(asIScriptEngine *engine) {

@@ -8258,6 +8258,128 @@ bool RunCK3dEntityScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
     return ok;
 }
 
+bool RunCKPlaceScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKPlace script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *placeType = engine->GetTypeInfoByDecl("CKPlace");
+    if (!placeType) {
+        error = "CKPlace self-test could not find the registered type.";
+        return false;
+    }
+    if (!placeType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !placeType->GetMethodByDecl("CKCamera@ GetDefaultCamera() const") ||
+        !placeType->GetMethodByDecl("void SetDefaultCamera(CKCamera@ cam)") ||
+        !placeType->GetMethodByDecl("void AddPortal(CKPlace@ place, CK3dEntity@ portal)") ||
+        !placeType->GetMethodByDecl("void RemovePortal(CKPlace@ place, CK3dEntity@ portal)") ||
+        !placeType->GetMethodByDecl("int GetPortalCount() const") ||
+        !placeType->GetMethodByDecl("CKPlace@ GetPortal(int i, CK3dEntity@ &out portal)") ||
+        !placeType->GetMethodByDecl("bool ComputeBestFitBBox(CKPlace@ p2, VxMatrix &out bBoxMatrix)")) {
+        error = "CKPlace self-test could not find expected object methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKPlaceSelfTest";
+    const char *source =
+        "int ProbeCKPlaceSurface(CKContext@ ctx, CKObject@ object) {\n"
+        "  if (ctx is null || object is null) return 1;\n"
+        "  CKPlace@ place = cast<CKPlace>(object);\n"
+        "  if (place is null) return 2;\n"
+        "  CKObject@ asObject = place;\n"
+        "  CKSceneObject@ asSceneObject = place;\n"
+        "  CKBeObject@ asBeObject = place;\n"
+        "  CKRenderObject@ asRenderObject = place;\n"
+        "  CK3dEntity@ asEntity = place;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null) return 3;\n"
+        "  if (cast<CKPlace>(asObject) !is place) return 4;\n"
+        "  if (cast<CKPlace>(asEntity) !is place) return 5;\n"
+        "  place.SetDefaultCamera(null);\n"
+        "  if (place.GetDefaultCamera() !is null) return 6;\n"
+        "  if (place.GetPortalCount() < 0) return 7;\n"
+        "  return 0;\n"
+        "}\n"
+        "void ProbeCKPlaceAddPortalNullPlace(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKPlace@ place = cast<CKPlace>(object);\n"
+        "  CKPlace@ none = null;\n"
+        "  place.AddPortal(none, place);\n"
+        "}\n"
+        "void ProbeCKPlaceAddPortalNullPortal(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKPlace@ place = cast<CKPlace>(object);\n"
+        "  CK3dEntity@ none = null;\n"
+        "  place.AddPortal(place, none);\n"
+        "}\n"
+        "void ProbeCKPlaceRemovePortalNullPlace(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKPlace@ place = cast<CKPlace>(object);\n"
+        "  CKPlace@ none = null;\n"
+        "  place.RemovePortal(none, place);\n"
+        "}\n"
+        "void ProbeCKPlaceRemovePortalNullPortal(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKPlace@ place = cast<CKPlace>(object);\n"
+        "  CK3dEntity@ none = null;\n"
+        "  place.RemovePortal(place, none);\n"
+        "}\n"
+        "void ProbeCKPlaceComputeBBoxNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKPlace@ place = cast<CKPlace>(object);\n"
+        "  CKPlace@ none = null;\n"
+        "  VxMatrix matrix;\n"
+        "  place.ComputeBestFitBBox(none, matrix);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKPlace self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckplace-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPlace self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKPlace self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKPlaceSurface(CKContext@, CKObject@)");
+    asIScriptFunction *addNullPlace = module->GetFunctionByDecl("void ProbeCKPlaceAddPortalNullPlace(CKContext@, CKObject@)");
+    asIScriptFunction *addNullPortal = module->GetFunctionByDecl("void ProbeCKPlaceAddPortalNullPortal(CKContext@, CKObject@)");
+    asIScriptFunction *removeNullPlace = module->GetFunctionByDecl("void ProbeCKPlaceRemovePortalNullPlace(CKContext@, CKObject@)");
+    asIScriptFunction *removeNullPortal = module->GetFunctionByDecl("void ProbeCKPlaceRemovePortalNullPortal(CKContext@, CKObject@)");
+    asIScriptFunction *computeBBoxNull = module->GetFunctionByDecl("void ProbeCKPlaceComputeBBoxNull(CKContext@, CKObject@)");
+    if (!probe || !addNullPlace || !addNullPortal || !removeNullPlace || !removeNullPortal || !computeBBoxNull) {
+        engine->DiscardModule(moduleName);
+        error = "CKPlace self-test functions were not found.";
+        return false;
+    }
+
+    CKPlace *place = CKPlace::Cast(context->CreateObject(
+        CKCID_PLACE, const_cast<CKSTRING>("__CKAS_CKPlaceSelfTestPlace"), CK_OBJECTCREATION_DYNAMIC));
+    if (!place) {
+        engine->DiscardModule(moduleName);
+        error = "CKPlace self-test could not create a temporary place.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKObjectProbe(engine, probe, context, place, false, "CKPlace surface probe", error) &&
+                    ExecuteCKObjectProbe(engine, addNullPlace, context, place, true, "CKPlace AddPortal null place probe", error) &&
+                    ExecuteCKObjectProbe(engine, addNullPortal, context, place, true, "CKPlace AddPortal null portal probe", error) &&
+                    ExecuteCKObjectProbe(engine, removeNullPlace, context, place, true, "CKPlace RemovePortal null place probe", error) &&
+                    ExecuteCKObjectProbe(engine, removeNullPortal, context, place, true, "CKPlace RemovePortal null portal probe", error) &&
+                    ExecuteCKObjectProbe(engine, computeBBoxNull, context, place, true, "CKPlace ComputeBestFitBBox null probe", error);
+
+    place->RemoveAllCallbacks();
+    context->DestroyObject(place);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCK3dObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CK3dObject script self-test requires CKContext and AngelScript engine.";
@@ -14368,6 +14490,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCK3dEntityScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKPlaceScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCK3dObjectScriptSelfTest(context, engine, error)) {
