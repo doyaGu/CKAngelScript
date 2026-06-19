@@ -435,6 +435,50 @@ bool ExecuteCKDataArrayProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKWaveSoundProbe(asIScriptEngine *engine,
+                             asIScriptFunction *function,
+                             CKWaveSound *sound,
+                             bool expectException,
+                             const char *label,
+                             std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, sound);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKParameterLocalProbe(asIScriptEngine *engine,
                                   asIScriptFunction *function,
                                   CKParameterLocal *parameter,
@@ -3894,9 +3938,9 @@ bool RunCKSoundManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
     return true;
 }
 
-bool RunCKWaveSoundScriptSelfTest(asIScriptEngine *engine, std::string &error) {
-    if (!engine) {
-        error = "CKWaveSound script self-test requires an AngelScript engine.";
+bool RunCKWaveSoundScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKWaveSound script self-test requires CKContext and AngelScript engine.";
         return false;
     }
 
@@ -3906,24 +3950,47 @@ bool RunCKWaveSoundScriptSelfTest(asIScriptEngine *engine, std::string &error) {
         return false;
     }
 
+    if (waveSoundType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr) {
+        error = "CKWaveSound self-test found unsafe ApplyPatchForOlderVersion array-pointer binding.";
+        return false;
+    }
     if (waveSoundType->GetMethodByDecl("CKERROR WriteData(NativePointer buffer, int size)") == nullptr ||
         waveSoundType->GetMethodByDecl("CKERROR Lock(CKDWORD writeCursor, CKDWORD numBytes, NativePointer &out ptr1, CKDWORD &out bytes1, NativePointer &out ptr2, CKDWORD &out bytes2, CK_WAVESOUND_LOCKMODE flags)") == nullptr ||
-        waveSoundType->GetMethodByDecl("CKERROR Unlock(NativePointer ptr1, CKDWORD bytes1, NativePointer ptr2, CKDWORD bytes2)") == nullptr) {
-        error = "CKWaveSound self-test could not find expected guarded audio-buffer methods.";
+        waveSoundType->GetMethodByDecl("CKERROR Unlock(NativePointer ptr1, CKDWORD bytes1, NativePointer ptr2, CKDWORD bytes2)") == nullptr ||
+        waveSoundType->GetMethodByDecl("CKSoundReader@ GetReader()") == nullptr ||
+        waveSoundType->GetMethodByDecl("CK3dEntity@ GetAttachedEntity()") == nullptr ||
+        waveSoundType->GetMethodByDecl("NativePointer GetAppData()") == nullptr ||
+        waveSoundType->GetMethodByDecl("void SetAppData(NativePointer data)") == nullptr) {
+        error = "CKWaveSound self-test could not find expected guarded audio-buffer and borrowed-handle methods.";
         return false;
     }
 
     constexpr const char *moduleName = "__CKAS_CKWaveSoundSelfTest";
     const char *source =
-        "void ProbeCKWaveSoundAudio(CKWaveSound@ sound, NativePointer data) {\n"
-        "  if (sound is null) return;\n"
-        "  sound.WriteData(data, 0);\n"
+        "int ProbeCKWaveSoundAudio(CKWaveSound@ sound) {\n"
+        "  if (sound is null) return 2;\n"
+        "  if (sound.GetClassID() != CKCID_WAVESOUND) return 3;\n"
+        "  if (sound.GetType() != CK_WAVESOUND_BACKGROUND) return 4;\n"
+        "  if (sound.GetReader() !is null) return 5;\n"
+        "  if (sound.GetAttachedEntity() !is null) return 6;\n"
+        "  NativePointer appData = sound.GetAppData();\n"
+        "  if (!appData.IsNull()) return 7;\n"
+        "  sound.SetAppData(appData);\n"
+        "  CKWaveFormat format;\n"
+        "  if (sound.GetSoundFormat(format) != CK_OK) return 8;\n"
+        "  if (format.wFormatTag != 1 || format.nChannels != 1 || format.wBitsPerSample != 16) return 9;\n"
+        "  sound.WriteData(NativePointer(), 0);\n"
         "  NativePointer ptr1;\n"
         "  NativePointer ptr2;\n"
         "  CKDWORD bytes1 = 0;\n"
         "  CKDWORD bytes2 = 0;\n"
-        "  sound.Lock(0, 0, ptr1, bytes1, ptr2, bytes2, CK_WAVESOUND_LOCKFROMWRITE);\n"
-        "  sound.Unlock(ptr1, bytes1, ptr2, bytes2);\n"
+        "  if (sound.Lock(0, 4, ptr1, bytes1, ptr2, bytes2, CK_WAVESOUND_LOCKFROMWRITE) != CK_OK) return 11;\n"
+        "  if (bytes1 + bytes2 != 4) return 12;\n"
+        "  if (bytes1 > 0 && ptr1.IsNull()) return 13;\n"
+        "  if (bytes2 > 0 && ptr2.IsNull()) return 14;\n"
+        "  if (sound.Unlock(ptr1, bytes1, ptr2, bytes2) != CK_OK) return 15;\n"
+        "  if (sound.CKGetObject(sound.GetID()) !is sound) return 16;\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -3945,15 +4012,42 @@ bool RunCKWaveSoundScriptSelfTest(asIScriptEngine *engine, std::string &error) {
         return false;
     }
 
-    asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKWaveSoundAudio(CKWaveSound@, NativePointer)");
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKWaveSoundAudio(CKWaveSound@)");
     if (!probe) {
         engine->DiscardModule(moduleName);
         error = "CKWaveSound self-test function was not found.";
         return false;
     }
 
+    CKWaveSound *sound = CKWaveSound::Cast(context->CreateObject(CKCID_WAVESOUND,
+                                                                  const_cast<CKSTRING>("__CKAS_CKWaveSoundSelfTest"),
+                                                                  CK_OBJECTCREATION_DYNAMIC));
+    if (!sound) {
+        engine->DiscardModule(moduleName);
+        error = "CKWaveSound self-test could not create a temporary CKWaveSound.";
+        return false;
+    }
+
+    CKWaveFormat format = {};
+    format.wFormatTag = CKWAVE_FORMAT_PCM;
+    format.nChannels = 1;
+    format.nSamplesPerSec = 8000;
+    format.wBitsPerSample = 16;
+    format.nBlockAlign = static_cast<CKWORD>((format.nChannels * format.wBitsPerSample) / 8);
+    format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
+    const CKERROR createErr = sound->Create(CK_WAVESOUND_BACKGROUND, &format, 4);
+    if (createErr != CK_OK) {
+        context->DestroyObject(sound);
+        engine->DiscardModule(moduleName);
+        error = "CKWaveSound self-test could not create a temporary PCM source.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKWaveSoundProbe(engine, probe, sound, false, "CKWaveSound audio surface probe", error);
+
+    context->DestroyObject(sound);
     engine->DiscardModule(moduleName);
-    return true;
+    return ok;
 }
 
 bool RunCKObjectManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -7272,7 +7366,7 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunCKSoundManagerScriptSelfTest(context, engine, error)) {
         return false;
     }
-    if (!RunCKWaveSoundScriptSelfTest(engine, error)) {
+    if (!RunCKWaveSoundScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKObjectScriptSelfTest(context, engine, error)) {

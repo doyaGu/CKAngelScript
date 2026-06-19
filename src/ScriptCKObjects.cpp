@@ -1994,7 +1994,6 @@ static void RegisterCKBeObjectMembers<CKWaveSound>(asIScriptEngine *engine, cons
     r = engine->RegisterObjectMethod(name, "bool IsWaitingForMessages()", asFUNCTIONPR([](CKWaveSound *self) -> bool { return self->IsWaitingForMessages(); }, (CKWaveSound *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int CallBehaviorCallbackFunction(CKDWORD message, CKGUID &in behguid = void)", asMETHODPR(CKWaveSound, CallBehaviorCallbackFunction, (CKDWORD, CKGUID*), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "float GetLastExecutionTime()", asMETHODPR(CKWaveSound, GetLastExecutionTime, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)", asMETHODPR(CKWaveSound, ApplyPatchForOlderVersion, (int, CKFileObject*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     RegisterCKObjectCast<CKWaveSound, CKBeObject>(engine, name, "CKBeObject");
 }
