@@ -9351,9 +9351,9 @@ bool RunCKCurveScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::
         !curveType->GetMethodByDecl("CKERROR InsertControlPoint(CKCurvePoint@ prev, CKCurvePoint@ pt)") ||
         !curveType->GetMethodByDecl("CKERROR RemoveControlPoint(CKCurvePoint@ pt, bool removeAll = false)") ||
         !curveType->GetMethodByDecl("CKERROR GetTangents(CKCurvePoint@ pt, VxVector&out input, VxVector&out output) const") ||
-        !curveType->GetMethodByDecl("CKERROR SetTangents(CKCurvePoint@ pt, VxVector&in input, VxVector&in output)") ||
+        !curveType->GetMethodByDecl("CKERROR SetTangents(CKCurvePoint@ pt, const VxVector&in input, const VxVector&in output)") ||
         !curveType->GetMethodByDecl("CKERROR GetTangents(int index, VxVector&out input, VxVector&out output) const") ||
-        !curveType->GetMethodByDecl("CKERROR SetTangents(int index, VxVector&in input, VxVector&in output)") ||
+        !curveType->GetMethodByDecl("CKERROR SetTangents(int index, const VxVector&in input, const VxVector&in output)") ||
         !curveType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
         !curveType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
         !curveType->GetMethodByDecl("bool SetRenderCallBack(CK_RENDEROBJECT_CALLBACK@ callback)") ||
@@ -9403,35 +9403,37 @@ bool RunCKCurveScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  VxVector tin(0.0f, 1.0f, 0.0f);\n"
         "  VxVector tout(1.0f, 0.0f, 0.0f);\n"
         "  if (curve.SetTangents(0, tin, tout) != CK_OK) return 17;\n"
+        "  if (tin.x != 0.0f || tin.y != 1.0f || tin.z != 0.0f || tout.x != 1.0f || tout.y != 0.0f || tout.z != 0.0f) return 18;\n"
         "  VxVector gotIn;\n"
         "  VxVector gotOut;\n"
-        "  if (curve.GetTangents(0, gotIn, gotOut) != CK_OK) return 18;\n"
-        "  if (curve.SetTangents(p2, tin, tout) != CK_OK) return 19;\n"
-        "  if (curve.GetTangents(p2, gotIn, gotOut) != CK_OK) return 20;\n"
+        "  if (curve.GetTangents(0, gotIn, gotOut) != CK_OK) return 19;\n"
+        "  if (curve.SetTangents(p2, tin, tout) != CK_OK) return 20;\n"
+        "  if (tin.x != 0.0f || tin.y != 1.0f || tin.z != 0.0f || tout.x != 1.0f || tout.y != 0.0f || tout.z != 0.0f) return 21;\n"
+        "  if (curve.GetTangents(p2, gotIn, gotOut) != CK_OK) return 22;\n"
         "  curve.Update();\n"
         "  VxVector pos;\n"
         "  VxVector dir;\n"
-        "  if (curve.GetPos(0.5f, pos, dir) != CK_OK) return 21;\n"
-        "  if (curve.GetLocalPos(0.5f, pos, dir) != CK_OK) return 22;\n"
+        "  if (curve.GetPos(0.5f, pos, dir) != CK_OK) return 23;\n"
+        "  if (curve.GetLocalPos(0.5f, pos, dir) != CK_OK) return 24;\n"
         "  NativeBuffer@ source = NativeBuffer(24);\n"
         "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
         "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
         "  source.Reset();\n"
         "  NativeBuffer@ transformed = NativeBuffer(24);\n"
         "  curve.TransformMany(transformed, source, 2);\n"
-        "  if (curve.AddMesh(mesh) != CK_OK) return 23;\n"
+        "  if (curve.AddMesh(mesh) != CK_OK) return 25;\n"
         "  curve.SetCurrentMesh(mesh);\n"
-        "  if (curve.GetCurrentMesh() !is mesh) return 24;\n"
-        "  if (curve.RemoveMesh(mesh) != CK_OK) return 25;\n"
+        "  if (curve.GetCurrentMesh() !is mesh) return 26;\n"
+        "  if (curve.RemoveMesh(mesh) != CK_OK) return 27;\n"
         "  curve.AddObjectAnimation(animation);\n"
-        "  if (curve.GetObjectAnimationCount() < 1) return 26;\n"
+        "  if (curve.GetObjectAnimationCount() < 1) return 28;\n"
         "  curve.RemoveObjectAnimation(animation);\n"
-        "  if (!curve.GetAppData().IsNull()) return 27;\n"
+        "  if (!curve.GetAppData().IsNull()) return 29;\n"
         "  curve.SetAppData(NativePointer());\n"
-        "  if (curve.RemoveControlPoint(p2) != CK_OK) return 28;\n"
-        "  if (curve.GetControlPointCount() != 2) return 29;\n"
-        "  if (curve.RemoveAllControlPoints() != CK_OK) return 30;\n"
-        "  if (curve.GetControlPointCount() != 0) return 31;\n"
+        "  if (curve.RemoveControlPoint(p2) != CK_OK) return 30;\n"
+        "  if (curve.GetControlPointCount() != 2) return 31;\n"
+        "  if (curve.RemoveAllControlPoints() != CK_OK) return 32;\n"
+        "  if (curve.GetControlPointCount() != 0) return 33;\n"
         "  return 0;\n"
         "}\n"
         "int ProbeCKCurveSmallTransform(CKCurve@ curve, CKCurve@ otherCurve, CKCurvePoint@ p0, CKCurvePoint@ p1, CKCurvePoint@ p2, CKCurvePoint@ otherPoint, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"

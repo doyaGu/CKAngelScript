@@ -4257,14 +4257,26 @@ static CKERROR CKCurveGetTangentsForPoint(CKCurve *self, CKCurvePoint *point, Vx
     return self->GetTangents(point, input, output);
 }
 
-static CKERROR CKCurveSetTangentsForPoint(CKCurve *self, CKCurvePoint *point, VxVector *input, VxVector *output) {
+static CKERROR CKCurveSetTangentsForPoint(CKCurve *self, CKCurvePoint *point, const VxVector &input, const VxVector &output) {
     if (!self || !point) {
         return RejectCKCurveCall("CKCurve.SetTangents requires a non-null curve point.");
     }
     if (!CKCurvePointBelongsTo(self, point)) {
         return RejectCKCurveCall("CKCurve.SetTangents requires a point owned by this curve.");
     }
-    return self->SetTangents(point, input, output);
+    VxVector inputCopy = input;
+    VxVector outputCopy = output;
+    return self->SetTangents(point, &inputCopy, &outputCopy);
+}
+
+static CKERROR CKCurveSetTangentsForIndex(CKCurve *self, int index, const VxVector &input, const VxVector &output) {
+    VxVector inputCopy = input;
+    VxVector outputCopy = output;
+#if CKVERSION == 0x13022002
+    return self->SetTangentsByIndex(index, &inputCopy, &outputCopy);
+#else
+    return self->SetTangents(index, &inputCopy, &outputCopy);
+#endif
 }
 
 static CKERROR CKCurveRemoveControlPoint(CKCurve *self, CKCurvePoint *point, bool removeAll) {
@@ -4327,12 +4339,12 @@ void RegisterCKCurve(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKCurve", "CKERROR GetTangents(CKCurvePoint@ pt, VxVector &out input, VxVector &out output) const", asFUNCTION(CKCurveGetTangentsForPoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangents(int index, VxVector &in input, VxVector &in output)", asMETHODPR(CKCurve, SetTangentsByIndex, (int, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangentsByIndex(int index, VxVector &in input, VxVector &in output)", asMETHODPR(CKCurve, SetTangentsByIndex, (int, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangents(int index, const VxVector &in input, const VxVector &in output)", asFUNCTION(CKCurveSetTangentsForIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangentsByIndex(int index, const VxVector &in input, const VxVector &in output)", asFUNCTION(CKCurveSetTangentsForIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #else
-    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangents(int index, VxVector &in input, VxVector &in output)", asMETHODPR(CKCurve, SetTangents, (int, VxVector *, VxVector *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangents(int index, const VxVector &in input, const VxVector &in output)", asFUNCTION(CKCurveSetTangentsForIndex), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
-    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangents(CKCurvePoint@ pt, VxVector &in input, VxVector &in output)", asFUNCTION(CKCurveSetTangentsForPoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKCurve", "CKERROR SetTangents(CKCurvePoint@ pt, const VxVector &in input, const VxVector &in output)", asFUNCTION(CKCurveSetTangentsForPoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKCurve", "void SetFittingCoeff(float fit)", asMETHODPR(CKCurve, SetFittingCoeff, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKCurve", "float GetFittingCoeff() const", asMETHODPR(CKCurve, GetFittingCoeff, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
