@@ -992,6 +992,24 @@ static void CKRenderContextRemovePostSpriteRenderCallBack(CKRenderContext *self,
     }
 }
 
+static bool CKRenderContextLockCurrentVB(CKRenderContext *self, CKDWORD vertexCount, VxDrawPrimitiveData &data) {
+    data = VxDrawPrimitiveData();
+    VxDrawPrimitiveData *locked = self->LockCurrentVB(vertexCount);
+    if (!locked) {
+        return false;
+    }
+    data = *locked;
+    return true;
+}
+
+static NativeBuffer *CKRenderContextGetDrawPrimitiveIndices(CKRenderContext *self, int indicesCount) {
+    if (indicesCount <= 0) {
+        return NativeBuffer::Create(0);
+    }
+    CKWORD *indices = self->GetDrawPrimitiveIndices(indicesCount);
+    return indices ? NativeBuffer::Create(indices, static_cast<size_t>(indicesCount) * sizeof(CKWORD)) : NativeBuffer::Create(0);
+}
+
 void RegisterCKRenderContext(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -1035,7 +1053,7 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKRenderContext", "void RemovePostSpriteRenderCallBack(CK_RENDERCALLBACK@ callback)", asFUNCTION(CKRenderContextRemovePostSpriteRenderCallBack), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "VxDrawPrimitiveData &GetDrawPrimitiveStructure(CKRST_DPFLAGS flags, int vretexCount)", asMETHODPR(CKRenderContext, GetDrawPrimitiveStructure, (CKRST_DPFLAGS, int), VxDrawPrimitiveData *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKRenderContext", "CKWORD &GetDrawPrimitiveIndices(int indicesCount)", asMETHODPR(CKRenderContext, GetDrawPrimitiveIndices, (int), CKWORD*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "NativeBuffer@ GetDrawPrimitiveIndices(int indicesCount)", asFUNCTION(CKRenderContextGetDrawPrimitiveIndices), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "void Transform(VxVector &out dest, const VxVector &in src, CK3dEntity@ ref = null)", asMETHODPR(CKRenderContext, Transform, (VxVector *, VxVector *, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "void TransformVertices(int vertexCount, VxTransformData &inout data, CK3dEntity@ ref = null)", asMETHODPR(CKRenderContext, TransformVertices, (int, VxTransformData*, CK3dEntity *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1171,7 +1189,7 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKRenderContext", "void UsedStencilBits(CKDWORD stencilBits)", asMETHODPR(CKRenderContext, UsedStencilBits, (CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "int GetFirstFreeStencilBits()", asMETHODPR(CKRenderContext, GetFirstFreeStencilBits, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKRenderContext", "VxDrawPrimitiveData &LockCurrentVB(CKDWORD vertexCount)", asMETHODPR(CKRenderContext, LockCurrentVB, (CKDWORD), VxDrawPrimitiveData *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "bool LockCurrentVB(CKDWORD vertexCount, VxDrawPrimitiveData &out data)", asFUNCTION(CKRenderContextLockCurrentVB), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "bool ReleaseCurrentVB()", asFUNCTIONPR([](CKRenderContext *self) -> bool { return self->ReleaseCurrentVB(); }, (CKRenderContext *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "void SetTextureMatrix(const VxMatrix &in mat, int stage = 0)", asMETHODPR(CKRenderContext, SetTextureMatrix, (const VxMatrix &, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

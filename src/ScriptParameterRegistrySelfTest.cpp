@@ -7731,6 +7731,14 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
         error = "CKRenderContext self-test could not find output GetPixelFormat declaration.";
         return false;
     }
+    if (renderContextType->GetMethodByDecl("bool LockCurrentVB(CKDWORD vertexCount, VxDrawPrimitiveData &out data)") == nullptr) {
+        error = "CKRenderContext self-test could not find safe LockCurrentVB declaration.";
+        return false;
+    }
+    if (renderContextType->GetMethodByDecl("NativeBuffer@ GetDrawPrimitiveIndices(int indicesCount)") == nullptr) {
+        error = "CKRenderContext self-test could not find buffer GetDrawPrimitiveIndices declaration.";
+        return false;
+    }
     if (renderContextType->GetMethodByDecl("void AddPreRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)") == nullptr ||
         renderContextType->GetMethodByDecl("void RemovePreRenderCallBack(CK_RENDERCALLBACK@ callback)") == nullptr ||
         renderContextType->GetMethodByDecl("void AddPostRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)") == nullptr ||
@@ -7742,6 +7750,14 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
     }
     if (renderContextType->GetMethodByDecl("VX_PIXELFORMAT GetPixelFormat(int &in bpp = void, int &in zbpp = void, int &in stencilBpp = void)") != nullptr) {
         error = "CKRenderContext self-test found stale input GetPixelFormat declaration.";
+        return false;
+    }
+    if (renderContextType->GetMethodByDecl("VxDrawPrimitiveData &LockCurrentVB(CKDWORD vertexCount)") != nullptr) {
+        error = "CKRenderContext self-test found stale reference-return LockCurrentVB declaration.";
+        return false;
+    }
+    if (renderContextType->GetMethodByDecl("CKWORD &GetDrawPrimitiveIndices(int indicesCount)") != nullptr) {
+        error = "CKRenderContext self-test found stale reference-return GetDrawPrimitiveIndices declaration.";
         return false;
     }
 
@@ -7758,6 +7774,26 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
         "  VX_PIXELFORMAT format = dev.GetPixelFormat(bpp, zbpp, stencil);\n"
         "  dev.GetPixelFormat();\n"
         "  if (bpp == -123 && zbpp == -456 && stencil == -789) return 2;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKRenderContextIndices(CKContext@ ctx) {\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev is null) return 1;\n"
+        "  NativeBuffer@ empty = dev.GetDrawPrimitiveIndices(0);\n"
+        "  if (empty is null || !empty.IsEmpty()) return 2;\n"
+        "  NativeBuffer@ indices = dev.GetDrawPrimitiveIndices(3);\n"
+        "  if (indices is null || indices.Size() != 6) return 3;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKRenderContextCurrentVB(CKContext@ ctx) {\n"
+        "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
+        "  if (dev is null) return 1;\n"
+        "  VxDrawPrimitiveData data;\n"
+        "  bool locked = dev.LockCurrentVB(1, data);\n"
+        "  if (locked) {\n"
+        "    dev.ReleaseCurrentVB();\n"
+        "    return 2;\n"
+        "  }\n"
         "  return 0;\n"
         "}\n"
         "int ProbeCKRenderContextCallbacks(CKContext@ ctx) {\n"
@@ -7801,15 +7837,19 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
     }
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKRenderContextPixelFormat(CKContext@)");
+    asIScriptFunction *indices = module->GetFunctionByDecl("int ProbeCKRenderContextIndices(CKContext@)");
+    asIScriptFunction *currentVB = module->GetFunctionByDecl("int ProbeCKRenderContextCurrentVB(CKContext@)");
     asIScriptFunction *callbacks = module->GetFunctionByDecl("int ProbeCKRenderContextCallbacks(CKContext@)");
     asIScriptFunction *temporary = module->GetFunctionByDecl("int ProbeCKRenderContextTemporaryCallback(CKContext@)");
-    if (!probe || !callbacks || !temporary) {
+    if (!probe || !indices || !currentVB || !callbacks || !temporary) {
         engine->DiscardModule(moduleName);
         error = "CKRenderContext self-test functions were not found.";
         return false;
     }
 
     const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKRenderContext GetPixelFormat probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, indices, context, false, "CKRenderContext GetDrawPrimitiveIndices probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, currentVB, context, false, "CKRenderContext LockCurrentVB probe", error) &&
                     ExecuteCKParameterTypeDescProbe(engine, callbacks, context, false, "CKRenderContext callback registration probe", error) &&
                     ExecuteCKParameterTypeDescProbe(engine, temporary, context, true, "CKRenderContext temporary callback probe", error);
 
