@@ -2112,6 +2112,105 @@ bool RunXStringArrayItScriptSelfTest(asIScriptEngine *engine, std::string &error
     return ok;
 }
 
+bool RunXStringArrayScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XStringArray script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("XStringArray");
+    if (!arrayType) {
+        error = "XStringArray self-test could not find XStringArray.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("bool RemoveAt(int pos, XString &out old)") ||
+        arrayType->GetMethodByDecl("XString& RemoveAt(int pos)") ||
+        !arrayType->GetMethodByDecl("XString& opIndex(int index)") ||
+        !arrayType->GetMethodByDecl("XString& Back()") ||
+        !arrayType->GetMethodByDecl("const XString& Back() const") ||
+        !arrayType->GetMethodByDecl("int GetMemoryOccupation(bool addStatic = false) const")) {
+        error = "XStringArray self-test found stale or missing method declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XStringArraySelfTest";
+    const char *source =
+        "int ProbeXStringArray() {\n"
+        "  XStringArray values;\n"
+        "  values.PushBack(XString(\"first\"));\n"
+        "  values.PushBack(XString(\"second\"));\n"
+        "  if (values.Size() != 2) return 1;\n"
+        "  if (!(values.Back() == XString(\"second\"))) return 2;\n"
+        "  values[0] = XString(\"changed\");\n"
+        "  if (!(values[0] == XString(\"changed\"))) return 3;\n"
+        "  XString old;\n"
+        "  if (!values.RemoveAt(0, old)) return 4;\n"
+        "  if (!(old == XString(\"changed\"))) return 5;\n"
+        "  if (values.Size() != 1 || !(values[0] == XString(\"second\"))) return 6;\n"
+        "  if (values.RemoveAt(-1, old)) return 7;\n"
+        "  if (values.RemoveAt(99, old)) return 8;\n"
+        "  if (values.GetMemoryOccupation(false) < 0) return 9;\n"
+        "  if (values.GetMemoryOccupation(true) < 0) return 10;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectXStringArrayNegativeIndex() {\n"
+        "  XStringArray values;\n"
+        "  values.PushBack(XString(\"value\"));\n"
+        "  values[-1] = XString(\"bad\");\n"
+        "}\n"
+        "void RejectXStringArrayOutOfRangeIndex() {\n"
+        "  XStringArray values;\n"
+        "  values.PushBack(XString(\"value\"));\n"
+        "  values[1] = XString(\"bad\");\n"
+        "}\n"
+        "void RejectXStringArrayEmptyBack() {\n"
+        "  XStringArray values;\n"
+        "  values.Back();\n"
+        "}\n"
+        "void RejectXStringArrayConstEmptyBack() {\n"
+        "  const XStringArray values;\n"
+        "  values.Back();\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XStringArray self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xstringarray-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XStringArray self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XStringArray self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXStringArray()");
+    asIScriptFunction *negativeIndex = module->GetFunctionByDecl("void RejectXStringArrayNegativeIndex()");
+    asIScriptFunction *outOfRangeIndex = module->GetFunctionByDecl("void RejectXStringArrayOutOfRangeIndex()");
+    asIScriptFunction *emptyBack = module->GetFunctionByDecl("void RejectXStringArrayEmptyBack()");
+    asIScriptFunction *constEmptyBack = module->GetFunctionByDecl("void RejectXStringArrayConstEmptyBack()");
+    if (!probe || !negativeIndex || !outOfRangeIndex || !emptyBack || !constEmptyBack) {
+        engine->DiscardModule(moduleName);
+        error = "XStringArray self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XStringArray container probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, negativeIndex, true, "XStringArray negative index rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, outOfRangeIndex, true, "XStringArray out-of-range index rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyBack, true, "XStringArray empty Back rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, constEmptyBack, true, "XStringArray const empty Back rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKAttributeDescScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKAttributeDesc script self-test requires an AngelScript engine.";
@@ -5981,6 +6080,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunXStringArrayItScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXStringArrayScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKAttributeDescScriptSelfTest(engine, error)) {

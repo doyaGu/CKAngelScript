@@ -287,7 +287,7 @@ void RegisterCKContainers(asIScriptEngine *engine) {
     RegisterXSArray<XSArray<CK_CLASSID>, CK_CLASSID>(engine, "XClassIDArray", "CK_CLASSID");
     RegisterXSArray<XSArray<VxImageDescEx>, VxImageDescEx>(engine, "XImageArray", "VxImageDescEx");
 
-    RegisterXClassArray<XClassArray<XString>, XString>(engine, "XStringArray", "XString", true);
+    RegisterXClassArray<XClassArray<XString>, XString, true>(engine, "XStringArray", "XString", true);
     RegisterXClassArray<XClassArray<CKFilePluginDependencies>, CKFilePluginDependencies>(engine, "XFilePluginDependenciesArray", "CKFilePluginDependencies");
 
     RegisterXClassArray<CKPATHENTRYVECTOR, XString>(engine, "CKPATHENTRYVECTOR", "XString");

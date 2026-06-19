@@ -103,6 +103,59 @@ static C &DecrementXIterator(C &self) {
     return self;
 }
 
+static void SetXArrayException(const char *operation) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        XString message;
+        message.Format("%s index is out of range.", operation);
+        ctx->SetException(message.CStr());
+    }
+}
+
+template<typename C, typename T>
+static T &GetXClassArrayValue(C &self, int index) {
+    static T empty = T();
+    if (index < 0 || index >= self.Size()) {
+        SetXArrayException("XClassArray.opIndex");
+        return empty;
+    }
+    return self[index];
+}
+
+template<typename C, typename T>
+static const T &GetXClassArrayBackConst(const C &self) {
+    static const T empty = T();
+    if (self.Size() <= 0) {
+        SetXArrayException("XClassArray.Back");
+        return empty;
+    }
+    return self.Back();
+}
+
+template<typename C, typename T>
+static T &GetXClassArrayBack(C &self) {
+    static T empty = T();
+    if (self.Size() <= 0) {
+        SetXArrayException("XClassArray.Back");
+        return empty;
+    }
+    return self.Back();
+}
+
+template<typename C, typename T>
+static bool RemoveXClassArrayValueAt(C &self, int index, T &old) {
+    if (index < 0 || index >= self.Size()) {
+        return false;
+    }
+    old = self[index];
+    self.RemoveAt(index);
+    return true;
+}
+
+template<typename C>
+static int GetXClassArrayMemoryOccupationBool(const C &self, bool addStatic) {
+    return self.GetMemoryOccupation(addStatic ? 1 : 0);
+}
+
 template<typename C, typename T>
 void RegisterXIterator(asIScriptEngine *engine, const char *className, const char *elementType) {
     int r = 0;
@@ -354,8 +407,11 @@ void RegisterXSArray(asIScriptEngine *engine, const char *className, const char 
     r = engine->RegisterObjectMethod(className, "int GetMemoryOccupation(bool addStatic = false) const", asMETHODPR(XSArray<T>, GetMemoryOccupation, (XBOOL) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
-template<typename C, typename T>
-void RegisterXClassArray(asIScriptEngine *engine, const char *className, const char *elementType, bool registerIteratorProducers = false) {
+template<typename C, typename T, bool GuardElementAccess = false>
+void RegisterXClassArray(asIScriptEngine *engine,
+                         const char *className,
+                         const char *elementType,
+                         bool registerIteratorProducers = false) {
     int r = 0;
     XString decl;
 
@@ -374,8 +430,13 @@ void RegisterXClassArray(asIScriptEngine *engine, const char *className, const c
     decl.Format("%s &opAssign(const %s &in other)", className, className);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, operator=, (const XClassArray<T> &), XClassArray<T> &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    decl.Format("%s &opIndex(int index)", elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, operator[], (int) const, T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    if constexpr (GuardElementAccess) {
+        decl.Format("%s &opIndex(int index)", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((GetXClassArrayValue<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    } else {
+        decl.Format("%s &opIndex(int index)", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, operator[], (int) const, T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    }
 
     r = engine->RegisterObjectMethod(className, "void Clear()", asMETHODPR(C, Clear, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(className, "void Reserve(int size)", asMETHODPR(C, Reserve, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -394,8 +455,13 @@ void RegisterXClassArray(asIScriptEngine *engine, const char *className, const c
     r = engine->RegisterObjectMethod(className, "void PopBack()", asMETHODPR(C, PopBack, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(className, "void PopFront()", asMETHODPR(C, PopFront, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    decl.Format("%s &RemoveAt(int pos)", elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, RemoveAt, (int), T *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    if constexpr (GuardElementAccess) {
+        decl.Format("bool RemoveAt(int pos, %s &out old)", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((RemoveXClassArrayValueAt<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    } else {
+        decl.Format("%s &RemoveAt(int pos)", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, RemoveAt, (int), T *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    }
 
     decl.Format("void FastRemove(const %s &in o)", elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, FastRemove, (const T &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -410,11 +476,19 @@ void RegisterXClassArray(asIScriptEngine *engine, const char *className, const c
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, Swap, (XClassArray<T> &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #endif
 
-    decl.Format("const %s &Back() const", elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, Back, () const, const T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    if constexpr (GuardElementAccess) {
+        decl.Format("const %s &Back() const", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((GetXClassArrayBackConst<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    decl.Format("%s &Back()", elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, Back, (), T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+        decl.Format("%s &Back()", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((GetXClassArrayBack<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    } else {
+        decl.Format("const %s &Back() const", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, Back, () const, const T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+
+        decl.Format("%s &Back()", elementType);
+        r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(XClassArray<T>, Back, (), T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    }
 
     if constexpr (std::is_convertible_v<decltype(std::declval<const C &>().Begin()), T *> &&
                   std::is_convertible_v<decltype(std::declval<const C &>().End()), T *>) {
@@ -429,7 +503,11 @@ void RegisterXClassArray(asIScriptEngine *engine, const char *className, const c
 
     r = engine->RegisterObjectMethod(className, "int Size() const", asMETHODPR(C, Size, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(className, "int Allocated() const", asMETHODPR(C, Allocated, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(className, "int GetMemoryOccupation(bool addStatic = false) const", asMETHODPR(C, GetMemoryOccupation, (XBOOL) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    if constexpr (GuardElementAccess) {
+        r = engine->RegisterObjectMethod(className, "int GetMemoryOccupation(bool addStatic = false) const", asFUNCTION((GetXClassArrayMemoryOccupationBool<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    } else {
+        r = engine->RegisterObjectMethod(className, "int GetMemoryOccupation(bool addStatic = false) const", asMETHODPR(C, GetMemoryOccupation, (XBOOL) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    }
 }
 
 #endif // CK_SCRIPTXSARRAY_H
