@@ -961,6 +961,98 @@ bool ExecuteCKTargetLightProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKSprite3DProbe(asIScriptEngine *engine,
+                            asIScriptFunction *function,
+                            CKSprite3D *sprite,
+                            CKMaterial *material,
+                            CKMesh *mesh,
+                            CKObjectAnimation *animation,
+                            bool expectException,
+                            const char *label,
+                            std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) r = scriptContext->SetArgObject(0, sprite);
+    if (r >= 0) r = scriptContext->SetArgObject(1, material);
+    if (r >= 0) r = scriptContext->SetArgObject(2, mesh);
+    if (r >= 0) r = scriptContext->SetArgObject(3, animation);
+    if (r >= 0) r = scriptContext->Execute();
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
+bool ExecuteCKGridProbe(asIScriptEngine *engine,
+                        asIScriptFunction *function,
+                        CKGrid *grid,
+                        CK3dEntity *entity,
+                        CKMesh *mesh,
+                        CKObjectAnimation *animation,
+                        bool expectException,
+                        const char *label,
+                        std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) r = scriptContext->SetArgObject(0, grid);
+    if (r >= 0) r = scriptContext->SetArgObject(1, entity);
+    if (r >= 0) r = scriptContext->SetArgObject(2, mesh);
+    if (r >= 0) r = scriptContext->SetArgObject(3, animation);
+    if (r >= 0) r = scriptContext->Execute();
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKCurveProbe(asIScriptEngine *engine,
                          asIScriptFunction *function,
                          CKCurve *curve,
@@ -6949,6 +7041,353 @@ bool RunCKTargetLightScriptSelfTest(CKContext *context, asIScriptEngine *engine,
     return ok;
 }
 
+bool RunCKSprite3DScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKSprite3D script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *spriteType = engine->GetTypeInfoByDecl("CKSprite3D");
+    if (!spriteType) {
+        error = "CKSprite3D self-test could not find the registered type.";
+        return false;
+    }
+    if (spriteType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
+        spriteType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        spriteType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        spriteType->GetMethodByDecl("CKMaterial@ GetMaterial() const") != nullptr ||
+        spriteType->GetMethodByDecl("void GetSize(Vx2DVector &out vect) const") != nullptr ||
+        spriteType->GetMethodByDecl("void GetOffset(Vx2DVector &out vect) const") != nullptr ||
+        spriteType->GetMethodByDecl("void GetUVMapping(VxRect &out rect) const") != nullptr ||
+        spriteType->GetMethodByDecl("VXSPRITE3D_TYPE GetMode() const") != nullptr) {
+        error = "CKSprite3D self-test found stale unsafe or const-drift declarations.";
+        return false;
+    }
+    if (!spriteType->GetMethodByDecl("CKMaterial@ GetMaterial()") ||
+        !spriteType->GetMethodByDecl("void SetSize(const Vx2DVector &in vect)") ||
+        !spriteType->GetMethodByDecl("void GetSize(Vx2DVector &out vect)") ||
+        !spriteType->GetMethodByDecl("void SetOffset(const Vx2DVector &in vect)") ||
+        !spriteType->GetMethodByDecl("void GetOffset(Vx2DVector &out vect)") ||
+        !spriteType->GetMethodByDecl("void SetUVMapping(const VxRect &in rect)") ||
+        !spriteType->GetMethodByDecl("void GetUVMapping(VxRect &out rect)") ||
+        !spriteType->GetMethodByDecl("VXSPRITE3D_TYPE GetMode()") ||
+        !spriteType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !spriteType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !spriteType->GetMethodByDecl("NativePointer GetAppData()")) {
+        error = "CKSprite3D self-test could not find expected sprite methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKSprite3DSelfTest";
+    const char *source =
+        "bool CloseEnough(float a, float b) {\n"
+        "  float d = a - b;\n"
+        "  return d > -0.0001f && d < 0.0001f;\n"
+        "}\n"
+        "int ProbeCKSprite3DSurface(CKSprite3D@ sprite, CKMaterial@ material, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  if (sprite is null || material is null || mesh is null || animation is null) return 1;\n"
+        "  CKObject@ asObject = sprite;\n"
+        "  CKSceneObject@ asSceneObject = sprite;\n"
+        "  CKBeObject@ asBeObject = sprite;\n"
+        "  CKRenderObject@ asRenderObject = sprite;\n"
+        "  CK3dEntity@ asEntity = sprite;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null) return 2;\n"
+        "  if (cast<CKSprite3D>(asObject) !is sprite) return 3;\n"
+        "  if (cast<CKSprite3D>(asRenderObject) !is sprite) return 4;\n"
+        "  if (cast<CKSprite3D>(asEntity) !is sprite) return 5;\n"
+        "  sprite.SetMaterial(material);\n"
+        "  if (sprite.GetMaterial() !is material) return 6;\n"
+        "  Vx2DVector sizeIn(2.0f, 3.0f);\n"
+        "  sprite.SetSize(sizeIn);\n"
+        "  if (!CloseEnough(sizeIn.x, 2.0f) || !CloseEnough(sizeIn.y, 3.0f)) return 7;\n"
+        "  Vx2DVector sizeOut;\n"
+        "  sprite.GetSize(sizeOut);\n"
+        "  if (!CloseEnough(sizeOut.x, 2.0f) || !CloseEnough(sizeOut.y, 3.0f)) return 8;\n"
+        "  Vx2DVector offsetIn(0.25f, -0.5f);\n"
+        "  sprite.SetOffset(offsetIn);\n"
+        "  if (!CloseEnough(offsetIn.x, 0.25f) || !CloseEnough(offsetIn.y, -0.5f)) return 9;\n"
+        "  Vx2DVector offsetOut;\n"
+        "  sprite.GetOffset(offsetOut);\n"
+        "  if (!CloseEnough(offsetOut.x, 0.25f) || !CloseEnough(offsetOut.y, -0.5f)) return 10;\n"
+        "  VxRect rectIn(0.0f, 0.0f, 0.5f, 0.75f);\n"
+        "  sprite.SetUVMapping(rectIn);\n"
+        "  if (!CloseEnough(rectIn.right, 0.5f) || !CloseEnough(rectIn.bottom, 0.75f)) return 11;\n"
+        "  VxRect rectOut;\n"
+        "  sprite.GetUVMapping(rectOut);\n"
+        "  if (!CloseEnough(rectOut.right, 0.5f) || !CloseEnough(rectOut.bottom, 0.75f)) return 12;\n"
+        "  VXSPRITE3D_TYPE oldMode = sprite.GetMode();\n"
+        "  sprite.SetMode(oldMode);\n"
+        "  if (sprite.GetMode() != oldMode) return 13;\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  source.Reset();\n"
+        "  NativeBuffer@ transformed = NativeBuffer(24);\n"
+        "  sprite.TransformMany(transformed, source, 2);\n"
+        "  if (sprite.AddMesh(mesh) != CK_OK) return 14;\n"
+        "  sprite.SetCurrentMesh(mesh);\n"
+        "  if (sprite.GetCurrentMesh() !is mesh) return 15;\n"
+        "  if (sprite.RemoveMesh(mesh) != CK_OK) return 16;\n"
+        "  sprite.AddObjectAnimation(animation);\n"
+        "  if (sprite.GetObjectAnimationCount() < 1) return 17;\n"
+        "  sprite.RemoveObjectAnimation(animation);\n"
+        "  if (!sprite.GetAppData().IsNull()) return 18;\n"
+        "  sprite.SetAppData(NativePointer());\n"
+        "  sprite.SetMaterial(null);\n"
+        "  if (sprite.GetMaterial() !is null) return 19;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKSprite3DSmallTransform(CKSprite3D@ sprite, CKMaterial@ material, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  sprite.TransformMany(tooSmall, source, 2);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKSprite3D self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("cksprite3d-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSprite3D self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKSprite3D self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKSprite3DSurface(CKSprite3D@, CKMaterial@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCKSprite3DSmallTransform(CKSprite3D@, CKMaterial@, CKMesh@, CKObjectAnimation@)");
+    if (!probe || !smallTransform) {
+        engine->DiscardModule(moduleName);
+        error = "CKSprite3D self-test functions were not found.";
+        return false;
+    }
+
+    CKSprite3D *sprite = CKSprite3D::Cast(context->CreateObject(
+        CKCID_SPRITE3D, const_cast<CKSTRING>("__CKAS_CKSprite3DSelfTestSprite"), CK_OBJECTCREATION_DYNAMIC));
+    CKMaterial *material = CKMaterial::Cast(context->CreateObject(
+        CKCID_MATERIAL, const_cast<CKSTRING>("__CKAS_CKSprite3DSelfTestMaterial"), CK_OBJECTCREATION_DYNAMIC));
+    CKMesh *mesh = CKMesh::Cast(context->CreateObject(
+        CKCID_MESH, const_cast<CKSTRING>("__CKAS_CKSprite3DSelfTestMesh"), CK_OBJECTCREATION_DYNAMIC));
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKSprite3DSelfTestAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    if (!sprite || !material || !mesh || !animation) {
+        if (animation) context->DestroyObject(animation);
+        if (mesh) context->DestroyObject(mesh);
+        if (material) context->DestroyObject(material);
+        if (sprite) context->DestroyObject(sprite);
+        engine->DiscardModule(moduleName);
+        error = "CKSprite3D self-test could not create temporary objects.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKSprite3DProbe(engine, probe, sprite, material, mesh, animation, false, "CKSprite3D surface probe", error) &&
+                    ExecuteCKSprite3DProbe(engine, smallTransform, sprite, material, mesh, animation, true, "CKSprite3D small TransformMany probe", error);
+
+    sprite->RemoveAllCallbacks();
+    sprite->RemoveMesh(mesh);
+    sprite->RemoveObjectAnimation(animation);
+    sprite->SetMaterial(nullptr);
+    context->DestroyObject(animation);
+    context->DestroyObject(mesh);
+    context->DestroyObject(material);
+    context->DestroyObject(sprite);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCKGridScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKGrid script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *gridType = engine->GetTypeInfoByDecl("CKGrid");
+    if (!gridType) {
+        error = "CKGrid self-test could not find the registered type.";
+        return false;
+    }
+    if (gridType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
+        gridType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        gridType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
+        gridType->GetMethodByDecl("bool IsActive() const") != nullptr ||
+        gridType->GetMethodByDecl("float GetHeightValidity() const") != nullptr ||
+        gridType->GetMethodByDecl("int GetWidth() const") != nullptr ||
+        gridType->GetMethodByDecl("int GetLength() const") != nullptr ||
+        gridType->GetMethodByDecl("float Get2dCoordsFrom3dPos(const VxVector &in pos3d, int &out x, int &out y) const") != nullptr ||
+        gridType->GetMethodByDecl("void Get3dPosFrom2dCoords(VxVector &out pos3d, int x, int z) const") != nullptr ||
+        gridType->GetMethodByDecl("bool HasCompatibleClass(CK3dEntity@ entity) const") != nullptr ||
+        gridType->GetMethodByDecl("int GetGridPriority() const") != nullptr ||
+        gridType->GetMethodByDecl("CK_GRIDORIENTATION GetOrientationMode() const") != nullptr ||
+        gridType->GetMethodByDecl("CKLayer@ GetLayer(int type) const") != nullptr ||
+        gridType->GetMethodByDecl("CKLayer@ GetLayer(const string &in typeName) const") != nullptr ||
+        gridType->GetMethodByDecl("int GetLayerCount() const") != nullptr ||
+        gridType->GetMethodByDecl("CKLayer@ GetLayerByIndex(int index) const") != nullptr) {
+        error = "CKGrid self-test found stale unsafe or const-drift declarations.";
+        return false;
+    }
+    if (!gridType->GetMethodByDecl("bool IsActive()") ||
+        !gridType->GetMethodByDecl("float GetHeightValidity()") ||
+        !gridType->GetMethodByDecl("int GetWidth()") ||
+        !gridType->GetMethodByDecl("int GetLength()") ||
+        !gridType->GetMethodByDecl("float Get2dCoordsFrom3dPos(const VxVector &in pos3d, int &out x, int &out y)") ||
+        !gridType->GetMethodByDecl("void Get3dPosFrom2dCoords(VxVector &out pos3d, int x, int z)") ||
+        !gridType->GetMethodByDecl("bool HasCompatibleClass(CK3dEntity@ entity)") ||
+        !gridType->GetMethodByDecl("int GetGridPriority()") ||
+        !gridType->GetMethodByDecl("CK_GRIDORIENTATION GetOrientationMode()") ||
+        !gridType->GetMethodByDecl("CKLayer@ AddLayer(const string &in typeName, int format = CKGRID_LAYER_FORMAT_NORMAL)") ||
+        !gridType->GetMethodByDecl("CKLayer@ AddDefaultLayer(int format = CKGRID_LAYER_FORMAT_NORMAL)") ||
+        !gridType->GetMethodByDecl("CKLayer@ GetLayer(int type)") ||
+        !gridType->GetMethodByDecl("CKLayer@ GetLayer(const string &in typeName)") ||
+        !gridType->GetMethodByDecl("int GetLayerCount()") ||
+        !gridType->GetMethodByDecl("CKLayer@ GetLayerByIndex(int index)") ||
+        !gridType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
+        !gridType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
+        !gridType->GetMethodByDecl("NativePointer GetAppData()")) {
+        error = "CKGrid self-test could not find expected grid methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKGridSelfTest";
+    const char *source =
+        "bool CloseEnough(float a, float b) {\n"
+        "  float d = a - b;\n"
+        "  return d > -0.0001f && d < 0.0001f;\n"
+        "}\n"
+        "int ProbeCKGridSurface(CKGrid@ grid, CK3dEntity@ entity, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  if (grid is null || entity is null || mesh is null || animation is null) return 1;\n"
+        "  CKObject@ asObject = grid;\n"
+        "  CKSceneObject@ asSceneObject = grid;\n"
+        "  CKBeObject@ asBeObject = grid;\n"
+        "  CKRenderObject@ asRenderObject = grid;\n"
+        "  CK3dEntity@ asEntity = grid;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null || asRenderObject is null || asEntity is null) return 2;\n"
+        "  if (cast<CKGrid>(asObject) !is grid) return 3;\n"
+        "  if (cast<CKGrid>(asRenderObject) !is grid) return 4;\n"
+        "  if (cast<CKGrid>(asEntity) !is grid) return 5;\n"
+        "  grid.IsActive();\n"
+        "  grid.SetHeightValidity(1.25f);\n"
+        "  if (!CloseEnough(grid.GetHeightValidity(), 1.25f)) return 6;\n"
+        "  grid.SetDimensions(2, 3, 20.0f, 30.0f);\n"
+        "  if (grid.GetWidth() != 2 || grid.GetLength() != 3) return 7;\n"
+        "  int x = 0;\n"
+        "  int y = 0;\n"
+        "  grid.Get2dCoordsFrom3dPos(VxVector(0.0f, 0.0f, 0.0f), x, y);\n"
+        "  VxVector pos;\n"
+        "  grid.Get3dPosFrom2dCoords(pos, 0, 0);\n"
+        "  grid.HasCompatibleClass(entity);\n"
+        "  grid.SetGridPriority(4);\n"
+        "  if (grid.GetGridPriority() != 4) return 8;\n"
+        "  CK_GRIDORIENTATION orientation = grid.GetOrientationMode();\n"
+        "  grid.SetOrientationMode(orientation);\n"
+        "  if (grid.GetOrientationMode() != orientation) return 9;\n"
+        "  CKLayer@ defaultLayer = grid.AddDefaultLayer();\n"
+        "  CKLayer@ namedLayer = grid.AddLayer(\"__ckas_missing_grid_layer\");\n"
+        "  grid.GetLayerCount();\n"
+        "  grid.GetLayerByIndex(0);\n"
+        "  grid.GetLayer(0);\n"
+        "  grid.GetLayer(\"__ckas_missing_grid_layer\");\n"
+        "  grid.RemoveLayer(0);\n"
+        "  grid.RemoveLayer(\"__ckas_missing_grid_layer\");\n"
+        "  grid.RemoveAllLayers();\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  source.Reset();\n"
+        "  NativeBuffer@ transformed = NativeBuffer(24);\n"
+        "  grid.TransformMany(transformed, source, 2);\n"
+        "  if (grid.AddMesh(mesh) != CK_OK) return 10;\n"
+        "  grid.SetCurrentMesh(mesh);\n"
+        "  if (grid.GetCurrentMesh() !is mesh) return 11;\n"
+        "  if (grid.RemoveMesh(mesh) != CK_OK) return 12;\n"
+        "  grid.AddObjectAnimation(animation);\n"
+        "  if (grid.GetObjectAnimationCount() < 1) return 13;\n"
+        "  grid.RemoveObjectAnimation(animation);\n"
+        "  if (!grid.GetAppData().IsNull()) return 14;\n"
+        "  grid.SetAppData(NativePointer());\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKGridSmallTransform(CKGrid@ grid, CK3dEntity@ entity, CKMesh@ mesh, CKObjectAnimation@ animation) {\n"
+        "  NativeBuffer@ source = NativeBuffer(24);\n"
+        "  source.Write(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  source.Write(VxVector(4.0f, 5.0f, 6.0f));\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  grid.TransformMany(tooSmall, source, 2);\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKGrid self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ckgrid-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKGrid self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKGrid self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKGridSurface(CKGrid@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    asIScriptFunction *smallTransform = module->GetFunctionByDecl("int ProbeCKGridSmallTransform(CKGrid@, CK3dEntity@, CKMesh@, CKObjectAnimation@)");
+    if (!probe || !smallTransform) {
+        engine->DiscardModule(moduleName);
+        error = "CKGrid self-test functions were not found.";
+        return false;
+    }
+
+    CKGrid *grid = CKGrid::Cast(context->CreateObject(
+        CKCID_GRID, const_cast<CKSTRING>("__CKAS_CKGridSelfTestGrid"), CK_OBJECTCREATION_DYNAMIC));
+    CK3dEntity *entity = CK3dEntity::Cast(context->CreateObject(
+        CKCID_3DOBJECT, const_cast<CKSTRING>("__CKAS_CKGridSelfTestEntity"), CK_OBJECTCREATION_DYNAMIC));
+    CKMesh *mesh = CKMesh::Cast(context->CreateObject(
+        CKCID_MESH, const_cast<CKSTRING>("__CKAS_CKGridSelfTestMesh"), CK_OBJECTCREATION_DYNAMIC));
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKGridSelfTestAnimation"), CK_OBJECTCREATION_DYNAMIC));
+    if (!grid || !entity || !mesh || !animation) {
+        if (animation) context->DestroyObject(animation);
+        if (mesh) context->DestroyObject(mesh);
+        if (entity) context->DestroyObject(entity);
+        if (grid) context->DestroyObject(grid);
+        engine->DiscardModule(moduleName);
+        error = "CKGrid self-test could not create temporary objects.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKGridProbe(engine, probe, grid, entity, mesh, animation, false, "CKGrid surface probe", error) &&
+                    ExecuteCKGridProbe(engine, smallTransform, grid, entity, mesh, animation, true, "CKGrid small TransformMany probe", error);
+
+    grid->RemoveAllCallbacks();
+    grid->RemoveMesh(mesh);
+    grid->RemoveObjectAnimation(animation);
+    grid->RemoveAllLayers();
+    context->DestroyObject(animation);
+    context->DestroyObject(mesh);
+    context->DestroyObject(entity);
+    context->DestroyObject(grid);
+    engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKCurveScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKCurve script self-test requires CKContext and AngelScript engine.";
@@ -11310,6 +11749,12 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKTargetLightScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKSprite3DScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKGridScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKCurveScriptSelfTest(context, engine, error)) {

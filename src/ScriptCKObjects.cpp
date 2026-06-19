@@ -3836,19 +3836,28 @@ void RegisterCKSprite3D(asIScriptEngine *engine) {
     RegisterCK3dEntityMembers<CKSprite3D>(engine, "CKSprite3D");
 
     r = engine->RegisterObjectMethod("CKSprite3D", "void SetMaterial(CKMaterial@ mat)", asMETHODPR(CKSprite3D, SetMaterial, (CKMaterial *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKSprite3D", "CKMaterial@ GetMaterial() const", asMETHODPR(CKSprite3D, GetMaterial, (), CKMaterial *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSprite3D", "CKMaterial@ GetMaterial()", asMETHODPR(CKSprite3D, GetMaterial, (), CKMaterial *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKSprite3D", "void SetSize(const Vx2DVector &in vect)", asMETHODPR(CKSprite3D, SetSize, (Vx2DVector&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKSprite3D", "void GetSize(Vx2DVector &out vect) const", asMETHODPR(CKSprite3D, GetSize, (Vx2DVector&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSprite3D", "void SetSize(const Vx2DVector &in vect)", asFUNCTIONPR([](CKSprite3D *self, const Vx2DVector *vect) {
+        Vx2DVector copy = vect ? *vect : Vx2DVector();
+        self->SetSize(copy);
+    }, (CKSprite3D *, const Vx2DVector *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSprite3D", "void GetSize(Vx2DVector &out vect)", asMETHODPR(CKSprite3D, GetSize, (Vx2DVector&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKSprite3D", "void SetOffset(const Vx2DVector &in vect)", asMETHODPR(CKSprite3D, SetOffset, (Vx2DVector&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKSprite3D", "void GetOffset(Vx2DVector &out vect) const", asMETHODPR(CKSprite3D, GetOffset, (Vx2DVector&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSprite3D", "void SetOffset(const Vx2DVector &in vect)", asFUNCTIONPR([](CKSprite3D *self, const Vx2DVector *vect) {
+        Vx2DVector copy = vect ? *vect : Vx2DVector();
+        self->SetOffset(copy);
+    }, (CKSprite3D *, const Vx2DVector *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSprite3D", "void GetOffset(Vx2DVector &out vect)", asMETHODPR(CKSprite3D, GetOffset, (Vx2DVector&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKSprite3D", "void SetUVMapping(const VxRect &in rect)", asMETHODPR(CKSprite3D, SetUVMapping, (VxRect&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKSprite3D", "void GetUVMapping(VxRect &out rect) const", asMETHODPR(CKSprite3D, GetUVMapping, (VxRect&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSprite3D", "void SetUVMapping(const VxRect &in rect)", asFUNCTIONPR([](CKSprite3D *self, const VxRect *rect) {
+        VxRect copy = rect ? *rect : VxRect();
+        self->SetUVMapping(copy);
+    }, (CKSprite3D *, const VxRect *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSprite3D", "void GetUVMapping(VxRect &out rect)", asMETHODPR(CKSprite3D, GetUVMapping, (VxRect&), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKSprite3D", "void SetMode(VXSPRITE3D_TYPE mode)", asMETHODPR(CKSprite3D, SetMode, (VXSPRITE3D_TYPE), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKSprite3D", "VXSPRITE3D_TYPE GetMode() const", asMETHODPR(CKSprite3D, GetMode, (), VXSPRITE3D_TYPE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSprite3D", "VXSPRITE3D_TYPE GetMode()", asMETHODPR(CKSprite3D, GetMode, (), VXSPRITE3D_TYPE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
 template<typename T>
@@ -4201,37 +4210,38 @@ void RegisterCKGrid(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKGrid", "void ConstructMeshTexture(float opacity = 0.5)", asMETHODPR(CKGrid, ConstructMeshTexture, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "void DestroyMeshTexture()", asMETHODPR(CKGrid, DestroyMeshTexture, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "bool IsActive() const", asFUNCTIONPR([](CKGrid *self) -> bool { return self->IsActive(); }, (CKGrid *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "bool IsActive()", asFUNCTIONPR([](CKGrid *self) -> bool { return self->IsActive(); }, (CKGrid *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGrid", "void SetHeightValidity(float heightValidity)", asMETHODPR(CKGrid, SetHeightValidity, (float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "float GetHeightValidity() const", asMETHODPR(CKGrid, GetHeightValidity, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "float GetHeightValidity()", asMETHODPR(CKGrid, GetHeightValidity, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKGrid", "int GetWidth() const", asMETHODPR(CKGrid, GetWidth, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "int GetLength() const", asMETHODPR(CKGrid, GetLength, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "int GetWidth()", asMETHODPR(CKGrid, GetWidth, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "int GetLength()", asMETHODPR(CKGrid, GetLength, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGrid", "void SetDimensions(int width, int length, float sizeX, float sizeY)", asMETHODPR(CKGrid, SetDimensions, (int, int, float, float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CKGrid", "float Get2dCoordsFrom3dPos(const VxVector &in pos3d, int &out x, int &out y) const", asMETHODPR(CKGrid, Get2dCoordsFrom3dPos, (const VxVector *, int *, int *), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "void Get3dPosFrom2dCoords(VxVector &out pos3d, int x, int z) const", asMETHODPR(CKGrid, Get3dPosFrom2dCoords, (VxVector *, int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "float Get2dCoordsFrom3dPos(const VxVector &in pos3d, int &out x, int &out y)", asMETHODPR(CKGrid, Get2dCoordsFrom3dPos, (const VxVector *, int *, int *), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "void Get3dPosFrom2dCoords(VxVector &out pos3d, int x, int z)", asMETHODPR(CKGrid, Get3dPosFrom2dCoords, (VxVector *, int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR AddClassification(int classification)", asMETHODPR(CKGrid, AddClassification, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR AddClassification(const string &in name)", asFUNCTIONPR([](CKGrid *self, const std::string &name) { return self->AddClassificationByName(const_cast<char *>(name.c_str())); }, (CKGrid *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR RemoveClassification(int classification)", asMETHODPR(CKGrid, RemoveClassification, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR RemoveClassification(const string &in name)", asFUNCTIONPR([](CKGrid *self, const std::string &name) { return self->RemoveClassificationByName(const_cast<char *>(name.c_str())); }, (CKGrid *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "bool HasCompatibleClass(CK3dEntity@ entity) const", asFUNCTIONPR([](CKGrid *self, CK3dEntity *entity) -> bool { return self->HasCompatibleClass(entity); }, (CKGrid *, CK3dEntity *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "bool HasCompatibleClass(CK3dEntity@ entity)", asFUNCTIONPR([](CKGrid *self, CK3dEntity *entity) -> bool { return self->HasCompatibleClass(entity); }, (CKGrid *, CK3dEntity *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGrid", "void SetGridPriority(int priority)", asMETHODPR(CKGrid, SetGridPriority, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "int GetGridPriority() const", asMETHODPR(CKGrid, GetGridPriority, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "int GetGridPriority()", asMETHODPR(CKGrid, GetGridPriority, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGrid", "void SetOrientationMode(CK_GRIDORIENTATION orientation)", asMETHODPR(CKGrid, SetOrientationMode, (CK_GRIDORIENTATION), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "CK_GRIDORIENTATION GetOrientationMode() const", asMETHODPR(CKGrid, GetOrientationMode, (), CK_GRIDORIENTATION), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "CK_GRIDORIENTATION GetOrientationMode()", asMETHODPR(CKGrid, GetOrientationMode, (), CK_GRIDORIENTATION), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ AddLayer(int type, int format = CKGRID_LAYER_FORMAT_NORMAL)", asMETHODPR(CKGrid, AddLayer, (int, int), CKLayer*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ AddLayer(const string &in typeName = \"\", int format = CKGRID_LAYER_FORMAT_NORMAL)", asFUNCTIONPR([](CKGrid *self, const std::string &typeName, int format) { return self->AddLayerByName(const_cast<char *>(typeName.c_str()), format); }, (CKGrid *, const std::string &, int), CKLayer *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ GetLayer(int type) const", asMETHODPR(CKGrid, GetLayer, (int), CKLayer*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ GetLayer(const string &in typeName) const", asFUNCTIONPR([](CKGrid *self, const std::string &typeName) { return self->GetLayerByName(const_cast<char *>(typeName.c_str())); }, (CKGrid *, const std::string &), CKLayer *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "int GetLayerCount() const", asMETHODPR(CKGrid, GetLayerCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ GetLayerByIndex(int index) const", asMETHODPR(CKGrid, GetLayerByIndex, (int), CKLayer*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ AddLayer(const string &in typeName, int format = CKGRID_LAYER_FORMAT_NORMAL)", asFUNCTIONPR([](CKGrid *self, const std::string &typeName, int format) { return self->AddLayerByName(const_cast<char *>(typeName.c_str()), format); }, (CKGrid *, const std::string &, int), CKLayer *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ AddDefaultLayer(int format = CKGRID_LAYER_FORMAT_NORMAL)", asFUNCTIONPR([](CKGrid *self, int format) { return self->AddLayerByName(nullptr, format); }, (CKGrid *, int), CKLayer *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ GetLayer(int type)", asMETHODPR(CKGrid, GetLayer, (int), CKLayer*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ GetLayer(const string &in typeName)", asFUNCTIONPR([](CKGrid *self, const std::string &typeName) { return self->GetLayerByName(const_cast<char *>(typeName.c_str())); }, (CKGrid *, const std::string &), CKLayer *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "int GetLayerCount()", asMETHODPR(CKGrid, GetLayerCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKGrid", "CKLayer@ GetLayerByIndex(int index)", asMETHODPR(CKGrid, GetLayerByIndex, (int), CKLayer*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR RemoveLayer(int type)", asMETHODPR(CKGrid, RemoveLayer, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR RemoveLayer(const string &in typeName)", asFUNCTIONPR([](CKGrid *self, const std::string &typeName) { return self->RemoveLayerByName(const_cast<char *>(typeName.c_str())); }, (CKGrid *, const std::string &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKGrid", "CKERROR RemoveAllLayers()", asMETHODPR(CKGrid, RemoveAllLayers, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
