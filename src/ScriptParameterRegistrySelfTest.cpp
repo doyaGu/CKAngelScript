@@ -7548,6 +7548,180 @@ bool RunCKBeObjectScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
     return ok;
 }
 
+bool RunCKLevelScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKLevel script self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *levelType = engine->GetTypeInfoByDecl("CKLevel");
+    if (!levelType) {
+        error = "CKLevel self-test could not find the registered type.";
+        return false;
+    }
+    if (!levelType->GetMethodByDecl("CKERROR AddObject(CKObject@ obj)") ||
+        !levelType->GetMethodByDecl("CKERROR RemoveObject(CKObject@ obj)") ||
+        !levelType->GetMethodByDecl("CKERROR AddPlace(CKPlace@ place)") ||
+        !levelType->GetMethodByDecl("CKERROR RemovePlace(CKPlace@ place)") ||
+        !levelType->GetMethodByDecl("CKERROR AddScene(CKScene@ scene)") ||
+        !levelType->GetMethodByDecl("CKERROR RemoveScene(CKScene@ scene)") ||
+        !levelType->GetMethodByDecl("CKERROR SetNextActiveScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)") ||
+        !levelType->GetMethodByDecl("CKERROR LaunchScene(CKScene@ scene, CK_SCENEOBJECTACTIVITY_FLAGS active = CK_SCENEOBJECTACTIVITY_SCENEDEFAULT, CK_SCENEOBJECTRESET_FLAGS reset = CK_SCENEOBJECTRESET_RESET)") ||
+        !levelType->GetMethodByDecl("void AddRenderContext(CKRenderContext@ dev, bool main = false)") ||
+        !levelType->GetMethodByDecl("void RemoveRenderContext(CKRenderContext@ dev)") ||
+        !levelType->GetMethodByDecl("CKERROR Merge(CKLevel@ mergedLevel, bool asScene)") ||
+        !levelType->GetMethodByDecl("CKBeObject@ opImplCast()")) {
+        error = "CKLevel self-test could not find expected level methods.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKLevelSelfTest";
+    const char *source =
+        "int ProbeCKLevelSurface(CKContext@ ctx, CKObject@ object) {\n"
+        "  if (ctx is null || object is null) return 1;\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  if (level is null) return 2;\n"
+        "  CKObject@ asObject = level;\n"
+        "  CKSceneObject@ asSceneObject = level;\n"
+        "  CKBeObject@ asBeObject = level;\n"
+        "  if (asObject is null || asSceneObject is null || asBeObject is null) return 3;\n"
+        "  if (cast<CKLevel>(asObject) !is level) return 4;\n"
+        "  level.GetPlaceCount();\n"
+        "  level.GetSceneCount();\n"
+        "  level.GetRenderContextCount();\n"
+        "  level.GetCurrentScene();\n"
+        "  level.GetLevelScene();\n"
+        "  level.ComputeObjectList(CKCID_OBJECT, true);\n"
+        "  return 0;\n"
+        "}\n"
+        "void ProbeCKLevelAddObjectNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKObject@ none = null;\n"
+        "  level.AddObject(none);\n"
+        "}\n"
+        "void ProbeCKLevelRemoveObjectNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKObject@ none = null;\n"
+        "  level.RemoveObject(none);\n"
+        "}\n"
+        "void ProbeCKLevelAddPlaceNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKPlace@ none = null;\n"
+        "  level.AddPlace(none);\n"
+        "}\n"
+        "void ProbeCKLevelRemovePlaceNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKPlace@ none = null;\n"
+        "  level.RemovePlace(none);\n"
+        "}\n"
+        "void ProbeCKLevelAddSceneNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKScene@ none = null;\n"
+        "  level.AddScene(none);\n"
+        "}\n"
+        "void ProbeCKLevelRemoveSceneNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKScene@ none = null;\n"
+        "  level.RemoveScene(none);\n"
+        "}\n"
+        "void ProbeCKLevelSetNextActiveSceneNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKScene@ none = null;\n"
+        "  level.SetNextActiveScene(none);\n"
+        "}\n"
+        "void ProbeCKLevelLaunchSceneNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKScene@ none = null;\n"
+        "  level.LaunchScene(none);\n"
+        "}\n"
+        "void ProbeCKLevelAddRenderContextNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKRenderContext@ none = null;\n"
+        "  level.AddRenderContext(none);\n"
+        "}\n"
+        "void ProbeCKLevelRemoveRenderContextNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKRenderContext@ none = null;\n"
+        "  level.RemoveRenderContext(none);\n"
+        "}\n"
+        "void ProbeCKLevelMergeNull(CKContext@ ctx, CKObject@ object) {\n"
+        "  CKLevel@ level = cast<CKLevel>(object);\n"
+        "  CKLevel@ none = null;\n"
+        "  level.Merge(none, false);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKLevel self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("cklevel-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKLevel self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKLevel self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *surface = module->GetFunctionByDecl("int ProbeCKLevelSurface(CKContext@, CKObject@)");
+    asIScriptFunction *addObjectNull = module->GetFunctionByDecl("void ProbeCKLevelAddObjectNull(CKContext@, CKObject@)");
+    asIScriptFunction *removeObjectNull = module->GetFunctionByDecl("void ProbeCKLevelRemoveObjectNull(CKContext@, CKObject@)");
+    asIScriptFunction *addPlaceNull = module->GetFunctionByDecl("void ProbeCKLevelAddPlaceNull(CKContext@, CKObject@)");
+    asIScriptFunction *removePlaceNull = module->GetFunctionByDecl("void ProbeCKLevelRemovePlaceNull(CKContext@, CKObject@)");
+    asIScriptFunction *addSceneNull = module->GetFunctionByDecl("void ProbeCKLevelAddSceneNull(CKContext@, CKObject@)");
+    asIScriptFunction *removeSceneNull = module->GetFunctionByDecl("void ProbeCKLevelRemoveSceneNull(CKContext@, CKObject@)");
+    asIScriptFunction *setNextActiveSceneNull = module->GetFunctionByDecl("void ProbeCKLevelSetNextActiveSceneNull(CKContext@, CKObject@)");
+    asIScriptFunction *launchSceneNull = module->GetFunctionByDecl("void ProbeCKLevelLaunchSceneNull(CKContext@, CKObject@)");
+    asIScriptFunction *addRenderContextNull = module->GetFunctionByDecl("void ProbeCKLevelAddRenderContextNull(CKContext@, CKObject@)");
+    asIScriptFunction *removeRenderContextNull = module->GetFunctionByDecl("void ProbeCKLevelRemoveRenderContextNull(CKContext@, CKObject@)");
+    asIScriptFunction *mergeNull = module->GetFunctionByDecl("void ProbeCKLevelMergeNull(CKContext@, CKObject@)");
+    if (!surface || !addObjectNull || !removeObjectNull || !addPlaceNull || !removePlaceNull ||
+        !addSceneNull || !removeSceneNull || !setNextActiveSceneNull || !launchSceneNull ||
+        !addRenderContextNull || !removeRenderContextNull || !mergeNull) {
+        engine->DiscardModule(moduleName);
+        error = "CKLevel self-test functions were not found.";
+        return false;
+    }
+
+    CKLevel *level = context->GetCurrentLevel();
+    bool destroyLevel = false;
+    if (!level) {
+        level = CKLevel::Cast(context->CreateObject(
+            CKCID_LEVEL, const_cast<CKSTRING>("__CKAS_CKLevelSelfTestLevel"), CK_OBJECTCREATION_DYNAMIC));
+        destroyLevel = level != nullptr;
+    }
+    if (!level) {
+        engine->DiscardModule(moduleName);
+        error = "CKLevel self-test could not get or create a temporary level.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKObjectProbe(engine, surface, context, level, false, "CKLevel surface probe", error) &&
+                    ExecuteCKObjectProbe(engine, addObjectNull, context, level, true, "CKLevel AddObject null probe", error) &&
+                    ExecuteCKObjectProbe(engine, removeObjectNull, context, level, true, "CKLevel RemoveObject null probe", error) &&
+                    ExecuteCKObjectProbe(engine, addPlaceNull, context, level, true, "CKLevel AddPlace null probe", error) &&
+                    ExecuteCKObjectProbe(engine, removePlaceNull, context, level, true, "CKLevel RemovePlace null probe", error) &&
+                    ExecuteCKObjectProbe(engine, addSceneNull, context, level, true, "CKLevel AddScene null probe", error) &&
+                    ExecuteCKObjectProbe(engine, removeSceneNull, context, level, true, "CKLevel RemoveScene null probe", error) &&
+                    ExecuteCKObjectProbe(engine, setNextActiveSceneNull, context, level, true, "CKLevel SetNextActiveScene null probe", error) &&
+                    ExecuteCKObjectProbe(engine, launchSceneNull, context, level, true, "CKLevel LaunchScene null probe", error) &&
+                    ExecuteCKObjectProbe(engine, addRenderContextNull, context, level, true, "CKLevel AddRenderContext null probe", error) &&
+                    ExecuteCKObjectProbe(engine, removeRenderContextNull, context, level, true, "CKLevel RemoveRenderContext null probe", error) &&
+                    ExecuteCKObjectProbe(engine, mergeNull, context, level, true, "CKLevel Merge null probe", error);
+
+    if (destroyLevel) {
+        context->DestroyObject(level);
+    }
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunCKGroupScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKGroup script self-test requires CKContext and AngelScript engine.";
@@ -14561,6 +14735,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKBeObjectScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKLevelScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKGroupScriptSelfTest(context, engine, error)) {
