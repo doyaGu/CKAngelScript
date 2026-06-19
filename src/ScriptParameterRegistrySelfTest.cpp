@@ -4402,6 +4402,449 @@ bool RunXStringArrayItScriptSelfTest(asIScriptEngine *engine, std::string &error
     return ok;
 }
 
+bool RunXIntArrayScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XIntArray script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("XIntArray");
+    if (!arrayType) {
+        error = "XIntArray self-test could not find XIntArray.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("int& opIndex(uint index)") ||
+        !arrayType->GetMethodByDecl("const int& opIndex(uint index) const") ||
+        !arrayType->GetMethodByDecl("bool RemoveAt(uint pos, int &out old)") ||
+        !arrayType->GetMethodByDecl("bool EraseAt(int pos)") ||
+        !arrayType->GetMethodByDecl("bool IsHere(const int &in o) const") ||
+        !arrayType->GetMethodByDecl("const int& Front() const") ||
+        !arrayType->GetMethodByDecl("int& Back()") ||
+        !arrayType->GetMethodByDecl("int GetMemoryOccupation(bool addStatic = false) const")) {
+        error = "XIntArray self-test found missing hardened container declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XIntArraySelfTest";
+    const char *source =
+        "int ProbeXIntArray() {\n"
+        "  XIntArray values;\n"
+        "  values.PushBack(10);\n"
+        "  values.Insert(1, 20);\n"
+        "  if (values.Size() != 2) return 1;\n"
+        "  if (values[0] != 10 || values[1] != 20) return 2;\n"
+        "  if (values.Front() != 10 || values.Back() != 20) return 3;\n"
+        "  if (!values.IsHere(20) || values.IsHere(30)) return 4;\n"
+        "  if (values.EraseAt(-1)) return 5;\n"
+        "  int old = 0;\n"
+        "  if (!values.RemoveAt(0, old) || old != 10) return 6;\n"
+        "  values.PopBack();\n"
+        "  if (values.Size() != 0) return 7;\n"
+        "  values.Resize(2);\n"
+        "  values[0] = 1;\n"
+        "  values[1] = 2;\n"
+        "  if (values.GetMemoryOccupation(false) < 0) return 8;\n"
+        "  if (values.GetMemoryOccupation(true) < 0) return 9;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectXIntArrayNegativeIndex() {\n"
+        "  XIntArray values;\n"
+        "  values.PushBack(1);\n"
+        "  values[uint(-1)] = 2;\n"
+        "}\n"
+        "void RejectXIntArrayOutOfRangeIndex() {\n"
+        "  XIntArray values;\n"
+        "  values.PushBack(1);\n"
+        "  values[1] = 2;\n"
+        "}\n"
+        "void RejectXIntArrayConstOutOfRangeIndex() {\n"
+        "  const XIntArray values;\n"
+        "  values[0];\n"
+        "}\n"
+        "void RejectXIntArrayEmptyFront() {\n"
+        "  XIntArray values;\n"
+        "  values.Front();\n"
+        "}\n"
+        "void RejectXIntArrayEmptyBack() {\n"
+        "  XIntArray values;\n"
+        "  values.Back();\n"
+        "}\n"
+        "void RejectXIntArrayEmptyPopBack() {\n"
+        "  XIntArray values;\n"
+        "  values.PopBack();\n"
+        "}\n"
+        "void RejectXIntArrayNegativeResize() {\n"
+        "  XIntArray values;\n"
+        "  values.Resize(-1);\n"
+        "}\n"
+        "void RejectXIntArrayBadInsert() {\n"
+        "  XIntArray values;\n"
+        "  values.Insert(1, 3);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XIntArray self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xintarray-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XIntArray self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XIntArray self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXIntArray()");
+    asIScriptFunction *negativeIndex = module->GetFunctionByDecl("void RejectXIntArrayNegativeIndex()");
+    asIScriptFunction *outOfRangeIndex = module->GetFunctionByDecl("void RejectXIntArrayOutOfRangeIndex()");
+    asIScriptFunction *constOutOfRangeIndex = module->GetFunctionByDecl("void RejectXIntArrayConstOutOfRangeIndex()");
+    asIScriptFunction *emptyFront = module->GetFunctionByDecl("void RejectXIntArrayEmptyFront()");
+    asIScriptFunction *emptyBack = module->GetFunctionByDecl("void RejectXIntArrayEmptyBack()");
+    asIScriptFunction *emptyPopBack = module->GetFunctionByDecl("void RejectXIntArrayEmptyPopBack()");
+    asIScriptFunction *negativeResize = module->GetFunctionByDecl("void RejectXIntArrayNegativeResize()");
+    asIScriptFunction *badInsert = module->GetFunctionByDecl("void RejectXIntArrayBadInsert()");
+    if (!probe || !negativeIndex || !outOfRangeIndex || !constOutOfRangeIndex || !emptyFront ||
+        !emptyBack || !emptyPopBack || !negativeResize || !badInsert) {
+        engine->DiscardModule(moduleName);
+        error = "XIntArray self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XIntArray container probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, negativeIndex, true, "XIntArray negative index rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, outOfRangeIndex, true, "XIntArray out-of-range index rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, constOutOfRangeIndex, true, "XIntArray const out-of-range index rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyFront, true, "XIntArray empty Front rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyBack, true, "XIntArray empty Back rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, emptyPopBack, true, "XIntArray empty PopBack rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, negativeResize, true, "XIntArray negative Resize rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, badInsert, true, "XIntArray bad Insert rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunXDwordArrayScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XDwordArray script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *arrayType = engine->GetTypeInfoByDecl("XDwordArray");
+    if (!arrayType) {
+        error = "XDwordArray self-test could not find XDwordArray.";
+        return false;
+    }
+    if (!arrayType->GetMethodByDecl("CKDWORD& opIndex(uint index)") ||
+        !arrayType->GetMethodByDecl("const CKDWORD& opIndex(uint index) const") ||
+        !arrayType->GetMethodByDecl("bool IsHere(const CKDWORD &in o) const") ||
+        !arrayType->GetMethodByDecl("int GetMemoryOccupation(bool addStatic = false) const")) {
+        error = "XDwordArray self-test found missing hardened XSArray declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XDwordArraySelfTest";
+    const char *source =
+        "int ProbeXDwordArray() {\n"
+        "  XDwordArray values;\n"
+        "  values.PushBack(10);\n"
+        "  values.Insert(1, 20);\n"
+        "  if (values.Size() != 2) return 1;\n"
+        "  if (values[0] != 10 || values[1] != 20) return 2;\n"
+        "  if (!values.IsHere(20) || values.IsHere(30)) return 3;\n"
+        "  values.PopBack();\n"
+        "  values.Resize(2);\n"
+        "  if (values.GetMemoryOccupation(false) < 0) return 4;\n"
+        "  if (values.GetMemoryOccupation(true) < 0) return 5;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectXDwordArrayNegativeIndex() {\n"
+        "  XDwordArray values;\n"
+        "  values.PushBack(1);\n"
+        "  values[uint(-1)] = 2;\n"
+        "}\n"
+        "void RejectXDwordArrayOutOfRangeIndex() {\n"
+        "  XDwordArray values;\n"
+        "  values.PushBack(1);\n"
+        "  values[1] = 2;\n"
+        "}\n"
+        "void RejectXDwordArrayNegativeResize() {\n"
+        "  XDwordArray values;\n"
+        "  values.Resize(-1);\n"
+        "}\n"
+        "void RejectXDwordArrayBadInsert() {\n"
+        "  XDwordArray values;\n"
+        "  values.Insert(1, 3);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XDwordArray self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xdwordarray-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XDwordArray self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XDwordArray self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXDwordArray()");
+    asIScriptFunction *negativeIndex = module->GetFunctionByDecl("void RejectXDwordArrayNegativeIndex()");
+    asIScriptFunction *outOfRangeIndex = module->GetFunctionByDecl("void RejectXDwordArrayOutOfRangeIndex()");
+    asIScriptFunction *negativeResize = module->GetFunctionByDecl("void RejectXDwordArrayNegativeResize()");
+    asIScriptFunction *badInsert = module->GetFunctionByDecl("void RejectXDwordArrayBadInsert()");
+    if (!probe || !negativeIndex || !outOfRangeIndex || !negativeResize || !badInsert) {
+        engine->DiscardModule(moduleName);
+        error = "XDwordArray self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XDwordArray container probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, negativeIndex, true, "XDwordArray negative index rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, outOfRangeIndex, true, "XDwordArray out-of-range index rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, negativeResize, true, "XDwordArray negative Resize rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, badInsert, true, "XDwordArray bad Insert rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunXFileObjectsTableScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XFileObjectsTable script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *tableType = engine->GetTypeInfoByDecl("XFileObjectsTable");
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("XFileObjectsTableIt");
+    if (!tableType || !iteratorType) {
+        error = "XFileObjectsTable self-test could not find registered table types.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("const CK_ID& GetKey() const") ||
+        !iteratorType->GetMethodByDecl("int& GetValue()") ||
+        !iteratorType->GetMethodByDecl("XFileObjectsTableIt& opPreInc()") ||
+        !tableType->GetMethodByDecl("bool Insert(const CK_ID &in, const int &in, bool override)") ||
+        !tableType->GetMethodByDecl("XFileObjectsTableIt Remove(const XFileObjectsTableIt &in)") ||
+        !tableType->GetMethodByDecl("bool LookUp(const CK_ID &in, int &out) const") ||
+        !tableType->GetMethodByDecl("bool IsHere(const CK_ID &in) const") ||
+        !tableType->GetMethodByDecl("int GetMemoryOccupation(bool = false) const")) {
+        error = "XFileObjectsTable self-test found missing hardened hash declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XFileObjectsTableSelfTest";
+    const char *source =
+        "int ProbeXFileObjectsTable() {\n"
+        "  XFileObjectsTable table;\n"
+        "  CK_ID key1 = 1;\n"
+        "  CK_ID key2 = 2;\n"
+        "  CK_ID missing = 99;\n"
+        "  int inserted = 10;\n"
+        "  int assigned = 20;\n"
+        "  if (!table.Insert(key1, inserted, true)) return 1;\n"
+        "  if (!table.IsHere(key1) || table.IsHere(key2)) return 2;\n"
+        "  int value = 0;\n"
+        "  if (!table.LookUp(key1, value) || value != inserted) return 3;\n"
+        "  table[key2] = assigned;\n"
+        "  XFileObjectsTableIt it = table.Find(key2);\n"
+        "  if (it.GetKey() != key2 || it.GetValue() != assigned) return 4;\n"
+        "  it.GetValue() = 21;\n"
+        "  if (!table.LookUp(key2, value) || value != 21) return 5;\n"
+        "  table.Remove(it);\n"
+        "  if (table.IsHere(key2)) return 6;\n"
+        "  if (table.GetMemoryOccupation(false) < 0) return 7;\n"
+        "  if (table.GetMemoryOccupation(true) < 0) return 8;\n"
+        "  if (table.IsHere(missing)) return 9;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectDefaultXFileObjectsTableItGet() {\n"
+        "  XFileObjectsTableIt it;\n"
+        "  it.GetValue();\n"
+        "}\n"
+        "void RejectDefaultXFileObjectsTableItInc() {\n"
+        "  XFileObjectsTableIt it;\n"
+        "  ++it;\n"
+        "}\n"
+        "void RejectMissingXFileObjectsTableItGet() {\n"
+        "  XFileObjectsTable table;\n"
+        "  CK_ID missing = 99;\n"
+        "  XFileObjectsTableIt it = table.Find(missing);\n"
+        "  it.GetValue();\n"
+        "}\n"
+        "void RejectEndXFileObjectsTableItKey() {\n"
+        "  XFileObjectsTable table;\n"
+        "  XFileObjectsTableIt it = table.End();\n"
+        "  it.GetKey();\n"
+        "}\n"
+        "void RejectDefaultXFileObjectsTableRemove() {\n"
+        "  XFileObjectsTable table;\n"
+        "  XFileObjectsTableIt it;\n"
+        "  table.Remove(it);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XFileObjectsTable self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xfileobjectstable-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XFileObjectsTable self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XFileObjectsTable self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXFileObjectsTable()");
+    asIScriptFunction *defaultGet = module->GetFunctionByDecl("void RejectDefaultXFileObjectsTableItGet()");
+    asIScriptFunction *defaultInc = module->GetFunctionByDecl("void RejectDefaultXFileObjectsTableItInc()");
+    asIScriptFunction *missingGet = module->GetFunctionByDecl("void RejectMissingXFileObjectsTableItGet()");
+    asIScriptFunction *endKey = module->GetFunctionByDecl("void RejectEndXFileObjectsTableItKey()");
+    asIScriptFunction *defaultRemove = module->GetFunctionByDecl("void RejectDefaultXFileObjectsTableRemove()");
+    if (!probe || !defaultGet || !defaultInc || !missingGet || !endKey || !defaultRemove) {
+        engine->DiscardModule(moduleName);
+        error = "XFileObjectsTable self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XFileObjectsTable container probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultGet, true, "XFileObjectsTable default Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultInc, true, "XFileObjectsTable default increment rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, missingGet, true, "XFileObjectsTable missing Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, endKey, true, "XFileObjectsTable end GetKey rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultRemove, true, "XFileObjectsTable default Remove rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunXHashIDScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "XHashID script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *tableType = engine->GetTypeInfoByDecl("XHashID");
+    asITypeInfo *iteratorType = engine->GetTypeInfoByDecl("XHashIDIt");
+    if (!tableType || !iteratorType) {
+        error = "XHashID self-test could not find registered table types.";
+        return false;
+    }
+    if (!iteratorType->GetMethodByDecl("const CK_ID& GetKey() const") ||
+        !iteratorType->GetMethodByDecl("CK_ID& GetValue()") ||
+        !iteratorType->GetMethodByDecl("XHashIDIt& opPreInc()") ||
+        !tableType->GetMethodByDecl("bool Insert(const CK_ID &in, const CK_ID &in, bool override)") ||
+        !tableType->GetMethodByDecl("XHashIDIt Remove(const XHashIDIt &in)") ||
+        !tableType->GetMethodByDecl("bool LookUp(const CK_ID &in, CK_ID &out) const") ||
+        !tableType->GetMethodByDecl("bool IsHere(const CK_ID &in) const")) {
+        error = "XHashID self-test found missing hardened XNHash declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_XHashIDSelfTest";
+    const char *source =
+        "int ProbeXHashID() {\n"
+        "  XHashID table;\n"
+        "  CK_ID key1 = 1;\n"
+        "  CK_ID key2 = 2;\n"
+        "  CK_ID inserted = 10;\n"
+        "  CK_ID assigned = 20;\n"
+        "  if (!table.Insert(key1, inserted, true)) return 1;\n"
+        "  if (!table.IsHere(key1) || table.IsHere(key2)) return 2;\n"
+        "  CK_ID value = 0;\n"
+        "  if (!table.LookUp(key1, value) || value != inserted) return 3;\n"
+        "  table[key2] = assigned;\n"
+        "  XHashIDIt it = table.Find(key2);\n"
+        "  if (it.GetKey() != key2 || it.GetValue() != assigned) return 4;\n"
+        "  table.Remove(it);\n"
+        "  if (table.IsHere(key2)) return 5;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectDefaultXHashIDItGet() {\n"
+        "  XHashIDIt it;\n"
+        "  it.GetValue();\n"
+        "}\n"
+        "void RejectDefaultXHashIDItInc() {\n"
+        "  XHashIDIt it;\n"
+        "  ++it;\n"
+        "}\n"
+        "void RejectMissingXHashIDItGet() {\n"
+        "  XHashID table;\n"
+        "  CK_ID missing = 99;\n"
+        "  XHashIDIt it = table.Find(missing);\n"
+        "  it.GetValue();\n"
+        "}\n"
+        "void RejectEndXHashIDItKey() {\n"
+        "  XHashID table;\n"
+        "  XHashIDIt it = table.End();\n"
+        "  it.GetKey();\n"
+        "}\n"
+        "void RejectDefaultXHashIDRemove() {\n"
+        "  XHashID table;\n"
+        "  XHashIDIt it;\n"
+        "  table.Remove(it);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "XHashID self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("xhashid-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XHashID self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "XHashID self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeXHashID()");
+    asIScriptFunction *defaultGet = module->GetFunctionByDecl("void RejectDefaultXHashIDItGet()");
+    asIScriptFunction *defaultInc = module->GetFunctionByDecl("void RejectDefaultXHashIDItInc()");
+    asIScriptFunction *missingGet = module->GetFunctionByDecl("void RejectMissingXHashIDItGet()");
+    asIScriptFunction *endKey = module->GetFunctionByDecl("void RejectEndXHashIDItKey()");
+    asIScriptFunction *defaultRemove = module->GetFunctionByDecl("void RejectDefaultXHashIDRemove()");
+    if (!probe || !defaultGet || !defaultInc || !missingGet || !endKey || !defaultRemove) {
+        engine->DiscardModule(moduleName);
+        error = "XHashID self-test functions were not found.";
+        return false;
+    }
+
+    bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "XHashID container probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultGet, true, "XHashID default Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultInc, true, "XHashID default increment rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, missingGet, true, "XHashID missing Get rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, endKey, true, "XHashID end GetKey rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, defaultRemove, true, "XHashID default Remove rejection probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 bool RunXStringArrayScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "XStringArray script self-test requires an AngelScript engine.";
@@ -13384,7 +13827,19 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunXIntArrayItScriptSelfTest(engine, error)) {
         return false;
     }
+    if (!RunXIntArrayScriptSelfTest(engine, error)) {
+        return false;
+    }
     if (!RunXDwordArrayItScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXDwordArrayScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXFileObjectsTableScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunXHashIDScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunXClassIDArrayItScriptSelfTest(engine, error)) {

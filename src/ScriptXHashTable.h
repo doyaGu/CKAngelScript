@@ -2,6 +2,8 @@
 #define CK_SCRIPTXHASHTABLE_H
 
 #include <angelscript.h>
+#include <type_traits>
+#include <utility>
 
 #include "XString.h"
 #include "XHashTable.h"
@@ -9,15 +11,148 @@
 #include "XSHashTable.h"
 #include "ScriptRegistration.h"
 
+static void SetXHashTableException(const char *operation, const char *detail) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        XString message;
+        message.Format("%s %s", operation, detail);
+        ctx->SetException(message.CStr());
+    }
+}
+
+template<typename C, typename = void>
+struct XHashTableIteratorState {
+    static bool HasNode(const C &self) {
+        C invalid;
+        return !(self == invalid);
+    }
+
+    template<typename Table>
+    static bool BelongsTo(const C &, const Table &) {
+        return true;
+    }
+};
+
+template<typename C>
+struct XHashTableIteratorState<C, std::void_t<decltype(std::declval<const C &>().m_Node),
+                                             decltype(std::declval<const C &>().m_Table)>> {
+    static bool HasNode(const C &self) {
+        return self.m_Node != nullptr && self.m_Table != nullptr;
+    }
+
+    template<typename Table>
+    static bool BelongsTo(const C &self, const Table &table) {
+        return static_cast<const void *>(self.m_Table) == static_cast<const void *>(&table);
+    }
+};
+
+template<typename C>
+static bool CheckXHashTableIteratorValid(const C &self, const char *operation) {
+    if (XHashTableIteratorState<C>::HasNode(self)) {
+        return true;
+    }
+    SetXHashTableException(operation, "requires a valid iterator.");
+    return false;
+}
+
+template<typename Table, typename It>
+static bool CheckXHashTableIteratorForTable(const Table &table, const It &it, const char *operation) {
+    if (!CheckXHashTableIteratorValid(it, operation)) {
+        return false;
+    }
+    if (!XHashTableIteratorState<It>::BelongsTo(it, table)) {
+        SetXHashTableException(operation, "requires an iterator from the same table.");
+        return false;
+    }
+    return true;
+}
+
+template<typename C>
+static bool EqualXHashTableIterator(const C &self, const C &other) {
+    return self == other;
+}
+
+template<typename C, typename K>
+static const K &GetXHashTableIteratorKey(const C &self) {
+    static const K empty = K();
+    if (!CheckXHashTableIteratorValid(self, "XHashTableIt.GetKey")) {
+        return empty;
+    }
+    return self.GetKey();
+}
+
+template<typename C, typename T>
+static const T &GetXHashTableIteratorValueConst(const C &self) {
+    static const T empty = T();
+    if (!CheckXHashTableIteratorValid(self, "XHashTableIt.GetValue")) {
+        return empty;
+    }
+    return *self;
+}
+
+template<typename C, typename T>
+static T &GetXHashTableIteratorValue(C &self) {
+    static T empty = T();
+    if (!CheckXHashTableIteratorValid(self, "XHashTableIt.GetValue")) {
+        return empty;
+    }
+    return *self;
+}
+
+template<typename C>
+static C &IncrementXHashTableIterator(C &self) {
+    if (CheckXHashTableIteratorValid(self, "XHashTableIt.opPreInc")) {
+        ++self;
+    }
+    return self;
+}
+
+template<typename C>
+static C PostIncrementXHashTableIterator(C &self, int) {
+    C old(self);
+    if (CheckXHashTableIteratorValid(self, "XHashTableIt.opPostInc")) {
+        ++self;
+    }
+    return old;
+}
+
+template<typename Table, typename It>
+static It RemoveXHashTableIterator(Table &table, const It &it) {
+    if (!CheckXHashTableIteratorForTable(table, it, "XHashTable.Remove")) {
+        return table.End();
+    }
+    return table.Remove(it);
+}
+
+template<typename Table, typename K, typename T>
+static bool InsertXHashTableValue(Table &table, const K &key, const T &value, bool overrideValue) {
+    return table.Insert(key, value, overrideValue ? 1 : 0) != 0;
+}
+
+template<typename Table, typename K, typename T>
+static bool LookUpXHashTableValue(const Table &table, const K &key, T &value) {
+    return table.LookUp(key, value) != 0;
+}
+
+template<typename Table, typename K>
+static bool IsXHashTableKeyHere(const Table &table, const K &key) {
+    return table.IsHere(key) != 0;
+}
+
+template<typename Table>
+static int GetXHashTableMemoryOccupationBool(const Table &table, bool addStatic) {
+    return table.GetMemoryOccupation(addStatic ? 1 : 0);
+}
+
 template<typename C, typename T, typename K>
 void RegisterXHashTableEntry(asIScriptEngine *engine, const char *className, const char *keyType, const char *elementType) {
     int r = 0;
     XString decl;
     XString name = decl.Format("%sEntry", className);
 
-    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>()); assert(r >= 0 || r == asALREADY_REGISTERED);
+    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());
     if (r == asALREADY_REGISTERED)
         return;
+    CKAS_CHECK_REGISTER(r);
 
     decl.Format("void f(const %s &in, const %s &in)", keyType, elementType);
     r = engine->RegisterObjectBehaviour(name.CStr(), asBEHAVE_CONSTRUCT, decl.CStr(), asFUNCTIONPR([](const K &k, const T &v, C *self) { new(self) C(k, v); }, (const K &, const T &, C *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -57,9 +192,10 @@ void RegisterXNHashTableEntry(asIScriptEngine *engine, const char *className, co
     XString decl;
     XString name = decl.Format("%sEntry", className);
 
-    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>()); assert(r >= 0 || r == asALREADY_REGISTERED);
+    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());
     if (r == asALREADY_REGISTERED)
         return;
+    CKAS_CHECK_REGISTER(r);
 
     decl.Format("void f(const %s &in, const %s &in)", keyType, elementType);
     r = engine->RegisterObjectBehaviour(name.CStr(), asBEHAVE_CONSTRUCT, decl.CStr(), asFUNCTIONPR([](const K &k, const T &v, C *self) { new(self) C(k, v); }, (const K &, const T &, C *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -88,9 +224,10 @@ void RegisterXHashTableIt(asIScriptEngine *engine, const char *className, const 
     XString decl;
 
     XString name = decl.Format("%sIt", className);
-    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());  assert(r >= 0 || r == asALREADY_REGISTERED);
+    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());
     if (r == asALREADY_REGISTERED)
         return;
+    CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour(name.CStr(), asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](C *self) { new(self) C(); }, (C *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
@@ -103,22 +240,22 @@ void RegisterXHashTableIt(asIScriptEngine *engine, const char *className, const 
     r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator=, (const C &), C &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool opEquals(const %s &in) const", name.CStr());
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator==, (const C &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((EqualXHashTableIterator<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("const %s &GetKey() const", keyType);
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, GetKey, () const, const K &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((GetXHashTableIteratorKey<C, K>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("const %s &GetValue() const", elementType);
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator*, () const, const T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((GetXHashTableIteratorValueConst<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%s &GetValue()", elementType);
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator*, (), T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((GetXHashTableIteratorValue<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%s &opPreInc()", name.CStr());
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator++, (), C &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((IncrementXHashTableIterator<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%s opPostInc(int)", name.CStr());
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator++, (int), C), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((PostIncrementXHashTableIterator<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 template<typename C, typename T, typename K>
@@ -127,9 +264,10 @@ void RegisterXHashTableConstIt(asIScriptEngine *engine, const char *className, c
     XString decl;
 
     XString name = decl.Format("%sConstIt", className);
-    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());  assert(r >= 0 || r == asALREADY_REGISTERED);
+    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());
     if (r == asALREADY_REGISTERED)
         return;
+    CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectBehaviour(name.CStr(), asBEHAVE_CONSTRUCT, "void f()", asFUNCTIONPR([](C *self) { new(self) C(); }, (C *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
@@ -142,19 +280,19 @@ void RegisterXHashTableConstIt(asIScriptEngine *engine, const char *className, c
     r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator=, (const C &), C &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool opEquals(const %s &in) const", name.CStr());
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator==, (const C &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((EqualXHashTableIterator<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("const %s &GetKey() const", keyType);
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, GetKey, () const, const K &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((GetXHashTableIteratorKey<C, K>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("const %s &GetValue() const", elementType);
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator*, () const, const T &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((GetXHashTableIteratorValueConst<C, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%s &opPreInc()", name.CStr());
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator++, (), C &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((IncrementXHashTableIterator<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%s opPostInc(int)", name.CStr());
-    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asMETHODPR(C, operator++, (int), C), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name.CStr(), decl.CStr(), asFUNCTION((PostIncrementXHashTableIterator<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 template<typename C, typename T, typename K>
@@ -163,9 +301,10 @@ void RegisterXHashTablePair(asIScriptEngine *engine, const char *className, cons
     XString decl;
     XString name = decl.Format("%sPair", className);
 
-    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());  assert(r >= 0 || r == asALREADY_REGISTERED);
+    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());
     if (r == asALREADY_REGISTERED)
         return;
+    CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
     using HashTableIt = XHashTableIt<T, K>;
@@ -199,9 +338,10 @@ void RegisterXNHashTablePair(asIScriptEngine *engine, const char *className, con
     XString decl;
     XString name = decl.Format("%sPair", className);
 
-    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());  assert(r >= 0 || r == asALREADY_REGISTERED);
+    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());
     if (r == asALREADY_REGISTERED)
         return;
+    CKAS_CHECK_REGISTER(r);
 
     decl.Format("void f(%sIt, int)", className);
     r = engine->RegisterObjectBehaviour(name.CStr(), asBEHAVE_CONSTRUCT, decl.CStr(), asFUNCTIONPR([](XNHashTableIt<T, K> it, int n, C *self) { new(self) C(it, n); }, (XNHashTableIt<T, K>, int, C *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -226,9 +366,10 @@ void RegisterXSHashTablePair(asIScriptEngine *engine, const char *className, con
     XString decl;
     XString name = decl.Format("%sPair", className);
 
-    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());  assert(r >= 0 || r == asALREADY_REGISTERED);
+    r = engine->RegisterObjectType(name.CStr(), sizeof(C), asOBJ_VALUE | asGetTypeTraits<C>());
     if (r == asALREADY_REGISTERED)
         return;
+    CKAS_CHECK_REGISTER(r);
 
     decl.Format("void f(%sIt, int)", className);
     r = engine->RegisterObjectBehaviour(name.CStr(), asBEHAVE_CONSTRUCT, decl.CStr(), asFUNCTIONPR([](XSHashTableIt<T, K> it, int n, C *self) { new(self) C(it, n); }, (XSHashTableIt<T, K>, int, C *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
@@ -299,7 +440,7 @@ void RegisterXHashTable(asIScriptEngine *engine, const char *className, const ch
     r = engine->RegisterObjectMethod(className, "void Clear()", asMETHODPR(C, Clear, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool Insert(const %s &in, const %s &in, bool override)", keyType, elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Insert, (const K &, const T &, XBOOL), XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((InsertXHashTableValue<C, K, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Insert(const %s &in, const %s &in)", className, keyType, elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Insert, (const K &, const T &), HashTableIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -314,7 +455,7 @@ void RegisterXHashTable(asIScriptEngine *engine, const char *className, const ch
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Remove, (const K &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Remove(const %sIt &in)", className, className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Remove, (const HashTableIt &), HashTableIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((RemoveXHashTableIterator<C, HashTableIt>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Find(const %s &in)", className, keyType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Find, (const K &), HashTableIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -323,29 +464,29 @@ void RegisterXHashTable(asIScriptEngine *engine, const char *className, const ch
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Find, (const K &) const, HashTableConstIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool LookUp(const %s &in, %s &out) const", keyType, elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, LookUp, (const K &, T &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((LookUpXHashTableValue<C, K, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool IsHere(const %s &in) const", keyType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, IsHere, (const K &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((IsXHashTableKeyHere<C, K>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Begin()", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](C &table) -> HashTableIt { return table.Begin(); }, (C &), HashTableIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](C &table) -> HashTableIt { return table.Begin(); }, (C &), HashTableIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sConstIt Begin() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &table) -> HashTableConstIt { return table.Begin(); }, (const C &), HashTableConstIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &table) -> HashTableConstIt { return table.Begin(); }, (const C &), HashTableConstIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt End()", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](C &table) -> HashTableIt { return table.End(); }, (C &), HashTableIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](C &table) -> HashTableIt { return table.End(); }, (C &), HashTableIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sConstIt End() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &table) -> HashTableConstIt { return table.End(); }, (const C &), HashTableConstIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const C &table) -> HashTableConstIt { return table.End(); }, (const C &), HashTableConstIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("int Index(const %s &in) const", keyType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(C, Index, (const K &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(className, "int Size() const", asMETHODPR(C, Size, () const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(className, "int GetMemoryOccupation(bool = false) const", asMETHODPR(C, GetMemoryOccupation, (XBOOL) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, "int GetMemoryOccupation(bool = false) const", asFUNCTION((GetXHashTableMemoryOccupationBool<C>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(className, "void Reserve(int)", asMETHODPR(C, Reserve, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
@@ -387,7 +528,7 @@ void RegisterXNHashTable(asIScriptEngine *engine, const char *className, const c
     r = engine->RegisterObjectMethod(className, "void Clear()", asMETHODPR(HashTable, Clear, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool Insert(const %s &in, const %s &in, bool override)", keyType, elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Insert, (const K &, const T &, XBOOL), XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((InsertXHashTableValue<HashTable, K, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Insert(const %s &in, const %s &in)", className, keyType, elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Insert, (const K &, const T &), HashTableIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -402,7 +543,7 @@ void RegisterXNHashTable(asIScriptEngine *engine, const char *className, const c
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Remove, (const K &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Remove(const %sIt &in)", className, className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Remove, (const HashTableIt &), HashTableIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((RemoveXHashTableIterator<HashTable, HashTableIt>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Find(const %s &in)", className, keyType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Find, (const K &), HashTableIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -411,22 +552,22 @@ void RegisterXNHashTable(asIScriptEngine *engine, const char *className, const c
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Find, (const K &) const, HashTableConstIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool LookUp(const %s &in, %s &out) const", keyType, elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, LookUp, (const K &, T &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((LookUpXHashTableValue<HashTable, K, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool IsHere(const %s &in) const", keyType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, IsHere, (const K &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((IsXHashTableKeyHere<HashTable, K>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Begin()", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](HashTable &table) -> HashTableIt { return table.Begin(); }, (HashTable &), HashTableIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](HashTable &table) -> HashTableIt { return table.Begin(); }, (HashTable &), HashTableIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sConstIt Begin() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const HashTable &table) -> HashTableConstIt { return table.Begin(); }, (const HashTable &), HashTableConstIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const HashTable &table) -> HashTableConstIt { return table.Begin(); }, (const HashTable &), HashTableConstIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt End()", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](HashTable &table) -> HashTableIt { return table.End(); }, (HashTable &), HashTableIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](HashTable &table) -> HashTableIt { return table.End(); }, (HashTable &), HashTableIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sConstIt End() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const HashTable &table) -> HashTableConstIt { return table.End(); }, (const HashTable &), HashTableConstIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const HashTable &table) -> HashTableConstIt { return table.End(); }, (const HashTable &), HashTableConstIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("int Index(const %s &in) const", keyType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Index, (const K &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -473,7 +614,7 @@ void RegisterXSHashTable(asIScriptEngine *engine, const char *className, const c
     r = engine->RegisterObjectMethod(className, "void Clear()", asMETHODPR(HashTable, Clear, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool Insert(const %s &in, const %s &in, bool override)", keyType, elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Insert, (const K &, const T &, XBOOL), XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((InsertXHashTableValue<HashTable, K, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Insert(const %s &in, const %s &in)", className, keyType, elementType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Insert, (const K &, const T &), HashTableIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -488,7 +629,7 @@ void RegisterXSHashTable(asIScriptEngine *engine, const char *className, const c
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Remove, (const K &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Remove(const %sIt &in)", className, className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Remove, (const HashTableIt &), HashTableIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((RemoveXHashTableIterator<HashTable, HashTableIt>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Find(const %s &in)", className, keyType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Find, (const K &), HashTableIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -497,22 +638,22 @@ void RegisterXSHashTable(asIScriptEngine *engine, const char *className, const c
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Find, (const K &) const, HashTableConstIt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool LookUp(const %s &in, %s &out) const", keyType, elementType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, LookUp, (const K &, T &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((LookUpXHashTableValue<HashTable, K, T>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("bool IsHere(const %s &in) const", keyType);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, IsHere, (const K &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTION((IsXHashTableKeyHere<HashTable, K>)), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt Begin()", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](HashTable &table) -> HashTableIt { return table.Begin(); }, (HashTable &), HashTableIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](HashTable &table) -> HashTableIt { return table.Begin(); }, (HashTable &), HashTableIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sConstIt Begin() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const HashTable &table) -> HashTableConstIt { return table.Begin(); }, (const HashTable &), HashTableConstIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const HashTable &table) -> HashTableConstIt { return table.Begin(); }, (const HashTable &), HashTableConstIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sIt End()", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](HashTable &table) -> HashTableIt { return table.End(); }, (HashTable &), HashTableIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](HashTable &table) -> HashTableIt { return table.End(); }, (HashTable &), HashTableIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("%sConstIt End() const", className);
-    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const HashTable &table) -> HashTableConstIt { return table.End(); }, (const HashTable &), HashTableConstIt), asCALL_CDECL_OBJFIRST); assert( r >= 0 );
+    r = engine->RegisterObjectMethod(className, decl.CStr(), asFUNCTIONPR([](const HashTable &table) -> HashTableConstIt { return table.End(); }, (const HashTable &), HashTableConstIt), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     decl.Format("int Index(const %s &in) const", keyType);
     r = engine->RegisterObjectMethod(className, decl.CStr(), asMETHODPR(HashTable, Index, (const K &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
