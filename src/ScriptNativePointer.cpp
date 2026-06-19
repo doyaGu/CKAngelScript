@@ -30,6 +30,14 @@ char *ResolveScriptArrayOwner(void *owner, intptr_t offset) {
     return buffer ? buffer + offset : nullptr;
 }
 
+void SetGenericReturnSize(asIScriptGeneric *gen, size_t size) {
+    if (sizeof(size_t) > sizeof(asDWORD)) {
+        gen->SetReturnQWord(static_cast<asQWORD>(size));
+    } else {
+        gen->SetReturnDWord(static_cast<asDWORD>(size));
+    }
+}
+
 } // namespace
 
 std::string NativePointer::ToString() const {
@@ -133,7 +141,7 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Cannot write object handle to buffer");
-        gen->SetReturnDWord(0);
+        SetGenericReturnSize(gen, 0);
         return;
     }
 
@@ -141,7 +149,7 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Cannot write script objects to buffer");
-        gen->SetReturnDWord(0);
+        SetGenericReturnSize(gen, 0);
         return;
     }
 
@@ -149,7 +157,7 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
     if (typeId & asTYPEID_APPOBJECT) {
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
-            gen->SetReturnDWord(0);
+            SetGenericReturnSize(gen, 0);
             return;
         }
 
@@ -165,7 +173,7 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
                     asIScriptContext *ctx = asGetActiveContext();
                     if (ctx)
                         ctx->SetException("Cannot write non-POD object to buffer");
-                    gen->SetReturnDWord(0);
+                    SetGenericReturnSize(gen, 0);
                 }
             }
             size = self->Write(addr, size);
@@ -176,7 +184,7 @@ static void NativePointerWriteGeneric(asIScriptGeneric *gen) {
             size = self->Write(addr, size);
     }
 
-    gen->SetReturnDWord(size);
+    SetGenericReturnSize(gen, size);
 }
 
 static void NativePointerReadGeneric(asIScriptGeneric *gen) {
@@ -189,7 +197,7 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Cannot read object handle from buffer");
-        gen->SetReturnDWord(0);
+        SetGenericReturnSize(gen, 0);
         return;
     }
 
@@ -197,7 +205,7 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Cannot read script objects from buffer");
-        gen->SetReturnDWord(0);
+        SetGenericReturnSize(gen, 0);
         return;
     }
 
@@ -205,7 +213,7 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
     if (typeId & asTYPEID_APPOBJECT) {
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
-            gen->SetReturnDWord(0);
+            SetGenericReturnSize(gen, 0);
             return;
         }
 
@@ -221,7 +229,7 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
                     asIScriptContext *ctx = asGetActiveContext();
                     if (ctx)
                         ctx->SetException("Cannot read non-POD object from buffer");
-                    gen->SetReturnDWord(0);
+                    SetGenericReturnSize(gen, 0);
                     return;
                 }
             }
@@ -233,7 +241,7 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
             size = self->Read(addr, size);
     }
 
-    gen->SetReturnDWord(size);
+    SetGenericReturnSize(gen, size);
 }
 
 void RegisterNativePointer(asIScriptEngine *engine) {
@@ -284,32 +292,32 @@ void RegisterNativePointer(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("NativePointer", "NativePointer ReadPointer() const", asMETHODPR(NativePointer, ReadPointer, () const, NativePointer), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("NativePointer", "void WritePointer(const NativePointer &in ptr)", asMETHODPR(NativePointer, WritePointer, (const NativePointer &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("NativePointer", "uint Write(?&in)", asFUNCTION(NativePointerWriteGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint Read(?&out)", asFUNCTION(NativePointerReadGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t Write(?&in)", asFUNCTION(NativePointerWriteGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t Read(?&out)", asFUNCTION(NativePointerReadGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteInt(int value)", asMETHODPR(NativePointer, WriteInt, (int), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteUInt(uint value)", asMETHODPR(NativePointer, WriteUInt, (unsigned int), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteFloat(float value)", asMETHODPR(NativePointer, WriteFloat, (float), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteDouble(double value)", asMETHODPR(NativePointer, WriteDouble, (double), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteShort(int16 value)", asMETHODPR(NativePointer, WriteShort, (short), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteChar(int8 value)", asMETHODPR(NativePointer, WriteChar, (char), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteUChar(uint8 value)", asMETHODPR(NativePointer, WriteUChar, (unsigned char), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteLong(int32 value)", asMETHODPR(NativePointer, WriteLong, (long), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteULong(uint32 value)", asMETHODPR(NativePointer, WriteULong, (unsigned long), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint WriteString(const string &in value)", asMETHODPR(NativePointer, WriteString, (const std::string &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteInt(int value)", asMETHODPR(NativePointer, WriteInt, (int), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteUInt(uint value)", asMETHODPR(NativePointer, WriteUInt, (unsigned int), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteFloat(float value)", asMETHODPR(NativePointer, WriteFloat, (float), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteDouble(double value)", asMETHODPR(NativePointer, WriteDouble, (double), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteShort(int16 value)", asMETHODPR(NativePointer, WriteShort, (short), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteChar(int8 value)", asMETHODPR(NativePointer, WriteChar, (char), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteUChar(uint8 value)", asMETHODPR(NativePointer, WriteUChar, (unsigned char), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteLong(int32 value)", asMETHODPR(NativePointer, WriteLong, (long), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteULong(uint32 value)", asMETHODPR(NativePointer, WriteULong, (unsigned long), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t WriteString(const string &in value)", asMETHODPR(NativePointer, WriteString, (const std::string &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadInt(int &out value)", asMETHODPR(NativePointer, ReadInt, (int &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadUInt(uint &out value)", asMETHODPR(NativePointer, ReadUInt, (unsigned int &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadFloat(float &out value)", asMETHODPR(NativePointer, ReadFloat, (float &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadDouble(double &out value)", asMETHODPR(NativePointer, ReadDouble, (double &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadShort(int16 &out value)", asMETHODPR(NativePointer, ReadShort, (short &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadChar(int8 &out value)", asMETHODPR(NativePointer, ReadChar, (char &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadUChar(uint8 &out value)", asMETHODPR(NativePointer, ReadUChar, (unsigned char &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadLong(int32 &out value)", asMETHODPR(NativePointer, ReadLong, (long &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadULong(uint32 &out value)", asMETHODPR(NativePointer, ReadULong, (unsigned long &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("NativePointer", "uint ReadString(string &out value)", asMETHODPR(NativePointer, ReadString, (std::string &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadInt(int &out value)", asMETHODPR(NativePointer, ReadInt, (int &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadUInt(uint &out value)", asMETHODPR(NativePointer, ReadUInt, (unsigned int &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadFloat(float &out value)", asMETHODPR(NativePointer, ReadFloat, (float &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadDouble(double &out value)", asMETHODPR(NativePointer, ReadDouble, (double &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadShort(int16 &out value)", asMETHODPR(NativePointer, ReadShort, (short &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadChar(int8 &out value)", asMETHODPR(NativePointer, ReadChar, (char &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadUChar(uint8 &out value)", asMETHODPR(NativePointer, ReadUChar, (unsigned char &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadLong(int32 &out value)", asMETHODPR(NativePointer, ReadLong, (long &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadULong(uint32 &out value)", asMETHODPR(NativePointer, ReadULong, (unsigned long &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "size_t ReadString(string &out value)", asMETHODPR(NativePointer, ReadString, (std::string &), size_t), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("NativePointer", "bool Fill(int value, uint size)", asMETHODPR(NativePointer, Fill, (int, size_t), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("NativePointer", "bool Fill(int value, size_t size)", asMETHODPR(NativePointer, Fill, (int, size_t), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("NativePointer", "bool IsNull() const", asMETHODPR(NativePointer, IsNull, () const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 

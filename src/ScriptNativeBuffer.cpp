@@ -28,6 +28,14 @@ char *ResolveNativeBufferOwner(void *owner, intptr_t offset) {
     return data ? data + offset : nullptr;
 }
 
+void SetGenericReturnSize(asIScriptGeneric *gen, size_t size) {
+    if (sizeof(size_t) > sizeof(asDWORD)) {
+        gen->SetReturnQWord(static_cast<asQWORD>(size));
+    } else {
+        gen->SetReturnDWord(static_cast<asDWORD>(size));
+    }
+}
+
 } // namespace
 
 NativeBuffer::NativeBuffer(size_t size) {
@@ -325,7 +333,7 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Cannot write object handle to buffer");
-        gen->SetReturnDWord(0);
+        SetGenericReturnSize(gen, 0);
         return;
     }
 
@@ -333,7 +341,7 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Cannot write script objects to buffer");
-        gen->SetReturnDWord(0);
+        SetGenericReturnSize(gen, 0);
         return;
     }
 
@@ -341,7 +349,7 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
     if (typeId & asTYPEID_APPOBJECT) {
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
-            gen->SetReturnDWord(0);
+            SetGenericReturnSize(gen, 0);
             return;
         }
 
@@ -357,7 +365,7 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
                     asIScriptContext *ctx = asGetActiveContext();
                     if (ctx)
                         ctx->SetException("Cannot write non-POD object to buffer");
-                    gen->SetReturnDWord(0);
+                    SetGenericReturnSize(gen, 0);
                     return;
                 }
             }
@@ -365,7 +373,7 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
             if (size != 0 && self->CursorPos() <= self->Size() && size <= self->Size() - self->CursorPos()) {
                 size = self->Write(addr, size);
             } else {
-                gen->SetReturnDWord(0);
+                SetGenericReturnSize(gen, 0);
                 return;
             }
         }
@@ -378,7 +386,7 @@ static void NativeBufferWriteGeneric(asIScriptGeneric *gen) {
         }
     }
 
-    gen->SetReturnDWord(size);
+    SetGenericReturnSize(gen, size);
 }
 
 static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
@@ -391,7 +399,7 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Cannot read object handle from buffer");
-        gen->SetReturnDWord(0);
+        SetGenericReturnSize(gen, 0);
         return;
     }
 
@@ -399,7 +407,7 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Cannot read script objects from buffer");
-        gen->SetReturnDWord(0);
+        SetGenericReturnSize(gen, 0);
         return;
     }
 
@@ -407,7 +415,7 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
     if (typeId & asTYPEID_APPOBJECT) {
         asITypeInfo *type = engine->GetTypeInfoById(typeId);
         if (!type) {
-            gen->SetReturnDWord(0);
+            SetGenericReturnSize(gen, 0);
             return;
         }
 
@@ -423,7 +431,7 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
                     asIScriptContext *ctx = asGetActiveContext();
                     if (ctx)
                         ctx->SetException("Cannot read non-POD object from buffer");
-                    gen->SetReturnDWord(0);
+                    SetGenericReturnSize(gen, 0);
                     return;
                 }
             }
@@ -431,7 +439,7 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
             if (size != 0 && self->CursorPos() <= self->Size() && size <= self->Size() - self->CursorPos()) {
                 size = self->Read(addr, size);
             } else {
-                gen->SetReturnDWord(0);
+                SetGenericReturnSize(gen, 0);
                 return;
             }
         }
@@ -444,7 +452,7 @@ static void NativeBufferReadGeneric(asIScriptGeneric *gen) {
         }
     }
 
-    gen->SetReturnDWord(size);
+    SetGenericReturnSize(gen, size);
 }
 
 static size_t NativeBufferLoadFile(NativeBuffer *self, const std::string &filename, size_t size, int offset) {

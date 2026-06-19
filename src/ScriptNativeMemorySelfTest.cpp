@@ -86,6 +86,19 @@ bool RunScriptNativeMemorySelfTest(CKContext *context, asIScriptEngine *engine, 
         return false;
     }
 
+    asITypeInfo *nativePointerType = engine->GetTypeInfoByDecl("NativePointer");
+    asITypeInfo *nativeBufferType = engine->GetTypeInfoByDecl("NativeBuffer");
+    if (!nativePointerType || !nativeBufferType) {
+        error = "Native memory self-test could not find NativePointer or NativeBuffer type.";
+        return false;
+    }
+    if (nativePointerType->GetMethodByDecl("size_t Write(?&in)") == nullptr ||
+        nativePointerType->GetMethodByDecl("size_t Read(?&out)") == nullptr ||
+        nativeBufferType->GetMethodByDecl("size_t Write(?&in)") == nullptr ||
+        nativeBufferType->GetMethodByDecl("size_t Read(?&out)") == nullptr) {
+        error = "Native memory self-test could not find expected size_t generic read/write methods.";
+        return false;
+    }
     constexpr const char *moduleName = "__CKAS_NativeMemorySelfTest";
     const char *source =
         "class NativeMemoryRejectBox { int value; }\n"
