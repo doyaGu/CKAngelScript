@@ -5122,6 +5122,34 @@ bool RunCK2dCurvePointScriptSelfTest(asIScriptEngine *engine, std::string &error
     return ok;
 }
 
+bool RunCK2dCurveScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CK2dCurve script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *curveType = engine->GetTypeInfoByDecl("CK2dCurve");
+    if (!curveType) {
+        error = "CK2dCurve type is not registered.";
+        return false;
+    }
+    if (curveType->GetMethodByDecl("CKStateChunk@ Dump()") ||
+        curveType->GetMethodByDecl("CKERROR Read(CKStateChunk@ chunk)")) {
+        error = "CK2dCurve still exposes internal Dump/Read persistence methods.";
+        return false;
+    }
+    if (curveType->GetMethodByDecl("void DeleteControlPoint(CK2dCurvePoint &in cpt)")) {
+        error = "CK2dCurve still exposes stale reference-based DeleteControlPoint.";
+        return false;
+    }
+    if (!curveType->GetMethodByDecl("bool DeleteControlPoint(int pos)")) {
+        error = "CK2dCurve indexed DeleteControlPoint declaration is not registered.";
+        return false;
+    }
+
+    return true;
+}
+
 bool RunCKDependenciesScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     if (!engine) {
         error = "CKDependencies script self-test requires an AngelScript engine.";
@@ -12372,6 +12400,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCK2dCurvePointScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCK2dCurveScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCKDependenciesScriptSelfTest(engine, error)) {

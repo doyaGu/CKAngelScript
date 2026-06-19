@@ -3656,6 +3656,25 @@ static CK2dCurvePoint &GetCK2dCurveControlPoint(CK2dCurve *self, int pos) {
     return *self->GetControlPoint(pos);
 }
 
+static bool DeleteCK2dCurveControlPoint(CK2dCurve *self, int pos) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CK2dCurve is null.");
+        }
+        return false;
+    }
+
+    const int count = self->GetControlPointCount();
+    if (pos < 0 || pos >= count) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CK2dCurve control point index out of range.");
+        }
+        return false;
+    }
+    self->DeleteControlPoint(self->GetControlPoint(pos));
+    return true;
+}
+
 void RegisterCK2dCurve(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3670,15 +3689,13 @@ void RegisterCK2dCurve(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CK2dCurve", "CKERROR GetPos(float step, Vx2DVector &out pos)", asMETHOD(CK2dCurve, GetPos), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurve", "float GetY(float x)", asMETHOD(CK2dCurve, GetY), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CK2dCurve", "void DeleteControlPoint(CK2dCurvePoint &in cpt)", asMETHOD(CK2dCurve, DeleteControlPoint), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CK2dCurve", "bool DeleteControlPoint(int pos)", asFUNCTION(DeleteCK2dCurveControlPoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurve", "void AddControlPoint(const Vx2DVector &in pos)", asMETHOD(CK2dCurve, AddControlPoint), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurve", "int GetControlPointCount()", asMETHOD(CK2dCurve, GetControlPointCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CK2dCurve", "CK2dCurvePoint &GetControlPoint(int pos)", asFUNCTION(GetCK2dCurveControlPoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CK2dCurve", "void Update()", asMETHOD(CK2dCurve, Update), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod("CK2dCurve", "CKStateChunk@ Dump()", asMETHOD(CK2dCurve, Dump), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CK2dCurve", "CKERROR Read(CKStateChunk@ chunk)", asMETHOD(CK2dCurve, Read), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
 // CKKeyframeData
