@@ -79,22 +79,24 @@ jobs:
 
       - name: Configure CMake
         shell: pwsh
-        run: >
-          cmake -G "Visual Studio 17 2022" -A Win32 -B "${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}"
-          -DCKAS_BUILD_SELF_TESTS=ON
-          -DVIRTOOLS_SDK_PATH="${{ github.workspace }}\Virtools-SDK-2.1"
-          -DCMAKE_INSTALL_PREFIX="${{ env.BASE_DIST_DIR }}\${{ matrix.configuration }}"
+        run: |
+          $env:CC = "cl"
+          $env:CXX = "cl"
+          cmake -G Ninja -B "${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}" `
+            -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} `
+            -DCKAS_BUILD_SELF_TESTS=ON `
+            -DVIRTOOLS_SDK_PATH="${{ github.workspace }}\Virtools-SDK-2.1" `
+            -DCMAKE_INSTALL_PREFIX="${{ env.BASE_DIST_DIR }}\${{ matrix.configuration }}"
 
       - name: Build the project
         shell: pwsh
-        run: cmake --build "${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}" --config ${{ matrix.configuration }}
+        run: cmake --build "${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}"
 
       - name: Install binaries to distribution folder
         shell: pwsh
         run: >
           cmake --install "${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}"
           --prefix "${{ env.BASE_DIST_DIR }}\${{ matrix.configuration }}"
-          --config ${{ matrix.configuration }}
 
       - name: Upload main distribution artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -117,7 +119,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: CKAngelScript-${{ github.ref_name }}-Runtime-Binary
-          path: ${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}\src\Release\AngelScript.dll
+          path: ${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}\src\AngelScript.dll
           retention-days: 14
 
       - name: Upload debug symbols
@@ -125,7 +127,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: CKAngelScript-${{ github.ref_name }}-Debug-Symbols
-          path: ${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}\src\Debug\AngelScript.pdb
+          path: ${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}\src\AngelScript.pdb
           if-no-files-found: error
           retention-days: 14
 
