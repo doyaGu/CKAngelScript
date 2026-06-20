@@ -11156,15 +11156,19 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
     if (prototypeType->GetMethodByDecl("int DeclareInParameter(const string &in name, CKGUID guidType)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareInParameter(const string &in name, CKGUID guidType, const string &in defaultVal)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareInParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareInParameter(const string &in name, CKGUID guidType, NativeBuffer@ defaultVal)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareOutParameter(const string &in name, CKGUID guidType)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareOutParameter(const string &in name, CKGUID guidType, const string &in defaultVal)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareOutParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareOutParameter(const string &in name, CKGUID guidType, NativeBuffer@ defaultVal)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareLocalParameter(const string &in name, CKGUID guidType)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareLocalParameter(const string &in name, CKGUID guidType, const string &in defaultVal)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareLocalParameter(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareLocalParameter(const string &in name, CKGUID guidType, NativeBuffer@ defaultVal)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareSetting(const string &in name, CKGUID guidType)") == nullptr ||
         prototypeType->GetMethodByDecl("int DeclareSetting(const string &in name, CKGUID guidType, const string &in defaultVal)") == nullptr ||
-        prototypeType->GetMethodByDecl("int DeclareSetting(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)") == nullptr) {
+        prototypeType->GetMethodByDecl("int DeclareSetting(const string &in name, CKGUID guidType, NativePointer defaultVal, int valSize)") == nullptr ||
+        prototypeType->GetMethodByDecl("int DeclareSetting(const string &in name, CKGUID guidType, NativeBuffer@ defaultVal)") == nullptr) {
         error = "CKBehaviorPrototype self-test could not find expected guarded parameter declaration overloads.";
         return false;
     }
@@ -11208,30 +11212,54 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
 
     constexpr const char *moduleName = "__CKAS_CKBehaviorPrototypeSelfTest";
     const char *source =
-        "void ProbeCKBehaviorPrototypePointers(CKBehaviorPrototype@ proto) {\n"
-        "  if (proto is null) return;\n"
+        "int ProbeCKBehaviorPrototypeRuntime() {\n"
+        "  CKBehaviorPrototype@ proto = CreateCKBehaviorPrototypeRunTime(\"__CKAS_CKBehaviorPrototypeRuntimeSelfTest\");\n"
+        "  if (proto is null) return 1;\n"
         "  NativePointer empty;\n"
         "  proto.SetFunction(empty);\n"
         "  NativePointer f = proto.GetFunction();\n"
+        "  if (!f.IsNull()) return 2;\n"
         "  proto.SetBehaviorCallbackFct(empty, CKCB_BEHAVIORALL, empty);\n"
         "  NativePointer cb = proto.GetBehaviorCallbackFct();\n"
-        "}\n";
-    const char *parameterSource =
-        "void ProbeCKBehaviorPrototypeParameterDeclarations(CKBehaviorPrototype@ proto) {\n"
-        "  if (proto is null) return;\n"
+        "  if (!cb.IsNull()) return 3;\n"
+        "  NativeBuffer@ data = NativeBuffer(4);\n"
+        "  if (data.WriteInt(123) != 4) return 4;\n"
+        "  if (proto.DeclareInParameter(\"In\", CKPGUID_INT) < 0) return 5;\n"
+        "  if (proto.DeclareInParameter(\"InText\", CKPGUID_STRING, \"text\") < 0) return 6;\n"
+        "  if (proto.DeclareInParameter(\"InRaw\", CKPGUID_INT, empty, 0) < 0) return 7;\n"
+        "  if (proto.DeclareInParameter(\"InBuffer\", CKPGUID_INT, data) < 0) return 8;\n"
+        "  if (proto.DeclareOutParameter(\"Out\", CKPGUID_INT) < 0) return 9;\n"
+        "  if (proto.DeclareOutParameter(\"OutText\", CKPGUID_STRING, \"text\") < 0) return 10;\n"
+        "  if (proto.DeclareOutParameter(\"OutRaw\", CKPGUID_INT, empty, 0) < 0) return 11;\n"
+        "  if (proto.DeclareOutParameter(\"OutBuffer\", CKPGUID_INT, data) < 0) return 12;\n"
+        "  if (proto.DeclareLocalParameter(\"Local\", CKPGUID_INT) < 0) return 13;\n"
+        "  if (proto.DeclareLocalParameter(\"LocalText\", CKPGUID_STRING, \"text\") < 0) return 14;\n"
+        "  if (proto.DeclareLocalParameter(\"LocalRaw\", CKPGUID_INT, empty, 0) < 0) return 15;\n"
+        "  if (proto.DeclareLocalParameter(\"LocalBuffer\", CKPGUID_INT, data) < 0) return 16;\n"
+        "  if (proto.DeclareSetting(\"Setting\", CKPGUID_BOOL) < 0) return 17;\n"
+        "  if (proto.DeclareSetting(\"SettingText\", CKPGUID_STRING, \"text\") < 0) return 18;\n"
+        "  if (proto.DeclareSetting(\"SettingRaw\", CKPGUID_BOOL, empty, 0) < 0) return 19;\n"
+        "  if (proto.DeclareSetting(\"SettingBuffer\", CKPGUID_BOOL, data) < 0) return 20;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKBehaviorPrototypeRawDefaultValue() {\n"
+        "  CKBehaviorPrototype@ proto = CreateCKBehaviorPrototypeRunTime(\"__CKAS_CKBehaviorPrototypeRawRejectSelfTest\");\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  proto.DeclareInParameter(\"BadRaw\", CKPGUID_INT, ptr, 4);\n"
+        "}\n"
+        "void RejectCKBehaviorPrototypeFunctionPointer() {\n"
+        "  CKBehaviorPrototype@ proto = CreateCKBehaviorPrototypeRunTime(\"__CKAS_CKBehaviorPrototypeFunctionRejectSelfTest\");\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  proto.SetFunction(ptr);\n"
+        "}\n"
+        "void RejectCKBehaviorPrototypeCallbackPointer() {\n"
+        "  CKBehaviorPrototype@ proto = CreateCKBehaviorPrototypeRunTime(\"__CKAS_CKBehaviorPrototypeCallbackRejectSelfTest\");\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
         "  NativePointer empty;\n"
-        "  proto.DeclareInParameter(\"In\", CKPGUID_INT);\n"
-        "  proto.DeclareInParameter(\"InText\", CKPGUID_STRING, \"text\");\n"
-        "  proto.DeclareInParameter(\"InRaw\", CKPGUID_INT, empty, 0);\n"
-        "  proto.DeclareOutParameter(\"Out\", CKPGUID_INT);\n"
-        "  proto.DeclareOutParameter(\"OutText\", CKPGUID_STRING, \"text\");\n"
-        "  proto.DeclareOutParameter(\"OutRaw\", CKPGUID_INT, empty, 0);\n"
-        "  proto.DeclareLocalParameter(\"Local\", CKPGUID_INT);\n"
-        "  proto.DeclareLocalParameter(\"LocalText\", CKPGUID_STRING, \"text\");\n"
-        "  proto.DeclareLocalParameter(\"LocalRaw\", CKPGUID_INT, empty, 0);\n"
-        "  proto.DeclareSetting(\"Setting\", CKPGUID_BOOL);\n"
-        "  proto.DeclareSetting(\"SettingText\", CKPGUID_STRING, \"text\");\n"
-        "  proto.DeclareSetting(\"SettingRaw\", CKPGUID_BOOL, empty, 0);\n"
+        "  proto.SetBehaviorCallbackFct(ptr, CKCB_BEHAVIORALL, empty);\n"
         "}\n";
     const char *parameterDescSource =
         "int ProbeCKParameterDescDefaultValue() {\n"
@@ -11279,8 +11307,14 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         "  if (copied.Name != \"copy\" || copied.Flags != 0x20000000) return 7;\n"
         "  return assigned.Name == \"assigned\" && assigned.Flags == 0x40000000 ? 0 : 8;\n"
         "}\n"
-        "void ProbeCKBehaviorPrototypeLists(CKBehaviorPrototype@ proto) {\n"
-        "  if (proto is null) return;\n"
+        "int ProbeCKBehaviorPrototypeLists() {\n"
+        "  CKBehaviorPrototype@ proto = CreateCKBehaviorPrototypeRunTime(\"__CKAS_CKBehaviorPrototypeListSelfTest\");\n"
+        "  if (proto is null) return 1;\n"
+        "  proto.DeclareInput(\"Input\");\n"
+        "  proto.DeclareOutput(\"Output\");\n"
+        "  proto.DeclareInParameter(\"InParam\", CKPGUID_INT);\n"
+        "  proto.DeclareOutParameter(\"OutParam\", CKPGUID_INT);\n"
+        "  proto.DeclareLocalParameter(\"LocalParam\", CKPGUID_INT);\n"
         "  if (proto.GetInputCount() > 0) {\n"
         "    CKDWORD flags = proto.GetInIOList(0).Flags;\n"
         "  }\n"
@@ -11296,6 +11330,7 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         "  if (proto.GetLocalParameterCount() > 0) {\n"
         "    int owner = proto.GetLocalParameterList(0).Owner;\n"
         "  }\n"
+        "  return 0;\n"
         "}\n";
 #endif
 
@@ -11309,12 +11344,6 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
     if (r < 0) {
         engine->DiscardModule(moduleName);
         error = "CKBehaviorPrototype self-test could not add its script section.";
-        return false;
-    }
-    r = module->AddScriptSection("ck-behavior-prototype-parameter-self-test", parameterSource);
-    if (r < 0) {
-        engine->DiscardModule(moduleName);
-        error = "CKBehaviorPrototype self-test could not add its parameter script section.";
         return false;
     }
     r = module->AddScriptSection("ck-parameter-desc-self-test", parameterDescSource);
@@ -11338,16 +11367,28 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         return false;
     }
 
-    asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKBehaviorPrototypePointers(CKBehaviorPrototype@)");
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKBehaviorPrototypeRuntime()");
     if (!probe) {
         engine->DiscardModule(moduleName);
         error = "CKBehaviorPrototype self-test function was not found.";
         return false;
     }
-    asIScriptFunction *parameterProbe = module->GetFunctionByDecl("void ProbeCKBehaviorPrototypeParameterDeclarations(CKBehaviorPrototype@)");
-    if (!parameterProbe) {
+    asIScriptFunction *rawRejectProbe = module->GetFunctionByDecl("void RejectCKBehaviorPrototypeRawDefaultValue()");
+    if (!rawRejectProbe) {
         engine->DiscardModule(moduleName);
-        error = "CKBehaviorPrototype parameter self-test function was not found.";
+        error = "CKBehaviorPrototype raw default rejection self-test function was not found.";
+        return false;
+    }
+    asIScriptFunction *functionRejectProbe = module->GetFunctionByDecl("void RejectCKBehaviorPrototypeFunctionPointer()");
+    if (!functionRejectProbe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype function pointer rejection self-test function was not found.";
+        return false;
+    }
+    asIScriptFunction *callbackRejectProbe = module->GetFunctionByDecl("void RejectCKBehaviorPrototypeCallbackPointer()");
+    if (!callbackRejectProbe) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype callback pointer rejection self-test function was not found.";
         return false;
     }
     asIScriptFunction *parameterDescProbe = module->GetFunctionByDecl("int ProbeCKParameterDescDefaultValue()");
@@ -11369,7 +11410,7 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBEHAVIORIO_DESC value self-test function was not found.";
         return false;
     }
-    asIScriptFunction *listProbe = module->GetFunctionByDecl("void ProbeCKBehaviorPrototypeLists(CKBehaviorPrototype@)");
+    asIScriptFunction *listProbe = module->GetFunctionByDecl("int ProbeCKBehaviorPrototypeLists()");
     if (!listProbe) {
         engine->DiscardModule(moduleName);
         error = "CKBehaviorPrototype list self-test function was not found.";
@@ -11378,13 +11419,22 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
 #endif
 
 #if CKVERSION == 0x13022002
-    const bool ok = ExecuteNoArgIntProbe(engine, parameterDescProbe, false, "CKPARAMETER_DESC DefaultValue probe", error) &&
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKBehaviorPrototype runtime probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, rawRejectProbe, true, "CKBehaviorPrototype raw default value rejection probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, functionRejectProbe, true, "CKBehaviorPrototype function pointer rejection probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, callbackRejectProbe, true, "CKBehaviorPrototype callback pointer rejection probe", error) &&
+                    ExecuteNoArgIntProbe(engine, parameterDescProbe, false, "CKPARAMETER_DESC DefaultValue probe", error) &&
                     ExecuteCKAttributeDescProbe(engine, parameterDescRawReject, true, "CKPARAMETER_DESC raw DefaultValue rejection probe", error) &&
-                    ExecuteNoArgIntProbe(engine, ioDescProbe, false, "CKBEHAVIORIO_DESC value probe", error);
+                    ExecuteNoArgIntProbe(engine, ioDescProbe, false, "CKBEHAVIORIO_DESC value probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, listProbe, false, "CKBehaviorPrototype list probe", error);
     engine->DiscardModule(moduleName);
     return ok;
 #else
-    const bool ok = ExecuteNoArgIntProbe(engine, parameterDescProbe, false, "CKPARAMETER_DESC DefaultValue probe", error) &&
+    const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKBehaviorPrototype runtime probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, rawRejectProbe, true, "CKBehaviorPrototype raw default value rejection probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, functionRejectProbe, true, "CKBehaviorPrototype function pointer rejection probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, callbackRejectProbe, true, "CKBehaviorPrototype callback pointer rejection probe", error) &&
+                    ExecuteNoArgIntProbe(engine, parameterDescProbe, false, "CKPARAMETER_DESC DefaultValue probe", error) &&
                     ExecuteCKAttributeDescProbe(engine, parameterDescRawReject, true, "CKPARAMETER_DESC raw DefaultValue rejection probe", error);
     engine->DiscardModule(moduleName);
     return ok;
