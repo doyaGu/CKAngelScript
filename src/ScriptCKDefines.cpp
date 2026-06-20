@@ -4475,6 +4475,50 @@ static int AddCKMorphControllerKey(CKMorphController *self, CKMorphKey &key, boo
     return self->AddKey(&key, allocateNormals);
 }
 
+static int AddCKMorphControllerKeyFromBuffers(CKMorphController *self,
+                                              float timeStep,
+                                              int vertexCount,
+                                              NativeBuffer *positions,
+                                              NativeBuffer *normals) {
+    if (!self) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphController.AddMorphKey called with a null controller.");
+        }
+        return -1;
+    }
+    if (vertexCount < 0) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphController.AddMorphKey requires a non-negative vertex count.");
+        }
+        return -1;
+    }
+    if (vertexCount > 0) {
+        const size_t requiredPositionBytes = static_cast<size_t>(vertexCount) * sizeof(VxVector);
+        if (!positions || !positions->IsValid() || positions->Size() < requiredPositionBytes) {
+            if (asIScriptContext *ctx = asGetActiveContext()) {
+                ctx->SetException("CKMorphController.AddMorphKey position buffer is too small.");
+            }
+            return -1;
+        }
+        if (normals) {
+            const size_t requiredNormalBytes = static_cast<size_t>(vertexCount) * sizeof(VxCompressedVector);
+            if (!normals->IsValid() || normals->Size() < requiredNormalBytes) {
+                if (asIScriptContext *ctx = asGetActiveContext()) {
+                    ctx->SetException("CKMorphController.AddMorphKey normal buffer is too small.");
+                }
+                return -1;
+            }
+        }
+    }
+
+    CKMorphKey key;
+    key.TimeStep = timeStep;
+    key.PosArray = positions ? reinterpret_cast<VxVector *>(positions->Data()) : nullptr;
+    key.NormArray = normals ? reinterpret_cast<VxCompressedVector *>(normals->Data()) : nullptr;
+    self->SetMorphVertexCount(vertexCount);
+    return self->AddKey(&key, normals != nullptr);
+}
+
 static CKMorphKey &GetCKMorphControllerKey(CKMorphController *self, int index) {
     if (!self) {
         return InvalidCKMorphKey("CKMorphController.GetMorphKey called with a null controller.");
@@ -4627,6 +4671,7 @@ void RegisterCKKeyframeData(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKMorphController", "int AddKey(float timeStep, bool allocateNormals)", asFUNCTIONPR([](CKMorphController *self, float timeStep, bool allocateNormals) { return self->AddKey(timeStep, allocateNormals); }, (CKMorphController *, float, bool), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMorphController", "int AddMorphKey(CKMorphKey &in key, bool allocateNormals = true)", asFUNCTION(AddCKMorphControllerKey), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKMorphController", "int AddMorphKey(float timeStep, int vertexCount, NativeBuffer@ positions, NativeBuffer@ normals = null)", asFUNCTION(AddCKMorphControllerKeyFromBuffers), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMorphController", "CKMorphKey &GetMorphKey(int index)", asFUNCTION(GetCKMorphControllerKey), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMorphController", "bool Evaluate(float timeStep, int vertexCount, NativeBuffer@ vertices, CKDWORD vertexStride, NativeBuffer@ normals = null)", asFUNCTION(EvaluateCKMorphController), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMorphController", "void SetMorphVertexCount(int count)", asMETHODPR(CKMorphController, SetMorphVertexCount, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

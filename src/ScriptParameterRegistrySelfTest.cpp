@@ -12951,6 +12951,7 @@ bool RunCKMorphControllerScriptSelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (morphControllerType->GetMethodByDecl("int AddMorphKey(CKMorphKey&in key, bool allocateNormals = true)") == nullptr ||
+        morphControllerType->GetMethodByDecl("int AddMorphKey(float timeStep, int vertexCount, NativeBuffer@ positions, NativeBuffer@ normals = null)") == nullptr ||
         morphControllerType->GetMethodByDecl("CKMorphKey& GetMorphKey(int index)") == nullptr ||
         morphControllerType->GetMethodByDecl("bool Evaluate(float timeStep, int vertexCount, NativeBuffer@ vertices, CKDWORD vertexStride, NativeBuffer@ normals = null)") == nullptr ||
         morphControllerType->GetMethodByDecl("NativeBuffer@ DumpKeys()") == nullptr ||
@@ -12965,17 +12966,13 @@ bool RunCKMorphControllerScriptSelfTest(CKContext *context, asIScriptEngine *eng
         "int ProbeMorphControllerSurface(CKMorphController@ controller) {\n"
         "  if (controller is null) return 1;\n"
         "  if (controller.GetType() != CKANIMATION_MORPH_CONTROL) return 2;\n"
-        "  controller.SetMorphVertexCount(2);\n"
         "  NativeBuffer@ sourceVertices = NativeBuffer(24);\n"
         "  VxVector first(1.0f, 2.0f, 3.0f);\n"
         "  VxVector second(4.0f, 5.0f, 6.0f);\n"
         "  if (sourceVertices.Write(first) != 12) return 3;\n"
         "  if (sourceVertices.Write(second) != 12) return 4;\n"
         "  sourceVertices.Reset();\n"
-        "  CKMorphKey key;\n"
-        "  key.TimeStep = 0.0f;\n"
-        "  key.SetPosArray(sourceVertices.ToPointer());\n"
-        "  if (controller.AddMorphKey(key, false) < 0) return 5;\n"
+        "  if (controller.AddMorphKey(0.0f, 2, sourceVertices, null) < 0) return 5;\n"
         "  if (controller.GetKeyCount() != 1) return 6;\n"
         "  CKMorphKey got = controller.GetMorphKey(0);\n"
         "  if (got.TimeStep != 0.0f) return 7;\n"
@@ -12994,6 +12991,11 @@ bool RunCKMorphControllerScriptSelfTest(CKContext *context, asIScriptEngine *eng
         "int ProbeMorphControllerSmallEvaluate(CKMorphController@ controller) {\n"
         "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
         "  controller.Evaluate(0.0f, 2, tooSmall, 12, null);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMorphControllerSmallAddKey(CKMorphController@ controller) {\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  controller.AddMorphKey(0.0f, 2, tooSmall, null);\n"
         "  return 0;\n"
         "}\n";
 
@@ -13018,7 +13020,8 @@ bool RunCKMorphControllerScriptSelfTest(CKContext *context, asIScriptEngine *eng
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeMorphControllerSurface(CKMorphController@)");
     asIScriptFunction *smallEvaluate = module->GetFunctionByDecl("int ProbeMorphControllerSmallEvaluate(CKMorphController@)");
-    if (!probe || !smallEvaluate) {
+    asIScriptFunction *smallAddKey = module->GetFunctionByDecl("int ProbeMorphControllerSmallAddKey(CKMorphController@)");
+    if (!probe || !smallEvaluate || !smallAddKey) {
         engine->DiscardModule(moduleName);
         error = "CKMorphController self-test functions were not found.";
         return false;
@@ -13041,7 +13044,8 @@ bool RunCKMorphControllerScriptSelfTest(CKContext *context, asIScriptEngine *eng
     }
 
     const bool ok = ExecuteCKMorphControllerProbe(engine, probe, controller, false, "CKMorphController probe", error) &&
-                    ExecuteCKMorphControllerProbe(engine, smallEvaluate, controller, true, "CKMorphController small-evaluate probe", error);
+                    ExecuteCKMorphControllerProbe(engine, smallEvaluate, controller, true, "CKMorphController small-evaluate probe", error) &&
+                    ExecuteCKMorphControllerProbe(engine, smallAddKey, controller, true, "CKMorphController small-add-key probe", error);
 
     context->DestroyObject(animation);
     engine->DiscardModule(moduleName);
