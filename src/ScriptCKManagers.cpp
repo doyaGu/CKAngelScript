@@ -183,6 +183,10 @@ static CKERROR RegisterCKParameterOperationFunction(CKParameterManager *self,
                                                     const CKGUID &param1,
                                                     const CKGUID &param2,
                                                     NativePointer op) {
+    if (!op.IsNull()) {
+        SetActiveScriptException("CKParameterManager.RegisterOperationFunction only accepts a null NativePointer from script.");
+        return CKERR_INVALIDPARAMETER;
+    }
     CKGUID operationCopy = operation;
     CKGUID paramResCopy = paramRes;
     CKGUID param1Copy = param1;
