@@ -11577,7 +11577,8 @@ bool RunCKBitmapReaderScriptSelfTest(asIScriptEngine *engine, std::string &error
         error = "CKBitmapReader self-test could not find the registered type.";
         return false;
     }
-    if (bitmapReaderType->GetMethodByDecl("int SaveMemory(NativePointer &out memory, CKBitmapProperties@ bp)") == nullptr ||
+    if (bitmapReaderType->GetMethodByDecl("int ReadMemory(NativeBuffer@ memory, CKBitmapProperties@ &out bp)") == nullptr ||
+        bitmapReaderType->GetMethodByDecl("int SaveMemory(NativePointer &out memory, CKBitmapProperties@ bp)") == nullptr ||
         bitmapReaderType->GetMethodByDecl("void ReleaseMemory(NativePointer memory)") == nullptr) {
         error = "CKBitmapReader self-test could not find expected memory methods.";
         return false;
@@ -11590,6 +11591,12 @@ bool RunCKBitmapReaderScriptSelfTest(asIScriptEngine *engine, std::string &error
         "  if (reader is null) return;\n"
         "  int result = reader.SaveMemory(memory, bp);\n"
         "  if (result > 0) reader.ReleaseMemory(memory);\n"
+        "}\n"
+        "void ProbeBitmapReaderNativeBuffer(CKBitmapReader@ reader) {\n"
+        "  if (reader is null) return;\n"
+        "  NativeBuffer@ memory = NativeBuffer(1);\n"
+        "  CKBitmapProperties@ bp;\n"
+        "  reader.ReadMemory(memory, bp);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -12029,7 +12036,8 @@ bool RunCKSoundReaderScriptSelfTest(asIScriptEngine *engine, std::string &error)
         return false;
     }
     if (soundReaderType->GetMethodByDecl("CKERROR GetDataBuffer(NativePointer &out buf, int &out size)") == nullptr ||
-        soundReaderType->GetMethodByDecl("CKERROR ReadMemory(NativePointer memory, int size)") == nullptr) {
+        soundReaderType->GetMethodByDecl("CKERROR ReadMemory(NativePointer memory, int size)") == nullptr ||
+        soundReaderType->GetMethodByDecl("CKERROR ReadMemory(NativeBuffer@ memory)") == nullptr) {
         error = "CKSoundReader self-test could not find expected memory methods.";
         return false;
     }
@@ -12042,6 +12050,11 @@ bool RunCKSoundReaderScriptSelfTest(asIScriptEngine *engine, std::string &error)
         "  if (reader is null) return;\n"
         "  reader.GetDataBuffer(buffer, bufferSize);\n"
         "  reader.ReadMemory(memory, size);\n"
+        "}\n"
+        "void ProbeSoundReaderNativeBuffer(CKSoundReader@ reader) {\n"
+        "  if (reader is null) return;\n"
+        "  NativeBuffer@ memory = NativeBuffer(1);\n"
+        "  reader.ReadMemory(memory);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);

@@ -2133,6 +2133,19 @@ static int ReadCKBitmapReaderMemory(CKBitmapReader *self, NativePointer memory, 
     return self->ReadMemory(memory.Get(), size, bp);
 }
 
+static int ReadCKBitmapReaderNativeBuffer(CKBitmapReader *self, NativeBuffer *memory, CKBitmapProperties **bp) {
+    if (bp) {
+        *bp = nullptr;
+    }
+    if (!self || !bp || !memory || memory->Size() > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+        (memory->Size() > 0 && !memory->Data())) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    const int size = static_cast<int>(memory->Size());
+    return self->ReadMemory(size > 0 ? memory->Data() : nullptr, size, bp);
+}
+
 static int ReadCKBitmapReaderAsynchronousFile(CKBitmapReader *self, const std::string &name, CKBitmapProperties **bp) {
     if (bp) {
         *bp = nullptr;
@@ -2181,6 +2194,16 @@ static CKERROR ReadCKSoundReaderMemory(CKSoundReader *self, NativePointer memory
     }
 
     return self->ReadMemory(memory.Get(), size);
+}
+
+static CKERROR ReadCKSoundReaderNativeBuffer(CKSoundReader *self, NativeBuffer *memory) {
+    if (!self || !memory || memory->Size() > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+        (memory->Size() > 0 && !memory->Data())) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    const int size = static_cast<int>(memory->Size());
+    return self->ReadMemory(size > 0 ? memory->Data() : nullptr, size);
 }
 
 static CKERROR OpenCKMovieReaderFile(CKMovieReader *self, const std::string &name) {
@@ -2282,6 +2305,7 @@ void RegisterCKBitmapReader(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBitmapReader", "void SetBitmapDefaultProperties(CKBitmapProperties@ bp)", asMETHODPR(CKBitmapReader, SetBitmapDefaultProperties, (CKBitmapProperties*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadFile(const string &in name, CKBitmapProperties@ &out bp)", asFUNCTION(ReadCKBitmapReaderFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadMemory(NativePointer memory, int size, CKBitmapProperties@ &out bp)", asFUNCTION(ReadCKBitmapReaderMemory), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadMemory(NativeBuffer@ memory, CKBitmapProperties@ &out bp)", asFUNCTION(ReadCKBitmapReaderNativeBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapReader", "int ReadASynchronousFile(const string &in name, CKBitmapProperties@ &out bp)", asFUNCTION(ReadCKBitmapReaderAsynchronousFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapReader", "int SaveFile(const string &in name, CKBitmapProperties@ bp)", asFUNCTION(SaveCKBitmapReaderFile), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBitmapReader", "int SaveMemory(NativePointer &out memory, CKBitmapProperties@ bp)", asFUNCTION(SaveCKBitmapReaderMemory), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -2308,6 +2332,7 @@ void RegisterCKSoundReader(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR Resume()", asMETHODPR(CKSoundReader, Resume, (), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR Seek(int pos)", asMETHODPR(CKSoundReader, Seek, (int), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR ReadMemory(NativePointer memory, int size)", asFUNCTION(ReadCKSoundReaderMemory), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKSoundReader", "CKERROR ReadMemory(NativeBuffer@ memory)", asFUNCTION(ReadCKSoundReaderNativeBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKMovieReader
