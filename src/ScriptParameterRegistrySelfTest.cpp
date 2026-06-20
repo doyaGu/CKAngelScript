@@ -5847,17 +5847,13 @@ bool RunVxEffectDescriptionScriptSelfTest(asIScriptEngine *engine, std::string &
         "  desc.SetCallback = empty;\n"
         "  desc.CallbackArg = empty;\n"
         "  if (!desc.SetCallback.IsNull() || !desc.CallbackArg.IsNull()) return 1;\n"
-        "  NativePointer arg;\n"
-        "  arg += 1;\n"
-        "  desc.CallbackArg = arg;\n"
-        "  if (desc.CallbackArg.IsNull()) return 2;\n"
         "  desc.Summary = \"effect-summary\";\n"
         "  desc.MaxTextureCount = 2;\n"
         "  VxEffectDescription copied(desc);\n"
-        "  if (copied.Summary != \"effect-summary\" || !copied.SetCallback.IsNull() || copied.CallbackArg.IsNull()) return 3;\n"
+        "  if (copied.Summary != \"effect-summary\" || !copied.SetCallback.IsNull() || !copied.CallbackArg.IsNull()) return 3;\n"
         "  VxEffectDescription assigned;\n"
         "  assigned = copied;\n"
-        "  if (assigned.MaxTextureCount != 2 || assigned.CallbackArg.IsNull()) return 4;\n"
+        "  if (assigned.MaxTextureCount != 2 || !assigned.CallbackArg.IsNull()) return 4;\n"
         "  assigned.CallbackArg = empty;\n"
         "  if (!assigned.CallbackArg.IsNull()) return 5;\n"
         "  return 0;\n"
@@ -5867,6 +5863,12 @@ bool RunVxEffectDescriptionScriptSelfTest(asIScriptEngine *engine, std::string &
         "  NativePointer ptr;\n"
         "  ptr += 1;\n"
         "  desc.SetCallback = ptr;\n"
+        "}\n"
+        "void RejectVxEffectDescriptionCallbackArg() {\n"
+        "  VxEffectDescription desc;\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  desc.CallbackArg = ptr;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -5890,14 +5892,16 @@ bool RunVxEffectDescriptionScriptSelfTest(asIScriptEngine *engine, std::string &
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeVxEffectDescription()");
     asIScriptFunction *rejectCallback = module->GetFunctionByDecl("void RejectVxEffectDescriptionSetCallback()");
-    if (!probe || !rejectCallback) {
+    asIScriptFunction *rejectCallbackArg = module->GetFunctionByDecl("void RejectVxEffectDescriptionCallbackArg()");
+    if (!probe || !rejectCallback || !rejectCallbackArg) {
         engine->DiscardModule(moduleName);
         error = "VxEffectDescription self-test functions were not found.";
         return false;
     }
 
     bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "VxEffectDescription value probe", error) &&
-              ExecuteCKAttributeDescProbe(engine, rejectCallback, true, "VxEffectDescription SetCallback rejection probe", error);
+              ExecuteCKAttributeDescProbe(engine, rejectCallback, true, "VxEffectDescription SetCallback rejection probe", error) &&
+              ExecuteCKAttributeDescProbe(engine, rejectCallbackArg, true, "VxEffectDescription CallbackArg rejection probe", error);
     engine->DiscardModule(moduleName);
     return ok;
 }

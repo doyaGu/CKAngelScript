@@ -1066,7 +1066,10 @@ static void SetVxEffectDescriptionCallback(VxEffectDescription *self, NativePoin
 }
 
 static void SetVxEffectDescriptionCallbackArg(VxEffectDescription *self, NativePointer ptr) {
-    self->CallbackArg = ptr.Get();
+    if (RejectNativeCallbackPointerWrite(ptr, "VxEffectDescription.CallbackArg only accepts a null NativePointer from script.")) {
+        return;
+    }
+    self->CallbackArg = nullptr;
 }
 
 void RegisterVxEffectDescription(asIScriptEngine *engine) {
