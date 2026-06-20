@@ -172,6 +172,9 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6.0.2
+
       - name: Download release packages
         uses: actions/download-artifact@v8.0.1
         with:
