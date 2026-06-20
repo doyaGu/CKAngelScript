@@ -24,7 +24,7 @@ bool RunScriptParameterConversionSelfTest(std::string &error);
 bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptApiSelfTest(CKContext *context, std::string &error);
 #if CKAS_ENABLE_API_EXPORT
-bool RunScriptInfoExportSelfTest(std::string &error);
+bool RunScriptInfoExportSelfTest(asIScriptEngine *engine, std::string &error);
 #endif
 bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);

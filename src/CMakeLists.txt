@@ -33,7 +33,6 @@ set(CKAS_HEADERS
         ScriptObjectRef.h
         ScriptScene.h
         ScriptAsync.h
-        ScriptSelfTests.h
         ScriptRefCounted.h
         ScriptBehaviorBridge.h
         ScriptComponentMetadata.h
@@ -109,24 +108,27 @@ if (CKAS_ENABLE_DYNCALL)
 endif ()
 
 if (CKAS_BUILD_SELF_TESTS)
+    set(CKAS_TEST_DIR "${PROJECT_SOURCE_DIR}/tests")
     list(APPEND CKAS_SOURCES
-            ScriptStartupSelfTest.cpp
-            ScriptComponentMetadataSelfTest.cpp
-            ScriptApiSelfTest.cpp
-            ScriptParameterConversionSelfTest.cpp
-            ScriptParameterRegistrySelfTest.cpp
-            ScriptRuntimeMetadataSelfTest.cpp
-            ScriptRuntimeDependencySelfTest.cpp
-            ScriptNativeMemorySelfTest.cpp
-            ScriptMessageSelfTest.cpp
-            ScriptSceneSelfTest.cpp
-            ScriptRuntimeSelfTest.cpp
-            ScriptAsyncSelfTest.cpp
-            ScriptBridgeSelfTest.cpp
+            "${CKAS_TEST_DIR}/ScriptStartupSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptComponentMetadataSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptApiSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptInfoExportSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptParameterConversionSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptParameterRegistrySelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptRuntimeMetadataSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptRuntimeDependencySelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptNativeMemorySelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptMessageSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptSceneSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptRuntimeSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptAsyncSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptBridgeSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptVxBindingSelfTest.cpp"
     )
     if (CKAS_ENABLE_DYNCALL)
         list(APPEND CKAS_SOURCES
-                ScriptDynLoadSelfTest.cpp
+                "${CKAS_TEST_DIR}/ScriptDynLoadSelfTest.cpp"
         )
     endif ()
 endif ()
@@ -159,6 +161,12 @@ target_include_directories(CKAngelScript
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CKAS_GENERATED_INCLUDE_DIR}
 )
+
+if (CKAS_BUILD_SELF_TESTS)
+    target_include_directories(CKAngelScript PRIVATE
+            "${PROJECT_SOURCE_DIR}/tests"
+    )
+endif ()
 
 target_link_libraries(CKAngelScript PRIVATE
         CK2 VxMath

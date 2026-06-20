@@ -97,7 +97,7 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
 
 #if CKAS_ENABLE_API_EXPORT
     ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "script-info-export", std::string());
-    if (!RunScriptInfoExportSelfTest(error)) {
+    if (!RunScriptInfoExportSelfTest(manager ? manager->GetScriptEngine() : nullptr, error)) {
         ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
                                                              "script-info-export",
                                                              "ScriptInfo export",

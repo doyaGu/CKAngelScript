@@ -5,7 +5,7 @@ param(
     [int]$PlayerSeconds = 60,
     [int]$LogTailLines = 40,
     [ValidateSet("Normal", "Hidden", "Minimized", "Maximized")]
-    [string]$PlayerWindowStyle = "Hidden",
+    [string]$PlayerWindowStyle = "Normal",
     [switch]$IncludeLogTail,
     [switch]$SkipInstall,
     [switch]$SkipPlayer,
