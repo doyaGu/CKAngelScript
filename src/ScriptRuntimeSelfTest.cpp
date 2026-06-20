@@ -1,5 +1,6 @@
 #include "ScriptSelfTests.h"
 
+#include <cstring>
 #include <string>
 
 #include "CKAngelScript.h"
@@ -21,6 +22,31 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     }
     if (!ScriptMessageSelfTest::RunScriptMessageSelfTest(context, engine, error)) {
         return false;
+    }
+
+    asITypeInfo *behaviorContextType = engine->GetTypeInfoByDecl("CKBehaviorContext");
+    if (!behaviorContextType) {
+        error = "CKBehaviorContext type is not registered.";
+        return false;
+    }
+    for (asUINT i = 0; i < behaviorContextType->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        if (behaviorContextType->GetProperty(i, &propertyName) >= 0 &&
+            propertyName && std::strcmp(propertyName, "CallbackArg") == 0) {
+            error = "CKBehaviorContext still exposes writable CallbackArg storage.";
+            return false;
+        }
+    }
+    if (!behaviorContextType->GetMethodByDecl("NativePointer get_CallbackArg() const")) {
+        error = "CKBehaviorContext CallbackArg getter is not registered.";
+        return false;
+    }
+    for (asUINT i = 0; i < behaviorContextType->GetMethodCount(); ++i) {
+        asIScriptFunction *method = behaviorContextType->GetMethodByIndex(i);
+        if (method && std::string(method->GetDeclaration()).find("set_CallbackArg") != std::string::npos) {
+            error = "CKBehaviorContext still exposes writable CallbackArg setter.";
+            return false;
+        }
     }
 
     ScriptContext defaultContext;
@@ -61,6 +87,7 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  string metadataKey = ctx.MetadataKey(0);\n"
         "  string metadataValue = ctx.MetadataValue(0);\n"
         "  CKBehaviorContext behaviorContext = ctx.ToBehaviorContext();\n"
+        "  NativePointer callbackArg = behaviorContext.CallbackArg;\n"
         "  BehaviorGraph@ graph = Behavior::Graph(ctx, \"__missing__\");\n"
         "  BehaviorRef@ behavior = Behavior::Find(ctx, \"__missing__\");\n"
         "  BBDecl@ decl = BB::Require(ctx, \"__missing__\");\n"
@@ -158,7 +185,7 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  if (behaviorContext.DeltaTime != 0.0f || behaviorContext.CallbackMessage != 0) return 10;\n"
         "  if (behaviorContext.CurrentLevel !is null || behaviorContext.CurrentScene !is null || behaviorContext.PreviousScene !is null) return 11;\n"
         "  if (behaviorContext.CurrentRenderContext !is null || behaviorContext.ParameterManager !is null || behaviorContext.MessageManager !is null) return 12;\n"
-        "  if (behaviorContext.AttributeManager !is null || behaviorContext.TimeManager !is null || behaviorContext.CallbackArg != 0) return 13;\n"
+        "  if (behaviorContext.AttributeManager !is null || behaviorContext.TimeManager !is null || !behaviorContext.CallbackArg.IsNull()) return 13;\n"
         "  RuntimeScriptInfo info;\n"
         "  RuntimeScriptInfo copied(info);\n"
         "  RuntimeScriptInfo assigned;\n"

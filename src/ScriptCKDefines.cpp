@@ -1133,8 +1133,6 @@ void RegisterCKBehaviorContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectProperty("CKBehaviorContext", "CKAttributeManager@ AttributeManager", asOFFSET(CKBehaviorContext, AttributeManager)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKBehaviorContext", "CKTimeManager@ TimeManager", asOFFSET(CKBehaviorContext, TimeManager)); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectProperty("CKBehaviorContext", "CKDWORD CallbackMessage", asOFFSET(CKBehaviorContext, CallbackMessage)); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectProperty("CKBehaviorContext", "uintptr_t CallbackArg", asOFFSET(CKBehaviorContext, CallbackArg)); CKAS_CHECK_REGISTER(r);
-
     r = engine->RegisterObjectBehaviour("CKBehaviorContext", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(ConstructCKBehaviorContext), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("CKBehaviorContext", asBEHAVE_CONSTRUCT, "void f(const CKBehaviorContext &in other)", asFUNCTIONPR([](const CKBehaviorContext &ctx, CKBehaviorContext *self) { new(self) CKBehaviorContext(ctx); }, (const CKBehaviorContext &, CKBehaviorContext *), void), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 
@@ -1143,7 +1141,6 @@ void RegisterCKBehaviorContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehaviorContext", "CKBehaviorContext &opAssign(const CKBehaviorContext &in other)", asMETHODPR(CKBehaviorContext, operator=, (const CKBehaviorContext &), CKBehaviorContext &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKBehaviorContext", "NativePointer get_CallbackArg() const", asFUNCTIONPR([](const CKBehaviorContext *self) { return NativePointer(self->CallbackArg); }, (const CKBehaviorContext *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKBehaviorContext", "void set_CallbackArg(NativePointer ptr)", asFUNCTIONPR([](CKBehaviorContext *self, NativePointer ptr) { self->CallbackArg = ptr.Get(); }, (CKBehaviorContext *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 // CKUICallbackStruct
