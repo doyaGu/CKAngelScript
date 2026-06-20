@@ -2843,6 +2843,36 @@ static void CKMesh_SubMeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, 
     }
 }
 
+static void SetCKMeshException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+template <typename T>
+static void TranslateCKMeshVerticesVector(T *self, const VxVector &vector) {
+    self->TranslateVertices(const_cast<VxVector *>(&vector));
+}
+
+template <typename T>
+static void SetCKMeshFaceMaterialBuffer(T *self, NativeBuffer *faceIndices, int faceCount, CKMaterial *mat) {
+    if (faceCount < 0) {
+        SetCKMeshException("CKMesh.SetFaceMaterial NativeBuffer faceCount must be non-negative.");
+        return;
+    }
+    if (faceCount == 0) {
+        self->SetFaceMaterialEx(nullptr, 0, mat);
+        return;
+    }
+
+    const size_t required = static_cast<size_t>(faceCount) * sizeof(int);
+    if (!faceIndices || !faceIndices->Data() || faceIndices->Size() < required) {
+        SetCKMeshException("CKMesh.SetFaceMaterial requires a NativeBuffer large enough for faceCount int indices.");
+        return;
+    }
+    self->SetFaceMaterialEx(reinterpret_cast<int *>(faceIndices->Data()), faceCount, mat);
+}
+
 template <typename T>
 static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
     assert(engine != nullptr);
@@ -2897,6 +2927,7 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void GetVertexTextureCoordinates(int index, float &out u, float &out v, int channel = -1)", asMETHODPR(T, GetVertexTextureCoordinates, (int, float *, float *, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "void TranslateVertices(NativePointer vector)", asFUNCTIONPR([](T *self, NativePointer vector) { self->TranslateVertices(reinterpret_cast<VxVector *>(vector.Get())); }, (T *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void TranslateVertices(const VxVector &in vector)", asFUNCTION(TranslateCKMeshVerticesVector<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void ScaleVertices(const VxVector &in vector, const VxVector &in pivot = void)", asMETHODPR(T, ScaleVertices, (VxVector *, VxVector *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void ScaleVertices(float x, float y, float z, const VxVector &in pivot = void)", asMETHODPR(T, ScaleVertices3f, (float, float, float, VxVector *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void RotateVertices(const VxVector &in vector, float angle)", asMETHODPR(T, RotateVertices, (VxVector *, float), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -2921,6 +2952,7 @@ static void RegisterCKMeshMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "NativePointer GetFaceNormalsPtr(NativePointer stride)", asFUNCTIONPR([](T *self, NativePointer stride) { return NativePointer(self->GetFaceNormalsPtr(reinterpret_cast<CKDWORD *>(stride.Get()))); }, (T *, NativePointer), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetFaceVertexIndex(int faceIndex, int vertex1, int vertex2, int vertex3)", asMETHODPR(T, SetFaceVertexIndex, (int, int, int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetFaceMaterial(NativePointer faceIndices, int faceCount, CKMaterial@ mat)", asFUNCTIONPR([](T *self, NativePointer faceIndices, int faceCount, CKMaterial *mat) { self->SetFaceMaterialEx(reinterpret_cast<int *>(faceIndices.Get()), faceCount, mat); }, (T *, NativePointer, int, CKMaterial *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetFaceMaterial(NativeBuffer@ faceIndices, int faceCount, CKMaterial@ mat)", asFUNCTION(SetCKMeshFaceMaterialBuffer<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetFaceMaterial(int faceIndex, CKMaterial@ mat)", asMETHODPR(T, SetFaceMaterial, (int, CKMaterial *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #if CKVERSION != 0x26052005
     r = engine->RegisterObjectMethod(name, "void SetFaceChannelMask(int faceIndex, CKWORD channelMask)", asMETHODPR(T, SetFaceChannelMask, (int, CKWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

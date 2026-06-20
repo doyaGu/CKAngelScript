@@ -11945,6 +11945,67 @@ bool RunCKMoviePropertiesScriptSelfTest(asIScriptEngine *engine, std::string &er
     return ok;
 }
 
+bool RunCKMeshScriptSelfTest(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKMesh script self-test requires an AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *meshType = engine->GetTypeInfoByDecl("CKMesh");
+    if (!meshType) {
+        error = "CKMesh self-test could not find the registered type.";
+        return false;
+    }
+    if (!meshType->GetMethodByDecl("void TranslateVertices(const VxVector&in vector)") ||
+        !meshType->GetMethodByDecl("void SetFaceMaterial(NativeBuffer@ faceIndices, int faceCount, CKMaterial@ mat)")) {
+        error = "CKMesh self-test could not find NativeBuffer/vector mesh declarations.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKMeshSelfTest";
+    const char *source =
+        "void ProbeCKMeshTypedBuffers(CKMesh@ mesh, CKMaterial@ material) {\n"
+        "  if (mesh is null) return;\n"
+        "  mesh.SetFaceVertexIndex(0, 0, 1, 2);\n"
+        "  mesh.SetVertexPosition(0, VxVector(0.0f, 0.0f, 0.0f));\n"
+        "  mesh.SetVertexPosition(1, VxVector(1.0f, 0.0f, 0.0f));\n"
+        "  mesh.SetVertexPosition(2, VxVector(0.0f, 1.0f, 0.0f));\n"
+        "  mesh.TranslateVertices(VxVector(1.0f, 2.0f, 3.0f));\n"
+        "  NativeBuffer@ faceIndices = NativeBuffer(4);\n"
+        "  faceIndices.WriteInt(0);\n"
+        "  mesh.SetFaceMaterial(faceIndices, 1, material);\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKMesh self-test could not create a script module.";
+        return false;
+    }
+
+    int r = module->AddScriptSection("ck-mesh-self-test", source);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMesh self-test could not add its script section.";
+        return false;
+    }
+    r = module->Build();
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKMesh self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("void ProbeCKMeshTypedBuffers(CKMesh@, CKMaterial@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKMesh self-test function was not found.";
+        return false;
+    }
+
+    engine->DiscardModule(moduleName);
+    return true;
+}
+
 bool RunCKTextureScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
         error = "CKTexture script self-test requires CKContext and AngelScript engine.";
@@ -15002,6 +15063,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKRenderObjectScriptSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunCKMeshScriptSelfTest(engine, error)) {
         return false;
     }
     if (!RunCK2dEntityScriptSelfTest(context, engine, error)) {
