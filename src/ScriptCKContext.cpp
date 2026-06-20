@@ -1,7 +1,7 @@
 #include "ScriptCKContext.h"
 
 #include <cassert>
-#include <limits>
+#include <limits.h>
 #include <string>
 
 #include "angelscript.h"
@@ -46,7 +46,7 @@ static bool ValidateCKContextNativeBuffer(CKContext *self, NativeBuffer *buffer,
         SetCKContextException((std::string(method) + " requires a NativeBuffer.").c_str());
         return false;
     }
-    if (buffer->Size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    if (buffer->Size() > static_cast<size_t>(INT_MAX)) {
         SetCKContextException((std::string(method) + " NativeBuffer is too large for the Virtools memory-load API.").c_str());
         return false;
     }

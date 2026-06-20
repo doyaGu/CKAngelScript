@@ -2899,7 +2899,7 @@ BBDecl *BBBridge::RequireGuid(CKGUID guid) const {
     if (!bridge) {
         return new BBDecl(nullptr, ctx, request, "AngelScript BB bridge is not available.");
     }
-    if (!guid.IsValid() || !CKGetPrototypeFromGuid(guid)) {
+    if (!CKGuidIsValid(guid) || !CKGetPrototypeFromGuid(guid)) {
         return new BBDecl(bridge, ctx, request, fmt::format("BB prototype GUID {} was not found.", GuidToString(guid)));
     }
     return new BBDecl(bridge, ctx, request);

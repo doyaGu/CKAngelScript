@@ -430,8 +430,8 @@ BBDecl *CreateSpecFromParameter(ScriptBehaviorBridge *bridge,
 
     BBBridge bb(bridge, behcontext);
     if (CKBehavior *behavior = CKBehavior::Cast(ReadObjectValue(source, behcontext.Context))) {
-        const CKGUID guid = behavior->GetPrototypeGuid();
-        if (guid.IsValid()) {
+        CKGUID guid = behavior->GetPrototypeGuid();
+        if (CKGuidIsValid(guid)) {
             return bb.RequireGuid(guid);
         }
         error = "BBDecl Component parameter '" + SafeString(source->GetName()) +

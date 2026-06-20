@@ -1,6 +1,7 @@
 #ifndef CK_ANGELSCRIPT_H
 #define CK_ANGELSCRIPT_H
 
+#include "VxDefines.h"
 #include "CKTypes.h"
 
 #include <stddef.h>

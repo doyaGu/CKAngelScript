@@ -349,7 +349,7 @@ ParamOp *ParamOperationByName(const CKBehaviorContext &ctx, const std::string &n
 
     std::string error;
     CKContext *context = ctx.Context ? ctx.Context : (bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr);
-    if (!ResolveOperationGuid(context, CKGUID(), name, error).IsValid()) {
+    if (!CKGuidIsValid(ResolveOperationGuid(context, CKGUID(), name, error))) {
         SetScriptException(error);
         return nullptr;
     }
@@ -365,7 +365,7 @@ ParamOp *ParamOperationByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
 
     std::string error;
     CKContext *context = ctx.Context ? ctx.Context : (bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr);
-    if (!ResolveOperationGuid(context, guid, std::string(), error).IsValid()) {
+    if (!CKGuidIsValid(ResolveOperationGuid(context, guid, std::string(), error))) {
         SetScriptException(error);
         return nullptr;
     }

@@ -423,7 +423,7 @@ BehaviorQuery *BehaviorQuery::PrototypeName(const std::string &name) {
 
 BehaviorQuery *BehaviorQuery::PrototypeQuery(const std::string &query) {
     CKGUID guid = ScriptBridgeGraphInternal::PrototypeGuidFromQuery(query);
-    if (guid.IsValid()) {
+    if (CKGuidIsValid(guid)) {
         m_PrototypeGuid = guid;
         m_PrototypeName.clear();
     } else {
@@ -495,7 +495,7 @@ bool BehaviorQuery::Matches(CKBehavior *behavior, int depth) const {
     if (!m_NameContains.empty() && !ScriptBridgeGraphInternal::ContainsText(SafeString(behavior->GetName()), m_NameContains)) {
         return false;
     }
-    if (m_PrototypeGuid.IsValid() && behavior->GetPrototypeGuid() != m_PrototypeGuid) {
+    if (CKGuidIsValid(m_PrototypeGuid) && behavior->GetPrototypeGuid() != m_PrototypeGuid) {
         return false;
     }
     if (!ScriptBridgeGraphInternal::BehaviorPrototypeNameMatches(behavior, m_PrototypeName)) {
@@ -2086,7 +2086,7 @@ int BehaviorGraphEdit::PlannedInputCount(int nodeIndex) const {
     int count = behavior ? behavior->GetInputCount() : 0;
     for (const LayoutSpec &spec : m_LayoutEdits) {
         if (spec.NodeIndex == nodeIndex && spec.Type == LayoutSpec::Kind::EnsureInputCount) {
-            count = std::max(count, spec.Count);
+            count = XMax(count, spec.Count);
         }
     }
     return count;
@@ -2097,7 +2097,7 @@ int BehaviorGraphEdit::PlannedOutputCount(int nodeIndex) const {
     int count = behavior ? behavior->GetOutputCount() : 0;
     for (const LayoutSpec &spec : m_LayoutEdits) {
         if (spec.NodeIndex == nodeIndex && spec.Type == LayoutSpec::Kind::EnsureOutputCount) {
-            count = std::max(count, spec.Count);
+            count = XMax(count, spec.Count);
         }
     }
     return count;

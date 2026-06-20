@@ -1,8 +1,8 @@
 #include "ScriptVxMath.h"
 
 #include <cassert>
-#include <limits>
 #include <new>
+#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -18,6 +18,11 @@
 #include "ScriptXString.h"
 #include "ScriptXBitArray.h"
 #include "ScriptRegistration.h"
+
+#if CKVERSION != 0x13022002
+typedef BYTE XBYTE;
+typedef DWORD XULONG;
+#endif
 
 static const float g_EPSILON = EPSILON;
 static const float g_PI = PI;
@@ -875,7 +880,7 @@ static bool ComputeStridedByteSize(int count, unsigned int stride, size_t elemen
         return true;
     }
     const size_t itemCount = static_cast<size_t>(count);
-    if (itemCount - 1 > (std::numeric_limits<size_t>::max() - elementSize) / static_cast<size_t>(stride)) {
+    if (itemCount - 1 > (SIZE_MAX - elementSize) / static_cast<size_t>(stride)) {
         return false;
     }
     required = (itemCount - 1) * static_cast<size_t>(stride) + elementSize;
@@ -887,7 +892,7 @@ static bool ComputePackedByteSize(int count, size_t elementSize, size_t &require
     if (count < 0) {
         return false;
     }
-    if (count > 0 && static_cast<size_t>(count) > std::numeric_limits<size_t>::max() / elementSize) {
+    if (count > 0 && static_cast<size_t>(count) > SIZE_MAX / elementSize) {
         return false;
     }
     required = static_cast<size_t>(count) * elementSize;
@@ -926,7 +931,7 @@ static bool ComputeVxImageByteSize(const VxImageDescEx &desc, const char *method
         }
         const size_t h = static_cast<size_t>(desc.Height);
         const size_t p = static_cast<size_t>(pitch);
-        if (p > std::numeric_limits<size_t>::max() / h) {
+        if (p > SIZE_MAX / h) {
             SetVxNativeBufferException((std::string(method) + " image byte size overflowed.").c_str());
             return false;
         }
@@ -940,8 +945,8 @@ static bool ComputeVxImageByteSize(const VxImageDescEx &desc, const char *method
     const size_t w = static_cast<size_t>(desc.Width);
     const size_t h = static_cast<size_t>(desc.Height);
     const size_t bpp = static_cast<size_t>(desc.BitsPerPixel);
-    if (w > std::numeric_limits<size_t>::max() / h ||
-        w * h > (std::numeric_limits<size_t>::max() - 7) / bpp) {
+    if (w > SIZE_MAX / h ||
+        w * h > (SIZE_MAX - 7) / bpp) {
         SetVxNativeBufferException((std::string(method) + " image byte size overflowed.").c_str());
         return false;
     }
@@ -957,7 +962,7 @@ static bool ComputeVxImageAlphaByteSize(const VxImageDescEx &desc, const char *m
     }
     const size_t w = static_cast<size_t>(desc.Width);
     const size_t h = static_cast<size_t>(desc.Height);
-    if (w > std::numeric_limits<size_t>::max() / h) {
+    if (w > SIZE_MAX / h) {
         SetVxNativeBufferException((std::string(method) + " alpha byte size overflowed.").c_str());
         return false;
     }
@@ -988,7 +993,7 @@ static bool ComputeVxImageColorMapByteSize(const VxImageDescEx &desc, const char
     }
     const size_t entries = static_cast<size_t>(desc.ColorMapEntries);
     const size_t stride = static_cast<size_t>(desc.BytesPerColorEntry);
-    if (entries > std::numeric_limits<size_t>::max() / stride) {
+    if (entries > SIZE_MAX / stride) {
         SetVxNativeBufferException((std::string(method) + " color-map byte size overflowed.").c_str());
         return false;
     }
@@ -2174,7 +2179,7 @@ static void VxBboxClassifyVertices(const VxBbox &box, int iVcount, NativePointer
         SetVxNativeBufferException("VxBbox::ClassifyVertices requires non-null vertices and flags pointers when count is positive.");
         return;
     }
-    box.ClassifyVertices(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, reinterpret_cast<unsigned long *>(oFlags.Get()));
+    box.ClassifyVertices(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, reinterpret_cast<XULONG *>(oFlags.Get()));
 }
 
 static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, int iVcount, NativePointer iVertices, unsigned long iStride, int iAxis, NativePointer oFlags) {
@@ -2182,7 +2187,7 @@ static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, int iVcount, Native
         SetVxNativeBufferException("VxBbox::ClassifyVerticesOneAxis requires non-null vertices and flags pointers when count is positive.");
         return;
     }
-    box.ClassifyVerticesOneAxis(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, iAxis, reinterpret_cast<unsigned long *>(oFlags.Get()));
+    box.ClassifyVerticesOneAxis(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, iAxis, reinterpret_cast<XULONG *>(oFlags.Get()));
 }
 
 static bool VxBboxClassifyVerticesBuffer(const VxBbox &box, int count, NativeBuffer *vertices, unsigned long stride, NativeBuffer *flags) {
@@ -2870,13 +2875,10 @@ static const float &VxOBBGetExtentConst(const VxOBB &box, int index) {
     }
 }
 
-static bool VxOBBVectorIn(const VxOBB &box, const VxVector &point) {
-    return box.VectorIn(point);
-}
-
-static bool VxOBBIsBoxInside(const VxOBB &box, const VxBbox &inner) {
-    return box.IsBoxInside(inner);
-}
+#if CKVERSION != 0x05082002
+static bool VxOBBVectorIn(const VxOBB &box, const VxVector &point) { return box.VectorIn(point); }
+static bool VxOBBIsBoxInside(const VxOBB &box, const VxBbox &inner) { return box.IsBoxInside(inner); }
+#endif
 
 static bool VxIntersectAABBOBBBool(const VxBbox &box1, const VxOBB &box2) {
     return VxIntersect::AABBOBB(box1, box2);
@@ -2922,8 +2924,10 @@ static void RegisterVxOBB(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxOBB", "void Create(const VxBbox &in box, const VxMatrix &in mat)", asMETHODPR(VxOBB, Create, (const VxBbox &, const VxMatrix &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
+#if CKVERSION != 0x05082002
     r = engine->RegisterObjectMethod("VxOBB", "bool VectorIn(const VxVector &in v) const", asFUNCTION(VxOBBVectorIn), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxOBB", "bool IsBoxInside(const VxBbox &in box) const", asFUNCTION(VxOBBIsBoxInside), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+#endif
 #endif
 }
 

@@ -231,9 +231,29 @@ static int GetCKInputKeyName(CKInputManager *self, CKDWORD key, std::string &key
     }
 
     char buffer[256] = {};
+#if CKVERSION == 0x13022002
     const int result = self->GetKeyName(key, buffer);
     keyName = buffer;
     return result;
+#else
+    XString name;
+    self->GetKeyName(key, name);
+    keyName = name.CStr();
+    return keyName.empty() ? 0 : 1;
+#endif
+}
+
+static CKDWORD GetCKInputKeyFromName(CKInputManager *self, const std::string &keyName) {
+    if (!self) {
+        return 0;
+    }
+#if CKVERSION == 0x13022002
+    return self->GetKeyFromName(const_cast<CKSTRING>(keyName.c_str()));
+#else
+    XString name;
+    name = keyName.c_str();
+    return self->GetKeyFromName(name);
+#endif
 }
 
 static bool IsCKInputKeyDown(CKInputManager *self, CKDWORD key, CKDWORD *stamp) {
@@ -919,8 +939,7 @@ static void UpdateCKSoundListenerSettings(CKSoundManager *self,
 }
 
 static VxDriverDesc &MissingVxDriverDesc(const char *message) {
-    static thread_local VxDriverDesc dummy{};
-    dummy = VxDriverDesc{};
+    static thread_local VxDriverDesc dummy;
     if (asIScriptContext *ctx = asGetActiveContext()) {
         ctx->SetException(message);
     }
@@ -1793,10 +1812,8 @@ void RegisterCKInputManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyDown(CKDWORD key, CKDWORD &out stamp = void)", asFUNCTION(IsCKInputKeyDown), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyUp(CKDWORD key)", asFUNCTIONPR([](CKInputManager *self, CKDWORD key) -> bool { return self->IsKeyUp(key); }, (CKInputManager *, CKDWORD), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyToggled(CKDWORD key, CKDWORD &out stamp = void)", asFUNCTION(IsCKInputKeyToggled), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-#if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKInputManager", "int GetKeyName(CKDWORD key, string &out keyName)", asFUNCTION(GetCKInputKeyName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKInputManager", "CKDWORD GetKeyFromName(const string &in keyName)", asFUNCTIONPR([](CKInputManager *self, const std::string &keyName) { return self->GetKeyFromName(const_cast<CKSTRING>(keyName.c_str())); }, (CKInputManager *, const std::string &), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-#endif
+    r = engine->RegisterObjectMethod("CKInputManager", "CKDWORD GetKeyFromName(const string &in keyName)", asFUNCTION(GetCKInputKeyFromName), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "NativePointer GetKeyboardState()", asFUNCTIONPR([](CKInputManager *self) { return NativePointer(self->GetKeyboardState()); }, (CKInputManager *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "NativeBuffer@ GetKeyboardStateSnapshot()", asFUNCTION(GetCKInputKeyboardStateSnapshot), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyboardAttached()", asFUNCTIONPR([](CKInputManager *self) -> bool { return self->IsKeyboardAttached(); }, (CKInputManager *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

@@ -37,7 +37,7 @@ ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object) {
 
     if (CKBehavior *behavior = CKBehavior::Cast(object)) {
         stamp.PrototypeGuid = behavior->GetPrototypeGuid();
-        stamp.Set(ScriptBridgeObjectStampFlags::PrototypeGuid, stamp.PrototypeGuid.IsValid());
+        stamp.Set(ScriptBridgeObjectStampFlags::PrototypeGuid, CKGuidIsValid(stamp.PrototypeGuid));
         CKObject *owner = behavior->GetOwner();
         stamp.OwnerId = owner ? owner->GetID() : 0;
         stamp.Set(ScriptBridgeObjectStampFlags::OwnerId, stamp.OwnerId != 0);
@@ -46,7 +46,7 @@ ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object) {
 
     if (CKParameterIn *input = CKParameterIn::Cast(object)) {
         stamp.TypeGuid = input->GetGUID();
-        stamp.Set(ScriptBridgeObjectStampFlags::TypeGuid, stamp.TypeGuid.IsValid());
+        stamp.Set(ScriptBridgeObjectStampFlags::TypeGuid, CKGuidIsValid(stamp.TypeGuid));
         CKObject *owner = input->GetOwner();
         stamp.OwnerId = owner ? owner->GetID() : 0;
         stamp.Set(ScriptBridgeObjectStampFlags::OwnerId, stamp.OwnerId != 0);
@@ -55,7 +55,7 @@ ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object) {
 
     if (CKParameterOperation *operation = CKParameterOperation::Cast(object)) {
         stamp.OperationGuid = operation->GetOperationGuid();
-        stamp.Set(ScriptBridgeObjectStampFlags::OperationGuid, stamp.OperationGuid.IsValid());
+        stamp.Set(ScriptBridgeObjectStampFlags::OperationGuid, CKGuidIsValid(stamp.OperationGuid));
         CKBehavior *owner = operation->GetOwner();
         stamp.OwnerId = owner ? owner->GetID() : 0;
         stamp.Set(ScriptBridgeObjectStampFlags::OwnerId, stamp.OwnerId != 0);
@@ -64,7 +64,7 @@ ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object) {
 
     if (CKParameter *parameter = CKParameter::Cast(object)) {
         stamp.TypeGuid = parameter->GetGUID();
-        stamp.Set(ScriptBridgeObjectStampFlags::TypeGuid, stamp.TypeGuid.IsValid());
+        stamp.Set(ScriptBridgeObjectStampFlags::TypeGuid, CKGuidIsValid(stamp.TypeGuid));
         CKObject *owner = parameter->GetOwner();
         stamp.OwnerId = owner ? owner->GetID() : 0;
         stamp.Set(ScriptBridgeObjectStampFlags::OwnerId, stamp.OwnerId != 0);
@@ -172,7 +172,12 @@ CKERROR CallBridgeBehaviorCallback(CKBehavior *behavior,
     }
 
     CKContext *context = sourceContext && sourceContext->Context ? sourceContext->Context : behavior->GetCKContext();
-    CKBehaviorContext callbackContext = sourceContext ? *sourceContext : (context ? context->m_BehaviorContext : CKBehaviorContext());
+    CKBehaviorContext callbackContext = sourceContext ? *sourceContext : CKBehaviorContext();
+#if CKVERSION == 0x13022002
+    if (!sourceContext && context) {
+        callbackContext = context->m_BehaviorContext;
+    }
+#endif
     callbackContext.Context = context;
     callbackContext.Behavior = behavior;
     callbackContext.CallbackMessage = message;
@@ -189,6 +194,10 @@ std::string IndexedName(const char *prefix, int index) {
 
 std::string GuidToString(CKGUID guid) {
     return fmt::format("guid:0x{:08x},0x{:08x}", guid.d[0], guid.d[1]);
+}
+
+bool CKGuidIsValid(CKGUID guid) {
+    return guid.IsValid() != FALSE;
 }
 
 bool NameEquals(CKSTRING actual, const std::string &expected) {
@@ -270,40 +279,65 @@ CKBEHAVIORIO_DESC *GetPrototypeInput(CKBehaviorPrototype *prototype, int index) 
     if (!prototype || index < 0 || index >= prototype->GetInputCount()) {
         return nullptr;
     }
+#if CKVERSION == 0x13022002
     CKBEHAVIORIO_DESC **list = prototype->GetInIOList();
     return list ? list[index] : nullptr;
+#else
+    const XArray<CKBEHAVIORIO_DESC> &list = prototype->GetInIOList();
+    return const_cast<CKBEHAVIORIO_DESC *>(&list[index]);
+#endif
 }
 
 CKBEHAVIORIO_DESC *GetPrototypeOutput(CKBehaviorPrototype *prototype, int index) {
     if (!prototype || index < 0 || index >= prototype->GetOutputCount()) {
         return nullptr;
     }
+#if CKVERSION == 0x13022002
     CKBEHAVIORIO_DESC **list = prototype->GetOutIOList();
     return list ? list[index] : nullptr;
+#else
+    const XArray<CKBEHAVIORIO_DESC> &list = prototype->GetOutIOList();
+    return const_cast<CKBEHAVIORIO_DESC *>(&list[index]);
+#endif
 }
 
 CKPARAMETER_DESC *GetPrototypeInputParameter(CKBehaviorPrototype *prototype, int index) {
     if (!prototype || index < 0 || index >= prototype->GetInParameterCount()) {
         return nullptr;
     }
+#if CKVERSION == 0x13022002
     CKPARAMETER_DESC **list = prototype->GetInParameterList();
     return list ? list[index] : nullptr;
+#else
+    const XClassArray<CKPARAMETER_DESC> &list = prototype->GetInParameterList();
+    return const_cast<CKPARAMETER_DESC *>(&list[index]);
+#endif
 }
 
 CKPARAMETER_DESC *GetPrototypeOutputParameter(CKBehaviorPrototype *prototype, int index) {
     if (!prototype || index < 0 || index >= prototype->GetOutParameterCount()) {
         return nullptr;
     }
+#if CKVERSION == 0x13022002
     CKPARAMETER_DESC **list = prototype->GetOutParameterList();
     return list ? list[index] : nullptr;
+#else
+    const XClassArray<CKPARAMETER_DESC> &list = prototype->GetOutParameterList();
+    return const_cast<CKPARAMETER_DESC *>(&list[index]);
+#endif
 }
 
 CKPARAMETER_DESC *GetPrototypeLocalParameter(CKBehaviorPrototype *prototype, int index) {
     if (!prototype || index < 0 || index >= prototype->GetLocalParameterCount()) {
         return nullptr;
     }
+#if CKVERSION == 0x13022002
     CKPARAMETER_DESC **list = prototype->GetLocalParameterList();
     return list ? list[index] : nullptr;
+#else
+    const XClassArray<CKPARAMETER_DESC> &list = prototype->GetLocalParameterList();
+    return const_cast<CKPARAMETER_DESC *>(&list[index]);
+#endif
 }
 
 int FindInputIndex(CKBehavior *behavior, const std::string &name) {
@@ -483,10 +517,10 @@ std::string OutputParamName(CKBehavior *behavior, int index) {
 }
 
 CKGUID ResolveBridgeValueType(CKContext *context, const ScriptParamValue &value, CKGUID fallbackGuid) {
-    if (value.TypeGuid.IsValid()) {
+    if (CKGuidIsValid(value.TypeGuid)) {
         return value.TypeGuid;
     }
-    if (fallbackGuid.IsValid()) {
+    if (CKGuidIsValid(fallbackGuid)) {
         return fallbackGuid;
     }
     (void) context;
@@ -940,7 +974,7 @@ CKGUID ResolveOperationGuid(CKContext *context, CKGUID guid, const std::string &
         return CKGUID();
     }
 
-    if (guid.IsValid()) {
+    if (CKGuidIsValid(guid)) {
         if (pm->OperationGuidToCode(guid) < 0) {
             error = fmt::format("Parameter operation {} is not registered.", GuidToString(guid));
             return CKGUID();
@@ -958,7 +992,7 @@ CKGUID ResolveOperationGuid(CKContext *context, CKGUID guid, const std::string &
     }
 
     CKGUID resolved = pm->OperationNameToGuid(const_cast<CKSTRING>(name.c_str()));
-    if (!resolved.IsValid() || pm->OperationGuidToCode(resolved) < 0) {
+    if (!CKGuidIsValid(resolved) || pm->OperationGuidToCode(resolved) < 0) {
         error = fmt::format("Parameter operation '{}' was not found.", name);
         return CKGUID();
     }

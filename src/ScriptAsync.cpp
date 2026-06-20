@@ -786,7 +786,7 @@ void ScriptAsyncTaskBase::NotifyGarbageCollector() {
 }
 
 void ScriptAsyncTaskBase::SetDelayFrames(int frames) {
-    m_DelayFrames = std::max(0, frames);
+    m_DelayFrames = XMax(0, frames);
 }
 
 void ScriptAsyncTaskBase::SetFunction(asIScriptFunction *function) {

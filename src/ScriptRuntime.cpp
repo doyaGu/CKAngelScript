@@ -694,7 +694,12 @@ void ScriptContext::Raise(const std::string &message) const {
 }
 
 CKBehaviorContext ScriptContext::ToBehaviorContext() const {
-    CKBehaviorContext ctx = m_Context ? m_Context->m_BehaviorContext : ScriptRuntimeInternal::MakeClearedBehaviorContext();
+    CKBehaviorContext ctx = ScriptRuntimeInternal::MakeClearedBehaviorContext();
+#if CKVERSION == 0x13022002
+    if (m_Context) {
+        ctx = m_Context->m_BehaviorContext;
+    }
+#endif
     ctx.Context = m_Context;
     ctx.DeltaTime = m_DeltaTime;
     if (m_Context) {

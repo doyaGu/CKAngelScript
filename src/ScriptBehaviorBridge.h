@@ -8,7 +8,7 @@
 
 #include <angelscript.h>
 
-#include "CKTypes.h"
+#include "CKAngelScript.h"
 #include "VxMath.h"
 #include "ScriptParameterConversion.h"
 

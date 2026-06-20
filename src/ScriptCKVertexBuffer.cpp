@@ -1,7 +1,7 @@
 #include "ScriptCKVertexBuffer.h"
 
 #include <algorithm>
-#include <limits>
+#include <limits.h>
 #include <mutex>
 #include <vector>
 
@@ -112,7 +112,7 @@ bool ScriptCKVertexBuffer::DrawIndexed(CKRenderContext *ctx,
     }
 
     const asUINT count = indices.GetSize();
-    if (count == 0 || count > static_cast<asUINT>((std::numeric_limits<int>::max)())) {
+    if (count == 0 || count > static_cast<asUINT>(INT_MAX)) {
         return false;
     }
 

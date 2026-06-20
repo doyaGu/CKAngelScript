@@ -25,6 +25,7 @@ CKERROR CallBridgeBehaviorCallback(CKBehavior *behavior,
 
 std::string IndexedName(const char *prefix, int index);
 std::string GuidToString(CKGUID guid);
+bool CKGuidIsValid(CKGUID guid);
 bool NameEquals(CKSTRING actual, const std::string &expected);
 std::string TrimString(const std::string &value);
 void SetScriptException(const std::string &message);

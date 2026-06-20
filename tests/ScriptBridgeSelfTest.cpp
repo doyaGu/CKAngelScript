@@ -2125,8 +2125,10 @@ static bool RunBehaviorBridgeNativeGraphEditDynamicLayoutSelfTest(CKContext *con
     }
     selectorCreated = true;
 
-    const int targetOutputCount = std::max(switcher->GetOutputCount() + 1, 6);
-    const int targetInputCount = std::max(selector->GetInputCount() + 1, 5);
+    const int switcherOutputCount = switcher->GetOutputCount() + 1;
+    const int selectorInputCount = selector->GetInputCount() + 1;
+    const int targetOutputCount = XMax(switcherOutputCount, 6);
+    const int targetInputCount = XMax(selectorInputCount, 5);
 
     CKBehaviorContext ctx;
     ctx.Context = context;

@@ -12,7 +12,7 @@
 
 #include <angelscript.h>
 
-#include "CKTypes.h"
+#include "CKAngelScript.h"
 
 struct CKBehaviorContext;
 class CScriptDictionary;

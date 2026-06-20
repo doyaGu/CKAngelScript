@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
-#include <limits>
+#include <limits.h>
 #include <mutex>
 #include <string>
 #include <type_traits>
@@ -2169,7 +2169,7 @@ static int ReadCKBitmapReaderNativeBuffer(CKBitmapReader *self, NativeBuffer *me
     if (bp) {
         *bp = nullptr;
     }
-    if (!self || !bp || !memory || memory->Size() > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+    if (!self || !bp || !memory || memory->Size() > static_cast<size_t>(INT_MAX) ||
         (memory->Size() > 0 && !memory->Data())) {
         return CKERR_INVALIDPARAMETER;
     }
@@ -2229,7 +2229,7 @@ static CKERROR ReadCKSoundReaderMemory(CKSoundReader *self, NativePointer memory
 }
 
 static CKERROR ReadCKSoundReaderNativeBuffer(CKSoundReader *self, NativeBuffer *memory) {
-    if (!self || !memory || memory->Size() > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+    if (!self || !memory || memory->Size() > static_cast<size_t>(INT_MAX) ||
         (memory->Size() > 0 && !memory->Data())) {
         return CKERR_INVALIDPARAMETER;
     }
@@ -2797,7 +2797,7 @@ static void ConstructCKTimeProfiler(const std::string &title,
         return;
     }
 
-    const int safeStartingCount = std::max(0, startingCount);
+    const int safeStartingCount = XMax(0, startingCount);
     CKSTRING titleCopy = DuplicateCKTimeProfilerString(title);
     new (self) CKTimeProfiler(titleCopy ? titleCopy : const_cast<CKSTRING>(""), context, safeStartingCount);
 
@@ -3045,7 +3045,7 @@ static bool SetCKParameterDescDefaultValueBuffer(CKPARAMETER_DESC *self, NativeB
     }
 
     const size_t size = data->Size();
-    if (size > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    if (size > static_cast<size_t>(INT_MAX)) {
         if (asIScriptContext *ctx = asGetActiveContext()) {
             ctx->SetException("CKPARAMETER_DESC.SetDefaultValue buffer is too large.");
         }
@@ -3271,7 +3271,7 @@ static bool GetCKBehaviorPrototypeBufferDefaultValue(NativeBuffer *defaultVal, v
     if (!defaultVal || defaultVal->Size() == 0) {
         return true;
     }
-    if (defaultVal->Size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    if (defaultVal->Size() > static_cast<size_t>(INT_MAX)) {
         SetCKBehaviorPrototypeParameterException("CKBehaviorPrototype NativeBuffer default value is too large.");
         return false;
     }

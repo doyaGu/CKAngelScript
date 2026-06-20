@@ -9,7 +9,7 @@
 
 #include <angelscript.h>
 
-#include "CKTypes.h"
+#include "CKAngelScript.h"
 #include "ScriptRuntimeDependency.h"
 #include "ScriptRuntimeMetadata.h"
 

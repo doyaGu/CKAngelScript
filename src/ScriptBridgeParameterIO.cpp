@@ -154,16 +154,16 @@ bool ValidateOperationSpec(CKContext *context,
     }
 
     const CKGUID operationGuid = ResolveOperationGuid(context, request.OperationGuid, request.OperationName, error);
-    if (!operationGuid.IsValid()) {
+    if (!CKGuidIsValid(operationGuid)) {
         return false;
     }
 
-    CKGUID resultGuid = request.ResultTypeGuid.IsValid()
+    CKGUID resultGuid = CKGuidIsValid(request.ResultTypeGuid)
         ? request.ResultTypeGuid
         : (!request.ResultTypeName.empty()
             ? ScriptResolveParameterGuid(context, request.ResultTypeName)
             : targetTypeGuid);
-    if (!resultGuid.IsValid() || resultGuid == CKPGUID_NONE) {
+    if (!CKGuidIsValid(resultGuid) || resultGuid == CKPGUID_NONE) {
         resultGuid = targetTypeGuid;
     }
 
@@ -235,16 +235,16 @@ ParamOperationRef *ConnectOperationToInput(ScriptBehaviorBridge *bridge,
     }
 
     const CKGUID operationGuid = ResolveOperationGuid(context, request.OperationGuid, request.OperationName, error);
-    if (!operationGuid.IsValid()) {
+    if (!CKGuidIsValid(operationGuid)) {
         return nullptr;
     }
 
-    CKGUID resultGuid = request.ResultTypeGuid.IsValid()
+    CKGUID resultGuid = CKGuidIsValid(request.ResultTypeGuid)
         ? request.ResultTypeGuid
         : (!request.ResultTypeName.empty()
             ? ScriptResolveParameterGuid(context, request.ResultTypeName)
             : targetParam->GetGUID());
-    if (!resultGuid.IsValid() || resultGuid == CKPGUID_NONE) {
+    if (!CKGuidIsValid(resultGuid) || resultGuid == CKPGUID_NONE) {
         resultGuid = targetParam->GetGUID();
     }
 

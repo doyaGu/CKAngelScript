@@ -954,7 +954,7 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
 
 bool ScriptBehaviorBridge::ResolvePrototype(const ScriptBridgeBBInvocationSpec &request, CKGUID &guid, std::string &error) const {
     if (request.PrototypeKind == ScriptBridgePrototypeKind::Guid) {
-        if (!request.Guid.IsValid()) {
+        if (!CKGuidIsValid(request.Guid)) {
             error = "Building Block GUID is invalid.";
             return false;
         }
@@ -1010,6 +1010,7 @@ int ScriptBehaviorBridge::ExecuteRuntimeBehavior(CKBehavior *behavior, const CKB
     }
 
     CKContext *context = m_Manager->GetCKContext();
+#if CKVERSION == 0x13022002
     CKBehaviorContext savedContext = context->m_BehaviorContext;
     CKBehaviorManager *behaviorManager = context->GetBehaviorManager();
     CKBehavior *savedCurrent = behaviorManager ? behaviorManager->m_CurrentBehavior : nullptr;
@@ -1023,6 +1024,9 @@ int ScriptBehaviorBridge::ExecuteRuntimeBehavior(CKBehavior *behavior, const CKB
     }
 
     return rc;
+#else
+    return behavior->Execute(ctx.DeltaTime);
+#endif
 }
 
 ScriptBridgeExecutionState ScriptBehaviorBridge::ExecuteOnce(CKBehavior *behavior,

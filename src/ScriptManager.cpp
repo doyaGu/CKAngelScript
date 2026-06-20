@@ -2573,8 +2573,9 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
         const char *typeName = type->GetName();
         const char *typeNamespace = type->GetNamespace();
         const std::string typeDeclaration = typeName ? typeName : "";
+        const int rawTypeMetadataCount = cached->GetTypeMetadataCount(typeId);
         const CKDWORD typeMetadataCount =
-            static_cast<CKDWORD>(std::max(0, cached->GetTypeMetadataCount(typeId)));
+            static_cast<CKDWORD>(XMax(0, rawTypeMetadataCount));
         if (typeMetadataCount > 0) {
             CKAngelScriptMetadataEntry entry = {};
             entry.Size = sizeof(entry);
@@ -2598,8 +2599,9 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
         const asUINT methodCount = type->GetMethodCount();
         for (asUINT methodIndex = 0; methodIndex < methodCount; ++methodIndex) {
             asIScriptFunction *method = type->GetMethodByIndex(methodIndex);
+            const int rawMetadataCount = cached->GetClassMethodMetadataCount(typeId, method);
             const CKDWORD metadataCount =
-                static_cast<CKDWORD>(std::max(0, cached->GetClassMethodMetadataCount(typeId, method)));
+                static_cast<CKDWORD>(XMax(0, rawMetadataCount));
             if (!method || metadataCount == 0) {
                 continue;
             }
@@ -2627,8 +2629,9 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
 
         const asUINT propertyCount = type->GetPropertyCount();
         for (asUINT propertyIndex = 0; propertyIndex < propertyCount; ++propertyIndex) {
+            const int rawMetadataCount = cached->GetClassVarMetadataCount(typeId, static_cast<int>(propertyIndex));
             const CKDWORD metadataCount =
-                static_cast<CKDWORD>(std::max(0, cached->GetClassVarMetadataCount(typeId, static_cast<int>(propertyIndex))));
+                static_cast<CKDWORD>(XMax(0, rawMetadataCount));
             if (metadataCount == 0) {
                 continue;
             }
@@ -2662,8 +2665,9 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
     const asUINT functionCount = module->GetFunctionCount();
     for (asUINT functionIndex = 0; functionIndex < functionCount; ++functionIndex) {
         asIScriptFunction *function = module->GetFunctionByIndex(functionIndex);
+        const int rawMetadataCount = cached->GetFuncMetadataCount(function);
         const CKDWORD metadataCount =
-            static_cast<CKDWORD>(std::max(0, cached->GetFuncMetadataCount(function)));
+            static_cast<CKDWORD>(XMax(0, rawMetadataCount));
         if (!function || metadataCount == 0) {
             continue;
         }
@@ -2689,8 +2693,9 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
 
     const asUINT globalCount = module->GetGlobalVarCount();
     for (asUINT globalIndex = 0; globalIndex < globalCount; ++globalIndex) {
+        const int rawMetadataCount = cached->GetVarMetadataCount(static_cast<int>(globalIndex));
         const CKDWORD metadataCount =
-            static_cast<CKDWORD>(std::max(0, cached->GetVarMetadataCount(static_cast<int>(globalIndex))));
+            static_cast<CKDWORD>(XMax(0, rawMetadataCount));
         if (metadataCount == 0) {
             continue;
         }

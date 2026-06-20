@@ -1,6 +1,7 @@
 #include "ScriptCKObjects.h"
 
-#include <limits>
+#include <limits.h>
+#include <stdint.h>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -63,8 +64,8 @@ bool GetCKLayerSquareArraySize(CKLayer *layer, const char *method, size_t &size)
 
     const size_t w = static_cast<size_t>(width);
     const size_t l = static_cast<size_t>(length);
-    if (w > std::numeric_limits<size_t>::max() / l ||
-        w * l > std::numeric_limits<size_t>::max() / sizeof(CKSquare)) {
+    if (w > SIZE_MAX / l ||
+        w * l > SIZE_MAX / sizeof(CKSquare)) {
         SetCKLayerException((std::string(method) + " square-array size overflowed.").c_str());
         return false;
     }
@@ -1157,7 +1158,7 @@ static bool CKRenderContextDrawPrimitiveBuffer(CKRenderContext *self,
         return false;
     }
     size_t required = 0;
-    if (indexCount > 0 && static_cast<size_t>(indexCount) > std::numeric_limits<size_t>::max() / sizeof(CKWORD)) {
+    if (indexCount > 0 && static_cast<size_t>(indexCount) > SIZE_MAX / sizeof(CKWORD)) {
         SetCKLayerException("CKRenderContext.DrawPrimitive index buffer size overflowed.");
         return false;
     }
@@ -2476,6 +2477,7 @@ void RegisterCKGroup(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKGroup", "CK_CLASSID GetCommonClassID()", asMETHODPR(CKGroup, GetCommonClassID, (), CK_CLASSID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
+#if CKVERSION == 0x13022002 || CKVERSION == 0x05082002
 static void SetCKMaterialCallback(CKMaterial *self, NativePointer fct, NativePointer argument) {
     if (!self) {
         if (asIScriptContext *ctx = asGetActiveContext()) {
@@ -2510,6 +2512,7 @@ static NativePointer GetCKMaterialCallback(CKMaterial *self, NativePointer *argu
     }
     return NativePointer(reinterpret_cast<void *>(callback));
 }
+#endif
 
 void RegisterCKMaterial(asIScriptEngine *engine) {
     assert(engine != nullptr);
@@ -2592,7 +2595,7 @@ void RegisterCKMaterial(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMaterial", "CKBYTE GetAlphaRef() const", asMETHODPR(CKMaterial, GetAlphaRef, (), CKBYTE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMaterial", "void SetAlphaRef(CKBYTE alphaRef = 0)", asMETHODPR(CKMaterial, SetAlphaRef, (CKBYTE), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-#if CKVERSION != 0x26052005
+#if CKVERSION == 0x13022002 || CKVERSION == 0x05082002
     r = engine->RegisterObjectMethod("CKMaterial", "void SetCallback(NativePointer fct, NativePointer argument)", asFUNCTION(SetCKMaterialCallback), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKMaterial", "NativePointer GetCallback(NativePointer &out argument = void)", asFUNCTION(GetCKMaterialCallback), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
@@ -2618,8 +2621,8 @@ static bool ComputeCKBitmapDataImageByteSize(int width, int height, int bitsPerP
     const size_t w = static_cast<size_t>(width);
     const size_t h = static_cast<size_t>(height);
     const size_t bpp = static_cast<size_t>(bitsPerPixel);
-    if (w > std::numeric_limits<size_t>::max() / h ||
-        w * h > (std::numeric_limits<size_t>::max() - 7) / bpp) {
+    if (w > SIZE_MAX / h ||
+        w * h > (SIZE_MAX - 7) / bpp) {
         SetCKBitmapDataException((std::string(method) + " image byte size overflowed.").c_str());
         return false;
     }
@@ -2644,7 +2647,7 @@ static bool ComputeCKBitmapDataDescByteSize(const VxImageDescEx &desc, const cha
         }
         const size_t h = static_cast<size_t>(desc.Height);
         const size_t p = static_cast<size_t>(pitch);
-        if (p > std::numeric_limits<size_t>::max() / h) {
+        if (p > SIZE_MAX / h) {
             SetCKBitmapDataException((std::string(method) + " image byte size overflowed.").c_str());
             return false;
         }
@@ -3494,7 +3497,7 @@ static CKERROR WriteCKWaveSoundNativeBuffer(CKWaveSound *self, NativeBuffer *buf
         SetCKWaveSoundException("CKWaveSound.WriteData called with a null sound.");
         return CKERR_INVALIDPARAMETER;
     }
-    if (!buffer || buffer->Size() > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+    if (!buffer || buffer->Size() > static_cast<size_t>(INT_MAX) ||
         (buffer->Size() > 0 && !buffer->Data())) {
         SetCKWaveSoundException("CKWaveSound.WriteData requires a valid NativeBuffer.");
         return CKERR_INVALIDPARAMETER;

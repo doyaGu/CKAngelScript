@@ -762,8 +762,9 @@ bool ParseScriptGuidString(const std::string &value, CKGUID &guid) {
     while (offset <= text.size()) {
         const std::size_t comma = text.find(',', offset);
         const std::size_t space = text.find_first_of(" \t\r\n", offset);
-        std::size_t end = std::min(comma == std::string::npos ? text.size() : comma,
-                                   space == std::string::npos ? text.size() : space);
+        const std::size_t commaEnd = comma == std::string::npos ? text.size() : comma;
+        const std::size_t spaceEnd = space == std::string::npos ? text.size() : space;
+        std::size_t end = XMin(commaEnd, spaceEnd);
         const std::string token = ScriptParamCodecInternal::TrimString(text.substr(offset, end - offset));
         if (!token.empty()) {
             tokens.push_back(token);

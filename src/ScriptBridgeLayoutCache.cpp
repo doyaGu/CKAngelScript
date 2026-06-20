@@ -1,6 +1,7 @@
 #include "ScriptBridgeHandles.h"
 
 #include <functional>
+#include <limits.h>
 
 #include <fmt/format.h>
 
@@ -21,7 +22,7 @@ void AppendLayoutSignature(std::string &signature, const CKGUID &guid) {
 }
 
 int LayoutGenerationFromSignature(const std::string &signature) {
-    return static_cast<int>(std::hash<std::string>{}(signature) & 0x7fffffff);
+    return static_cast<int>(std::hash<std::string>{}(signature) & static_cast<size_t>(INT_MAX));
 }
 
 bool BehaviorFlagSet(CKDWORD flags, CKDWORD flag) {

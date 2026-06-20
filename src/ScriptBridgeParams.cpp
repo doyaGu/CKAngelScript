@@ -43,14 +43,14 @@ const ScriptParamValue &ParamValue::Value() const { return m_Value; }
 bool ParamValue::IsValid() const { return m_Value.Kind != ScriptParamValueKind::Empty; }
 
 CKGUID ParamValue::TypeGuid() const {
-    return m_Value.TypeGuid.IsValid() ? m_Value.TypeGuid : ScriptParameterGuidForValue(m_Value);
+    return CKGuidIsValid(m_Value.TypeGuid) ? m_Value.TypeGuid : ScriptParameterGuidForValue(m_Value);
 }
 
 std::string ParamValue::TypeName() const {
     if (!m_Value.TypeNameText().empty()) {
         return m_Value.TypeNameText();
     }
-    return TypeGuid().IsValid() ? GuidToString(TypeGuid()) : std::string();
+    return CKGuidIsValid(TypeGuid()) ? GuidToString(TypeGuid()) : std::string();
 }
 
 int ParamValue::AsInt() const {
@@ -151,7 +151,7 @@ ParamStructValue::ParamStructValue(const ScriptParamValue &value)
     : m_Value(value) {}
 
 bool ParamStructValue::IsValid() const {
-    return m_Value.Kind == ScriptParamValueKind::Struct && m_Value.TypeGuid.IsValid();
+    return m_Value.Kind == ScriptParamValueKind::Struct && CKGuidIsValid(m_Value.TypeGuid);
 }
 
 CKGUID ParamStructValue::TypeGuid() const { return m_Value.TypeGuid; }
@@ -160,7 +160,7 @@ std::string ParamStructValue::TypeName() const {
     if (!m_Value.TypeNameText().empty()) {
         return m_Value.TypeNameText();
     }
-    return m_Value.TypeGuid.IsValid() ? GuidToString(m_Value.TypeGuid) : std::string();
+    return CKGuidIsValid(m_Value.TypeGuid) ? GuidToString(m_Value.TypeGuid) : std::string();
 }
 
 ParamStructValue *ParamStructValue::Set(int index, ParamValue *value) {
@@ -197,7 +197,7 @@ ParamValue *ParamStructValue::AsValue() const {
 
 std::string ParamStructValue::Describe() const {
     return fmt::format("ParamStructValue type={} members={}",
-                       m_Value.TypeGuid.IsValid() ? GuidToString(m_Value.TypeGuid) : std::string("<unknown>"),
+                       CKGuidIsValid(m_Value.TypeGuid) ? GuidToString(m_Value.TypeGuid) : std::string("<unknown>"),
                        m_Value.StructMembers().size());
 }
 
@@ -1081,11 +1081,11 @@ std::string ParamOp::Describe() const {
     CKParameterManager *pm = m_Context ? m_Context->GetParameterManager() : nullptr;
     std::string error;
     const CKGUID guid = ResolveOperationGuid(m_Context, m_Request.OperationGuid, m_Request.OperationName, error);
-    CKSTRING name = pm && guid.IsValid() ? pm->OperationGuidToName(guid) : nullptr;
+    CKSTRING name = pm && CKGuidIsValid(guid) ? pm->OperationGuidToName(guid) : nullptr;
     return fmt::format("ParamOp '{}' guid={} result={}",
         name && name[0] ? name : m_Request.OperationName,
-        guid.IsValid() ? GuidToString(guid) : std::string("<unresolved>"),
-        m_Request.ResultTypeGuid.IsValid() ? GuidToString(m_Request.ResultTypeGuid) : m_Request.ResultTypeName);
+        CKGuidIsValid(guid) ? GuidToString(guid) : std::string("<unresolved>"),
+        CKGuidIsValid(m_Request.ResultTypeGuid) ? GuidToString(m_Request.ResultTypeGuid) : m_Request.ResultTypeName);
 }
 
 ScriptBridgeOperationInput *ParamOp::Slot(int slot) {

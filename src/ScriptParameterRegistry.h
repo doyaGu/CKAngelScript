@@ -7,7 +7,7 @@
 
 #include <angelscript.h>
 
-#include "CKTypes.h"
+#include "CKAngelScript.h"
 #include "ScriptRefCounted.h"
 
 class CKContext;
