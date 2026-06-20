@@ -14413,6 +14413,32 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
         "  if (pm is null) return 3;\n"
         "  return 0;\n"
         "}\n"
+        "int ProbeCopiedParameterTypeDescClears(CKContext@ ctx) {\n"
+        "  CKParameterManager@ pm = ctx.GetParameterManager();\n"
+        "  if (pm is null) return 1;\n"
+        "  CKParameterTypeDesc desc = pm.GetParameterTypeDescription(CKPGUID_INT);\n"
+        "  NativePointer empty;\n"
+        "  desc.CreatorDll = empty;\n"
+        "  desc.CreateDefaultFunction = empty;\n"
+        "  desc.DeleteFunction = empty;\n"
+        "  desc.SaveLoadFunction = empty;\n"
+        "  desc.CheckFunction = empty;\n"
+        "  desc.CopyFunction = empty;\n"
+        "  desc.StringFunction = empty;\n"
+        "  desc.UICreatorFunction = empty;\n"
+        "  if (!desc.CreatorDll.IsNull()) return 2;\n"
+        "  if (!desc.CreateDefaultFunction.IsNull() || !desc.DeleteFunction.IsNull()) return 3;\n"
+        "  if (!desc.SaveLoadFunction.IsNull() || !desc.CheckFunction.IsNull()) return 4;\n"
+        "  if (!desc.CopyFunction.IsNull() || !desc.StringFunction.IsNull() || !desc.UICreatorFunction.IsNull()) return 5;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCopiedParameterTypeRegister(CKContext@ ctx) {\n"
+        "  CKParameterManager@ pm = ctx.GetParameterManager();\n"
+        "  CKParameterTypeDesc desc = pm.GetParameterTypeDescription(CKPGUID_INT);\n"
+        "  desc.Guid = CKGUID(0x72656770, 0x74797065);\n"
+        "  desc.TypeName = \"__CKAS_UnsafeCopiedParameterType\";\n"
+        "  pm.RegisterParameterType(desc);\n"
+        "}\n"
         "int ProbeMissingParameterType(CKContext@ ctx) {\n"
         "  CKParameterManager@ pm = ctx.GetParameterManager();\n"
         "  pm.GetParameterTypeDescription(-2147483647);\n"
@@ -14491,6 +14517,8 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
     }
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeParameterTypeDesc(CKContext@)");
+    asIScriptFunction *clearCopied = module->GetFunctionByDecl("int ProbeCopiedParameterTypeDescClears(CKContext@)");
+    asIScriptFunction *rejectCopiedRegister = module->GetFunctionByDecl("void RejectCopiedParameterTypeRegister(CKContext@)");
     asIScriptFunction *missingType = module->GetFunctionByDecl("int ProbeMissingParameterType(CKContext@)");
     asIScriptFunction *missingGuid = module->GetFunctionByDecl("int ProbeMissingParameterGuid(CKContext@)");
     asIScriptFunction *operationGuidInputs = module->GetFunctionByDecl("int ProbeOperationFunctionGuidInputs(CKContext@)");
@@ -14504,7 +14532,7 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
     asIScriptFunction *rejectCopy = module->GetFunctionByDecl("void RejectParameterTypeCopyFunction(CKContext@)");
     asIScriptFunction *rejectString = module->GetFunctionByDecl("void RejectParameterTypeStringFunction(CKContext@)");
     asIScriptFunction *rejectUICreator = module->GetFunctionByDecl("void RejectParameterTypeUICreatorFunction(CKContext@)");
-    if (!probe || !missingType || !missingGuid || !operationGuidInputs || !rejectOperationFunction || !operationDescriptions || !rejectCreatorDll || !rejectCreateDefault ||
+    if (!probe || !clearCopied || !rejectCopiedRegister || !missingType || !missingGuid || !operationGuidInputs || !rejectOperationFunction || !operationDescriptions || !rejectCreatorDll || !rejectCreateDefault ||
         !rejectDelete || !rejectSaveLoad || !rejectCheck || !rejectCopy || !rejectString || !rejectUICreator) {
         engine->DiscardModule(moduleName);
         error = "CKParameterTypeDesc self-test functions were not found.";
@@ -14512,6 +14540,7 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
     }
 
     bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKParameterTypeDesc CreatorDll probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, clearCopied, context, false, "CKParameterTypeDesc copied callback clear probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, missingType, context, true, "CKParameterTypeDesc missing type probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, missingGuid, context, true, "CKParameterTypeDesc missing guid probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, operationGuidInputs, context, false, "CKParameterManager operation GUID input probe", error) &&
@@ -14525,6 +14554,24 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
               ExecuteCKParameterTypeDescProbe(engine, rejectCopy, context, true, "CKParameterTypeDesc CopyFunction rejection probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, rejectString, context, true, "CKParameterTypeDesc StringFunction rejection probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, rejectUICreator, context, true, "CKParameterTypeDesc UICreatorFunction rejection probe", error);
+
+    if (ok) {
+        if (CKParameterManager *pm = context->GetParameterManager()) {
+            if (CKParameterTypeDesc *desc = pm->GetParameterTypeDescription(CKPGUID_INT)) {
+                const bool hasNativeCallbacks = desc->CreatorDll ||
+                                                desc->CreateDefaultFunction ||
+                                                desc->DeleteFunction ||
+                                                desc->SaveLoadFunction ||
+                                                desc->CheckFunction ||
+                                                desc->CopyFunction ||
+                                                desc->StringFunction ||
+                                                desc->UICreatorFunction;
+                if (hasNativeCallbacks) {
+                    ok = ExecuteCKParameterTypeDescProbe(engine, rejectCopiedRegister, context, true, "CKParameterTypeDesc unsafe copied registration probe", error);
+                }
+            }
+        }
+    }
 
     engine->DiscardModule(moduleName);
     return ok;

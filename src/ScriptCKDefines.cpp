@@ -1844,43 +1844,75 @@ void RegisterCKStructStruct(asIScriptEngine *engine) {
 // CKParameterTypeDesc
 
 static void SetCKParameterTypeDescCreatorDll(CKParameterTypeDesc *self, NativePointer ptr) {
-    (void)self;
-    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CreatorDll is read-only from script.");
+    if (RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CreatorDll only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->CreatorDll = nullptr;
+    }
 }
 
 static void SetCKParameterTypeDescCreateDefaultFunction(CKParameterTypeDesc *self, NativePointer ptr) {
-    (void)self;
-    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CreateDefaultFunction is read-only from script.");
+    if (RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CreateDefaultFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->CreateDefaultFunction = nullptr;
+    }
 }
 
 static void SetCKParameterTypeDescDeleteFunction(CKParameterTypeDesc *self, NativePointer ptr) {
-    (void)self;
-    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.DeleteFunction is read-only from script.");
+    if (RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.DeleteFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->DeleteFunction = nullptr;
+    }
 }
 
 static void SetCKParameterTypeDescSaveLoadFunction(CKParameterTypeDesc *self, NativePointer ptr) {
-    (void)self;
-    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.SaveLoadFunction is read-only from script.");
+    if (RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.SaveLoadFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->SaveLoadFunction = nullptr;
+    }
 }
 
 static void SetCKParameterTypeDescCheckFunction(CKParameterTypeDesc *self, NativePointer ptr) {
-    (void)self;
-    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CheckFunction is read-only from script.");
+    if (RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CheckFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->CheckFunction = nullptr;
+    }
 }
 
 static void SetCKParameterTypeDescCopyFunction(CKParameterTypeDesc *self, NativePointer ptr) {
-    (void)self;
-    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CopyFunction is read-only from script.");
+    if (RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.CopyFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->CopyFunction = nullptr;
+    }
 }
 
 static void SetCKParameterTypeDescStringFunction(CKParameterTypeDesc *self, NativePointer ptr) {
-    (void)self;
-    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.StringFunction is read-only from script.");
+    if (RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.StringFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->StringFunction = nullptr;
+    }
 }
 
 static void SetCKParameterTypeDescUICreatorFunction(CKParameterTypeDesc *self, NativePointer ptr) {
-    (void)self;
-    RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.UICreatorFunction is read-only from script.");
+    if (RejectNativeFunctionPointerInstall(ptr, "CKParameterTypeDesc.UICreatorFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->UICreatorFunction = nullptr;
+    }
 }
 
 void RegisterCKParameterTypeDesc(asIScriptEngine *engine) {

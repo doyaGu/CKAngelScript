@@ -977,6 +977,29 @@ static CKParameterTypeDesc &GetCKParameterTypeDescriptionByGuid(CKParameterManag
     return MissingCKParameterTypeDesc("CKParameterManager.GetParameterTypeDescription did not find a matching parameter type.");
 }
 
+static bool CKParameterTypeDescHasNativeCallbacks(const CKParameterTypeDesc *type) {
+    return type &&
+           (type->CreatorDll ||
+            type->CreateDefaultFunction ||
+            type->DeleteFunction ||
+            type->SaveLoadFunction ||
+            type->CheckFunction ||
+            type->CopyFunction ||
+            type->StringFunction ||
+            type->UICreatorFunction);
+}
+
+static CKERROR RegisterScriptParameterType(CKParameterManager *self, CKParameterTypeDesc *type) {
+    if (!self || !type) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (CKParameterTypeDescHasNativeCallbacks(type)) {
+        SetActiveScriptException("CKParameterManager.RegisterParameterType does not accept CKParameterTypeDesc values with native callback pointers; clear them first.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->RegisterParameterType(type);
+}
+
 static CKFlagsStruct &GetCKFlagsDescByType(CKParameterManager *self, CKParameterType type) {
     if (self) {
         if (CKFlagsStruct *desc = self->GetFlagsDescByType(type)) {
@@ -1272,7 +1295,7 @@ void RegisterCKParameterManager(asIScriptEngine *engine) {
 
     RegisterCKBaseManagerMembers<CKParameterManager>(engine, "CKParameterManager");
 
-    r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR RegisterParameterType(CKParameterTypeDesc &in type)", asMETHODPR(CKParameterManager, RegisterParameterType, (CKParameterTypeDesc*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR RegisterParameterType(CKParameterTypeDesc &in type)", asFUNCTION(RegisterScriptParameterType), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "CKERROR UnRegisterParameterType(CKGUID guid)", asMETHODPR(CKParameterManager, UnRegisterParameterType, (CKGUID), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "CKParameterTypeDesc &GetParameterTypeDescription(int type)", asFUNCTION(GetCKParameterTypeDescriptionByType), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKParameterManager", "CKParameterTypeDesc &GetParameterTypeDescription(CKGUID guid)", asFUNCTION(GetCKParameterTypeDescriptionByGuid), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
