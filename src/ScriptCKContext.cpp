@@ -1,6 +1,7 @@
 #include "ScriptCKContext.h"
 
 #include <cassert>
+#include <limits>
 #include <string>
 
 #include "angelscript.h"
@@ -8,6 +9,7 @@
 #include "CKContext.h"
 
 #include "ScriptUtils.h"
+#include "ScriptNativeBuffer.h"
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
 #include "ScriptCKVertexBuffer.h"
@@ -34,6 +36,28 @@ static bool ValidateCKContextMemoryBuffer(CKContext *self, int size, NativePoint
     return true;
 }
 
+static bool ValidateCKContextNativeBuffer(CKContext *self, NativeBuffer *buffer, const char *method, int &size) {
+    size = 0;
+    if (!self) {
+        SetCKContextException("CKContext method called with a null context.");
+        return false;
+    }
+    if (!buffer) {
+        SetCKContextException((std::string(method) + " requires a NativeBuffer.").c_str());
+        return false;
+    }
+    if (buffer->Size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        SetCKContextException((std::string(method) + " NativeBuffer is too large for the Virtools memory-load API.").c_str());
+        return false;
+    }
+    if (buffer->Size() > 0 && !buffer->Data()) {
+        SetCKContextException((std::string(method) + " requires a valid NativeBuffer data pointer.").c_str());
+        return false;
+    }
+    size = static_cast<int>(buffer->Size());
+    return true;
+}
+
 static CKERROR ClearCKContextAll(CKContext *self) {
     if (!self) {
         return CKERR_INVALIDPARAMETER;
@@ -53,6 +77,17 @@ static CKERROR LoadCKContextFromBuffer(CKContext *self,
     return self->Load(size, buffer.Get(), objects, loadFlags);
 }
 
+static CKERROR LoadCKContextFromNativeBuffer(CKContext *self,
+                                             NativeBuffer *buffer,
+                                             CKObjectArray *objects,
+                                             CK_LOAD_FLAGS loadFlags) {
+    int size = 0;
+    if (!ValidateCKContextNativeBuffer(self, buffer, "CKContext.Load", size)) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->Load(size, size > 0 ? buffer->Data() : nullptr, objects, loadFlags);
+}
+
 static CKERROR GetCKContextFileInfoFromBuffer(CKContext *self,
                                               int size,
                                               NativePointer buffer,
@@ -61,6 +96,16 @@ static CKERROR GetCKContextFileInfoFromBuffer(CKContext *self,
         return CKERR_INVALIDPARAMETER;
     }
     return self->GetFileInfo(size, buffer.Get(), fileInfo);
+}
+
+static CKERROR GetCKContextFileInfoFromNativeBuffer(CKContext *self,
+                                                   NativeBuffer *buffer,
+                                                   CKFileInfo *fileInfo) {
+    int size = 0;
+    if (!ValidateCKContextNativeBuffer(self, buffer, "CKContext.GetFileInfo", size)) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->GetFileInfo(size, size > 0 ? buffer->Data() : nullptr, fileInfo);
 }
 
 static CKERROR LoadCKContextAnimationOnCharacterFromBuffer(CKContext *self,
@@ -73,6 +118,18 @@ static CKERROR LoadCKContextAnimationOnCharacterFromBuffer(CKContext *self,
         return CKERR_INVALIDPARAMETER;
     }
     return self->LoadAnimationOnCharacter(size, buffer.Get(), objects, character, asDynamicObjects);
+}
+
+static CKERROR LoadCKContextAnimationOnCharacterFromNativeBuffer(CKContext *self,
+                                                                NativeBuffer *buffer,
+                                                                CKObjectArray *objects,
+                                                                CKCharacter *character,
+                                                                bool asDynamicObjects) {
+    int size = 0;
+    if (!ValidateCKContextNativeBuffer(self, buffer, "CKContext.LoadAnimationOnCharacter", size)) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->LoadAnimationOnCharacter(size, size > 0 ? buffer->Data() : nullptr, objects, character, asDynamicObjects);
 }
 
 void RegisterCKContext(asIScriptEngine *engine) {
@@ -219,14 +276,17 @@ void RegisterCKContext(asIScriptEngine *engine) {
     // Save/Load functions
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Load(const string &in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT, CKGUID &in readerGuid = void)", asFUNCTIONPR([](CKContext *self, const std::string &fileName, CKObjectArray *objects, CK_LOAD_FLAGS loadFlags, CKGUID *readerGuid) { return self->Load(const_cast<CKSTRING>(fileName.c_str()), objects, loadFlags, readerGuid); }, (CKContext *, const std::string &, CKObjectArray *, CK_LOAD_FLAGS, CKGUID *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Load(int size, NativePointer buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)", asFUNCTION(LoadCKContextFromBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR Load(NativeBuffer@ buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)", asFUNCTION(LoadCKContextFromNativeBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "string GetLastFileLoaded()", asFUNCTIONPR([](CKContext *self) -> std::string { return ScriptStringify(self->GetLastFileLoaded()); }, (CKContext *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "string GetLastCmoLoaded()", asFUNCTIONPR([](CKContext *self) -> std::string { return ScriptStringify(self->GetLastCmoLoaded()); }, (CKContext *), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "void SetLastCmoLoaded(const string &in str)", asFUNCTIONPR([](CKContext *self, const std::string &str) { self->SetLastCmoLoaded(const_cast<CKSTRING>(str.c_str())); }, (CKContext *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR GetFileInfo(const string &in fileName, CKFileInfo &out fileInfo)", asFUNCTIONPR([](CKContext *self, const std::string &fileName, CKFileInfo *fileInfo) { return self->GetFileInfo(const_cast<CKSTRING>(fileName.c_str()), fileInfo); }, (CKContext *, const std::string &, CKFileInfo *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR GetFileInfo(int size, NativePointer buffer, CKFileInfo &out fileInfo)", asFUNCTION(GetCKContextFileInfoFromBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR GetFileInfo(NativeBuffer@ buffer, CKFileInfo &out fileInfo)", asFUNCTION(GetCKContextFileInfoFromNativeBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR Save(const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags, CKDependencies &in dependencies = void, CKGUID &in readerGuid = void)", asFUNCTIONPR([](CKContext *self, const std::string &fileName, CKObjectArray *objects, CKDWORD saveFlags, CKDependencies *dependencies, CKGUID *readerGuid) { return self->Save(const_cast<CKSTRING>(fileName.c_str()), objects, saveFlags, dependencies, readerGuid); }, (CKContext *, const std::string &, CKObjectArray *, CKDWORD, CKDependencies *, CKGUID *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR LoadAnimationOnCharacter(const string &in fileName, CKObjectArray@ objects, CKCharacter@ carac, CKGUID &in readerGuid = void, bool asDynamicObjects = false)", asFUNCTIONPR([](CKContext *self, const std::string &fileName, CKObjectArray *objects, CKCharacter *carac, CKGUID *readerGuid, bool asDynamicObjects) { return self->LoadAnimationOnCharacter(const_cast<CKSTRING>(fileName.c_str()), objects, carac, readerGuid, asDynamicObjects); }, (CKContext *, const std::string &, CKObjectArray *, CKCharacter *, CKGUID *, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "CKERROR LoadAnimationOnCharacter(int size, NativePointer buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)", asFUNCTION(LoadCKContextAnimationOnCharacterFromBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKERROR LoadAnimationOnCharacter(NativeBuffer@ buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)", asFUNCTION(LoadCKContextAnimationOnCharacterFromNativeBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // r = engine->RegisterObjectMethod("CKContext", "void SetAutomaticLoadMode(CK_LOADMODE generalMode, CK_LOADMODE _3DObjectsMode, CK_LOADMODE meshMode, CK_LOADMODE matTexturesMode)", asMETHODPR(CKContext, SetAutomaticLoadMode, (CK_LOADMODE, CK_LOADMODE, CK_LOADMODE, CK_LOADMODE), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKContext", "void SetUserLoadCallback(uintptr_t, uintptr_t)", asMETHODPR(CKContext, SetUserLoadCallback, (CK_USERLOADCALLBACK, void *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

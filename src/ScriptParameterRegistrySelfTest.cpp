@@ -7225,8 +7225,11 @@ bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         contextType->GetMethodByDecl("CKERROR DestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)") == nullptr ||
         contextType->GetMethodByDecl("CKObject@ GetObject(CK_ID id)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR Load(int size, NativePointer buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR Load(NativeBuffer@ buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR GetFileInfo(int size, NativePointer buffer, CKFileInfo &out fileInfo)") == nullptr ||
-        contextType->GetMethodByDecl("CKERROR LoadAnimationOnCharacter(int size, NativePointer buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)") == nullptr) {
+        contextType->GetMethodByDecl("CKERROR GetFileInfo(NativeBuffer@ buffer, CKFileInfo &out fileInfo)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR LoadAnimationOnCharacter(int size, NativePointer buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR LoadAnimationOnCharacter(NativeBuffer@ buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)") == nullptr) {
         error = "CKContext self-test could not find expected object and guarded buffer methods.";
         return false;
     }
@@ -7255,6 +7258,15 @@ bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         "  if (ctx.DestroyObject(obj, 0, deps) != CK_OK) return 15;\n"
         "  if (ctx.GetObject(id) !is null) return 16;\n"
         "  if (ctx.GetObjectCount() > beforeCount + 1) return 17;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKContextNativeBufferLoaders(CKContext@ ctx) {\n"
+        "  NativeBuffer@ bytes = NativeBuffer(1);\n"
+        "  bytes.WriteUChar(0);\n"
+        "  if (ctx.Load(bytes, null) == CK_OK) return 20;\n"
+        "  CKFileInfo info;\n"
+        "  if (ctx.GetFileInfo(bytes, info) == CK_OK) return 21;\n"
+        "  if (ctx.LoadAnimationOnCharacter(bytes, null, null) == CK_OK) return 22;\n"
         "  return 0;\n"
         "}\n"
         "void ProbeCKContextLoadNullBuffer(CKContext@ ctx) {\n"
@@ -7288,16 +7300,18 @@ bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
     }
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKContextSurface(CKContext@)");
+    asIScriptFunction *bufferLoaders = module->GetFunctionByDecl("int ProbeCKContextNativeBufferLoaders(CKContext@)");
     asIScriptFunction *loadNull = module->GetFunctionByDecl("void ProbeCKContextLoadNullBuffer(CKContext@)");
     asIScriptFunction *fileInfoNull = module->GetFunctionByDecl("void ProbeCKContextFileInfoNullBuffer(CKContext@)");
     asIScriptFunction *animationNull = module->GetFunctionByDecl("void ProbeCKContextAnimationNullBuffer(CKContext@)");
-    if (!probe || !loadNull || !fileInfoNull || !animationNull) {
+    if (!probe || !bufferLoaders || !loadNull || !fileInfoNull || !animationNull) {
         engine->DiscardModule(moduleName);
         error = "CKContext self-test functions were not found.";
         return false;
     }
 
     const bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKContext surface probe", error) &&
+                    ExecuteCKParameterTypeDescProbe(engine, bufferLoaders, context, false, "CKContext NativeBuffer loader probe", error) &&
                     ExecuteCKParameterTypeDescProbe(engine, loadNull, context, true, "CKContext Load null-buffer probe", error) &&
                     ExecuteCKParameterTypeDescProbe(engine, fileInfoNull, context, true, "CKContext GetFileInfo null-buffer probe", error) &&
                     ExecuteCKParameterTypeDescProbe(engine, animationNull, context, true, "CKContext LoadAnimationOnCharacter null-buffer probe", error);
