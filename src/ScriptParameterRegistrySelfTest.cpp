@@ -11164,6 +11164,17 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBehaviorPrototype self-test could not find expected guarded parameter declaration overloads.";
         return false;
     }
+    asITypeInfo *parameterDescType = engine->GetTypeInfoByDecl("CKPARAMETER_DESC");
+    if (!parameterDescType) {
+        error = "CKBehaviorPrototype self-test could not find CKPARAMETER_DESC.";
+        return false;
+    }
+    if (parameterDescType->GetMethodByDecl("NativePointer get_DefaultValue() const") == nullptr ||
+        parameterDescType->GetMethodByDecl("void set_DefaultValue(NativePointer ptr)") == nullptr ||
+        parameterDescType->GetMethodByDecl("bool SetDefaultValue(NativeBuffer@ data)") == nullptr) {
+        error = "CKPARAMETER_DESC self-test could not find guarded DefaultValue methods.";
+        return false;
+    }
 #if CKVERSION == 0x13022002
     asITypeInfo *behaviorIoDescType = engine->GetTypeInfoByDecl("CKBEHAVIORIO_DESC");
     if (!behaviorIoDescType) {
@@ -11217,6 +11228,30 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         "  proto.DeclareSetting(\"Setting\", CKPGUID_BOOL);\n"
         "  proto.DeclareSetting(\"SettingText\", CKPGUID_STRING, \"text\");\n"
         "  proto.DeclareSetting(\"SettingRaw\", CKPGUID_BOOL, empty, 0);\n"
+        "}\n";
+    const char *parameterDescSource =
+        "int ProbeCKParameterDescDefaultValue() {\n"
+        "  CKPARAMETER_DESC desc;\n"
+        "  if (!desc.DefaultValue.IsNull() || desc.DefaultValueSize != 0) return 1;\n"
+        "  NativeBuffer@ data = NativeBuffer(4);\n"
+        "  if (data.WriteInt(123) != 4) return 2;\n"
+        "  if (!desc.SetDefaultValue(data)) return 3;\n"
+        "  if (desc.DefaultValue.IsNull() || desc.DefaultValueSize != 4) return 4;\n"
+        "  CKPARAMETER_DESC copied(desc);\n"
+        "  if (copied.DefaultValue.IsNull() || copied.DefaultValueSize != 4) return 5;\n"
+        "  NativePointer empty;\n"
+        "  desc.DefaultValue = empty;\n"
+        "  if (!desc.DefaultValue.IsNull() || desc.DefaultValueSize != 0) return 6;\n"
+        "  if (copied.DefaultValue.IsNull() || copied.DefaultValueSize != 4) return 7;\n"
+        "  if (!desc.SetDefaultValue(null)) return 8;\n"
+        "  if (!desc.DefaultValue.IsNull() || desc.DefaultValueSize != 0) return 9;\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKParameterDescRawDefaultValue() {\n"
+        "  CKPARAMETER_DESC desc;\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  desc.DefaultValue = ptr;\n"
         "}\n";
 #if CKVERSION == 0x13022002
     const char *listSource =
@@ -11278,6 +11313,12 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBehaviorPrototype self-test could not add its parameter script section.";
         return false;
     }
+    r = module->AddScriptSection("ck-parameter-desc-self-test", parameterDescSource);
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehaviorPrototype self-test could not add its CKPARAMETER_DESC script section.";
+        return false;
+    }
 #if CKVERSION == 0x13022002
     r = module->AddScriptSection("ck-behavior-prototype-list-self-test", listSource);
     if (r < 0) {
@@ -11305,6 +11346,18 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
         error = "CKBehaviorPrototype parameter self-test function was not found.";
         return false;
     }
+    asIScriptFunction *parameterDescProbe = module->GetFunctionByDecl("int ProbeCKParameterDescDefaultValue()");
+    if (!parameterDescProbe) {
+        engine->DiscardModule(moduleName);
+        error = "CKPARAMETER_DESC DefaultValue self-test function was not found.";
+        return false;
+    }
+    asIScriptFunction *parameterDescRawReject = module->GetFunctionByDecl("void RejectCKParameterDescRawDefaultValue()");
+    if (!parameterDescRawReject) {
+        engine->DiscardModule(moduleName);
+        error = "CKPARAMETER_DESC raw DefaultValue rejection self-test function was not found.";
+        return false;
+    }
 #if CKVERSION == 0x13022002
     asIScriptFunction *ioDescProbe = module->GetFunctionByDecl("int ProbeCKBehaviorIoDescValue()");
     if (!ioDescProbe) {
@@ -11321,12 +11374,16 @@ bool RunCKBehaviorPrototypeScriptSelfTest(asIScriptEngine *engine, std::string &
 #endif
 
 #if CKVERSION == 0x13022002
-    const bool ok = ExecuteNoArgIntProbe(engine, ioDescProbe, false, "CKBEHAVIORIO_DESC value probe", error);
+    const bool ok = ExecuteNoArgIntProbe(engine, parameterDescProbe, false, "CKPARAMETER_DESC DefaultValue probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, parameterDescRawReject, true, "CKPARAMETER_DESC raw DefaultValue rejection probe", error) &&
+                    ExecuteNoArgIntProbe(engine, ioDescProbe, false, "CKBEHAVIORIO_DESC value probe", error);
     engine->DiscardModule(moduleName);
     return ok;
 #else
+    const bool ok = ExecuteNoArgIntProbe(engine, parameterDescProbe, false, "CKPARAMETER_DESC DefaultValue probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, parameterDescRawReject, true, "CKPARAMETER_DESC raw DefaultValue rejection probe", error);
     engine->DiscardModule(moduleName);
-    return true;
+    return ok;
 #endif
 }
 

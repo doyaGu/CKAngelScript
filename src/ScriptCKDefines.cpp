@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <type_traits>
@@ -2955,6 +2956,57 @@ void RegisterCKPATHCATEGORY(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKPATHCATEGORY", "CKPATHCATEGORY &opAssign(const CKPATHCATEGORY &in other)", asMETHODPR(CKPATHCATEGORY, operator=, (const CKPATHCATEGORY &), CKPATHCATEGORY &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
+static void ClearCKParameterDescDefaultValue(CKPARAMETER_DESC *self) {
+    if (!self) {
+        return;
+    }
+
+    delete[] self->DefaultValue;
+    self->DefaultValue = nullptr;
+    self->DefaultValueSize = 0;
+}
+
+static void SetCKParameterDescDefaultValuePointer(CKPARAMETER_DESC *self, NativePointer ptr) {
+    if (ptr.IsNull()) {
+        ClearCKParameterDescDefaultValue(self);
+        return;
+    }
+
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException("CKPARAMETER_DESC.DefaultValue only accepts a null NativePointer from script; use SetDefaultValue(NativeBuffer@) to copy bytes.");
+    }
+}
+
+static bool SetCKParameterDescDefaultValueBuffer(CKPARAMETER_DESC *self, NativeBuffer *data) {
+    if (!self) {
+        return false;
+    }
+
+    ClearCKParameterDescDefaultValue(self);
+    if (!data || data->IsEmpty()) {
+        return true;
+    }
+
+    const size_t size = data->Size();
+    if (size > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKPARAMETER_DESC.SetDefaultValue buffer is too large.");
+        }
+        return false;
+    }
+
+    char *source = data->Data();
+    if (!source) {
+        return true;
+    }
+
+    CKBYTE *copy = new CKBYTE[size];
+    std::memcpy(copy, source, size);
+    self->DefaultValue = copy;
+    self->DefaultValueSize = static_cast<int>(size);
+    return true;
+}
+
 void RegisterCKPARAMETER_DESC(asIScriptEngine *engine) {
     int r = 0;
 
@@ -2980,7 +3032,8 @@ void RegisterCKPARAMETER_DESC(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "void set_DefaultValueString(const string &in value)", asFUNCTIONPR([](CKPARAMETER_DESC *self, const std::string &value) { CKDeletePointer(self->DefaultValueString); self->DefaultValueString = CKStrdup(const_cast<CKSTRING>(value.c_str())); }, (CKPARAMETER_DESC *, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "NativePointer get_DefaultValue() const", asFUNCTIONPR([](const CKPARAMETER_DESC *self) { return NativePointer(self->DefaultValue); }, (const CKPARAMETER_DESC *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "void set_DefaultValue(NativePointer ptr)", asFUNCTIONPR([](CKPARAMETER_DESC *self, NativePointer ptr) { self->DefaultValue = reinterpret_cast<CKBYTE *>(ptr.Get()); }, (CKPARAMETER_DESC *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "void set_DefaultValue(NativePointer ptr)", asFUNCTION(SetCKParameterDescDefaultValuePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKPARAMETER_DESC", "bool SetDefaultValue(NativeBuffer@ data)", asFUNCTION(SetCKParameterDescDefaultValueBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 static std::mutex g_CKBehaviorIoDescOwnedMutex;
