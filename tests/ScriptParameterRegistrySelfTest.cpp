@@ -6990,6 +6990,11 @@ bool RunCKMidiManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine,
         error = "CKMidiManager self-test could not find expected guarded NativePointer methods.";
         return false;
     }
+    if (midiManagerType->GetMethodByDecl("NativeBuffer@ Create(NativeBuffer@ hwnd)") != nullptr ||
+        midiManagerType->GetMethodByDecl("CKERROR Play(NativeBuffer@ source)") != nullptr) {
+        error = "CKMidiManager self-test found stale NativeBuffer handle declarations.";
+        return false;
+    }
 
     return true;
 }
@@ -7031,6 +7036,11 @@ bool RunCKSoundManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
         soundManagerType->GetMethodByDecl("void Update3DSettings(NativePointer source, CK_SOUNDMANAGER_CAPS settingsoptions, CKWaveSound3DSettings &out settings, bool set = true)") != nullptr ||
         soundManagerType->GetMethodByDecl("void UpdateListenerSettings(CK_SOUNDMANAGER_CAPS settingsoptions, CKListenerSettings &out settings, bool set = true)") != nullptr) {
         error = "CKSoundManager self-test found stale out-only settings declarations.";
+        return false;
+    }
+    if (soundManagerType->GetMethodByDecl("NativeBuffer@ CreateSource(CK_WAVESOUND_TYPE flags, CKWaveFormat &in wf, CKDWORD bytes, bool streamed)") != nullptr ||
+        soundManagerType->GetMethodByDecl("CKERROR Lock(NativeBuffer@ source, CKDWORD writeCursor, CKDWORD numBytes, NativePointer &out audioPtr1, CKDWORD &out audioBytes1, NativePointer &out audioPtr2, CKDWORD &out audioBytes2, CK_WAVESOUND_LOCKMODE flags)") != nullptr) {
+        error = "CKSoundManager self-test found stale NativeBuffer source-handle declarations.";
         return false;
     }
 
@@ -7891,6 +7901,10 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
         error = "CKRenderContext self-test could not find buffer GetDrawPrimitiveIndices declaration.";
         return false;
     }
+    if (renderContextType->GetMethodByDecl("bool DrawPrimitive(VXPRIMITIVETYPE pType, NativeBuffer@ indices, int indexCount, VxDrawPrimitiveData &in data)") == nullptr) {
+        error = "CKRenderContext self-test could not find buffer DrawPrimitive declaration.";
+        return false;
+    }
     if (renderContextType->GetMethodByDecl("void AddPreRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)") == nullptr ||
         renderContextType->GetMethodByDecl("void RemovePreRenderCallBack(CK_RENDERCALLBACK@ callback)") == nullptr ||
         renderContextType->GetMethodByDecl("void AddPostRenderCallBack(CK_RENDERCALLBACK@ callback, bool temporary = false)") == nullptr ||
@@ -7936,6 +7950,10 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
         "  NativeBuffer@ indices = dev.GetDrawPrimitiveIndices(3);\n"
         "  if (indices is null || indices.Size() != 6) return 3;\n"
         "  return 0;\n"
+        "}\n"
+        "void ProbeCKRenderContextDrawPrimitiveBuffer(CKRenderContext@ dev, NativeBuffer@ indices, VxDrawPrimitiveData &in data) {\n"
+        "  if (dev is null) return;\n"
+        "  dev.DrawPrimitive(VX_TRIANGLELIST, indices, 0, data);\n"
         "}\n"
         "int ProbeCKRenderContextCurrentVB(CKContext@ ctx) {\n"
         "  CKRenderContext@ dev = ctx.GetPlayerRenderContext();\n"
@@ -7990,10 +8008,11 @@ bool RunCKRenderContextScriptSelfTest(CKContext *context, asIScriptEngine *engin
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKRenderContextPixelFormat(CKContext@)");
     asIScriptFunction *indices = module->GetFunctionByDecl("int ProbeCKRenderContextIndices(CKContext@)");
+    asIScriptFunction *drawPrimitive = module->GetFunctionByDecl("void ProbeCKRenderContextDrawPrimitiveBuffer(CKRenderContext@, NativeBuffer@, VxDrawPrimitiveData &in)");
     asIScriptFunction *currentVB = module->GetFunctionByDecl("int ProbeCKRenderContextCurrentVB(CKContext@)");
     asIScriptFunction *callbacks = module->GetFunctionByDecl("int ProbeCKRenderContextCallbacks(CKContext@)");
     asIScriptFunction *temporary = module->GetFunctionByDecl("int ProbeCKRenderContextTemporaryCallback(CKContext@)");
-    if (!probe || !indices || !currentVB || !callbacks || !temporary) {
+    if (!probe || !indices || !drawPrimitive || !currentVB || !callbacks || !temporary) {
         engine->DiscardModule(moduleName);
         error = "CKRenderContext self-test functions were not found.";
         return false;
@@ -10707,6 +10726,11 @@ bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         error = "CKDataArray self-test could not find expected object methods.";
         return false;
     }
+    if (arrayType->GetMethodByDecl("bool GetNearest(int c, NativeBuffer@ value, int &out row)") != nullptr ||
+        arrayType->GetMethodByDecl("NativeBuffer@ GetElement(int i, int c)") != nullptr) {
+        error = "CKDataArray self-test found stale NativeBuffer declarations without per-column size validation.";
+        return false;
+    }
 
     constexpr const char *moduleName = "__CKAS_CKDataArraySelfTest";
     const char *source =
@@ -10962,6 +10986,7 @@ bool RunCKInputManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
         inputManagerType->GetMethodByDecl("CKDWORD GetKeyFromName(const string &in keyName)") == nullptr ||
         isKeyDown == nullptr ||
         isKeyToggled == nullptr ||
+        inputManagerType->GetMethodByDecl("NativeBuffer@ GetKeyboardStateSnapshot()") == nullptr ||
         inputManagerType->GetMethodByDecl("void GetMouseButtonsState(CKBYTE &out left, CKBYTE &out right, CKBYTE &out middle, CKBYTE &out extra)") == nullptr) {
         error = "CKInputManager self-test could not find expected key or mouse-state methods.";
         return false;
@@ -10987,6 +11012,8 @@ bool RunCKInputManagerScriptSelfTest(CKContext *context, asIScriptEngine *engine
         "  CKDWORD stamp = 0;\n"
         "  input.IsKeyDown(0, stamp);\n"
         "  input.IsKeyToggled(0, stamp);\n"
+        "  NativeBuffer@ keyboard = input.GetKeyboardStateSnapshot();\n"
+        "  if (keyboard !is null && !keyboard.IsEmpty() && keyboard.Size() != 256) return;\n"
         "  CKBYTE left = 0;\n"
         "  CKBYTE right = 0;\n"
         "  CKBYTE middle = 0;\n"
@@ -11605,6 +11632,11 @@ bool RunCKMaterialScriptSelfTest(asIScriptEngine *engine, std::string &error) {
     }
     if (materialType->GetMethodByDecl("NativePointer GetCallback(NativePointer &out argument = void) const") != nullptr) {
         error = "CKMaterial self-test found stale const callback declaration.";
+        return false;
+    }
+    if (materialType->GetMethodByDecl("void SetCallback(NativeBuffer@ fct, NativeBuffer@ argument)") != nullptr ||
+        materialType->GetMethodByDecl("NativeBuffer@ GetCallback(NativeBuffer@ &out argument = void)") != nullptr) {
+        error = "CKMaterial self-test found stale NativeBuffer callback declarations.";
         return false;
     }
 
@@ -13852,6 +13884,10 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     }
     if (operationType->GetMethodByDecl("NativePointer GetOperationFunction()") != nullptr) {
         error = "CKParameterOperation self-test found stale raw GetOperationFunction exposure.";
+        return false;
+    }
+    if (operationType->GetMethodByDecl("NativeBuffer@ GetOperationFunction()") != nullptr) {
+        error = "CKParameterOperation self-test found stale NativeBuffer operation-function exposure.";
         return false;
     }
     constexpr const char *moduleName = "__CKAS_CKParameterSelfTest";

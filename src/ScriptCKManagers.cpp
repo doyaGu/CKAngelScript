@@ -1,5 +1,6 @@
 #include "ScriptCKManagers.h"
 
+#include <cstring>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -273,6 +274,23 @@ static void GetCKInputMouseButtonsState(CKInputManager *self,
     *right = states[1];
     *middle = states[2];
     *extra = states[3];
+}
+
+static NativeBuffer *GetCKInputKeyboardStateSnapshot(CKInputManager *self) {
+    unsigned char *state = self ? self->GetKeyboardState() : nullptr;
+    if (!state) {
+        return NativeBuffer::Create(0);
+    }
+    NativeBuffer *snapshot = NativeBuffer::Create(256);
+    if (!snapshot || !snapshot->Data()) {
+        if (snapshot) {
+            snapshot->Release();
+        }
+        SetActiveScriptException("CKInputManager.GetKeyboardStateSnapshot could not allocate a NativeBuffer.");
+        return NativeBuffer::Create(0);
+    }
+    std::memcpy(snapshot->Data(), state, 256);
+    return snapshot;
 }
 
 static CKERROR SendCKMessage(CKMessageManager *self, CKMessage *message) {
@@ -1780,6 +1798,7 @@ void RegisterCKInputManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKInputManager", "CKDWORD GetKeyFromName(const string &in keyName)", asFUNCTIONPR([](CKInputManager *self, const std::string &keyName) { return self->GetKeyFromName(const_cast<CKSTRING>(keyName.c_str())); }, (CKInputManager *, const std::string &), CKDWORD), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod("CKInputManager", "NativePointer GetKeyboardState()", asFUNCTIONPR([](CKInputManager *self) { return NativePointer(self->GetKeyboardState()); }, (CKInputManager *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKInputManager", "NativeBuffer@ GetKeyboardStateSnapshot()", asFUNCTION(GetCKInputKeyboardStateSnapshot), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKInputManager", "bool IsKeyboardAttached()", asFUNCTIONPR([](CKInputManager *self) -> bool { return self->IsKeyboardAttached(); }, (CKInputManager *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKInputManager", "int GetNumberOfKeyInBuffer()", asMETHODPR(CKInputManager, GetNumberOfKeyInBuffer, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

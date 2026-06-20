@@ -1147,6 +1147,31 @@ static NativeBuffer *CKRenderContextGetDrawPrimitiveIndices(CKRenderContext *sel
     return indices ? NativeBuffer::Create(indices, static_cast<size_t>(indicesCount) * sizeof(CKWORD)) : NativeBuffer::Create(0);
 }
 
+static bool CKRenderContextDrawPrimitiveBuffer(CKRenderContext *self,
+                                               VXPRIMITIVETYPE pType,
+                                               NativeBuffer *indices,
+                                               int indexCount,
+                                               VxDrawPrimitiveData *data) {
+    if (indexCount < 0) {
+        SetCKLayerException("CKRenderContext.DrawPrimitive indexCount must be non-negative.");
+        return false;
+    }
+    size_t required = 0;
+    if (indexCount > 0 && static_cast<size_t>(indexCount) > std::numeric_limits<size_t>::max() / sizeof(CKWORD)) {
+        SetCKLayerException("CKRenderContext.DrawPrimitive index buffer size overflowed.");
+        return false;
+    }
+    required = static_cast<size_t>(indexCount) * sizeof(CKWORD);
+    if (!indices || (required > 0 && !indices->Data()) || indices->Size() < required) {
+        SetCKLayerException("CKRenderContext.DrawPrimitive requires an indices NativeBuffer large enough for indexCount CKWORD values.");
+        return false;
+    }
+    return self->DrawPrimitive(pType,
+                               reinterpret_cast<CKWORD *>(indices->Data()),
+                               indexCount,
+                               data) != FALSE;
+}
+
 void RegisterCKRenderContext(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -1260,6 +1285,7 @@ void RegisterCKRenderContext(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKRenderContext", "float GetFogDensity()", asMETHODPR(CKRenderContext, GetFogDensity, (), float), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "bool DrawPrimitive(VXPRIMITIVETYPE pType, NativePointer indices, int indexCount, VxDrawPrimitiveData &in data)", asFUNCTIONPR([](CKRenderContext *self, VXPRIMITIVETYPE pType, NativePointer indices, int indexCount, VxDrawPrimitiveData *data) -> bool { return self->DrawPrimitive(pType, reinterpret_cast<CKWORD *>(indices.Get()), indexCount, data); }, (CKRenderContext *, VXPRIMITIVETYPE, NativePointer, int, VxDrawPrimitiveData *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKRenderContext", "bool DrawPrimitive(VXPRIMITIVETYPE pType, NativeBuffer@ indices, int indexCount, VxDrawPrimitiveData &in data)", asFUNCTION(CKRenderContextDrawPrimitiveBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKRenderContext", "void SetWorldTransformationMatrix(const VxMatrix &in mat)", asMETHODPR(CKRenderContext, SetWorldTransformationMatrix, (const VxMatrix &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKRenderContext", "void SetProjectionTransformationMatrix(const VxMatrix &in mat)", asMETHODPR(CKRenderContext, SetProjectionTransformationMatrix, (const VxMatrix &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
