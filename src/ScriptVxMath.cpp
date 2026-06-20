@@ -1921,7 +1921,43 @@ bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error) {
         return false;
     }
 
+    asITypeInfo *drawPrimitiveType = engine->GetTypeInfoByDecl("VxDrawPrimitiveData");
+    if (!drawPrimitiveType) {
+        error = "VxDrawPrimitiveData type is not registered.";
+        return false;
+    }
+    for (asUINT i = 0; i < drawPrimitiveType->GetPropertyCount(); ++i) {
+        const char *decl = drawPrimitiveType->GetPropertyDeclaration(i, true);
+        const std::string propertyDecl = decl ? decl : "";
+        if (propertyDecl == "NativePointer PositionPtr" ||
+            propertyDecl == "NativePointer NormalPtr" ||
+            propertyDecl == "NativePointer ColorPtr" ||
+            propertyDecl == "NativePointer SpecularColorPtr" ||
+            propertyDecl == "NativePointer TexCoordPtr") {
+            error = "VxDrawPrimitiveData self-test found stale writable pointer property: " + propertyDecl + ".";
+            return false;
+        }
+    }
+
 #if CKVERSION == 0x13022002 || CKVERSION == 0x05082002
+    if (!drawPrimitiveType->GetMethodByDecl("NativePointer get_PositionPtr() const") ||
+        !drawPrimitiveType->GetMethodByDecl("NativePointer get_NormalPtr() const") ||
+        !drawPrimitiveType->GetMethodByDecl("NativePointer get_ColorPtr() const") ||
+        !drawPrimitiveType->GetMethodByDecl("NativePointer get_SpecularColorPtr() const") ||
+        !drawPrimitiveType->GetMethodByDecl("NativePointer get_TexCoordPtr() const") ||
+        !drawPrimitiveType->GetMethodByDecl("NativePointer GetTexCoordPtrs(int i) const") ||
+        !drawPrimitiveType->GetMethodByDecl("uint GetTexCoordStrides(int i) const")) {
+        error = "VxDrawPrimitiveData read-only pointer accessors are not registered.";
+        return false;
+    }
+    if (drawPrimitiveType->GetMethodByDecl("void set_PositionPtr(NativePointer ptr)") ||
+        drawPrimitiveType->GetMethodByDecl("void set_NormalPtr(NativePointer ptr)") ||
+        drawPrimitiveType->GetMethodByDecl("void set_ColorPtr(NativePointer ptr)") ||
+        drawPrimitiveType->GetMethodByDecl("void set_SpecularColorPtr(NativePointer ptr)") ||
+        drawPrimitiveType->GetMethodByDecl("void set_TexCoordPtr(NativePointer ptr)")) {
+        error = "VxDrawPrimitiveData self-test found stale writable pointer setter.";
+        return false;
+    }
     VxDrawPrimitiveData data = {};
     char stages[CKRST_MAX_STAGES] = {};
     data.TexCoordPtr = &stages[0];
