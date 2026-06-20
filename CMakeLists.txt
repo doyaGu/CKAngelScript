@@ -4,7 +4,13 @@ if (POLICY CMP0144)
     cmake_policy(SET CMP0144 NEW)
 endif ()
 
-project(CKAngelScript VERSION 0.2.0.0)
+project(CKAngelScript VERSION 0.2.0)
+
+if (CMAKE_PROJECT_VERSION_TWEAK STREQUAL "")
+    set(CKAS_VERSION_TWEAK_VALUE 0)
+else ()
+    set(CKAS_VERSION_TWEAK_VALUE ${CMAKE_PROJECT_VERSION_TWEAK})
+endif ()
 
 option(CKAS_BUILD_SELF_TESTS "Build optional AngelScript startup self-test support" OFF)
 option(CKAS_ENABLE_DYNCALL "Build DynCall-backed native FFI support" OFF)
