@@ -1558,6 +1558,54 @@ bool ExecuteCKAnimationCopyNullProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKObjectAnimationProbe(asIScriptEngine *engine,
+                                   asIScriptFunction *function,
+                                   CKObjectAnimation *animation,
+                                   CKObjectAnimation *other,
+                                   bool expectException,
+                                   const char *label,
+                                   std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, animation);
+    }
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(1, other);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKBehaviorLinkProbe(asIScriptEngine *engine,
                                 asIScriptFunction *function,
                                 CKBehavior *root,
@@ -12754,6 +12802,20 @@ bool RunCKMorphKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
         "  CKMorphKey right;\n"
         "  left.Compare(right, -1, 0.0f);\n"
         "  return 0;\n"
+        "}\n"
+        "int ProbeMorphKeyRejectPosArray() {\n"
+        "  CKMorphKey key;\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  key.SetPosArray(ptr);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeMorphKeyRejectNormArray() {\n"
+        "  CKMorphKey key;\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  key.SetNormArray(ptr);\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -12777,14 +12839,18 @@ bool RunCKMorphKeyScriptSelfTest(asIScriptEngine *engine, std::string &error) {
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeMorphKey()");
     asIScriptFunction *negativeCount = module->GetFunctionByDecl("int ProbeMorphKeyNegativeCount()");
-    if (!probe || !negativeCount) {
+    asIScriptFunction *rejectPosArray = module->GetFunctionByDecl("int ProbeMorphKeyRejectPosArray()");
+    asIScriptFunction *rejectNormArray = module->GetFunctionByDecl("int ProbeMorphKeyRejectNormArray()");
+    if (!probe || !negativeCount || !rejectPosArray || !rejectNormArray) {
         engine->DiscardModule(moduleName);
         error = "CKMorphKey self-test functions were not found.";
         return false;
     }
 
     const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKMorphKey probe", error) &&
-                    ExecuteCKAttributeDescProbe(engine, negativeCount, true, "CKMorphKey negative-count probe", error);
+                    ExecuteCKAttributeDescProbe(engine, negativeCount, true, "CKMorphKey negative-count probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, rejectPosArray, true, "CKMorphKey PosArray rejection probe", error) &&
+                    ExecuteCKAttributeDescProbe(engine, rejectNormArray, true, "CKMorphKey NormArray rejection probe", error);
 
     engine->DiscardModule(moduleName);
     return ok;
@@ -13052,9 +13118,9 @@ bool RunCKMorphControllerScriptSelfTest(CKContext *context, asIScriptEngine *eng
     return ok;
 }
 
-bool RunCKObjectAnimationScriptSelfTest(asIScriptEngine *engine, std::string &error) {
-    if (!engine) {
-        error = "CKObjectAnimation script self-test requires an AngelScript engine.";
+bool RunCKObjectAnimationScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "CKObjectAnimation script self-test requires CKContext and AngelScript engine.";
         return false;
     }
 
@@ -13063,7 +13129,11 @@ bool RunCKObjectAnimationScriptSelfTest(asIScriptEngine *engine, std::string &er
         error = "CKObjectAnimation self-test could not find the registered type.";
         return false;
     }
-    if (animationType->GetMethodByDecl("bool EvaluateMorphTarget(float time, int vertexCount, NativePointer vertices, CKDWORD vStride, NativePointer normals)") == nullptr ||
+    if (animationType->GetMethodByDecl("bool EvaluateMorphTarget(float time, int vertexCount, NativePointer vertices, CKDWORD vStride, NativePointer normals)") != nullptr) {
+        error = "CKObjectAnimation self-test found stale raw EvaluateMorphTarget declaration.";
+        return false;
+    }
+    if (animationType->GetMethodByDecl("bool EvaluateMorphTarget(float time, int vertexCount, NativeBuffer@ vertices, CKDWORD vStride, NativeBuffer@ normals = null)") == nullptr ||
         animationType->GetMethodByDecl("bool Compare(CKObjectAnimation@ anim, float threshold = 0.0)") == nullptr ||
         animationType->GetMethodByDecl("bool ShareDataFrom(CKObjectAnimation@ anim)") == nullptr ||
         animationType->GetMethodByDecl("CKObjectAnimation@ CreateMergedAnimation(CKObjectAnimation@ subAnim2, bool dynamic = false)") == nullptr ||
@@ -13075,13 +13145,19 @@ bool RunCKObjectAnimationScriptSelfTest(asIScriptEngine *engine, std::string &er
 
     constexpr const char *moduleName = "__CKAS_CKObjectAnimationSelfTest";
     const char *source =
-        "void ProbeObjectAnimationSurface(CKObjectAnimation@ anim, CKObjectAnimation@ other, NativePointer vertices, NativePointer normals) {\n"
-        "  if (anim is null || other is null) return;\n"
-        "  anim.EvaluateMorphTarget(0.0f, 0, vertices, 12, normals);\n"
+        "int ProbeObjectAnimationSurface(CKObjectAnimation@ anim, CKObjectAnimation@ other) {\n"
+        "  if (anim is null || other is null) return 1;\n"
+        "  NativeBuffer@ vertices = NativeBuffer(24);\n"
+        "  if (anim.EvaluateMorphTarget(0.0f, 0, vertices, 12, null)) return 2;\n"
         "  anim.Compare(other);\n"
         "  anim.ShareDataFrom(other);\n"
-        "  CKObjectAnimation@ merged = anim.CreateMergedAnimation(other);\n"
         "  anim.Clone(other);\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeObjectAnimationSmallMorphTarget(CKObjectAnimation@ anim, CKObjectAnimation@ other) {\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(12);\n"
+        "  anim.EvaluateMorphTarget(0.0f, 2, tooSmall, 12, null);\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -13103,8 +13179,33 @@ bool RunCKObjectAnimationScriptSelfTest(asIScriptEngine *engine, std::string &er
         return false;
     }
 
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeObjectAnimationSurface(CKObjectAnimation@, CKObjectAnimation@)");
+    asIScriptFunction *smallMorphTarget = module->GetFunctionByDecl("int ProbeObjectAnimationSmallMorphTarget(CKObjectAnimation@, CKObjectAnimation@)");
+    if (!probe || !smallMorphTarget) {
+        engine->DiscardModule(moduleName);
+        error = "CKObjectAnimation self-test functions were not found.";
+        return false;
+    }
+
+    CKObjectAnimation *animation = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKObjectAnimationSelfTest"), CK_OBJECTCREATION_DYNAMIC));
+    CKObjectAnimation *other = CKObjectAnimation::Cast(context->CreateObject(
+        CKCID_OBJECTANIMATION, const_cast<CKSTRING>("__CKAS_CKObjectAnimationSelfTestOther"), CK_OBJECTCREATION_DYNAMIC));
+    if (!animation || !other) {
+        if (animation) context->DestroyObject(animation);
+        if (other) context->DestroyObject(other);
+        engine->DiscardModule(moduleName);
+        error = "CKObjectAnimation self-test could not create native animations.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKObjectAnimationProbe(engine, probe, animation, other, false, "CKObjectAnimation probe", error) &&
+                    ExecuteCKObjectAnimationProbe(engine, smallMorphTarget, animation, other, true, "CKObjectAnimation small morph target probe", error);
+
+    context->DestroyObject(animation);
+    context->DestroyObject(other);
     engine->DiscardModule(moduleName);
-    return true;
+    return ok;
 }
 
 bool RunCKAnimationScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -14637,7 +14738,7 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     if (!RunCKMorphControllerScriptSelfTest(context, engine, error)) {
         return false;
     }
-    if (!RunCKObjectAnimationScriptSelfTest(engine, error)) {
+    if (!RunCKObjectAnimationScriptSelfTest(context, engine, error)) {
         return false;
     }
     if (!RunCKAnimationScriptSelfTest(context, engine, error)) {

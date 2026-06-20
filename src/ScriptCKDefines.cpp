@@ -4405,8 +4405,14 @@ static NativePointer GetCKMorphKeyPosArray(CKMorphKey *self) {
 }
 
 static void SetCKMorphKeyPosArray(CKMorphKey *self, NativePointer pointer) {
+    if (!pointer.IsNull()) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphKey.SetPosArray only accepts a null NativePointer from script; use CKMorphController.AddMorphKey with NativeBuffer data.");
+        }
+        return;
+    }
     if (self) {
-        self->PosArray = reinterpret_cast<VxVector *>(pointer.Get());
+        self->PosArray = nullptr;
     }
 }
 
@@ -4415,8 +4421,14 @@ static NativePointer GetCKMorphKeyNormArray(CKMorphKey *self) {
 }
 
 static void SetCKMorphKeyNormArray(CKMorphKey *self, NativePointer pointer) {
+    if (!pointer.IsNull()) {
+        if (asIScriptContext *ctx = asGetActiveContext()) {
+            ctx->SetException("CKMorphKey.SetNormArray only accepts a null NativePointer from script; use CKMorphController.AddMorphKey with NativeBuffer data.");
+        }
+        return;
+    }
     if (self) {
-        self->NormArray = reinterpret_cast<VxCompressedVector *>(pointer.Get());
+        self->NormArray = nullptr;
     }
 }
 

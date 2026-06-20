@@ -1728,9 +1728,9 @@ static void SetCKObjectAnimationException(const char *message) {
 static bool EvaluateCKObjectAnimationMorphTarget(CKObjectAnimation *self,
                                                  float time,
                                                  int vertexCount,
-                                                 NativePointer vertices,
+                                                 NativeBuffer *vertices,
                                                  CKDWORD vStride,
-                                                 NativePointer normals) {
+                                                 NativeBuffer *normals) {
     if (!self) {
         SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget called with a null animation.");
         return false;
@@ -1739,7 +1739,7 @@ static bool EvaluateCKObjectAnimationMorphTarget(CKObjectAnimation *self,
         SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget requires a non-negative vertex count.");
         return false;
     }
-    if (vertexCount > 0 && !vertices.Get()) {
+    if (vertexCount > 0 && !vertices) {
         SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget requires a vertex output buffer when vertexCount is positive.");
         return false;
     }
@@ -1747,11 +1747,25 @@ static bool EvaluateCKObjectAnimationMorphTarget(CKObjectAnimation *self,
         SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget vertex stride is smaller than VxVector.");
         return false;
     }
+    if (vertexCount > 0) {
+        const size_t requiredVertexBytes = static_cast<size_t>(vertexCount - 1) * vStride + sizeof(VxVector);
+        if (!vertices->IsValid() || vertices->Size() < requiredVertexBytes) {
+            SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget vertex output buffer is too small.");
+            return false;
+        }
+        if (normals) {
+            const size_t requiredNormalBytes = static_cast<size_t>(vertexCount) * sizeof(VxCompressedVector);
+            if (!normals->IsValid() || normals->Size() < requiredNormalBytes) {
+                SetCKObjectAnimationException("CKObjectAnimation.EvaluateMorphTarget normal output buffer is too small.");
+                return false;
+            }
+        }
+    }
     return self->EvaluateMorphTarget(time,
                                      vertexCount,
-                                     reinterpret_cast<VxVector *>(vertices.Get()),
+                                     vertices ? reinterpret_cast<VxVector *>(vertices->Data()) : nullptr,
                                      vStride,
-                                     reinterpret_cast<VxCompressedVector *>(normals.Get())) != FALSE;
+                                     normals ? reinterpret_cast<VxCompressedVector *>(normals->Data()) : nullptr) != FALSE;
 }
 
 static bool CompareCKObjectAnimation(CKObjectAnimation *self, CKObjectAnimation *anim, float threshold) {
@@ -1845,7 +1859,7 @@ void RegisterCKObjectAnimation(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateScale(float time, VxVector &out scl)", asFUNCTIONPR([](CKObjectAnimation *self, float time, VxVector &scl) -> bool { return self->EvaluateScale(time, scl); }, (CKObjectAnimation *, float, VxVector &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateRotation(float time, VxQuaternion &out rot)", asFUNCTIONPR([](CKObjectAnimation *self, float time, VxQuaternion &rot) -> bool { return self->EvaluateRotation(time, rot); }, (CKObjectAnimation *, float, VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateScaleAxis(float time, VxQuaternion &out scaleAxis)", asFUNCTIONPR([](CKObjectAnimation *self, float time, VxQuaternion &scaleAxis) -> bool { return self->EvaluateScaleAxis(time, scaleAxis); }, (CKObjectAnimation *, float, VxQuaternion &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateMorphTarget(float time, int vertexCount, NativePointer vertices, CKDWORD vStride, NativePointer normals)", asFUNCTION(EvaluateCKObjectAnimationMorphTarget), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateMorphTarget(float time, int vertexCount, NativeBuffer@ vertices, CKDWORD vStride, NativeBuffer@ normals = null)", asFUNCTION(EvaluateCKObjectAnimationMorphTarget), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKObjectAnimation", "bool EvaluateKeys(float step, VxQuaternion &out rot, VxVector &out pos, VxVector &out scale, VxQuaternion &out scaleRot = void)", asFUNCTIONPR([](CKObjectAnimation *self, float step, VxQuaternion *rot, VxVector *pos, VxVector *scale, VxQuaternion *scaleRot) -> bool { return self->EvaluateKeys(step, rot, pos, scale, scaleRot); }, (CKObjectAnimation *, float, VxQuaternion *, VxVector *, VxVector *, VxQuaternion *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Info functions
