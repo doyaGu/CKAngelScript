@@ -1,5 +1,6 @@
 #include "ScriptCKObjects.h"
 
+#include <limits>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -3201,6 +3202,21 @@ static CKERROR WriteCKWaveSoundData(CKWaveSound *self, NativePointer buffer, int
     return self->WriteData(reinterpret_cast<CKBYTE *>(buffer.Get()), size);
 }
 
+static CKERROR WriteCKWaveSoundNativeBuffer(CKWaveSound *self, NativeBuffer *buffer) {
+    if (!self) {
+        SetCKWaveSoundException("CKWaveSound.WriteData called with a null sound.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (!buffer || buffer->Size() > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+        (buffer->Size() > 0 && !buffer->Data())) {
+        SetCKWaveSoundException("CKWaveSound.WriteData requires a valid NativeBuffer.");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    const int size = static_cast<int>(buffer->Size());
+    return self->WriteData(reinterpret_cast<CKBYTE *>(size > 0 ? buffer->Data() : nullptr), size);
+}
+
 static CKERROR LockCKWaveSound(CKWaveSound *self,
                                CKDWORD writeCursor,
                                CKDWORD numBytes,
@@ -3328,6 +3344,7 @@ void RegisterCKWaveSound(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKWaveSound", "void GetOrientation(VxVector &out dir, VxVector &out up)", asMETHODPR(CKWaveSound, GetOrientation, (VxVector &, VxVector &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR WriteData(NativePointer buffer, int size)", asFUNCTION(WriteCKWaveSoundData), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR WriteData(NativeBuffer@ buffer)", asFUNCTION(WriteCKWaveSoundNativeBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR Lock(CKDWORD writeCursor, CKDWORD numBytes, NativePointer &out ptr1, CKDWORD &out bytes1, NativePointer &out ptr2, CKDWORD &out bytes2, CK_WAVESOUND_LOCKMODE flags)", asFUNCTION(LockCKWaveSound), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKWaveSound", "CKERROR Unlock(NativePointer ptr1, CKDWORD bytes1, NativePointer ptr2, CKDWORD bytes2)", asFUNCTION(UnlockCKWaveSound), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

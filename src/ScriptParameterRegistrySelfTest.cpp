@@ -7115,6 +7115,7 @@ bool RunCKWaveSoundScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         return false;
     }
     if (waveSoundType->GetMethodByDecl("CKERROR WriteData(NativePointer buffer, int size)") == nullptr ||
+        waveSoundType->GetMethodByDecl("CKERROR WriteData(NativeBuffer@ buffer)") == nullptr ||
         waveSoundType->GetMethodByDecl("CKERROR Lock(CKDWORD writeCursor, CKDWORD numBytes, NativePointer &out ptr1, CKDWORD &out bytes1, NativePointer &out ptr2, CKDWORD &out bytes2, CK_WAVESOUND_LOCKMODE flags)") == nullptr ||
         waveSoundType->GetMethodByDecl("CKERROR Unlock(NativePointer ptr1, CKDWORD bytes1, NativePointer ptr2, CKDWORD bytes2)") == nullptr ||
         waveSoundType->GetMethodByDecl("CKSoundReader@ GetReader()") == nullptr ||
@@ -7140,6 +7141,10 @@ bool RunCKWaveSoundScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (sound.GetSoundFormat(format) != CK_OK) return 8;\n"
         "  if (format.wFormatTag != 1 || format.nChannels != 1 || format.wBitsPerSample != 16) return 9;\n"
         "  sound.WriteData(NativePointer(), 0);\n"
+        "  NativeBuffer@ audio = NativeBuffer(4);\n"
+        "  audio.WriteShort(0);\n"
+        "  audio.WriteShort(0);\n"
+        "  sound.WriteData(audio);\n"
         "  NativePointer ptr1;\n"
         "  NativePointer ptr2;\n"
         "  CKDWORD bytes1 = 0;\n"
