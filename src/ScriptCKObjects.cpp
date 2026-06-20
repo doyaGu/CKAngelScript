@@ -15,6 +15,130 @@
 
 #undef GetObject
 
+namespace {
+
+void SetCKLayerException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+bool ValidateCKLayerValueBuffer(CKLayer *layer, NativeBuffer *buffer, const char *method) {
+    if (!layer) {
+        SetCKLayerException("CKLayer value access called with a null layer.");
+        return false;
+    }
+    if (!buffer || !buffer->Data() || buffer->Size() < sizeof(CKSquare)) {
+        SetCKLayerException((std::string(method) + " requires a NativeBuffer large enough for one CKSquare.").c_str());
+        return false;
+    }
+    return true;
+}
+
+CKGrid *GetCKLayerOwnerGrid(CKLayer *layer, const char *method) {
+    if (!layer) {
+        SetCKLayerException("CKLayer square-array access called with a null layer.");
+        return nullptr;
+    }
+    CKContext *context = layer->GetCKContext();
+    CKGrid *grid = context ? CKGrid::Cast(CKGetObject(context, layer->GetOwner())) : nullptr;
+    if (!grid) {
+        SetCKLayerException((std::string(method) + " requires a layer owned by a CKGrid.").c_str());
+        return nullptr;
+    }
+    return grid;
+}
+
+bool GetCKLayerSquareArraySize(CKLayer *layer, const char *method, size_t &size) {
+    CKGrid *grid = GetCKLayerOwnerGrid(layer, method);
+    if (!grid) {
+        return false;
+    }
+    const int width = grid->GetWidth();
+    const int length = grid->GetLength();
+    if (width <= 0 || length <= 0) {
+        SetCKLayerException((std::string(method) + " requires positive CKGrid dimensions.").c_str());
+        return false;
+    }
+
+    const size_t w = static_cast<size_t>(width);
+    const size_t l = static_cast<size_t>(length);
+    if (w > std::numeric_limits<size_t>::max() / l ||
+        w * l > std::numeric_limits<size_t>::max() / sizeof(CKSquare)) {
+        SetCKLayerException((std::string(method) + " square-array size overflowed.").c_str());
+        return false;
+    }
+
+    size = w * l * sizeof(CKSquare);
+    return true;
+}
+
+void SetCKLayerValueBuffer(CKLayer *layer, int x, int y, NativeBuffer *buffer) {
+    if (!ValidateCKLayerValueBuffer(layer, buffer, "CKLayer.SetValue")) {
+        return;
+    }
+    layer->SetValue(x, y, buffer->Data());
+}
+
+void GetCKLayerValueBuffer(CKLayer *layer, int x, int y, NativeBuffer *buffer) {
+    if (!ValidateCKLayerValueBuffer(layer, buffer, "CKLayer.GetValue")) {
+        return;
+    }
+    layer->GetValue(x, y, buffer->Data());
+}
+
+bool SetCKLayerValue2Buffer(CKLayer *layer, int x, int y, NativeBuffer *buffer) {
+    if (!ValidateCKLayerValueBuffer(layer, buffer, "CKLayer.SetValue2")) {
+        return false;
+    }
+    return layer->SetValue2(x, y, buffer->Data()) != FALSE;
+}
+
+bool GetCKLayerValue2Buffer(CKLayer *layer, int x, int y, NativeBuffer *buffer) {
+    if (!ValidateCKLayerValueBuffer(layer, buffer, "CKLayer.GetValue2")) {
+        return false;
+    }
+    return layer->GetValue2(x, y, buffer->Data()) != FALSE;
+}
+
+bool SetCKLayerSquareArrayBuffer(CKLayer *layer, NativeBuffer *buffer) {
+    size_t required = 0;
+    if (!GetCKLayerSquareArraySize(layer, "CKLayer.SetSquareArray", required)) {
+        return false;
+    }
+    if (!buffer || (required > 0 && !buffer->Data()) || buffer->Size() < required) {
+        SetCKLayerException("CKLayer.SetSquareArray requires a NativeBuffer large enough for the owning grid.");
+        return false;
+    }
+    layer->SetSquareArray(reinterpret_cast<CKSquare *>(buffer->Data()));
+    return true;
+}
+
+NativeBuffer *CopyCKLayerSquareArray(CKLayer *layer) {
+    size_t size = 0;
+    if (!GetCKLayerSquareArraySize(layer, "CKLayer.CopySquareArray", size)) {
+        return nullptr;
+    }
+    CKSquare *squares = layer->GetSquareArray();
+    if (!squares) {
+        SetCKLayerException("CKLayer.CopySquareArray requires a non-null square array.");
+        return nullptr;
+    }
+    NativeBuffer *buffer = NativeBuffer::Create(size);
+    if (!buffer || (size > 0 && !buffer->Data())) {
+        if (buffer) {
+            buffer->Release();
+        }
+        SetCKLayerException("CKLayer.CopySquareArray could not allocate the NativeBuffer.");
+        return nullptr;
+    }
+    buffer->Write(squares, size);
+    buffer->Reset();
+    return buffer;
+}
+
+} // namespace
+
 template<typename B, typename D>
 B *CKObjectUpcast(D *derived) {
     static_assert(std::is_base_of_v<CKObject, B> == true);
@@ -1285,12 +1409,18 @@ void RegisterCKLayer(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKLayer", "void SetValue(int x, int y, NativePointer val)", asFUNCTIONPR([](CKLayer *layer, int x, int y, NativePointer val) { layer->SetValue(x, y, val.Get()); }, (CKLayer *, int, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLayer", "void GetValue(int x, int y, NativePointer val)", asFUNCTIONPR([](CKLayer *layer, int x, int y, NativePointer val) { layer->GetValue(x, y, val.Get()); }, (CKLayer *, int, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLayer", "void SetValue(int x, int y, NativeBuffer@ val)", asFUNCTION(SetCKLayerValueBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLayer", "void GetValue(int x, int y, NativeBuffer@ val)", asFUNCTION(GetCKLayerValueBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKLayer", "bool SetValue2(int x, int y, NativePointer val)", asFUNCTIONPR([](CKLayer *layer, int x, int y, NativePointer val) -> bool { return layer->SetValue2(x, y, val.Get()); }, (CKLayer *, int, int, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLayer", "bool GetValue2(int x, int y, NativePointer val)", asFUNCTIONPR([](CKLayer *layer, int x, int y, NativePointer val) -> bool { return layer->GetValue2(x, y, val.Get()); }, (CKLayer *, int, int, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLayer", "bool SetValue2(int x, int y, NativeBuffer@ val)", asFUNCTION(SetCKLayerValue2Buffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLayer", "bool GetValue2(int x, int y, NativeBuffer@ val)", asFUNCTION(GetCKLayerValue2Buffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKLayer", "NativePointer GetSquareArray()", asFUNCTIONPR([](CKLayer *self) { return NativePointer(self->GetSquareArray()); }, (CKLayer *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKLayer", "void SetSquareArray(NativePointer sqArray)", asFUNCTIONPR([](CKLayer *self, NativePointer sqArray) { self->SetSquareArray(reinterpret_cast<CKSquare *>(sqArray.Get())); }, (CKLayer *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLayer", "bool SetSquareArray(NativeBuffer@ sqArray)", asFUNCTION(SetCKLayerSquareArrayBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKLayer", "NativeBuffer@ CopySquareArray()", asFUNCTION(CopyCKLayerSquareArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKLayer", "void SetVisible(bool vis = true)", asFUNCTIONPR([](CKLayer *self, bool vis) { self->SetVisible(vis); }, (CKLayer *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKLayer", "bool IsVisible()", asFUNCTIONPR([](CKLayer *layer) -> bool { return layer->IsVisible(); }, (CKLayer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

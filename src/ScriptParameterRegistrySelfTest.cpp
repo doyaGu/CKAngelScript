@@ -9450,6 +9450,15 @@ bool RunCKGridScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::s
         error = "CKLayer self-test could not find pointer square-array declarations.";
         return false;
     }
+    if (!layerType->GetMethodByDecl("void SetValue(int x, int y, NativeBuffer@ val)") ||
+        !layerType->GetMethodByDecl("void GetValue(int x, int y, NativeBuffer@ val)") ||
+        !layerType->GetMethodByDecl("bool SetValue2(int x, int y, NativeBuffer@ val)") ||
+        !layerType->GetMethodByDecl("bool GetValue2(int x, int y, NativeBuffer@ val)") ||
+        !layerType->GetMethodByDecl("bool SetSquareArray(NativeBuffer@ sqArray)") ||
+        !layerType->GetMethodByDecl("NativeBuffer@ CopySquareArray()")) {
+        error = "CKLayer self-test could not find NativeBuffer layer declarations.";
+        return false;
+    }
     if (gridType->GetMethodByDecl("void ApplyPatchForOlderVersion(int nbObject, CKFileObject &in fileObjects)") != nullptr ||
         gridType->GetMethodByDecl("void TransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
         gridType->GetMethodByDecl("void InverseTransformMany(VxVector&out dest, const VxVector&in src, int count, CK3dEntity@ ref = null) const") != nullptr ||
@@ -9530,6 +9539,22 @@ bool RunCKGridScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::s
         "    NativePointer squares = defaultLayer.GetSquareArray();\n"
         "    if (squares.IsNull()) return 15;\n"
         "    defaultLayer.SetSquareArray(squares);\n"
+        "    NativeBuffer@ value = NativeBuffer(4);\n"
+        "    value.Write(int(123));\n"
+        "    if (!defaultLayer.SetValue2(0, 0, value)) return 16;\n"
+        "    NativeBuffer@ outValue = NativeBuffer(4);\n"
+        "    if (!defaultLayer.GetValue2(0, 0, outValue)) return 17;\n"
+        "    int readValue = 0;\n"
+        "    outValue.Read(readValue);\n"
+        "    if (readValue != 123) return 18;\n"
+        "    NativeBuffer@ squareArray = NativeBuffer(24);\n"
+        "    squareArray.Write(int(456));\n"
+        "    if (!defaultLayer.SetSquareArray(squareArray)) return 19;\n"
+        "    NativeBuffer@ copiedSquares = defaultLayer.CopySquareArray();\n"
+        "    if (copiedSquares is null || copiedSquares.Size() != 24) return 20;\n"
+        "    int copiedValue = 0;\n"
+        "    copiedSquares.Read(copiedValue);\n"
+        "    if (copiedValue != 456) return 21;\n"
         "  }\n"
         "  grid.GetLayerCount();\n"
         "  grid.GetLayerByIndex(0);\n"
