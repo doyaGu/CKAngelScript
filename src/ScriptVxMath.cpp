@@ -1,6 +1,7 @@
 #include "ScriptVxMath.h"
 
 #include <cassert>
+#include <limits>
 #include <new>
 #include <string>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "CKDefines.h"
 
 #include "ScriptUtils.h"
+#include "ScriptNativeBuffer.h"
 #include "ScriptNativePointer.h"
 #include "ScriptXString.h"
 #include "ScriptXBitArray.h"
@@ -854,6 +856,186 @@ static bool VxTransformBox2DBool(const VxMatrix &worldProjectionMat, const VxBbo
     return VxTransformBox2D(worldProjectionMat, box, &screenSize, &extents, orClipFlags, andClipFlags) != FALSE;
 }
 
+static void SetVxNativeBufferException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+static bool ComputeStridedByteSize(int count, unsigned int stride, size_t elementSize, size_t &required) {
+    required = 0;
+    if (count < 0) {
+        return false;
+    }
+    if (count == 0) {
+        return true;
+    }
+    if (stride == 0) {
+        required = elementSize;
+        return true;
+    }
+    const size_t itemCount = static_cast<size_t>(count);
+    if (itemCount - 1 > (std::numeric_limits<size_t>::max() - elementSize) / static_cast<size_t>(stride)) {
+        return false;
+    }
+    required = (itemCount - 1) * static_cast<size_t>(stride) + elementSize;
+    return true;
+}
+
+static bool ComputePackedByteSize(int count, size_t elementSize, size_t &required) {
+    required = 0;
+    if (count < 0) {
+        return false;
+    }
+    if (count > 0 && static_cast<size_t>(count) > std::numeric_limits<size_t>::max() / elementSize) {
+        return false;
+    }
+    required = static_cast<size_t>(count) * elementSize;
+    return true;
+}
+
+static bool EnsureNativeBuffer(NativeBuffer *buffer, size_t required, const char *message) {
+    if (!buffer || !buffer->Data() || buffer->Size() < required) {
+        SetVxNativeBufferException(message);
+        return false;
+    }
+    return true;
+}
+
+static bool InterpolateFloatArrayBuffer(NativeBuffer *res, NativeBuffer *array1, NativeBuffer *array2, float factor, int count) {
+    if (count <= 0) {
+        return true;
+    }
+    size_t required = 0;
+    if (!ComputePackedByteSize(count, sizeof(float), required)) {
+        SetVxNativeBufferException("InterpolateFloatArray count overflows NativeBuffer size calculation.");
+        return false;
+    }
+    if (!EnsureNativeBuffer(res, required, "InterpolateFloatArray requires a result NativeBuffer large enough for count floats.") ||
+        !EnsureNativeBuffer(array1, required, "InterpolateFloatArray requires first input NativeBuffer large enough for count floats.") ||
+        !EnsureNativeBuffer(array2, required, "InterpolateFloatArray requires second input NativeBuffer large enough for count floats.")) {
+        return false;
+    }
+    InterpolateFloatArray(res->Data(), array1->Data(), array2->Data(), factor, count);
+    return true;
+}
+
+static bool InterpolateVectorArrayBuffer(NativeBuffer *res, NativeBuffer *array1, NativeBuffer *array2, float factor, int count, unsigned int strideRes, unsigned int strideIn) {
+    if (count <= 0) {
+        return true;
+    }
+    size_t requiredRes = 0;
+    size_t requiredIn = 0;
+    if (!ComputeStridedByteSize(count, strideRes, sizeof(VxVector), requiredRes) ||
+        !ComputeStridedByteSize(count, strideIn, sizeof(VxVector), requiredIn)) {
+        SetVxNativeBufferException("InterpolateVectorArray count/stride overflows NativeBuffer size calculation.");
+        return false;
+    }
+    if (!EnsureNativeBuffer(res, requiredRes, "InterpolateVectorArray requires a result NativeBuffer large enough for count vectors.") ||
+        !EnsureNativeBuffer(array1, requiredIn, "InterpolateVectorArray requires first input NativeBuffer large enough for count vectors.") ||
+        !EnsureNativeBuffer(array2, requiredIn, "InterpolateVectorArray requires second input NativeBuffer large enough for count vectors.")) {
+        return false;
+    }
+    InterpolateVectorArray(res->Data(), array1->Data(), array2->Data(), factor, count, strideRes, strideIn);
+    return true;
+}
+
+static bool VxFillStructureBuffer(int count, NativeBuffer *dst, unsigned int stride, unsigned int sizeSrc, NativeBuffer *src) {
+    if (count <= 0 || sizeSrc == 0 || stride == 0 || (sizeSrc & 3u) != 0) {
+        return false;
+    }
+    size_t requiredDst = 0;
+    if (!ComputeStridedByteSize(count, stride, sizeSrc, requiredDst)) {
+        SetVxNativeBufferException("VxFillStructure count/stride overflows NativeBuffer size calculation.");
+        return false;
+    }
+    if (!EnsureNativeBuffer(dst, requiredDst, "VxFillStructure requires a destination NativeBuffer large enough for count structures.") ||
+        !EnsureNativeBuffer(src, sizeSrc, "VxFillStructure requires a source NativeBuffer large enough for one structure.")) {
+        return false;
+    }
+    return VxFillStructure(count, dst->Data(), stride, sizeSrc, src->Data()) != FALSE;
+}
+
+static bool VxCopyStructureBuffer(int count, NativeBuffer *dst, unsigned int outStride, unsigned int sizeSrc, NativeBuffer *src, unsigned int inStride) {
+    if (count <= 0 || sizeSrc == 0 || outStride == 0 || inStride == 0 || (sizeSrc & 3u) != 0) {
+        return false;
+    }
+    size_t requiredDst = 0;
+    size_t requiredSrc = 0;
+    if (!ComputeStridedByteSize(count, outStride, sizeSrc, requiredDst) ||
+        !ComputeStridedByteSize(count, inStride, sizeSrc, requiredSrc)) {
+        SetVxNativeBufferException("VxCopyStructure count/stride overflows NativeBuffer size calculation.");
+        return false;
+    }
+    if (!EnsureNativeBuffer(dst, requiredDst, "VxCopyStructure requires a destination NativeBuffer large enough for count structures.") ||
+        !EnsureNativeBuffer(src, requiredSrc, "VxCopyStructure requires a source NativeBuffer large enough for count structures.")) {
+        return false;
+    }
+    return VxCopyStructure(count, dst->Data(), outStride, sizeSrc, src->Data(), inStride) != FALSE;
+}
+
+static bool VxIndexedCopyBuffer(NativeBuffer *dst, unsigned int dstStride, NativeBuffer *src, unsigned int srcStride, unsigned int sizeSrc, NativeBuffer *indices, int indexCount) {
+    if (indexCount <= 0 || sizeSrc == 0 || (sizeSrc & 3u) != 0) {
+        return false;
+    }
+    size_t requiredIndices = 0;
+    if (!ComputePackedByteSize(indexCount, sizeof(int), requiredIndices)) {
+        SetVxNativeBufferException("VxIndexedCopy index count overflows NativeBuffer size calculation.");
+        return false;
+    }
+    if (!EnsureNativeBuffer(indices, requiredIndices, "VxIndexedCopy requires an indices NativeBuffer large enough for indexCount integers.")) {
+        return false;
+    }
+    const int *indexData = reinterpret_cast<const int *>(indices->Data());
+    int maxIndex = -1;
+    for (int i = 0; i < indexCount; ++i) {
+        if (indexData[i] < 0) {
+            SetVxNativeBufferException("VxIndexedCopy NativeBuffer overload does not accept negative indices.");
+            return false;
+        }
+        if (indexData[i] > maxIndex) {
+            maxIndex = indexData[i];
+        }
+    }
+    size_t requiredDst = 0;
+    size_t requiredSrc = 0;
+    if (!ComputeStridedByteSize(indexCount, dstStride, sizeSrc, requiredDst) ||
+        !ComputeStridedByteSize(maxIndex + 1, srcStride, sizeSrc, requiredSrc)) {
+        SetVxNativeBufferException("VxIndexedCopy count/stride overflows NativeBuffer size calculation.");
+        return false;
+    }
+    if (!EnsureNativeBuffer(dst, requiredDst, "VxIndexedCopy requires a destination NativeBuffer large enough for indexCount structures.") ||
+        !EnsureNativeBuffer(src, requiredSrc, "VxIndexedCopy requires a source NativeBuffer large enough for the largest index.")) {
+        return false;
+    }
+    VxStridedData dstData(dst->Data(), dstStride);
+    VxStridedData srcData(src->Data(), srcStride);
+    return VxIndexedCopy(dstData, srcData, sizeSrc, const_cast<int *>(indexData), indexCount) != FALSE;
+}
+
+static bool VxComputeBestFitBBoxBuffer(NativeBuffer *points, unsigned int stride, int count, VxMatrix &bBoxMatrix, float additionalBorder) {
+    if (count <= 0) {
+        return false;
+    }
+    size_t requiredPoints = 0;
+    if (!ComputeStridedByteSize(count, stride, sizeof(VxVector), requiredPoints)) {
+        SetVxNativeBufferException("VxComputeBestFitBBox count/stride overflows NativeBuffer size calculation.");
+        return false;
+    }
+    if (!EnsureNativeBuffer(points, requiredPoints, "VxComputeBestFitBBox requires a points NativeBuffer large enough for count vectors.")) {
+        return false;
+    }
+    return VxComputeBestFitBBox(reinterpret_cast<XBYTE *>(points->Data()), stride, count, bBoxMatrix, additionalBorder) != FALSE;
+}
+
+static bool VxConvertToNormalMapBool(const VxImageDescEx &image, unsigned int colorMask) {
+    return VxConvertToNormalMap(image, static_cast<XULONG>(colorMask)) != FALSE;
+}
+
+static bool VxConvertToBumpMapBool(const VxImageDescEx &image) {
+    return VxConvertToBumpMap(image) != FALSE;
+}
+
 static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     int r = 0;
 
@@ -862,8 +1044,10 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("float Tcos(int angle)", asFUNCTION(Tcos), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Interpolation functions
-    r = engine->RegisterGlobalFunction("void InterpolateFloatArray(NativePointer res, NativePointer array1, NativePointer array2, float factor, int count)", asFUNCTIONPR([](NativePointer res, NativePointer array1, NativePointer array2, float factor, int count) { InterpolateFloatArray(res.Get(), array1.Get(), array2.Get(), factor, count); }, (NativePointer, NativePointer, NativePointer, float, int), void), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void InterpolateVectorArray(NativePointer res, NativePointer array1, NativePointer array2, float factor, int count, uint strideRes, uint strideIn)", asFUNCTIONPR([](NativePointer res, NativePointer array1, NativePointer array2, float factor, int count, unsigned int strideRes, unsigned int strideIn) { InterpolateVectorArray(res.Get(), array1.Get(), array2.Get(), factor, count, strideRes, strideIn); }, (NativePointer, NativePointer, NativePointer, float, int, unsigned int, unsigned int), void), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void InterpolateFloatArray(NativePointer res, NativePointer array1, NativePointer array2, float factor, int count)", asFUNCTIONPR([](NativePointer res, NativePointer array1, NativePointer array2, float factor, int count) { if (count > 0) { InterpolateFloatArray(res.Get(), array1.Get(), array2.Get(), factor, count); } }, (NativePointer, NativePointer, NativePointer, float, int), void), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void InterpolateVectorArray(NativePointer res, NativePointer array1, NativePointer array2, float factor, int count, uint strideRes, uint strideIn)", asFUNCTIONPR([](NativePointer res, NativePointer array1, NativePointer array2, float factor, int count, unsigned int strideRes, unsigned int strideIn) { if (count > 0) { InterpolateVectorArray(res.Get(), array1.Get(), array2.Get(), factor, count, strideRes, strideIn); } }, (NativePointer, NativePointer, NativePointer, float, int, unsigned int, unsigned int), void), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool InterpolateFloatArray(NativeBuffer@ res, NativeBuffer@ array1, NativeBuffer@ array2, float factor, int count)", asFUNCTION(InterpolateFloatArrayBuffer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool InterpolateVectorArray(NativeBuffer@ res, NativeBuffer@ array1, NativeBuffer@ array2, float factor, int count, uint strideRes, uint strideIn)", asFUNCTION(InterpolateVectorArrayBuffer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Box and transformation functions
     r = engine->RegisterGlobalFunction("bool VxTransformBox2D(const VxMatrix &in, const VxBbox &in, VxRect &out, VxRect &out, VXCLIP_FLAGS &out, VXCLIP_FLAGS &out)", asFUNCTION(VxTransformBox2DBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
@@ -873,6 +1057,9 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool VxFillStructure(int count, NativePointer dst, uint stride, uint sizeSrc, NativePointer src)", asFUNCTIONPR([](int count, NativePointer dst, unsigned int stride, unsigned int sizeSrc, NativePointer src) -> bool { return VxFillStructure(count, dst.Get(), stride, sizeSrc, src.Get()); }, (int, NativePointer, unsigned int, unsigned int, NativePointer), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool VxCopyStructure(int count, NativePointer dst, uint outStride, uint sizeSrc, NativePointer src, uint inStride)", asFUNCTIONPR([](int count, NativePointer dst, unsigned int outStride, unsigned int sizeSrc, NativePointer src, unsigned int inStride) -> bool { return VxCopyStructure(count, dst.Get(), outStride, sizeSrc, src.Get(), inStride); }, (int, NativePointer, unsigned int, unsigned int, NativePointer, unsigned int), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool VxIndexedCopy(const VxStridedData &in dst, const VxStridedData &in src, uint sizeSrc, NativePointer indices, int indexCount)", asFUNCTIONPR([](const VxStridedData &dst, const VxStridedData &src, unsigned int sizeSrc, NativePointer indices, int indexCount) -> bool { return VxIndexedCopy(dst, src, sizeSrc, reinterpret_cast<int *>(indices.Get()), indexCount); }, (const VxStridedData &, const VxStridedData &, unsigned int, NativePointer, int), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxFillStructure(int count, NativeBuffer@ dst, uint stride, uint sizeSrc, NativeBuffer@ src)", asFUNCTION(VxFillStructureBuffer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxCopyStructure(int count, NativeBuffer@ dst, uint outStride, uint sizeSrc, NativeBuffer@ src, uint inStride)", asFUNCTION(VxCopyStructureBuffer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxIndexedCopy(NativeBuffer@ dst, uint dstStride, NativeBuffer@ src, uint srcStride, uint sizeSrc, NativeBuffer@ indices, int indexCount)", asFUNCTION(VxIndexedCopyBuffer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Graphic utilities (Blitting)
     r = engine->RegisterGlobalFunction("void VxDoBlit(const VxImageDescEx &in src, const VxImageDescEx &in dst)", asFUNCTION(VxDoBlit), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
@@ -891,8 +1078,8 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void VxResizeImage32(const VxImageDescEx &in src, const VxImageDescEx &in dst)", asFUNCTION(VxResizeImage32), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Conversion to normal/bump map
-    r = engine->RegisterGlobalFunction("bool VxConvertToNormalMap(const VxImageDescEx &in image, uint colorMask)", asFUNCTION(VxConvertToNormalMap), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool VxConvertToBumpMap(const VxImageDescEx &in image)", asFUNCTION(VxConvertToBumpMap), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxConvertToNormalMap(const VxImageDescEx &in image, uint colorMask)", asFUNCTION(VxConvertToNormalMapBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxConvertToBumpMap(const VxImageDescEx &in image)", asFUNCTION(VxConvertToBumpMapBool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Pixel format conversion functions
     r = engine->RegisterGlobalFunction("VX_PIXELFORMAT VxImageDesc2PixelFormat(const VxImageDescEx &in desc)", asFUNCTION(VxImageDesc2PixelFormat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
@@ -915,6 +1102,7 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
 
     // Best-fit bounding box computation
     r = engine->RegisterGlobalFunction("bool VxComputeBestFitBBox(NativePointer points, uint stride, int count, VxMatrix &out bBoxMatrix, float additionalBorder)", asFUNCTIONPR([](NativePointer points, unsigned int stride, int count, VxMatrix &bBoxMatrix, float additionalBorder) -> bool { return VxComputeBestFitBBox(reinterpret_cast<XBYTE *>(points.Get()), stride, count, bBoxMatrix, additionalBorder); }, (NativePointer, unsigned int, int, VxMatrix &, float), bool), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxComputeBestFitBBox(NativeBuffer@ points, uint stride, int count, VxMatrix &out bBoxMatrix, float additionalBorder)", asFUNCTION(VxComputeBestFitBBoxBuffer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterGlobalFunction("int CKRST_DP_WEIGHT(int x)", asFUNCTIONPR([](int x) -> int { return CKRST_DP_WEIGHT(x); }, (int), int), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("int CKRST_DP_IWEIGHT(int x)", asFUNCTIONPR([](int x) -> int { return CKRST_DP_IWEIGHT(x); }, (int), int), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
@@ -1366,6 +1554,11 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxVector firstPoint;\n"
         "  if (boxPoints.Read(firstPoint) != 12) return 23;\n"
         "  if (firstPoint.x < 0.0f || firstPoint.x > 2.0f || firstPoint.y < 0.0f || firstPoint.y > 4.0f || firstPoint.z < 0.0f || firstPoint.z > 6.0f) return 24;\n"
+        "  NativeBuffer@ boxPointsSafe = NativeBuffer(8 * 12);\n"
+        "  if (!box.TransformTo(boxPointsSafe, identity)) return 920;\n"
+        "  NativeBuffer@ boxFlags = NativeBuffer(2 * 4);\n"
+        "  if (!box.ClassifyVertices(2, boxPointsSafe, 12, boxFlags)) return 921;\n"
+        "  if (!box.ClassifyVerticesOneAxis(2, boxPointsSafe, 12, 0, boxFlags)) return 922;\n"
         "  VxVector vector = {1.0f, 2.0f, 3.0f};\n"
         "  if (vector.x != 1.0f || vector.y != 2.0f || vector.z != 3.0f) return 25;\n"
         "  if (vector[0] != 1.0f || vector[1] != 2.0f || vector[2] != 3.0f) return 26;\n"
@@ -1454,6 +1647,39 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  VxVector copiedB;\n"
         "  if (destBytes.Read(copiedA) != 12 || destBytes.Read(copiedB) != 12) return 71;\n"
         "  if (copiedA.x != 3.0f || copiedB.x != 1.0f) return 72;\n"
+        "  NativeBuffer@ destBytesSafe = NativeBuffer(24);\n"
+        "  if (!VxIndexedCopy(destBytesSafe, 12, sourceBytes, 12, 12, indexBytes, 2)) return 923;\n"
+        "  NativeBuffer@ interpA = NativeBuffer(8);\n"
+        "  NativeBuffer@ interpB = NativeBuffer(8);\n"
+        "  NativeBuffer@ interpOut = NativeBuffer(8);\n"
+        "  if (interpA.WriteFloat(1.0f) != 4 || interpA.WriteFloat(3.0f) != 4) return 924;\n"
+        "  if (interpB.WriteFloat(5.0f) != 4 || interpB.WriteFloat(7.0f) != 4) return 925;\n"
+        "  if (!InterpolateFloatArray(interpOut, interpA, interpB, 0.5f, 2)) return 926;\n"
+        "  if (!interpOut.Seek(0)) return 927;\n"
+        "  float interpF0;\n"
+        "  float interpF1;\n"
+        "  if (interpOut.ReadFloat(interpF0) != 4 || interpOut.ReadFloat(interpF1) != 4) return 928;\n"
+        "  if (interpF0 != 3.0f || interpF1 != 5.0f) return 929;\n"
+        "  NativeBuffer@ interpVecOut = NativeBuffer(24);\n"
+        "  if (!InterpolateVectorArray(interpVecOut, sourceBytes, sourceBytes, 0.25f, 2, 12, 12)) return 930;\n"
+        "  NativeBuffer@ fillSrc = NativeBuffer(4);\n"
+        "  NativeBuffer@ fillDst = NativeBuffer(8);\n"
+        "  if (fillSrc.WriteInt(287454020) != 4) return 931;\n"
+        "  if (!VxFillStructure(2, fillDst, 4, 4, fillSrc)) return 932;\n"
+        "  if (!fillDst.Seek(0)) return 933;\n"
+        "  int filled0;\n"
+        "  int filled1;\n"
+        "  if (fillDst.ReadInt(filled0) != 4 || fillDst.ReadInt(filled1) != 4) return 934;\n"
+        "  if (filled0 != 287454020 || filled1 != 287454020) return 935;\n"
+        "  NativeBuffer@ copyDstSafe = NativeBuffer(8);\n"
+        "  if (!VxCopyStructure(2, copyDstSafe, 4, 4, fillDst, 4)) return 936;\n"
+        "  NativeBuffer@ bboxPoints = NativeBuffer(4 * 12);\n"
+        "  if (bboxPoints.Write(VxVector(0.0f, 0.0f, 0.0f)) != 12) return 939;\n"
+        "  if (bboxPoints.Write(VxVector(1.0f, 0.0f, 0.0f)) != 12) return 940;\n"
+        "  if (bboxPoints.Write(VxVector(0.0f, 1.0f, 0.0f)) != 12) return 941;\n"
+        "  if (bboxPoints.Write(VxVector(0.0f, 0.0f, 1.0f)) != 12) return 942;\n"
+        "  VxMatrix bestFitBox;\n"
+        "  if (!VxComputeBestFitBBox(bboxPoints, 12, 4, bestFitBox, 0.0f)) return 943;\n"
         "  VxMatrix matrix;\n"
         "  matrix.SetIdentity();\n"
         "  if (matrix[0].x != 1.0f || matrix[0].y != 0.0f || matrix[1].y != 1.0f || matrix[2].z != 1.0f || matrix[3].w != 1.0f) return 73;\n"
@@ -1549,6 +1775,8 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  frustum.ComputeVertices(frustumVertices.ToPointer());\n"
         "  VxVector frustumVertex;\n"
         "  if (frustumVertices.Read(frustumVertex) != 12) return 602;\n"
+        "  NativeBuffer@ frustumVerticesSafe = NativeBuffer(8 * 12);\n"
+        "  if (!frustum.ComputeVertices(frustumVerticesSafe)) return 937;\n"
         "  bool frustumFace = VxIntersectFrustumFace(frustum, VxVector(0.0f, 0.0f, 2.0f), VxVector(1.0f, 0.0f, 2.0f), VxVector(0.0f, 1.0f, 2.0f));\n"
         "  bool frustumAabb = VxIntersectFrustumAABB(frustum, sameBox);\n"
         "  bool frustumObb = VxIntersectFrustumOBB(frustum, sameBox, identity);\n"
@@ -1558,6 +1786,9 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  if (!missingMap.GetBase().IsNull()) return 83;\n"
         "  if (missingMap.GetFileSize() != 0) return 84;\n"
         "  if (missingMap.GetErrorType() != VxMMF_FileOpen) return 85;\n"
+        "  NativeBuffer@ keyState = NativeBuffer(256);\n"
+        "  if (!keyState.Fill(0, 256)) return 938;\n"
+        "  VxScanCodeToAscii(0, keyState);\n"
         "  VxMutex mutex;\n"
         "  mutex.EnterMutex();\n"
         "  mutex.LeaveMutex();\n"
@@ -2476,7 +2707,18 @@ static void RegisterVXFONTINFO(asIScriptEngine *engine) {
 // VxWindowFunctions
 
 static char VxScanCodeToAsciiWrapper(unsigned int scancode, NativePointer keyState) {
+    if (keyState.IsNull()) {
+        SetVxNativeBufferException("VxScanCodeToAscii requires a non-null keyState pointer for 256 bytes.");
+        return 0;
+    }
     return VxScanCodeToAscii(scancode, reinterpret_cast<unsigned char *>(keyState.Get()));
+}
+
+static char VxScanCodeToAsciiBuffer(unsigned int scancode, NativeBuffer *keyState) {
+    if (!EnsureNativeBuffer(keyState, 256, "VxScanCodeToAscii requires a keyState NativeBuffer of at least 256 bytes.")) {
+        return 0;
+    }
+    return VxScanCodeToAscii(scancode, reinterpret_cast<unsigned char *>(keyState->Data()));
 }
 
 static int VxScanCodeToNameWrapper(unsigned int scancode, std::string &out) {
@@ -2548,6 +2790,7 @@ static void RegisterVxWindowFunctions(asIScriptEngine *engine) {
 
     // Keyboard and cursor functions
     r = engine->RegisterGlobalFunction("int8 VxScanCodeToAscii(uint scancode, NativePointer keyState)", asFUNCTION(VxScanCodeToAsciiWrapper), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("int8 VxScanCodeToAscii(uint scancode, NativeBuffer@ keyState)", asFUNCTION(VxScanCodeToAsciiBuffer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("int VxScanCodeToName(uint scancode, string &out name)", asFUNCTION(VxScanCodeToNameWrapper), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("int VxShowCursor(bool show)", asFUNCTION(VxShowCursor), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool VxSetCursor(VXCURSOR_POINTER cursorID)", asFUNCTION(VxSetCursor), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
@@ -2831,11 +3074,97 @@ static void RegisterVxVector4(asIScriptEngine *engine) {
 // VxBbox
 
 static void VxBboxClassifyVertices(const VxBbox &box, int iVcount, NativePointer iVertices, unsigned long iStride, NativePointer oFlags) {
+    if (iVcount > 0 && (iVertices.IsNull() || oFlags.IsNull())) {
+        SetVxNativeBufferException("VxBbox::ClassifyVertices requires non-null vertices and flags pointers when count is positive.");
+        return;
+    }
     box.ClassifyVertices(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, reinterpret_cast<unsigned long *>(oFlags.Get()));
 }
 
 static void VxBboxClassifyVerticesOneAxis(const VxBbox &box, int iVcount, NativePointer iVertices, unsigned long iStride, int iAxis, NativePointer oFlags) {
+    if (iVcount > 0 && (iVertices.IsNull() || oFlags.IsNull())) {
+        SetVxNativeBufferException("VxBbox::ClassifyVerticesOneAxis requires non-null vertices and flags pointers when count is positive.");
+        return;
+    }
     box.ClassifyVerticesOneAxis(iVcount, reinterpret_cast<XBYTE *>(iVertices.Get()), iStride, iAxis, reinterpret_cast<unsigned long *>(oFlags.Get()));
+}
+
+static bool VxBboxClassifyVerticesBuffer(const VxBbox &box, int count, NativeBuffer *vertices, unsigned long stride, NativeBuffer *flags) {
+    if (count <= 0) {
+        return true;
+    }
+    size_t requiredVertices = 0;
+    size_t requiredFlags = 0;
+    if (!ComputeStridedByteSize(count, stride, sizeof(VxVector), requiredVertices) ||
+        !ComputePackedByteSize(count, sizeof(unsigned long), requiredFlags)) {
+        SetVxNativeBufferException("VxBbox::ClassifyVertices count/stride overflows NativeBuffer size calculation.");
+        return false;
+    }
+    if (!EnsureNativeBuffer(vertices, requiredVertices, "VxBbox::ClassifyVertices requires a vertices NativeBuffer large enough for count vectors.") ||
+        !EnsureNativeBuffer(flags, requiredFlags, "VxBbox::ClassifyVertices requires a flags NativeBuffer large enough for count values.")) {
+        return false;
+    }
+    XBYTE *vertexData = reinterpret_cast<XBYTE *>(vertices->Data());
+    XULONG *flagData = reinterpret_cast<XULONG *>(flags->Data());
+    for (int i = 0; i < count; ++i) {
+        const float *v = reinterpret_cast<const float *>(vertexData + static_cast<size_t>(i) * stride);
+        XULONG flag = 0;
+        if (v[2] < box.Min.z) {
+            flag |= VXCLIP_BACK;
+        } else if (v[2] > box.Max.z) {
+            flag |= VXCLIP_FRONT;
+        }
+        if (v[1] < box.Min.y) {
+            flag |= VXCLIP_BOTTOM;
+        } else if (v[1] > box.Max.y) {
+            flag |= VXCLIP_TOP;
+        }
+        if (v[0] < box.Min.x) {
+            flag |= VXCLIP_LEFT;
+        } else if (v[0] > box.Max.x) {
+            flag |= VXCLIP_RIGHT;
+        }
+        flagData[i] = flag;
+    }
+    return true;
+}
+
+static bool VxBboxClassifyVerticesOneAxisBuffer(const VxBbox &box, int count, NativeBuffer *vertices, unsigned long stride, int axis, NativeBuffer *flags) {
+    if (count <= 0) {
+        return true;
+    }
+    size_t requiredVertices = 0;
+    size_t requiredFlags = 0;
+    if (!ComputeStridedByteSize(count, stride, sizeof(VxVector), requiredVertices) ||
+        !ComputePackedByteSize(count, sizeof(unsigned long), requiredFlags)) {
+        SetVxNativeBufferException("VxBbox::ClassifyVerticesOneAxis count/stride overflows NativeBuffer size calculation.");
+        return false;
+    }
+    if (!EnsureNativeBuffer(vertices, requiredVertices, "VxBbox::ClassifyVerticesOneAxis requires a vertices NativeBuffer large enough for count vectors.") ||
+        !EnsureNativeBuffer(flags, requiredFlags, "VxBbox::ClassifyVerticesOneAxis requires a flags NativeBuffer large enough for count values.")) {
+        return false;
+    }
+    XBYTE *vertexData = reinterpret_cast<XBYTE *>(vertices->Data());
+    XULONG *flagData = reinterpret_cast<XULONG *>(flags->Data());
+    if (axis < 0 || axis > 2) {
+        for (int i = 0; i < count; ++i) {
+            flagData[i] = 0;
+        }
+        return true;
+    }
+    const float minValue = (&box.Min.x)[axis];
+    const float maxValue = (&box.Max.x)[axis];
+    for (int i = 0; i < count; ++i) {
+        const float *v = reinterpret_cast<const float *>(vertexData + static_cast<size_t>(i) * stride + static_cast<size_t>(axis) * sizeof(float));
+        if (*v < minValue) {
+            flagData[i] = 1;
+        } else if (*v > maxValue) {
+            flagData[i] = 2;
+        } else {
+            flagData[i] = 0;
+        }
+    }
+    return true;
 }
 
 static void VxBboxTransformTo(const VxBbox &box, NativePointer pts, const VxMatrix &mat) {
@@ -2847,6 +3176,14 @@ static void VxBboxTransformTo(const VxBbox &box, NativePointer pts, const VxMatr
         return;
     }
     box.TransformTo(points, mat);
+}
+
+static bool VxBboxTransformToBuffer(const VxBbox &box, NativeBuffer *pts, const VxMatrix &mat) {
+    if (!EnsureNativeBuffer(pts, 8 * sizeof(VxVector), "VxBbox::TransformTo requires an output NativeBuffer large enough for 8 VxVector values.")) {
+        return false;
+    }
+    box.TransformTo(reinterpret_cast<VxVector *>(pts->Data()), mat);
+    return true;
 }
 
 static void RegisterVxBbox(asIScriptEngine *engine) {
@@ -2890,11 +3227,14 @@ static void RegisterVxBbox(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxBbox", "int Classify(const VxBbox &in box, const VxVector &in point) const", asMETHODPR(VxBbox, Classify, (const VxBbox &, const VxVector &) const, int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVertices(int count, NativePointer vertices, uint stride, NativePointer flags) const", asFUNCTION(VxBboxClassifyVertices), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxBbox", "void ClassifyVerticesOneAxis(int count, NativePointer vertices, uint stride, int axis, NativePointer flags) const", asFUNCTION(VxBboxClassifyVerticesOneAxis), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxBbox", "bool ClassifyVertices(int count, NativeBuffer@ vertices, uint stride, NativeBuffer@ flags) const", asFUNCTION(VxBboxClassifyVerticesBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxBbox", "bool ClassifyVerticesOneAxis(int count, NativeBuffer@ vertices, uint stride, int axis, NativeBuffer@ flags) const", asFUNCTION(VxBboxClassifyVerticesOneAxisBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxBbox", "void Intersect(const VxBbox &in box)", asMETHODPR(VxBbox, Intersect, (const VxBbox &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxBbox", "bool VectorIn(const VxVector &in v) const", asMETHODPR(VxBbox, VectorIn, (const VxVector &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxBbox", "bool IsBoxInside(const VxBbox &in box) const", asMETHODPR(VxBbox, IsBoxInside, (const VxBbox &) const, XBOOL), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxBbox", "void TransformTo(NativePointer pts, const VxMatrix &in mat) const", asFUNCTION(VxBboxTransformTo), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxBbox", "bool TransformTo(NativeBuffer@ pts, const VxMatrix &in mat) const", asFUNCTION(VxBboxTransformToBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxBbox", "void TransformFrom(const VxBbox &in box, const VxMatrix &in mat)", asMETHODPR(VxBbox, TransformFrom, (const VxBbox &, const VxMatrix &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
@@ -3817,6 +4157,14 @@ static void VxFrustumComputeVertices(const VxFrustum &frustum, NativePointer ver
     frustum.ComputeVertices(reinterpret_cast<VxVector *>(vertices.Get()));
 }
 
+static bool VxFrustumComputeVerticesBuffer(const VxFrustum &frustum, NativeBuffer *vertices) {
+    if (!EnsureNativeBuffer(vertices, 8 * sizeof(VxVector), "VxFrustum.ComputeVertices requires an output NativeBuffer large enough for 8 VxVector values.")) {
+        return false;
+    }
+    frustum.ComputeVertices(reinterpret_cast<VxVector *>(vertices->Data()));
+    return true;
+}
+
 static void RegisterVxFrustum(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3874,6 +4222,7 @@ static void RegisterVxFrustum(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("VxFrustum", "bool IsInside(const VxVector &in point) const", asFUNCTION(VxFrustumIsInside), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "void Transform(const VxMatrix &in mat)", asMETHODPR(VxFrustum, Transform, (const VxMatrix &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "void ComputeVertices(NativePointer vertices) const", asFUNCTION(VxFrustumComputeVertices), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxFrustum", "bool ComputeVertices(NativeBuffer@ vertices) const", asFUNCTION(VxFrustumComputeVerticesBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxFrustum", "void Update()", asMETHOD(VxFrustum, Update), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
