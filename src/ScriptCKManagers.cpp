@@ -10,6 +10,7 @@
 #include "add_on/scriptarray/scriptarray.h"
 
 #include "ScriptUtils.h"
+#include "ScriptNativeBuffer.h"
 #include "ScriptNativePointer.h"
 #include "ScriptRegistration.h"
 #include "ScriptCKVertexBuffer.h"
@@ -1095,6 +1096,49 @@ static void SetCKAttributeManagerCallbackFunction(CKAttributeManager *self,
     self->SetAttributeCallbackFunction(attribType, nullptr, nullptr);
 }
 
+static const XObjectPointerArray &EmptyCKAttributeManagerObjectList() {
+    static XObjectPointerArray empty;
+    return empty;
+}
+
+static const XObjectPointerArray &FillCKAttributeListByAttributesBuffer(CKAttributeManager *self,
+                                                                        NativeBuffer *attribList,
+                                                                        int count) {
+    if (count < 0) {
+        SetActiveScriptException("CKAttributeManager.FillListByAttributes NativeBuffer count must be non-negative.");
+        return EmptyCKAttributeManagerObjectList();
+    }
+    if (count == 0) {
+        return self->FillListByAttributes(nullptr, 0);
+    }
+
+    const size_t required = static_cast<size_t>(count) * sizeof(CKAttributeType);
+    if (!attribList || !attribList->Data() || attribList->Size() < required) {
+        SetActiveScriptException("CKAttributeManager.FillListByAttributes requires a NativeBuffer large enough for count CKAttributeType values.");
+        return EmptyCKAttributeManagerObjectList();
+    }
+    return self->FillListByAttributes(reinterpret_cast<CKAttributeType *>(attribList->Data()), count);
+}
+
+static const XObjectPointerArray &FillCKAttributeListByGlobalAttributesBuffer(CKAttributeManager *self,
+                                                                              NativeBuffer *attribList,
+                                                                              int count) {
+    if (count < 0) {
+        SetActiveScriptException("CKAttributeManager.FillListByGlobalAttributes NativeBuffer count must be non-negative.");
+        return EmptyCKAttributeManagerObjectList();
+    }
+    if (count == 0) {
+        return self->FillListByGlobalAttributes(nullptr, 0);
+    }
+
+    const size_t required = static_cast<size_t>(count) * sizeof(CKAttributeType);
+    if (!attribList || !attribList->Data() || attribList->Size() < required) {
+        SetActiveScriptException("CKAttributeManager.FillListByGlobalAttributes requires a NativeBuffer large enough for count CKAttributeType values.");
+        return EmptyCKAttributeManagerObjectList();
+    }
+    return self->FillListByGlobalAttributes(reinterpret_cast<CKAttributeType *>(attribList->Data()), count);
+}
+
 void RegisterCKPluginManager(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -1393,6 +1437,8 @@ void RegisterCKAttributeManager(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKAttributeManager", "const XObjectPointerArray &GetGlobalAttributeListPtr(CKAttributeType attribType)", asMETHODPR(CKAttributeManager, GetGlobalAttributeListPtr, (CKAttributeType), const XObjectPointerArray &), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKAttributeManager", "const XObjectPointerArray &FillListByAttributes(NativePointer attribList, int count)", asFUNCTIONPR([](CKAttributeManager *self, NativePointer attribList, int count) -> const XObjectPointerArray & { return self->FillListByAttributes(reinterpret_cast<CKAttributeType *>(attribList.Get()), count); }, (CKAttributeManager *, NativePointer, int), const XObjectPointerArray &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKAttributeManager", "const XObjectPointerArray &FillListByGlobalAttributes(NativePointer attribList, int count)", asFUNCTIONPR([](CKAttributeManager *self, NativePointer attribList, int count) -> const XObjectPointerArray & { return self->FillListByGlobalAttributes(reinterpret_cast<CKAttributeType *>(attribList.Get()), count); }, (CKAttributeManager  *, NativePointer, int), const XObjectPointerArray &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeManager", "const XObjectPointerArray &FillListByAttributes(NativeBuffer@ attribList, int count)", asFUNCTION(FillCKAttributeListByAttributesBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKAttributeManager", "const XObjectPointerArray &FillListByGlobalAttributes(NativeBuffer@ attribList, int count)", asFUNCTION(FillCKAttributeListByGlobalAttributesBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKAttributeManager", "int GetCategoriesCount()", asMETHODPR(CKAttributeManager, GetCategoriesCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKAttributeManager", "string GetCategoryName(CKAttributeCategory index)", asFUNCTIONPR([](CKAttributeManager *self, CKAttributeCategory index) -> std::string { return ScriptStringify(self->GetCategoryName(index)); }, (CKAttributeManager *, CKAttributeCategory), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

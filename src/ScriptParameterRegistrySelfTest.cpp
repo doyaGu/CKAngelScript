@@ -6442,6 +6442,17 @@ bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *en
         return false;
     }
 
+    asITypeInfo *managerType = engine->GetTypeInfoByDecl("CKAttributeManager");
+    if (!managerType) {
+        error = "CKAttributeManager self-test could not find the registered type.";
+        return false;
+    }
+    if (!managerType->GetMethodByDecl("const XObjectPointerArray &FillListByAttributes(NativeBuffer@ attribList, int count)") ||
+        !managerType->GetMethodByDecl("const XObjectPointerArray &FillListByGlobalAttributes(NativeBuffer@ attribList, int count)")) {
+        error = "CKAttributeManager self-test could not find NativeBuffer list declarations.";
+        return false;
+    }
+
     constexpr const char *moduleName = "__CKAS_CKAttributeManagerSelfTest";
     const char *source =
         "int ProbeAttributeManager(CKContext@ ctx) {\n"
@@ -6455,6 +6466,11 @@ bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *en
         "  am.IsAttributeIndexValid(-2147483647);\n"
         "  am.IsCategoryIndexValid(-2147483647);\n"
         "  return 0;\n"
+        "}\n"
+        "void ProbeAttributeManagerNativeBuffer(CKAttributeManager@ am, NativeBuffer@ attrs) {\n"
+        "  if (am is null || attrs is null) return;\n"
+        "  am.FillListByAttributes(attrs, 1);\n"
+        "  am.FillListByGlobalAttributes(attrs, 1);\n"
         "}\n"
         "int ProbeAttributeManagerCallbackReject(CKContext@ ctx) {\n"
         "  CKAttributeManager@ am = ctx.GetAttributeManager();\n"
@@ -6493,9 +6509,10 @@ bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *en
     }
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeAttributeManager(CKContext@)");
+    asIScriptFunction *bufferProbe = module->GetFunctionByDecl("void ProbeAttributeManagerNativeBuffer(CKAttributeManager@, NativeBuffer@)");
     asIScriptFunction *callbackReject = module->GetFunctionByDecl("int ProbeAttributeManagerCallbackReject(CKContext@)");
     asIScriptFunction *callbackArgReject = module->GetFunctionByDecl("int ProbeAttributeManagerCallbackArgReject(CKContext@)");
-    if (!probe || !callbackReject || !callbackArgReject) {
+    if (!probe || !bufferProbe || !callbackReject || !callbackArgReject) {
         engine->DiscardModule(moduleName);
         error = "CKAttributeManager self-test functions were not found.";
         return false;
