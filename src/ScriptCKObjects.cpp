@@ -1527,6 +1527,34 @@ static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
     gen->SetReturnDWord(err);
 }
 
+static bool RejectCKBehaviorFunctionPointerWrite(const NativePointer &ptr, const char *message) {
+    if (ptr.IsNull()) {
+        return false;
+    }
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+    return true;
+}
+
+static void SetCKBehaviorFunction(CKBehavior *self, NativePointer fct) {
+    if (RejectCKBehaviorFunctionPointerWrite(fct, "CKBehavior.SetFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->SetFunction(nullptr);
+    }
+}
+
+static void SetCKBehaviorCallbackFunction(CKBehavior *self, NativePointer fct) {
+    if (RejectCKBehaviorFunctionPointerWrite(fct, "CKBehavior.SetCallbackFunction only accepts a null NativePointer from script.")) {
+        return;
+    }
+    if (self) {
+        self->SetCallbackFunction(nullptr);
+    }
+}
+
 void RegisterCKBehavior(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
@@ -1561,11 +1589,11 @@ void RegisterCKBehavior(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKBehavior", "void SetCompatibleClassID(CK_CLASSID cid)", asMETHODPR(CKBehavior, SetCompatibleClassID, (CK_CLASSID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Function
-    r = engine->RegisterObjectMethod("CKBehavior", "void SetFunction(NativePointer fct)", asFUNCTIONPR([](CKBehavior *self, NativePointer fct) { self->SetFunction(reinterpret_cast<CKBEHAVIORFCT>(fct.Get())); }, (CKBehavior *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "void SetFunction(NativePointer fct)", asFUNCTION(SetCKBehaviorFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "NativePointer GetFunction()", asFUNCTIONPR([](CKBehavior *self) { return NativePointer(self->GetFunction()); }, (CKBehavior *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Callbacks
-    r = engine->RegisterObjectMethod("CKBehavior", "void SetCallbackFunction(NativePointer fct)", asFUNCTIONPR([](CKBehavior *self, NativePointer fct) { self->SetCallbackFunction(reinterpret_cast<CKBEHAVIORCALLBACKFCT>(fct.Get())); }, (CKBehavior *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKBehavior", "void SetCallbackFunction(NativePointer fct)", asFUNCTION(SetCKBehaviorCallbackFunction), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "int CallCallbackFunction(CKDWORD message)", asMETHODPR(CKBehavior, CallCallbackFunction, (CKDWORD), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKBehavior", "int CallSubBehaviorsCallbackFunction(CKDWORD message, CKGUID &in behguid = void)", asMETHODPR(CKBehavior, CallSubBehaviorsCallbackFunction, (CKDWORD, CKGUID*), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 

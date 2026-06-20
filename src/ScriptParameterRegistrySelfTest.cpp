@@ -331,6 +331,50 @@ bool ExecuteCKBehaviorIOProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteCKBehaviorProbe(asIScriptEngine *engine,
+                            asIScriptFunction *function,
+                            CKBehavior *behavior,
+                            bool expectException,
+                            const char *label,
+                            std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, behavior);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (expectException) {
+        ok = r == asEXECUTION_EXCEPTION;
+        if (!ok) {
+            error = std::string(label) + " expected a script exception, got code " + std::to_string(r) + ".";
+        }
+    } else if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " + (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKSceneObjectProbe(asIScriptEngine *engine,
                                asIScriptFunction *function,
                                CKSceneObject *object,
@@ -10278,6 +10322,9 @@ bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         !behaviorType->GetMethodByDecl("CKERROR SetOutputParameterValue(int pos, ?&in value)") ||
         !behaviorType->GetMethodByDecl("CKERROR GetLocalParameterValue(int pos, ?&out value)") ||
         !behaviorType->GetMethodByDecl("CKERROR SetLocalParameterValue(int pos, ?&in value)") ||
+        !behaviorType->GetMethodByDecl("void SetFunction(NativePointer fct)") ||
+        !behaviorType->GetMethodByDecl("NativePointer GetFunction()") ||
+        !behaviorType->GetMethodByDecl("void SetCallbackFunction(NativePointer fct)") ||
         !behaviorType->GetMethodByDecl("NativePointer GetInputParameterReadDataPtr(int pos)") ||
         !behaviorType->GetMethodByDecl("NativePointer GetOutputParameterWriteDataPtr(int pos)") ||
         !behaviorType->GetMethodByDecl("NativePointer GetLocalParameterReadDataPtr(int pos)") ||
@@ -10327,6 +10374,23 @@ bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         "  behavior.GetFlags();\n"
         "  behavior.GetType();\n"
         "  return 0;\n"
+        "}\n"
+        "int ProbeCKBehaviorFunctionPointers(CKBehavior@ behavior) {\n"
+        "  if (behavior is null) return 2;\n"
+        "  NativePointer empty;\n"
+        "  behavior.SetFunction(empty);\n"
+        "  behavior.SetCallbackFunction(empty);\n"
+        "  return 0;\n"
+        "}\n"
+        "void RejectCKBehaviorFunctionPointer(CKBehavior@ behavior) {\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  behavior.SetFunction(ptr);\n"
+        "}\n"
+        "void RejectCKBehaviorCallbackPointer(CKBehavior@ behavior) {\n"
+        "  NativePointer ptr;\n"
+        "  ptr += 1;\n"
+        "  behavior.SetCallbackFunction(ptr);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -10348,8 +10412,31 @@ bool RunCKBehaviorScriptSelfTest(CKContext *context, asIScriptEngine *engine, st
         return false;
     }
 
+    asIScriptFunction *pointerProbe = module->GetFunctionByDecl("int ProbeCKBehaviorFunctionPointers(CKBehavior@)");
+    asIScriptFunction *rejectFunction = module->GetFunctionByDecl("void RejectCKBehaviorFunctionPointer(CKBehavior@)");
+    asIScriptFunction *rejectCallback = module->GetFunctionByDecl("void RejectCKBehaviorCallbackPointer(CKBehavior@)");
+    if (!pointerProbe || !rejectFunction || !rejectCallback) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehavior self-test function pointer probes were not found.";
+        return false;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR,
+                                                                  const_cast<CKSTRING>("__CKAS_CKBehaviorFunctionSelfTest"),
+                                                                  CK_OBJECTCREATION_DYNAMIC));
+    if (!behavior) {
+        engine->DiscardModule(moduleName);
+        error = "CKBehavior self-test could not create a temporary behavior.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKBehaviorProbe(engine, pointerProbe, behavior, false, "CKBehavior function pointer clear probe", error) &&
+                    ExecuteCKBehaviorProbe(engine, rejectFunction, behavior, true, "CKBehavior function pointer rejection probe", error) &&
+                    ExecuteCKBehaviorProbe(engine, rejectCallback, behavior, true, "CKBehavior callback pointer rejection probe", error);
+
+    context->DestroyObject(behavior);
     engine->DiscardModule(moduleName);
-    return true;
+    return ok;
 }
 
 bool RunCKBehaviorIOScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
