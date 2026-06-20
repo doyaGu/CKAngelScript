@@ -119,6 +119,19 @@ static bool ExecuteVxBindingScriptSmoke(asIScriptEngine *engine, std::string &er
         "  imageDesc.Image = imageStorage.ToPointer();\n"
         "  imageDesc.ColorMap = colorMapStorage.ToPointer();\n"
         "  if (imageDesc.Image.IsNull() || imageDesc.ColorMap.IsNull()) return 703;\n"
+        "  imageDesc.ColorMapEntries = 4;\n"
+        "  imageDesc.BytesPerColorEntry = 4;\n"
+        "  if (!imageDesc.SetImageBuffer(imageStorage)) return 706;\n"
+        "  if (!imageDesc.SetColorMapBuffer(colorMapStorage)) return 707;\n"
+        "  NativeBuffer@ imageView = imageDesc.GetImageBuffer();\n"
+        "  NativeBuffer@ colorMapView = imageDesc.GetColorMapBuffer();\n"
+        "  if (imageView is null || imageView.Size() != 16) return 708;\n"
+        "  if (colorMapView is null || colorMapView.Size() != 16) return 709;\n"
+        "  NativeBuffer@ alphaValues = NativeBuffer(4);\n"
+        "  alphaValues.Fill(0x7f, 4);\n"
+        "  if (!VxDoAlphaBlit(imageDesc, alphaValues)) return 710;\n"
+        "  NativeBuffer@ mip = NativeBuffer(4);\n"
+        "  if (!VxGenerateMipMap(imageDesc, mip)) return 711;\n"
         "  VxImageDescEx imagePointerCopy(imageDesc);\n"
         "  if (imagePointerCopy.Image.ToUInt() != imageDesc.Image.ToUInt() || imagePointerCopy.ColorMap.ToUInt() != imageDesc.ColorMap.ToUInt()) return 704;\n"
         "  VxImageDescEx imagePointerAssigned;\n"
@@ -906,6 +919,15 @@ bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error) {
         error = "CKPOINT window function declarations are not registered with safe point passing.";
         return false;
     }
+    if (!engine->GetGlobalFunctionByDecl("bool VxDoAlphaBlit(const VxImageDescEx &in dst, NativeBuffer@ alphaValues)") ||
+        !engine->GetGlobalFunctionByDecl("bool VxGenerateMipMap(const VxImageDescEx &in src, NativeBuffer@ dst)")) {
+        error = "Vx image NativeBuffer overload declarations are not registered.";
+        return false;
+    }
+    if (engine->GetGlobalFunctionByDecl("NativeBuffer@ VxConvertBitmap(BITMAP_HANDLE bitmap, VxImageDescEx &out desc)") != nullptr) {
+        error = "VxConvertBitmap self-test found stale NativeBuffer return declaration for unclear ownership.";
+        return false;
+    }
     for (asUINT i = 0; i < engine->GetGlobalFunctionCount(); ++i) {
         asIScriptFunction *function = engine->GetGlobalFunctionByIndex(i);
         if (!function) {
@@ -934,6 +956,18 @@ bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error) {
     }
     if (!directoryParserType->GetMethodByDecl("void Reset(const string &in dir, const string &in fileMask, bool recursive = false)")) {
         error = "CKDirectoryParser.Reset explicit overload is not registered.";
+        return false;
+    }
+    asITypeInfo *imageDescType = engine->GetTypeInfoByDecl("VxImageDescEx");
+    if (!imageDescType) {
+        error = "VxImageDescEx type is not registered.";
+        return false;
+    }
+    if (!imageDescType->GetMethodByDecl("NativeBuffer@ GetImageBuffer() const") ||
+        !imageDescType->GetMethodByDecl("bool SetImageBuffer(NativeBuffer@ buffer)") ||
+        !imageDescType->GetMethodByDecl("NativeBuffer@ GetColorMapBuffer() const") ||
+        !imageDescType->GetMethodByDecl("bool SetColorMapBuffer(NativeBuffer@ buffer)")) {
+        error = "VxImageDescEx NativeBuffer accessors are not registered.";
         return false;
     }
 

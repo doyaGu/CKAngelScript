@@ -902,6 +902,100 @@ static bool EnsureNativeBuffer(NativeBuffer *buffer, size_t required, const char
     return true;
 }
 
+static bool ComputeVxImageByteSize(const VxImageDescEx &desc, const char *method, size_t &required) {
+    required = 0;
+    if (desc.Flags >= _DXT1) {
+        if (desc.TotalImageSize <= 0) {
+            SetVxNativeBufferException((std::string(method) + " requires a positive compressed image size.").c_str());
+            return false;
+        }
+        required = static_cast<size_t>(desc.TotalImageSize);
+        return true;
+    }
+    if (desc.Height <= 0) {
+        SetVxNativeBufferException((std::string(method) + " requires a positive image height.").c_str());
+        return false;
+    }
+    if (desc.BytesPerLine != 0) {
+        const long long pitch = desc.BytesPerLine < 0
+                                    ? -static_cast<long long>(desc.BytesPerLine)
+                                    : static_cast<long long>(desc.BytesPerLine);
+        if (pitch <= 0) {
+            SetVxNativeBufferException((std::string(method) + " requires a valid image pitch.").c_str());
+            return false;
+        }
+        const size_t h = static_cast<size_t>(desc.Height);
+        const size_t p = static_cast<size_t>(pitch);
+        if (p > std::numeric_limits<size_t>::max() / h) {
+            SetVxNativeBufferException((std::string(method) + " image byte size overflowed.").c_str());
+            return false;
+        }
+        required = p * h;
+        return true;
+    }
+    if (desc.Width <= 0 || desc.BitsPerPixel <= 0) {
+        SetVxNativeBufferException((std::string(method) + " requires positive image width and bits per pixel.").c_str());
+        return false;
+    }
+    const size_t w = static_cast<size_t>(desc.Width);
+    const size_t h = static_cast<size_t>(desc.Height);
+    const size_t bpp = static_cast<size_t>(desc.BitsPerPixel);
+    if (w > std::numeric_limits<size_t>::max() / h ||
+        w * h > (std::numeric_limits<size_t>::max() - 7) / bpp) {
+        SetVxNativeBufferException((std::string(method) + " image byte size overflowed.").c_str());
+        return false;
+    }
+    required = (w * h * bpp + 7) / 8;
+    return true;
+}
+
+static bool ComputeVxImageAlphaByteSize(const VxImageDescEx &desc, const char *method, size_t &required) {
+    required = 0;
+    if (desc.Width <= 0 || desc.Height <= 0) {
+        SetVxNativeBufferException((std::string(method) + " requires positive image dimensions.").c_str());
+        return false;
+    }
+    const size_t w = static_cast<size_t>(desc.Width);
+    const size_t h = static_cast<size_t>(desc.Height);
+    if (w > std::numeric_limits<size_t>::max() / h) {
+        SetVxNativeBufferException((std::string(method) + " alpha byte size overflowed.").c_str());
+        return false;
+    }
+    required = w * h;
+    return true;
+}
+
+static bool ComputeVxImageMipByteSize(const VxImageDescEx &desc, const char *method, size_t &required) {
+    VxImageDescEx mipDesc(desc);
+    mipDesc.Width = desc.Width > 1 ? desc.Width / 2 : 1;
+    mipDesc.Height = desc.Height > 1 ? desc.Height / 2 : 1;
+    if (desc.Flags >= _DXT1) {
+        mipDesc.TotalImageSize = 0;
+    } else if (desc.BytesPerLine != 0) {
+        const long long pitch = desc.BytesPerLine < 0
+                                    ? -static_cast<long long>(desc.BytesPerLine)
+                                    : static_cast<long long>(desc.BytesPerLine);
+        const long long mipPitch = pitch > 1 ? pitch / 2 : pitch;
+        mipDesc.BytesPerLine = static_cast<int>(desc.BytesPerLine < 0 ? -mipPitch : mipPitch);
+    }
+    return ComputeVxImageByteSize(mipDesc, method, required);
+}
+
+static bool ComputeVxImageColorMapByteSize(const VxImageDescEx &desc, const char *method, size_t &required) {
+    required = 0;
+    if (desc.ColorMapEntries <= 0 || desc.BytesPerColorEntry <= 0) {
+        return true;
+    }
+    const size_t entries = static_cast<size_t>(desc.ColorMapEntries);
+    const size_t stride = static_cast<size_t>(desc.BytesPerColorEntry);
+    if (entries > std::numeric_limits<size_t>::max() / stride) {
+        SetVxNativeBufferException((std::string(method) + " color-map byte size overflowed.").c_str());
+        return false;
+    }
+    required = entries * stride;
+    return true;
+}
+
 static bool InterpolateFloatArrayBuffer(NativeBuffer *res, NativeBuffer *array1, NativeBuffer *array2, float factor, int count) {
     if (count <= 0) {
         return true;
@@ -1036,6 +1130,26 @@ static bool VxConvertToBumpMapBool(const VxImageDescEx &image) {
     return VxConvertToBumpMap(image) != FALSE;
 }
 
+static bool VxDoAlphaBlitBuffer(const VxImageDescEx &dst, NativeBuffer *alphaValues) {
+    size_t required = 0;
+    if (!ComputeVxImageAlphaByteSize(dst, "VxDoAlphaBlit", required) ||
+        !EnsureNativeBuffer(alphaValues, required, "VxDoAlphaBlit requires an alpha NativeBuffer large enough for one byte per pixel.")) {
+        return false;
+    }
+    VxDoAlphaBlit(dst, reinterpret_cast<XBYTE *>(alphaValues->Data()));
+    return true;
+}
+
+static bool VxGenerateMipMapBuffer(const VxImageDescEx &src, NativeBuffer *dst) {
+    size_t required = 0;
+    if (!ComputeVxImageMipByteSize(src, "VxGenerateMipMap", required) ||
+        !EnsureNativeBuffer(dst, required, "VxGenerateMipMap requires a destination NativeBuffer large enough for the next mip level.")) {
+        return false;
+    }
+    VxGenerateMipMap(src, reinterpret_cast<XBYTE *>(dst->Data()));
+    return true;
+}
+
 static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     int r = 0;
 
@@ -1066,6 +1180,7 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void VxDoBlitUpsideDown(const VxImageDescEx &in src, const VxImageDescEx &in dst)", asFUNCTION(VxDoBlitUpsideDown), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void VxDoAlphaBlit(const VxImageDescEx &in dst, uint8 alphaValue)", asFUNCTIONPR(VxDoAlphaBlit, (const VxImageDescEx &, XBYTE), void), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void VxDoAlphaBlit(const VxImageDescEx &in dst, NativePointer alphaValue)", asFUNCTIONPR([](const VxImageDescEx &dst, NativePointer alphaValue) { VxDoAlphaBlit(dst, reinterpret_cast<XBYTE *>(alphaValue.Get())); }, (const VxImageDescEx &, NativePointer), void), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxDoAlphaBlit(const VxImageDescEx &in dst, NativeBuffer@ alphaValues)", asFUNCTION(VxDoAlphaBlitBuffer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Inline functions
     r = engine->RegisterGlobalFunction("uint GetBitCount(uint mask)", asFUNCTION(GetBitCount), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
@@ -1075,6 +1190,7 @@ static void RegisterVxMathGlobalFunctions(asIScriptEngine *engine) {
 
     // Graphic utilities (MipMaps and Resizing)
     r = engine->RegisterGlobalFunction("void VxGenerateMipMap(const VxImageDescEx &in src, NativePointer dst)", asFUNCTIONPR([](const VxImageDescEx &src, NativePointer dst) { VxGenerateMipMap(src, reinterpret_cast<XBYTE *>(dst.Get())); }, (const VxImageDescEx &, NativePointer), void), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool VxGenerateMipMap(const VxImageDescEx &in src, NativeBuffer@ dst)", asFUNCTION(VxGenerateMipMapBuffer), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void VxResizeImage32(const VxImageDescEx &in src, const VxImageDescEx &in dst)", asFUNCTION(VxResizeImage32), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     // Conversion to normal/bump map
@@ -3292,6 +3408,59 @@ static bool VxImageDescExHasAlpha(const VxImageDescEx &desc) {
     return const_cast<VxImageDescEx &>(desc).HasAlpha() != FALSE;
 }
 
+static NativeBuffer *VxImageDescExGetImageBuffer(const VxImageDescEx *self) {
+    size_t size = 0;
+    if (!self || !self->Image ||
+        !ComputeVxImageByteSize(*self, "VxImageDescEx.GetImageBuffer", size)) {
+        return NativeBuffer::Create(0);
+    }
+    return NativeBuffer::Create(self->Image, size);
+}
+
+static bool VxImageDescExSetImageBuffer(VxImageDescEx *self, NativeBuffer *buffer) {
+    if (!self) {
+        SetVxNativeBufferException("VxImageDescEx.SetImageBuffer requires a valid descriptor.");
+        return false;
+    }
+    size_t required = 0;
+    if (!ComputeVxImageByteSize(*self, "VxImageDescEx.SetImageBuffer", required) ||
+        !EnsureNativeBuffer(buffer, required, "VxImageDescEx.SetImageBuffer requires a NativeBuffer large enough for the descriptor image data.")) {
+        return false;
+    }
+    self->Image = reinterpret_cast<XBYTE *>(buffer->Data());
+    return true;
+}
+
+static NativeBuffer *VxImageDescExGetColorMapBuffer(const VxImageDescEx *self) {
+    size_t size = 0;
+    if (!self || !self->ColorMap ||
+        !ComputeVxImageColorMapByteSize(*self, "VxImageDescEx.GetColorMapBuffer", size) ||
+        size == 0) {
+        return NativeBuffer::Create(0);
+    }
+    return NativeBuffer::Create(self->ColorMap, size);
+}
+
+static bool VxImageDescExSetColorMapBuffer(VxImageDescEx *self, NativeBuffer *buffer) {
+    if (!self) {
+        SetVxNativeBufferException("VxImageDescEx.SetColorMapBuffer requires a valid descriptor.");
+        return false;
+    }
+    size_t required = 0;
+    if (!ComputeVxImageColorMapByteSize(*self, "VxImageDescEx.SetColorMapBuffer", required)) {
+        return false;
+    }
+    if (required == 0) {
+        self->ColorMap = nullptr;
+        return true;
+    }
+    if (!EnsureNativeBuffer(buffer, required, "VxImageDescEx.SetColorMapBuffer requires a NativeBuffer large enough for the descriptor color map.")) {
+        return false;
+    }
+    self->ColorMap = reinterpret_cast<XBYTE *>(buffer->Data());
+    return true;
+}
+
 static void RegisterVxImageDescEx(asIScriptEngine *engine) {
     int r = 0;
 
@@ -3328,9 +3497,13 @@ static void RegisterVxImageDescEx(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("VxImageDescEx", "NativePointer get_ColorMap() const", asFUNCTIONPR([](const VxImageDescEx *self) { return NativePointer(self->ColorMap); }, (const VxImageDescEx *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxImageDescEx", "void set_ColorMap(NativePointer ptr)", asFUNCTIONPR([](VxImageDescEx *self, NativePointer ptr) { self->ColorMap = reinterpret_cast<XBYTE *>(ptr.Get()); }, (VxImageDescEx *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "NativeBuffer@ GetColorMapBuffer() const", asFUNCTION(VxImageDescExGetColorMapBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "bool SetColorMapBuffer(NativeBuffer@ buffer)", asFUNCTION(VxImageDescExSetColorMapBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("VxImageDescEx", "NativePointer get_Image() const", asFUNCTIONPR([](const VxImageDescEx *self) { return NativePointer(self->Image); }, (const VxImageDescEx *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("VxImageDescEx", "void set_Image(NativePointer ptr)", asFUNCTIONPR([](VxImageDescEx *self, NativePointer ptr) { self->Image = reinterpret_cast<XBYTE *>(ptr.Get()); }, (VxImageDescEx *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "NativeBuffer@ GetImageBuffer() const", asFUNCTION(VxImageDescExGetImageBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("VxImageDescEx", "bool SetImageBuffer(NativeBuffer@ buffer)", asFUNCTION(VxImageDescExSetImageBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 }
 
 void RegisterVxMath(asIScriptEngine *engine) {
