@@ -2577,6 +2577,76 @@ void RegisterCKMaterial(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKMaterial", "CKParameter@ GetEffectParameter() const", asMETHODPR(CKMaterial, GetEffectParameter, (), CKParameter*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
+static void SetCKBitmapDataException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+static bool ComputeCKBitmapDataImageByteSize(int width, int height, int bitsPerPixel, const char *method, size_t &size) {
+    if (width <= 0 || height <= 0 || bitsPerPixel <= 0) {
+        SetCKBitmapDataException((std::string(method) + " requires positive image dimensions and bits per pixel.").c_str());
+        return false;
+    }
+
+    const size_t w = static_cast<size_t>(width);
+    const size_t h = static_cast<size_t>(height);
+    const size_t bpp = static_cast<size_t>(bitsPerPixel);
+    if (w > std::numeric_limits<size_t>::max() / h ||
+        w * h > (std::numeric_limits<size_t>::max() - 7) / bpp) {
+        SetCKBitmapDataException((std::string(method) + " image byte size overflowed.").c_str());
+        return false;
+    }
+
+    size = (w * h * bpp + 7) / 8;
+    return true;
+}
+
+static bool ComputeCKBitmapDataDescByteSize(const VxImageDescEx &desc, const char *method, size_t &size) {
+    if (desc.Height <= 0) {
+        SetCKBitmapDataException((std::string(method) + " requires a positive image height.").c_str());
+        return false;
+    }
+
+    if (desc.BytesPerLine != 0) {
+        const long long pitch = desc.BytesPerLine < 0
+                                    ? -static_cast<long long>(desc.BytesPerLine)
+                                    : static_cast<long long>(desc.BytesPerLine);
+        if (pitch <= 0) {
+            SetCKBitmapDataException((std::string(method) + " requires a valid image pitch.").c_str());
+            return false;
+        }
+        const size_t h = static_cast<size_t>(desc.Height);
+        const size_t p = static_cast<size_t>(pitch);
+        if (p > std::numeric_limits<size_t>::max() / h) {
+            SetCKBitmapDataException((std::string(method) + " image byte size overflowed.").c_str());
+            return false;
+        }
+        size = p * h;
+        return true;
+    }
+
+    return ComputeCKBitmapDataImageByteSize(desc.Width, desc.Height, desc.BitsPerPixel, method, size);
+}
+
+static bool ValidateCKBitmapDataBuffer(NativeBuffer *buffer, size_t required, const char *method) {
+    if (!buffer || (required > 0 && !buffer->Data()) || buffer->Size() < required) {
+        SetCKBitmapDataException((std::string(method) + " requires a NativeBuffer large enough for the image data.").c_str());
+        return false;
+    }
+    return true;
+}
+
+template<typename T>
+static bool SetCKBitmapDataSlotImageFromBuffer(T *self, int slot, NativeBuffer *buffer, VxImageDescEx &desc) {
+    size_t required = 0;
+    if (!ComputeCKBitmapDataDescByteSize(desc, "CKBitmapData.SetSlotImage", required) ||
+        !ValidateCKBitmapDataBuffer(buffer, required, "CKBitmapData.SetSlotImage")) {
+        return false;
+    }
+    return self->SetSlotImage(slot, buffer->Data(), desc) != FALSE;
+}
+
 template<typename T>
 void RegisterCKBitmapDataMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
@@ -2656,6 +2726,7 @@ void RegisterCKBitmapDataMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "void SetAlphaForTransparentColor(const VxImageDescEx &in desc)", asMETHODPR(T, SetAlphaForTransparentColor, (const VxImageDescEx &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "void SetBorderColorForClamp(const VxImageDescEx &in desc)", asMETHODPR(T, SetBorderColorForClamp, (const VxImageDescEx &), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool SetSlotImage(int slot, NativePointer buffer, const VxImageDescEx &in desc)", asFUNCTIONPR([](T *self, int slot, NativePointer buffer, VxImageDescEx &desc) -> bool { return self->SetSlotImage(slot, buffer.Get(), desc); }, (T *, int, NativePointer, VxImageDescEx &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "bool SetSlotImage(int slot, NativeBuffer@ buffer, const VxImageDescEx &in desc)", asFUNCTION(SetCKBitmapDataSlotImageFromBuffer<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // r = engine->RegisterObjectMethod(name, "bool DumpToChunk(CKStateChunk@ chunk, CKContext@ context, CKFile@ file, NativeBuffer Identifiers)", asFUNCTIONPR([](T *self, CKStateChunk *chunk, CKContext *context, CKFile *file, NativeBuffer identifiers) -> bool { return self->DumpToChunk(chunk, context, file, identifiers); }, (T *, CKStateChunk *, CKContext *, CKFile *, NativeBuffer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod(name, "bool ReadFromChunk(CKStateChunk@ chunk, CKContext@ context, CKFile@ file, NativeBuffer Identifiers)", asFUNCTIONPR([](T *self, CKStateChunk *chunk, CKContext *context, CKFile *file, NativeBuffer identifiers) -> bool { return self->ReadFromChunk(chunk, context, file, identifiers); }, (T *, CKStateChunk *, CKContext *, CKFile *, NativeBuffer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

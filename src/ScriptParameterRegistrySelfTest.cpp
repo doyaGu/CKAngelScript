@@ -11965,7 +11965,8 @@ bool RunCKTextureScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         textureType->GetMethodByDecl("CKBeObject@ opImplCast()") == nullptr ||
         textureType->GetMethodByDecl("bool GetVideoTextureDesc(VxImageDescEx&out desc)") == nullptr ||
         textureType->GetMethodByDecl("bool GetSystemTextureDesc(VxImageDescEx&out desc)") == nullptr ||
-        textureType->GetMethodByDecl("bool GetUserMipMapLevel(int level, VxImageDescEx&out resultImage)") == nullptr) {
+        textureType->GetMethodByDecl("bool GetUserMipMapLevel(int level, VxImageDescEx&out resultImage)") == nullptr ||
+        textureType->GetMethodByDecl("bool SetSlotImage(int slot, NativeBuffer@ buffer, const VxImageDescEx&in desc)") == nullptr) {
         error = "CKTexture self-test could not find expected texture methods.";
         return false;
     }
@@ -11992,6 +11993,11 @@ bool RunCKTextureScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         "  if (!texture.CreateImage(2, 2, 32, 0)) return 4;\n"
         "  if (texture.GetWidth() != 2 || texture.m_Width != 2) return 5;\n"
         "  if (texture.GetHeight() != 2 || texture.m_Height != 2) return 6;\n"
+        "  VxImageDescEx imageDesc;\n"
+        "  if (!texture.GetImageDesc(imageDesc)) return 23;\n"
+        "  NativeBuffer@ slotData = NativeBuffer(16);\n"
+        "  slotData.Fill(0x44, 16);\n"
+        "  if (!texture.SetSlotImage(0, slotData, imageDesc)) return 24;\n"
         "  texture.IsInVideoMemory();\n"
         "  texture.UseMipmap(false);\n"
         "  texture.GetMipmapCount();\n"
