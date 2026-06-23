@@ -29,7 +29,7 @@ typedef struct CKAngelScriptResultReader CKAngelScriptResultReader;
 typedef struct CKBehaviorContext CKBehaviorContext;
 typedef struct CKAngelScript CKAngelScript;
 
-#define CKAS_API_VERSION 6
+#define CKAS_API_VERSION 7
 
 #ifdef __cplusplus
 class CKContext;
@@ -81,7 +81,8 @@ typedef enum CKAS_FEATURE {
     CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS = 15,
     CKAS_FEATURE_SCRIPT_ARRAY_ACCESS = 16,
     CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION = 17,
-    CKAS_FEATURE_SOURCE_SECTIONS = 18
+    CKAS_FEATURE_SOURCE_SECTIONS = 18,
+    CKAS_FEATURE_OBJECT_HANDLE_ARGS = 19
 } CKAS_FEATURE;
 
 typedef enum CKAS_EXECUTIONSTATE {
@@ -357,6 +358,9 @@ typedef CKAS_STATUS (*CKAngelScriptArrayInsertLastProc)(void *array, const void 
 typedef CKAS_STATUS (*CKAngelScriptArrayRemoveAtProc)(void *array, CKDWORD index);
 typedef CKAS_STATUS (*CKAngelScriptArrayRemoveLastProc)(void *array);
 typedef CKAS_STATUS (*CKAngelScriptArrayClearProc)(void *array);
+typedef CKAS_STATUS (*CKAngelScriptArgSetObjectHandleProc)(CKAngelScriptArgWriter *writer,
+                                                           CKDWORD index,
+                                                           void *object);
 
 typedef struct CKAngelScriptExtensionApi {
     CKDWORD Size;
@@ -666,6 +670,9 @@ CKAS_API CKAS_STATUS CKAngelScriptArgSetString(CKAngelScriptArgWriter *writer,
 CKAS_API CKAS_STATUS CKAngelScriptArgSetBorrowedObject(CKAngelScriptArgWriter *writer,
                                                        CKDWORD index,
                                                        void *object);
+CKAS_API CKAS_STATUS CKAngelScriptArgSetObjectHandle(CKAngelScriptArgWriter *writer,
+                                                     CKDWORD index,
+                                                     void *object);
 
 CKAS_API CKAS_STATUS CKAngelScriptResultGetBool(CKAngelScriptResultReader *reader,
                                                 CKBOOL *value);

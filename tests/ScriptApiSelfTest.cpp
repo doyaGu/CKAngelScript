@@ -165,6 +165,7 @@ struct ObjectExecutionData {
     const char *StringInput = nullptr;
     char StringOutput[64] = {};
     size_t RequiredSize = 0;
+    void *ObjectInput = nullptr;
 };
 
 struct MetadataProbe {
@@ -174,6 +175,7 @@ struct MetadataProbe {
     bool Global = false;
     bool TypeProperty = false;
     bool Declaration = false;
+    bool SourceSectionType = false;
     int NamespacedTypes = 0;
     int NamespacedMethods = 0;
     CKDWORD CallbackCount = 0;
@@ -252,6 +254,11 @@ CKAS_STATUS WriteObjectString(CKAngelScriptArgWriter *writer, void *userData) {
     return CKAngelScriptArgSetString(writer, 0, data ? data->StringInput : "");
 }
 
+CKAS_STATUS WriteObjectHandle(CKAngelScriptArgWriter *writer, void *userData) {
+    auto *data = static_cast<ObjectExecutionData *>(userData);
+    return CKAngelScriptArgSetObjectHandle(writer, 0, data ? data->ObjectInput : nullptr);
+}
+
 CKAS_STATUS ReadObjectString(CKAngelScriptResultReader *reader, void *userData) {
     auto *data = static_cast<ObjectExecutionData *>(userData);
     if (!data) {
@@ -320,6 +327,10 @@ CKAS_STATUS ProbeMetadata(const CKAngelScriptMetadataEntry *entry,
                CkasStringContains(entry->ParentTypeNamespace, "CKASMetadata") &&
                CkasStringEquals(entry->Name, "Mark")) {
         ++probe->NamespacedMethods;
+    } else if (CkasStringEquals(metadata, "ckas_selftest_source_section_type") &&
+               entry->Target == CKAS_METADATA_TYPE &&
+               CkasStringEquals(entry->Name, "__CKAS_SourceSectionMetadataType")) {
+        probe->SourceSectionType = true;
     }
 
     return CKAS_OK;
@@ -567,6 +578,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_FEATURE_SCRIPT_ARRAY_ACCESS != 16 ||
         CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION != 17 ||
         CKAS_FEATURE_SOURCE_SECTIONS != 18 ||
+        CKAS_FEATURE_OBJECT_HANDLE_ARGS != 19 ||
         CKAS_EXECUTION_CANCELLED != 5 ||
         CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
         CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
@@ -595,8 +607,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS) ||
         !api->HasFeature(CKAS_FEATURE_SCRIPT_ARRAY_ACCESS) ||
         !api->HasFeature(CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION) ||
-        !api->HasFeature(CKAS_FEATURE_SOURCE_SECTIONS)) {
-        error = "CKAngelScript API self-test found an unexpected v6 feature set.";
+        !api->HasFeature(CKAS_FEATURE_SOURCE_SECTIONS) ||
+        !api->HasFeature(CKAS_FEATURE_OBJECT_HANDLE_ARGS)) {
+        error = "CKAngelScript API self-test found an unexpected v7 feature set.";
         return false;
     }
 
@@ -1088,6 +1101,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "#include \"lib/helper.as\"\n"
         "int __ckas_public_source_sections_loaded() { return __ckas_snapshot_helper() + 1; }\n";
     const char *sourceSectionHelper =
+        "[ckas_selftest_source_section_type]\n"
+        "class __CKAS_SourceSectionMetadataType {}\n"
         "int __ckas_snapshot_helper() { return 20; }\n";
     CKAngelScriptSourceSection sourceSections[2] = {};
     sourceSections[0].Size = sizeof(sourceSections[0]);
@@ -1110,6 +1125,16 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                   &result) != CKAS_OK ||
         !borrowedFunction) {
         error = "CKAngelScript API self-test expected source-section LoadModule to resolve in-memory includes.";
+        RemoveTextFile(singleFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
+    MetadataProbe sourceSectionMetadataProbe;
+    if (api->EnumerateMetadata(sourceSectionsModuleName, ProbeMetadata, &sourceSectionMetadataProbe, &result) != CKAS_OK ||
+        !sourceSectionMetadataProbe.SourceSectionType) {
+        error = "CKAngelScript API self-test expected source-section LoadModule to preserve metadata from included sections.";
         RemoveTextFile(singleFile);
         RemoveTextFile(multiFileA);
         RemoveTextFile(multiFileB);
@@ -1722,6 +1747,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  bool Flip(bool value) { return !value; }\n"
         "  float Half(float value) { return value * 0.5f; }\n"
         "  string Echo(const string &in value) { return \"echo:\" + value; }\n"
+        "  int UseHandle(__CKAS_PublicObject@ other) { return other is null ? -1 : other.Add(base); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
         "}\n"
@@ -2001,6 +2027,28 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     objectCall.ReadResult = ReadObjectInt;
+
+    methodOptions.MethodDecl = "int UseHandle(__CKAS_PublicObject@)";
+    CKAngelScriptMethod *handleMethod = nullptr;
+    objectData.ObjectInput = object;
+    objectData.IntOutput = 0;
+    if (api->FindObjectMethod(methodOptions, &handleMethod, &result) != CKAS_OK || !handleMethod) {
+        error = "CKAngelScript API self-test failed to find object-handle arg method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = handleMethod;
+    objectCall.WriteArgs = WriteObjectHandle;
+    objectCall.ReadResult = ReadObjectInt;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_OK || objectData.IntOutput != 20) {
+        error = "CKAngelScript API self-test expected object handle arg round-trip.";
+        api->ReleaseMethod(handleMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseMethod(handleMethod);
 
     methodOptions.MethodDecl = "bool Flip(bool)";
     CKAngelScriptMethod *boolMethod = nullptr;

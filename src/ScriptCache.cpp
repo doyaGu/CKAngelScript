@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <cstring>
 #include <unordered_map>
 #include <utility>
 
@@ -286,6 +287,167 @@ void ScriptMetadata::Extract(CScriptBuilder &builder, ScriptMetadata &outMetadat
     (void)outMetadata;
     // If metadata processing is disabled, do nothing.
 #endif
+}
+
+namespace {
+
+static std::string QualifiedName(const char *nameSpace, const char *name) {
+    std::string result;
+    if (nameSpace && nameSpace[0] != '\0') {
+        result += nameSpace;
+        result += "::";
+    }
+    result += name ? name : "";
+    return result;
+}
+
+static asITypeInfo *FindMatchingType(asIScriptModule *module, asITypeInfo *sourceType) {
+    if (!module || !sourceType)
+        return nullptr;
+
+    const std::string qualified = QualifiedName(sourceType->GetNamespace(), sourceType->GetName());
+    asITypeInfo *target = module->GetTypeInfoByDecl(qualified.c_str());
+    if (target)
+        return target;
+
+    const char *sourceName = sourceType->GetName();
+    const char *sourceNamespace = sourceType->GetNamespace();
+    for (asUINT i = 0; i < module->GetObjectTypeCount(); ++i) {
+        asITypeInfo *candidate = module->GetObjectTypeByIndex(i);
+        if (!candidate)
+            continue;
+        const char *candidateName = candidate->GetName();
+        const char *candidateNamespace = candidate->GetNamespace();
+        if (std::strcmp(candidateName ? candidateName : "", sourceName ? sourceName : "") == 0 &&
+            std::strcmp(candidateNamespace ? candidateNamespace : "", sourceNamespace ? sourceNamespace : "") == 0) {
+            return candidate;
+        }
+    }
+    return nullptr;
+}
+
+static asIScriptFunction *FindMatchingGlobalFunction(asIScriptModule *module, asIScriptFunction *sourceFunction) {
+    if (!module || !sourceFunction)
+        return nullptr;
+
+    const char *decl = sourceFunction->GetDeclaration(false, true, false);
+    if (decl && decl[0] != '\0') {
+        asIScriptFunction *target = module->GetFunctionByDecl(decl);
+        if (target)
+            return target;
+    }
+
+    const char *name = sourceFunction->GetName();
+    if (name && name[0] != '\0')
+        return module->GetFunctionByName(name);
+    return nullptr;
+}
+
+static int FindMatchingGlobalVar(asIScriptModule *module, const char *declaration) {
+    if (!module || !declaration || declaration[0] == '\0')
+        return -1;
+    const int index = module->GetGlobalVarIndexByDecl(declaration);
+    if (index >= 0)
+        return index;
+
+    for (asUINT i = 0; i < module->GetGlobalVarCount(); ++i) {
+        const char *candidateDecl = module->GetGlobalVarDeclaration(i, true);
+        if (candidateDecl && std::strcmp(candidateDecl, declaration) == 0)
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
+static int FindMatchingProperty(asITypeInfo *type, const char *declaration) {
+    if (!type || !declaration || declaration[0] == '\0')
+        return -1;
+    for (asUINT i = 0; i < type->GetPropertyCount(); ++i) {
+        const char *candidateDecl = type->GetPropertyDeclaration(i, false);
+        if (candidateDecl && std::strcmp(candidateDecl, declaration) == 0)
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
+} // namespace
+
+bool ScriptMetadata::RemapForModule(asIScriptModule *fromModule,
+                                    asIScriptModule *toModule,
+                                    const ScriptMetadata &fromMetadata,
+                                    ScriptMetadata &outMetadata) {
+    outMetadata.Clear();
+    if (!fromModule || !toModule)
+        return false;
+
+    asIScriptEngine *engine = fromModule->GetEngine();
+    if (!engine)
+        return false;
+
+    bool complete = true;
+    for (const auto &entry : fromMetadata.typeMetadataMap) {
+        asITypeInfo *sourceType = engine->GetTypeInfoById(entry.first);
+        asITypeInfo *targetType = FindMatchingType(toModule, sourceType);
+        if (targetType) {
+            outMetadata.typeMetadataMap[targetType->GetTypeId()] = entry.second;
+        } else {
+            complete = false;
+        }
+    }
+
+    for (const auto &entry : fromMetadata.funcMetadataMap) {
+        asIScriptFunction *sourceFunction = engine->GetFunctionById(entry.first);
+        asIScriptFunction *targetFunction = FindMatchingGlobalFunction(toModule, sourceFunction);
+        if (targetFunction) {
+            outMetadata.funcMetadataMap[targetFunction->GetId()] = entry.second;
+        } else {
+            complete = false;
+        }
+    }
+
+    for (const auto &entry : fromMetadata.varMetadataMap) {
+        const char *declaration = fromModule->GetGlobalVarDeclaration(static_cast<asUINT>(entry.first), true);
+        const int targetIndex = FindMatchingGlobalVar(toModule, declaration);
+        if (targetIndex >= 0) {
+            outMetadata.varMetadataMap[targetIndex] = entry.second;
+        } else {
+            complete = false;
+        }
+    }
+
+    for (const auto &entry : fromMetadata.classMetadataMap) {
+        asITypeInfo *sourceType = engine->GetTypeInfoById(entry.first);
+        asITypeInfo *targetType = FindMatchingType(toModule, sourceType);
+        if (!sourceType || !targetType) {
+            complete = false;
+            continue;
+        }
+
+        ScriptMetadata::ClassMetadata classMetadata(targetType->GetName() ? targetType->GetName() : "");
+        for (const auto &methodEntry : entry.second.funcMetadataMap) {
+            asIScriptFunction *sourceMethod = engine->GetFunctionById(methodEntry.first);
+            const char *declaration = sourceMethod ? sourceMethod->GetDeclaration(false, false, false) : nullptr;
+            asIScriptFunction *targetMethod = declaration ? targetType->GetMethodByDecl(declaration, false) : nullptr;
+            if (targetMethod) {
+                classMetadata.funcMetadataMap[targetMethod->GetId()] = methodEntry.second;
+            } else {
+                complete = false;
+            }
+        }
+
+        for (const auto &propertyEntry : entry.second.varMetadataMap) {
+            const char *declaration = sourceType->GetPropertyDeclaration(static_cast<asUINT>(propertyEntry.first), false);
+            const int targetIndex = FindMatchingProperty(targetType, declaration);
+            if (targetIndex >= 0) {
+                classMetadata.varMetadataMap[targetIndex] = propertyEntry.second;
+            } else {
+                complete = false;
+            }
+        }
+
+        outMetadata.classMetadataMap[targetType->GetTypeId()] = std::move(classMetadata);
+    }
+
+    return complete;
 }
 
 CachedScript::~CachedScript() {

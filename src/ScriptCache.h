@@ -113,6 +113,10 @@ struct ScriptMetadata {
     }
 
     static void Extract(CScriptBuilder &builder, ScriptMetadata &outMetadata);
+    static bool RemapForModule(asIScriptModule *fromModule,
+                               asIScriptModule *toModule,
+                               const ScriptMetadata &fromMetadata,
+                               ScriptMetadata &outMetadata);
 };
 
 struct CachedScript : ICachedScript {

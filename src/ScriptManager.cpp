@@ -273,6 +273,16 @@ bool IsValidBorrowedObjectParam(int typeId, asDWORD flags) {
            (flags & asTM_OUTREF) == 0;
 }
 
+bool IsValidObjectHandleParam(int typeId, asDWORD flags) {
+    if ((typeId & asTYPEID_OBJHANDLE) == 0) {
+        return false;
+    }
+    if ((typeId & asTYPEID_MASK_OBJECT) == 0) {
+        return false;
+    }
+    return (flags & asTM_OUTREF) == 0;
+}
+
 const char *StatusName(CKAS_STATUS status) {
     switch (status) {
         case CKAS_OK:
@@ -717,6 +727,7 @@ using ScriptManagerInternal::DispatchMetadata;
 using ScriptManagerInternal::IsIntOrEnumType;
 using ScriptManagerInternal::IsStringType;
 using ScriptManagerInternal::IsValidBorrowedObjectParam;
+using ScriptManagerInternal::IsValidObjectHandleParam;
 using ScriptManagerInternal::IsValidStringParam;
 using ScriptManagerInternal::MakeEngineExtensionConfigGroupName;
 using ScriptManagerInternal::MakeExecutionResult;
@@ -768,6 +779,7 @@ extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
         case CKAS_FEATURE_SCRIPT_ARRAY_ACCESS:
         case CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION:
         case CKAS_FEATURE_SOURCE_SECTIONS:
+        case CKAS_FEATURE_OBJECT_HANDLE_ARGS:
             return TRUE;
         default:
             return FALSE;
@@ -1420,6 +1432,19 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptArgSetBorrowedObject(CKAngelScriptA
         return CKAS_INVALIDARGUMENT;
     }
     if (!IsValidBorrowedObjectParam(writer->Method->ParamTypes[index], writer->Method->ParamFlags[index])) {
+        return CKAS_TYPEMISMATCH;
+    }
+    const int r = writer->Context->SetArgObject(static_cast<asUINT>(index), object);
+    return r < 0 ? CKAS_TYPEMISMATCH : CKAS_OK;
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptArgSetObjectHandle(CKAngelScriptArgWriter *writer,
+                                                                CKDWORD index,
+                                                                void *object) {
+    if (!ValidateArgIndex(writer, index)) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    if (!IsValidObjectHandleParam(writer->Method->ParamTypes[index], writer->Method->ParamFlags[index])) {
         return CKAS_TYPEMISMATCH;
     }
     const int r = writer->Context->SetArgObject(static_cast<asUINT>(index), object);
@@ -2322,7 +2347,10 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     committedCache->name = moduleName ? moduleName : "";
     committedCache->sections = candidate->sections;
     committedCache->sourceSnapshotSections = candidate->sourceSnapshotSections;
-    committedCache->metadata = candidate->metadata;
+    ScriptMetadata::RemapForModule(candidate->module,
+                                   committedModule,
+                                   candidate->metadata,
+                                   committedCache->metadata);
     committedCache->module = committedModule;
     m_ScriptCache.CacheScript(moduleName, committedCache);
     candidate->Discard();

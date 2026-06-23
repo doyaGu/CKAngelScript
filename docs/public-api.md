@@ -260,6 +260,12 @@ CKAngelScriptObjectMethodExecuteOptions call =
 CKAS_STATUS status = CKAngelScriptCallObjectMethod(angelScript, &call, &result);
 ```
 
+Use `CKAngelScriptArgSetBorrowedObject` only for borrowed object reference
+parameters such as `const T &in`. Use `CKAngelScriptArgSetObjectHandle` for
+handle parameters such as `T@`; it accepts null handles and relies on
+AngelScript's normal handle AddRef/Release behavior for the duration of the
+call.
+
 Typed helpers support `bool`, `int`, `float`, `string`, and explicitly borrowed host objects. Borrowed object arguments are for callback-local views already registered with the engine and must target read-only input references.
 
 Release handles when the host no longer needs them:
