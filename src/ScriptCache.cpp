@@ -1,6 +1,9 @@
 #include "ScriptCache.h"
 
+#include <algorithm>
+#include <cctype>
 #include <climits>
+#include <unordered_map>
 #include <utility>
 
 #include "ScriptManager.h"
@@ -38,6 +41,112 @@ static int PragmaCallback(const std::string &pragmaText, CScriptBuilder &builder
     // The #pragma directive was not accepted
     return -1;
 }
+
+namespace {
+
+std::string NormalizeSnapshotSectionName(std::string path) {
+    std::replace(path.begin(), path.end(), '\\', '/');
+
+    std::string prefix;
+    size_t start = 0;
+    if (path.size() >= 2 && path[1] == ':') {
+        prefix = path.substr(0, 2);
+        start = 2;
+        if (start < path.size() && path[start] == '/')
+            ++start;
+    } else if (!path.empty() && path[0] == '/') {
+        prefix = "/";
+        start = 1;
+    }
+
+    std::vector<std::string> parts;
+    while (start <= path.size()) {
+        const size_t end = path.find('/', start);
+        const std::string part = path.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (part.empty() || part == ".") {
+            // skip
+        } else if (part == "..") {
+            if (!parts.empty())
+                parts.pop_back();
+        } else {
+            parts.push_back(part);
+        }
+        if (end == std::string::npos)
+            break;
+        start = end + 1;
+    }
+
+    std::string normalized = prefix;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (!normalized.empty() && normalized.back() != '/')
+            normalized.push_back('/');
+        normalized += parts[i];
+    }
+    if (normalized.empty())
+        normalized = ".";
+
+#ifdef _WIN32
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+#endif
+    return normalized;
+}
+
+std::string ResolveSnapshotIncludeName(const char *include, const char *from) {
+    std::string includeName = include ? include : "";
+    std::replace(includeName.begin(), includeName.end(), '\\', '/');
+    const bool includeAbsolute = !includeName.empty() &&
+                                 (includeName[0] == '/' ||
+                                  (includeName.size() >= 2 && includeName[1] == ':'));
+    if (includeAbsolute)
+        return NormalizeSnapshotSectionName(includeName);
+
+    std::string base = from ? from : "";
+    std::replace(base.begin(), base.end(), '\\', '/');
+    const size_t slash = base.find_last_of('/');
+    if (slash != std::string::npos)
+        includeName = base.substr(0, slash + 1) + includeName;
+    return NormalizeSnapshotSectionName(includeName);
+}
+
+struct SnapshotSection {
+    std::string Name;
+    std::string Code;
+};
+
+struct SnapshotIncludeContext {
+    std::unordered_map<std::string, SnapshotSection> Sections;
+};
+
+int SnapshotIncludeCallback(const char *include,
+                            const char *from,
+                            CScriptBuilder *builder,
+                            void *userParam) {
+    auto *context = static_cast<SnapshotIncludeContext *>(userParam);
+    if (!context || !builder)
+        return -1;
+
+    const std::string key = ResolveSnapshotIncludeName(include, from);
+    const auto it = context->Sections.find(key);
+    if (it == context->Sections.end()) {
+        asIScriptEngine *engine = builder->GetEngine();
+        if (engine) {
+            const std::string message = "Failed to resolve snapshot include '" +
+                                        std::string(include ? include : "") + "'";
+            engine->WriteMessage(from ? from : "", 0, 0, asMSGTYPE_ERROR, message.c_str());
+        }
+        return -1;
+    }
+
+    const SnapshotSection &section = it->second;
+    return builder->AddSectionFromMemory(section.Name.c_str(),
+                                         section.Code.c_str(),
+                                         static_cast<unsigned int>(section.Code.size()),
+                                         0);
+}
+
+} // namespace
 
 std::vector<std::string> &ScriptMetadata::GetMetadataForType(int typeId) {
     auto it = typeMetadataMap.find(typeId);
@@ -204,7 +313,17 @@ bool CachedScript::Build(asIScriptEngine *engine) {
 
     // Prepare the script builder
     CScriptBuilder builder;
-    // builder.SetIncludeCallback(MyIncludeCallback, nullptr);
+    SnapshotIncludeContext snapshotIncludeContext;
+    if (sourceSnapshotSections) {
+        for (const auto &section : sections) {
+            SnapshotSection snapshotSection;
+            snapshotSection.Name = std::get<0>(section);
+            snapshotSection.Code = std::get<1>(section);
+            snapshotIncludeContext.Sections[NormalizeSnapshotSectionName(snapshotSection.Name)] =
+                std::move(snapshotSection);
+        }
+        builder.SetIncludeCallback(SnapshotIncludeCallback, &snapshotIncludeContext);
+    }
     builder.SetPragmaCallback(PragmaCallback, nullptr);
 
 #if CKVERSION == 0x13022002
@@ -222,8 +341,11 @@ bool CachedScript::Build(asIScriptEngine *engine) {
         return false;
     }
 
-    // Add the script file
-    for (auto &section: sections) {
+    // Add the script file. Snapshot sections use section[0] as the entry and
+    // resolve any included sections from the in-memory map above.
+    const size_t sectionCount = sourceSnapshotSections && !sections.empty() ? 1 : sections.size();
+    for (size_t i = 0; i < sectionCount; ++i) {
+        auto &section = sections[i];
         std::string &filename = std::get<0>(section);
         std::string &code = std::get<1>(section);
 
@@ -237,8 +359,11 @@ bool CachedScript::Build(asIScriptEngine *engine) {
             fclose(fp);
         }
 
-        if (!exists && code.size() != 0) {
-            r = builder.AddSectionFromMemory(filename.c_str(), code.c_str(), code.size(), 0);
+        if (sourceSnapshotSections || code.size() != 0) {
+            r = builder.AddSectionFromMemory(filename.c_str(),
+                                             code.c_str(),
+                                             static_cast<unsigned int>(code.size()),
+                                             0);
             if (r < 0) {
                 engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Failed to load section from memory");
                 return false;

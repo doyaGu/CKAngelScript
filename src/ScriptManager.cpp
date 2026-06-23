@@ -767,6 +767,7 @@ extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
         case CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS:
         case CKAS_FEATURE_SCRIPT_ARRAY_ACCESS:
         case CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION:
+        case CKAS_FEATURE_SOURCE_SECTIONS:
             return TRUE;
         default:
             return FALSE;
@@ -2140,6 +2141,7 @@ void ScriptManager::BumpModuleGeneration(const char *moduleName) {
 std::shared_ptr<CachedScript> ScriptManager::BuildTransientModule(
     const char *moduleName,
     const std::vector<std::tuple<std::string, std::string>> &sections,
+    bool sourceSnapshotSections,
     int &angelScriptCode,
     std::string &diagnostics,
     std::vector<CapturedScriptMessage> *messages) {
@@ -2152,6 +2154,7 @@ std::shared_ptr<CachedScript> ScriptManager::BuildTransientModule(
 
     auto script = std::make_shared<CachedScript>();
     script->name = moduleName;
+    script->sourceSnapshotSections = sourceSnapshotSections;
     for (const auto &section : sections) {
         script->AddSection(std::get<0>(section), std::get<1>(section));
     }
@@ -2186,6 +2189,7 @@ bool ScriptManager::CaptureModuleReplacementSnapshot(const char *moduleName,
     if (snapshot.Cache) {
         snapshot.Sections = snapshot.Cache->sections;
         snapshot.Metadata = snapshot.Cache->metadata;
+        snapshot.SourceSnapshotSections = snapshot.Cache->sourceSnapshotSections;
     }
 
     asIScriptModule *module = GetModule(moduleName);
@@ -2243,6 +2247,7 @@ bool ScriptManager::RestoreModuleReplacementSnapshot(const char *moduleName,
     std::shared_ptr<CachedScript> restoredCache = snapshot.Cache ? snapshot.Cache : std::make_shared<CachedScript>();
     restoredCache->name = moduleName ? moduleName : "";
     restoredCache->sections = snapshot.Sections;
+    restoredCache->sourceSnapshotSections = snapshot.SourceSnapshotSections;
     restoredCache->metadata = snapshot.Metadata;
     restoredCache->module = restoredModule;
     m_ScriptCache.CacheScript(moduleName, restoredCache);
@@ -2252,13 +2257,19 @@ bool ScriptManager::RestoreModuleReplacementSnapshot(const char *moduleName,
 CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     const char *moduleName,
     const std::vector<std::tuple<std::string, std::string>> &sections,
+    bool sourceSnapshotSections,
     CKAngelScriptResult *result) {
     int angelScriptCode = 0;
     std::string diagnostics;
     std::vector<CapturedScriptMessage> diagnosticMessages;
     const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(moduleName);
     std::shared_ptr<CachedScript> candidate =
-        BuildTransientModule(transientName.c_str(), sections, angelScriptCode, diagnostics, &diagnosticMessages);
+        BuildTransientModule(transientName.c_str(),
+                             sections,
+                             sourceSnapshotSections,
+                             angelScriptCode,
+                             diagnostics,
+                             &diagnosticMessages);
     if (!candidate || !candidate->module) {
         return StoreResult(result,
                            CKAS_COMPILEERROR,
@@ -2310,6 +2321,7 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     auto committedCache = std::make_shared<CachedScript>();
     committedCache->name = moduleName ? moduleName : "";
     committedCache->sections = candidate->sections;
+    committedCache->sourceSnapshotSections = candidate->sourceSnapshotSections;
     committedCache->metadata = candidate->metadata;
     committedCache->module = committedModule;
     m_ScriptCache.CacheScript(moduleName, committedCache);
@@ -2327,6 +2339,10 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
     const char **filenames = PublicField(options, &CKAngelScriptLoadOptions::Filenames, static_cast<const char **>(nullptr));
     const size_t fileCount = PublicField(options, &CKAngelScriptLoadOptions::FileCount, static_cast<size_t>(0));
     const char *code = PublicField(options, &CKAngelScriptLoadOptions::Code, static_cast<const char *>(nullptr));
+    const CKAngelScriptSourceSection *sourceSections =
+        PublicField(options, &CKAngelScriptLoadOptions::Sections, static_cast<const CKAngelScriptSourceSection *>(nullptr));
+    const size_t sourceSectionCount =
+        PublicField(options, &CKAngelScriptLoadOptions::SectionCount, static_cast<size_t>(0));
     const CKDWORD flags = PublicField(options,
                                       &CKAngelScriptLoadOptions::Flags,
                                       static_cast<CKDWORD>(CKAS_LOAD_DEFAULT));
@@ -2343,12 +2359,13 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
     const bool hasCode = code != nullptr;
     const bool hasFile = filename && filename[0] != '\0';
     const bool hasFiles = fileCount > 0;
-    const int sourceCount = (hasCode ? 1 : 0) + (hasFile ? 1 : 0) + (hasFiles ? 1 : 0);
+    const bool hasSourceSections = sourceSectionCount > 0;
+    const int sourceCount = (hasCode ? 1 : 0) + (hasFile ? 1 : 0) + (hasFiles ? 1 : 0) + (hasSourceSections ? 1 : 0);
     if (sourceCount > 1) {
         return StoreResult(result,
                            CKAS_INVALIDARGUMENT,
                            0,
-                           "LoadModule accepts only one source: Code, Filename, or Filenames.");
+                           "LoadModule accepts only one source: Code, Filename, Filenames, or Sections.");
     }
     const bool replacingExisting = HasModule(moduleName);
     if (replacingExisting) {
@@ -2364,6 +2381,38 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
     }
     if (hasCode) {
         return CompileModule(moduleName, code, CKAS_COMPILE_REPLACEEXISTING, result);
+    }
+    if (hasSourceSections) {
+        if (!sourceSections) {
+            return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Source section list is null.");
+        }
+        std::vector<std::tuple<std::string, std::string>> sections;
+        sections.reserve(sourceSectionCount);
+        for (size_t i = 0; i < sourceSectionCount; ++i) {
+            const CKAngelScriptSourceSection &sourceSection = sourceSections[i];
+            if (!HasCompletePublicStruct(sourceSection)) {
+                return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Source section options size is invalid.");
+            }
+            const char *sectionName = PublicField(sourceSection,
+                                                  &CKAngelScriptSourceSection::SectionName,
+                                                  static_cast<const char *>(nullptr));
+            const char *sectionCode = PublicField(sourceSection,
+                                                  &CKAngelScriptSourceSection::Code,
+                                                  static_cast<const char *>(nullptr));
+            const size_t sectionSize = PublicField(sourceSection,
+                                                   &CKAngelScriptSourceSection::CodeSize,
+                                                   static_cast<size_t>(0));
+            if (!sectionName || sectionName[0] == '\0') {
+                return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Source section list contains an empty section name.");
+            }
+            if (!sectionCode) {
+                return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Source section list contains null code.");
+            }
+            sections.emplace_back(sectionName,
+                                  sectionSize == 0 ? std::string(sectionCode)
+                                                   : std::string(sectionCode, sectionSize));
+        }
+        return ReplaceModuleFromSections(moduleName, sections, true, result);
     }
     if (hasFiles) {
         if (!filenames) {

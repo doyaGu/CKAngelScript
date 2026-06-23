@@ -119,6 +119,7 @@ struct CachedScript : ICachedScript {
     asIScriptModule *module = nullptr;
     std::string name;
     std::vector<std::tuple<std::string, std::string>> sections;
+    bool sourceSnapshotSections = false;
     ScriptMetadata metadata;
 
     ~CachedScript() override;

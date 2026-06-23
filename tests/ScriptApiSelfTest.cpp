@@ -427,6 +427,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         initLoadOptions.Filenames ||
         initLoadOptions.FileCount != 0 ||
         initLoadOptions.Code ||
+        initLoadOptions.Sections ||
+        initLoadOptions.SectionCount != 0 ||
         initLoadOptions.Flags != CKAS_LOAD_DEFAULT) {
         error = "CKAngelScript API self-test expected LoadOptions initializer defaults.";
         return false;
@@ -564,6 +566,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS != 15 ||
         CKAS_FEATURE_SCRIPT_ARRAY_ACCESS != 16 ||
         CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION != 17 ||
+        CKAS_FEATURE_SOURCE_SECTIONS != 18 ||
         CKAS_EXECUTION_CANCELLED != 5 ||
         CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
         CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
@@ -591,8 +594,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_OBJECT_TYPE_NAMESPACE) ||
         !api->HasFeature(CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS) ||
         !api->HasFeature(CKAS_FEATURE_SCRIPT_ARRAY_ACCESS) ||
-        !api->HasFeature(CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION)) {
-        error = "CKAngelScript API self-test found an unexpected v5 feature set.";
+        !api->HasFeature(CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION) ||
+        !api->HasFeature(CKAS_FEATURE_SOURCE_SECTIONS)) {
+        error = "CKAngelScript API self-test found an unexpected v6 feature set.";
         return false;
     }
 
@@ -1077,6 +1081,60 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->UnloadModule(multiFileModuleName, nullptr);
+
+    constexpr const char *sourceSectionsModuleName = "__CKAS_ManagerApiSourceSectionsLoadSelfTest";
+    const char *sourceSectionEntry =
+        "#include \"lib/helper.as\"\n"
+        "#include \"lib/helper.as\"\n"
+        "int __ckas_public_source_sections_loaded() { return __ckas_snapshot_helper() + 1; }\n";
+    const char *sourceSectionHelper =
+        "int __ckas_snapshot_helper() { return 20; }\n";
+    CKAngelScriptSourceSection sourceSections[2] = {};
+    sourceSections[0].Size = sizeof(sourceSections[0]);
+    sourceSections[0].SectionName = "entry/main.as";
+    sourceSections[0].Code = sourceSectionEntry;
+    sourceSections[0].CodeSize = std::strlen(sourceSectionEntry);
+    sourceSections[1].Size = sizeof(sourceSections[1]);
+    sourceSections[1].SectionName = "entry/lib/helper.as";
+    sourceSections[1].Code = sourceSectionHelper;
+    sourceSections[1].CodeSize = std::strlen(sourceSectionHelper);
+    CKAngelScriptLoadOptions sourceSectionOptions =
+        CKAngelScriptApi::LoadSectionsOptions(sourceSectionsModuleName,
+                                              sourceSections,
+                                              2,
+                                              CKAS_LOAD_REPLACEEXISTING);
+    if (api->LoadModule(sourceSectionOptions, &result) != CKAS_OK ||
+        api->BorrowFunctionByDecl(sourceSectionsModuleName,
+                                  "int __ckas_public_source_sections_loaded()",
+                                  &borrowedFunction,
+                                  &result) != CKAS_OK ||
+        !borrowedFunction) {
+        error = "CKAngelScript API self-test expected source-section LoadModule to resolve in-memory includes.";
+        RemoveTextFile(singleFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
+    api->UnloadModule(sourceSectionsModuleName, nullptr);
+
+    CKAngelScriptSourceSection invalidSourceSection = {};
+    invalidSourceSection.Size = sizeof(invalidSourceSection);
+    invalidSourceSection.SectionName = "";
+    invalidSourceSection.Code = sourceSectionEntry;
+    CKAngelScriptLoadOptions invalidSourceSectionOptions =
+        CKAngelScriptApi::LoadSectionsOptions("__CKAS_ManagerApiInvalidSourceSectionsSelfTest",
+                                              &invalidSourceSection,
+                                              1,
+                                              CKAS_LOAD_REPLACEEXISTING);
+    if (api->LoadModule(invalidSourceSectionOptions, &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected LoadModule with an invalid source section to fail.";
+        RemoveTextFile(singleFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
 
     constexpr const char *defaultFileModuleName = "__CKAS_ManagerApiDefaultFileLoadSelfTest";
     CKAngelScriptLoadOptions defaultFileOptions = CKAngelScriptApi::LoadOptions();

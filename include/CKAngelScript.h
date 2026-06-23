@@ -29,7 +29,7 @@ typedef struct CKAngelScriptResultReader CKAngelScriptResultReader;
 typedef struct CKBehaviorContext CKBehaviorContext;
 typedef struct CKAngelScript CKAngelScript;
 
-#define CKAS_API_VERSION 5
+#define CKAS_API_VERSION 6
 
 #ifdef __cplusplus
 class CKContext;
@@ -80,7 +80,8 @@ typedef enum CKAS_FEATURE {
     CKAS_FEATURE_OBJECT_TYPE_NAMESPACE = 14,
     CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS = 15,
     CKAS_FEATURE_SCRIPT_ARRAY_ACCESS = 16,
-    CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION = 17
+    CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION = 17,
+    CKAS_FEATURE_SOURCE_SECTIONS = 18
 } CKAS_FEATURE;
 
 typedef enum CKAS_EXECUTIONSTATE {
@@ -154,6 +155,16 @@ typedef CKAS_STATUS (*CKAngelScriptMetadataCallback)(
     const char *metadata,
     void *userData);
 
+typedef struct CKAngelScriptSourceSection {
+    CKDWORD Size;
+    // SectionName is used for diagnostics and relative include resolution.
+    // Code is borrowed only for the LoadModule call. CodeSize may be zero to
+    // request strlen(Code); pass a non-zero size for exact buffers.
+    const char *SectionName;
+    const char *Code;
+    size_t CodeSize;
+} CKAngelScriptSourceSection;
+
 typedef struct CKAngelScriptLoadOptions {
     CKDWORD Size;
     // ModuleName and source strings are borrowed only for the LoadModule call.
@@ -163,6 +174,10 @@ typedef struct CKAngelScriptLoadOptions {
     size_t FileCount;
     const char *Code;
     CKDWORD Flags;
+    // Sections[0] is the entry section; remaining sections are only used to
+    // resolve #include directives from the same snapshot.
+    const CKAngelScriptSourceSection *Sections;
+    size_t SectionCount;
 } CKAngelScriptLoadOptions;
 
 typedef struct CKAngelScriptFunctionOptions {
@@ -973,6 +988,18 @@ public:
         options.ModuleName = moduleName;
         options.Filenames = filenames;
         options.FileCount = fileCount;
+        options.Flags = flags;
+        return options;
+    }
+
+    static CKAngelScriptLoadOptions LoadSectionsOptions(const char *moduleName,
+                                                        const CKAngelScriptSourceSection *sections,
+                                                        size_t sectionCount,
+                                                        CKDWORD flags = CKAS_LOAD_DEFAULT) {
+        CKAngelScriptLoadOptions options = LoadOptions();
+        options.ModuleName = moduleName;
+        options.Sections = sections;
+        options.SectionCount = sectionCount;
         options.Flags = flags;
         return options;
     }

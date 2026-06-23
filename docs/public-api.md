@@ -26,7 +26,7 @@ if (!api.IsValid()) {
 
 The handle is owned by CKAngelScript. Do not allocate, delete, or cast it to CKAngelScript internals.
 
-Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. v3 feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, and metadata reflection.
+Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. Feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, metadata reflection, script array access, active-context host exceptions, and source-section loading.
 
 ## Optional Plugin Integration
 
@@ -125,7 +125,7 @@ CKAS_STATUS status =
                               &result);
 ```
 
-`CKAngelScriptLoadOptions` accepts exactly one source: `Filename`, `Filenames` plus `FileCount`, or `Code`. Unknown flags return `CKAS_INVALIDARGUMENT`. Replacing an existing module requires `CKAS_LOAD_REPLACEEXISTING` or `CKAS_COMPILE_REPLACEEXISTING`; without replace, duplicates return `CKAS_ALREADYEXISTS`.
+`CKAngelScriptLoadOptions` accepts exactly one source: `Filename`, `Filenames` plus `FileCount`, `Code`, or `Sections` plus `SectionCount`. `Sections[0]` is the entry section; the remaining sections are an in-memory include snapshot used by `#include` resolution and are not automatically compiled unless included. Unknown flags return `CKAS_INVALIDARGUMENT`. Replacing an existing module requires `CKAS_LOAD_REPLACEEXISTING` or `CKAS_COMPILE_REPLACEEXISTING`; without replace, duplicates return `CKAS_ALREADYEXISTS`.
 
 Module replacement is atomic at the public API boundary: if the replacement source fails to compile or load, the old module remains available and its generation is unchanged. Successful replacement bumps the generation once.
 

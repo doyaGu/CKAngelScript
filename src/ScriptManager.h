@@ -418,11 +418,13 @@ protected:
         std::vector<std::tuple<std::string, std::string>> Sections;
         ScriptMetadata Metadata;
         std::vector<unsigned char> ByteCode;
+        bool SourceSnapshotSections = false;
         bool HasModule = false;
     };
     std::shared_ptr<CachedScript> BuildTransientModule(
         const char *moduleName,
         const std::vector<std::tuple<std::string, std::string>> &sections,
+        bool sourceSnapshotSections,
         int &angelScriptCode,
         std::string &diagnostics,
         std::vector<CapturedScriptMessage> *messages = nullptr);
@@ -439,6 +441,7 @@ protected:
     CKAS_STATUS ReplaceModuleFromSections(
         const char *moduleName,
         const std::vector<std::tuple<std::string, std::string>> &sections,
+        bool sourceSnapshotSections = false,
         CKAngelScriptResult *result = nullptr);
     // Internal low-level shims backing the public module API. Do not call these
     // from behavior blocks or runtime helpers; use LoadModule/CompileModule/
