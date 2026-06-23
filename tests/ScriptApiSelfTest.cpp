@@ -563,6 +563,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_FEATURE_OBJECT_TYPE_NAMESPACE != 14 ||
         CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS != 15 ||
         CKAS_FEATURE_SCRIPT_ARRAY_ACCESS != 16 ||
+        CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION != 17 ||
         CKAS_EXECUTION_CANCELLED != 5 ||
         CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
         CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
@@ -589,8 +590,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_METADATA_REFLECTION) ||
         !api->HasFeature(CKAS_FEATURE_OBJECT_TYPE_NAMESPACE) ||
         !api->HasFeature(CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS) ||
-        !api->HasFeature(CKAS_FEATURE_SCRIPT_ARRAY_ACCESS)) {
-        error = "CKAngelScript API self-test found an unexpected v4 feature set.";
+        !api->HasFeature(CKAS_FEATURE_SCRIPT_ARRAY_ACCESS) ||
+        !api->HasFeature(CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION)) {
+        error = "CKAngelScript API self-test found an unexpected v5 feature set.";
         return false;
     }
 

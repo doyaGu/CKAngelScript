@@ -29,7 +29,7 @@ typedef struct CKAngelScriptResultReader CKAngelScriptResultReader;
 typedef struct CKBehaviorContext CKBehaviorContext;
 typedef struct CKAngelScript CKAngelScript;
 
-#define CKAS_API_VERSION 4
+#define CKAS_API_VERSION 5
 
 #ifdef __cplusplus
 class CKContext;
@@ -79,7 +79,8 @@ typedef enum CKAS_FEATURE {
     CKAS_FEATURE_METADATA_REFLECTION = 13,
     CKAS_FEATURE_OBJECT_TYPE_NAMESPACE = 14,
     CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS = 15,
-    CKAS_FEATURE_SCRIPT_ARRAY_ACCESS = 16
+    CKAS_FEATURE_SCRIPT_ARRAY_ACCESS = 16,
+    CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION = 17
 } CKAS_FEATURE;
 
 typedef enum CKAS_EXECUTIONSTATE {
@@ -303,6 +304,10 @@ typedef CKAS_STATUS (*CKAngelScriptUnregisterEngineExtensionProc)(
 typedef CKAS_STATUS (*CKAngelScriptAssignObjectHandleProc)(void **handleSlot,
                                                            void *object,
                                                            asITypeInfo *type);
+typedef CKAS_STATUS (*CKAngelScriptSetActiveContextExceptionProc)(
+    CKAngelScript *angelScript,
+    const char *message,
+    CKAngelScriptResult *result);
 typedef CKAS_STATUS (*CKAngelScriptCreateArrayProc)(
     CKAngelScript *angelScript,
     const char *arrayDecl,
@@ -527,6 +532,9 @@ CKAS_API CKAS_STATUS CKAngelScriptBorrowEngine(CKAngelScript *angelScript,
 CKAS_API CKAS_STATUS CKAngelScriptBorrowActiveContext(CKAngelScript *angelScript,
                                                       asIScriptContext **outContext,
                                                       CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptSetActiveContextException(CKAngelScript *angelScript,
+                                                            const char *message,
+                                                            CKAngelScriptResult *result);
 CKAS_API CKAS_STATUS CKAngelScriptAssignObjectHandle(void **handleSlot,
                                                      void *object,
                                                      asITypeInfo *type);
@@ -1181,6 +1189,11 @@ public:
     CKAS_STATUS BorrowActiveContext(asIScriptContext **outContext,
                                     CKAngelScriptResult *result = nullptr) const {
         return CKAngelScriptBorrowActiveContext(m_AngelScript, outContext, result);
+    }
+
+    CKAS_STATUS SetActiveContextException(const char *message,
+                                          CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptSetActiveContextException(m_AngelScript, message, result);
     }
 
     static CKAS_STATUS AssignObjectHandle(void **handleSlot, void *object, asITypeInfo *type) {

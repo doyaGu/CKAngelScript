@@ -241,6 +241,7 @@ public:
 
     asIScriptContext *GetActiveContext();
     CKAS_STATUS BorrowActiveContext(asIScriptContext **outContext, CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS SetActiveContextException(const char *message, CKAngelScriptResult *result = nullptr);
 
     // Internal low-level AngelScript helpers. The public AngelScript C API
     // intentionally exposes only module and execution operations.

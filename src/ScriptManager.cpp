@@ -766,6 +766,7 @@ extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
         case CKAS_FEATURE_OBJECT_TYPE_NAMESPACE:
         case CKAS_FEATURE_OBJECT_METHOD_CONTEXT_ACCESS:
         case CKAS_FEATURE_SCRIPT_ARRAY_ACCESS:
+        case CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION:
             return TRUE;
         default:
             return FALSE;
@@ -876,6 +877,15 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptBorrowActiveContext(CKAngelScript *
     ScriptManager *scriptManager = FromPublicHandle(angelScript);
     return scriptManager
                ? scriptManager->BorrowActiveContext(outContext, result)
+               : StoreStatelessPublicResult(result, CKAS_INVALIDARGUMENT, 0, "CKAngelScript handle is invalid.");
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptSetActiveContextException(CKAngelScript *angelScript,
+                                                                       const char *message,
+                                                                       CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager
+               ? scriptManager->SetActiveContextException(message, result)
                : StoreStatelessPublicResult(result, CKAS_INVALIDARGUMENT, 0, "CKAngelScript handle is invalid.");
 }
 
@@ -1881,6 +1891,21 @@ CKAS_STATUS ScriptManager::BorrowActiveContext(asIScriptContext **outContext, CK
         return StoreResult(result, CKAS_NOTFOUND, 0, "No active context belongs to this CKAngelScript manager.");
     }
     *outContext = ctx;
+    return StoreResult(result, CKAS_OK);
+}
+
+CKAS_STATUS ScriptManager::SetActiveContextException(const char *message, CKAngelScriptResult *result) {
+    if (!message || message[0] == '\0') {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Exception message is required.");
+    }
+    if (!m_ScriptEngine) {
+        return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
+    }
+    asIScriptContext *ctx = GetActiveContext();
+    if (!ctx || ctx->GetEngine() != m_ScriptEngine) {
+        return StoreResult(result, CKAS_NOTFOUND, 0, "No active context belongs to this CKAngelScript manager.");
+    }
+    ctx->SetException(message);
     return StoreResult(result, CKAS_OK);
 }
 
