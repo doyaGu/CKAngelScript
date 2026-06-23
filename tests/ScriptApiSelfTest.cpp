@@ -344,14 +344,22 @@ void RemoveTextFile(const std::filesystem::path &path) {
     std::filesystem::remove(path, ec);
 }
 
-bool ContainsCompileLocation(const CKAngelScriptResult &result) {
-    if (!result.ErrorMessage || result.ErrorMessage[0] == '\0') {
+bool ContainsStructuredCompileDiagnostic(const CKAngelScriptResult &result) {
+    if (!result.CompilerMessages || result.CompilerMessageCount == 0) {
         return false;
     }
-    const std::string message = result.ErrorMessage;
-    return message.find('(') != std::string::npos &&
-           message.find(')') != std::string::npos &&
-           message.find("ERROR") != std::string::npos;
+    for (size_t i = 0; i < result.CompilerMessageCount; ++i) {
+        const CKAngelScriptCompilerMessage &message = result.CompilerMessages[i];
+        if (message.Size >= sizeof(CKAngelScriptCompilerMessage) &&
+            message.Type == CKAS_MESSAGE_ERROR &&
+            message.Row > 0 &&
+            message.Column > 0 &&
+            message.Message &&
+            message.Message[0] != '\0') {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ExpectStatus(CKAS_STATUS actual,
@@ -389,7 +397,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         result.Status != CKAS_OK ||
         result.AngelScriptCode != 0 ||
         result.ErrorMessage ||
-        result.StackTrace) {
+        result.StackTrace ||
+        result.CompilerMessages ||
+        result.CompilerMessageCount != 0) {
         error = "CKAngelScript API self-test expected Result() to initialize a clean result.";
         return false;
     }
@@ -401,7 +411,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         initResult.Status != CKAS_OK ||
         initResult.AngelScriptCode != 0 ||
         initResult.ErrorMessage ||
-        initResult.StackTrace) {
+        initResult.StackTrace ||
+        initResult.CompilerMessages ||
+        initResult.CompilerMessageCount != 0) {
         error = "CKAngelScript API self-test expected Result initializer defaults.";
         return false;
     }
@@ -1632,8 +1644,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     constexpr const char *badModuleName = "__CKAS_ManagerApiBadCompileSelfTest";
     if (api->CompileModule(badModuleName, "int __ckas_bad_compile( {", CKAS_COMPILE_REPLACEEXISTING, &result) !=
         CKAS_COMPILEERROR ||
-        !ContainsCompileLocation(result)) {
-        error = "CKAngelScript API self-test expected compile errors to include AngelScript diagnostics.";
+        !ContainsStructuredCompileDiagnostic(result)) {
+        error = "CKAngelScript API self-test expected compile errors to include structured AngelScript diagnostics.";
         api->UnloadModule(badModuleName, nullptr);
         return false;
     }

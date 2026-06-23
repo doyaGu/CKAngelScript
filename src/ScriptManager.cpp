@@ -74,7 +74,7 @@ struct CKAngelScriptExecution {
     ScriptInvoker Invoker;
     asIScriptFunction *Function = nullptr;
     CKAS_EXECUTIONSTATE State = CKAS_EXECUTION_READY;
-    CKAngelScriptResult Result = {sizeof(CKAngelScriptResult), CKAS_OK, 0, nullptr, nullptr};
+    CKAngelScriptResult Result = {sizeof(CKAngelScriptResult), CKAS_OK, 0, nullptr, nullptr, nullptr, 0};
     std::string ErrorMessage;
     std::string StackTrace;
     std::string ModuleName;
@@ -530,6 +530,8 @@ CKAS_STATUS StoreStatelessPublicResult(CKAngelScriptResult *out,
         out->AngelScriptCode = angelScriptCode;
         out->ErrorMessage = errorMessage && errorMessage[0] != '\0' ? errorMessage : nullptr;
         out->StackTrace = nullptr;
+        out->CompilerMessages = nullptr;
+        out->CompilerMessageCount = 0;
     }
     return status;
 }
@@ -1885,9 +1887,26 @@ CKAS_STATUS ScriptManager::BorrowActiveContext(asIScriptContext **outContext, CK
 CKAngelScriptResult ScriptManager::MakeResult(CKAS_STATUS status,
                                             int angelScriptCode,
                                             const std::string &errorMessage,
-                                            const std::string &stackTrace) {
+                                            const std::string &stackTrace,
+                                            const std::vector<CapturedScriptMessage> *compilerMessages) {
     m_LastErrorMessage = errorMessage;
     m_LastStackTrace = stackTrace;
+    m_LastCompilerMessageStorage.clear();
+    m_LastCompilerMessages.clear();
+    if (compilerMessages && !compilerMessages->empty()) {
+        m_LastCompilerMessageStorage = *compilerMessages;
+        m_LastCompilerMessages.reserve(m_LastCompilerMessageStorage.size());
+        for (const CapturedScriptMessage &message : m_LastCompilerMessageStorage) {
+            CKAngelScriptCompilerMessage publicMessage = {};
+            publicMessage.Size = sizeof(publicMessage);
+            publicMessage.Section = message.Section.empty() ? nullptr : message.Section.c_str();
+            publicMessage.Row = message.Row;
+            publicMessage.Column = message.Column;
+            publicMessage.Type = message.Type;
+            publicMessage.Message = message.Message.empty() ? nullptr : message.Message.c_str();
+            m_LastCompilerMessages.push_back(publicMessage);
+        }
+    }
 
     CKAngelScriptResult result;
     result.Size = sizeof(result);
@@ -1895,6 +1914,8 @@ CKAngelScriptResult ScriptManager::MakeResult(CKAS_STATUS status,
     result.AngelScriptCode = angelScriptCode;
     result.ErrorMessage = m_LastErrorMessage.empty() ? nullptr : m_LastErrorMessage.c_str();
     result.StackTrace = m_LastStackTrace.empty() ? nullptr : m_LastStackTrace.c_str();
+    result.CompilerMessages = m_LastCompilerMessages.empty() ? nullptr : m_LastCompilerMessages.data();
+    result.CompilerMessageCount = m_LastCompilerMessages.size();
     m_LastResult = result;
     return m_LastResult;
 }
@@ -1903,8 +1924,9 @@ CKAS_STATUS ScriptManager::StoreResult(CKAngelScriptResult *out,
                                              CKAS_STATUS status,
                                              int angelScriptCode,
                                              const std::string &errorMessage,
-                                             const std::string &stackTrace) {
-    CKAngelScriptResult result = MakeResult(status, angelScriptCode, errorMessage, stackTrace);
+                                             const std::string &stackTrace,
+                                             const std::vector<CapturedScriptMessage> *compilerMessages) {
+    CKAngelScriptResult result = MakeResult(status, angelScriptCode, errorMessage, stackTrace, compilerMessages);
     if (out) {
         *out = result;
     }
@@ -2023,11 +2045,15 @@ CKAS_STATUS ScriptManager::UnregisterEngineExtension(const char *name,
 
 void ScriptManager::BeginScriptMessageCapture() {
     m_CapturedScriptMessages.clear();
+    m_CapturedCompilerMessages.clear();
     m_CapturingScriptMessages = true;
 }
 
-std::string ScriptManager::EndScriptMessageCapture() {
+std::string ScriptManager::EndScriptMessageCapture(std::vector<CapturedScriptMessage> *messages) {
     m_CapturingScriptMessages = false;
+    if (messages) {
+        *messages = m_CapturedCompilerMessages;
+    }
     return m_CapturedScriptMessages;
 }
 
@@ -2090,7 +2116,8 @@ std::shared_ptr<CachedScript> ScriptManager::BuildTransientModule(
     const char *moduleName,
     const std::vector<std::tuple<std::string, std::string>> &sections,
     int &angelScriptCode,
-    std::string &diagnostics) {
+    std::string &diagnostics,
+    std::vector<CapturedScriptMessage> *messages) {
     angelScriptCode = 0;
     diagnostics.clear();
     if (!m_ScriptEngine || !moduleName || moduleName[0] == '\0' || sections.empty()) {
@@ -2106,7 +2133,7 @@ std::shared_ptr<CachedScript> ScriptManager::BuildTransientModule(
 
     BeginScriptMessageCapture();
     const bool built = script->Build(m_ScriptEngine);
-    diagnostics = EndScriptMessageCapture();
+    diagnostics = EndScriptMessageCapture(messages);
     if (!built) {
         angelScriptCode = -3;
         if (script->module) {
@@ -2203,14 +2230,17 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     CKAngelScriptResult *result) {
     int angelScriptCode = 0;
     std::string diagnostics;
+    std::vector<CapturedScriptMessage> diagnosticMessages;
     const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(moduleName);
     std::shared_ptr<CachedScript> candidate =
-        BuildTransientModule(transientName.c_str(), sections, angelScriptCode, diagnostics);
+        BuildTransientModule(transientName.c_str(), sections, angelScriptCode, diagnostics, &diagnosticMessages);
     if (!candidate || !candidate->module) {
         return StoreResult(result,
                            CKAS_COMPILEERROR,
                            angelScriptCode,
-                           diagnostics.empty() ? "Failed to compile replacement script module." : diagnostics);
+                           diagnostics.empty() ? "Failed to compile replacement script module." : diagnostics,
+                           std::string(),
+                           &diagnosticMessages);
     }
 
     std::vector<unsigned char> candidateByteCode;
@@ -2260,7 +2290,7 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     m_ScriptCache.CacheScript(moduleName, committedCache);
     candidate->Discard();
     BumpModuleGeneration(moduleName);
-    return StoreResult(result, CKAS_OK);
+    return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
 
 CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result) {
@@ -2335,17 +2365,20 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
             }
             return ReplaceModuleFromSections(moduleName, sections, result);
         }
+        std::vector<CapturedScriptMessage> diagnosticMessages;
         BeginScriptMessageCapture();
         const int loadResult = LoadModuleFromFiles(moduleName, filenames, fileCount);
-        const std::string diagnostics = EndScriptMessageCapture();
+        const std::string diagnostics = EndScriptMessageCapture(&diagnosticMessages);
         if (loadResult < 0) {
             return StoreResult(result,
                                CKAS_COMPILEERROR,
                                loadResult,
-                               diagnostics.empty() ? "Failed to load script files." : diagnostics);
+                               diagnostics.empty() ? "Failed to load script files." : diagnostics,
+                               std::string(),
+                               &diagnosticMessages);
         }
         BumpModuleGeneration(moduleName);
-        return StoreResult(result, CKAS_OK);
+        return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
     }
 
     if (replacingExisting) {
@@ -2361,17 +2394,20 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
         return ReplaceModuleFromSections(moduleName, sections, result);
     }
 
+    std::vector<CapturedScriptMessage> diagnosticMessages;
     BeginScriptMessageCapture();
     const int loadResult = LoadModuleFromDefaultOrFile(moduleName, filename);
-    const std::string diagnostics = EndScriptMessageCapture();
+    const std::string diagnostics = EndScriptMessageCapture(&diagnosticMessages);
     if (loadResult < 0) {
         return StoreResult(result,
                            CKAS_COMPILEERROR,
                            loadResult,
-                           diagnostics.empty() ? "Failed to load script file." : diagnostics);
+                           diagnostics.empty() ? "Failed to load script file." : diagnostics,
+                           std::string(),
+                           &diagnosticMessages);
     }
     BumpModuleGeneration(moduleName);
-    return StoreResult(result, CKAS_OK);
+    return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
 
 CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
@@ -2403,17 +2439,20 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
         return ReplaceModuleFromSections(moduleName, sections, result);
     }
 
+    std::vector<CapturedScriptMessage> diagnosticMessages;
     BeginScriptMessageCapture();
     const int compileResult = CompileModuleFromMemory(moduleName, scriptCode);
-    const std::string diagnostics = EndScriptMessageCapture();
+    const std::string diagnostics = EndScriptMessageCapture(&diagnosticMessages);
     if (compileResult < 0) {
         return StoreResult(result,
                            CKAS_COMPILEERROR,
                            compileResult,
-                           diagnostics.empty() ? "Failed to compile script module." : diagnostics);
+                           diagnostics.empty() ? "Failed to compile script module." : diagnostics,
+                           std::string(),
+                           &diagnosticMessages);
     }
     BumpModuleGeneration(moduleName);
-    return StoreResult(result, CKAS_OK);
+    return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
 
 CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptResult *result) {
@@ -3691,15 +3730,19 @@ ScriptBehaviorBridge *ScriptManager::GetBehaviorBridge() {
 
 void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
     const char *type = "NULL";
+    CKAS_MESSAGETYPE publicType = CKAS_MESSAGE_INFORMATION;
     switch (msg.type) {
         case asMSGTYPE_ERROR:
             type = "ERROR";
+            publicType = CKAS_MESSAGE_ERROR;
             break;
         case asMSGTYPE_WARNING:
             type = "WARN";
+            publicType = CKAS_MESSAGE_WARNING;
             break;
         case asMSGTYPE_INFORMATION:
             type = "INFO";
+            publicType = CKAS_MESSAGE_INFORMATION;
             break;
     }
     const std::string formatted = fmt::format("{}({},{}): {}: {}",
@@ -3713,6 +3756,13 @@ void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
             m_CapturedScriptMessages += "\n";
         }
         m_CapturedScriptMessages += formatted;
+        CapturedScriptMessage captured;
+        captured.Section = msg.section ? msg.section : "";
+        captured.Row = msg.row;
+        captured.Column = msg.col;
+        captured.Type = publicType;
+        captured.Message = msg.message ? msg.message : "";
+        m_CapturedCompilerMessages.push_back(std::move(captured));
     }
     m_Context->OutputToConsoleEx(const_cast<char *>("%s"), formatted.c_str());
 }

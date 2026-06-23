@@ -29,7 +29,7 @@ typedef struct CKAngelScriptResultReader CKAngelScriptResultReader;
 typedef struct CKBehaviorContext CKBehaviorContext;
 typedef struct CKAngelScript CKAngelScript;
 
-#define CKAS_API_VERSION 3
+#define CKAS_API_VERSION 4
 
 #ifdef __cplusplus
 class CKContext;
@@ -56,6 +56,12 @@ typedef enum CKAS_STATUS {
     CKAS_AMBIGUOUS = 15,
     CKAS_FOREIGNHANDLE = 16
 } CKAS_STATUS;
+
+typedef enum CKAS_MESSAGETYPE {
+    CKAS_MESSAGE_ERROR = 0,
+    CKAS_MESSAGE_WARNING = 1,
+    CKAS_MESSAGE_INFORMATION = 2
+} CKAS_MESSAGETYPE;
 
 typedef enum CKAS_FEATURE {
     CKAS_FEATURE_MODULE_LIFECYCLE = 1,
@@ -232,6 +238,15 @@ typedef struct CKAngelScriptObjectMethodExecuteOptions {
     CKDWORD Flags;
 } CKAngelScriptObjectMethodExecuteOptions;
 
+typedef struct CKAngelScriptCompilerMessage {
+    CKDWORD Size;
+    const char *Section;
+    int Row;
+    int Column;
+    CKAS_MESSAGETYPE Type;
+    const char *Message;
+} CKAngelScriptCompilerMessage;
+
 typedef struct CKAngelScriptResult {
     CKDWORD Size;
     CKAS_STATUS Status;
@@ -243,6 +258,11 @@ typedef struct CKAngelScriptResult {
     // resumed, or cancelled again.
     const char *ErrorMessage;
     const char *StackTrace;
+    // CompilerMessages points to structured AngelScript compiler diagnostics
+    // captured during LoadModule/CompileModule. The array and its borrowed
+    // strings follow the same lifetime as ErrorMessage.
+    const CKAngelScriptCompilerMessage *CompilerMessages;
+    size_t CompilerMessageCount;
 } CKAngelScriptResult;
 
 typedef struct CKAngelScriptEngineExtension {
