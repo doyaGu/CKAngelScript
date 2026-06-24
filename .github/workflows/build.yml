@@ -163,46 +163,21 @@ jobs:
           path: ${{ env.PACKAGE_DIR }}\*.zip
           retention-days: 30
 
-  draft-release:
+  package-release-assets:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [ package-release ]
     runs-on: windows-latest
 
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v6.0.2
-
       - name: Download release packages
         uses: actions/download-artifact@v8.0.1
         with:
           name: CKAngelScript-${{ github.ref_name }}-Release-Packages
           path: ${{ github.workspace }}\packages
 
-      - name: Create or update draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: pwsh
-        run: |
-          $tag = $env:GITHUB_REF_NAME
-          $assets = @(Get-ChildItem -LiteralPath "${{ github.workspace }}\packages" -Filter '*.zip')
-          if ($assets.Count -ne 2) {
-            throw "Expected 2 release packages, found $($assets.Count)"
-          }
-
-          $assetPaths = @($assets | ForEach-Object { $_.FullName })
-          $releaseJson = gh release view $tag --json isDraft 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag @assetPaths --draft --title $tag --notes "Draft release for $tag." --verify-tag
-            exit $LASTEXITCODE
-          }
-
-          $release = $releaseJson | ConvertFrom-Json
-          if (-not $release.isDraft) {
-            Write-Host "Release $tag already exists and is not a draft; skipping asset upload."
-            exit 0
-          }
-
-          gh release upload $tag @assetPaths --clobber
+      - name: Upload manual release assets
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: CKAngelScript-${{ github.ref_name }}-Manual-Release-Assets
+          path: ${{ github.workspace }}\packages\*.zip
+          retention-days: 30
