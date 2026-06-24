@@ -578,9 +578,16 @@ ObjectRef *OwnerImpl(const CKBehaviorContext &ctx, ScriptBehaviorBridge *bridge 
     return MakeRef(context, owner, "Behavior owner is not available.", bridge, ComponentIdFromContext(ctx));
 }
 
+bool RejectSceneMutation(const char *apiName) {
+    return ScriptManager::RejectActiveHostCall(apiName, CKAS_HOSTCALL_MUTATES_HOST_STATE);
+}
+
 ObjectRef *CreateImpl(CKContext *context, CK_CLASSID cid, const std::string &name, bool dynamic, ScriptBehaviorBridge *bridge = nullptr, CK_ID componentId = 0) {
     if (!context) {
         return MakeInvalid(nullptr, "CKContext is not available.");
+    }
+    if (RejectSceneMutation("Scene::Create")) {
+        return MakeInvalid(context, "Scene::Create is not available in the current script host phase.");
     }
     CKObject *object = context->CreateObject(cid,
                                             name.empty() ? nullptr : const_cast<CKSTRING>(name.c_str()),
@@ -596,6 +603,9 @@ T *CreateTypedImpl(CKContext *context, CK_CLASSID cid, const std::string &name, 
     if (!context) {
         return new T(nullptr, 0, ScriptBridgeObjectStamp(), "CKContext is not available.");
     }
+    if (RejectSceneMutation("Scene::Create")) {
+        return new T(context, 0, ScriptBridgeObjectStamp(), "Scene::Create is not available in the current script host phase.");
+    }
     CKObject *object = context->CreateObject(cid,
                                             name.empty() ? nullptr : const_cast<CKSTRING>(name.c_str()),
                                             dynamic ? CK_OBJECTCREATION_DYNAMIC : CK_OBJECTCREATION_NONAMECHECK);
@@ -607,6 +617,10 @@ T *CreateTypedImpl(CKContext *context, CK_CLASSID cid, const std::string &name, 
 
 bool AddToCurrentSceneImpl(CKContext *context, ObjectRef *ref, bool dependencies) {
     if (!context || !ref) {
+        return false;
+    }
+    if (RejectSceneMutation("Scene::AddToCurrentScene")) {
+        ref->SetError("Scene::AddToCurrentScene is not available in the current script host phase.");
         return false;
     }
     CKScene *scene = context->GetCurrentScene();
@@ -673,6 +687,10 @@ bool AddToSceneImpl(CKContext *context, SceneRef *sceneRef, ObjectRef *ref, bool
     if (!context || !sceneRef || !ref) {
         return false;
     }
+    if (RejectSceneMutation("Scene::AddToScene")) {
+        ref->SetError("Scene::AddToScene is not available in the current script host phase.");
+        return false;
+    }
     CKScene *scene = sceneRef->Scene();
     if (!scene) {
         ref->SetError("Scene::AddToScene requires a valid SceneRef.");
@@ -699,6 +717,10 @@ bool RemoveFromCurrentSceneImpl(CKContext *context, ObjectRef *ref, bool depende
     if (!context || !ref) {
         return false;
     }
+    if (RejectSceneMutation("Scene::RemoveFromCurrentScene")) {
+        ref->SetError("Scene::RemoveFromCurrentScene is not available in the current script host phase.");
+        return false;
+    }
     CKScene *scene = context->GetCurrentScene();
     if (!scene) {
         ref->SetError("Current scene is not available.");
@@ -719,6 +741,10 @@ bool RemoveFromCurrentSceneImpl(CKContext *context, ObjectRef *ref, bool depende
 
 bool RemoveFromSceneImpl(CKContext *context, SceneRef *sceneRef, ObjectRef *ref, bool dependencies) {
     if (!context || !sceneRef || !ref) {
+        return false;
+    }
+    if (RejectSceneMutation("Scene::RemoveFromScene")) {
+        ref->SetError("Scene::RemoveFromScene is not available in the current script host phase.");
         return false;
     }
     CKScene *scene = sceneRef->Scene();
@@ -747,6 +773,10 @@ bool DestroyImpl(CKContext *context, ObjectRef *ref, bool allowPersistent, CKDWO
     if (!context || !ref) {
         return false;
     }
+    if (RejectSceneMutation("Scene::Destroy")) {
+        ref->SetError("Scene::Destroy is not available in the current script host phase.");
+        return false;
+    }
     CKObject *object = ref->Object();
     if (!object) {
         ref->SetError("Scene::Destroy requires a valid object reference.");
@@ -768,6 +798,9 @@ bool DestroyImpl(CKContext *context, ObjectRef *ref, bool allowPersistent, CKDWO
 
 bool SelectImpl(CKContext *context, CScriptArray *objects, bool clearSelection) {
     if (!context || !objects) {
+        return false;
+    }
+    if (RejectSceneMutation("Scene::Select")) {
         return false;
     }
     XObjectArray ids;

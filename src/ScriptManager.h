@@ -242,6 +242,10 @@ public:
     asIScriptContext *GetActiveContext();
     CKAS_STATUS BorrowActiveContext(asIScriptContext **outContext, CKAngelScriptResult *result = nullptr);
     CKAS_STATUS SetActiveContextException(const char *message, CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS SetHostCallFilter(CKAngelScriptHostCallFilterCallback callback,
+                                  void *userData,
+                                  CKAngelScriptResult *result = nullptr);
+    bool RejectHostCall(const char *apiName, CKDWORD flags);
 
     // Internal low-level AngelScript helpers. The public AngelScript C API
     // intentionally exposes only module and execution operations.
@@ -391,6 +395,8 @@ public:
         return (ScriptManager *) engine->GetUserData(SCRIPT_MANAGER_TYPE);
     }
 
+    static bool RejectActiveHostCall(const char *apiName, CKDWORD flags);
+
 protected:
     void SetupScriptPathCategory();
     int SetupScriptEngine();
@@ -491,6 +497,8 @@ protected:
     bool m_CapturingScriptMessages = false;
     std::string m_CapturedScriptMessages;
     std::vector<CapturedScriptMessage> m_CapturedCompilerMessages;
+    CKAngelScriptHostCallFilterCallback m_HostCallFilter = nullptr;
+    void *m_HostCallFilterUserData = nullptr;
 };
 
 #endif // CK_SCRIPTMANAGER_H

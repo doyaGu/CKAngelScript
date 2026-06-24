@@ -780,6 +780,7 @@ extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
         case CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION:
         case CKAS_FEATURE_SOURCE_SECTIONS:
         case CKAS_FEATURE_OBJECT_HANDLE_ARGS:
+        case CKAS_FEATURE_HOST_CALL_FILTER:
             return TRUE;
         default:
             return FALSE;
@@ -899,6 +900,17 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptSetActiveContextException(CKAngelSc
     ScriptManager *scriptManager = FromPublicHandle(angelScript);
     return scriptManager
                ? scriptManager->SetActiveContextException(message, result)
+               : StoreStatelessPublicResult(result, CKAS_INVALIDARGUMENT, 0, "CKAngelScript handle is invalid.");
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptSetHostCallFilter(
+    CKAngelScript *angelScript,
+    CKAngelScriptHostCallFilterCallback callback,
+    void *userData,
+    CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager
+               ? scriptManager->SetHostCallFilter(callback, userData, result)
                : StoreStatelessPublicResult(result, CKAS_INVALIDARGUMENT, 0, "CKAngelScript handle is invalid.");
 }
 
@@ -1933,6 +1945,31 @@ CKAS_STATUS ScriptManager::SetActiveContextException(const char *message, CKAnge
     }
     ctx->SetException(message);
     return StoreResult(result, CKAS_OK);
+}
+
+CKAS_STATUS ScriptManager::SetHostCallFilter(CKAngelScriptHostCallFilterCallback callback,
+                                             void *userData,
+                                             CKAngelScriptResult *result) {
+    m_HostCallFilter = callback;
+    m_HostCallFilterUserData = userData;
+    return StoreResult(result, CKAS_OK);
+}
+
+bool ScriptManager::RejectHostCall(const char *apiName, CKDWORD flags) {
+    if (!m_HostCallFilter) {
+        return false;
+    }
+    return m_HostCallFilter(apiName, flags, m_HostCallFilterUserData) != CKAS_OK;
+}
+
+bool ScriptManager::RejectActiveHostCall(const char *apiName, CKDWORD flags) {
+    asIScriptContext *ctx = asGetActiveContext();
+    if (!ctx) {
+        return false;
+    }
+    asIScriptEngine *engine = ctx->GetEngine();
+    ScriptManager *manager = engine ? GetManager(engine) : nullptr;
+    return manager ? manager->RejectHostCall(apiName, flags) : false;
 }
 
 CKAngelScriptResult ScriptManager::MakeResult(CKAS_STATUS status,

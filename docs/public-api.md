@@ -26,7 +26,7 @@ if (!api.IsValid()) {
 
 The handle is owned by CKAngelScript. Do not allocate, delete, or cast it to CKAngelScript internals.
 
-Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. Feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, metadata reflection, script array access, active-context host exceptions, and source-section loading.
+Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. Feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, metadata reflection, script array access, active-context host exceptions, source-section loading, object handle argument writing, and host-call filtering.
 
 ## Optional Plugin Integration
 
@@ -83,6 +83,7 @@ CKAngelScript never owns callback `UserData`. The caller is always responsible f
 | `CKAngelScriptEnumerateMetadata` | `userData`, `CKAngelScriptMetadataEntry`, and metadata strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. |
 | `CKAngelScriptCallObjectMethod` | `WriteArgs`, `ReadResult`, and `UserData` are borrowed only until the synchronous call returns. Do not store `CKAngelScriptArgWriter` or `CKAngelScriptResultReader` pointers. |
 | `CKAngelScriptStartExecution` / `CKAngelScriptResumeExecution` | `ConfigureContext`, `ReadResult`, and `UserData` from `CKAngelScriptExecutionStepOptions` are borrowed only for that one start/resume call. Suspend does not retain them; pass fresh step options when resuming. |
+| `CKAngelScriptSetHostCallFilter` | `callback` and `userData` are retained until replaced, cleared, or the CKAngelScript manager is destroyed. The callback must not execute script or unload/replace modules. |
 | `CKAngelScriptRegisterEngineExtension` | `Register` and `UserData` are retained until `CKAngelScriptUnregisterEngineExtension` succeeds or the CKAngelScript manager is destroyed. If immediate registration fails, they are not retained. |
 
 `CKAngelScriptFunctionExecutionOptions::BehaviorContext` is the exception: CKAngelScript copies it into the execution handle during `CreateFunctionExecution`, so the source pointer only needs to survive that call.
@@ -111,6 +112,25 @@ if (status != CKAS_OK) {
 ```
 
 Initializer helpers are null-safe no-ops. Status text helpers return static strings, never allocate, and do not update `CKAngelScriptGetLastResult()`.
+
+## Host-Call Filtering
+
+`CKAngelScriptSetHostCallFilter()` installs a manager-wide synchronous filter for CKAngelScript-provided host calls. It is intended for embedders that need phase gates, such as blocking world-mutating APIs while a script runtime is being hot-reloaded.
+
+```cpp
+CKAS_STATUS FilterHostCall(const char *apiName, CKDWORD flags, void *userData) {
+    if ((flags & CKAS_HOSTCALL_MUTATES_HOST_STATE) != 0 && IsInRestrictedPhase(userData)) {
+        return CKAS_INVALIDSTATE;
+    }
+    return CKAS_OK;
+}
+
+CKAngelScriptResult result;
+CKAngelScriptInitResult(&result);
+CKAngelScriptSetHostCallFilter(angelScript, FilterHostCall, hostState, &result);
+```
+
+The filter is not a sandbox and does not cover raw Virtools SDK bindings unless those bindings explicitly call into it. A non-`CKAS_OK` return rejects the host call; callers that need a script exception should set one with `CKAngelScriptSetActiveContextException()` from the active script thread.
 
 ## Module Lifecycle
 

@@ -29,7 +29,7 @@ typedef struct CKAngelScriptResultReader CKAngelScriptResultReader;
 typedef struct CKBehaviorContext CKBehaviorContext;
 typedef struct CKAngelScript CKAngelScript;
 
-#define CKAS_API_VERSION 7
+#define CKAS_API_VERSION 8
 
 #ifdef __cplusplus
 class CKContext;
@@ -82,7 +82,8 @@ typedef enum CKAS_FEATURE {
     CKAS_FEATURE_SCRIPT_ARRAY_ACCESS = 16,
     CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION = 17,
     CKAS_FEATURE_SOURCE_SECTIONS = 18,
-    CKAS_FEATURE_OBJECT_HANDLE_ARGS = 19
+    CKAS_FEATURE_OBJECT_HANDLE_ARGS = 19,
+    CKAS_FEATURE_HOST_CALL_FILTER = 20
 } CKAS_FEATURE;
 
 typedef enum CKAS_EXECUTIONSTATE {
@@ -114,6 +115,11 @@ typedef enum CKAS_CALLFLAGS {
     CKAS_CALL_NO_SUSPEND = 0x00000001
 } CKAS_CALLFLAGS;
 
+typedef enum CKAS_HOSTCALLFLAGS {
+    CKAS_HOSTCALL_DEFAULT = 0,
+    CKAS_HOSTCALL_MUTATES_HOST_STATE = 0x00000001
+} CKAS_HOSTCALLFLAGS;
+
 typedef enum CKAS_METADATA_TARGET {
     CKAS_METADATA_TYPE = 1,
     CKAS_METADATA_TYPE_METHOD = 2,
@@ -134,6 +140,9 @@ typedef CKAS_STATUS (*CKAngelScriptWriteArgsCallback)(CKAngelScriptArgWriter *wr
                                                       void *userData);
 typedef CKAS_STATUS (*CKAngelScriptReadResultCallback)(CKAngelScriptResultReader *reader,
                                                        void *userData);
+typedef CKAS_STATUS (*CKAngelScriptHostCallFilterCallback)(const char *apiName,
+                                                           CKDWORD flags,
+                                                           void *userData);
 
 typedef struct CKAngelScriptMetadataEntry {
     CKDWORD Size;
@@ -323,6 +332,11 @@ typedef CKAS_STATUS (*CKAngelScriptAssignObjectHandleProc)(void **handleSlot,
 typedef CKAS_STATUS (*CKAngelScriptSetActiveContextExceptionProc)(
     CKAngelScript *angelScript,
     const char *message,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptSetHostCallFilterProc)(
+    CKAngelScript *angelScript,
+    CKAngelScriptHostCallFilterCallback callback,
+    void *userData,
     CKAngelScriptResult *result);
 typedef CKAS_STATUS (*CKAngelScriptCreateArrayProc)(
     CKAngelScript *angelScript,
@@ -554,6 +568,10 @@ CKAS_API CKAS_STATUS CKAngelScriptBorrowActiveContext(CKAngelScript *angelScript
 CKAS_API CKAS_STATUS CKAngelScriptSetActiveContextException(CKAngelScript *angelScript,
                                                             const char *message,
                                                             CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptSetHostCallFilter(CKAngelScript *angelScript,
+                                                    CKAngelScriptHostCallFilterCallback callback,
+                                                    void *userData,
+                                                    CKAngelScriptResult *result);
 CKAS_API CKAS_STATUS CKAngelScriptAssignObjectHandle(void **handleSlot,
                                                      void *object,
                                                      asITypeInfo *type);
@@ -1228,6 +1246,12 @@ public:
     CKAS_STATUS SetActiveContextException(const char *message,
                                           CKAngelScriptResult *result = nullptr) const {
         return CKAngelScriptSetActiveContextException(m_AngelScript, message, result);
+    }
+
+    CKAS_STATUS SetHostCallFilter(CKAngelScriptHostCallFilterCallback callback,
+                                  void *userData,
+                                  CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptSetHostCallFilter(m_AngelScript, callback, userData, result);
     }
 
     static CKAS_STATUS AssignObjectHandle(void **handleSlot, void *object, asITypeInfo *type) {

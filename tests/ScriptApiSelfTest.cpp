@@ -168,6 +168,12 @@ struct ObjectExecutionData {
     void *ObjectInput = nullptr;
 };
 
+struct HostCallFilterProbeData {
+    int CallCount = 0;
+    const char *LastApiName = nullptr;
+    CKDWORD LastFlags = 0;
+};
+
 struct MetadataProbe {
     bool Type = false;
     bool Method = false;
@@ -217,6 +223,17 @@ CKAS_STATUS MarkResumeHook(asIScriptContext *ctx, void *userData) {
 
 CKAS_STATUS RejectExecutionConfigure(asIScriptContext *, void *) {
     return CKAS_INVALIDARGUMENT;
+}
+
+CKAS_STATUS HostCallFilterProbe(const char *apiName, CKDWORD flags, void *userData) {
+    auto *data = static_cast<HostCallFilterProbeData *>(userData);
+    if (!data || !apiName || apiName[0] == '\0') {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++data->CallCount;
+    data->LastApiName = apiName;
+    data->LastFlags = flags;
+    return (flags & CKAS_HOSTCALL_MUTATES_HOST_STATE) != 0 ? CKAS_INVALIDSTATE : CKAS_OK;
 }
 
 CKAS_STATUS WriteObjectInt(CKAngelScriptArgWriter *writer, void *userData) {
@@ -579,11 +596,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION != 17 ||
         CKAS_FEATURE_SOURCE_SECTIONS != 18 ||
         CKAS_FEATURE_OBJECT_HANDLE_ARGS != 19 ||
+        CKAS_FEATURE_HOST_CALL_FILTER != 20 ||
         CKAS_EXECUTION_CANCELLED != 5 ||
         CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
         CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
         CKAS_ENGINEEXTENSION_DEFERRED != 0x00000001 ||
         CKAS_CALL_NO_SUSPEND != 0x00000001 ||
+        CKAS_HOSTCALL_MUTATES_HOST_STATE != 0x00000001 ||
         CKAS_METADATA_TYPE_PROPERTY != 5) {
         error = "CKAngelScript API self-test expected stable explicit public enum values.";
         return false;
@@ -608,8 +627,42 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_SCRIPT_ARRAY_ACCESS) ||
         !api->HasFeature(CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION) ||
         !api->HasFeature(CKAS_FEATURE_SOURCE_SECTIONS) ||
-        !api->HasFeature(CKAS_FEATURE_OBJECT_HANDLE_ARGS)) {
-        error = "CKAngelScript API self-test found an unexpected v7 feature set.";
+        !api->HasFeature(CKAS_FEATURE_OBJECT_HANDLE_ARGS) ||
+        !api->HasFeature(CKAS_FEATURE_HOST_CALL_FILTER)) {
+        error = "CKAngelScript API self-test found an unexpected v8 feature set.";
+        return false;
+    }
+
+    HostCallFilterProbeData hostCallFilterProbe;
+    CKAngelScriptResult hostCallFilterResult = CKAngelScriptApi::Result();
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    if (!manager) {
+        error = "CKAngelScript API self-test could not resolve ScriptManager for host-call filter.";
+        return false;
+    }
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK ||
+        hostCallFilterResult.Status != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install a host-call filter.";
+        return false;
+    }
+    if (manager->RejectHostCall("SelfTest::ReadOnly", CKAS_HOSTCALL_DEFAULT) ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "SelfTest::ReadOnly") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_DEFAULT) {
+        error = "CKAngelScript API self-test expected read-only host calls to pass through the filter.";
+        return false;
+    }
+    if (!manager->RejectHostCall("SelfTest::Mutating", CKAS_HOSTCALL_MUTATES_HOST_STATE) ||
+        hostCallFilterProbe.CallCount != 2 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "SelfTest::Mutating") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE) {
+        error = "CKAngelScript API self-test expected mutating host calls to be rejected by the filter.";
+        return false;
+    }
+    if (api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) != CKAS_OK ||
+        hostCallFilterResult.Status != CKAS_OK ||
+        manager->RejectHostCall("SelfTest::AfterClear", CKAS_HOSTCALL_MUTATES_HOST_STATE)) {
+        error = "CKAngelScript API self-test failed to clear the host-call filter.";
         return false;
     }
 
