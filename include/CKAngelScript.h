@@ -29,7 +29,7 @@ typedef struct CKAngelScriptResultReader CKAngelScriptResultReader;
 typedef struct CKBehaviorContext CKBehaviorContext;
 typedef struct CKAngelScript CKAngelScript;
 
-#define CKAS_API_VERSION 8
+#define CKAS_API_VERSION 4
 
 #ifdef __cplusplus
 class CKContext;

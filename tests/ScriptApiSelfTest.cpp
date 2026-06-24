@@ -629,7 +629,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_SOURCE_SECTIONS) ||
         !api->HasFeature(CKAS_FEATURE_OBJECT_HANDLE_ARGS) ||
         !api->HasFeature(CKAS_FEATURE_HOST_CALL_FILTER)) {
-        error = "CKAngelScript API self-test found an unexpected v8 feature set.";
+        error = "CKAngelScript API self-test found an unexpected feature set.";
         return false;
     }
 
