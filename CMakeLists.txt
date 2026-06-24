@@ -4,7 +4,7 @@ if (POLICY CMP0144)
     cmake_policy(SET CMP0144 NEW)
 endif ()
 
-project(CKAngelScript VERSION 0.2.0)
+project(CKAngelScript VERSION 0.3.0)
 
 if (CMAKE_PROJECT_VERSION_TWEAK STREQUAL "")
     set(CKAS_VERSION_TWEAK_VALUE 0)
