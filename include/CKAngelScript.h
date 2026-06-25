@@ -29,7 +29,7 @@ typedef struct CKAngelScriptResultReader CKAngelScriptResultReader;
 typedef struct CKBehaviorContext CKBehaviorContext;
 typedef struct CKAngelScript CKAngelScript;
 
-#define CKAS_API_VERSION 4
+#define CKAS_API_VERSION 5
 
 #ifdef __cplusplus
 class CKContext;
@@ -83,7 +83,10 @@ typedef enum CKAS_FEATURE {
     CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION = 17,
     CKAS_FEATURE_SOURCE_SECTIONS = 18,
     CKAS_FEATURE_OBJECT_HANDLE_ARGS = 19,
-    CKAS_FEATURE_HOST_CALL_FILTER = 20
+    CKAS_FEATURE_HOST_CALL_FILTER = 20,
+    CKAS_FEATURE_MODULE_IMPORTS = 21,
+    CKAS_FEATURE_MODULE_BYTECODE = 22,
+    CKAS_FEATURE_MODULE_REPLACE_TRANSACTION = 23
 } CKAS_FEATURE;
 
 typedef enum CKAS_EXECUTIONSTATE {
@@ -120,6 +123,12 @@ typedef enum CKAS_HOSTCALLFLAGS {
     CKAS_HOSTCALL_MUTATES_HOST_STATE = 0x00000001
 } CKAS_HOSTCALLFLAGS;
 
+typedef enum CKAS_BYTECODEFLAGS {
+    CKAS_BYTECODE_DEFAULT = 0,
+    CKAS_BYTECODE_STRIP_DEBUG_INFO = 0x00000001,
+    CKAS_BYTECODE_REPLACEEXISTING = 0x00000002
+} CKAS_BYTECODEFLAGS;
+
 typedef enum CKAS_METADATA_TARGET {
     CKAS_METADATA_TYPE = 1,
     CKAS_METADATA_TYPE_METHOD = 2,
@@ -143,6 +152,12 @@ typedef CKAS_STATUS (*CKAngelScriptReadResultCallback)(CKAngelScriptResultReader
 typedef CKAS_STATUS (*CKAngelScriptHostCallFilterCallback)(const char *apiName,
                                                            CKDWORD flags,
                                                            void *userData);
+typedef CKAS_STATUS (*CKAngelScriptBytecodeWriteCallback)(const void *data,
+                                                          size_t size,
+                                                          void *userData);
+typedef CKAS_STATUS (*CKAngelScriptBytecodeReadCallback)(void *data,
+                                                         size_t size,
+                                                         void *userData);
 
 typedef struct CKAngelScriptMetadataEntry {
     CKDWORD Size;
@@ -163,6 +178,19 @@ typedef CKAS_STATUS (*CKAngelScriptMetadataCallback)(
     const CKAngelScriptMetadataEntry *entry,
     CKDWORD metadataIndex,
     const char *metadata,
+    void *userData);
+
+typedef struct CKAngelScriptImportEntry {
+    CKDWORD Size;
+    CKDWORD Index;
+    const char *Declaration;
+    const char *SourceModuleName;
+} CKAngelScriptImportEntry;
+
+// Import callback pointers are borrowed only for the current callback
+// invocation. Copy entry strings if they must outlive the callback.
+typedef CKAS_STATUS (*CKAngelScriptImportCallback)(
+    const CKAngelScriptImportEntry *entry,
     void *userData);
 
 typedef struct CKAngelScriptSourceSection {
@@ -189,6 +217,34 @@ typedef struct CKAngelScriptLoadOptions {
     const CKAngelScriptSourceSection *Sections;
     size_t SectionCount;
 } CKAngelScriptLoadOptions;
+
+typedef struct CKAngelScriptImportBindOptions {
+    CKDWORD Size;
+    // ImportModuleName is the module that declares the import. SourceModuleName
+    // and FunctionDecl are optional overrides; when omitted, CKAngelScript uses
+    // the import declaration's source module and declaration.
+    const char *ImportModuleName;
+    CKDWORD ImportIndex;
+    const char *SourceModuleName;
+    const char *FunctionDecl;
+    CKDWORD Flags;
+} CKAngelScriptImportBindOptions;
+
+typedef struct CKAngelScriptBytecodeSaveOptions {
+    CKDWORD Size;
+    const char *ModuleName;
+    CKAngelScriptBytecodeWriteCallback Write;
+    void *UserData;
+    CKDWORD Flags;
+} CKAngelScriptBytecodeSaveOptions;
+
+typedef struct CKAngelScriptBytecodeLoadOptions {
+    CKDWORD Size;
+    const char *ModuleName;
+    CKAngelScriptBytecodeReadCallback Read;
+    void *UserData;
+    CKDWORD Flags;
+} CKAngelScriptBytecodeLoadOptions;
 
 typedef struct CKAngelScriptFunctionOptions {
     CKDWORD Size;
@@ -315,6 +371,9 @@ typedef CKAngelScript *(*CKAngelScriptGetProc)(CKContext *context);
 typedef CKDWORD (*CKAngelScriptGetApiVersionProc)(void);
 typedef CKBOOL (*CKAngelScriptHasFeatureProc)(CKAS_FEATURE feature);
 typedef void (*CKAngelScriptInitResultProc)(CKAngelScriptResult *result);
+typedef void (*CKAngelScriptInitImportBindOptionsProc)(CKAngelScriptImportBindOptions *options);
+typedef void (*CKAngelScriptInitBytecodeSaveOptionsProc)(CKAngelScriptBytecodeSaveOptions *options);
+typedef void (*CKAngelScriptInitBytecodeLoadOptionsProc)(CKAngelScriptBytecodeLoadOptions *options);
 typedef void (*CKAngelScriptInitEngineExtensionProc)(CKAngelScriptEngineExtension *extension);
 typedef const char *(*CKAngelScriptGetStatusNameProc)(CKAS_STATUS status);
 typedef const char *(*CKAngelScriptGetStatusDescriptionProc)(CKAS_STATUS status);
@@ -375,6 +434,42 @@ typedef CKAS_STATUS (*CKAngelScriptArrayClearProc)(void *array);
 typedef CKAS_STATUS (*CKAngelScriptArgSetObjectHandleProc)(CKAngelScriptArgWriter *writer,
                                                            CKDWORD index,
                                                            void *object);
+typedef CKAS_STATUS (*CKAngelScriptGetImportedFunctionCountProc)(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKDWORD *outCount,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptEnumerateImportedFunctionsProc)(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKAngelScriptImportCallback callback,
+    void *userData,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptBindImportedFunctionProc)(
+    CKAngelScript *angelScript,
+    const CKAngelScriptImportBindOptions *options,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptBindAllImportedFunctionsProc)(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptUnbindImportedFunctionProc)(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKDWORD importIndex,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptUnbindAllImportedFunctionsProc)(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptSaveModuleBytecodeProc)(
+    CKAngelScript *angelScript,
+    const CKAngelScriptBytecodeSaveOptions *options,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptLoadModuleBytecodeProc)(
+    CKAngelScript *angelScript,
+    const CKAngelScriptBytecodeLoadOptions *options,
+    CKAngelScriptResult *result);
 
 typedef struct CKAngelScriptExtensionApi {
     CKDWORD Size;
@@ -382,11 +477,22 @@ typedef struct CKAngelScriptExtensionApi {
     CKAngelScriptGetApiVersionProc GetApiVersion;
     CKAngelScriptHasFeatureProc HasFeature;
     CKAngelScriptInitResultProc InitResult;
+    CKAngelScriptInitImportBindOptionsProc InitImportBindOptions;
+    CKAngelScriptInitBytecodeSaveOptionsProc InitBytecodeSaveOptions;
+    CKAngelScriptInitBytecodeLoadOptionsProc InitBytecodeLoadOptions;
     CKAngelScriptInitEngineExtensionProc InitEngineExtension;
     CKAngelScriptGetStatusNameProc GetStatusName;
     CKAngelScriptGetStatusDescriptionProc GetStatusDescription;
     CKAngelScriptRegisterEngineExtensionProc RegisterEngineExtension;
     CKAngelScriptUnregisterEngineExtensionProc UnregisterEngineExtension;
+    CKAngelScriptGetImportedFunctionCountProc GetImportedFunctionCount;
+    CKAngelScriptEnumerateImportedFunctionsProc EnumerateImportedFunctions;
+    CKAngelScriptBindImportedFunctionProc BindImportedFunction;
+    CKAngelScriptBindAllImportedFunctionsProc BindAllImportedFunctions;
+    CKAngelScriptUnbindImportedFunctionProc UnbindImportedFunction;
+    CKAngelScriptUnbindAllImportedFunctionsProc UnbindAllImportedFunctions;
+    CKAngelScriptSaveModuleBytecodeProc SaveModuleBytecode;
+    CKAngelScriptLoadModuleBytecodeProc LoadModuleBytecode;
 } CKAngelScriptExtensionApi;
 
 static inline void CKAngelScriptInitExtensionApi(CKAngelScriptExtensionApi *api) {
@@ -398,11 +504,22 @@ static inline void CKAngelScriptInitExtensionApi(CKAngelScriptExtensionApi *api)
     api->GetApiVersion = NULL;
     api->HasFeature = NULL;
     api->InitResult = NULL;
+    api->InitImportBindOptions = NULL;
+    api->InitBytecodeSaveOptions = NULL;
+    api->InitBytecodeLoadOptions = NULL;
     api->InitEngineExtension = NULL;
     api->GetStatusName = NULL;
     api->GetStatusDescription = NULL;
     api->RegisterEngineExtension = NULL;
     api->UnregisterEngineExtension = NULL;
+    api->GetImportedFunctionCount = NULL;
+    api->EnumerateImportedFunctions = NULL;
+    api->BindImportedFunction = NULL;
+    api->BindAllImportedFunctions = NULL;
+    api->UnbindImportedFunction = NULL;
+    api->UnbindAllImportedFunctions = NULL;
+    api->SaveModuleBytecode = NULL;
+    api->LoadModuleBytecode = NULL;
 }
 
 static inline CKBOOL CKAngelScriptExtensionApiIsLoaded(const CKAngelScriptExtensionApi *api) {
@@ -412,11 +529,22 @@ static inline CKBOOL CKAngelScriptExtensionApiIsLoaded(const CKAngelScriptExtens
            api->GetApiVersion &&
            api->HasFeature &&
            api->InitResult &&
+           api->InitImportBindOptions &&
+           api->InitBytecodeSaveOptions &&
+           api->InitBytecodeLoadOptions &&
            api->InitEngineExtension &&
            api->GetStatusName &&
            api->GetStatusDescription &&
            api->RegisterEngineExtension &&
-           api->UnregisterEngineExtension
+           api->UnregisterEngineExtension &&
+           api->GetImportedFunctionCount &&
+           api->EnumerateImportedFunctions &&
+           api->BindImportedFunction &&
+           api->BindAllImportedFunctions &&
+           api->UnbindImportedFunction &&
+           api->UnbindAllImportedFunctions &&
+           api->SaveModuleBytecode &&
+           api->LoadModuleBytecode
                ? TRUE
                : FALSE;
 }
@@ -437,6 +565,12 @@ static inline CKBOOL CKAngelScriptLoadExtensionApi(CKAngelScriptExtensionApi *ap
         (CKAngelScriptHasFeatureProc)resolver(userData, "CKAngelScriptHasFeature");
     api->InitResult =
         (CKAngelScriptInitResultProc)resolver(userData, "CKAngelScriptInitResult");
+    api->InitImportBindOptions =
+        (CKAngelScriptInitImportBindOptionsProc)resolver(userData, "CKAngelScriptInitImportBindOptions");
+    api->InitBytecodeSaveOptions =
+        (CKAngelScriptInitBytecodeSaveOptionsProc)resolver(userData, "CKAngelScriptInitBytecodeSaveOptions");
+    api->InitBytecodeLoadOptions =
+        (CKAngelScriptInitBytecodeLoadOptionsProc)resolver(userData, "CKAngelScriptInitBytecodeLoadOptions");
     api->InitEngineExtension =
         (CKAngelScriptInitEngineExtensionProc)resolver(userData, "CKAngelScriptInitEngineExtension");
     api->GetStatusName =
@@ -447,12 +581,31 @@ static inline CKBOOL CKAngelScriptLoadExtensionApi(CKAngelScriptExtensionApi *ap
         (CKAngelScriptRegisterEngineExtensionProc)resolver(userData, "CKAngelScriptRegisterEngineExtension");
     api->UnregisterEngineExtension =
         (CKAngelScriptUnregisterEngineExtensionProc)resolver(userData, "CKAngelScriptUnregisterEngineExtension");
+    api->GetImportedFunctionCount =
+        (CKAngelScriptGetImportedFunctionCountProc)resolver(userData, "CKAngelScriptGetImportedFunctionCount");
+    api->EnumerateImportedFunctions =
+        (CKAngelScriptEnumerateImportedFunctionsProc)resolver(userData, "CKAngelScriptEnumerateImportedFunctions");
+    api->BindImportedFunction =
+        (CKAngelScriptBindImportedFunctionProc)resolver(userData, "CKAngelScriptBindImportedFunction");
+    api->BindAllImportedFunctions =
+        (CKAngelScriptBindAllImportedFunctionsProc)resolver(userData, "CKAngelScriptBindAllImportedFunctions");
+    api->UnbindImportedFunction =
+        (CKAngelScriptUnbindImportedFunctionProc)resolver(userData, "CKAngelScriptUnbindImportedFunction");
+    api->UnbindAllImportedFunctions =
+        (CKAngelScriptUnbindAllImportedFunctionsProc)resolver(userData, "CKAngelScriptUnbindAllImportedFunctions");
+    api->SaveModuleBytecode =
+        (CKAngelScriptSaveModuleBytecodeProc)resolver(userData, "CKAngelScriptSaveModuleBytecode");
+    api->LoadModuleBytecode =
+        (CKAngelScriptLoadModuleBytecodeProc)resolver(userData, "CKAngelScriptLoadModuleBytecode");
 
     if (!CKAngelScriptExtensionApiIsLoaded(api) ||
         api->GetApiVersion() != CKAS_API_VERSION ||
         !api->HasFeature(CKAS_FEATURE_ENGINE_EXTENSION) ||
         !api->HasFeature(CKAS_FEATURE_PUBLIC_STRUCT_INITIALIZERS) ||
-        !api->HasFeature(CKAS_FEATURE_STATUS_TEXT)) {
+        !api->HasFeature(CKAS_FEATURE_STATUS_TEXT) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_IMPORTS) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_BYTECODE) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_REPLACE_TRANSACTION)) {
         CKAngelScriptInitExtensionApi(api);
         return FALSE;
     }
@@ -547,6 +700,9 @@ CKAS_API CKDWORD CKAngelScriptGetApiVersion();
 CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature);
 CKAS_API void CKAngelScriptInitResult(CKAngelScriptResult *result);
 CKAS_API void CKAngelScriptInitLoadOptions(CKAngelScriptLoadOptions *options);
+CKAS_API void CKAngelScriptInitImportBindOptions(CKAngelScriptImportBindOptions *options);
+CKAS_API void CKAngelScriptInitBytecodeSaveOptions(CKAngelScriptBytecodeSaveOptions *options);
+CKAS_API void CKAngelScriptInitBytecodeLoadOptions(CKAngelScriptBytecodeLoadOptions *options);
 CKAS_API void CKAngelScriptInitFunctionOptions(CKAngelScriptFunctionOptions *options);
 CKAS_API void CKAngelScriptInitFunctionExecutionOptions(CKAngelScriptFunctionExecutionOptions *options);
 CKAS_API void CKAngelScriptInitExecutionStepOptions(CKAngelScriptExecutionStepOptions *options);
@@ -650,6 +806,34 @@ CKAS_API CKAS_STATUS CKAngelScriptEnumerateMetadata(CKAngelScript *angelScript,
                                                     CKAngelScriptMetadataCallback callback,
                                                     void *userData,
                                                     CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptGetImportedFunctionCount(CKAngelScript *angelScript,
+                                                           const char *moduleName,
+                                                           CKDWORD *outCount,
+                                                           CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptEnumerateImportedFunctions(CKAngelScript *angelScript,
+                                                             const char *moduleName,
+                                                             CKAngelScriptImportCallback callback,
+                                                             void *userData,
+                                                             CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptBindImportedFunction(CKAngelScript *angelScript,
+                                                       const CKAngelScriptImportBindOptions *options,
+                                                       CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptBindAllImportedFunctions(CKAngelScript *angelScript,
+                                                           const char *moduleName,
+                                                           CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptUnbindImportedFunction(CKAngelScript *angelScript,
+                                                         const char *moduleName,
+                                                         CKDWORD importIndex,
+                                                         CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptUnbindAllImportedFunctions(CKAngelScript *angelScript,
+                                                             const char *moduleName,
+                                                             CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptSaveModuleBytecode(CKAngelScript *angelScript,
+                                                     const CKAngelScriptBytecodeSaveOptions *options,
+                                                     CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptLoadModuleBytecode(CKAngelScript *angelScript,
+                                                     const CKAngelScriptBytecodeLoadOptions *options,
+                                                     CKAngelScriptResult *result);
 CKAS_API CKAS_STATUS CKAngelScriptFindFunction(CKAngelScript *angelScript,
                                                const CKAngelScriptFunctionOptions *options,
                                                CKAngelScriptFunction **outFunction,
@@ -1029,6 +1213,64 @@ public:
         return options;
     }
 
+    static CKAngelScriptImportBindOptions ImportBindOptions() {
+        CKAngelScriptImportBindOptions options;
+        CKAngelScriptInitImportBindOptions(&options);
+        return options;
+    }
+
+    static CKAngelScriptImportBindOptions ImportBindOptions(const char *importModuleName,
+                                                            CKDWORD importIndex,
+                                                            const char *sourceModuleName = nullptr,
+                                                            const char *functionDecl = nullptr,
+                                                            CKDWORD flags = 0) {
+        CKAngelScriptImportBindOptions options = ImportBindOptions();
+        options.ImportModuleName = importModuleName;
+        options.ImportIndex = importIndex;
+        options.SourceModuleName = sourceModuleName;
+        options.FunctionDecl = functionDecl;
+        options.Flags = flags;
+        return options;
+    }
+
+    static CKAngelScriptBytecodeSaveOptions BytecodeSaveOptions() {
+        CKAngelScriptBytecodeSaveOptions options;
+        CKAngelScriptInitBytecodeSaveOptions(&options);
+        return options;
+    }
+
+    static CKAngelScriptBytecodeSaveOptions BytecodeSaveOptions(
+        const char *moduleName,
+        CKAngelScriptBytecodeWriteCallback write,
+        void *userData = nullptr,
+        CKDWORD flags = CKAS_BYTECODE_DEFAULT) {
+        CKAngelScriptBytecodeSaveOptions options = BytecodeSaveOptions();
+        options.ModuleName = moduleName;
+        options.Write = write;
+        options.UserData = userData;
+        options.Flags = flags;
+        return options;
+    }
+
+    static CKAngelScriptBytecodeLoadOptions BytecodeLoadOptions() {
+        CKAngelScriptBytecodeLoadOptions options;
+        CKAngelScriptInitBytecodeLoadOptions(&options);
+        return options;
+    }
+
+    static CKAngelScriptBytecodeLoadOptions BytecodeLoadOptions(
+        const char *moduleName,
+        CKAngelScriptBytecodeReadCallback read,
+        void *userData = nullptr,
+        CKDWORD flags = CKAS_BYTECODE_DEFAULT) {
+        CKAngelScriptBytecodeLoadOptions options = BytecodeLoadOptions();
+        options.ModuleName = moduleName;
+        options.Read = read;
+        options.UserData = userData;
+        options.Flags = flags;
+        return options;
+    }
+
     static CKAngelScriptFunctionOptions FunctionOptions() {
         CKAngelScriptFunctionOptions options;
         CKAngelScriptInitFunctionOptions(&options);
@@ -1382,6 +1624,78 @@ public:
                                   void *userData = nullptr,
                                   CKAngelScriptResult *result = nullptr) const {
         return CKAngelScriptEnumerateMetadata(m_AngelScript, moduleName, callback, userData, result);
+    }
+
+    CKAS_STATUS GetImportedFunctionCount(const char *moduleName,
+                                         CKDWORD *outCount,
+                                         CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptGetImportedFunctionCount(m_AngelScript, moduleName, outCount, result);
+    }
+
+    CKAS_STATUS EnumerateImportedFunctions(const char *moduleName,
+                                           CKAngelScriptImportCallback callback,
+                                           void *userData = nullptr,
+                                           CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptEnumerateImportedFunctions(m_AngelScript, moduleName, callback, userData, result);
+    }
+
+    CKAS_STATUS BindImportedFunction(const CKAngelScriptImportBindOptions &options,
+                                     CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptBindImportedFunction(m_AngelScript, &options, result);
+    }
+
+    CKAS_STATUS BindImportedFunction(const char *importModuleName,
+                                     CKDWORD importIndex,
+                                     const char *sourceModuleName = nullptr,
+                                     const char *functionDecl = nullptr,
+                                     CKAngelScriptResult *result = nullptr) const {
+        return BindImportedFunction(ImportBindOptions(importModuleName,
+                                                      importIndex,
+                                                      sourceModuleName,
+                                                      functionDecl),
+                                    result);
+    }
+
+    CKAS_STATUS BindAllImportedFunctions(const char *moduleName,
+                                         CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptBindAllImportedFunctions(m_AngelScript, moduleName, result);
+    }
+
+    CKAS_STATUS UnbindImportedFunction(const char *moduleName,
+                                       CKDWORD importIndex,
+                                       CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptUnbindImportedFunction(m_AngelScript, moduleName, importIndex, result);
+    }
+
+    CKAS_STATUS UnbindAllImportedFunctions(const char *moduleName,
+                                           CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptUnbindAllImportedFunctions(m_AngelScript, moduleName, result);
+    }
+
+    CKAS_STATUS SaveModuleBytecode(const CKAngelScriptBytecodeSaveOptions &options,
+                                   CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptSaveModuleBytecode(m_AngelScript, &options, result);
+    }
+
+    CKAS_STATUS SaveModuleBytecode(const char *moduleName,
+                                   CKAngelScriptBytecodeWriteCallback write,
+                                   void *userData = nullptr,
+                                   CKDWORD flags = CKAS_BYTECODE_DEFAULT,
+                                   CKAngelScriptResult *result = nullptr) const {
+        return SaveModuleBytecode(BytecodeSaveOptions(moduleName, write, userData, flags), result);
+    }
+
+    CKAS_STATUS LoadModuleBytecode(const CKAngelScriptBytecodeLoadOptions &options,
+                                   CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptLoadModuleBytecode(m_AngelScript, &options, result);
+    }
+
+    CKAS_STATUS LoadModuleBytecode(const char *moduleName,
+                                   CKAngelScriptBytecodeReadCallback read,
+                                   void *userData = nullptr,
+                                   CKDWORD flags = CKAS_BYTECODE_DEFAULT,
+                                   CKAngelScriptResult *result = nullptr) const {
+        return LoadModuleBytecode(BytecodeLoadOptions(moduleName, read, userData, flags), result);
     }
 
     CKAS_STATUS FindFunction(const CKAngelScriptFunctionOptions &options,

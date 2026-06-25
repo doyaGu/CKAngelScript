@@ -289,6 +289,26 @@ public:
                                   CKAngelScriptMetadataCallback callback,
                                   void *userData,
                                   CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS GetImportedFunctionCount(const char *moduleName,
+                                         CKDWORD *outCount,
+                                         CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS EnumerateImportedFunctions(const char *moduleName,
+                                           CKAngelScriptImportCallback callback,
+                                           void *userData,
+                                           CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS BindImportedFunction(const CKAngelScriptImportBindOptions &options,
+                                     CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS BindAllImportedFunctions(const char *moduleName,
+                                         CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS UnbindImportedFunction(const char *moduleName,
+                                       CKDWORD importIndex,
+                                       CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS UnbindAllImportedFunctions(const char *moduleName,
+                                           CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS SaveModuleBytecode(const CKAngelScriptBytecodeSaveOptions &options,
+                                   CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS LoadModuleBytecode(const CKAngelScriptBytecodeLoadOptions &options,
+                                   CKAngelScriptResult *result = nullptr);
     CKAS_STATUS FindFunction(const CKAngelScriptFunctionOptions &options,
                              CKAngelScriptFunction **outFunction,
                              CKAngelScriptResult *result = nullptr);
@@ -297,6 +317,7 @@ public:
                              CKAngelScriptObject **outObject,
                              CKAngelScriptResult *result = nullptr);
     CKAS_STATUS ReleaseObject(CKAngelScriptObject *object, CKAngelScriptResult *result = nullptr);
+    bool OwnsObjectHandle(const CKAngelScriptObject *object) const;
     CKAS_STATUS FindObjectMethod(const CKAngelScriptMethodOptions &options,
                                  CKAngelScriptMethod **outMethod,
                                  CKAngelScriptResult *result = nullptr);
