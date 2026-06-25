@@ -221,6 +221,12 @@ struct MetadataProbe {
     CKDWORD CallbackCount = 0;
 };
 
+struct ReentrantMetadataProbe {
+    CKAngelScriptApi *Api = nullptr;
+    CKAS_STATUS ReentryStatus = CKAS_OK;
+    CKDWORD CallbackCount = 0;
+};
+
 struct ImportProbe {
     bool SawImport = false;
     CKDWORD CallbackCount = 0;
@@ -405,6 +411,20 @@ CKAS_STATUS ProbeMetadata(const CKAngelScriptMetadataEntry *entry,
 
 CKAS_STATUS StopMetadata(const CKAngelScriptMetadataEntry *, CKDWORD, const char *, void *) {
     return CKAS_CANCELLED;
+}
+
+CKAS_STATUS MutateFromMetadataCallback(const CKAngelScriptMetadataEntry *, CKDWORD, const char *, void *userData) {
+    auto *probe = static_cast<ReentrantMetadataProbe *>(userData);
+    if (!probe || !probe->Api) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    probe->ReentryStatus =
+        probe->Api->CompileModule("__CKAS_MetadataCallbackReentry",
+                                  "int __ckas_metadata_callback_reentry() { return 1; }\n",
+                                  CKAS_COMPILE_REPLACEEXISTING,
+                                  nullptr);
+    return CKAS_OK;
 }
 
 CKAS_STATUS ProbeImport(const CKAngelScriptImportEntry *entry, void *userData) {
@@ -1275,6 +1295,15 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         metadataProbe.NamespacedTypes != 2 ||
         metadataProbe.NamespacedMethods != 2) {
         error = "CKAngelScript API self-test expected metadata enumeration for type/method/function/global/property targets.";
+        return false;
+    }
+    ReentrantMetadataProbe metadataReentry;
+    metadataReentry.Api = &api;
+    if (api->EnumerateMetadata(moduleName, MutateFromMetadataCallback, &metadataReentry, &result) != CKAS_OK ||
+        metadataReentry.CallbackCount == 0 ||
+        metadataReentry.ReentryStatus != CKAS_INVALIDSTATE) {
+        error = "CKAngelScript API self-test expected metadata callbacks to reject module mutation reentry.";
+        api->UnloadModule("__CKAS_MetadataCallbackReentry", nullptr);
         return false;
     }
     if (api->EnumerateMetadata("__CKAS_MissingMetadataModule", ProbeMetadata, &metadataProbe, &result) != CKAS_NOTFOUND ||

@@ -80,7 +80,7 @@ CKAngelScript never owns callback `UserData`. The caller is always responsible f
 
 | Callback path | Lifetime contract |
 | --- | --- |
-| `CKAngelScriptEnumerateMetadata` | `userData`, `CKAngelScriptMetadataEntry`, and metadata strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. |
+| `CKAngelScriptEnumerateMetadata` | `userData`, `CKAngelScriptMetadataEntry`, and metadata strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. Module mutation from the callback returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptEnumerateImportedFunctions` | `userData`, `CKAngelScriptImportEntry`, and import strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. Module mutation from the callback returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptSaveModuleBytecode` / `CKAngelScriptLoadModuleBytecode` | `Write`, `Read`, and `UserData` are borrowed only until the bytecode call returns. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptCallObjectMethod` | `WriteArgs`, `ReadResult`, and `UserData` are borrowed only until the synchronous call returns. Do not store `CKAngelScriptArgWriter` or `CKAngelScriptResultReader` pointers. |

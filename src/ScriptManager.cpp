@@ -3233,6 +3233,13 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
                    ? StoreResult(result, CKAS_OK)
                    : StoreResult(result, status, 0, "Metadata enumeration stopped by callback.");
     };
+    auto dispatchMetadata = [this, callback, userData](
+                                const CKAngelScriptMetadataEntry &entry,
+                                CKDWORD metadataCount,
+                                const std::function<const char *(CKDWORD)> &metadataAt) {
+        ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+        return DispatchMetadata(entry, metadataCount, metadataAt, callback, userData);
+    };
 
     const asUINT typeCount = module->GetObjectTypeCount();
     for (asUINT typeIndex = 0; typeIndex < typeCount; ++typeIndex) {
@@ -3254,14 +3261,12 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
             entry.Name = typeName;
             entry.Namespace = typeNamespace;
             entry.Declaration = typeDeclaration.c_str();
-            const CKAS_STATUS status = DispatchMetadata(
+            const CKAS_STATUS status = dispatchMetadata(
                 entry,
                 typeMetadataCount,
                 [cached, typeId](CKDWORD index) {
                     return cached->GetTypeMetadata(typeId, static_cast<int>(index));
-                },
-                callback,
-                userData);
+                });
             if (status != CKAS_OK) {
                 return finish(status);
             }
@@ -3285,14 +3290,12 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
             entry.Declaration = declaration.c_str();
             entry.ParentTypeName = typeName;
             entry.ParentTypeNamespace = typeNamespace;
-            const CKAS_STATUS status = DispatchMetadata(
+            const CKAS_STATUS status = dispatchMetadata(
                 entry,
                 metadataCount,
                 [cached, typeId, method](CKDWORD index) {
                     return cached->GetClassMethodMetadata(typeId, method, static_cast<int>(index));
-                },
-                callback,
-                userData);
+                });
             if (status != CKAS_OK) {
                 return finish(status);
             }
@@ -3317,16 +3320,14 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
             entry.Declaration = declaration;
             entry.ParentTypeName = typeName;
             entry.ParentTypeNamespace = typeNamespace;
-            const CKAS_STATUS status = DispatchMetadata(
+            const CKAS_STATUS status = dispatchMetadata(
                 entry,
                 metadataCount,
                 [cached, typeId, propertyIndex](CKDWORD index) {
                     return cached->GetClassVarMetadata(typeId,
                                                        static_cast<int>(propertyIndex),
                                                        static_cast<int>(index));
-                },
-                callback,
-                userData);
+                });
             if (status != CKAS_OK) {
                 return finish(status);
             }
@@ -3349,14 +3350,12 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
         entry.Name = function->GetName();
         entry.Namespace = function->GetNamespace();
         entry.Declaration = declaration.c_str();
-        const CKAS_STATUS status = DispatchMetadata(
+        const CKAS_STATUS status = dispatchMetadata(
             entry,
             metadataCount,
             [cached, function](CKDWORD index) {
                 return cached->GetFuncMetadata(function, static_cast<int>(index));
-            },
-            callback,
-            userData);
+            });
         if (status != CKAS_OK) {
             return finish(status);
         }
@@ -3380,14 +3379,12 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
         entry.Name = name;
         entry.Namespace = nameSpace;
         entry.Declaration = declaration;
-        const CKAS_STATUS status = DispatchMetadata(
+        const CKAS_STATUS status = dispatchMetadata(
             entry,
             metadataCount,
             [cached, globalIndex](CKDWORD index) {
                 return cached->GetVarMetadata(static_cast<int>(globalIndex), static_cast<int>(index));
-            },
-            callback,
-            userData);
+            });
         if (status != CKAS_OK) {
             return finish(status);
         }
