@@ -231,6 +231,12 @@ struct BytecodeBuffer {
     size_t Offset = 0;
 };
 
+struct ReentrantBytecodeWriteProbe {
+    BytecodeBuffer Buffer;
+    CKAngelScriptApi *Api = nullptr;
+    CKAS_STATUS ReentryStatus = CKAS_OK;
+};
+
 bool CkasStringEquals(const char *lhs, const char *rhs) {
     return lhs && rhs && std::strcmp(lhs, rhs) == 0;
 }
@@ -425,6 +431,19 @@ CKAS_STATUS WriteBytecode(const void *data, size_t size, void *userData) {
         buffer->Bytes.insert(buffer->Bytes.end(), bytes, bytes + size);
     }
     return CKAS_OK;
+}
+
+CKAS_STATUS WriteBytecodeWithReentry(const void *data, size_t size, void *userData) {
+    auto *probe = static_cast<ReentrantBytecodeWriteProbe *>(userData);
+    if (!probe || !probe->Api) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    probe->ReentryStatus =
+        probe->Api->CompileModule("__CKAS_BytecodeCallbackReentry",
+                                  "int __ckas_bytecode_callback_reentry() { return 1; }\n",
+                                  CKAS_COMPILE_REPLACEEXISTING,
+                                  nullptr);
+    return WriteBytecode(data, size, &probe->Buffer);
 }
 
 CKAS_STATUS ReadBytecode(void *data, size_t size, void *userData) {
@@ -1270,6 +1289,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     const char *importProviderSource =
         "int __ckas_import_add(int value) { return value + 12; }\n"
         "void __ckas_import_wrong() {}\n";
+    const char *importProviderReplacementSource =
+        "int __ckas_import_add(int value) { return value + 20; }\n"
+        "void __ckas_import_wrong() {}\n";
     const char *importConsumerSource =
         "import int __ckas_import_add(int value) from \"__CKAS_ImportProvider\";\n"
         "int __ckas_import_call() { return __ckas_import_add(5); }\n";
@@ -1298,8 +1320,24 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    CKAngelScriptFunction *preBindImportFunction = nullptr;
+    if (api->FindFunction(CKAngelScriptApi::FunctionByDeclOptions(importConsumerModuleName,
+                                                                  "int __ckas_import_call()"),
+                          &preBindImportFunction,
+                          &result) != CKAS_OK ||
+        !preBindImportFunction) {
+        error = "CKAngelScript API self-test expected to capture an import consumer function before binding.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     int importValue = 0;
+    CKAngelScriptExecution *staleImportExecution = nullptr;
     if (api->BindAllImportedFunctions(importConsumerModuleName, &result) != CKAS_OK ||
+        api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(preBindImportFunction),
+                                     &staleImportExecution,
+                                     &result) != CKAS_STALEHANDLE ||
+        staleImportExecution ||
         !ExecuteIntFunction(api,
                             importConsumerModuleName,
                             "int __ckas_import_call()",
@@ -1308,7 +1346,45 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                             error) ||
         importValue != 17) {
         if (error.empty()) {
-            error = "CKAngelScript API self-test expected BindAllImportedFunctions to make the import callable.";
+            error = "CKAngelScript API self-test expected BindAllImportedFunctions to relink and stale old consumer handles.";
+        }
+        if (staleImportExecution) {
+            api->ReleaseExecution(staleImportExecution);
+        }
+        api->ReleaseFunction(preBindImportFunction);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    api->ReleaseFunction(preBindImportFunction);
+    if (api->CompileModule(importProviderModuleName,
+                           importProviderReplacementSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_INUSE ||
+        api->UnloadModule(importProviderModuleName, &result) != CKAS_INUSE) {
+        error = "CKAngelScript API self-test expected bound import consumers to block provider replacement.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->CompileModule(importConsumerModuleName,
+                           importConsumerSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->CompileModule(importProviderModuleName,
+                           importProviderReplacementSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->BindAllImportedFunctions(importConsumerModuleName, &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            importConsumerModuleName,
+                            "int __ckas_import_call()",
+                            importValue,
+                            result,
+                            error) ||
+        importValue != 25) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected consumer replacement to clear import edges for provider reload.";
         }
         api->UnloadModule(importConsumerModuleName, nullptr);
         api->UnloadModule(importProviderModuleName, nullptr);
@@ -1326,7 +1402,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                             importValue,
                             result,
                             error) ||
-        importValue != 17 ||
+        importValue != 25 ||
         api->UnbindAllImportedFunctions(importConsumerModuleName, &result) != CKAS_OK) {
         if (error.empty()) {
             error = "CKAngelScript API self-test expected explicit import bind and unbind to work.";
@@ -2094,6 +2170,19 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                                                       RejectBytecodeWrite),
                                 &result) != CKAS_CANCELLED) {
         error = "CKAngelScript API self-test expected bytecode save and write failure statuses.";
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    ReentrantBytecodeWriteProbe reentrantBytecodeWrite;
+    reentrantBytecodeWrite.Api = &api;
+    if (api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(bytecodeSourceModuleName,
+                                                                      WriteBytecodeWithReentry,
+                                                                      &reentrantBytecodeWrite),
+                                &result) != CKAS_OK ||
+        reentrantBytecodeWrite.Buffer.Bytes.empty() ||
+        reentrantBytecodeWrite.ReentryStatus != CKAS_INVALIDSTATE) {
+        error = "CKAngelScript API self-test expected bytecode callbacks to reject module mutation reentry.";
         api->UnloadModule(bytecodeSourceModuleName, nullptr);
         api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
         return false;

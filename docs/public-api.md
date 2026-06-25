@@ -81,8 +81,8 @@ CKAngelScript never owns callback `UserData`. The caller is always responsible f
 | Callback path | Lifetime contract |
 | --- | --- |
 | `CKAngelScriptEnumerateMetadata` | `userData`, `CKAngelScriptMetadataEntry`, and metadata strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. |
-| `CKAngelScriptEnumerateImportedFunctions` | `userData`, `CKAngelScriptImportEntry`, and import strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. |
-| `CKAngelScriptSaveModuleBytecode` / `CKAngelScriptLoadModuleBytecode` | `Write`, `Read`, and `UserData` are borrowed only until the bytecode call returns. The callbacks must not unload or replace modules. |
+| `CKAngelScriptEnumerateImportedFunctions` | `userData`, `CKAngelScriptImportEntry`, and import strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. Module mutation from the callback returns `CKAS_INVALIDSTATE`. |
+| `CKAngelScriptSaveModuleBytecode` / `CKAngelScriptLoadModuleBytecode` | `Write`, `Read`, and `UserData` are borrowed only until the bytecode call returns. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptCallObjectMethod` | `WriteArgs`, `ReadResult`, and `UserData` are borrowed only until the synchronous call returns. Do not store `CKAngelScriptArgWriter` or `CKAngelScriptResultReader` pointers. |
 | `CKAngelScriptStartExecution` / `CKAngelScriptResumeExecution` | `ConfigureContext`, `ReadResult`, and `UserData` from `CKAngelScriptExecutionStepOptions` are borrowed only for that one start/resume call. Suspend does not retain them; pass fresh step options when resuming. |
 | `CKAngelScriptSetHostCallFilter` | `callback` and `userData` are retained until replaced, cleared, or the CKAngelScript manager is destroyed. The callback must not execute script or unload/replace modules. |
@@ -166,7 +166,7 @@ CKAngelScriptImportBindOptions bind = CKAngelScriptApi::ImportBindOptions("consu
 CKAS_STATUS status = CKAngelScriptBindImportedFunction(angelScript, &bind, &result);
 ```
 
-`CKAngelScriptUnbindImportedFunction()` and `CKAngelScriptUnbindAllImportedFunctions()` remove bindings from the importing module. Bindings point at the provider function resolved at bind time; replacing a provider module does not automatically retarget consumers, so reload coordinators should unbind and rebind affected consumers after provider generation changes.
+`CKAngelScriptUnbindImportedFunction()` and `CKAngelScriptUnbindAllImportedFunctions()` remove bindings from the importing module. Bind and unbind operations change the importing module generation, so old consumer symbol/execution handles become stale. Bindings point at the provider function resolved at bind time; replacing or unloading a provider module with bound consumers returns `CKAS_INUSE`. Reload coordinators should replace or unbind affected consumers before replacing the provider, then rebind consumers after provider generation changes.
 
 Bytecode APIs use caller-provided read/write callbacks, so CKAngelScript never allocates byte buffers that the caller must free:
 

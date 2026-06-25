@@ -238,6 +238,21 @@ private:
     CKAS_STATUS m_Status = CKAS_OK;
 };
 
+class PublicCallbackScope {
+public:
+    explicit PublicCallbackScope(int &depth)
+        : m_Depth(depth) {
+        ++m_Depth;
+    }
+
+    ~PublicCallbackScope() {
+        --m_Depth;
+    }
+
+private:
+    int &m_Depth;
+};
+
 bool SaveModuleByteCode(asIScriptModule *module,
                         std::vector<unsigned char> &byteCode,
                         int &angelScriptCode,
@@ -2155,6 +2170,7 @@ int ScriptManager::Shutdown() {
     m_ScriptContexts.clear();
 
     ClearCKObjectData();
+    m_ImportBindings.clear();
     m_ScriptCache.Clear();
 
     m_BehaviorBridge.reset();
@@ -2478,6 +2494,153 @@ bool ScriptManager::HasRuntimeHandleForModule(const char *moduleName) const {
     return false;
 }
 
+bool ScriptManager::HasBoundImportConsumersForModule(const char *moduleName,
+                                                     std::string *consumerModule) const {
+    if (consumerModule) {
+        consumerModule->clear();
+    }
+    if (!moduleName || moduleName[0] == '\0') {
+        return false;
+    }
+    for (const ImportBindingEdge &edge : m_ImportBindings) {
+        if (edge.SourceModuleName == moduleName && edge.ImportModuleName != moduleName) {
+            if (consumerModule) {
+                *consumerModule = edge.ImportModuleName;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ScriptManager::IsModuleMutationBlockedByCallback() const {
+    return m_PublicCallbackDepth > 0;
+}
+
+CKAS_STATUS ScriptManager::RejectModuleMutationDuringCallback(const char *apiName,
+                                                              CKAngelScriptResult *result) {
+    return StoreResult(result,
+                       CKAS_INVALIDSTATE,
+                       0,
+                       fmt::format("{} cannot mutate modules while a CKAngelScript callback is active.",
+                                   apiName ? apiName : "CKAngelScript"));
+}
+
+std::vector<ScriptManager::ImportBindingEdge> ScriptManager::GetImportBindingsForModule(
+    const char *moduleName) const {
+    std::vector<ImportBindingEdge> bindings;
+    if (!moduleName || moduleName[0] == '\0') {
+        return bindings;
+    }
+    for (const ImportBindingEdge &edge : m_ImportBindings) {
+        if (edge.ImportModuleName == moduleName) {
+            bindings.push_back(edge);
+        }
+    }
+    return bindings;
+}
+
+bool ScriptManager::RemoveImportBinding(const char *moduleName, CKDWORD importIndex) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return false;
+    }
+    const auto oldSize = m_ImportBindings.size();
+    m_ImportBindings.erase(std::remove_if(m_ImportBindings.begin(),
+                                          m_ImportBindings.end(),
+                                          [moduleName, importIndex](const ImportBindingEdge &edge) {
+                                              return edge.ImportModuleName == moduleName &&
+                                                     edge.ImportIndex == importIndex;
+                                          }),
+                           m_ImportBindings.end());
+    return m_ImportBindings.size() != oldSize;
+}
+
+bool ScriptManager::RemoveImportBindingsForModule(const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return false;
+    }
+    const auto oldSize = m_ImportBindings.size();
+    m_ImportBindings.erase(std::remove_if(m_ImportBindings.begin(),
+                                          m_ImportBindings.end(),
+                                          [moduleName](const ImportBindingEdge &edge) {
+                                              return edge.ImportModuleName == moduleName;
+                                          }),
+                           m_ImportBindings.end());
+    return m_ImportBindings.size() != oldSize;
+}
+
+bool ScriptManager::RebindImportBindings(const std::vector<ImportBindingEdge> &bindings,
+                                         int &angelScriptCode,
+                                         std::string &errorMessage) {
+    angelScriptCode = 0;
+    errorMessage.clear();
+    for (const ImportBindingEdge &edge : bindings) {
+        asIScriptModule *importModule = GetModule(edge.ImportModuleName.c_str());
+        if (!importModule) {
+            errorMessage = fmt::format("Failed to restore import binding: module '{}' was not found.",
+                                       edge.ImportModuleName);
+            return false;
+        }
+        if (edge.ImportIndex >= importModule->GetImportedFunctionCount()) {
+            angelScriptCode = asINVALID_ARG;
+            errorMessage = fmt::format("Failed to restore import binding: import {} is out of range in module '{}'.",
+                                       edge.ImportIndex,
+                                       edge.ImportModuleName);
+            return false;
+        }
+        asIScriptModule *sourceModule = GetModule(edge.SourceModuleName.c_str());
+        if (!sourceModule) {
+            angelScriptCode = asNO_MODULE;
+            errorMessage = fmt::format("Failed to restore import binding: source module '{}' was not found.",
+                                       edge.SourceModuleName);
+            return false;
+        }
+        asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(edge.FunctionDecl.c_str());
+        if (!targetFunction) {
+            angelScriptCode = asNO_FUNCTION;
+            errorMessage = fmt::format("Failed to restore import binding: function '{}' was not found in module '{}'.",
+                                       edge.FunctionDecl,
+                                       edge.SourceModuleName);
+            return false;
+        }
+        angelScriptCode = importModule->BindImportedFunction(edge.ImportIndex, targetFunction);
+        if (angelScriptCode < 0) {
+            errorMessage = fmt::format("Failed to restore import binding {} in module '{}'.",
+                                       edge.ImportIndex,
+                                       edge.ImportModuleName);
+            return false;
+        }
+    }
+    return true;
+}
+
+void ScriptManager::RestoreImportBindingsForModule(
+    const char *moduleName,
+    const std::vector<ImportBindingEdge> &bindings) {
+    RemoveImportBindingsForModule(moduleName);
+    for (const ImportBindingEdge &edge : bindings) {
+        m_ImportBindings.push_back(edge);
+    }
+}
+
+void ScriptManager::RecordImportBinding(const char *importModuleName,
+                                        CKDWORD importIndex,
+                                        const char *sourceModuleName,
+                                        const char *functionDecl) {
+    RemoveImportBinding(importModuleName, importIndex);
+    if (!importModuleName || importModuleName[0] == '\0' ||
+        !sourceModuleName || sourceModuleName[0] == '\0' ||
+        !functionDecl || functionDecl[0] == '\0') {
+        return;
+    }
+    ImportBindingEdge edge;
+    edge.ImportModuleName = importModuleName;
+    edge.ImportIndex = importIndex;
+    edge.SourceModuleName = sourceModuleName;
+    edge.FunctionDecl = functionDecl;
+    m_ImportBindings.push_back(edge);
+}
+
 void ScriptManager::BumpModuleGeneration(const char *moduleName) {
     if (!moduleName || moduleName[0] == '\0') {
         return;
@@ -2538,6 +2701,7 @@ bool ScriptManager::CaptureModuleReplacementSnapshot(const char *moduleName,
     }
 
     snapshot.Cache = m_ScriptCache.GetCachedScript(moduleName);
+    snapshot.ImportBindings = GetImportBindingsForModule(moduleName);
     if (snapshot.Cache) {
         snapshot.Sections = snapshot.Cache->sections;
         snapshot.Metadata = snapshot.Cache->metadata;
@@ -2564,6 +2728,7 @@ void ScriptManager::RemoveModuleForReplacement(const char *moduleName,
     }
 
     m_ScriptCache.Invalidate(moduleName);
+    RemoveImportBindingsForModule(moduleName);
     if (snapshot.Cache && snapshot.Cache->module) {
         snapshot.Cache->module->Discard();
         snapshot.Cache->module = nullptr;
@@ -2603,6 +2768,10 @@ bool ScriptManager::RestoreModuleReplacementSnapshot(const char *moduleName,
     restoredCache->metadata = snapshot.Metadata;
     restoredCache->module = restoredModule;
     m_ScriptCache.CacheScript(moduleName, restoredCache);
+    if (!RebindImportBindings(snapshot.ImportBindings, angelScriptCode, errorMessage)) {
+        return false;
+    }
+    RestoreImportBindingsForModule(moduleName, snapshot.ImportBindings);
     return true;
 }
 
@@ -2705,6 +2874,9 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
     if (!moduleName || moduleName[0] == '\0') {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
+    if (IsModuleMutationBlockedByCallback()) {
+        return RejectModuleMutationDuringCallback("LoadModule", result);
+    }
     if ((flags & ~static_cast<CKDWORD>(CKAS_LOAD_REPLACEEXISTING)) != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown LoadModule flags.");
     }
@@ -2732,6 +2904,14 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                                CKAS_INUSE,
                                0,
                                "Module has live object or execution handles.");
+        }
+        std::string importConsumer;
+        if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
+            return StoreResult(result,
+                               CKAS_INUSE,
+                               0,
+                               fmt::format("Module is imported by bound module '{}'.",
+                                           importConsumer));
         }
     }
     if (hasCode) {
@@ -2846,6 +3026,9 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
     if (!moduleName || moduleName[0] == '\0' || !scriptCode) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name and script code are required.");
     }
+    if (IsModuleMutationBlockedByCallback()) {
+        return RejectModuleMutationDuringCallback("CompileModule", result);
+    }
     if ((flags & ~static_cast<CKDWORD>(CKAS_COMPILE_REPLACEEXISTING)) != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown CompileModule flags.");
     }
@@ -2862,6 +3045,14 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
                                CKAS_INUSE,
                                0,
                                "Module has live object or execution handles.");
+        }
+        std::string importConsumer;
+        if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
+            return StoreResult(result,
+                               CKAS_INUSE,
+                               0,
+                               fmt::format("Module is imported by bound module '{}'.",
+                                           importConsumer));
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(moduleName, scriptCode);
@@ -2888,15 +3079,27 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
     if (!moduleName || moduleName[0] == '\0') {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
+    if (IsModuleMutationBlockedByCallback()) {
+        return RejectModuleMutationDuringCallback("UnloadModule", result);
+    }
     if (HasRuntimeHandleForModule(moduleName)) {
         return StoreResult(result,
                            CKAS_INUSE,
                            0,
                            "Module has live object or execution handles.");
     }
+    std::string importConsumer;
+    if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
+        return StoreResult(result,
+                           CKAS_INUSE,
+                           0,
+                           fmt::format("Module is imported by bound module '{}'.",
+                                       importConsumer));
+    }
     if (!DiscardCachedModule(moduleName)) {
         return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }
+    RemoveImportBindingsForModule(moduleName);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK);
 }
@@ -3231,7 +3434,11 @@ CKAS_STATUS ScriptManager::EnumerateImportedFunctions(const char *moduleName,
         entry.Index = static_cast<CKDWORD>(i);
         entry.Declaration = module->GetImportedFunctionDeclaration(i);
         entry.SourceModuleName = module->GetImportedFunctionSourceModule(i);
-        const CKAS_STATUS callbackStatus = DispatchImport(entry, callback, userData);
+        CKAS_STATUS callbackStatus = CKAS_OK;
+        {
+            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+            callbackStatus = DispatchImport(entry, callback, userData);
+        }
         if (callbackStatus != CKAS_OK) {
             return StoreResult(result,
                                callbackStatus,
@@ -3244,6 +3451,9 @@ CKAS_STATUS ScriptManager::EnumerateImportedFunctions(const char *moduleName,
 
 CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOptions &options,
                                                 CKAngelScriptResult *result) {
+    if (IsModuleMutationBlockedByCallback()) {
+        return RejectModuleMutationDuringCallback("BindImportedFunction", result);
+    }
     if (!HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Import bind options size is invalid.");
     }
@@ -3302,16 +3512,25 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
                                        sourceModuleName));
     }
 
+    const bool removedOldBinding = RemoveImportBinding(importModuleName, importIndex);
     const int bindResult = importModule->BindImportedFunction(importIndex, targetFunction);
     if (bindResult < 0) {
+        if (removedOldBinding) {
+            BumpModuleGeneration(importModuleName);
+        }
         status = StatusFromImportBindResult(bindResult);
         return StoreResult(result, status, bindResult, "Failed to bind imported function.");
     }
+    RecordImportBinding(importModuleName, importIndex, sourceModuleName, functionDecl);
+    BumpModuleGeneration(importModuleName);
     return StoreResult(result, CKAS_OK, bindResult);
 }
 
 CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
                                                     CKAngelScriptResult *result) {
+    if (IsModuleMutationBlockedByCallback()) {
+        return RejectModuleMutationDuringCallback("BindAllImportedFunctions", result);
+    }
     asIScriptModule *module = nullptr;
     const CKAS_STATUS borrowStatus = BorrowModule(moduleName, &module, result);
     if (borrowStatus != CKAS_OK) {
@@ -3319,10 +3538,17 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
     }
 
     const asUINT count = module->GetImportedFunctionCount();
+    bool changedBindings = false;
+    const auto finishChanged = [&]() {
+        if (changedBindings) {
+            BumpModuleGeneration(moduleName);
+        }
+    };
     for (asUINT i = 0; i < count; ++i) {
         const char *sourceModuleName = module->GetImportedFunctionSourceModule(i);
         const char *functionDecl = module->GetImportedFunctionDeclaration(i);
         if (!sourceModuleName || sourceModuleName[0] == '\0' || !functionDecl || functionDecl[0] == '\0') {
+            finishChanged();
             return StoreResult(result,
                                CKAS_INVALIDARGUMENT,
                                0,
@@ -3330,6 +3556,7 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
         }
         asIScriptModule *sourceModule = GetModule(sourceModuleName);
         if (!sourceModule) {
+            finishChanged();
             return StoreResult(result,
                                CKAS_NOTFOUND,
                                0,
@@ -3337,6 +3564,7 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
         }
         asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl);
         if (!targetFunction) {
+            finishChanged();
             return StoreResult(result,
                                CKAS_NOTFOUND,
                                0,
@@ -3345,21 +3573,34 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
                                            functionDecl,
                                            sourceModuleName));
         }
+        if (RemoveImportBinding(moduleName, static_cast<CKDWORD>(i))) {
+            changedBindings = true;
+        }
         const int bindResult = module->BindImportedFunction(i, targetFunction);
         if (bindResult < 0) {
             const CKAS_STATUS status = StatusFromImportBindResult(bindResult);
+            finishChanged();
             return StoreResult(result,
                                status,
                                bindResult,
                                fmt::format("Failed to bind import {}.", i));
         }
+        RecordImportBinding(moduleName,
+                            static_cast<CKDWORD>(i),
+                            sourceModuleName,
+                            functionDecl);
+        changedBindings = true;
     }
+    finishChanged();
     return StoreResult(result, CKAS_OK);
 }
 
 CKAS_STATUS ScriptManager::UnbindImportedFunction(const char *moduleName,
                                                   CKDWORD importIndex,
                                                   CKAngelScriptResult *result) {
+    if (IsModuleMutationBlockedByCallback()) {
+        return RejectModuleMutationDuringCallback("UnbindImportedFunction", result);
+    }
     asIScriptModule *module = nullptr;
     CKAS_STATUS status = BorrowModule(moduleName, &module, result);
     if (status != CKAS_OK) {
@@ -3373,11 +3614,17 @@ CKAS_STATUS ScriptManager::UnbindImportedFunction(const char *moduleName,
         status = StatusFromImportBindResult(unbindResult);
         return StoreResult(result, status, unbindResult, "Failed to unbind imported function.");
     }
+    if (RemoveImportBinding(moduleName, importIndex)) {
+        BumpModuleGeneration(moduleName);
+    }
     return StoreResult(result, CKAS_OK, unbindResult);
 }
 
 CKAS_STATUS ScriptManager::UnbindAllImportedFunctions(const char *moduleName,
                                                       CKAngelScriptResult *result) {
+    if (IsModuleMutationBlockedByCallback()) {
+        return RejectModuleMutationDuringCallback("UnbindAllImportedFunctions", result);
+    }
     asIScriptModule *module = nullptr;
     CKAS_STATUS status = BorrowModule(moduleName, &module, result);
     if (status != CKAS_OK) {
@@ -3387,6 +3634,9 @@ CKAS_STATUS ScriptManager::UnbindAllImportedFunctions(const char *moduleName,
     if (unbindResult < 0) {
         status = StatusFromImportBindResult(unbindResult);
         return StoreResult(result, status, unbindResult, "Failed to unbind imported functions.");
+    }
+    if (RemoveImportBindingsForModule(moduleName)) {
+        BumpModuleGeneration(moduleName);
     }
     return StoreResult(result, CKAS_OK, unbindResult);
 }
@@ -3409,6 +3659,9 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
     if ((flags & ~static_cast<CKDWORD>(CKAS_BYTECODE_STRIP_DEBUG_INFO)) != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown SaveModuleBytecode flags.");
     }
+    if (IsModuleMutationBlockedByCallback()) {
+        return RejectModuleMutationDuringCallback("SaveModuleBytecode", result);
+    }
     if (!write) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode write callback is required.");
     }
@@ -3422,12 +3675,17 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
     int angelScriptCode = 0;
     CKAS_STATUS callbackStatus = CKAS_OK;
     const bool stripDebugInfo = HasPublicFlag(flags, CKAS_BYTECODE_STRIP_DEBUG_INFO);
-    if (!ScriptManagerModuleReplacementInternal::SaveModuleByteCode(module,
-                                                                    write,
-                                                                    userData,
-                                                                    stripDebugInfo,
-                                                                    angelScriptCode,
-                                                                    callbackStatus)) {
+    bool saved = false;
+    {
+        ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+        saved = ScriptManagerModuleReplacementInternal::SaveModuleByteCode(module,
+                                                                           write,
+                                                                           userData,
+                                                                           stripDebugInfo,
+                                                                           angelScriptCode,
+                                                                           callbackStatus);
+    }
+    if (!saved) {
         if (callbackStatus != CKAS_OK) {
             return StoreResult(result, callbackStatus, angelScriptCode, "Bytecode write callback failed.");
         }
@@ -3454,6 +3712,9 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
     if (!moduleName || moduleName[0] == '\0') {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
+    if (IsModuleMutationBlockedByCallback()) {
+        return RejectModuleMutationDuringCallback("LoadModuleBytecode", result);
+    }
     if (!read) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode read callback is required.");
     }
@@ -3476,18 +3737,33 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
                            0,
                            "Module has live object or execution handles.");
     }
+    if (replacingExisting) {
+        std::string importConsumer;
+        if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
+            return StoreResult(result,
+                               CKAS_INUSE,
+                               0,
+                               fmt::format("Module is imported by bound module '{}'.",
+                                           importConsumer));
+        }
+    }
 
     int angelScriptCode = 0;
     CKAS_STATUS callbackStatus = CKAS_OK;
     const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(moduleName);
     asIScriptModule *candidateModule = nullptr;
-    if (!ScriptManagerModuleReplacementInternal::LoadModuleByteCode(m_ScriptEngine,
-                                                                    transientName.c_str(),
-                                                                    read,
-                                                                    userData,
-                                                                    &candidateModule,
-                                                                    angelScriptCode,
-                                                                    callbackStatus)) {
+    bool loaded = false;
+    {
+        ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+        loaded = ScriptManagerModuleReplacementInternal::LoadModuleByteCode(m_ScriptEngine,
+                                                                            transientName.c_str(),
+                                                                            read,
+                                                                            userData,
+                                                                            &candidateModule,
+                                                                            angelScriptCode,
+                                                                            callbackStatus);
+    }
+    if (!loaded) {
         if (callbackStatus != CKAS_OK) {
             return StoreResult(result, callbackStatus, angelScriptCode, "Bytecode read callback failed.");
         }

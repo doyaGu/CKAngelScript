@@ -439,15 +439,36 @@ protected:
     bool OwnsMethod(const CKAngelScriptMethod *method) const;
     bool HasExecutionForModule(const char *moduleName) const;
     bool HasRuntimeHandleForModule(const char *moduleName) const;
+    bool HasBoundImportConsumersForModule(const char *moduleName, std::string *consumerModule = nullptr) const;
+    bool IsModuleMutationBlockedByCallback() const;
+    CKAS_STATUS RejectModuleMutationDuringCallback(const char *apiName, CKAngelScriptResult *result);
     void BumpModuleGeneration(const char *moduleName);
+    struct ImportBindingEdge {
+        std::string ImportModuleName;
+        CKDWORD ImportIndex = 0;
+        std::string SourceModuleName;
+        std::string FunctionDecl;
+    };
     struct ModuleReplacementSnapshot {
         std::shared_ptr<CachedScript> Cache;
         std::vector<std::tuple<std::string, std::string>> Sections;
         ScriptMetadata Metadata;
+        std::vector<ImportBindingEdge> ImportBindings;
         std::vector<unsigned char> ByteCode;
         bool SourceSnapshotSections = false;
         bool HasModule = false;
     };
+    std::vector<ImportBindingEdge> GetImportBindingsForModule(const char *moduleName) const;
+    bool RemoveImportBinding(const char *moduleName, CKDWORD importIndex);
+    bool RemoveImportBindingsForModule(const char *moduleName);
+    bool RebindImportBindings(const std::vector<ImportBindingEdge> &bindings,
+                              int &angelScriptCode,
+                              std::string &errorMessage);
+    void RestoreImportBindingsForModule(const char *moduleName, const std::vector<ImportBindingEdge> &bindings);
+    void RecordImportBinding(const char *importModuleName,
+                             CKDWORD importIndex,
+                             const char *sourceModuleName,
+                             const char *functionDecl);
     std::shared_ptr<CachedScript> BuildTransientModule(
         const char *moduleName,
         const std::vector<std::tuple<std::string, std::string>> &sections,
@@ -509,6 +530,7 @@ protected:
     std::unordered_set<CKAngelScriptObject *> m_Objects;
     std::unordered_set<CKAngelScriptMethod *> m_Methods;
     std::unordered_map<std::string, CKDWORD> m_ModuleGenerations;
+    std::vector<ImportBindingEdge> m_ImportBindings;
     std::vector<ScriptEngineExtensionRegistration> m_EngineExtensions;
     CKAngelScriptResult m_LastResult = {sizeof(CKAngelScriptResult), CKAS_OK, 0, nullptr, nullptr, nullptr, 0};
     std::string m_LastErrorMessage;
@@ -520,6 +542,7 @@ protected:
     std::vector<CapturedScriptMessage> m_CapturedCompilerMessages;
     CKAngelScriptHostCallFilterCallback m_HostCallFilter = nullptr;
     void *m_HostCallFilterUserData = nullptr;
+    int m_PublicCallbackDepth = 0;
 };
 
 #endif // CK_SCRIPTMANAGER_H
