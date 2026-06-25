@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "CKAngelScript.h"
 #include "ScriptAsync.h"
@@ -126,6 +127,15 @@ static CKAngelScriptRawProc ResolveCkasSelfTestApiSymbol(void *, const char *nam
     if (std::strcmp(name, "CKAngelScriptInitResult") == 0) {
         return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitResult);
     }
+    if (std::strcmp(name, "CKAngelScriptInitImportBindOptions") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitImportBindOptions);
+    }
+    if (std::strcmp(name, "CKAngelScriptInitBytecodeSaveOptions") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitBytecodeSaveOptions);
+    }
+    if (std::strcmp(name, "CKAngelScriptInitBytecodeLoadOptions") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitBytecodeLoadOptions);
+    }
     if (std::strcmp(name, "CKAngelScriptInitEngineExtension") == 0) {
         return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitEngineExtension);
     }
@@ -140,6 +150,30 @@ static CKAngelScriptRawProc ResolveCkasSelfTestApiSymbol(void *, const char *nam
     }
     if (std::strcmp(name, "CKAngelScriptUnregisterEngineExtension") == 0) {
         return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptUnregisterEngineExtension);
+    }
+    if (std::strcmp(name, "CKAngelScriptGetImportedFunctionCount") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptGetImportedFunctionCount);
+    }
+    if (std::strcmp(name, "CKAngelScriptEnumerateImportedFunctions") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptEnumerateImportedFunctions);
+    }
+    if (std::strcmp(name, "CKAngelScriptBindImportedFunction") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptBindImportedFunction);
+    }
+    if (std::strcmp(name, "CKAngelScriptBindAllImportedFunctions") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptBindAllImportedFunctions);
+    }
+    if (std::strcmp(name, "CKAngelScriptUnbindImportedFunction") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptUnbindImportedFunction);
+    }
+    if (std::strcmp(name, "CKAngelScriptUnbindAllImportedFunctions") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptUnbindAllImportedFunctions);
+    }
+    if (std::strcmp(name, "CKAngelScriptSaveModuleBytecode") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptSaveModuleBytecode);
+    }
+    if (std::strcmp(name, "CKAngelScriptLoadModuleBytecode") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptLoadModuleBytecode);
     }
     return nullptr;
 }
@@ -185,6 +219,16 @@ struct MetadataProbe {
     int NamespacedTypes = 0;
     int NamespacedMethods = 0;
     CKDWORD CallbackCount = 0;
+};
+
+struct ImportProbe {
+    bool SawImport = false;
+    CKDWORD CallbackCount = 0;
+};
+
+struct BytecodeBuffer {
+    std::vector<unsigned char> Bytes;
+    size_t Offset = 0;
 };
 
 bool CkasStringEquals(const char *lhs, const char *rhs) {
@@ -357,6 +401,53 @@ CKAS_STATUS StopMetadata(const CKAngelScriptMetadataEntry *, CKDWORD, const char
     return CKAS_CANCELLED;
 }
 
+CKAS_STATUS ProbeImport(const CKAngelScriptImportEntry *entry, void *userData) {
+    auto *probe = static_cast<ImportProbe *>(userData);
+    if (!probe || !entry || entry->Size < sizeof(*entry) || !entry->Declaration || !entry->SourceModuleName) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    if (entry->Index == 0 &&
+        CkasStringContains(entry->Declaration, "__ckas_import_add") &&
+        CkasStringEquals(entry->SourceModuleName, "__CKAS_ImportProvider")) {
+        probe->SawImport = true;
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS WriteBytecode(const void *data, size_t size, void *userData) {
+    auto *buffer = static_cast<BytecodeBuffer *>(userData);
+    if (!buffer || (!data && size > 0)) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    if (size > 0) {
+        const auto *bytes = static_cast<const unsigned char *>(data);
+        buffer->Bytes.insert(buffer->Bytes.end(), bytes, bytes + size);
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ReadBytecode(void *data, size_t size, void *userData) {
+    auto *buffer = static_cast<BytecodeBuffer *>(userData);
+    if (!buffer || (!data && size > 0) || buffer->Offset > buffer->Bytes.size() ||
+        size > buffer->Bytes.size() - buffer->Offset) {
+        return CKAS_BUFFERTOOSMALL;
+    }
+    if (size > 0) {
+        std::memcpy(data, buffer->Bytes.data() + buffer->Offset, size);
+        buffer->Offset += size;
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS RejectBytecodeWrite(const void *, size_t, void *) {
+    return CKAS_CANCELLED;
+}
+
+CKAS_STATUS RejectBytecodeRead(void *, size_t, void *) {
+    return CKAS_CANCELLED;
+}
+
 bool WriteTextFile(const std::filesystem::path &path, const char *text, std::string &error) {
     std::ofstream out(path, std::ios::out | std::ios::trunc);
     if (!out) {
@@ -388,6 +479,43 @@ bool ContainsStructuredCompileDiagnostic(const CKAngelScriptResult &result) {
         }
     }
     return false;
+}
+
+bool ExecuteIntFunction(const CKAngelScriptApi &api,
+                        const char *moduleName,
+                        const char *functionDecl,
+                        int &value,
+                        CKAngelScriptResult &result,
+                        std::string &error) {
+    CKAngelScriptFunction *function = nullptr;
+    if (api.FindFunction(CKAngelScriptApi::FunctionByDeclOptions(moduleName, functionDecl), &function, &result) != CKAS_OK ||
+        !function) {
+        error = std::string("CKAngelScript API self-test could not find function: ") +
+                (functionDecl ? functionDecl : "<null>");
+        return false;
+    }
+
+    IntExecutionData data;
+    CKAngelScriptFunctionExecutionOptions executeOptions =
+        CKAngelScriptApi::FunctionExecutionOptions(function);
+    CKAngelScriptExecutionStepOptions stepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(nullptr, ReadIntReturn, &data);
+    CKAngelScriptExecution *execution = nullptr;
+    const CKAS_STATUS createStatus = api.CreateFunctionExecution(executeOptions, &execution, &result);
+    if (createStatus != CKAS_OK || !execution) {
+        api.ReleaseFunction(function);
+        error = "CKAngelScript API self-test could not create function execution.";
+        return false;
+    }
+    const CKAS_STATUS startStatus = api.StartExecution(execution, stepOptions, &result);
+    const CKAS_STATUS releaseExecutionStatus = api.ReleaseExecution(execution);
+    api.ReleaseFunction(function);
+    if (startStatus != CKAS_OK || releaseExecutionStatus != CKAS_OK) {
+        error = "CKAngelScript API self-test function execution failed.";
+        return false;
+    }
+    value = data.Output;
+    return true;
 }
 
 bool ExpectStatus(CKAS_STATUS actual,
@@ -459,6 +587,43 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         initLoadOptions.SectionCount != 0 ||
         initLoadOptions.Flags != CKAS_LOAD_DEFAULT) {
         error = "CKAngelScript API self-test expected LoadOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptImportBindOptions initImportBindOptions;
+    std::memset(&initImportBindOptions, 0x7f, sizeof(initImportBindOptions));
+    CKAngelScriptInitImportBindOptions(&initImportBindOptions);
+    if (initImportBindOptions.Size != sizeof(initImportBindOptions) ||
+        initImportBindOptions.ImportModuleName ||
+        initImportBindOptions.ImportIndex != 0 ||
+        initImportBindOptions.SourceModuleName ||
+        initImportBindOptions.FunctionDecl ||
+        initImportBindOptions.Flags != 0) {
+        error = "CKAngelScript API self-test expected ImportBindOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptBytecodeSaveOptions initBytecodeSaveOptions;
+    std::memset(&initBytecodeSaveOptions, 0x7f, sizeof(initBytecodeSaveOptions));
+    CKAngelScriptInitBytecodeSaveOptions(&initBytecodeSaveOptions);
+    if (initBytecodeSaveOptions.Size != sizeof(initBytecodeSaveOptions) ||
+        initBytecodeSaveOptions.ModuleName ||
+        initBytecodeSaveOptions.Write ||
+        initBytecodeSaveOptions.UserData ||
+        initBytecodeSaveOptions.Flags != CKAS_BYTECODE_DEFAULT) {
+        error = "CKAngelScript API self-test expected BytecodeSaveOptions initializer defaults.";
+        return false;
+    }
+
+    CKAngelScriptBytecodeLoadOptions initBytecodeLoadOptions;
+    std::memset(&initBytecodeLoadOptions, 0x7f, sizeof(initBytecodeLoadOptions));
+    CKAngelScriptInitBytecodeLoadOptions(&initBytecodeLoadOptions);
+    if (initBytecodeLoadOptions.Size != sizeof(initBytecodeLoadOptions) ||
+        initBytecodeLoadOptions.ModuleName ||
+        initBytecodeLoadOptions.Read ||
+        initBytecodeLoadOptions.UserData ||
+        initBytecodeLoadOptions.Flags != CKAS_BYTECODE_DEFAULT) {
+        error = "CKAngelScript API self-test expected BytecodeLoadOptions initializer defaults.";
         return false;
     }
 
@@ -547,6 +712,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
     CKAngelScriptInitResult(nullptr);
     CKAngelScriptInitLoadOptions(nullptr);
+    CKAngelScriptInitImportBindOptions(nullptr);
+    CKAngelScriptInitBytecodeSaveOptions(nullptr);
+    CKAngelScriptInitBytecodeLoadOptions(nullptr);
     CKAngelScriptInitFunctionOptions(nullptr);
     CKAngelScriptInitFunctionExecutionOptions(nullptr);
     CKAngelScriptInitExecutionStepOptions(nullptr);
@@ -597,12 +765,18 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_FEATURE_SOURCE_SECTIONS != 18 ||
         CKAS_FEATURE_OBJECT_HANDLE_ARGS != 19 ||
         CKAS_FEATURE_HOST_CALL_FILTER != 20 ||
+        CKAS_FEATURE_MODULE_IMPORTS != 21 ||
+        CKAS_FEATURE_MODULE_BYTECODE != 22 ||
+        CKAS_FEATURE_MODULE_REPLACE_TRANSACTION != 23 ||
         CKAS_EXECUTION_CANCELLED != 5 ||
         CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
         CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
         CKAS_ENGINEEXTENSION_DEFERRED != 0x00000001 ||
         CKAS_CALL_NO_SUSPEND != 0x00000001 ||
         CKAS_HOSTCALL_MUTATES_HOST_STATE != 0x00000001 ||
+        CKAS_BYTECODE_DEFAULT != 0 ||
+        CKAS_BYTECODE_STRIP_DEBUG_INFO != 0x00000001 ||
+        CKAS_BYTECODE_REPLACEEXISTING != 0x00000002 ||
         CKAS_METADATA_TYPE_PROPERTY != 5) {
         error = "CKAngelScript API self-test expected stable explicit public enum values.";
         return false;
@@ -628,7 +802,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_ACTIVE_CONTEXT_EXCEPTION) ||
         !api->HasFeature(CKAS_FEATURE_SOURCE_SECTIONS) ||
         !api->HasFeature(CKAS_FEATURE_OBJECT_HANDLE_ARGS) ||
-        !api->HasFeature(CKAS_FEATURE_HOST_CALL_FILTER)) {
+        !api->HasFeature(CKAS_FEATURE_HOST_CALL_FILTER) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_IMPORTS) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_BYTECODE) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_REPLACE_TRANSACTION)) {
         error = "CKAngelScript API self-test found an unexpected feature set.";
         return false;
     }
@@ -1087,6 +1264,98 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         error = "CKAngelScript API self-test expected metadata enumeration failure statuses.";
         return false;
     }
+
+    constexpr const char *importProviderModuleName = "__CKAS_ImportProvider";
+    constexpr const char *importConsumerModuleName = "__CKAS_ImportConsumer";
+    const char *importProviderSource =
+        "int __ckas_import_add(int value) { return value + 12; }\n";
+    const char *importConsumerSource =
+        "import int __ckas_import_add(int value) from \"__CKAS_ImportProvider\";\n"
+        "int __ckas_import_call() { return __ckas_import_add(5); }\n";
+    if (api->CompileModule(importProviderModuleName,
+                           importProviderSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->CompileModule(importConsumerModuleName,
+                           importConsumerSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to compile import probe modules.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    CKDWORD importCount = 99;
+    ImportProbe importProbe;
+    if (api->GetImportedFunctionCount(importConsumerModuleName, &importCount, &result) != CKAS_OK ||
+        importCount != 1 ||
+        api->EnumerateImportedFunctions(importConsumerModuleName, ProbeImport, &importProbe, &result) != CKAS_OK ||
+        importProbe.CallbackCount != 1 ||
+        !importProbe.SawImport) {
+        error = "CKAngelScript API self-test expected import enumeration to describe the consumer import.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    int importValue = 0;
+    if (api->BindAllImportedFunctions(importConsumerModuleName, &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            importConsumerModuleName,
+                            "int __ckas_import_call()",
+                            importValue,
+                            result,
+                            error) ||
+        importValue != 17) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected BindAllImportedFunctions to make the import callable.";
+        }
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->UnbindImportedFunction(importConsumerModuleName, 0, &result) != CKAS_OK ||
+        api->BindImportedFunction(importConsumerModuleName,
+                                  0,
+                                  importProviderModuleName,
+                                  "int __ckas_import_add(int)",
+                                  &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            importConsumerModuleName,
+                            "int __ckas_import_call()",
+                            importValue,
+                            result,
+                            error) ||
+        importValue != 17 ||
+        api->UnbindAllImportedFunctions(importConsumerModuleName, &result) != CKAS_OK) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected explicit import bind and unbind to work.";
+        }
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->BindImportedFunction(importConsumerModuleName,
+                                  3,
+                                  importProviderModuleName,
+                                  "int __ckas_import_add(int)",
+                                  &result) != CKAS_INVALIDARGUMENT ||
+        api->BindImportedFunction(importConsumerModuleName,
+                                  0,
+                                  "__CKAS_MissingImportProvider",
+                                  "int __ckas_import_add(int)",
+                                  &result) != CKAS_NOTFOUND ||
+        api->BindImportedFunction(importConsumerModuleName,
+                                  0,
+                                  importProviderModuleName,
+                                  "int __ckas_missing_import(int)",
+                                  &result) != CKAS_NOTFOUND) {
+        error = "CKAngelScript API self-test expected import binding failures to report stable statuses.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    api->UnloadModule(importConsumerModuleName, nullptr);
+    api->UnloadModule(importProviderModuleName, nullptr);
 
     constexpr const char *loadModuleName = "__CKAS_ManagerApiLoadSelfTest";
     CKAngelScriptLoadOptions loadOptions = CKAngelScriptApi::LoadCodeOptions(
@@ -1789,6 +2058,201 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->UnloadModule(badModuleName, nullptr);
 
+    constexpr const char *bytecodeSourceModuleName = "__CKAS_BytecodeSourceSelfTest";
+    constexpr const char *bytecodeReplacementSourceModuleName = "__CKAS_BytecodeReplacementSourceSelfTest";
+    constexpr const char *bytecodeTargetModuleName = "__CKAS_BytecodeTargetSelfTest";
+    const char *bytecodeSource =
+        "int __ckas_bytecode_value() { return 31; }\n";
+    const char *bytecodeReplacementSource =
+        "int __ckas_bytecode_value() { return 44; }\n";
+    if (api->CompileModule(bytecodeSourceModuleName,
+                           bytecodeSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->CompileModule(bytecodeReplacementSourceModuleName,
+                           bytecodeReplacementSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to compile bytecode source modules.";
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    BytecodeBuffer bytecode;
+    if (api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(bytecodeSourceModuleName,
+                                                                      WriteBytecode,
+                                                                      &bytecode),
+                                &result) != CKAS_OK ||
+        bytecode.Bytes.empty() ||
+        api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(bytecodeSourceModuleName,
+                                                                      RejectBytecodeWrite),
+                                &result) != CKAS_CANCELLED) {
+        error = "CKAngelScript API self-test expected bytecode save and write failure statuses.";
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    BytecodeBuffer bytecodeRead = bytecode;
+    int bytecodeValue = 0;
+    if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeTargetModuleName,
+                                                                      ReadBytecode,
+                                                                      &bytecodeRead),
+                                &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            bytecodeTargetModuleName,
+                            "int __ckas_bytecode_value()",
+                            bytecodeValue,
+                            result,
+                            error) ||
+        bytecodeValue != 31) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected bytecode load to create an executable module.";
+        }
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    bytecodeRead = bytecode;
+    const CKDWORD bytecodeGenerationBeforeFailedReplace = api->GetModuleGeneration(bytecodeTargetModuleName);
+    if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeTargetModuleName,
+                                                                      ReadBytecode,
+                                                                      &bytecodeRead),
+                                &result) != CKAS_ALREADYEXISTS ||
+        api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeTargetModuleName,
+                                                                      RejectBytecodeRead,
+                                                                      nullptr,
+                                                                      CKAS_BYTECODE_REPLACEEXISTING),
+                                &result) != CKAS_CANCELLED ||
+        api->GetModuleGeneration(bytecodeTargetModuleName) != bytecodeGenerationBeforeFailedReplace ||
+        !ExecuteIntFunction(api,
+                            bytecodeTargetModuleName,
+                            "int __ckas_bytecode_value()",
+                            bytecodeValue,
+                            result,
+                            error) ||
+        bytecodeValue != 31) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected failed bytecode replacement to preserve the old module.";
+        }
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+
+    CKAngelScriptFunction *staleBytecodeFunction = nullptr;
+    if (api->FindFunction(CKAngelScriptApi::FunctionByDeclOptions(bytecodeTargetModuleName,
+                                                                  "int __ckas_bytecode_value()"),
+                          &staleBytecodeFunction,
+                          &result) != CKAS_OK ||
+        !staleBytecodeFunction) {
+        error = "CKAngelScript API self-test expected to capture a bytecode function handle.";
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+
+    BytecodeBuffer replacementBytecode;
+    if (api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(bytecodeReplacementSourceModuleName,
+                                                                      WriteBytecode,
+                                                                      &replacementBytecode),
+                                &result) != CKAS_OK ||
+        replacementBytecode.Bytes.empty()) {
+        error = "CKAngelScript API self-test expected replacement bytecode to save.";
+        api->ReleaseFunction(staleBytecodeFunction);
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    BytecodeBuffer replacementBytecodeRead = replacementBytecode;
+    if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeTargetModuleName,
+                                                                      ReadBytecode,
+                                                                      &replacementBytecodeRead,
+                                                                      CKAS_BYTECODE_REPLACEEXISTING),
+                                &result) != CKAS_OK ||
+        api->GetModuleGeneration(bytecodeTargetModuleName) != bytecodeGenerationBeforeFailedReplace + 1 ||
+        !ExecuteIntFunction(api,
+                            bytecodeTargetModuleName,
+                            "int __ckas_bytecode_value()",
+                            bytecodeValue,
+                            result,
+                            error) ||
+        bytecodeValue != 44) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected bytecode replacement to commit and bump generation.";
+        }
+        api->ReleaseFunction(staleBytecodeFunction);
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    CKAngelScriptExecution *staleBytecodeExecution =
+        reinterpret_cast<CKAngelScriptExecution *>(static_cast<uintptr_t>(1));
+    if (api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(staleBytecodeFunction),
+                                     &staleBytecodeExecution,
+                                     &result) != CKAS_STALEHANDLE ||
+        staleBytecodeExecution != nullptr) {
+        error = "CKAngelScript API self-test expected bytecode replacement to stale old function handles.";
+        api->ReleaseFunction(staleBytecodeFunction);
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    api->ReleaseFunction(staleBytecodeFunction);
+
+    constexpr const char *bytecodeObjectModuleName = "__CKAS_BytecodeObjectSelfTest";
+    const char *bytecodeObjectSource =
+        "class __CKAS_BytecodeObject {}\n";
+    if (api->CompileModule(bytecodeObjectModuleName,
+                           bytecodeObjectSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to compile bytecode object module.";
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    CKAngelScriptObject *bytecodeObject = nullptr;
+    if (api->CreateObject(CKAngelScriptApi::ObjectOptions(bytecodeObjectModuleName,
+                                                         "__CKAS_BytecodeObject"),
+                          &bytecodeObject,
+                          &result) != CKAS_OK ||
+        !bytecodeObject) {
+        error = "CKAngelScript API self-test failed to create bytecode object handle.";
+        api->UnloadModule(bytecodeObjectModuleName, nullptr);
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    replacementBytecodeRead = replacementBytecode;
+    const CKAS_STATUS liveObjectReplaceStatus =
+        api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeObjectModuleName,
+                                                                      ReadBytecode,
+                                                                      &replacementBytecodeRead,
+                                                                      CKAS_BYTECODE_REPLACEEXISTING),
+                                &result);
+    if (liveObjectReplaceStatus != CKAS_INUSE) {
+        error = "CKAngelScript API self-test expected live object handles to block bytecode replacement.";
+        api->ReleaseObject(bytecodeObject);
+        api->UnloadModule(bytecodeObjectModuleName, nullptr);
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    api->ReleaseObject(bytecodeObject);
+    api->UnloadModule(bytecodeObjectModuleName, nullptr);
+    api->UnloadModule(bytecodeTargetModuleName, nullptr);
+    api->UnloadModule(bytecodeSourceModuleName, nullptr);
+    api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+
     constexpr const char *objectModuleName = "__CKAS_ManagerApiObjectSelfTest";
     const char *objectSource =
         "class __CKAS_PublicObject {\n"
@@ -1998,7 +2462,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     api->ReleaseObject(namespaceObject);
 
     CKAngelScriptObject *object = nullptr;
-    if (api->CreateObject(objectOptions, &object, &result) != CKAS_OK || !object) {
+    const CKAS_STATUS objectCreateStatus = api->CreateObject(objectOptions, &object, &result);
+    if (objectCreateStatus != CKAS_OK || !object) {
         error = "CKAngelScript API self-test failed to create an object handle.";
         return false;
     }
