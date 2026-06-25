@@ -768,8 +768,11 @@ CKAS_STATUS StatusFromImportBindResult(int code) {
         case asNO_FUNCTION:
             return CKAS_NOTFOUND;
         case asINVALID_TYPE:
+        case asINVALID_INTERFACE:
         case asCANT_BIND_ALL_FUNCTIONS:
             return CKAS_TYPEMISMATCH;
+        case asNOT_SUPPORTED:
+            return CKAS_UNSUPPORTED;
         default:
             return CKAS_EXECUTIONFAILED;
     }
@@ -3461,18 +3464,17 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
 
-    if (HasRuntimeHandleForModule(moduleName)) {
-        return StoreResult(result,
-                           CKAS_INUSE,
-                           0,
-                           "Module has live object or execution handles.");
-    }
-
     const bool replacingExisting = HasModule(moduleName);
     if (replacingExisting) {
         if (!HasPublicFlag(flags, CKAS_BYTECODE_REPLACEEXISTING)) {
             return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
+    }
+    if (HasRuntimeHandleForModule(moduleName)) {
+        return StoreResult(result,
+                           CKAS_INUSE,
+                           0,
+                           "Module has live object or execution handles.");
     }
 
     int angelScriptCode = 0;

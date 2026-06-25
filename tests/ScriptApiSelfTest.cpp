@@ -1268,7 +1268,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     constexpr const char *importProviderModuleName = "__CKAS_ImportProvider";
     constexpr const char *importConsumerModuleName = "__CKAS_ImportConsumer";
     const char *importProviderSource =
-        "int __ckas_import_add(int value) { return value + 12; }\n";
+        "int __ckas_import_add(int value) { return value + 12; }\n"
+        "void __ckas_import_wrong() {}\n";
     const char *importConsumerSource =
         "import int __ckas_import_add(int value) from \"__CKAS_ImportProvider\";\n"
         "int __ckas_import_call() { return __ckas_import_add(5); }\n";
@@ -1348,7 +1349,12 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                   0,
                                   importProviderModuleName,
                                   "int __ckas_missing_import(int)",
-                                  &result) != CKAS_NOTFOUND) {
+                                  &result) != CKAS_NOTFOUND ||
+        api->BindImportedFunction(importConsumerModuleName,
+                                  0,
+                                  importProviderModuleName,
+                                  "void __ckas_import_wrong()",
+                                  &result) != CKAS_TYPEMISMATCH) {
         error = "CKAngelScript API self-test expected import binding failures to report stable statuses.";
         api->UnloadModule(importConsumerModuleName, nullptr);
         api->UnloadModule(importProviderModuleName, nullptr);
@@ -2225,6 +2231,19 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                           &result) != CKAS_OK ||
         !bytecodeObject) {
         error = "CKAngelScript API self-test failed to create bytecode object handle.";
+        api->UnloadModule(bytecodeObjectModuleName, nullptr);
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    replacementBytecodeRead = replacementBytecode;
+    if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeObjectModuleName,
+                                                                      ReadBytecode,
+                                                                      &replacementBytecodeRead),
+                                &result) != CKAS_ALREADYEXISTS) {
+        error = "CKAngelScript API self-test expected bytecode duplicate loads to report already-exists before live handle state.";
+        api->ReleaseObject(bytecodeObject);
         api->UnloadModule(bytecodeObjectModuleName, nullptr);
         api->UnloadModule(bytecodeTargetModuleName, nullptr);
         api->UnloadModule(bytecodeSourceModuleName, nullptr);

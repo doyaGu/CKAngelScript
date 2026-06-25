@@ -166,7 +166,7 @@ CKAngelScriptImportBindOptions bind = CKAngelScriptApi::ImportBindOptions("consu
 CKAS_STATUS status = CKAngelScriptBindImportedFunction(angelScript, &bind, &result);
 ```
 
-`CKAngelScriptUnbindImportedFunction()` and `CKAngelScriptUnbindAllImportedFunctions()` remove bindings from the importing module.
+`CKAngelScriptUnbindImportedFunction()` and `CKAngelScriptUnbindAllImportedFunctions()` remove bindings from the importing module. Bindings point at the provider function resolved at bind time; replacing a provider module does not automatically retarget consumers, so reload coordinators should unbind and rebind affected consumers after provider generation changes.
 
 Bytecode APIs use caller-provided read/write callbacks, so CKAngelScript never allocates byte buffers that the caller must free:
 
