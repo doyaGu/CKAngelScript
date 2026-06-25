@@ -1440,6 +1440,52 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    asIScriptModule *rawImportConsumer = nullptr;
+    asIScriptModule *rawImportProvider = nullptr;
+    CKAngelScriptFunction *rawBoundImportFunction = nullptr;
+    if (api->BorrowModule(importConsumerModuleName, &rawImportConsumer, &result) != CKAS_OK ||
+        api->BorrowModule(importProviderModuleName, &rawImportProvider, &result) != CKAS_OK ||
+        !rawImportConsumer ||
+        !rawImportProvider) {
+        error = "CKAngelScript API self-test expected to borrow import modules for raw bind recovery.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    asIScriptFunction *rawImportTarget = rawImportProvider->GetFunctionByDecl("int __ckas_import_add(int)");
+    if (!rawImportTarget ||
+        rawImportConsumer->BindImportedFunction(0, rawImportTarget) < 0 ||
+        api->FindFunction(CKAngelScriptApi::FunctionByDeclOptions(importConsumerModuleName,
+                                                                  "int __ckas_import_call()"),
+                          &rawBoundImportFunction,
+                          &result) != CKAS_OK ||
+        !rawBoundImportFunction) {
+        error = "CKAngelScript API self-test expected raw import binding setup to succeed.";
+        api->UnbindImportedFunction(importConsumerModuleName, 0, nullptr);
+        api->ReleaseFunction(rawBoundImportFunction);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    const CKDWORD rawBoundImportGeneration = api->GetModuleGeneration(importConsumerModuleName);
+    CKAngelScriptExecution *rawUnbindExecution = nullptr;
+    if (api->UnbindImportedFunction(importConsumerModuleName, 0, &result) != CKAS_OK ||
+        api->GetModuleGeneration(importConsumerModuleName) != rawBoundImportGeneration + 1 ||
+        api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(rawBoundImportFunction),
+                                     &rawUnbindExecution,
+                                     &result) != CKAS_STALEHANDLE ||
+        rawUnbindExecution != nullptr) {
+        error = "CKAngelScript API self-test expected CKAS unbind to stale handles after raw import binds.";
+        if (rawUnbindExecution) {
+            api->ReleaseExecution(rawUnbindExecution);
+        }
+        api->ReleaseFunction(rawBoundImportFunction);
+        api->UnbindImportedFunction(importConsumerModuleName, 0, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    api->ReleaseFunction(rawBoundImportFunction);
     if (api->BindImportedFunction(importConsumerModuleName,
                                   3,
                                   importProviderModuleName,

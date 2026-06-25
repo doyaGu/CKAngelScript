@@ -70,6 +70,8 @@ The v3 API deliberately separates borrowed AngelScript pointers from CKAngelScri
 - `CKAngelScriptObject` owns a live `asIScriptObject`. It blocks unload/replace of its module until released.
 - `CKAngelScriptExecution` owns runtime execution state. It blocks unload/replace of its module until released.
 
+Borrowed raw AngelScript pointers are escape hatches. Directly mutating module import bindings through `asIScriptModule` bypasses CKAngelScript's import dependency tracking, so provider reload blocking and reload diagnostics only cover bindings made through `CKAngelScriptBindImportedFunction()` or `CKAngelScriptBindAllImportedFunctions()`.
+
 All out pointer APIs clear the out pointer before validation and leave it null on failure.
 
 All public options and engine-extension structs must be zero-initialized and set `Size >= sizeof(v3_struct)`. `Size == 0` or a truncated struct returns `CKAS_INVALIDARGUMENT`; larger sizes are accepted so future struct extensions can be ignored by older binaries.
@@ -166,7 +168,7 @@ CKAngelScriptImportBindOptions bind = CKAngelScriptApi::ImportBindOptions("consu
 CKAS_STATUS status = CKAngelScriptBindImportedFunction(angelScript, &bind, &result);
 ```
 
-`CKAngelScriptUnbindImportedFunction()` and `CKAngelScriptUnbindAllImportedFunctions()` remove bindings from the importing module. Bind and unbind operations change the importing module generation, so old consumer symbol/execution handles become stale. Bindings point at the provider function resolved at bind time; replacing or unloading a provider module with bound consumers returns `CKAS_INUSE`. Reload coordinators should replace or unbind affected consumers before replacing the provider, then rebind consumers after provider generation changes.
+`CKAngelScriptUnbindImportedFunction()` and `CKAngelScriptUnbindAllImportedFunctions()` remove bindings from the importing module. Bind and unbind operations change the importing module generation, so old consumer symbol/execution handles become stale. Bindings point at the provider function resolved at bind time; replacing or unloading a provider module with CKAngelScript-tracked bound consumers returns `CKAS_INUSE`. Reload coordinators should replace or unbind affected consumers before replacing the provider, then rebind consumers after provider generation changes.
 
 Bytecode APIs use caller-provided read/write callbacks, so CKAngelScript never allocates byte buffers that the caller must free:
 

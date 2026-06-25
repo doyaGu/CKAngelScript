@@ -3509,12 +3509,10 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
                                        sourceModuleName));
     }
 
-    const bool removedOldBinding = RemoveImportBinding(importModuleName, importIndex);
+    RemoveImportBinding(importModuleName, importIndex);
     const int bindResult = importModule->BindImportedFunction(importIndex, targetFunction);
     if (bindResult < 0) {
-        if (removedOldBinding) {
-            BumpModuleGeneration(importModuleName);
-        }
+        BumpModuleGeneration(importModuleName);
         status = StatusFromImportBindResult(bindResult);
         return StoreResult(result, status, bindResult, "Failed to bind imported function.");
     }
@@ -3574,6 +3572,7 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
             changedBindings = true;
         }
         const int bindResult = module->BindImportedFunction(i, targetFunction);
+        changedBindings = true;
         if (bindResult < 0) {
             const CKAS_STATUS status = StatusFromImportBindResult(bindResult);
             finishChanged();
@@ -3611,9 +3610,8 @@ CKAS_STATUS ScriptManager::UnbindImportedFunction(const char *moduleName,
         status = StatusFromImportBindResult(unbindResult);
         return StoreResult(result, status, unbindResult, "Failed to unbind imported function.");
     }
-    if (RemoveImportBinding(moduleName, importIndex)) {
-        BumpModuleGeneration(moduleName);
-    }
+    RemoveImportBinding(moduleName, importIndex);
+    BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, unbindResult);
 }
 
@@ -3632,7 +3630,8 @@ CKAS_STATUS ScriptManager::UnbindAllImportedFunctions(const char *moduleName,
         status = StatusFromImportBindResult(unbindResult);
         return StoreResult(result, status, unbindResult, "Failed to unbind imported functions.");
     }
-    if (RemoveImportBindingsForModule(moduleName)) {
+    RemoveImportBindingsForModule(moduleName);
+    if (module->GetImportedFunctionCount() > 0) {
         BumpModuleGeneration(moduleName);
     }
     return StoreResult(result, CKAS_OK, unbindResult);
