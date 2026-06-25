@@ -26,7 +26,7 @@ if (!api.IsValid()) {
 
 The handle is owned by CKAngelScript. Do not allocate, delete, or cast it to CKAngelScript internals.
 
-Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. Feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, metadata reflection, script array access, active-context host exceptions, source-section loading, object handle argument writing, and host-call filtering.
+Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. Feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, metadata reflection, script array access, active-context host exceptions, source-section loading, object handle argument writing, host-call filtering, module imports, module bytecode, and module replacement transactions.
 
 ## Optional Plugin Integration
 
@@ -59,7 +59,7 @@ CKAS_STATUS status =
         &result);
 ```
 
-Call `CKAngelScriptUnregisterEngineExtensionWithApi(&ckas, context, "BML", &result)` before the owning plugin state is destroyed. The helper table intentionally covers the engine-extension integration path only; advanced module/function/object APIs remain available through the full C ABI when a plugin deliberately takes a hard dependency or resolves more symbols itself.
+Call `CKAngelScriptUnregisterEngineExtensionWithApi(&ckas, context, "BML", &result)` before the owning plugin state is destroyed. The v5 helper table also resolves module import and bytecode entry points for optional integrations that need script-library mechanics without taking a hard DLL link dependency.
 
 ## Handle Model
 
@@ -81,6 +81,8 @@ CKAngelScript never owns callback `UserData`. The caller is always responsible f
 | Callback path | Lifetime contract |
 | --- | --- |
 | `CKAngelScriptEnumerateMetadata` | `userData`, `CKAngelScriptMetadataEntry`, and metadata strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. |
+| `CKAngelScriptEnumerateImportedFunctions` | `userData`, `CKAngelScriptImportEntry`, and import strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. |
+| `CKAngelScriptSaveModuleBytecode` / `CKAngelScriptLoadModuleBytecode` | `Write`, `Read`, and `UserData` are borrowed only until the bytecode call returns. The callbacks must not unload or replace modules. |
 | `CKAngelScriptCallObjectMethod` | `WriteArgs`, `ReadResult`, and `UserData` are borrowed only until the synchronous call returns. Do not store `CKAngelScriptArgWriter` or `CKAngelScriptResultReader` pointers. |
 | `CKAngelScriptStartExecution` / `CKAngelScriptResumeExecution` | `ConfigureContext`, `ReadResult`, and `UserData` from `CKAngelScriptExecutionStepOptions` are borrowed only for that one start/resume call. Suspend does not retain them; pass fresh step options when resuming. |
 | `CKAngelScriptSetHostCallFilter` | `callback` and `userData` are retained until replaced, cleared, or the CKAngelScript manager is destroyed. The callback must not execute script or unload/replace modules. |
@@ -150,6 +152,33 @@ CKAS_STATUS status =
 Module replacement is atomic at the public API boundary: if the replacement source fails to compile or load, the old module remains available and its generation is unchanged. Successful replacement bumps the generation once.
 
 `CKAngelScriptGetModuleGeneration()` returns the generation tracked by CKAngelScript. Symbol handles created before an unload/replace later fail with `CKAS_STALEHANDLE`.
+
+## Module Imports And Bytecode
+
+CKAngelScript exposes AngelScript function imports as explicit host-controlled bindings. Use `CKAngelScriptGetImportedFunctionCount()` or `CKAngelScriptEnumerateImportedFunctions()` to inspect a module's imports. `CKAngelScriptBindImportedFunction()` binds one import by index; if `SourceModuleName` or `FunctionDecl` is omitted, CKAngelScript uses the source module and declaration written in the script import. `CKAngelScriptBindAllImportedFunctions()` enumerates imports and binds each one with the same rule. Missing source modules or functions return `CKAS_NOTFOUND`; incompatible bindings return `CKAS_TYPEMISMATCH`.
+
+```angelscript
+import int add_score(int value) from "score_lib";
+```
+
+```cpp
+CKAngelScriptImportBindOptions bind = CKAngelScriptApi::ImportBindOptions("consumer", 0);
+CKAS_STATUS status = CKAngelScriptBindImportedFunction(angelScript, &bind, &result);
+```
+
+`CKAngelScriptUnbindImportedFunction()` and `CKAngelScriptUnbindAllImportedFunctions()` remove bindings from the importing module.
+
+Bytecode APIs use caller-provided read/write callbacks, so CKAngelScript never allocates byte buffers that the caller must free:
+
+```cpp
+CKAngelScriptBytecodeSaveOptions save =
+    CKAngelScriptApi::BytecodeSaveOptions("score_lib", WriteBytes, userData);
+CKAS_STATUS status = CKAngelScriptSaveModuleBytecode(angelScript, &save, &result);
+```
+
+`CKAngelScriptLoadModuleBytecode()` creates a module from bytecode. Loading over an existing module requires `CKAS_BYTECODE_REPLACEEXISTING`; without it, duplicates return `CKAS_ALREADYEXISTS`. Live `CKAngelScriptObject` or `CKAngelScriptExecution` handles block bytecode replacement with `CKAS_INUSE`. Replacement is transactional at the public API boundary: CKAngelScript first loads the bytecode into a transient module, snapshots it, then commits it under the requested module name. Failed loads or failed commits leave the previous module and generation unchanged when rollback succeeds. Successful bytecode replacement bumps module generation and stale-checks old symbol handles.
+
+AngelScript bytecode is not a stable interchange format. A persistent cache key must include at least the CKAngelScript API version, AngelScript version, engine options, build flags, and a hash of the registered host API surface. Do not reuse bytecode across CKAngelScript or registration changes unless the cache key proves compatibility.
 
 ## Function Lookup And Execution
 
