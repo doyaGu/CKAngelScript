@@ -2628,6 +2628,13 @@ bool ScriptManager::RebindImportBindings(const std::vector<ImportBindingEdge> &b
                                          std::string &errorMessage) {
     angelScriptCode = 0;
     errorMessage.clear();
+    struct ResolvedImportBinding {
+        const ImportBindingEdge *Edge = nullptr;
+        asIScriptModule *ImportModule = nullptr;
+        asIScriptFunction *TargetFunction = nullptr;
+    };
+    std::vector<ResolvedImportBinding> resolvedBindings;
+    resolvedBindings.reserve(bindings.size());
     for (const ImportBindingEdge &edge : bindings) {
         asIScriptModule *importModule = GetModule(edge.ImportModuleName.c_str());
         if (!importModule) {
@@ -2657,13 +2664,27 @@ bool ScriptManager::RebindImportBindings(const std::vector<ImportBindingEdge> &b
                                        edge.SourceModuleName);
             return false;
         }
-        angelScriptCode = importModule->BindImportedFunction(edge.ImportIndex, targetFunction);
+        ResolvedImportBinding resolved;
+        resolved.Edge = &edge;
+        resolved.ImportModule = importModule;
+        resolved.TargetFunction = targetFunction;
+        resolvedBindings.push_back(resolved);
+    }
+    std::vector<ResolvedImportBinding> appliedBindings;
+    appliedBindings.reserve(resolvedBindings.size());
+    for (const ResolvedImportBinding &resolved : resolvedBindings) {
+        const ImportBindingEdge &edge = *resolved.Edge;
+        angelScriptCode = resolved.ImportModule->BindImportedFunction(edge.ImportIndex, resolved.TargetFunction);
         if (angelScriptCode < 0) {
             errorMessage = fmt::format("Failed to restore import binding {} in module '{}'.",
                                        edge.ImportIndex,
                                        edge.ImportModuleName);
+            for (const ResolvedImportBinding &applied : appliedBindings) {
+                applied.ImportModule->UnbindImportedFunction(applied.Edge->ImportIndex);
+            }
             return false;
         }
+        appliedBindings.push_back(resolved);
     }
     return true;
 }
