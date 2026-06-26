@@ -1521,6 +1521,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    if (api->GetImportedFunctionCount(importConsumerModuleName, nullptr, &result) != CKAS_INVALIDARGUMENT ||
+        api->EnumerateImportedFunctions(importConsumerModuleName, nullptr, nullptr, &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected import inspection invalid arguments to fail.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     CKAngelScriptFunction *preBindImportFunction = nullptr;
     if (api->FindFunction(CKAngelScriptApi::FunctionByDeclOptions(importConsumerModuleName,
                                                                   "int __ckas_import_call()"),
@@ -2527,6 +2534,16 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
         return false;
     }
+    if (api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(bytecodeSourceModuleName,
+                                                                      WriteBytecode,
+                                                                      &bytecode,
+                                                                      CKAS_BYTECODE_REPLACEEXISTING),
+                                &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected bytecode save to reject load-only flags.";
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
     ReentrantBytecodeWriteProbe reentrantBytecodeWrite;
     reentrantBytecodeWrite.Api = &api;
     if (api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(bytecodeSourceModuleName,
@@ -2583,6 +2600,18 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         if (error.empty()) {
             error = "CKAngelScript API self-test expected failed bytecode replacement to preserve the old module.";
         }
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    bytecodeRead = bytecode;
+    if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions("__CKAS_BytecodeInvalidFlagSelfTest",
+                                                                      ReadBytecode,
+                                                                      &bytecodeRead,
+                                                                      CKAS_BYTECODE_STRIP_DEBUG_INFO),
+                                &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected bytecode load to reject save-only flags.";
         api->UnloadModule(bytecodeTargetModuleName, nullptr);
         api->UnloadModule(bytecodeSourceModuleName, nullptr);
         api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
