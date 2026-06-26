@@ -63,7 +63,7 @@ Call `CKAngelScriptUnregisterEngineExtensionWithApi(&ckas, context, "BML", &resu
 
 ## Handle Model
 
-The v3 API deliberately separates borrowed AngelScript pointers from CKAngelScript handles:
+The public API deliberately separates borrowed AngelScript pointers from CKAngelScript handles:
 
 - `CKAngelScriptBorrowEngine`, `CKAngelScriptBorrowActiveContext`, `CKAngelScriptBorrowModule`, and `CKAngelScriptBorrowFunctionBy*` return borrowed `asIScript*` pointers through out parameters. CKAngelScript does not `AddRef` them. Callers must not release them.
 - `CKAngelScriptFunction` and `CKAngelScriptMethod` are symbol handles. They store owner, module/class identity, lookup key, and module generation. They do not retain `asIScriptFunction *` and do not block unload.
@@ -272,7 +272,7 @@ cannot be combined with `TypeDecl`. Soft loaders that set `ClassNamespace` must 
 `CKAS_FEATURE_OBJECT_TYPE_NAMESPACE`; older CKAngelScript builds may accept the smaller
 v3 object options struct but ignore the namespace field.
 
-This is the v3 baseline object identity model. CKAngelScript does not expose
+This is the baseline object identity model. CKAngelScript does not expose
 create-by-metadata-entry or create-by-AngelScript-type-id APIs; metadata
 reflection is for discovery and diagnostics, while object creation uses
 `ModuleName + ClassName + optional ClassNamespace` or `ModuleName + TypeDecl`.
@@ -326,7 +326,7 @@ CKAngelScriptReleaseMethod(angelScript, method, &result);
 CKAngelScriptReleaseObject(angelScript, object, &result);
 ```
 
-`CKAngelScriptCreateObjectMethodExecution` is intentionally not exported in v3. Object-method resume is not part of the public ABI until it is implemented honestly.
+`CKAngelScriptCreateObjectMethodExecution` is intentionally not exported. Object-method resume is not part of the public ABI until it is implemented honestly.
 
 ## Raw Borrowing
 
