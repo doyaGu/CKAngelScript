@@ -5,7 +5,6 @@
 
 #include "ScriptApiSupport.h"
 
-
 bool ScriptManager::OwnsExecution(const CKAngelScriptExecution *execution) const {
     return execution && m_Executions.find(const_cast<CKAngelScriptExecution *>(execution)) != m_Executions.end();
 }
@@ -24,6 +23,58 @@ bool ScriptManager::OwnsObjectHandle(const CKAngelScriptObject *object) const {
 
 bool ScriptManager::OwnsMethod(const CKAngelScriptMethod *method) const {
     return method && m_Methods.find(const_cast<CKAngelScriptMethod *>(method)) != m_Methods.end();
+}
+
+CKAS_STATUS ScriptManager::ValidateFunctionHandle(const CKAngelScriptFunction *function, CKAngelScriptResult *result) {
+    if (!function) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function handle is invalid.");
+    }
+    if (function->Manager && function->Manager != this) {
+        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Function handle belongs to another CKAngelScript manager.");
+    }
+    if (!OwnsFunction(function)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function handle is invalid.");
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ScriptManager::ValidateObjectHandle(const CKAngelScriptObject *object, CKAngelScriptResult *result) {
+    if (!object) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is invalid.");
+    }
+    if (object->Manager && object->Manager != this) {
+        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Object handle belongs to another CKAngelScript manager.");
+    }
+    if (!OwnsObject(object)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is invalid.");
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ScriptManager::ValidateMethodHandle(const CKAngelScriptMethod *method, CKAngelScriptResult *result) {
+    if (!method) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Method handle is invalid.");
+    }
+    if (method->Manager && method->Manager != this) {
+        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Method handle belongs to another CKAngelScript manager.");
+    }
+    if (!OwnsMethod(method)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Method handle is invalid.");
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ScriptManager::ValidateExecutionHandle(const CKAngelScriptExecution *execution, CKAngelScriptResult *result) {
+    if (!execution) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
+    }
+    if (execution->Manager && execution->Manager != this) {
+        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Execution handle belongs to another CKAngelScript manager.");
+    }
+    if (!OwnsExecution(execution)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
+    }
+    return CKAS_OK;
 }
 
 bool ScriptManager::HasExecutionForModule(const char *moduleName) const {
@@ -100,11 +151,9 @@ CKAS_STATUS ScriptManager::ReleaseFunction(CKAngelScriptFunction *function, CKAn
     if (!function) {
         return StoreResult(result, CKAS_OK);
     }
-    if (function->Manager && function->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Function handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsFunction(function)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateFunctionHandle(function, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     m_Functions.erase(function);
     delete function;
@@ -172,11 +221,9 @@ CKAS_STATUS ScriptManager::ReleaseObject(CKAngelScriptObject *object, CKAngelScr
     if (!object) {
         return StoreResult(result, CKAS_OK);
     }
-    if (object->Manager && object->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Object handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsObject(object)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateObjectHandle(object, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     m_Objects.erase(object);
     if (object->Object) {
@@ -207,10 +254,11 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
     if (!object) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is required.");
     }
-    if (object->Manager && object->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Object handle belongs to another CKAngelScript manager.");
+    const CKAS_STATUS objectStatus = ValidateObjectHandle(object, result);
+    if (objectStatus != CKAS_OK) {
+        return objectStatus;
     }
-    if (!OwnsObject(object) || !object->Object) {
+    if (!object->Object) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is invalid.");
     }
     if (hasMethodName == hasMethodDecl) {
@@ -274,11 +322,9 @@ CKAS_STATUS ScriptManager::ReleaseMethod(CKAngelScriptMethod *method, CKAngelScr
     if (!method) {
         return StoreResult(result, CKAS_OK);
     }
-    if (method->Manager && method->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Method handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsMethod(method)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Method handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateMethodHandle(method, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     m_Methods.erase(method);
     delete method;
@@ -373,11 +419,9 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
     if (!functionHandle) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function handle is required.");
     }
-    if (functionHandle->Manager && functionHandle->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Function handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsFunction(functionHandle)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function handle is invalid.");
+    const CKAS_STATUS functionStatus = ValidateFunctionHandle(functionHandle, result);
+    if (functionStatus != CKAS_OK) {
+        return functionStatus;
     }
     if (!m_ScriptEngine) {
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
@@ -428,14 +472,9 @@ CKAS_STATUS ScriptManager::StartExecution(CKAngelScriptExecution *execution,
     if (options && !ScriptApiSupport::HasCompletePublicStruct(*options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "StartExecution step options size is invalid.");
     }
-    if (!execution) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
-    }
-    if (execution->Manager && execution->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Execution handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsExecution(execution)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     if (execution->State != CKAS_EXECUTION_READY) {
         ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
@@ -456,14 +495,9 @@ CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution,
     if (options && !ScriptApiSupport::HasCompletePublicStruct(*options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "ResumeExecution step options size is invalid.");
     }
-    if (!execution) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
-    }
-    if (execution->Manager && execution->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Execution handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsExecution(execution)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     if (execution->State != CKAS_EXECUTION_SUSPENDED) {
         ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
@@ -479,14 +513,9 @@ CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution,
 }
 
 CKAS_STATUS ScriptManager::CancelExecution(CKAngelScriptExecution *execution, CKAngelScriptResult *result) {
-    if (!execution) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
-    }
-    if (execution->Manager && execution->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Execution handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsExecution(execution)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     execution->Invoker.AbortContext();
     execution->State = CKAS_EXECUTION_CANCELLED;
@@ -498,11 +527,9 @@ CKAS_STATUS ScriptManager::ReleaseExecution(CKAngelScriptExecution *execution, C
     if (!execution) {
         return StoreResult(result, CKAS_OK);
     }
-    if (execution->Manager && execution->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Execution handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsExecution(execution)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     if (execution->Invoker.IsContextSuspended()) {
         execution->Invoker.AbortContext();
@@ -521,14 +548,9 @@ CKAS_STATUS ScriptManager::GetExecutionState(const CKAngelScriptExecution *execu
     if (!outState) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution state out pointer is required.");
     }
-    if (!execution) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
-    }
-    if (execution->Manager && execution->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Execution handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsExecution(execution)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     *outState = execution->State;
     return StoreResult(result, CKAS_OK);
@@ -543,14 +565,9 @@ CKAS_STATUS ScriptManager::BorrowExecutionResult(const CKAngelScriptExecution *e
     if (!outResult) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution result out pointer is required.");
     }
-    if (!execution) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
-    }
-    if (execution->Manager && execution->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Execution handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsExecution(execution)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     *outResult = &execution->Result;
     return StoreResult(result, CKAS_OK);
