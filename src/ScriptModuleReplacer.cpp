@@ -67,7 +67,7 @@ bool ScriptModuleReplacer::CaptureSnapshot(ScriptManager &manager,
         return false;
     }
 
-    snapshot.Cache = manager.m_ScriptCache.GetCachedScript(moduleName);
+    snapshot.Cache = manager.m_ModuleRegistry.GetCachedScript(moduleName);
     snapshot.ImportBindings = manager.m_ModuleStateStore.GetImportBindingsForModule(moduleName);
     if (snapshot.Cache) {
         snapshot.Sections = snapshot.Cache->sections;
@@ -95,7 +95,7 @@ void ScriptModuleReplacer::RemoveForReplacement(ScriptManager &manager,
         return;
     }
 
-    manager.m_ScriptCache.Invalidate(moduleName);
+    manager.m_ModuleRegistry.Invalidate(moduleName);
     manager.m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
     if (snapshot.Cache && snapshot.Cache->module) {
         snapshot.Cache->module->Discard();
@@ -137,7 +137,7 @@ bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
     restoredCache->sourceSnapshotSections = snapshot.SourceSnapshotSections;
     restoredCache->metadata = snapshot.Metadata;
     restoredCache->module = restoredModule;
-    manager.m_ScriptCache.CacheScript(moduleName, restoredCache);
+    manager.m_ModuleRegistry.CacheScript(moduleName, restoredCache);
     if (!manager.m_ImportBinder.Rebind(manager,
                                        snapshot.ImportBindings,
                                        angelScriptCode,
@@ -261,7 +261,7 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                                    candidate->metadata,
                                    committedCache->metadata);
     committedCache->module = committedModule;
-    manager.m_ScriptCache.CacheScript(moduleName, committedCache);
+    manager.m_ModuleRegistry.CacheScript(moduleName, committedCache);
     candidate->Discard();
     manager.SetModuleIncludeEdges(moduleName, committedCache->includeEdges);
     manager.SetModuleKind(moduleName, ScriptModuleKind::Source);
@@ -291,7 +291,7 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromBytecode(
     auto committedCache = std::make_shared<CachedScript>();
     committedCache->name = moduleName ? moduleName : "";
     committedCache->module = committedModule;
-    manager.m_ScriptCache.CacheScript(moduleName, committedCache);
+    manager.m_ModuleRegistry.CacheScript(moduleName, committedCache);
     manager.ClearModuleIncludeEdges(moduleName);
     manager.SetModuleKind(moduleName, ScriptModuleKind::Bytecode);
     manager.BumpModuleGeneration(moduleName);

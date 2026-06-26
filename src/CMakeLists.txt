@@ -56,6 +56,7 @@ set(CKAS_HEADERS
         ScriptPublicOptions.h
         ScriptModuleBytecode.h
         ScriptModuleBytecodeStore.h
+        ScriptModuleRegistry.h
         ScriptModuleStateStore.h
         ScriptPathResolver.h
 )

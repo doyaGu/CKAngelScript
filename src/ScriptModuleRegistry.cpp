@@ -4,12 +4,174 @@
 #include <functional>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <fmt/format.h>
 
 #include "ScriptApiSupport.h"
+#include "ScriptModuleRegistry.h"
 #include "ScriptPublicOptions.h"
+
+void ScriptModuleRegistry::Clear() {
+    m_Cache.Clear();
+}
+
+std::shared_ptr<CachedScript> ScriptModuleRegistry::GetCachedScript(const char *scriptName) {
+    if (!ScriptApiSupport::IsNonEmpty(scriptName)) {
+        return nullptr;
+    }
+    return m_Cache.GetCachedScript(scriptName);
+}
+
+std::shared_ptr<CachedScript> ScriptModuleRegistry::NewCachedScript(const char *scriptName) {
+    if (!ScriptApiSupport::IsNonEmpty(scriptName)) {
+        return nullptr;
+    }
+    return m_Cache.NewCachedScript(scriptName);
+}
+
+void ScriptModuleRegistry::CacheScript(const char *scriptName, std::shared_ptr<CachedScript> script) {
+    if (!ScriptApiSupport::IsNonEmpty(scriptName)) {
+        return;
+    }
+    m_Cache.CacheScript(scriptName, std::move(script));
+}
+
+void ScriptModuleRegistry::Invalidate(const char *scriptName) {
+    if (!ScriptApiSupport::IsNonEmpty(scriptName)) {
+        return;
+    }
+    m_Cache.Invalidate(scriptName);
+}
+
+int ScriptModuleRegistry::LoadFromDefaultOrFile(ScriptManager &manager,
+                                                const char *moduleName,
+                                                const char *filename) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
+        return -1;
+    }
+
+    asIScriptEngine *engine = manager.GetScriptEngine();
+    if (!engine) {
+        return -2;
+    }
+
+    XString scriptFilename;
+    if (filename) {
+        scriptFilename = filename;
+    } else {
+        scriptFilename = moduleName;
+        scriptFilename += ".as";
+    }
+
+    auto cache = m_Cache.LoadScript(engine, moduleName, scriptFilename.CStr());
+    if (!cache) {
+        return -3;
+    }
+    return 0;
+}
+
+int ScriptModuleRegistry::LoadFromFiles(ScriptManager &manager,
+                                        const char *moduleName,
+                                        const char **filenames,
+                                        size_t count) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
+        return -1;
+    }
+
+    asIScriptEngine *engine = manager.GetScriptEngine();
+    if (!engine) {
+        return -2;
+    }
+
+    std::vector<std::string> files;
+    for (size_t i = 0; i < count; i++) {
+        XString scriptFilename = filenames[i];
+        if (scriptFilename.Find(".as") == XString::NOTFOUND) {
+            scriptFilename += ".as";
+        }
+        manager.ResolveScriptFileName(scriptFilename);
+        files.emplace_back(scriptFilename.CStr());
+    }
+
+    auto cache = m_Cache.LoadScript(engine, moduleName, files);
+    if (!cache) {
+        return -3;
+    }
+    return 0;
+}
+
+int ScriptModuleRegistry::CompileFromMemory(ScriptManager &manager,
+                                            const char *moduleName,
+                                            const char *scriptCode) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName) || !scriptCode) {
+        return -1;
+    }
+
+    asIScriptEngine *engine = manager.GetScriptEngine();
+    if (!engine) {
+        return -2;
+    }
+
+    auto cache = m_Cache.CompileScript(engine, moduleName, scriptCode);
+    if (!cache) {
+        return -3;
+    }
+    return 0;
+}
+
+bool ScriptModuleRegistry::DiscardCached(const char *moduleName) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
+        return false;
+    }
+    return m_Cache.UnloadScript(moduleName);
+}
+
+bool ScriptModuleRegistry::RestoreFromChunk(const char *scriptName, CKStateChunk *chunk) {
+    if (!chunk) {
+        return false;
+    }
+    std::shared_ptr<CachedScript> script = NewCachedScript(scriptName);
+    if (!script) {
+        return false;
+    }
+    if (script->module) {
+        return true;
+    }
+    return script->LoadFromChunk(chunk);
+}
+
+bool ScriptModuleRegistry::SaveToChunk(const char *scriptName, CKStateChunk *chunk) {
+    if (!chunk) {
+        return false;
+    }
+    std::shared_ptr<CachedScript> script = GetCachedScript(scriptName);
+    return script ? script->SaveToChunk(chunk) : false;
+}
+
+bool ScriptModuleRegistry::ClearCode(const char *scriptName) {
+    std::shared_ptr<CachedScript> script = GetCachedScript(scriptName);
+    if (!script) {
+        return false;
+    }
+    script->ClearCodeCache();
+    return true;
+}
+
+unsigned long long ScriptModuleRegistry::BuildSourceHash(const char *moduleName) {
+    unsigned long long sourceHash = ScriptApiSupport::kFnvOffsetBasis;
+    const std::shared_ptr<CachedScript> cached = GetCachedScript(moduleName ? moduleName : "");
+    if (cached) {
+        ScriptApiSupport::HashBool(sourceHash, cached->sourceSnapshotSections);
+        ScriptApiSupport::HashValue(sourceHash, static_cast<unsigned long long>(cached->sections.size()));
+        for (const auto &section : cached->sections) {
+            ScriptApiSupport::HashString(sourceHash, std::get<0>(section));
+            ScriptApiSupport::HashString(sourceHash, std::get<1>(section));
+        }
+    }
+    return sourceHash;
+}
 
 bool ScriptManager::HasBoundImportConsumersForModule(const char *moduleName,
                                                      std::string *consumerModule) const {
@@ -75,7 +237,7 @@ void ScriptManager::RefreshModuleIncludeEdgesFromCache(const char *moduleName) {
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;
     }
-    const std::shared_ptr<CachedScript> cached = m_ScriptCache.GetCachedScript(moduleName);
+    const std::shared_ptr<CachedScript> cached = m_ModuleRegistry.GetCachedScript(moduleName);
     SetModuleIncludeEdges(moduleName, cached ? cached->includeEdges : std::vector<ScriptIncludeEdge>());
 }
 
@@ -84,17 +246,7 @@ void ScriptManager::ClearModuleIncludeEdges(const char *moduleName) {
 }
 
 unsigned long long ScriptManager::BuildModuleSourceHash(const char *moduleName) {
-    unsigned long long sourceHash = ScriptApiSupport::kFnvOffsetBasis;
-    const std::shared_ptr<CachedScript> cached = m_ScriptCache.GetCachedScript(moduleName ? moduleName : "");
-    if (cached) {
-        ScriptApiSupport::HashBool(sourceHash, cached->sourceSnapshotSections);
-        ScriptApiSupport::HashValue(sourceHash, static_cast<unsigned long long>(cached->sections.size()));
-        for (const auto &section : cached->sections) {
-            ScriptApiSupport::HashString(sourceHash, std::get<0>(section));
-            ScriptApiSupport::HashString(sourceHash, std::get<1>(section));
-        }
-    }
-    return sourceHash;
+    return m_ModuleRegistry.BuildSourceHash(moduleName);
 }
 
 unsigned long long ScriptManager::BuildDeclaredImportHash(const char *moduleName) {
@@ -699,68 +851,19 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
 }
 
 int ScriptManager::LoadModuleFromDefaultOrFile(const char *moduleName, const char *filename) {
-    if (!ScriptApiSupport::IsNonEmpty(moduleName))
-        return -1;
-
-    if (!GetScriptEngine())
-        return -2;
-
-    XString scriptFilename;
-    if (filename) {
-        scriptFilename = filename;
-    } else {
-        scriptFilename = moduleName;
-        scriptFilename += ".as";
-    }
-
-    auto cache = m_ScriptCache.LoadScript(GetScriptEngine(), moduleName, scriptFilename.CStr());
-    if (!cache)
-        return -3;
-    return 0;
+    return m_ModuleRegistry.LoadFromDefaultOrFile(*this, moduleName, filename);
 }
 
 int ScriptManager::LoadModuleFromFiles(const char *moduleName, const char **filenames, size_t count) {
-    if (!ScriptApiSupport::IsNonEmpty(moduleName))
-        return -1;
-
-    if (!GetScriptEngine())
-        return -2;
-
-    std::vector<std::string> files;
-    for (size_t i = 0; i < count; i++) {
-        XString scriptFilename = filenames[i];
-        if (scriptFilename.Find(".as") == XString::NOTFOUND)
-            scriptFilename += ".as";
-        ResolveScriptFileName(scriptFilename);
-        files.emplace_back(scriptFilename.CStr());
-    }
-
-    auto cache = m_ScriptCache.LoadScript(GetScriptEngine(), moduleName, files);
-    if (!cache)
-        return -3;
-    return 0;
+    return m_ModuleRegistry.LoadFromFiles(*this, moduleName, filenames, count);
 }
 
 int ScriptManager::CompileModuleFromMemory(const char *moduleName, const char *scriptCode) {
-    if (!ScriptApiSupport::IsNonEmpty(moduleName))
-        return -1;
-
-    if (!scriptCode)
-        return -1;
-
-    if (!GetScriptEngine())
-        return -2;
-
-    auto cache = m_ScriptCache.CompileScript(GetScriptEngine(), moduleName, scriptCode);
-    if (!cache)
-        return -3;
-    return 0;
+    return m_ModuleRegistry.CompileFromMemory(*this, moduleName, scriptCode);
 }
 
 bool ScriptManager::DiscardCachedModule(const char *moduleName) {
-    if (!ScriptApiSupport::IsNonEmpty(moduleName))
-        return false;
-    return m_ScriptCache.UnloadScript(moduleName);
+    return m_ModuleRegistry.DiscardCached(moduleName);
 }
 
 bool ScriptManager::DiscardModule(const char *moduleName) {
@@ -785,47 +888,22 @@ asIScriptModule *ScriptManager::GetScript(const char *scriptName) {
 }
 
 std::shared_ptr<CachedScript> ScriptManager::GetCachedScript(const char *scriptName) {
-    if (!ScriptApiSupport::IsNonEmpty(scriptName)) {
-        return nullptr;
-    }
-    return m_ScriptCache.GetCachedScript(scriptName);
+    return m_ModuleRegistry.GetCachedScript(scriptName);
 }
 
 std::shared_ptr<CachedScript> ScriptManager::NewCachedScript(const char *scriptName) {
-    if (!ScriptApiSupport::IsNonEmpty(scriptName)) {
-        return nullptr;
-    }
-    return m_ScriptCache.NewCachedScript(scriptName);
+    return m_ModuleRegistry.NewCachedScript(scriptName);
 }
 
 bool ScriptManager::RestoreCachedScriptFromChunk(const char *scriptName, CKStateChunk *chunk) {
-    if (!chunk) {
-        return false;
-    }
-    std::shared_ptr<CachedScript> script = NewCachedScript(scriptName);
-    if (!script) {
-        return false;
-    }
-    if (script->module) {
-        return true;
-    }
-    return script->LoadFromChunk(chunk);
+    return m_ModuleRegistry.RestoreFromChunk(scriptName, chunk);
 }
 
 bool ScriptManager::SaveCachedScriptToChunk(const char *scriptName, CKStateChunk *chunk) {
-    if (!chunk) {
-        return false;
-    }
-    std::shared_ptr<CachedScript> script = GetCachedScript(scriptName);
-    return script ? script->SaveToChunk(chunk) : false;
+    return m_ModuleRegistry.SaveToChunk(scriptName, chunk);
 }
 
 bool ScriptManager::ClearCachedScriptCode(const char *scriptName) {
-    std::shared_ptr<CachedScript> script = GetCachedScript(scriptName);
-    if (!script) {
-        return false;
-    }
-    script->ClearCodeCache();
-    return true;
+    return m_ModuleRegistry.ClearCode(scriptName);
 }
 

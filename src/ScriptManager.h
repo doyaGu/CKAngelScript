@@ -13,12 +13,12 @@
 
 #include "ScriptApiDiagnostics.h"
 #include "ScriptHandleRegistry.h"
-#include "ScriptCache.h"
 #include "ScriptCKObjectRetainer.h"
 #include "ScriptComponentStateStore.h"
 #include "ScriptEngineHost.h"
 #include "ScriptImportBinder.h"
 #include "ScriptModuleBytecodeStore.h"
+#include "ScriptModuleRegistry.h"
 #include "ScriptModuleReplacer.h"
 #include "ScriptModuleStateStore.h"
 #include "ScriptPathResolver.h"
@@ -330,7 +330,7 @@ protected:
     int m_Flags = 0;
     ScriptPathResolver m_PathResolver;
     ScriptEngineHost m_EngineHost;
-    ScriptCache m_ScriptCache;
+    ScriptModuleRegistry m_ModuleRegistry;
     ScriptCKObjectRetainer m_CKObjectRetainer;
     ScriptComponentStateStore m_ComponentStates;
     std::unique_ptr<ScriptBehaviorBridge> m_BehaviorBridge;

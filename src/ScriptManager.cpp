@@ -199,7 +199,7 @@ int ScriptManager::Shutdown() {
 
     ClearCKObjectData();
     m_ModuleStateStore.Clear();
-    m_ScriptCache.Clear();
+    m_ModuleRegistry.Clear();
 
     m_BehaviorBridge.reset();
     m_Runtime.reset();
