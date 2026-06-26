@@ -157,7 +157,7 @@ Module replacement is atomic at the public API boundary: if the replacement sour
 
 ## Module Imports And Bytecode
 
-CKAngelScript exposes AngelScript function imports as explicit host-controlled bindings. Use `CKAngelScriptGetImportedFunctionCount()` or `CKAngelScriptEnumerateImportedFunctions()` to inspect a module's imports. `CKAngelScriptBindImportedFunction()` binds one import by index; if `SourceModuleName` or `FunctionDecl` is omitted, CKAngelScript uses the source module and declaration written in the script import. `CKAngelScriptBindAllImportedFunctions()` first resolves every import, then commits the bindings; missing source modules or functions return `CKAS_NOTFOUND` without changing the importing module. Incompatible bindings return `CKAS_TYPEMISMATCH`.
+CKAngelScript exposes AngelScript function imports as explicit host-controlled bindings. Use `CKAngelScriptGetImportedFunctionCount()` or `CKAngelScriptEnumerateImportedFunctions()` to inspect a module's imports. `CKAngelScriptBindImportedFunction()` binds one import by index; if `SourceModuleName` or `FunctionDecl` is omitted, CKAngelScript uses the source module and declaration written in the script import. If a single rebind fails after CKAngelScript already tracked a previous binding for that import, CKAngelScript restores that previous binding before returning. `CKAngelScriptBindAllImportedFunctions()` first resolves every import, then commits the bindings; missing source modules or functions return `CKAS_NOTFOUND` without changing the importing module. Incompatible bindings return `CKAS_TYPEMISMATCH`.
 
 ```angelscript
 import int add_score(int value) from "score_lib";

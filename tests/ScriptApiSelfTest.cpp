@@ -1556,11 +1556,41 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                             importValue,
                             result,
                             error) ||
-        importValue != 25 ||
-        api->UnbindAllImportedFunctions(importConsumerModuleName, &result) != CKAS_OK) {
+        importValue != 25) {
         if (error.empty()) {
-            error = "CKAngelScript API self-test expected explicit import bind and unbind to work.";
+            error = "CKAngelScript API self-test expected explicit import bind to work.";
         }
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    const CKDWORD failedRebindGeneration = api->GetModuleGeneration(importConsumerModuleName);
+    if (api->BindImportedFunction(importConsumerModuleName,
+                                  0,
+                                  importProviderModuleName,
+                                  "void __ckas_import_wrong()",
+                                  &result) != CKAS_TYPEMISMATCH ||
+        api->GetModuleGeneration(importConsumerModuleName) != failedRebindGeneration ||
+        api->CompileModule(importProviderModuleName,
+                           importProviderReplacementSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_INUSE ||
+        !ExecuteIntFunction(api,
+                            importConsumerModuleName,
+                            "int __ckas_import_call()",
+                            importValue,
+                            result,
+                            error) ||
+        importValue != 25) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected failed import rebind to restore the previous binding.";
+        }
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->UnbindAllImportedFunctions(importConsumerModuleName, &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected explicit import unbind-all to work.";
         api->UnloadModule(importConsumerModuleName, nullptr);
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;

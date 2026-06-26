@@ -3534,11 +3534,36 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
                                        sourceModuleName));
     }
 
-    RemoveImportBinding(importModuleName, importIndex);
+    std::vector<ImportBindingEdge> previousBinding;
+    for (const ImportBindingEdge &edge : m_ImportBindings) {
+        if (edge.ImportModuleName == importModuleName && edge.ImportIndex == importIndex) {
+            previousBinding.push_back(edge);
+            break;
+        }
+    }
+
     const int bindResult = importModule->BindImportedFunction(importIndex, targetFunction);
     if (bindResult < 0) {
-        BumpModuleGeneration(importModuleName);
         status = StatusFromImportBindResult(bindResult);
+        if (!previousBinding.empty()) {
+            int rollbackCode = 0;
+            std::string rollbackError;
+            if (RebindImportBindings(previousBinding, rollbackCode, rollbackError)) {
+                return StoreResult(result,
+                                   status,
+                                   bindResult,
+                                   "Failed to bind imported function; previous binding was restored.");
+            }
+            RemoveImportBinding(importModuleName, importIndex);
+            BumpModuleGeneration(importModuleName);
+            return StoreResult(result,
+                               CKAS_EXECUTIONFAILED,
+                               rollbackCode,
+                               fmt::format("Failed to bind imported function; rollback also failed: {}",
+                                           rollbackError));
+        }
+        RemoveImportBinding(importModuleName, importIndex);
+        BumpModuleGeneration(importModuleName);
         return StoreResult(result, status, bindResult, "Failed to bind imported function.");
     }
     RecordImportBinding(importModuleName, importIndex, sourceModuleName, functionDecl);
