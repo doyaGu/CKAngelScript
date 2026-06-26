@@ -223,7 +223,11 @@ struct MetadataProbe {
 
 struct ReentrantMetadataProbe {
     CKAngelScriptApi *Api = nullptr;
+    const char *ModuleName = nullptr;
     CKAS_STATUS ReentryStatus = CKAS_OK;
+    CKAS_STATUS BytecodeSaveStatus = CKAS_OK;
+    CKAS_STATUS BytecodeWriteReentryStatus = CKAS_OK;
+    size_t BytecodeSize = 0;
     CKDWORD CallbackCount = 0;
 };
 
@@ -473,6 +477,8 @@ CKAS_STATUS StopMetadata(const CKAngelScriptMetadataEntry *, CKDWORD, const char
     return CKAS_CANCELLED;
 }
 
+CKAS_STATUS WriteBytecodeWithReentry(const void *data, size_t size, void *userData);
+
 CKAS_STATUS MutateFromMetadataCallback(const CKAngelScriptMetadataEntry *, CKDWORD, const char *, void *userData) {
     auto *probe = static_cast<ReentrantMetadataProbe *>(userData);
     if (!probe || !probe->Api) {
@@ -484,6 +490,17 @@ CKAS_STATUS MutateFromMetadataCallback(const CKAngelScriptMetadataEntry *, CKDWO
                                   "int __ckas_metadata_callback_reentry() { return 1; }\n",
                                   CKAS_COMPILE_REPLACEEXISTING,
                                   nullptr);
+    if (probe->CallbackCount == 1) {
+        ReentrantBytecodeWriteProbe bytecodeWrite;
+        bytecodeWrite.Api = probe->Api;
+        probe->BytecodeSaveStatus =
+            probe->Api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(probe->ModuleName,
+                                                                                  WriteBytecodeWithReentry,
+                                                                                  &bytecodeWrite),
+                                           nullptr);
+        probe->BytecodeWriteReentryStatus = bytecodeWrite.ReentryStatus;
+        probe->BytecodeSize = bytecodeWrite.Buffer.Bytes.size();
+    }
     return CKAS_OK;
 }
 
@@ -1424,11 +1441,16 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     ReentrantMetadataProbe metadataReentry;
     metadataReentry.Api = &api;
+    metadataReentry.ModuleName = moduleName;
     if (api->EnumerateMetadata(moduleName, MutateFromMetadataCallback, &metadataReentry, &result) != CKAS_OK ||
         metadataReentry.CallbackCount == 0 ||
-        metadataReentry.ReentryStatus != CKAS_INVALIDSTATE) {
-        error = "CKAngelScript API self-test expected metadata callbacks to reject module mutation reentry.";
+        metadataReentry.ReentryStatus != CKAS_INVALIDSTATE ||
+        metadataReentry.BytecodeSaveStatus != CKAS_OK ||
+        metadataReentry.BytecodeWriteReentryStatus != CKAS_INVALIDSTATE ||
+        metadataReentry.BytecodeSize == 0) {
+        error = "CKAngelScript API self-test expected metadata callbacks to allow bytecode save while rejecting module mutation reentry.";
         api->UnloadModule("__CKAS_MetadataCallbackReentry", nullptr);
+        api->UnloadModule("__CKAS_BytecodeCallbackReentry", nullptr);
         return false;
     }
     if (api->EnumerateMetadata("__CKAS_MissingMetadataModule", ProbeMetadata, &metadataProbe, &result) != CKAS_NOTFOUND ||

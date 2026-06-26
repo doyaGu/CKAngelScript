@@ -3755,9 +3755,6 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
     if ((flags & ~static_cast<CKDWORD>(CKAS_BYTECODE_STRIP_DEBUG_INFO)) != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown SaveModuleBytecode flags.");
     }
-    if (IsModuleMutationBlockedByCallback()) {
-        return RejectModuleMutationDuringCallback("SaveModuleBytecode", result);
-    }
     if (!write) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode write callback is required.");
     }
