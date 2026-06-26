@@ -1540,8 +1540,23 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     int importValue = 0;
+    CKAngelScriptExecution *preBindReadyImportExecution = nullptr;
+    if (api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(preBindImportFunction),
+                                     &preBindReadyImportExecution,
+                                     &result) != CKAS_OK ||
+        !preBindReadyImportExecution) {
+        error = "CKAngelScript API self-test expected to capture an import consumer execution before binding.";
+        if (preBindReadyImportExecution) {
+            api->ReleaseExecution(preBindReadyImportExecution);
+        }
+        api->ReleaseFunction(preBindImportFunction);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     CKAngelScriptExecution *staleImportExecution = nullptr;
     if (api->BindAllImportedFunctions(importConsumerModuleName, &result) != CKAS_OK ||
+        api->StartExecution(preBindReadyImportExecution, nullptr, &result) != CKAS_STALEHANDLE ||
         api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(preBindImportFunction),
                                      &staleImportExecution,
                                      &result) != CKAS_STALEHANDLE ||
@@ -1559,11 +1574,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         if (staleImportExecution) {
             api->ReleaseExecution(staleImportExecution);
         }
+        api->ReleaseExecution(preBindReadyImportExecution);
         api->ReleaseFunction(preBindImportFunction);
         api->UnloadModule(importConsumerModuleName, nullptr);
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    api->ReleaseExecution(preBindReadyImportExecution);
     api->ReleaseFunction(preBindImportFunction);
     if (api->CompileModule(importProviderModuleName,
                            importProviderReplacementSource,
@@ -1776,6 +1793,43 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->UnloadModule(importConsumerModuleName, nullptr);
     api->UnloadModule(importProviderModuleName, nullptr);
+
+    constexpr const char *namespaceImportProviderModuleName = "__CKAS_NamespaceImportProvider";
+    constexpr const char *namespaceImportConsumerModuleName = "__CKAS_NamespaceImportConsumer";
+    const char *namespaceImportProviderSource =
+        "namespace CKASImportNamespace {\n"
+        "int Add(int value) { return value + 40; }\n"
+        "}\n";
+    const char *namespaceImportConsumerSource =
+        "namespace CKASImportNamespace {\n"
+        "import int Add(int value) from \"__CKAS_NamespaceImportProvider\";\n"
+        "}\n"
+        "int __ckas_namespace_import_call() { return CKASImportNamespace::Add(2); }\n";
+    if (api->CompileModule(namespaceImportProviderModuleName,
+                           namespaceImportProviderSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->CompileModule(namespaceImportConsumerModuleName,
+                           namespaceImportConsumerSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->BindAllImportedFunctions(namespaceImportConsumerModuleName, &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            namespaceImportConsumerModuleName,
+                            "int __ckas_namespace_import_call()",
+                            importValue,
+                            result,
+                            error) ||
+        importValue != 42) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected default import binding to resolve namespaced declarations.";
+        }
+        api->UnloadModule(namespaceImportConsumerModuleName, nullptr);
+        api->UnloadModule(namespaceImportProviderModuleName, nullptr);
+        return false;
+    }
+    api->UnloadModule(namespaceImportConsumerModuleName, nullptr);
+    api->UnloadModule(namespaceImportProviderModuleName, nullptr);
 
     constexpr const char *loadModuleName = "__CKAS_ManagerApiLoadSelfTest";
     CKAngelScriptLoadOptions loadOptions = CKAngelScriptApi::LoadCodeOptions(
