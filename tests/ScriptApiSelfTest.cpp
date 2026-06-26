@@ -1343,6 +1343,53 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    constexpr const char *rawModuleName = "__CKAS_RawModuleUnloadSelfTest";
+    const char *rawModuleSource =
+        "int __ckas_raw_module_value() { return 73; }\n";
+    asIScriptModule *rawModule = engine->GetModule(rawModuleName, asGM_ALWAYS_CREATE);
+    if (!rawModule ||
+        rawModule->AddScriptSection(rawModuleName,
+                                    rawModuleSource,
+                                    static_cast<unsigned int>(std::strlen(rawModuleSource))) < 0 ||
+        rawModule->Build() < 0) {
+        error = "CKAngelScript API self-test failed to create a raw AngelScript module.";
+        if (rawModule) {
+            rawModule->Discard();
+        }
+        return false;
+    }
+    CKAngelScriptFunction *rawModuleFunction = nullptr;
+    if (!api->HasModule(rawModuleName) ||
+        api->FindFunction(CKAngelScriptApi::FunctionByDeclOptions(rawModuleName,
+                                                                  "int __ckas_raw_module_value()"),
+                          &rawModuleFunction,
+                          &result) != CKAS_OK ||
+        !rawModuleFunction ||
+        api->UnloadModule(rawModuleName, &result) != CKAS_OK ||
+        api->HasModule(rawModuleName)) {
+        error = "CKAngelScript API self-test expected UnloadModule to discard raw engine modules.";
+        api->ReleaseFunction(rawModuleFunction);
+        rawModule = engine->GetModule(rawModuleName, asGM_ONLY_IF_EXISTS);
+        if (rawModule) {
+            rawModule->Discard();
+        }
+        return false;
+    }
+    CKAngelScriptExecution *rawModuleExecution =
+        reinterpret_cast<CKAngelScriptExecution *>(static_cast<uintptr_t>(1));
+    if (api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(rawModuleFunction),
+                                     &rawModuleExecution,
+                                     &result) != CKAS_STALEHANDLE ||
+        rawModuleExecution != nullptr) {
+        error = "CKAngelScript API self-test expected raw module unload to stale CKAS function handles.";
+        if (rawModuleExecution) {
+            api->ReleaseExecution(rawModuleExecution);
+        }
+        api->ReleaseFunction(rawModuleFunction);
+        return false;
+    }
+    api->ReleaseFunction(rawModuleFunction);
+
     MetadataProbe metadataProbe;
     if (api->EnumerateMetadata(moduleName, ProbeMetadata, &metadataProbe, &result) != CKAS_OK ||
         metadataProbe.CallbackCount < 5 ||

@@ -3121,7 +3121,7 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
     if (mutationStatus != CKAS_OK) {
         return mutationStatus;
     }
-    if (!DiscardCachedModule(moduleName)) {
+    if (!DiscardModule(moduleName)) {
         return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }
     RemoveImportBindingsForModule(moduleName);
@@ -4517,6 +4517,21 @@ bool ScriptManager::DiscardCachedModule(const char *moduleName) {
     if (!moduleName || moduleName[0] == '\0')
         return false;
     return m_ScriptCache.UnloadScript(moduleName);
+}
+
+bool ScriptManager::DiscardModule(const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return false;
+    }
+    if (DiscardCachedModule(moduleName)) {
+        return true;
+    }
+    asIScriptModule *module = GetModule(moduleName);
+    if (!module) {
+        return false;
+    }
+    module->Discard();
+    return true;
 }
 
 asIScriptModule *ScriptManager::GetScript(const char *scriptName) {

@@ -338,7 +338,7 @@ CKAS_STATUS status =
     CKAngelScriptBorrowModule(angelScript, "example_api", &module, &result);
 ```
 
-Borrowed pointers are only valid under normal AngelScript/module lifetime rules. CKAngelScript does not extend their lifetime. `BorrowActiveContext` only returns a context whose engine belongs to the same CKAngelScript manager; otherwise it returns `CKAS_NOTFOUND`.
+Borrowed pointers are only valid under normal AngelScript/module lifetime rules. CKAngelScript does not extend their lifetime. Raw modules created directly on the borrowed engine are visible to `CKAngelScriptHasModule()`, `CKAngelScriptBorrowModule()`, replacement APIs, and `CKAngelScriptUnloadModule()`, but CKAngelScript only tracks import dependency edges created through its public import binding APIs. `BorrowActiveContext` only returns a context whose engine belongs to the same CKAngelScript manager; otherwise it returns `CKAS_NOTFOUND`.
 
 ## Metadata Reflection
 

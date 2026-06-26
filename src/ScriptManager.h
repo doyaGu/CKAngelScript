@@ -500,6 +500,7 @@ protected:
     int LoadModuleFromDefaultOrFile(const char *moduleName, const char *filename);
     int LoadModuleFromFiles(const char *moduleName, const char **filenames, size_t count);
     int CompileModuleFromMemory(const char *moduleName, const char *scriptCode);
+    bool DiscardModule(const char *moduleName);
     bool DiscardCachedModule(const char *moduleName);
     CKAngelScriptResult MakeResult(CKAS_STATUS status,
                                  int angelScriptCode = 0,
