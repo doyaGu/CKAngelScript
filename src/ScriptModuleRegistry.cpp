@@ -429,12 +429,20 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
     return m_ModuleRegistry.Unload(*this, moduleName, result);
 }
 
+bool ScriptModuleRegistry::Has(ScriptManager &manager, const char *moduleName) {
+    return manager.GetModule(moduleName) != nullptr;
+}
+
+CKDWORD ScriptModuleRegistry::GetGeneration(const ScriptManager &manager, const char *moduleName) const {
+    return manager.m_ModuleStateStore.GetGeneration(moduleName);
+}
+
 bool ScriptManager::HasModule(const char *moduleName) {
-    return GetModule(moduleName) != nullptr;
+    return m_ModuleRegistry.Has(*this, moduleName);
 }
 
 CKDWORD ScriptManager::GetModuleGeneration(const char *moduleName) const {
-    return m_ModuleStateStore.GetGeneration(moduleName);
+    return m_ModuleRegistry.GetGeneration(*this, moduleName);
 }
 
 asIScriptModule *ScriptManager::GetModule(const char *moduleName) {

@@ -25,6 +25,8 @@ public:
                         CKDWORD flags,
                         CKAngelScriptResult *result);
     CKAS_STATUS Unload(ScriptManager &manager, const char *moduleName, CKAngelScriptResult *result);
+    bool Has(ScriptManager &manager, const char *moduleName);
+    CKDWORD GetGeneration(const ScriptManager &manager, const char *moduleName) const;
 
     CKAS_STATUS CheckRuntimeHandlesReleased(ScriptManager &manager,
                                             const char *moduleName,
