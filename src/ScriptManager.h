@@ -305,14 +305,6 @@ protected:
         const std::vector<std::tuple<std::string, std::string>> &sections,
         bool sourceSnapshotSections,
         CKAngelScriptResult *result);
-    // Low-level shims backing the public module API. Do not call these
-    // from behavior blocks or runtime helpers; use LoadModule/CompileModule/
-    // UnloadModule and the cache helper methods above.
-    int LoadModuleFromDefaultOrFile(const char *moduleName, const char *filename);
-    int LoadModuleFromFiles(const char *moduleName, const char **filenames, size_t count);
-    int CompileModuleFromMemory(const char *moduleName, const char *scriptCode);
-    bool DiscardModule(const char *moduleName);
-    bool DiscardCachedModule(const char *moduleName);
     CKAngelScriptResult MakeResult(CKAS_STATUS status,
                                  int angelScriptCode = 0,
                                  const std::string &errorMessage = std::string(),

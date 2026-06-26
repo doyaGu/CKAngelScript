@@ -128,6 +128,21 @@ bool ScriptModuleRegistry::DiscardCached(const char *moduleName) {
     return m_Cache.UnloadScript(moduleName);
 }
 
+bool ScriptModuleRegistry::Discard(ScriptManager &manager, const char *moduleName) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
+        return false;
+    }
+    if (DiscardCached(moduleName)) {
+        return true;
+    }
+    asIScriptModule *module = manager.GetModule(moduleName);
+    if (!module) {
+        return false;
+    }
+    module->Discard();
+    return true;
+}
+
 bool ScriptModuleRegistry::RestoreFromChunk(const char *scriptName, CKStateChunk *chunk) {
     if (!chunk) {
         return false;
@@ -329,7 +344,8 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
         }
         std::vector<CapturedScriptMessage> diagnosticMessages;
         BeginScriptMessageCapture();
-        const int loadResult = LoadModuleFromFiles(request.ModuleName, request.Filenames, request.FileCount);
+        const int loadResult =
+            m_ModuleRegistry.LoadFromFiles(*this, request.ModuleName, request.Filenames, request.FileCount);
         const std::string diagnostics = EndScriptMessageCapture(&diagnosticMessages);
         if (loadResult < 0) {
             return StoreResult(result,
@@ -360,7 +376,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
 
     std::vector<CapturedScriptMessage> diagnosticMessages;
     BeginScriptMessageCapture();
-    const int loadResult = LoadModuleFromDefaultOrFile(request.ModuleName, request.Filename);
+    const int loadResult = m_ModuleRegistry.LoadFromDefaultOrFile(*this, request.ModuleName, request.Filename);
     const std::string diagnostics = EndScriptMessageCapture(&diagnosticMessages);
     if (loadResult < 0) {
         return StoreResult(result,
@@ -408,7 +424,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
 
     std::vector<CapturedScriptMessage> diagnosticMessages;
     BeginScriptMessageCapture();
-    const int compileResult = CompileModuleFromMemory(moduleName, scriptCode);
+    const int compileResult = m_ModuleRegistry.CompileFromMemory(*this, moduleName, scriptCode);
     const std::string diagnostics = EndScriptMessageCapture(&diagnosticMessages);
     if (compileResult < 0) {
         return StoreResult(result,
@@ -435,7 +451,7 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
     if (mutationStatus != CKAS_OK) {
         return mutationStatus;
     }
-    if (!DiscardModule(moduleName)) {
+    if (!m_ModuleRegistry.Discard(*this, moduleName)) {
         return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }
     m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
@@ -848,37 +864,6 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
 CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOptions &options,
                                               CKAngelScriptResult *result) {
     return m_ModuleBytecodeStore.Load(*this, options, result);
-}
-
-int ScriptManager::LoadModuleFromDefaultOrFile(const char *moduleName, const char *filename) {
-    return m_ModuleRegistry.LoadFromDefaultOrFile(*this, moduleName, filename);
-}
-
-int ScriptManager::LoadModuleFromFiles(const char *moduleName, const char **filenames, size_t count) {
-    return m_ModuleRegistry.LoadFromFiles(*this, moduleName, filenames, count);
-}
-
-int ScriptManager::CompileModuleFromMemory(const char *moduleName, const char *scriptCode) {
-    return m_ModuleRegistry.CompileFromMemory(*this, moduleName, scriptCode);
-}
-
-bool ScriptManager::DiscardCachedModule(const char *moduleName) {
-    return m_ModuleRegistry.DiscardCached(moduleName);
-}
-
-bool ScriptManager::DiscardModule(const char *moduleName) {
-    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
-        return false;
-    }
-    if (DiscardCachedModule(moduleName)) {
-        return true;
-    }
-    asIScriptModule *module = GetModule(moduleName);
-    if (!module) {
-        return false;
-    }
-    module->Discard();
-    return true;
 }
 
 asIScriptModule *ScriptManager::GetScript(const char *scriptName) {

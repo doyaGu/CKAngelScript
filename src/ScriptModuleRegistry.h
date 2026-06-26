@@ -20,7 +20,7 @@ public:
     int LoadFromDefaultOrFile(ScriptManager &manager, const char *moduleName, const char *filename);
     int LoadFromFiles(ScriptManager &manager, const char *moduleName, const char **filenames, size_t count);
     int CompileFromMemory(ScriptManager &manager, const char *moduleName, const char *scriptCode);
-    bool DiscardCached(const char *moduleName);
+    bool Discard(ScriptManager &manager, const char *moduleName);
 
     bool RestoreFromChunk(const char *scriptName, CKStateChunk *chunk);
     bool SaveToChunk(const char *scriptName, CKStateChunk *chunk);
@@ -28,6 +28,8 @@ public:
     unsigned long long BuildSourceHash(const char *moduleName);
 
 private:
+    bool DiscardCached(const char *moduleName);
+
     ScriptCache m_Cache;
 };
 
