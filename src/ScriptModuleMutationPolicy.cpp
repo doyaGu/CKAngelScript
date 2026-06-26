@@ -12,7 +12,7 @@ CKAS_STATUS ScriptModuleMutationPolicy::CheckRuntimeHandlesReleased(
     const ScriptHandleRegistry &handles,
     ScriptApiDiagnostics &diagnostics,
     const char *moduleName,
-    CKAngelScriptResult *result) const {
+    CKAngelScriptResult *result) {
     if (handles.HasRuntimeHandleForModule(moduleName)) {
         return diagnostics.StoreResult(result,
                                        CKAS_INUSE,
@@ -26,7 +26,7 @@ CKAS_STATUS ScriptModuleMutationPolicy::CheckNoBoundImportConsumers(
     const ScriptModuleStateStore &stateStore,
     ScriptApiDiagnostics &diagnostics,
     const char *moduleName,
-    CKAngelScriptResult *result) const {
+    CKAngelScriptResult *result) {
     std::string importConsumer;
     if (stateStore.HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
         return diagnostics.StoreResult(result,
@@ -43,7 +43,7 @@ CKAS_STATUS ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
     const ScriptModuleStateStore &stateStore,
     ScriptApiDiagnostics &diagnostics,
     const char *moduleName,
-    CKAngelScriptResult *result) const {
+    CKAngelScriptResult *result) {
     const CKAS_STATUS runtimeStatus = CheckRuntimeHandlesReleased(handles, diagnostics, moduleName, result);
     if (runtimeStatus != CKAS_OK) {
         return runtimeStatus;
@@ -54,7 +54,7 @@ CKAS_STATUS ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
 CKAS_STATUS ScriptModuleMutationPolicy::CheckMutationAllowed(ScriptApiDiagnostics &diagnostics,
                                                             int publicCallbackDepth,
                                                             const char *apiName,
-                                                            CKAngelScriptResult *result) const {
+                                                            CKAngelScriptResult *result) {
     if (publicCallbackDepth <= 0) {
         return CKAS_OK;
     }

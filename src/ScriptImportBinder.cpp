@@ -4,6 +4,7 @@
 
 #include "ScriptApiSupport.h"
 #include "ScriptManager.h"
+#include "ScriptModuleMutationPolicy.h"
 #include "ScriptPublicOptions.h"
 
 namespace {
@@ -76,10 +77,10 @@ CKAS_STATUS ScriptImportBinder::BindImportedFunction(ScriptManager &manager,
                                                      const CKAngelScriptImportBindOptions &options,
                                                      CKAngelScriptResult *result) {
     CKAS_STATUS callbackStatus =
-        manager.m_ModuleMutationPolicy.CheckMutationAllowed(manager.m_Diagnostics,
-                                                            manager.m_PublicCallbackDepth,
-                                                            "BindImportedFunction",
-                                                            result);
+        ScriptModuleMutationPolicy::CheckMutationAllowed(manager.m_Diagnostics,
+                                                         manager.m_PublicCallbackDepth,
+                                                         "BindImportedFunction",
+                                                         result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
@@ -173,10 +174,10 @@ CKAS_STATUS ScriptImportBinder::BindAllImportedFunctions(ScriptManager &manager,
                                                          const char *moduleName,
                                                          CKAngelScriptResult *result) {
     CKAS_STATUS callbackStatus =
-        manager.m_ModuleMutationPolicy.CheckMutationAllowed(manager.m_Diagnostics,
-                                                            manager.m_PublicCallbackDepth,
-                                                            "BindAllImportedFunctions",
-                                                            result);
+        ScriptModuleMutationPolicy::CheckMutationAllowed(manager.m_Diagnostics,
+                                                         manager.m_PublicCallbackDepth,
+                                                         "BindAllImportedFunctions",
+                                                         result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
@@ -281,10 +282,10 @@ CKAS_STATUS ScriptImportBinder::UnbindImportedFunction(ScriptManager &manager,
                                                        CKDWORD importIndex,
                                                        CKAngelScriptResult *result) {
     CKAS_STATUS callbackStatus =
-        manager.m_ModuleMutationPolicy.CheckMutationAllowed(manager.m_Diagnostics,
-                                                            manager.m_PublicCallbackDepth,
-                                                            "UnbindImportedFunction",
-                                                            result);
+        ScriptModuleMutationPolicy::CheckMutationAllowed(manager.m_Diagnostics,
+                                                         manager.m_PublicCallbackDepth,
+                                                         "UnbindImportedFunction",
+                                                         result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
@@ -310,10 +311,10 @@ CKAS_STATUS ScriptImportBinder::UnbindAllImportedFunctions(ScriptManager &manage
                                                            const char *moduleName,
                                                            CKAngelScriptResult *result) {
     CKAS_STATUS callbackStatus =
-        manager.m_ModuleMutationPolicy.CheckMutationAllowed(manager.m_Diagnostics,
-                                                            manager.m_PublicCallbackDepth,
-                                                            "UnbindAllImportedFunctions",
-                                                            result);
+        ScriptModuleMutationPolicy::CheckMutationAllowed(manager.m_Diagnostics,
+                                                         manager.m_PublicCallbackDepth,
+                                                         "UnbindAllImportedFunctions",
+                                                         result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }

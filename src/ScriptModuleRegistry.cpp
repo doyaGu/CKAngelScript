@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "ScriptApiSupport.h"
+#include "ScriptModuleMutationPolicy.h"
 #include "ScriptModuleRegistry.h"
 #include "ScriptPublicOptions.h"
 
@@ -215,10 +216,10 @@ CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
         return manager.StoreResult(result, optionStatus, 0, errorMessage);
     }
     const CKAS_STATUS callbackStatus =
-        manager.m_ModuleMutationPolicy.CheckMutationAllowed(manager.m_Diagnostics,
-                                                            manager.m_PublicCallbackDepth,
-                                                            "LoadModule",
-                                                            result);
+        ScriptModuleMutationPolicy::CheckMutationAllowed(manager.m_Diagnostics,
+                                                         manager.m_PublicCallbackDepth,
+                                                         "LoadModule",
+                                                         result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
@@ -230,7 +231,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
         if (!ScriptApiSupport::HasPublicFlag(request.Flags, CKAS_LOAD_REPLACEEXISTING)) {
             return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
-        const CKAS_STATUS mutationStatus = manager.m_ModuleMutationPolicy.CheckReplaceOrUnloadAllowed(
+        const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
             manager.m_HandleRegistry,
             manager.m_ModuleStateStore,
             manager.m_Diagnostics,
@@ -312,10 +313,10 @@ CKAS_STATUS ScriptModuleRegistry::Compile(ScriptManager &manager,
         return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name and script code are required.");
     }
     const CKAS_STATUS callbackStatus =
-        manager.m_ModuleMutationPolicy.CheckMutationAllowed(manager.m_Diagnostics,
-                                                            manager.m_PublicCallbackDepth,
-                                                            "CompileModule",
-                                                            result);
+        ScriptModuleMutationPolicy::CheckMutationAllowed(manager.m_Diagnostics,
+                                                         manager.m_PublicCallbackDepth,
+                                                         "CompileModule",
+                                                         result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
@@ -330,7 +331,7 @@ CKAS_STATUS ScriptModuleRegistry::Compile(ScriptManager &manager,
         if (!ScriptApiSupport::HasPublicFlag(flags, CKAS_COMPILE_REPLACEEXISTING)) {
             return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
-        const CKAS_STATUS mutationStatus = manager.m_ModuleMutationPolicy.CheckReplaceOrUnloadAllowed(
+        const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
             manager.m_HandleRegistry,
             manager.m_ModuleStateStore,
             manager.m_Diagnostics,
@@ -366,14 +367,14 @@ CKAS_STATUS ScriptModuleRegistry::Unload(ScriptManager &manager,
         return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     const CKAS_STATUS callbackStatus =
-        manager.m_ModuleMutationPolicy.CheckMutationAllowed(manager.m_Diagnostics,
-                                                            manager.m_PublicCallbackDepth,
-                                                            "UnloadModule",
-                                                            result);
+        ScriptModuleMutationPolicy::CheckMutationAllowed(manager.m_Diagnostics,
+                                                         manager.m_PublicCallbackDepth,
+                                                         "UnloadModule",
+                                                         result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
-    const CKAS_STATUS mutationStatus = manager.m_ModuleMutationPolicy.CheckReplaceOrUnloadAllowed(
+    const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
         manager.m_HandleRegistry,
         manager.m_ModuleStateStore,
         manager.m_Diagnostics,
