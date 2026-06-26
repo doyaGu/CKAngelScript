@@ -10,6 +10,7 @@
 
 #include "CKAll.h"
 #include "ScriptAsync.h"
+#include "ScriptComponentState.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
 #include "add_on/scriptdictionary/scriptdictionary.h"

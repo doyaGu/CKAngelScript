@@ -31,6 +31,7 @@
 #include "ScriptVxMath.h"
 #include "ScriptCK2.h"
 #include "ScriptBehaviorBridge.h"
+#include "ScriptComponentState.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptScene.h"
 #include "ScriptRuntime.h"
@@ -5041,110 +5042,31 @@ CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
 }
 
 void * ScriptManager::GetCKObjectData(CK_ID id) const {
-    const auto it = m_CKObjectDataMap.find(id);
-    if (it == m_CKObjectDataMap.end()) {
-        return nullptr;
-    }
-    return it->second;
+    return m_CKObjectRetainer.GetData(id);
 }
 
 void ScriptManager::SetCKObjectData(CK_ID id, void *data) {
-    if (data) {
-        m_CKObjectDataMap[id] = data;
-    } else {
-        m_CKObjectDataMap.erase(id);
-    }
+    m_CKObjectRetainer.SetData(id, data);
 }
 
 void ScriptManager::ReleaseCKObjectData(CK_ID id) {
-    const auto it = m_CKObjectDataMap.find(id);
-    if (it == m_CKObjectDataMap.end()) {
-        return;
-    }
-
-    auto *func = static_cast<asIScriptFunction *>(it->second);
-    m_CKObjectDataMap.erase(it);
-    if (func) {
-        func->Release();
-    }
+    m_CKObjectRetainer.ReleaseData(id);
 }
 
 void ScriptManager::ClearCKObjectData() {
-    for (const auto &entry : m_CKObjectDataMap) {
-        auto *func = static_cast<asIScriptFunction *>(entry.second);
-        if (func) {
-            func->Release();
-        }
-    }
-    m_CKObjectDataMap.clear();
-
-    for (const auto &entry : m_CKObjectCallbackMap) {
-        for (auto *func : entry.second) {
-            if (!func) {
-                continue;
-            }
-            if (IsMarkedAsReleasedOnce(func)) {
-                ClearReleasedOnceMark(func);
-            } else {
-                if (IsMarkedAsTemporary(func)) {
-                    ClearTemporaryMark(func);
-                }
-                func->Release();
-            }
-        }
-    }
-    m_CKObjectCallbackMap.clear();
+    m_CKObjectRetainer.Clear();
 }
 
 void ScriptManager::TrackCKObjectCallback(CK_ID id, asIScriptFunction *func) {
-    if (func) {
-        m_CKObjectCallbackMap[id].push_back(func);
-    }
+    m_CKObjectRetainer.TrackCallback(id, func);
 }
 
 bool ScriptManager::UntrackCKObjectCallback(CK_ID id, asIScriptFunction *func) {
-    auto it = m_CKObjectCallbackMap.find(id);
-    if (it == m_CKObjectCallbackMap.end()) {
-        return false;
-    }
-
-    auto &callbacks = it->second;
-    bool removed = false;
-    for (auto cb = callbacks.begin(); cb != callbacks.end(); ++cb) {
-        if (*cb == func) {
-            callbacks.erase(cb);
-            removed = true;
-            break;
-        }
-    }
-
-    if (callbacks.empty()) {
-        m_CKObjectCallbackMap.erase(it);
-    }
-    return removed;
+    return m_CKObjectRetainer.UntrackCallback(id, func);
 }
 
 void ScriptManager::ReleaseCKObjectCallbacks(CK_ID id) {
-    auto it = m_CKObjectCallbackMap.find(id);
-    if (it == m_CKObjectCallbackMap.end()) {
-        return;
-    }
-
-    auto callbacks = std::move(it->second);
-    m_CKObjectCallbackMap.erase(it);
-    for (auto *func : callbacks) {
-        if (!func) {
-            continue;
-        }
-        if (IsMarkedAsReleasedOnce(func)) {
-            ClearReleasedOnceMark(func);
-        } else {
-            if (IsMarkedAsTemporary(func)) {
-                ClearTemporaryMark(func);
-            }
-            func->Release();
-        }
-    }
+    m_CKObjectRetainer.ReleaseCallbacks(id);
 }
 
 static void ReleaseScriptFunction(asIScriptFunction *&func) {

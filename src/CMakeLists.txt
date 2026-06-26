@@ -35,7 +35,9 @@ set(CKAS_HEADERS
         ScriptAsync.h
         ScriptRefCounted.h
         ScriptBehaviorBridge.h
+        ScriptCKObjectRetainer.h
         ScriptComponentMetadata.h
+        ScriptComponentState.h
         ScriptComponentInjection.h
         ScriptComponentAutomation.h
         ScriptBridgeCommon.h
@@ -81,6 +83,7 @@ set(CKAS_SOURCES
         ScriptScene.cpp
         ScriptAsync.cpp
         ScriptBehaviorBridge.cpp
+        ScriptCKObjectRetainer.cpp
         ScriptBridgeRuntime.cpp
         ScriptBridgeLayoutCache.cpp
         ScriptBridgeWatch.cpp

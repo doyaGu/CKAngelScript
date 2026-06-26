@@ -5,7 +5,7 @@
 
 #include <string>
 
-#include "ScriptManager.h"
+#include "ScriptComponentState.h"
 
 class BBConfig;
 

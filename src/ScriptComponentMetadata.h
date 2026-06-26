@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "ScriptManager.h"
+#include "ScriptComponentState.h"
 #include "ScriptParameterConversion.h"
 
 namespace AngelScriptComponentInternal {

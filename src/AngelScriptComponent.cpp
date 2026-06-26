@@ -21,6 +21,7 @@
 #include "ScriptComponentMetadata.h"
 #include "ScriptComponentAutomation.h"
 #include "ScriptComponentInjection.h"
+#include "ScriptComponentState.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptMessage.h"
