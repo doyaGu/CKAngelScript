@@ -9,7 +9,6 @@
 #include <fmt/format.h>
 
 #include "ScriptApiSupport.h"
-#include "ScriptModuleBytecode.h"
 #include "ScriptPublicOptions.h"
 
 bool ScriptManager::HasBoundImportConsumersForModule(const char *moduleName,
@@ -691,171 +690,12 @@ CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
 
 CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOptions &options,
                                               CKAngelScriptResult *result) {
-    ScriptPublicOptions::BytecodeSaveRequest request;
-    std::string errorMessage;
-    CKAS_STATUS optionStatus = ScriptPublicOptions::DecodeBytecodeSaveOptions(options,
-                                                                              request,
-                                                                              errorMessage);
-    if (optionStatus != CKAS_OK) {
-        return StoreResult(result, optionStatus, 0, errorMessage);
-    }
-    if (m_BytecodeCallbackDepth > 0) {
-        return StoreResult(result,
-                           CKAS_INVALIDSTATE,
-                           0,
-                           "SaveModuleBytecode cannot be called from a CKAngelScript bytecode callback.");
-    }
-    if (!request.Write) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode write callback is required.");
-    }
-
-    asIScriptModule *module = nullptr;
-    const CKAS_STATUS borrowStatus = BorrowModule(request.ModuleName, &module, result);
-    if (borrowStatus != CKAS_OK) {
-        return borrowStatus;
-    }
-
-    int angelScriptCode = 0;
-    CKAS_STATUS callbackStatus = CKAS_OK;
-    bool saved = false;
-    {
-        ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
-        ScriptApiSupport::CallbackDepthScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
-        saved = ScriptModuleBytecode::SaveModuleByteCode(module,
-                                                         request.Write,
-                                                         request.UserData,
-                                                         request.StripDebugInfo,
-                                                         angelScriptCode,
-                                                         callbackStatus);
-    }
-    if (!saved) {
-        if (callbackStatus != CKAS_OK) {
-            return StoreResult(result, callbackStatus, angelScriptCode, "Bytecode write callback failed.");
-        }
-        return StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, "Failed to save module bytecode.");
-    }
-    return StoreResult(result, CKAS_OK, angelScriptCode);
+    return m_ModuleBytecodeStore.Save(*this, options, result);
 }
 
 CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOptions &options,
                                               CKAngelScriptResult *result) {
-    ScriptPublicOptions::BytecodeLoadRequest request;
-    std::string errorMessage;
-    CKAS_STATUS optionStatus = ScriptPublicOptions::DecodeBytecodeLoadOptions(options,
-                                                                              request,
-                                                                              errorMessage);
-    if (optionStatus != CKAS_OK) {
-        return StoreResult(result, optionStatus, 0, errorMessage);
-    }
-    if (!ScriptApiSupport::IsNonEmpty(request.ModuleName)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
-    }
-    if (IsModuleMutationBlockedByCallback()) {
-        return RejectModuleMutationDuringCallback("LoadModuleBytecode", result);
-    }
-    if (!request.Read) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode read callback is required.");
-    }
-    if (!GetScriptEngine()) {
-        return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
-    }
-
-    const bool replacingExisting = HasModule(request.ModuleName);
-    if (replacingExisting) {
-        if (!ScriptApiSupport::HasPublicFlag(request.Flags, CKAS_BYTECODE_REPLACEEXISTING)) {
-            return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
-        }
-    }
-    const CKAS_STATUS runtimeStatus = CheckModuleRuntimeHandlesReleased(request.ModuleName, result);
-    if (runtimeStatus != CKAS_OK) {
-        return runtimeStatus;
-    }
-    if (replacingExisting) {
-        const CKAS_STATUS importStatus = CheckModuleHasNoBoundImportConsumers(request.ModuleName, result);
-        if (importStatus != CKAS_OK) {
-            return importStatus;
-        }
-    }
-
-    int angelScriptCode = 0;
-    CKAS_STATUS callbackStatus = CKAS_OK;
-    const std::string transientName =
-        ScriptModuleBytecode::MakeTransientModuleName(GetScriptEngine(), request.ModuleName);
-    asIScriptModule *candidateModule = nullptr;
-    bool loaded = false;
-    {
-        ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
-        ScriptApiSupport::CallbackDepthScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
-        loaded = ScriptModuleBytecode::LoadModuleByteCode(GetScriptEngine(),
-                                                          transientName.c_str(),
-                                                          request.Read,
-                                                          request.UserData,
-                                                          &candidateModule,
-                                                          angelScriptCode,
-                                                          callbackStatus);
-    }
-    if (!loaded) {
-        if (callbackStatus != CKAS_OK) {
-            return StoreResult(result, callbackStatus, angelScriptCode, "Bytecode read callback failed.");
-        }
-        return StoreResult(result, CKAS_COMPILEERROR, angelScriptCode, "Failed to load module bytecode.");
-    }
-
-    std::vector<unsigned char> candidateByteCode;
-    if (!ScriptModuleBytecode::SaveModuleByteCode(candidateModule,
-                                                  candidateByteCode,
-                                                  angelScriptCode)) {
-        candidateModule->Discard();
-        return StoreResult(result,
-                           CKAS_EXECUTIONFAILED,
-                           angelScriptCode,
-                           "Failed to snapshot loaded module bytecode.");
-    }
-    candidateModule->Discard();
-    candidateModule = nullptr;
-
-    ScriptModuleReplacer::Snapshot snapshot;
-    std::string snapshotError;
-    if (!m_ModuleReplacer.CaptureSnapshot(*this,
-                                          request.ModuleName,
-                                          snapshot,
-                                          angelScriptCode,
-                                          snapshotError)) {
-        return StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, snapshotError);
-    }
-
-    m_ModuleReplacer.RemoveForReplacement(*this, request.ModuleName, snapshot);
-
-    asIScriptModule *committedModule = nullptr;
-    if (!ScriptModuleBytecode::LoadModuleByteCode(GetScriptEngine(),
-                                                  request.ModuleName,
-                                                  candidateByteCode,
-                                                  &committedModule,
-                                                  angelScriptCode)) {
-        int restoreCode = 0;
-        std::string restoreError;
-        const bool restored = m_ModuleReplacer.RestoreSnapshot(*this,
-                                                               request.ModuleName,
-                                                               snapshot,
-                                                               restoreCode,
-                                                               restoreError);
-        return StoreResult(result,
-                           CKAS_EXECUTIONFAILED,
-                           angelScriptCode,
-                           restored
-                               ? "Failed to commit loaded module bytecode."
-                               : fmt::format("Failed to commit loaded module bytecode; rollback also failed: {}",
-                                             restoreError));
-    }
-
-    auto committedCache = std::make_shared<CachedScript>();
-    committedCache->name = request.ModuleName;
-    committedCache->module = committedModule;
-    m_ScriptCache.CacheScript(request.ModuleName, committedCache);
-    ClearModuleIncludeEdges(request.ModuleName);
-    SetModuleKind(request.ModuleName, ScriptModuleKind::Bytecode);
-    BumpModuleGeneration(request.ModuleName);
-    return StoreResult(result, CKAS_OK, angelScriptCode);
+    return m_ModuleBytecodeStore.Load(*this, options, result);
 }
 
 int ScriptManager::LoadModuleFromDefaultOrFile(const char *moduleName, const char *filename) {

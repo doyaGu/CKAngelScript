@@ -18,6 +18,7 @@
 #include "ScriptCKObjectRetainer.h"
 #include "ScriptEngineHost.h"
 #include "ScriptImportBinder.h"
+#include "ScriptModuleBytecodeStore.h"
 #include "ScriptModuleReplacer.h"
 #include "ScriptModuleStateStore.h"
 
@@ -46,6 +47,7 @@ struct ScriptEngineExtensionRegistration {
 
 class ScriptManager : public CKBaseManager {
     friend class ScriptImportBinder;
+    friend class ScriptModuleBytecodeStore;
     friend class ScriptModuleReplacer;
 
 public:
@@ -372,6 +374,7 @@ protected:
     ScriptHandleRegistry m_HandleRegistry;
     ScriptModuleStateStore m_ModuleStateStore;
     ScriptImportBinder m_ImportBinder;
+    ScriptModuleBytecodeStore m_ModuleBytecodeStore;
     ScriptModuleReplacer m_ModuleReplacer;
     std::vector<ScriptEngineExtensionRegistration> m_EngineExtensions;
     ScriptApiDiagnostics m_Diagnostics;

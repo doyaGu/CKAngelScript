@@ -54,6 +54,7 @@ set(CKAS_HEADERS
         ScriptApiSupport.h
         ScriptPublicOptions.h
         ScriptModuleBytecode.h
+        ScriptModuleBytecodeStore.h
         ScriptModuleStateStore.h
 )
 
@@ -65,6 +66,7 @@ set(CKAS_SOURCES
         ScriptApiSupport.cpp
         ScriptPublicOptions.cpp
         ScriptModuleBytecode.cpp
+        ScriptModuleBytecodeStore.cpp
         ScriptModuleStateStore.cpp
         ScriptImportBinder.cpp
         ScriptModuleReplacer.cpp
