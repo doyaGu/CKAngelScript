@@ -560,36 +560,37 @@ CKAS_STATUS ScriptManager::BorrowFunctionByDecl(const char *moduleName,
     return m_ModuleRegistry.BorrowFunctionByDecl(*this, moduleName, functionDecl, outFunction, result);
 }
 
-CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
-                                             CKAngelScriptMetadataCallback callback,
-                                             void *userData,
-                                             CKAngelScriptResult *result) {
+CKAS_STATUS ScriptModuleRegistry::EnumerateMetadata(ScriptManager &manager,
+                                                    const char *moduleName,
+                                                    CKAngelScriptMetadataCallback callback,
+                                                    void *userData,
+                                                    CKAngelScriptResult *result) {
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (!callback) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Metadata callback is required.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Metadata callback is required.");
     }
-    if (!GetScriptEngine()) {
-        return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
+    if (!manager.GetScriptEngine()) {
+        return manager.StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
 
     std::shared_ptr<CachedScript> cached = GetCachedScript(moduleName);
     if (!cached || !cached->GetScriptModule()) {
-        return StoreResult(result, CKAS_NOTFOUND, 0, "Module metadata was not found.");
+        return manager.StoreResult(result, CKAS_NOTFOUND, 0, "Module metadata was not found.");
     }
 
     asIScriptModule *module = cached->GetScriptModule();
-    auto finish = [this, result](CKAS_STATUS status) {
+    auto finish = [&manager, result](CKAS_STATUS status) {
         return status == CKAS_OK
-                   ? StoreResult(result, CKAS_OK)
-                   : StoreResult(result, status, 0, "Metadata enumeration stopped by callback.");
+                   ? manager.StoreResult(result, CKAS_OK)
+                   : manager.StoreResult(result, status, 0, "Metadata enumeration stopped by callback.");
     };
-    auto dispatchMetadata = [this, callback, userData](
+    auto dispatchMetadata = [&manager, callback, userData](
                                 const CKAngelScriptMetadataEntry &entry,
                                 CKDWORD metadataCount,
                                 const std::function<const char *(CKDWORD)> &metadataAt) {
-        ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
+        ScriptApiSupport::CallbackDepthScope callbackScope(manager.m_PublicCallbackDepth);
         return ScriptApiSupport::DispatchMetadata(entry, metadataCount, metadataAt, callback, userData);
     };
 
@@ -742,7 +743,14 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
         }
     }
 
-    return StoreResult(result, CKAS_OK);
+    return manager.StoreResult(result, CKAS_OK);
+}
+
+CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
+                                             CKAngelScriptMetadataCallback callback,
+                                             void *userData,
+                                             CKAngelScriptResult *result) {
+    return m_ModuleRegistry.EnumerateMetadata(*this, moduleName, callback, userData, result);
 }
 
 CKAS_STATUS ScriptManager::GetImportedFunctionCount(const char *moduleName,

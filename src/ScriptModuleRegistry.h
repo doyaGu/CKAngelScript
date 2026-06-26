@@ -55,6 +55,11 @@ public:
                                      const char *functionDecl,
                                      asIScriptFunction **outFunction,
                                      CKAngelScriptResult *result);
+    CKAS_STATUS EnumerateMetadata(ScriptManager &manager,
+                                  const char *moduleName,
+                                  CKAngelScriptMetadataCallback callback,
+                                  void *userData,
+                                  CKAngelScriptResult *result);
     CKAS_STATUS EnumerateIncludeEdges(ScriptManager &manager,
                                       const char *moduleName,
                                       CKAngelScriptIncludeEdgeCallback callback,
