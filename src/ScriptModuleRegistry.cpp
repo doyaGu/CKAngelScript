@@ -441,44 +441,46 @@ asIScriptModule *ScriptManager::GetModule(const char *moduleName) {
     return GetScript(moduleName);
 }
 
-CKAS_STATUS ScriptManager::BorrowModule(const char *moduleName,
-                                        asIScriptModule **outModule,
-                                        CKAngelScriptResult *result) {
+CKAS_STATUS ScriptModuleRegistry::BorrowModule(ScriptManager &manager,
+                                               const char *moduleName,
+                                               asIScriptModule **outModule,
+                                               CKAngelScriptResult *result) {
     if (outModule) {
         *outModule = nullptr;
     }
     if (!outModule) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module out pointer is required.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module out pointer is required.");
     }
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
-    if (!GetScriptEngine()) {
-        return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
+    if (!manager.GetScriptEngine()) {
+        return manager.StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
-    asIScriptModule *module = GetModule(moduleName);
+    asIScriptModule *module = manager.GetModule(moduleName);
     if (!module) {
-        return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not found.");
+        return manager.StoreResult(result, CKAS_NOTFOUND, 0, "Module was not found.");
     }
     *outModule = module;
-    return StoreResult(result, CKAS_OK);
+    return manager.StoreResult(result, CKAS_OK);
 }
 
-CKAS_STATUS ScriptManager::BorrowFunctionByName(const char *moduleName,
-                                                const char *functionName,
-                                                asIScriptFunction **outFunction,
-                                                CKAngelScriptResult *result) {
+CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByName(ScriptManager &manager,
+                                                       const char *moduleName,
+                                                       const char *functionName,
+                                                       asIScriptFunction **outFunction,
+                                                       CKAngelScriptResult *result) {
     if (outFunction) {
         *outFunction = nullptr;
     }
     if (!outFunction) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function out pointer is required.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function out pointer is required.");
     }
     if (!ScriptApiSupport::IsNonEmpty(functionName)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function name is required.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function name is required.");
     }
     asIScriptModule *module = nullptr;
-    CKAS_STATUS status = BorrowModule(moduleName, &module, result);
+    CKAS_STATUS status = BorrowModule(manager, moduleName, &module, result);
     if (status != CKAS_OK) {
         return status;
     }
@@ -494,39 +496,60 @@ CKAS_STATUS ScriptManager::BorrowFunctionByName(const char *moduleName,
         }
     }
     if (matchCount == 0) {
-        return StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
+        return manager.StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
     }
     if (matchCount > 1) {
-        return StoreResult(result, CKAS_AMBIGUOUS, 0, "Function name matched multiple overloads.");
+        return manager.StoreResult(result, CKAS_AMBIGUOUS, 0, "Function name matched multiple overloads.");
     }
     *outFunction = match;
-    return StoreResult(result, CKAS_OK);
+    return manager.StoreResult(result, CKAS_OK);
+}
+
+CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByDecl(ScriptManager &manager,
+                                                       const char *moduleName,
+                                                       const char *functionDecl,
+                                                       asIScriptFunction **outFunction,
+                                                       CKAngelScriptResult *result) {
+    if (outFunction) {
+        *outFunction = nullptr;
+    }
+    if (!outFunction) {
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function out pointer is required.");
+    }
+    if (!ScriptApiSupport::IsNonEmpty(functionDecl)) {
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function declaration is required.");
+    }
+    asIScriptModule *module = nullptr;
+    CKAS_STATUS status = BorrowModule(manager, moduleName, &module, result);
+    if (status != CKAS_OK) {
+        return status;
+    }
+    asIScriptFunction *function = module->GetFunctionByDecl(functionDecl);
+    if (!function) {
+        return manager.StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
+    }
+    *outFunction = function;
+    return manager.StoreResult(result, CKAS_OK);
+}
+
+CKAS_STATUS ScriptManager::BorrowModule(const char *moduleName,
+                                        asIScriptModule **outModule,
+                                        CKAngelScriptResult *result) {
+    return m_ModuleRegistry.BorrowModule(*this, moduleName, outModule, result);
+}
+
+CKAS_STATUS ScriptManager::BorrowFunctionByName(const char *moduleName,
+                                                const char *functionName,
+                                                asIScriptFunction **outFunction,
+                                                CKAngelScriptResult *result) {
+    return m_ModuleRegistry.BorrowFunctionByName(*this, moduleName, functionName, outFunction, result);
 }
 
 CKAS_STATUS ScriptManager::BorrowFunctionByDecl(const char *moduleName,
                                                 const char *functionDecl,
                                                 asIScriptFunction **outFunction,
                                                 CKAngelScriptResult *result) {
-    if (outFunction) {
-        *outFunction = nullptr;
-    }
-    if (!outFunction) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function out pointer is required.");
-    }
-    if (!ScriptApiSupport::IsNonEmpty(functionDecl)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function declaration is required.");
-    }
-    asIScriptModule *module = nullptr;
-    CKAS_STATUS status = BorrowModule(moduleName, &module, result);
-    if (status != CKAS_OK) {
-        return status;
-    }
-    asIScriptFunction *function = module->GetFunctionByDecl(functionDecl);
-    if (!function) {
-        return StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
-    }
-    *outFunction = function;
-    return StoreResult(result, CKAS_OK);
+    return m_ModuleRegistry.BorrowFunctionByDecl(*this, moduleName, functionDecl, outFunction, result);
 }
 
 CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,

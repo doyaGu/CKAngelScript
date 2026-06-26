@@ -39,6 +39,21 @@ public:
                                      const char *apiName,
                                      CKAngelScriptResult *result);
 
+    CKAS_STATUS BorrowModule(ScriptManager &manager,
+                             const char *moduleName,
+                             asIScriptModule **outModule,
+                             CKAngelScriptResult *result);
+    CKAS_STATUS BorrowFunctionByName(ScriptManager &manager,
+                                     const char *moduleName,
+                                     const char *functionName,
+                                     asIScriptFunction **outFunction,
+                                     CKAngelScriptResult *result);
+    CKAS_STATUS BorrowFunctionByDecl(ScriptManager &manager,
+                                     const char *moduleName,
+                                     const char *functionDecl,
+                                     asIScriptFunction **outFunction,
+                                     CKAngelScriptResult *result);
+
     int LoadFromDefaultOrFile(ScriptManager &manager, const char *moduleName, const char *filename);
     int LoadFromFiles(ScriptManager &manager, const char *moduleName, const char **filenames, size_t count);
     int CompileFromMemory(ScriptManager &manager, const char *moduleName, const char *scriptCode);
