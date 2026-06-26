@@ -70,6 +70,8 @@ private:
     ModuleState *FindState(const char *moduleName);
     const ModuleState *FindState(const char *moduleName) const;
     ModuleState &EnsureState(const char *moduleName);
+    void MarkModuleLoaded(const char *moduleName);
+    void MarkModuleUnloaded(const char *moduleName);
 
     std::unordered_map<std::string, ModuleState> m_States;
     std::vector<std::string> m_ModuleOrder;

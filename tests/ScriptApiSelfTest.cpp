@@ -1875,12 +1875,60 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    constexpr const char *secondImportConsumerModuleName = "__CKAS_ImportSecondConsumer";
+    if (api->CompileModule(secondImportConsumerModuleName,
+                           importConsumerSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->BindAllImportedFunctions(secondImportConsumerModuleName, &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected a second import consumer to bind.";
+        api->UnloadModule(secondImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     if (api->CompileModule(importProviderModuleName,
+                           importProviderReplacementSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_INUSE ||
+        !CkasStringContains(result.ErrorMessage, importConsumerModuleName)) {
+        error = "CKAngelScript API self-test expected provider replacement diagnostics to use current consumer order.";
+        api->UnloadModule(secondImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->UnloadModule(importConsumerModuleName, &result) != CKAS_OK ||
+        api->CompileModule(importConsumerModuleName,
+                           importConsumerSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->BindAllImportedFunctions(importConsumerModuleName, &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected import consumer unload/reload to update module order.";
+        api->UnloadModule(secondImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->CompileModule(importProviderModuleName,
+                           importProviderReplacementSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_INUSE ||
+        !CkasStringContains(result.ErrorMessage, secondImportConsumerModuleName)) {
+        error = "CKAngelScript API self-test expected reloaded import consumers to move after already-loaded consumers.";
+        api->UnloadModule(secondImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->UnloadModule(secondImportConsumerModuleName, &result) != CKAS_OK ||
+        api->CompileModule(importProviderModuleName,
                            importProviderReplacementSource,
                            CKAS_COMPILE_REPLACEEXISTING,
                            &result) != CKAS_INUSE ||
         api->UnloadModule(importProviderModuleName, &result) != CKAS_INUSE) {
         error = "CKAngelScript API self-test expected bound import consumers to block provider replacement.";
+        api->UnloadModule(secondImportConsumerModuleName, nullptr);
         api->UnloadModule(importConsumerModuleName, nullptr);
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;

@@ -58,6 +58,11 @@ void ScriptModuleStateStore::SetKind(const char *moduleName, ScriptModuleKind ki
         state.Kind = kind;
         state.FingerprintDirty = true;
     }
+    if (kind == ScriptModuleKind::RawUnknown) {
+        MarkModuleUnloaded(moduleName);
+    } else {
+        MarkModuleLoaded(moduleName);
+    }
 }
 
 void ScriptModuleStateStore::SetIncludeEdges(const char *moduleName,
@@ -302,9 +307,22 @@ const ScriptModuleStateStore::ModuleState *ScriptModuleStateStore::FindState(
 
 ScriptModuleStateStore::ModuleState &ScriptModuleStateStore::EnsureState(const char *moduleName) {
     const std::string key = moduleName ? moduleName : "";
-    const auto inserted = m_States.emplace(key, ModuleState());
-    if (inserted.second) {
-        m_ModuleOrder.push_back(key);
+    return m_States.emplace(key, ModuleState()).first->second;
+}
+
+void ScriptModuleStateStore::MarkModuleLoaded(const char *moduleName) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
+        return;
     }
-    return inserted.first->second;
+    m_ModuleOrder.erase(std::remove(m_ModuleOrder.begin(), m_ModuleOrder.end(), moduleName),
+                        m_ModuleOrder.end());
+    m_ModuleOrder.emplace_back(moduleName);
+}
+
+void ScriptModuleStateStore::MarkModuleUnloaded(const char *moduleName) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
+        return;
+    }
+    m_ModuleOrder.erase(std::remove(m_ModuleOrder.begin(), m_ModuleOrder.end(), moduleName),
+                        m_ModuleOrder.end());
 }
