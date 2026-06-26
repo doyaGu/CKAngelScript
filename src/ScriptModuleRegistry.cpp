@@ -582,335 +582,42 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
 CKAS_STATUS ScriptManager::GetImportedFunctionCount(const char *moduleName,
                                                     CKDWORD *outCount,
                                                     CKAngelScriptResult *result) {
-    if (outCount) {
-        *outCount = 0;
-    }
-    if (!outCount) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Import count out pointer is required.");
-    }
-    asIScriptModule *module = nullptr;
-    const CKAS_STATUS status = BorrowModule(moduleName, &module, result);
-    if (status != CKAS_OK) {
-        return status;
-    }
-    *outCount = static_cast<CKDWORD>(module->GetImportedFunctionCount());
-    return StoreResult(result, CKAS_OK);
+    return m_ImportBinder.GetImportedFunctionCount(*this, moduleName, outCount, result);
 }
 
 CKAS_STATUS ScriptManager::EnumerateImportedFunctions(const char *moduleName,
                                                       CKAngelScriptImportCallback callback,
                                                       void *userData,
                                                       CKAngelScriptResult *result) {
-    if (!callback) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Import callback is required.");
-    }
-    asIScriptModule *module = nullptr;
-    const CKAS_STATUS status = BorrowModule(moduleName, &module, result);
-    if (status != CKAS_OK) {
-        return status;
-    }
-
-    const asUINT count = module->GetImportedFunctionCount();
-    for (asUINT i = 0; i < count; ++i) {
-        CKAngelScriptImportEntry entry = {};
-        entry.Size = sizeof(entry);
-        entry.Index = static_cast<CKDWORD>(i);
-        entry.Declaration = module->GetImportedFunctionDeclaration(i);
-        entry.SourceModuleName = module->GetImportedFunctionSourceModule(i);
-        CKAS_STATUS callbackStatus = CKAS_OK;
-        {
-            ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
-            callbackStatus = ScriptApiSupport::DispatchImport(entry, callback, userData);
-        }
-        if (callbackStatus != CKAS_OK) {
-            return StoreResult(result,
-                               callbackStatus,
-                               0,
-                               "Import enumeration stopped by callback.");
-        }
-    }
-    return StoreResult(result, CKAS_OK);
+    return m_ImportBinder.EnumerateImportedFunctions(*this, moduleName, callback, userData, result);
 }
 
 CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOptions &options,
                                                 CKAngelScriptResult *result) {
-    if (IsModuleMutationBlockedByCallback()) {
-        return RejectModuleMutationDuringCallback("BindImportedFunction", result);
-    }
-    ScriptPublicOptions::ImportBindRequest request;
-    std::string errorMessage;
-    CKAS_STATUS optionStatus = ScriptPublicOptions::DecodeImportBindOptions(options, request, errorMessage);
-    if (optionStatus != CKAS_OK) {
-        return StoreResult(result, optionStatus, 0, errorMessage);
-    }
-
-    asIScriptModule *importModule = nullptr;
-    CKAS_STATUS status = BorrowModule(request.ImportModuleName, &importModule, result);
-    if (status != CKAS_OK) {
-        return status;
-    }
-    const asUINT importCount = importModule->GetImportedFunctionCount();
-    if (request.ImportIndex >= importCount) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Import index is out of range.");
-    }
-
-    const char *defaultSourceModuleName = importModule->GetImportedFunctionSourceModule(request.ImportIndex);
-    const char *defaultFunctionDecl = importModule->GetImportedFunctionDeclaration(request.ImportIndex);
-    const std::string sourceModuleName =
-        ScriptApiSupport::IsNonEmpty(request.SourceModuleName)
-            ? request.SourceModuleName
-            : (defaultSourceModuleName ? defaultSourceModuleName : "");
-    const std::string functionDecl =
-        ScriptApiSupport::IsNonEmpty(request.FunctionDecl)
-            ? request.FunctionDecl
-            : (defaultFunctionDecl ? defaultFunctionDecl : "");
-    if (sourceModuleName.empty() || functionDecl.empty()) {
-        return StoreResult(result,
-                           CKAS_INVALIDARGUMENT,
-                           0,
-                           "Import source module and function declaration are required.");
-    }
-
-    asIScriptModule *sourceModule = GetModule(sourceModuleName.c_str());
-    if (!sourceModule) {
-        return StoreResult(result,
-                           CKAS_NOTFOUND,
-                           0,
-                           fmt::format("Import source module '{}' was not found.", sourceModuleName));
-    }
-    asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl.c_str());
-    if (!targetFunction) {
-        return StoreResult(result,
-                           CKAS_NOTFOUND,
-                           0,
-                           fmt::format("Import target function '{}' was not found in module '{}'.",
-                                       functionDecl,
-                                       sourceModuleName));
-    }
-
-    std::vector<ScriptImportBindingEdge> previousBinding =
-        m_ModuleStateStore.GetImportBindingForModuleIndex(request.ImportModuleName, request.ImportIndex);
-
-    const int bindResult = importModule->BindImportedFunction(request.ImportIndex, targetFunction);
-    if (bindResult < 0) {
-        status = ScriptApiSupport::StatusFromImportBindResult(bindResult);
-        if (!previousBinding.empty()) {
-            int rollbackCode = 0;
-            std::string rollbackError;
-            if (m_ImportBinder.Rebind(*this, previousBinding, rollbackCode, rollbackError)) {
-                return StoreResult(result,
-                                   status,
-                                   bindResult,
-                                   "Failed to bind imported function; previous binding was restored.");
-            }
-            m_ModuleStateStore.RemoveImportBinding(request.ImportModuleName, request.ImportIndex);
-            BumpModuleGeneration(request.ImportModuleName);
-            return StoreResult(result,
-                               CKAS_EXECUTIONFAILED,
-                               rollbackCode,
-                               fmt::format("Failed to bind imported function; rollback also failed: {}",
-                                           rollbackError));
-        }
-        m_ModuleStateStore.RemoveImportBinding(request.ImportModuleName, request.ImportIndex);
-        BumpModuleGeneration(request.ImportModuleName);
-        return StoreResult(result, status, bindResult, "Failed to bind imported function.");
-    }
-    m_ModuleStateStore.RecordImportBinding(request.ImportModuleName,
-                                           request.ImportIndex,
-                                           sourceModuleName.c_str(),
-                                           functionDecl.c_str());
-    BumpModuleGeneration(request.ImportModuleName);
-    return StoreResult(result, CKAS_OK, bindResult);
+    return m_ImportBinder.BindImportedFunction(*this, options, result);
 }
 
 CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
                                                     CKAngelScriptResult *result) {
-    if (IsModuleMutationBlockedByCallback()) {
-        return RejectModuleMutationDuringCallback("BindAllImportedFunctions", result);
-    }
-    asIScriptModule *module = nullptr;
-    const CKAS_STATUS borrowStatus = BorrowModule(moduleName, &module, result);
-    if (borrowStatus != CKAS_OK) {
-        return borrowStatus;
-    }
-
-    const asUINT count = module->GetImportedFunctionCount();
-    struct ResolvedImportBinding {
-        CKDWORD Index = 0;
-        std::string SourceModuleName;
-        std::string FunctionDecl;
-        asIScriptFunction *TargetFunction = nullptr;
-    };
-    std::vector<ResolvedImportBinding> resolvedBindings;
-    resolvedBindings.reserve(count);
-    for (asUINT i = 0; i < count; ++i) {
-        const char *sourceModuleNameView = module->GetImportedFunctionSourceModule(i);
-        const char *functionDeclView = module->GetImportedFunctionDeclaration(i);
-        const std::string sourceModuleName = sourceModuleNameView ? sourceModuleNameView : "";
-        const std::string functionDecl = functionDeclView ? functionDeclView : "";
-        if (sourceModuleName.empty() || functionDecl.empty()) {
-            return StoreResult(result,
-                               CKAS_INVALIDARGUMENT,
-                               0,
-                               fmt::format("Import {} is missing a source module or declaration.", i));
-        }
-        asIScriptModule *sourceModule = GetModule(sourceModuleName.c_str());
-        if (!sourceModule) {
-            return StoreResult(result,
-                               CKAS_NOTFOUND,
-                               0,
-                               fmt::format("Import {} source module '{}' was not found.", i, sourceModuleName));
-        }
-        asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl.c_str());
-        if (!targetFunction) {
-            return StoreResult(result,
-                               CKAS_NOTFOUND,
-                               0,
-                               fmt::format("Import {} target function '{}' was not found in module '{}'.",
-                                           i,
-                                           functionDecl,
-                                           sourceModuleName));
-        }
-        const asEFuncType functionType = targetFunction->GetFuncType();
-        if (functionType != asFUNC_SCRIPT && functionType != asFUNC_SYSTEM) {
-            return StoreResult(result,
-                               CKAS_UNSUPPORTED,
-                               asNOT_SUPPORTED,
-                               fmt::format("Import {} target function type is not supported.", i));
-        }
-        ResolvedImportBinding binding;
-        binding.Index = static_cast<CKDWORD>(i);
-        binding.SourceModuleName = sourceModuleName;
-        binding.FunctionDecl = functionDecl;
-        binding.TargetFunction = targetFunction;
-        resolvedBindings.push_back(binding);
-    }
-
-    const std::vector<ScriptImportBindingEdge> previousBindings =
-        m_ModuleStateStore.GetImportBindingsForModule(moduleName);
-    for (const ResolvedImportBinding &binding : resolvedBindings) {
-        m_ModuleStateStore.RemoveImportBinding(moduleName, binding.Index);
-        const int bindResult = module->BindImportedFunction(binding.Index, binding.TargetFunction);
-        if (bindResult < 0) {
-            const CKAS_STATUS status = ScriptApiSupport::StatusFromImportBindResult(bindResult);
-            module->UnbindAllImportedFunctions();
-            m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
-
-            int rollbackCode = 0;
-            std::string rollbackError;
-            const bool restored = m_ImportBinder.Rebind(*this,
-                                                        previousBindings,
-                                                        rollbackCode,
-                                                        rollbackError);
-            if (!restored) {
-                BumpModuleGeneration(moduleName);
-                return StoreResult(result,
-                                   CKAS_EXECUTIONFAILED,
-                                   rollbackCode,
-                                   fmt::format("Failed to bind import {}; rollback also failed: {}",
-                                               binding.Index,
-                                               rollbackError));
-            }
-            m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
-            m_ModuleStateStore.RestoreImportBindingsForModule(moduleName, previousBindings);
-            return StoreResult(result,
-                               status,
-                               bindResult,
-                               fmt::format("Failed to bind import {}.", binding.Index));
-        }
-        m_ModuleStateStore.RecordImportBinding(moduleName,
-                                               binding.Index,
-                                               binding.SourceModuleName.c_str(),
-                                               binding.FunctionDecl.c_str());
-    }
-    if (!resolvedBindings.empty()) {
-        BumpModuleGeneration(moduleName);
-    }
-    return StoreResult(result, CKAS_OK);
+    return m_ImportBinder.BindAllImportedFunctions(*this, moduleName, result);
 }
 
 CKAS_STATUS ScriptManager::UnbindImportedFunction(const char *moduleName,
                                                   CKDWORD importIndex,
                                                   CKAngelScriptResult *result) {
-    if (IsModuleMutationBlockedByCallback()) {
-        return RejectModuleMutationDuringCallback("UnbindImportedFunction", result);
-    }
-    asIScriptModule *module = nullptr;
-    CKAS_STATUS status = BorrowModule(moduleName, &module, result);
-    if (status != CKAS_OK) {
-        return status;
-    }
-    if (importIndex >= module->GetImportedFunctionCount()) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Import index is out of range.");
-    }
-    const int unbindResult = module->UnbindImportedFunction(importIndex);
-    if (unbindResult < 0) {
-        status = ScriptApiSupport::StatusFromImportBindResult(unbindResult);
-        return StoreResult(result, status, unbindResult, "Failed to unbind imported function.");
-    }
-    m_ModuleStateStore.RemoveImportBinding(moduleName, importIndex);
-    BumpModuleGeneration(moduleName);
-    return StoreResult(result, CKAS_OK, unbindResult);
+    return m_ImportBinder.UnbindImportedFunction(*this, moduleName, importIndex, result);
 }
 
 CKAS_STATUS ScriptManager::UnbindAllImportedFunctions(const char *moduleName,
                                                       CKAngelScriptResult *result) {
-    if (IsModuleMutationBlockedByCallback()) {
-        return RejectModuleMutationDuringCallback("UnbindAllImportedFunctions", result);
-    }
-    asIScriptModule *module = nullptr;
-    CKAS_STATUS status = BorrowModule(moduleName, &module, result);
-    if (status != CKAS_OK) {
-        return status;
-    }
-    const int unbindResult = module->UnbindAllImportedFunctions();
-    if (unbindResult < 0) {
-        status = ScriptApiSupport::StatusFromImportBindResult(unbindResult);
-        return StoreResult(result, status, unbindResult, "Failed to unbind imported functions.");
-    }
-    m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
-    if (module->GetImportedFunctionCount() > 0) {
-        BumpModuleGeneration(moduleName);
-    }
-    return StoreResult(result, CKAS_OK, unbindResult);
+    return m_ImportBinder.UnbindAllImportedFunctions(*this, moduleName, result);
 }
 
 CKAS_STATUS ScriptManager::EnumerateBoundImportEdges(const char *moduleName,
                                                      CKAngelScriptBoundImportEdgeCallback callback,
                                                      void *userData,
                                                      CKAngelScriptResult *result) {
-    if (!callback) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bound import edge callback is required.");
-    }
-    asIScriptModule *module = nullptr;
-    const CKAS_STATUS borrowStatus = BorrowModule(moduleName, &module, result);
-    if (borrowStatus != CKAS_OK) {
-        return borrowStatus;
-    }
-    (void)module;
-
-    const std::vector<ScriptImportBindingEdge> edges =
-        m_ModuleStateStore.GetImportBindingsForModule(moduleName);
-    for (const ScriptImportBindingEdge &edge : edges) {
-        CKAngelScriptBoundImportEdge publicEdge = {};
-        publicEdge.Size = sizeof(publicEdge);
-        publicEdge.ImportModuleName = edge.ImportModuleName.c_str();
-        publicEdge.ImportIndex = edge.ImportIndex;
-        publicEdge.SourceModuleName = edge.SourceModuleName.c_str();
-        publicEdge.FunctionDecl = edge.FunctionDecl.c_str();
-        CKAS_STATUS callbackStatus = CKAS_OK;
-        {
-            ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
-            callbackStatus = ScriptApiSupport::DispatchBoundImportEdge(publicEdge, callback, userData);
-        }
-        if (callbackStatus != CKAS_OK) {
-            return StoreResult(result,
-                               callbackStatus,
-                               0,
-                               "Bound import edge enumeration stopped by callback.");
-        }
-    }
-    return StoreResult(result, CKAS_OK);
+    return m_ImportBinder.EnumerateBoundImportEdges(*this, moduleName, callback, userData, result);
 }
 
 CKAS_STATUS ScriptManager::EnumerateModuleIncludeEdges(const char *moduleName,

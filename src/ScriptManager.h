@@ -45,6 +45,7 @@ struct ScriptEngineExtensionRegistration {
 };
 
 class ScriptManager : public CKBaseManager {
+    friend class ScriptImportBinder;
     friend class ScriptModuleReplacer;
 
 public:
