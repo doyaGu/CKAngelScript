@@ -145,7 +145,7 @@ CKAS_STATUS ScriptImportBinder::BindImportedFunction(ScriptManager &manager,
                                            "Failed to bind imported function; previous binding was restored.");
             }
             manager.m_ModuleStateStore.RemoveImportBinding(request.ImportModuleName, request.ImportIndex);
-            manager.BumpModuleGeneration(request.ImportModuleName);
+            manager.m_ModuleStateStore.BumpGeneration(request.ImportModuleName);
             return manager.StoreResult(result,
                                        CKAS_EXECUTIONFAILED,
                                        rollbackCode,
@@ -153,14 +153,14 @@ CKAS_STATUS ScriptImportBinder::BindImportedFunction(ScriptManager &manager,
                                                    rollbackError));
         }
         manager.m_ModuleStateStore.RemoveImportBinding(request.ImportModuleName, request.ImportIndex);
-        manager.BumpModuleGeneration(request.ImportModuleName);
+        manager.m_ModuleStateStore.BumpGeneration(request.ImportModuleName);
         return manager.StoreResult(result, status, bindResult, "Failed to bind imported function.");
     }
     manager.m_ModuleStateStore.RecordImportBinding(request.ImportModuleName,
                                                    request.ImportIndex,
                                                    sourceModuleName.c_str(),
                                                    functionDecl.c_str());
-    manager.BumpModuleGeneration(request.ImportModuleName);
+    manager.m_ModuleStateStore.BumpGeneration(request.ImportModuleName);
     return manager.StoreResult(result, CKAS_OK, bindResult);
 }
 
@@ -241,7 +241,7 @@ CKAS_STATUS ScriptImportBinder::BindAllImportedFunctions(ScriptManager &manager,
                                          rollbackCode,
                                          rollbackError);
             if (!restored) {
-                manager.BumpModuleGeneration(moduleName);
+                manager.m_ModuleStateStore.BumpGeneration(moduleName);
                 return manager.StoreResult(result,
                                            CKAS_EXECUTIONFAILED,
                                            rollbackCode,
@@ -261,7 +261,7 @@ CKAS_STATUS ScriptImportBinder::BindAllImportedFunctions(ScriptManager &manager,
                                                        binding.FunctionDecl.c_str());
     }
     if (!resolvedBindings.empty()) {
-        manager.BumpModuleGeneration(moduleName);
+        manager.m_ModuleStateStore.BumpGeneration(moduleName);
     }
     return manager.StoreResult(result, CKAS_OK);
 }
@@ -287,7 +287,7 @@ CKAS_STATUS ScriptImportBinder::UnbindImportedFunction(ScriptManager &manager,
         return manager.StoreResult(result, status, unbindResult, "Failed to unbind imported function.");
     }
     manager.m_ModuleStateStore.RemoveImportBinding(moduleName, importIndex);
-    manager.BumpModuleGeneration(moduleName);
+    manager.m_ModuleStateStore.BumpGeneration(moduleName);
     return manager.StoreResult(result, CKAS_OK, unbindResult);
 }
 
@@ -309,7 +309,7 @@ CKAS_STATUS ScriptImportBinder::UnbindAllImportedFunctions(ScriptManager &manage
     }
     manager.m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
     if (module->GetImportedFunctionCount() > 0) {
-        manager.BumpModuleGeneration(moduleName);
+        manager.m_ModuleStateStore.BumpGeneration(moduleName);
     }
     return manager.StoreResult(result, CKAS_OK, unbindResult);
 }

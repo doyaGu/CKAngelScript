@@ -263,9 +263,9 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
     committedCache->module = committedModule;
     manager.m_ModuleRegistry.CacheScript(moduleName, committedCache);
     candidate->Discard();
-    manager.SetModuleIncludeEdges(moduleName, committedCache->includeEdges);
-    manager.SetModuleKind(moduleName, ScriptModuleKind::Source);
-    manager.BumpModuleGeneration(moduleName);
+    manager.m_ModuleStateStore.SetIncludeEdges(moduleName, committedCache->includeEdges);
+    manager.m_ModuleStateStore.SetKind(moduleName, ScriptModuleKind::Source);
+    manager.m_ModuleStateStore.BumpGeneration(moduleName);
     return manager.StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
 
@@ -292,8 +292,8 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromBytecode(
     committedCache->name = moduleName ? moduleName : "";
     committedCache->module = committedModule;
     manager.m_ModuleRegistry.CacheScript(moduleName, committedCache);
-    manager.ClearModuleIncludeEdges(moduleName);
-    manager.SetModuleKind(moduleName, ScriptModuleKind::Bytecode);
-    manager.BumpModuleGeneration(moduleName);
+    manager.m_ModuleStateStore.ClearIncludeEdges(moduleName);
+    manager.m_ModuleStateStore.SetKind(moduleName, ScriptModuleKind::Bytecode);
+    manager.m_ModuleStateStore.BumpGeneration(moduleName);
     return manager.StoreResult(result, CKAS_OK, angelScriptCode);
 }
