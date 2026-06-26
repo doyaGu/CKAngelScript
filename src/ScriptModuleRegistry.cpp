@@ -766,42 +766,75 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
 CKAS_STATUS ScriptManager::GetImportedFunctionCount(const char *moduleName,
                                                     CKDWORD *outCount,
                                                     CKAngelScriptResult *result) {
-    return m_ImportBinder.GetImportedFunctionCount(*this, moduleName, outCount, result);
+    ScriptImportBinder::ReadContext context = {
+        *this,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ImportBinder.GetImportedFunctionCount(context, moduleName, outCount, result);
 }
 
 CKAS_STATUS ScriptManager::EnumerateImportedFunctions(const char *moduleName,
                                                       CKAngelScriptImportCallback callback,
                                                       void *userData,
                                                       CKAngelScriptResult *result) {
-    return m_ImportBinder.EnumerateImportedFunctions(*this, moduleName, callback, userData, result);
+    ScriptImportBinder::ReadContext context = {
+        *this,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ImportBinder.EnumerateImportedFunctions(context, moduleName, callback, userData, result);
 }
 
 CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOptions &options,
                                                 CKAngelScriptResult *result) {
-    return m_ImportBinder.BindImportedFunction(*this, options, result);
+    ScriptImportBinder::BindContext context = {
+        *this,
+        m_ModuleStateStore,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ImportBinder.BindImportedFunction(context, options, result);
 }
 
 CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
                                                     CKAngelScriptResult *result) {
-    return m_ImportBinder.BindAllImportedFunctions(*this, moduleName, result);
+    ScriptImportBinder::BindContext context = {
+        *this,
+        m_ModuleStateStore,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ImportBinder.BindAllImportedFunctions(context, moduleName, result);
 }
 
 CKAS_STATUS ScriptManager::UnbindImportedFunction(const char *moduleName,
                                                   CKDWORD importIndex,
                                                   CKAngelScriptResult *result) {
-    return m_ImportBinder.UnbindImportedFunction(*this, moduleName, importIndex, result);
+    ScriptImportBinder::BindContext context = {
+        *this,
+        m_ModuleStateStore,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ImportBinder.UnbindImportedFunction(context, moduleName, importIndex, result);
 }
 
 CKAS_STATUS ScriptManager::UnbindAllImportedFunctions(const char *moduleName,
                                                       CKAngelScriptResult *result) {
-    return m_ImportBinder.UnbindAllImportedFunctions(*this, moduleName, result);
+    ScriptImportBinder::BindContext context = {
+        *this,
+        m_ModuleStateStore,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ImportBinder.UnbindAllImportedFunctions(context, moduleName, result);
 }
 
 CKAS_STATUS ScriptManager::EnumerateBoundImportEdges(const char *moduleName,
                                                      CKAngelScriptBoundImportEdgeCallback callback,
                                                      void *userData,
                                                      CKAngelScriptResult *result) {
-    return m_ImportBinder.EnumerateBoundImportEdges(*this, moduleName, callback, userData, result);
+    ScriptImportBinder::BindContext context = {
+        *this,
+        m_ModuleStateStore,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ImportBinder.EnumerateBoundImportEdges(context, moduleName, callback, userData, result);
 }
 
 CKAS_STATUS ScriptModuleRegistry::EnumerateIncludeEdges(ScriptManager &manager,

@@ -37,7 +37,6 @@ class ScriptRuntime;
 class ScriptInvoker;
 
 class ScriptManager : public CKBaseManager {
-    friend class ScriptImportBinder;
     friend class ScriptModuleRegistry;
 
 public:

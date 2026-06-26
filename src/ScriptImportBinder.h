@@ -6,33 +6,47 @@
 
 #include "ScriptModuleStateStore.h"
 
+class ScriptApiDiagnostics;
 class ScriptManager;
 
 class ScriptImportBinder {
 public:
-    CKAS_STATUS GetImportedFunctionCount(ScriptManager &manager,
+    struct ReadContext {
+        ScriptManager &Manager;
+        ScriptApiDiagnostics &Diagnostics;
+        int &PublicCallbackDepth;
+    };
+
+    struct BindContext {
+        ScriptManager &Manager;
+        ScriptModuleStateStore &StateStore;
+        ScriptApiDiagnostics &Diagnostics;
+        int &PublicCallbackDepth;
+    };
+
+    CKAS_STATUS GetImportedFunctionCount(ReadContext &context,
                                          const char *moduleName,
                                          CKDWORD *outCount,
                                          CKAngelScriptResult *result);
-    CKAS_STATUS EnumerateImportedFunctions(ScriptManager &manager,
+    CKAS_STATUS EnumerateImportedFunctions(ReadContext &context,
                                            const char *moduleName,
                                            CKAngelScriptImportCallback callback,
                                            void *userData,
                                            CKAngelScriptResult *result);
-    CKAS_STATUS BindImportedFunction(ScriptManager &manager,
+    CKAS_STATUS BindImportedFunction(BindContext &context,
                                      const CKAngelScriptImportBindOptions &options,
                                      CKAngelScriptResult *result);
-    CKAS_STATUS BindAllImportedFunctions(ScriptManager &manager,
+    CKAS_STATUS BindAllImportedFunctions(BindContext &context,
                                          const char *moduleName,
                                          CKAngelScriptResult *result);
-    CKAS_STATUS UnbindImportedFunction(ScriptManager &manager,
+    CKAS_STATUS UnbindImportedFunction(BindContext &context,
                                        const char *moduleName,
                                        CKDWORD importIndex,
                                        CKAngelScriptResult *result);
-    CKAS_STATUS UnbindAllImportedFunctions(ScriptManager &manager,
+    CKAS_STATUS UnbindAllImportedFunctions(BindContext &context,
                                            const char *moduleName,
                                            CKAngelScriptResult *result);
-    CKAS_STATUS EnumerateBoundImportEdges(ScriptManager &manager,
+    CKAS_STATUS EnumerateBoundImportEdges(BindContext &context,
                                           const char *moduleName,
                                           CKAngelScriptBoundImportEdgeCallback callback,
                                           void *userData,
