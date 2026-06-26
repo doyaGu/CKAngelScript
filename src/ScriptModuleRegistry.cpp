@@ -891,12 +891,25 @@ CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
 
 CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOptions &options,
                                               CKAngelScriptResult *result) {
-    return m_ModuleBytecodeStore.Save(*this, options, result);
+    ScriptModuleBytecodeStore::SaveContext context = {
+        *this,
+        m_Diagnostics,
+        m_PublicCallbackDepth,
+        m_BytecodeCallbackDepth};
+    return m_ModuleBytecodeStore.Save(context, options, result);
 }
 
 CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOptions &options,
                                               CKAngelScriptResult *result) {
-    return m_ModuleBytecodeStore.Load(*this, options, result);
+    ScriptModuleBytecodeStore::LoadContext context = {
+        *this,
+        m_ModuleRegistry,
+        m_ModuleStateStore,
+        m_HandleRegistry,
+        m_Diagnostics,
+        m_PublicCallbackDepth,
+        m_BytecodeCallbackDepth};
+    return m_ModuleBytecodeStore.Load(context, options, result);
 }
 
 asIScriptModule *ScriptManager::GetScript(const char *scriptName) {

@@ -3,14 +3,35 @@
 
 #include "CKAngelScript.h"
 
+class ScriptApiDiagnostics;
+class ScriptHandleRegistry;
 class ScriptManager;
+class ScriptModuleRegistry;
+class ScriptModuleStateStore;
 
 class ScriptModuleBytecodeStore {
 public:
-    CKAS_STATUS Save(ScriptManager &manager,
+    struct SaveContext {
+        ScriptManager &Manager;
+        ScriptApiDiagnostics &Diagnostics;
+        int &PublicCallbackDepth;
+        int &BytecodeCallbackDepth;
+    };
+
+    struct LoadContext {
+        ScriptManager &Manager;
+        ScriptModuleRegistry &ModuleRegistry;
+        ScriptModuleStateStore &ModuleStateStore;
+        ScriptHandleRegistry &HandleRegistry;
+        ScriptApiDiagnostics &Diagnostics;
+        int &PublicCallbackDepth;
+        int &BytecodeCallbackDepth;
+    };
+
+    CKAS_STATUS Save(SaveContext &context,
                      const CKAngelScriptBytecodeSaveOptions &options,
                      CKAngelScriptResult *result);
-    CKAS_STATUS Load(ScriptManager &manager,
+    CKAS_STATUS Load(LoadContext &context,
                      const CKAngelScriptBytecodeLoadOptions &options,
                      CKAngelScriptResult *result);
 };
