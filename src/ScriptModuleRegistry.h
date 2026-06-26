@@ -53,6 +53,15 @@ public:
                                      const char *functionDecl,
                                      asIScriptFunction **outFunction,
                                      CKAngelScriptResult *result);
+    CKAS_STATUS EnumerateIncludeEdges(ScriptManager &manager,
+                                      const char *moduleName,
+                                      CKAngelScriptIncludeEdgeCallback callback,
+                                      void *userData,
+                                      CKAngelScriptResult *result);
+    CKAS_STATUS GetFingerprint(ScriptManager &manager,
+                               const char *moduleName,
+                               CKAngelScriptModuleFingerprint *outFingerprint,
+                               CKAngelScriptResult *result);
 
     int LoadFromDefaultOrFile(ScriptManager &manager, const char *moduleName, const char *filename);
     int LoadFromFiles(ScriptManager &manager, const char *moduleName, const char **filenames, size_t count);

@@ -778,24 +778,25 @@ CKAS_STATUS ScriptManager::EnumerateBoundImportEdges(const char *moduleName,
     return m_ImportBinder.EnumerateBoundImportEdges(*this, moduleName, callback, userData, result);
 }
 
-CKAS_STATUS ScriptManager::EnumerateModuleIncludeEdges(const char *moduleName,
-                                                       CKAngelScriptIncludeEdgeCallback callback,
-                                                       void *userData,
-                                                       CKAngelScriptResult *result) {
+CKAS_STATUS ScriptModuleRegistry::EnumerateIncludeEdges(ScriptManager &manager,
+                                                        const char *moduleName,
+                                                        CKAngelScriptIncludeEdgeCallback callback,
+                                                        void *userData,
+                                                        CKAngelScriptResult *result) {
     if (!callback) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Include edge callback is required.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Include edge callback is required.");
     }
     asIScriptModule *module = nullptr;
-    const CKAS_STATUS borrowStatus = BorrowModule(moduleName, &module, result);
+    const CKAS_STATUS borrowStatus = BorrowModule(manager, moduleName, &module, result);
     if (borrowStatus != CKAS_OK) {
         return borrowStatus;
     }
     (void)module;
 
     const std::vector<ScriptIncludeEdge> *includeEdges =
-        m_ModuleStateStore.FindIncludeEdges(moduleName);
+        manager.m_ModuleStateStore.FindIncludeEdges(moduleName);
     if (!includeEdges) {
-        return StoreResult(result, CKAS_OK);
+        return manager.StoreResult(result, CKAS_OK);
     }
 
     for (const ScriptIncludeEdge &edge : *includeEdges) {
@@ -807,44 +808,59 @@ CKAS_STATUS ScriptManager::EnumerateModuleIncludeEdges(const char *moduleName,
         publicEdge.ResolvedFromSnapshot = edge.ResolvedFromSnapshot ? TRUE : FALSE;
         CKAS_STATUS callbackStatus = CKAS_OK;
         {
-            ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
+            ScriptApiSupport::CallbackDepthScope callbackScope(manager.m_PublicCallbackDepth);
             callbackStatus = ScriptApiSupport::DispatchIncludeEdge(publicEdge, callback, userData);
         }
         if (callbackStatus != CKAS_OK) {
-            return StoreResult(result,
-                               callbackStatus,
-                               0,
-                               "Include edge enumeration stopped by callback.");
+            return manager.StoreResult(result,
+                                       callbackStatus,
+                                       0,
+                                       "Include edge enumeration stopped by callback.");
         }
     }
-    return StoreResult(result, CKAS_OK);
+    return manager.StoreResult(result, CKAS_OK);
 }
 
-CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
-                                                CKAngelScriptModuleFingerprint *outFingerprint,
-                                                CKAngelScriptResult *result) {
+CKAS_STATUS ScriptModuleRegistry::GetFingerprint(ScriptManager &manager,
+                                                 const char *moduleName,
+                                                 CKAngelScriptModuleFingerprint *outFingerprint,
+                                                 CKAngelScriptResult *result) {
     std::string errorMessage;
     CKAS_STATUS optionStatus = ScriptPublicOptions::ValidateModuleFingerprintOutput(outFingerprint,
                                                                                    errorMessage);
     if (optionStatus != CKAS_OK) {
-        return StoreResult(result, optionStatus, 0, errorMessage);
+        return manager.StoreResult(result, optionStatus, 0, errorMessage);
     }
     CKAngelScriptInitModuleFingerprint(outFingerprint);
 
     asIScriptModule *module = nullptr;
-    const CKAS_STATUS borrowStatus = BorrowModule(moduleName, &module, result);
+    const CKAS_STATUS borrowStatus = BorrowModule(manager, moduleName, &module, result);
     if (borrowStatus != CKAS_OK) {
         return borrowStatus;
     }
     (void)module;
 
-    *outFingerprint = m_ModuleStateStore.GetFingerprint(moduleName,
-                                                        CKAS_API_VERSION,
-                                                        asGetLibraryVersion(),
-                                                        asGetLibraryOptions(),
-                                                        m_ModuleRegistry.BuildSourceHash(moduleName),
-                                                        m_ImportBinder.BuildDeclaredImportHash(*this, moduleName));
-    return StoreResult(result, CKAS_OK);
+    *outFingerprint = manager.m_ModuleStateStore.GetFingerprint(
+        moduleName,
+        CKAS_API_VERSION,
+        asGetLibraryVersion(),
+        asGetLibraryOptions(),
+        BuildSourceHash(moduleName),
+        manager.m_ImportBinder.BuildDeclaredImportHash(manager, moduleName));
+    return manager.StoreResult(result, CKAS_OK);
+}
+
+CKAS_STATUS ScriptManager::EnumerateModuleIncludeEdges(const char *moduleName,
+                                                       CKAngelScriptIncludeEdgeCallback callback,
+                                                       void *userData,
+                                                       CKAngelScriptResult *result) {
+    return m_ModuleRegistry.EnumerateIncludeEdges(*this, moduleName, callback, userData, result);
+}
+
+CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
+                                                CKAngelScriptModuleFingerprint *outFingerprint,
+                                                CKAngelScriptResult *result) {
+    return m_ModuleRegistry.GetFingerprint(*this, moduleName, outFingerprint, result);
 }
 
 CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOptions &options,
