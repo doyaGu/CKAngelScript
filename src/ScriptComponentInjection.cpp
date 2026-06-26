@@ -10,7 +10,7 @@
 #include "ScriptParameterConversion.h"
 #include "ScriptInvoker.h"
 
-namespace AngelScriptComponentInternal {
+namespace ScriptComponentSupport {
 
 bool ReadStringValue(CKParameter *source, std::string &value) {
     return ReadParameterText(source, value);
@@ -1314,4 +1314,4 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
 }
 
 
-} // namespace AngelScriptComponentInternal
+} // namespace ScriptComponentSupport

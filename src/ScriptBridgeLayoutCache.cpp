@@ -5,7 +5,7 @@
 
 #include <fmt/format.h>
 
-namespace ScriptBehaviorBridgeInternal {
+namespace {
 
 std::string LayoutGuidKey(CKGUID guid) {
     return fmt::format("{:08x}:{:08x}", guid.d[0], guid.d[1]);
@@ -29,7 +29,7 @@ bool BehaviorFlagSet(CKDWORD flags, CKDWORD flag) {
     return (flags & flag) != 0;
 }
 
-bool IsBridgeInternalLocalName(const std::string &name) {
+bool IsBridgeScratchLocalName(const std::string &name) {
     return name.find("__CKAS_BridgeInput_") == 0 ||
            name.find("__CKAS_BridgeOutput_") == 0 ||
            name.find("__CKAS_GraphEditInput_") == 0 ||
@@ -38,7 +38,7 @@ bool IsBridgeInternalLocalName(const std::string &name) {
            name == "__CKAS_Target";
 }
 
-} // namespace ScriptBehaviorBridgeInternal
+} // namespace
 
 CKBehaviorPrototype *ScriptBehaviorBridge::ResolvePrototypeObject(const ScriptBridgeBBInvocationSpec &request, std::string &error) const {
     CKGUID guid;
@@ -83,7 +83,7 @@ const ScriptBridgeLayoutRecord *ScriptBehaviorBridge::GetPrototypeLayout(const C
         return nullptr;
     }
 
-    const std::string key = ScriptBehaviorBridgeInternal::LayoutGuidKey(prototype->GetGuid());
+    const std::string key = LayoutGuidKey(prototype->GetGuid());
     ScriptBridgeLayoutRecord fresh = BuildPrototypeLayout(prototype);
     auto it = m_PrototypeLayouts.find(key);
     if (it != m_PrototypeLayouts.end() && it->second.Signature == fresh.Signature) {
@@ -138,8 +138,8 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
         slot.Caps = 0;
         SetScriptBridgeSlotCap(slot.Caps,
                                ScriptBridgeSlotCaps::Dynamic,
-                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETERINPUTS) ||
-                                   ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS));
+                               BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETERINPUTS) ||
+                                   BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS));
         slot.Name = SafeString(pin ? pin->GetName() : nullptr);
         slot.TypeGuid = pin ? pin->GetGUID() : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -157,8 +157,8 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
         slot.Caps = 0;
         SetScriptBridgeSlotCap(slot.Caps,
                                ScriptBridgeSlotCaps::Dynamic,
-                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETEROUTPUTS) ||
-                                   ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS));
+                               BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETEROUTPUTS) ||
+                                   BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS));
         slot.Name = SafeString(param ? param->GetName() : nullptr);
         slot.TypeGuid = param ? param->GetGUID() : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -173,7 +173,7 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
         ScriptBridgeLayoutParamSlot slot;
         const bool isSetting = behavior->IsLocalParameterSetting(i);
         const std::string name = SafeString(param ? param->GetName() : nullptr);
-        if (!isSetting && ScriptBehaviorBridgeInternal::IsBridgeInternalLocalName(name)) {
+        if (!isSetting && IsBridgeScratchLocalName(name)) {
             continue;
         }
         slot.Kind = isSetting ? ScriptBridgeSlotKind::Setting : ScriptBridgeSlotKind::Local;
@@ -194,7 +194,7 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *b
     }
 
     layout.Signature = LayoutSignature(layout);
-    layout.LayoutGeneration = ScriptBehaviorBridgeInternal::LayoutGenerationFromSignature(layout.Signature);
+    layout.LayoutGeneration = LayoutGenerationFromSignature(layout.Signature);
     return layout;
 }
 
@@ -242,8 +242,8 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
         slot.Caps = 0;
         SetScriptBridgeSlotCap(slot.Caps,
                                ScriptBridgeSlotCaps::Dynamic,
-                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETERINPUTS) ||
-                                   ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS));
+                               BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETERINPUTS) ||
+                                   BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS));
         slot.Name = SafeString(param ? param->Name : nullptr);
         slot.TypeGuid = param ? param->Guid : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -260,8 +260,8 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
         slot.Caps = 0;
         SetScriptBridgeSlotCap(slot.Caps,
                                ScriptBridgeSlotCaps::Dynamic,
-                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETEROUTPUTS) ||
-                                   ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS));
+                               BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_VARIABLEPARAMETEROUTPUTS) ||
+                                   BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDOUTPUTPARAMS));
         slot.Name = SafeString(param ? param->Name : nullptr);
         slot.TypeGuid = param ? param->Guid : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -281,7 +281,7 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
         SetScriptBridgeSlotCap(slot.Caps, ScriptBridgeSlotCaps::Setting, isSetting);
         SetScriptBridgeSlotCap(slot.Caps,
                                ScriptBridgeSlotCaps::Dynamic,
-                               ScriptBehaviorBridgeInternal::BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDLOCALPARAMS));
+                               BehaviorFlagSet(layout.BehaviorFlags, CKBEHAVIOR_INTERNALLYCREATEDLOCALPARAMS));
         slot.Name = SafeString(param ? param->Name : nullptr);
         slot.TypeGuid = param ? param->Guid : CKGUID();
         slot.TypeName = ParameterTypeLabel(context, slot.TypeGuid);
@@ -294,32 +294,32 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
     }
 
     layout.Signature = LayoutSignature(layout);
-    layout.LayoutGeneration = ScriptBehaviorBridgeInternal::LayoutGenerationFromSignature(layout.Signature);
+    layout.LayoutGeneration = LayoutGenerationFromSignature(layout.Signature);
     return layout;
 }
 
 std::string ScriptBehaviorBridge::LayoutSignature(const ScriptBridgeLayoutRecord &layout) const {
     std::string signature;
-    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, layout.Prototype ? "prototype" : "behavior");
-    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, layout.PrototypeGuid);
-    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("behaviorFlags:{} prototypeFlags:{} compatible:{}",
+    AppendLayoutSignature(signature, layout.Prototype ? "prototype" : "behavior");
+    AppendLayoutSignature(signature, layout.PrototypeGuid);
+    AppendLayoutSignature(signature, fmt::format("behaviorFlags:{} prototypeFlags:{} compatible:{}",
         layout.BehaviorFlags,
         layout.PrototypeFlags,
         layout.CompatibleClassId));
-    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("in:{}", layout.Inputs.size()));
+    AppendLayoutSignature(signature, fmt::format("in:{}", layout.Inputs.size()));
     for (const auto &slot : layout.Inputs) {
-        ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, slot.Name);
+        AppendLayoutSignature(signature, slot.Name);
     }
-    ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("out:{}", layout.Outputs.size()));
+    AppendLayoutSignature(signature, fmt::format("out:{}", layout.Outputs.size()));
     for (const auto &slot : layout.Outputs) {
-        ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, slot.Name);
+        AppendLayoutSignature(signature, slot.Name);
     }
 
     auto appendParams = [&](const char *label, const std::vector<ScriptBridgeLayoutParamSlot> &slots) {
-        ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("{}:{}", label, slots.size()));
+        AppendLayoutSignature(signature, fmt::format("{}:{}", label, slots.size()));
         for (const auto &slot : slots) {
-            ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, fmt::format("{}:{}:{}:{}", slot.Index, slot.ParameterId, slot.Caps, slot.Name));
-            ScriptBehaviorBridgeInternal::AppendLayoutSignature(signature, slot.TypeGuid);
+            AppendLayoutSignature(signature, fmt::format("{}:{}:{}:{}", slot.Index, slot.ParameterId, slot.Caps, slot.Name));
+            AppendLayoutSignature(signature, slot.TypeGuid);
         }
     };
     appendParams("pin", layout.Pins);

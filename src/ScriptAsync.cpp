@@ -15,7 +15,7 @@
 #include "add_on/scriptarray/scriptarray.h"
 #include "ScriptRegistration.h"
 
-namespace ScriptAsyncInternal {
+namespace {
 
 std::vector<ScriptAsyncTaskBase *> ReadTaskArray(CScriptArray *tasks);
 
@@ -500,7 +500,7 @@ void AsyncAllGeneric(asIScriptGeneric *gen) { AsyncAggregateGeneric(gen, ScriptA
 void AsyncRaceGeneric(asIScriptGeneric *gen) { AsyncAggregateGeneric(gen, ScriptAsyncTaskKind::Race, "Race"); }
 void AsyncAnyGeneric(asIScriptGeneric *gen) { AsyncAggregateGeneric(gen, ScriptAsyncTaskKind::Any, "Any"); }
 
-} // namespace ScriptAsyncInternal
+} // namespace
 
 ScriptAsyncStoredValue::~ScriptAsyncStoredValue() {
     Clear();
@@ -522,7 +522,7 @@ void ScriptAsyncStoredValue::EnumReferences(asIScriptEngine *engine) const {
         return;
     }
 
-    asITypeInfo *type = ScriptAsyncInternal::TypeInfoById(m_Engine, m_TypeId);
+    asITypeInfo *type = TypeInfoById(m_Engine, m_TypeId);
     if (!type) {
         return;
     }
@@ -602,8 +602,8 @@ bool ScriptAsyncStoredValue::CopyTo(void *address, int typeId, std::string &erro
         asITypeInfo *toType = m_Engine->GetTypeInfoById(typeId);
         if (!fromType || !toType) {
             error = fmt::format("Async task result type mismatch: stored {}, requested {}.",
-                                ScriptAsyncInternal::TypeName(m_Engine, m_TypeId),
-                                ScriptAsyncInternal::TypeName(m_Engine, typeId));
+                                TypeName(m_Engine, m_TypeId),
+                                TypeName(m_Engine, typeId));
             return false;
         }
 
@@ -616,8 +616,8 @@ bool ScriptAsyncStoredValue::CopyTo(void *address, int typeId, std::string &erro
         const int r = m_Engine->RefCastObject(m_Object, fromType, toType, out);
         if (r < 0 || !*out) {
             error = fmt::format("Async task result type mismatch: stored {}, requested {}.",
-                                ScriptAsyncInternal::TypeName(m_Engine, m_TypeId),
-                                ScriptAsyncInternal::TypeName(m_Engine, typeId));
+                                TypeName(m_Engine, m_TypeId),
+                                TypeName(m_Engine, typeId));
             return false;
         }
         return true;
@@ -626,12 +626,12 @@ bool ScriptAsyncStoredValue::CopyTo(void *address, int typeId, std::string &erro
     if (typeId & asTYPEID_MASK_OBJECT) {
         if (!(m_TypeId & asTYPEID_MASK_OBJECT) || (m_TypeId & asTYPEID_OBJHANDLE) || m_TypeId != typeId || !m_Object) {
             error = fmt::format("Async task result type mismatch: stored {}, requested {}.",
-                                ScriptAsyncInternal::TypeName(m_Engine, m_TypeId),
-                                ScriptAsyncInternal::TypeName(m_Engine, typeId));
+                                TypeName(m_Engine, m_TypeId),
+                                TypeName(m_Engine, typeId));
             return false;
         }
         if (m_Engine->AssignScriptObject(address, m_Object, m_Engine->GetTypeInfoById(typeId)) < 0) {
-            error = fmt::format("Async task failed to assign result of type {}.", ScriptAsyncInternal::TypeName(m_Engine, typeId));
+            error = fmt::format("Async task failed to assign result of type {}.", TypeName(m_Engine, typeId));
             return false;
         }
         return true;
@@ -640,8 +640,8 @@ bool ScriptAsyncStoredValue::CopyTo(void *address, int typeId, std::string &erro
     const int size = m_Engine->GetSizeOfPrimitiveType(typeId);
     if (m_TypeId != typeId || size <= 0 || m_Primitive.size() != static_cast<size_t>(size)) {
         error = fmt::format("Async task result type mismatch: stored {}, requested {}.",
-                            ScriptAsyncInternal::TypeName(m_Engine, m_TypeId),
-                            ScriptAsyncInternal::TypeName(m_Engine, typeId));
+                            TypeName(m_Engine, m_TypeId),
+                            TypeName(m_Engine, typeId));
         return false;
     }
     std::memcpy(address, m_Primitive.data(), m_Primitive.size());
@@ -665,7 +665,7 @@ bool ScriptAsyncStoredValue::CopyFrom(const ScriptAsyncStoredValue &other, std::
 
     asITypeInfo *type = m_Engine->GetTypeInfoById(m_TypeId);
     if (!type) {
-        error = fmt::format("Async task result type '{}' is not registered.", ScriptAsyncInternal::TypeName(m_Engine, m_TypeId));
+        error = fmt::format("Async task result type '{}' is not registered.", TypeName(m_Engine, m_TypeId));
         Clear();
         return false;
     }
@@ -676,7 +676,7 @@ bool ScriptAsyncStoredValue::CopyFrom(const ScriptAsyncStoredValue &other, std::
     } else {
         m_Object = m_Engine->CreateScriptObjectCopy(other.m_Object, type);
         if (!m_Object) {
-            error = fmt::format("Async task failed to copy result of type {}.", ScriptAsyncInternal::TypeName(m_Engine, m_TypeId));
+            error = fmt::format("Async task failed to copy result of type {}.", TypeName(m_Engine, m_TypeId));
             Clear();
             return false;
         }
@@ -776,7 +776,7 @@ void ScriptAsyncTaskBase::NotifyGarbageCollector() {
     const std::string taskDecl = fmt::format("AsyncTask<{}>", subtypeDecl);
     asITypeInfo *type = m_Engine->GetTypeInfoByDecl(taskDecl.c_str());
     if (!type) {
-        asITypeInfo *subtype = ScriptAsyncInternal::TypeInfoById(m_Engine, m_SubTypeId);
+        asITypeInfo *subtype = TypeInfoById(m_Engine, m_SubTypeId);
         asIScriptModule *module = subtype ? subtype->GetModule() : nullptr;
         type = module ? module->GetTypeInfoByDecl(taskDecl.c_str()) : nullptr;
     }
@@ -1042,7 +1042,7 @@ void ScriptAsyncTaskBase::AdvanceScript() {
         SetState(ScriptAsyncTaskState::Running);
     } else {
         Fail(r == asEXECUTION_EXCEPTION
-             ? ScriptAsyncInternal::ContextExceptionMessage(m_Context, "Async::Spawn")
+             ? ContextExceptionMessage(m_Context, "Async::Spawn")
              : fmt::format("Async::Spawn failed with AngelScript result {}.", r));
         ReleaseContext();
     }
@@ -1215,7 +1215,7 @@ bool ScriptAsyncTaskBase::CompleteAllArray(std::string &error) {
 
     asITypeInfo *arrayType = m_Engine->GetTypeInfoById(m_SubTypeId & ~asTYPEID_OBJHANDLE);
     if (!arrayType) {
-        error = fmt::format("Async::All result type '{}' is not registered.", ScriptAsyncInternal::TypeName(m_Engine, m_SubTypeId));
+        error = fmt::format("Async::All result type '{}' is not registered.", TypeName(m_Engine, m_SubTypeId));
         return false;
     }
     CScriptArray *array = CScriptArray::Create(arrayType, static_cast<asUINT>(m_Children.size()));
@@ -1429,7 +1429,7 @@ void RegisterScriptAsync(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectType("AsyncTask<class T>", 0, asOBJ_REF | asOBJ_GC | asOBJ_TEMPLATE); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_TEMPLATE_CALLBACK, "bool f(int&in, bool&out)", asFUNCTION(ScriptAsyncInternal::ScriptAsyncTemplateCallback), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_TEMPLATE_CALLBACK, "bool f(int&in, bool&out)", asFUNCTION(ScriptAsyncTemplateCallback), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_ADDREF, "void f()", asMETHOD(ScriptAsyncTaskBase, AddRef), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_RELEASE, "void f()", asMETHOD(ScriptAsyncTaskBase, Release), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("AsyncTask<T>", asBEHAVE_GETREFCOUNT, "int f()", asMETHOD(ScriptAsyncTaskBase, GetRefCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1452,43 +1452,43 @@ void RegisterScriptAsync(asIScriptEngine *engine) {
     r = engine->RegisterFuncdef("string AsyncStringFunc()"); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterFuncdef("CKObject@ AsyncObjectFunc()"); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<void>@+ task)", asFUNCTION(ScriptAsyncInternal::AwaitVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<int>@+ task, int &out result)", asFUNCTION(ScriptAsyncInternal::AwaitInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<float>@+ task, float &out result)", asFUNCTION(ScriptAsyncInternal::AwaitFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<string>@+ task, string &out result)", asFUNCTION(ScriptAsyncInternal::AwaitString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Await(AsyncTask<CKObject@>@+ task, CKObject@ &out result)", asFUNCTION(ScriptAsyncInternal::AwaitObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Await(?&in task, ?&out result)", asFUNCTION(ScriptAsyncInternal::AwaitGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<void>@+ task)", asFUNCTION(AwaitVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<int>@+ task, int &out result)", asFUNCTION(AwaitInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<float>@+ task, float &out result)", asFUNCTION(AwaitFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<string>@+ task, string &out result)", asFUNCTION(AwaitString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(AsyncTask<CKObject@>@+ task, CKObject@ &out result)", asFUNCTION(AwaitObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Await(?&in task, ?&out result)", asFUNCTION(AwaitGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
 
     const char *previousNamespace = engine->GetDefaultNamespace();
     const std::string previous = previousNamespace ? previousNamespace : "";
     r = engine->SetDefaultNamespace("Async"); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Delay(int frames)", asFUNCTION(ScriptAsyncInternal::AsyncDelay), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Spawn(AsyncVoidFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Spawn(AsyncIntFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Spawn(AsyncFloatFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Spawn(AsyncStringFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Spawn(AsyncObjectFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Spawn(?&in fn, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Create(AsyncVoidFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Create(AsyncIntFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Create(AsyncFloatFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Create(AsyncStringFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Create(AsyncObjectFunc@ fn)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Create(?&in fn, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncSpawnGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Delay(int frames)", asFUNCTION(AsyncDelay), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Spawn(AsyncVoidFunc@ fn)", asFUNCTION(AsyncSpawnVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Spawn(AsyncIntFunc@ fn)", asFUNCTION(AsyncSpawnInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Spawn(AsyncFloatFunc@ fn)", asFUNCTION(AsyncSpawnFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Spawn(AsyncStringFunc@ fn)", asFUNCTION(AsyncSpawnString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Spawn(AsyncObjectFunc@ fn)", asFUNCTION(AsyncSpawnObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Spawn(?&in fn, ?&out task)", asFUNCTION(AsyncSpawnGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Create(AsyncVoidFunc@ fn)", asFUNCTION(AsyncSpawnVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Create(AsyncIntFunc@ fn)", asFUNCTION(AsyncSpawnInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Create(AsyncFloatFunc@ fn)", asFUNCTION(AsyncSpawnFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Create(AsyncStringFunc@ fn)", asFUNCTION(AsyncSpawnString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Create(AsyncObjectFunc@ fn)", asFUNCTION(AsyncSpawnObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Create(?&in fn, ?&out task)", asFUNCTION(AsyncSpawnGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ All(array<AsyncTask<void>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAllVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ All(array<AsyncTask<void>@>@ tasks)", asFUNCTION(AsyncAllVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     // Use the out-parameter aggregate overloads for typed results. The direct typed-return
     // overloads can make AngelScript's overload resolver hang in the Virtools Player host.
-    r = engine->RegisterGlobalFunction("void All(?&in tasks, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncAllGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Race(array<AsyncTask<void>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncRaceVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Race(?&in tasks, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncRaceGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Any(array<AsyncTask<void>@>@ tasks)", asFUNCTION(ScriptAsyncInternal::AsyncAnyVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("void Any(?&in tasks, ?&out task)", asFUNCTION(ScriptAsyncInternal::AsyncAnyGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(BBTask@+ task)", asFUNCTION(ScriptAsyncInternal::AsyncWaitBBTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(GraphTask@+ task)", asFUNCTION(ScriptAsyncInternal::AsyncWaitGraphTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, BBTask@+ task, int inputIndex = -1)", asFUNCTION(ScriptAsyncInternal::AsyncWaitBBTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, GraphTask@+ task)", asFUNCTION(ScriptAsyncInternal::AsyncWaitGraphTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void All(?&in tasks, ?&out task)", asFUNCTION(AsyncAllGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Race(array<AsyncTask<void>@>@ tasks)", asFUNCTION(AsyncRaceVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Race(?&in tasks, ?&out task)", asFUNCTION(AsyncRaceGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Any(array<AsyncTask<void>@>@ tasks)", asFUNCTION(AsyncAnyVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("void Any(?&in tasks, ?&out task)", asFUNCTION(AsyncAnyGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(BBTask@+ task)", asFUNCTION(AsyncWaitBBTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(GraphTask@+ task)", asFUNCTION(AsyncWaitGraphTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, BBTask@+ task, int inputIndex = -1)", asFUNCTION(AsyncWaitBBTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, GraphTask@+ task)", asFUNCTION(AsyncWaitGraphTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->SetDefaultNamespace(previous.c_str()); CKAS_CHECK_REGISTER(r);
 }

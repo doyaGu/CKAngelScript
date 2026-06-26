@@ -2,11 +2,11 @@
 
 #include <fmt/format.h>
 
-namespace ScriptRegistrationInternal {
+namespace {
 
 thread_local ScriptRegistrationContext *g_ActiveRegistrationContext = nullptr;
 
-} // namespace ScriptRegistrationInternal
+} // namespace
 
 ScriptRegistrationContext::ScriptRegistrationContext(const char *moduleName)
     : m_ModuleName(moduleName && moduleName[0] != '\0' ? moduleName : "AngelScript registration") {}
@@ -43,16 +43,16 @@ std::string ScriptRegistrationContext::GetSummary() const {
 }
 
 ScriptRegistrationScope::ScriptRegistrationScope(ScriptRegistrationContext &context)
-    : m_Previous(ScriptRegistrationInternal::g_ActiveRegistrationContext) {
-    ScriptRegistrationInternal::g_ActiveRegistrationContext = &context;
+    : m_Previous(g_ActiveRegistrationContext) {
+    g_ActiveRegistrationContext = &context;
 }
 
 ScriptRegistrationScope::~ScriptRegistrationScope() {
-    ScriptRegistrationInternal::g_ActiveRegistrationContext = m_Previous;
+    g_ActiveRegistrationContext = m_Previous;
 }
 
 ScriptRegistrationContext *GetActiveScriptRegistrationContext() {
-    return ScriptRegistrationInternal::g_ActiveRegistrationContext;
+    return g_ActiveRegistrationContext;
 }
 
 bool CheckScriptRegistrationResult(int code,

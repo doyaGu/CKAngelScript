@@ -10,7 +10,7 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptInvoker.h"
 
-namespace AngelScriptComponentInternal {
+namespace ScriptComponentSupport {
 
 std::string TrimString(const std::string &value) {
     const auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char c) { return std::isspace(c) != 0; });
@@ -1494,4 +1494,4 @@ bool ResolveComponentBinding(asIScriptEngine *engine,
     return false;
 }
 
-} // namespace AngelScriptComponentInternal
+} // namespace ScriptComponentSupport

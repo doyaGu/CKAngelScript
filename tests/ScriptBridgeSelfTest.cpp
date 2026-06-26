@@ -2515,21 +2515,21 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     selfMoveEdit->Release();
     targetGraph->Release();
 
-    CKParameterLocal *internalGraphEditTarget = target->CreateLocalParameter(
+    CKParameterLocal *scratchGraphEditTarget = target->CreateLocalParameter(
         const_cast<CKSTRING>("__CKAS_GraphEdit_Target"),
         CKPGUID_INT);
     const ScriptBridgeLayoutRecord *internalFilteredLayout = bridge->GetBehaviorLayout(target->GetID(), CaptureBridgeObjectStamp(target));
-    bool exposedInternalLocal = false;
+    bool exposedScratchLocal = false;
     if (internalFilteredLayout) {
         for (const ScriptBridgeLayoutParamSlot &local : internalFilteredLayout->Locals) {
             if (local.Name == "__CKAS_GraphEdit_Target") {
-                exposedInternalLocal = true;
+                exposedScratchLocal = true;
                 break;
             }
         }
     }
-    if (!internalGraphEditTarget || exposedInternalLocal) {
-        error = "Graph edit self-test exposed internal graph edit target local.";
+    if (!scratchGraphEditTarget || exposedScratchLocal) {
+        error = "Graph edit self-test exposed scratch graph edit target local.";
         unlinkResult->Release();
         unlinkEdit->Release();
         createdLink->Release();
@@ -2981,7 +2981,7 @@ static bool RunBehaviorBridgeNativePrototypeDiscoverySelfTest(CKContext *context
     return true;
 }
 
-static bool RunBehaviorBridgeNativeInternalShapeSelfTest(asIScriptEngine *engine, std::string &error) {
+static bool RunBehaviorBridgeNativeShapeSelfTest(asIScriptEngine *engine, std::string &error) {
     if (engine) {
         if (!engine->GetTypeInfoByName("BBDecl") || !engine->GetTypeInfoByName("BBConfig") ||
             !engine->GetTypeInfoByName("BBInstance")) {
@@ -3719,9 +3719,9 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
         return false;
     }
 
-    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-internal-shape", std::string());
-    if (!RunBehaviorBridgeNativeInternalShapeSelfTest(engine, error)) {
-        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-internal-shape", error);
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-hidden-shape", std::string());
+    if (!RunBehaviorBridgeNativeShapeSelfTest(engine, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-hidden-shape", error);
         return false;
     }
 

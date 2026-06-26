@@ -268,7 +268,7 @@ ParamSourceLinkRef::ParamSourceLinkRef(ScriptBehaviorBridge *bridge,
 
 ParamSourceLinkRef::~ParamSourceLinkRef() {
     std::string error;
-    (void) RestoreInternal(error, false);
+    (void) RestoreSourceLink(error, false);
 }
 
 bool ParamSourceLinkRef::IsValid() const {
@@ -289,7 +289,7 @@ bool ParamSourceLinkRef::Commit() {
 
 bool ParamSourceLinkRef::Restore() {
     std::string error;
-    if (!RestoreInternal(error, true)) {
+    if (!RestoreSourceLink(error, true)) {
         SetScriptException(error.empty() ? "Failed to restore parameter source." : error);
         return false;
     }
@@ -339,7 +339,7 @@ CKParameter *ParamSourceLinkRef::InstalledSource() const {
     return ParameterSourceForConnection(GetStampedCKObjectById(Context(), m_InstalledSourceId, m_InstalledSourceStamp));
 }
 
-bool ParamSourceLinkRef::RestoreInternal(std::string &error, bool explicitCall) {
+bool ParamSourceLinkRef::RestoreSourceLink(std::string &error, bool explicitCall) {
     if (m_State != OwnershipState::Scoped) {
         return true;
     }

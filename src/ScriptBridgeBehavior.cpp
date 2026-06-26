@@ -5,7 +5,7 @@
 
 #include <fmt/format.h>
 
-namespace ScriptBridgeBehaviorInternal {
+namespace {
 
 int SubBehaviorDepth(CKBehavior *root, CKBehavior *target, std::set<CK_ID> &visited) {
     if (!root || !target) {
@@ -74,7 +74,7 @@ CKBehavior *FindContainingBehaviorInContext(CKBehavior *behavior) {
     return best;
 }
 
-} // namespace ScriptBridgeBehaviorInternal
+} // namespace
 
 namespace {
 
@@ -488,10 +488,10 @@ BehaviorGraph *BehaviorBridge::Graph() const {
     CKBehavior *behavior = ctx.Behavior;
     CKBehavior *root = nullptr;
     if (behavior) {
-        root = ScriptBridgeBehaviorInternal::FindContainingOwnerScript(behavior);
+        root = FindContainingOwnerScript(behavior);
     }
     if (!root && behavior) {
-        root = ScriptBridgeBehaviorInternal::FindContainingBehaviorInContext(behavior);
+        root = FindContainingBehaviorInContext(behavior);
     }
     if (!root && behavior) {
         root = behavior->GetOwnerScript();

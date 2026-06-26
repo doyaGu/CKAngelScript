@@ -9,11 +9,11 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     std::vector<ScriptComponentBinding> bindings;
     auto addMetadata = [&](const std::string &metadata) -> bool {
         ScriptComponentBinding binding;
-        if (!AngelScriptComponentInternal::ParseBindingMetadata(metadata, "TextConfig", binding)) {
+        if (!ScriptComponentSupport::ParseBindingMetadata(metadata, "TextConfig", binding)) {
             error = "Component metadata self-test failed to parse '" + metadata + "'.";
             return false;
         }
-        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(bindings, binding);
+        ScriptComponentSupport::MergeOrAppendMetadataBinding(bindings, binding);
         return true;
     };
 
@@ -67,21 +67,21 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     std::vector<ScriptComponentBinding> repeatedSlotBindings;
     for (const std::string &fieldName : {std::string("FirstConfig"), std::string("SecondConfig")}) {
         ScriptComponentBinding configBinding;
-        if (!AngelScriptComponentInternal::ParseBindingMetadata(
+        if (!ScriptComponentSupport::ParseBindingMetadata(
                 "bbconfig prototype=\"Logics/Calculator/Identity\"",
                 fieldName,
                 configBinding)) {
             error = "Component metadata self-test failed to parse repeated-slot config metadata.";
             return false;
         }
-        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(repeatedSlotBindings, configBinding);
+        ScriptComponentSupport::MergeOrAppendMetadataBinding(repeatedSlotBindings, configBinding);
 
         ScriptComponentBinding slotBinding;
-        if (!AngelScriptComponentInternal::ParseBindingMetadata("bbpout \"pOut 0\"", fieldName, slotBinding)) {
+        if (!ScriptComponentSupport::ParseBindingMetadata("bbpout \"pOut 0\"", fieldName, slotBinding)) {
             error = "Component metadata self-test failed to parse repeated-slot fragment metadata.";
             return false;
         }
-        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(repeatedSlotBindings, slotBinding);
+        ScriptComponentSupport::MergeOrAppendMetadataBinding(repeatedSlotBindings, slotBinding);
     }
     if (repeatedSlotBindings.size() != 2 ||
         repeatedSlotBindings[0].ParameterName != "FirstConfig" ||
@@ -91,7 +91,7 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     }
 
     ScriptComponentBinding legacyManaged;
-    if (!AngelScriptComponentInternal::ParseBindingMetadata(
+    if (!ScriptComponentSupport::ParseBindingMetadata(
             "bbconfig prototype=\"Interface/Text/2D Text\" managed=true",
             "LegacyConfig",
             legacyManaged)) {
@@ -107,11 +107,11 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     std::vector<ScriptComponentBinding> aggregateBindings;
     auto addAggregateMetadata = [&](const std::string &metadata) -> bool {
         ScriptComponentBinding aggregateBinding;
-        if (!AngelScriptComponentInternal::ParseBindingMetadata(metadata, "AggregateConfig", aggregateBinding)) {
+        if (!ScriptComponentSupport::ParseBindingMetadata(metadata, "AggregateConfig", aggregateBinding)) {
             error = "Component metadata self-test failed to parse aggregate metadata '" + metadata + "'.";
             return false;
         }
-        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(aggregateBindings, aggregateBinding);
+        ScriptComponentSupport::MergeOrAppendMetadataBinding(aggregateBindings, aggregateBinding);
         return true;
     };
     if (!addAggregateMetadata("bbconfig prototype=\"Interface/Text/2D Text\" pins=\"Text='Aggregate'\" settings=\"Text Properties='Screen Proportionnal'\" sources=\"Font<-FontConfig.Font Created\"") ||
@@ -135,11 +135,11 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
              std::string("bbsetting field=ManifestConfig \"Text Properties\"=\"Screen Proportionnal\""),
              std::string("bbsource field=ManifestConfig \"Font\"=\"FontConfig.Font Created\"")}) {
         ScriptComponentBinding manifestBinding;
-        if (!AngelScriptComponentInternal::ParseManifestLine(line, manifestBinding)) {
+        if (!ScriptComponentSupport::ParseManifestLine(line, manifestBinding)) {
             error = "Component metadata self-test failed to parse manifest line '" + line + "'.";
             return false;
         }
-        AngelScriptComponentInternal::MergeOrAppendMetadataBinding(manifestBindings, manifestBinding);
+        ScriptComponentSupport::MergeOrAppendMetadataBinding(manifestBindings, manifestBinding);
     }
     if (manifestBindings.size() != 1 ||
         manifestBindings[0].BBConfigLifetime != ScriptComponentBBConfigLifetime::Manual ||
@@ -153,7 +153,7 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     }
 
     ScriptComponentBinding occurrenceBinding;
-    if (!AngelScriptComponentInternal::ParseBindingMetadata(
+    if (!ScriptComponentSupport::ParseBindingMetadata(
             "bbconfig prototype=\"Logics/Calculator/Identity\" pins=\"Value[3]='42'\" sources=\"pIn 0[1]<-SourceConfig.pout:Value[2]\" required=\"pout:Out[4]\"",
             "OccurrenceConfig",
             occurrenceBinding)) {
@@ -182,7 +182,7 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
     }
 
     ScriptComponentBinding slotOccurrenceBinding;
-    if (!AngelScriptComponentInternal::ParseBindingMetadata(
+    if (!ScriptComponentSupport::ParseBindingMetadata(
             "bbslot from=\"OccurrenceConfig\" pout=\"Out[2]\"",
             "OutSlot",
             slotOccurrenceBinding)) {
@@ -195,7 +195,7 @@ bool RunScriptComponentMetadataSelfTest(std::string &error) {
         error = "Component metadata self-test did not preserve BBSlot field occurrence.";
         return false;
     }
-    const std::string occurrenceCacheText = AngelScriptComponentInternal::BuildBBConfigBindingCacheText(occurrenceBinding, 0, std::string());
+    const std::string occurrenceCacheText = ScriptComponentSupport::BuildBBConfigBindingCacheText(occurrenceBinding, 0, std::string());
     if (occurrenceCacheText.find("pin:Value[3]=") == std::string::npos ||
         occurrenceCacheText.find("source:pIn 0[1]<-SourceConfig.pout:Value[2]") == std::string::npos) {
         error = "Component metadata self-test did not include slot occurrences in BBConfig cache text.";

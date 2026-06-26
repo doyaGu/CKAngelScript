@@ -7,13 +7,13 @@
 
 #include "ScriptComponentState.h"
 
-namespace AngelScriptComponentInternal {
+namespace ScriptComponentSupport {
 
 void StopComponentLifetimeBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state);
 void DestroyComponentLifetimeBBConfigs(ScriptComponentState *state);
 bool EnsureAutoStartedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state, std::string &error);
 bool StepAutomatedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state, std::string &error);
 
-} // namespace AngelScriptComponentInternal
+} // namespace ScriptComponentSupport
 
 #endif

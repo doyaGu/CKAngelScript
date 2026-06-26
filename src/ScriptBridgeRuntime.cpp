@@ -4,7 +4,7 @@
 
 #include <fmt/format.h>
 
-namespace ScriptBehaviorBridgeInternal {
+namespace {
 
 bool SetLocalParameterValueByIndex(CKBehavior *behavior,
                                    int index,
@@ -163,7 +163,7 @@ bool ConfigureBehaviorOwnerAndTarget(CKContext *context,
     return true;
 }
 
-} // namespace ScriptBehaviorBridgeInternal
+} // namespace
 
 BBResult *ScriptBehaviorBridge::RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex) {
     ScriptBridgeExecutionState state;
@@ -327,11 +327,11 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
                                 err));
     }
 
-    if (!ScriptBehaviorBridgeInternal::ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
+    if (!ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
         return fail(error);
     }
 
-    if (!ScriptBehaviorBridgeInternal::ConfigureBehaviorOwnerAndTarget(context, behavior, request, error)) {
+    if (!ConfigureBehaviorOwnerAndTarget(context, behavior, request, error)) {
         return fail(error);
     }
 
@@ -341,7 +341,7 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
     }
     createCallbackSent = true;
 
-    CKBeObject *owner = ScriptBehaviorBridgeInternal::ResolveRequestBeObject(context,
+    CKBeObject *owner = ResolveRequestBeObject(context,
                                                                              request.OwnerId,
                                                                              request.OwnerStamp,
                                                                              "Owner",
@@ -356,7 +356,7 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
         }
     }
 
-    if (!ScriptBehaviorBridgeInternal::NotifyIndexedSettingsEdited(behavior, request.IndexedSettings, ctx, error)) {
+    if (!NotifyIndexedSettingsEdited(behavior, request.IndexedSettings, ctx, error)) {
         return fail(error);
     }
 
@@ -908,11 +908,11 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         return fail(fmt::format("Failed to initialize Building Block from GUID ({}, {}) with CKERROR {}.", guid.d[0], guid.d[1], err));
     }
 
-    if (!ScriptBehaviorBridgeInternal::ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
+    if (!ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
         return fail(error);
     }
 
-    if (!ScriptBehaviorBridgeInternal::ConfigureBehaviorOwnerAndTarget(context, behavior, request, error)) {
+    if (!ConfigureBehaviorOwnerAndTarget(context, behavior, request, error)) {
         return fail(error);
     }
 
@@ -922,7 +922,7 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
     }
     createCallbackSent = true;
 
-    CKBeObject *owner = ScriptBehaviorBridgeInternal::ResolveRequestBeObject(context,
+    CKBeObject *owner = ResolveRequestBeObject(context,
                                                                              request.OwnerId,
                                                                              request.OwnerStamp,
                                                                              "Owner",
@@ -937,7 +937,7 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         }
     }
 
-    if (!ScriptBehaviorBridgeInternal::NotifyIndexedSettingsEdited(behavior, request.IndexedSettings, ctx, state.Error)) {
+    if (!NotifyIndexedSettingsEdited(behavior, request.IndexedSettings, ctx, state.Error)) {
         return fail(state.Error);
     }
 
@@ -1129,7 +1129,7 @@ bool ScriptBehaviorBridge::SetBehaviorSetting(CKBehavior *behavior,
         error = "Building Block behavior is not available.";
         return false;
     }
-    if (!ScriptBehaviorBridgeInternal::SetLocalParameterValueByIndex(behavior, settingIndex, value, error)) {
+    if (!SetLocalParameterValueByIndex(behavior, settingIndex, value, error)) {
         return false;
     }
     CKERROR err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED);

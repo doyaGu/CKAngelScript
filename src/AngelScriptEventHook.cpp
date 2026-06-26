@@ -8,7 +8,7 @@
 #include "ScriptMessage.h"
 #include "add_on/scriptdictionary/scriptdictionary.h"
 
-namespace AngelScriptEventHookInternal {
+namespace {
 
 constexpr int OUTPUT_OUT = 0;
 constexpr int OUTPUT_ERROR = 1;
@@ -55,7 +55,7 @@ CScriptDictionary *CreatePayloadDictionary(asIScriptEngine *engine, const std::s
     return payload;
 }
 
-} // namespace AngelScriptEventHookInternal
+} // namespace
 
 CKObjectDeclaration *FillBehaviorAngelScriptEventHookDecl() {
     CKObjectDeclaration *od = CreateCKObjectDeclaration("Event Hook");
@@ -106,21 +106,21 @@ int AngelScriptEventHook(const CKBehaviorContext &behcontext) {
     ScriptManager *manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
     if (!manager || !manager->GetMessageBus()) {
         const std::string error = "AngelScript manager or message bus is not available.";
-        AngelScriptEventHookInternal::RaiseError(behavior, error);
+        RaiseError(behavior, error);
         LOG_ERROR("[AngelScript Event Hook] %s", error.c_str());
         return CKBR_OK;
     }
 
-    const std::string topic = AngelScriptEventHookInternal::ReadStringParameter(behavior, AngelScriptEventHookInternal::PARAM_TOPIC);
+    const std::string topic = ReadStringParameter(behavior, PARAM_TOPIC);
     if (topic.empty()) {
         const std::string error = "Event Hook topic is empty.";
-        AngelScriptEventHookInternal::RaiseError(behavior, error);
+        RaiseError(behavior, error);
         return CKBR_OK;
     }
 
-    const std::string target = AngelScriptEventHookInternal::ReadStringParameter(behavior, AngelScriptEventHookInternal::PARAM_TARGET);
-    const std::string payloadText = AngelScriptEventHookInternal::ReadStringParameter(behavior, AngelScriptEventHookInternal::PARAM_PAYLOAD);
-    CScriptDictionary *payload = AngelScriptEventHookInternal::CreatePayloadDictionary(manager->GetScriptEngine(),
+    const std::string target = ReadStringParameter(behavior, PARAM_TARGET);
+    const std::string payloadText = ReadStringParameter(behavior, PARAM_PAYLOAD);
+    CScriptDictionary *payload = CreatePayloadDictionary(manager->GetScriptEngine(),
                                                                                        payloadText,
                                                                                        behavior->GetID());
 
@@ -133,7 +133,7 @@ int AngelScriptEventHook(const CKBehaviorContext &behcontext) {
 
     if (!published) {
         const std::string message = error.empty() ? "Event Hook publish failed." : error;
-        AngelScriptEventHookInternal::RaiseError(behavior, message);
+        RaiseError(behavior, message);
         if (behcontext.Context) {
             behcontext.Context->OutputToConsoleEx(const_cast<char *>("[AngelScript Event Hook] %s"), message.c_str());
         }
@@ -141,8 +141,8 @@ int AngelScriptEventHook(const CKBehaviorContext &behcontext) {
         return CKBR_OK;
     }
 
-    if (behavior->GetOutputCount() > AngelScriptEventHookInternal::OUTPUT_OUT) {
-        behavior->ActivateOutput(AngelScriptEventHookInternal::OUTPUT_OUT);
+    if (behavior->GetOutputCount() > OUTPUT_OUT) {
+        behavior->ActivateOutput(OUTPUT_OUT);
     }
     return CKBR_OK;
 }

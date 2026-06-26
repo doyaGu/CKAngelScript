@@ -7,7 +7,7 @@
 #include "Logger.h"
 #include "ScriptManager.h"
 
-namespace ScriptStartupSelfTestInternal {
+namespace {
 
 bool StartupSelfTestsAttempted = false;
 
@@ -52,43 +52,43 @@ bool ReportSelfTestFailure(ScriptManager *manager,
     return false;
 }
 
-} // namespace ScriptStartupSelfTestInternal
+} // namespace
 
 CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
-    if (ScriptStartupSelfTestInternal::StartupSelfTestsAttempted) {
+    if (StartupSelfTestsAttempted) {
         return CK_OK;
     }
-    if (!ScriptStartupSelfTestInternal::ShouldRunStartupSelfTests()) {
+    if (!ShouldRunStartupSelfTests()) {
         return CK_OK;
     }
-    ScriptStartupSelfTestInternal::StartupSelfTestsAttempted = true;
+    StartupSelfTestsAttempted = true;
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "start", std::string());
+    WriteStartupSelfTestMarker("running", "start", std::string());
 
     std::string error;
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "parameter-conversion", std::string());
+    WriteStartupSelfTestMarker("running", "parameter-conversion", std::string());
     if (!RunScriptParameterConversionSelfTest(error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "parameter-conversion",
                                                              "Parameter conversion",
                                                              error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "parameter-registry", std::string());
+    WriteStartupSelfTestMarker("running", "parameter-registry", std::string());
     if (!RunScriptParameterRegistrySelfTest(manager ? manager->GetCKContext() : nullptr,
                                             manager ? manager->GetScriptEngine() : nullptr,
                                             error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "parameter-registry",
                                                              "Parameter registry",
                                                              error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "manager-api", std::string());
+    WriteStartupSelfTestMarker("running", "manager-api", std::string());
     if (!RunScriptApiSelfTest(manager ? manager->GetCKContext() : nullptr, error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "manager-api",
                                                              "CKAngelScript API",
                                                              error);
@@ -96,9 +96,9 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     }
 
 #if CKAS_ENABLE_API_EXPORT
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "script-info-export", std::string());
+    WriteStartupSelfTestMarker("running", "script-info-export", std::string());
     if (!RunScriptInfoExportSelfTest(manager ? manager->GetScriptEngine() : nullptr, error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "script-info-export",
                                                              "ScriptInfo export",
                                                              error);
@@ -106,38 +106,38 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     }
 #endif
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "component-metadata", std::string());
+    WriteStartupSelfTestMarker("running", "component-metadata", std::string());
     if (!RunScriptComponentMetadataSelfTest(error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "component-metadata",
                                                              "Component metadata",
                                                              error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "runtime-metadata", std::string());
+    WriteStartupSelfTestMarker("running", "runtime-metadata", std::string());
     if (!ScriptRuntimeMetadata::RunScriptRuntimeMetadataSelfTest(error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "runtime-metadata",
                                                              "Runtime metadata",
                                                              error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "runtime-dependency", std::string());
+    WriteStartupSelfTestMarker("running", "runtime-dependency", std::string());
     if (!ScriptRuntimeDependencyResolver::RunScriptRuntimeDependencySelfTest(error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "runtime-dependency",
                                                              "Runtime dependency",
                                                              error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "native-memory", std::string());
+    WriteStartupSelfTestMarker("running", "native-memory", std::string());
     if (!RunScriptNativeMemorySelfTest(manager ? manager->GetCKContext() : nullptr,
                                        manager ? manager->GetScriptEngine() : nullptr,
                                        error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "native-memory",
                                                              "Native memory",
                                                              error);
@@ -145,9 +145,9 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     }
 
 #if CKAS_ENABLE_DYNCALL
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "dynload", std::string());
+    WriteStartupSelfTestMarker("running", "dynload", std::string());
     if (!RunScriptDynLoadSelfTest(manager ? manager->GetScriptEngine() : nullptr, error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "dynload",
                                                              "DynLoad",
                                                              error);
@@ -155,58 +155,58 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     }
 #endif
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "vx-bindings", std::string());
+    WriteStartupSelfTestMarker("running", "vx-bindings", std::string());
     if (!RunScriptVxBindingSelfTest(manager ? manager->GetScriptEngine() : nullptr, error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "vx-bindings",
                                                              "Vx bindings",
                                                              error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "behavior-bridge", std::string());
+    WriteStartupSelfTestMarker("running", "behavior-bridge", std::string());
     if (!RunScriptBehaviorBridgeSelfTest(manager ? manager->GetCKContext() : nullptr,
                                          manager ? manager->GetScriptEngine() : nullptr,
                                          error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager,
+        ReportSelfTestFailure(manager,
                                                              "behavior-bridge",
                                                              "Behavior bridge",
                                                              error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "scene", std::string());
+    WriteStartupSelfTestMarker("running", "scene", std::string());
     if (!RunScriptSceneSelfTest(manager ? manager->GetCKContext() : nullptr,
                                 manager ? manager->GetScriptEngine() : nullptr,
                                 error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager, "scene", "Scene API", error);
+        ReportSelfTestFailure(manager, "scene", "Scene API", error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "message", std::string());
+    WriteStartupSelfTestMarker("running", "message", std::string());
     if (!ScriptMessageSelfTest::RunScriptMessageSelfTest(manager ? manager->GetCKContext() : nullptr,
                                                          manager ? manager->GetScriptEngine() : nullptr,
                                                          error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager, "message", "Message", error);
+        ReportSelfTestFailure(manager, "message", "Message", error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "runtime", std::string());
+    WriteStartupSelfTestMarker("running", "runtime", std::string());
     if (!RunScriptRuntimeSelfTest(manager ? manager->GetCKContext() : nullptr,
                                   manager ? manager->GetScriptEngine() : nullptr,
                                   error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager, "runtime", "Runtime", error);
+        ReportSelfTestFailure(manager, "runtime", "Runtime", error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("running", "async", std::string());
+    WriteStartupSelfTestMarker("running", "async", std::string());
     if (!RunScriptAsyncSelfTest(manager ? manager->GetCKContext() : nullptr,
                                 manager ? manager->GetScriptEngine() : nullptr,
                                 error)) {
-        ScriptStartupSelfTestInternal::ReportSelfTestFailure(manager, "async", "Async", error);
+        ReportSelfTestFailure(manager, "async", "Async", error);
         return CKERR_INVALIDOPERATION;
     }
 
-    ScriptStartupSelfTestInternal::WriteStartupSelfTestMarker("ok", "complete", std::string());
+    WriteStartupSelfTestMarker("ok", "complete", std::string());
     return CK_OK;
 }

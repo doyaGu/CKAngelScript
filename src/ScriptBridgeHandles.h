@@ -116,7 +116,7 @@ private:
     CKParameterIn *Target() const;
     CKParameter *PreviousSource() const;
     CKParameter *InstalledSource() const;
-    bool RestoreInternal(std::string &error, bool explicitCall);
+    bool RestoreSourceLink(std::string &error, bool explicitCall);
 
     enum class OwnershipState {
         Scoped,
@@ -637,7 +637,7 @@ private:
                                 const std::string &description,
                                 const std::vector<ScriptBridgeStampedObjectRef> &createdNodes = {},
                                 const std::vector<ScriptBridgeStampedObjectRef> &createdLinks = {}) const;
-    bool ValidateInternal(const CKBehaviorContext &ctx, std::string &error) const;
+    bool ValidatePlan(const CKBehaviorContext &ctx, std::string &error) const;
     bool ResolveNodeIndex(const GraphEditNode *node, int &index, std::string &error) const;
     CKBehavior *ResolveNodeBehavior(int index) const;
     CKBehaviorLink *ResolveExistingLink(const LinkSpec &spec) const;

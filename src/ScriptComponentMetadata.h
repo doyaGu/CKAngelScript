@@ -9,7 +9,7 @@
 #include "ScriptComponentState.h"
 #include "ScriptParameterConversion.h"
 
-namespace AngelScriptComponentInternal {
+namespace ScriptComponentSupport {
 
 std::string TrimString(const std::string &value);
 std::string ToLower(std::string value);
@@ -54,6 +54,6 @@ bool ResolveComponentBinding(asIScriptEngine *engine,
                              ScriptComponentBinding &binding,
                              std::string &error);
 
-} // namespace AngelScriptComponentInternal
+} // namespace ScriptComponentSupport
 
 #endif

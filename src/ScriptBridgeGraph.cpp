@@ -8,7 +8,7 @@
 #include "add_on/scriptarray/scriptarray.h"
 #include "ScriptParameterConversion.h"
 
-namespace ScriptBridgeGraphInternal {
+namespace {
 
 CKContext *GraphContext(ScriptBehaviorBridge *bridge, const CKBehaviorContext &ctx) {
     if (ctx.Context) {
@@ -113,7 +113,7 @@ CKBehavior *IoOwner(CKBehaviorIO *io) {
     return io ? io->GetOwner() : nullptr;
 }
 
-int SourceOutputIndex(CKBehaviorLink *link) {
+int LinkSourceOutputIndex(CKBehaviorLink *link) {
     CKBehaviorIO *io = link ? link->GetInBehaviorIO() : nullptr;
     CKBehavior *owner = IoOwner(io);
     if (!owner || !io) {
@@ -123,7 +123,7 @@ int SourceOutputIndex(CKBehaviorLink *link) {
     return index >= 0 ? index : owner->GetInputPosition(io);
 }
 
-int TargetInputIndex(CKBehaviorLink *link) {
+int LinkTargetInputIndex(CKBehaviorLink *link) {
     CKBehaviorIO *io = link ? link->GetOutBehaviorIO() : nullptr;
     CKBehavior *owner = IoOwner(io);
     if (!owner || !io) {
@@ -133,11 +133,11 @@ int TargetInputIndex(CKBehaviorLink *link) {
     return index >= 0 ? index : owner->GetOutputPosition(io);
 }
 
-CKBehavior *SourceBehavior(CKBehaviorLink *link) {
+CKBehavior *LinkSourceBehavior(CKBehaviorLink *link) {
     return IoOwner(link ? link->GetInBehaviorIO() : nullptr);
 }
 
-CKBehavior *TargetBehavior(CKBehaviorLink *link) {
+CKBehavior *LinkTargetBehavior(CKBehaviorLink *link) {
     return IoOwner(link ? link->GetOutBehaviorIO() : nullptr);
 }
 
@@ -175,7 +175,7 @@ bool ContainsSubBehaviorRecursive(CKBehavior *container, CKBehavior *behavior) {
 }
 
 bool LinkTouches(CKBehaviorLink *link, CKBehavior *behavior) {
-    return behavior && (SourceBehavior(link) == behavior || TargetBehavior(link) == behavior);
+    return behavior && (LinkSourceBehavior(link) == behavior || LinkTargetBehavior(link) == behavior);
 }
 
 bool GraphContainsLink(CKBehavior *container, CKBehaviorLink *link) {
@@ -393,7 +393,7 @@ bool BehaviorPrototypeNameMatches(CKBehavior *behavior, const std::string &name)
     return decl && (SafeString(decl->GetName()) == name || PrototypeQualifiedName(decl) == name);
 }
 
-} // namespace ScriptBridgeGraphInternal
+} // namespace
 
 BehaviorQuery::BehaviorQuery() = default;
 
@@ -422,7 +422,7 @@ BehaviorQuery *BehaviorQuery::PrototypeName(const std::string &name) {
 }
 
 BehaviorQuery *BehaviorQuery::PrototypeQuery(const std::string &query) {
-    CKGUID guid = ScriptBridgeGraphInternal::PrototypeGuidFromQuery(query);
+    CKGUID guid = PrototypeGuidFromQuery(query);
     if (CKGuidIsValid(guid)) {
         m_PrototypeGuid = guid;
         m_PrototypeName.clear();
@@ -492,13 +492,13 @@ bool BehaviorQuery::Matches(CKBehavior *behavior, int depth) const {
     if (!m_Name.empty() && !NameEquals(behavior->GetName(), m_Name)) {
         return false;
     }
-    if (!m_NameContains.empty() && !ScriptBridgeGraphInternal::ContainsText(SafeString(behavior->GetName()), m_NameContains)) {
+    if (!m_NameContains.empty() && !ContainsText(SafeString(behavior->GetName()), m_NameContains)) {
         return false;
     }
     if (CKGuidIsValid(m_PrototypeGuid) && behavior->GetPrototypeGuid() != m_PrototypeGuid) {
         return false;
     }
-    if (!ScriptBridgeGraphInternal::BehaviorPrototypeNameMatches(behavior, m_PrototypeName)) {
+    if (!BehaviorPrototypeNameMatches(behavior, m_PrototypeName)) {
         return false;
     }
     CKBeObject *target = behavior->GetTarget();
@@ -562,12 +562,12 @@ BehaviorNode *BehaviorGraph::Require(BehaviorQuery *query) const {
 }
 
 CScriptArray *BehaviorGraph::FindAll(BehaviorQuery *query) const {
-    CScriptArray *array = ScriptBridgeGraphInternal::CreateNodeArray(m_Bridge);
+    CScriptArray *array = CreateNodeArray(m_Bridge);
     if (!array) {
         return nullptr;
     }
     for (CKBehavior *behavior : FindAllRaw(query)) {
-        ScriptBridgeGraphInternal::AppendNode(array, WrapNode(behavior));
+        AppendNode(array, WrapNode(behavior));
     }
     return array;
 }
@@ -577,17 +577,17 @@ std::string BehaviorGraph::DescribeCandidates(BehaviorQuery *query) const {
     const std::vector<CKBehavior *> matches = FindAllRaw(query);
     text += fmt::format("\nCandidates: {}", matches.size());
     for (CKBehavior *behavior : matches) {
-        text += "\n  " + ScriptBridgeGraphInternal::BehaviorLabel(behavior);
+        text += "\n  " + BehaviorLabel(behavior);
     }
     return text;
 }
 
 std::string BehaviorGraph::Describe() const {
-    return fmt::format("BehaviorGraph(root={})", ScriptBridgeGraphInternal::BehaviorLabel(RootBehavior()));
+    return fmt::format("BehaviorGraph(root={})", BehaviorLabel(RootBehavior()));
 }
 
 CKBehavior *BehaviorGraph::RootBehavior() const {
-    return ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, m_RootBehaviorId, m_RootStamp);
+    return StampedBehaviorById(m_Bridge, m_RootBehaviorId, m_RootStamp);
 }
 
 ScriptBehaviorBridge *BehaviorGraph::Bridge() const { return m_Bridge; }
@@ -679,7 +679,7 @@ std::string GraphEditResult::Describe() const {
 }
 
 CScriptArray *GraphEditResult::CreatedNodes() const {
-    CScriptArray *array = ScriptBridgeGraphInternal::CreateNodeArray(m_Bridge);
+    CScriptArray *array = CreateNodeArray(m_Bridge);
     if (!array) {
         return nullptr;
     }
@@ -694,14 +694,14 @@ CScriptArray *GraphEditResult::CreatedNodes() const {
     for (const ScriptBridgeStampedObjectRef &ref : m_CreatedNodeIds) {
         CKBehavior *behavior = CreatedBehavior(ref);
         if (behavior) {
-            ScriptBridgeGraphInternal::AppendNode(array, new BehaviorNode(m_Bridge, ctx, rootId, behavior->GetID(), componentId));
+            AppendNode(array, new BehaviorNode(m_Bridge, ctx, rootId, behavior->GetID(), componentId));
         }
     }
     return array;
 }
 
 CScriptArray *GraphEditResult::CreatedLinks() const {
-    CScriptArray *array = ScriptBridgeGraphInternal::CreateLinkArray(m_Bridge);
+    CScriptArray *array = CreateLinkArray(m_Bridge);
     if (!array) {
         return nullptr;
     }
@@ -716,20 +716,20 @@ CScriptArray *GraphEditResult::CreatedLinks() const {
     for (const ScriptBridgeStampedObjectRef &ref : m_CreatedLinkIds) {
         CKBehaviorLink *link = CreatedLink(ref);
         if (link) {
-            ScriptBridgeGraphInternal::AppendLink(array, new BehaviorLinkRef(m_Bridge,
+            AppendLink(array, new BehaviorLinkRef(m_Bridge,
                                                                              rootId,
                                                                              link->GetID(),
                                                                              componentId,
                                                                              ref.Stamp,
                                                                              ref.Address,
-                                                                             ScriptBridgeGraphInternal::GraphContext(m_Bridge, ctx)));
+                                                                             GraphContext(m_Bridge, ctx)));
         }
     }
     return array;
 }
 
 CKBehavior *GraphEditResult::RootBehavior() const {
-    CKContext *context = ScriptBridgeGraphInternal::GraphContext(m_Bridge, m_Context);
+    CKContext *context = GraphContext(m_Bridge, m_Context);
     CKBehavior *root = CKBehavior::Cast(GetStampedCKObjectById(context, m_RootBehaviorId, m_RootBehaviorStamp));
     if (root && m_RootBehaviorAddress && ScriptBridgeObjectAddress(root) != m_RootBehaviorAddress) {
         return nullptr;
@@ -738,7 +738,7 @@ CKBehavior *GraphEditResult::RootBehavior() const {
 }
 
 CKBehavior *GraphEditResult::CreatedBehavior(const ScriptBridgeStampedObjectRef &ref) const {
-    CKContext *context = ScriptBridgeGraphInternal::GraphContext(m_Bridge, m_Context);
+    CKContext *context = GraphContext(m_Bridge, m_Context);
     CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(context, ref.Id, ref.Stamp));
     if (behavior && ref.Address && ScriptBridgeObjectAddress(behavior) != ref.Address) {
         return nullptr;
@@ -747,7 +747,7 @@ CKBehavior *GraphEditResult::CreatedBehavior(const ScriptBridgeStampedObjectRef 
 }
 
 CKBehaviorLink *GraphEditResult::CreatedLink(const ScriptBridgeStampedObjectRef &ref) const {
-    CKContext *context = ScriptBridgeGraphInternal::GraphContext(m_Bridge, m_Context);
+    CKContext *context = GraphContext(m_Bridge, m_Context);
     CKBehaviorLink *link = CKBehaviorLink::Cast(GetStampedCKObjectById(context, ref.Id, ref.Stamp));
     if (link && ref.Address && ScriptBridgeObjectAddress(link) != ref.Address) {
         return nullptr;
@@ -796,7 +796,7 @@ std::string GraphEditNode::Describe() const {
     }
     CKBehavior *behavior = m_Edit ? m_Edit->ResolveNode(this) : nullptr;
     if (behavior) {
-        return ScriptBridgeGraphInternal::BehaviorLabel(behavior);
+        return BehaviorLabel(behavior);
     }
     return fmt::format("GraphEditNode(pending #{})", m_SpecIndex);
 }
@@ -869,7 +869,7 @@ std::string BehaviorGraphEdit::Error() const {
 
 std::string BehaviorGraphEdit::Describe() const {
     return fmt::format("BehaviorGraphEdit(root={}, nodes={}, links={}, removes={}, moves={}, layoutEdits={})",
-                       ScriptBridgeGraphInternal::BehaviorLabel(RootBehavior()),
+                       BehaviorLabel(RootBehavior()),
                        m_Nodes.size(),
                        m_Links.size(),
                        m_Removes.size(),
@@ -1196,7 +1196,7 @@ BehaviorGraphEdit *BehaviorGraphEdit::Operation(GraphEditNode *node, BBSlot *pin
 
 GraphEditResult *BehaviorGraphEdit::Validate(const CKBehaviorContext &ctx) const {
     std::string error;
-    if (!ValidateInternal(ctx, error)) {
+    if (!ValidatePlan(ctx, error)) {
         return MakeResult(false, error, error);
     }
     return MakeResult(true, std::string(), "Graph edit validation succeeded.");
@@ -1204,12 +1204,12 @@ GraphEditResult *BehaviorGraphEdit::Validate(const CKBehaviorContext &ctx) const
 
 GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
     std::string error;
-    if (!ValidateInternal(ctx, error)) {
+    if (!ValidatePlan(ctx, error)) {
         SetError(error);
         return MakeResult(false, error, error);
     }
 
-    CKContext *context = ScriptBridgeGraphInternal::GraphContext(m_Bridge, ctx);
+    CKContext *context = GraphContext(m_Bridge, ctx);
     CKBehavior *root = RootBehavior();
     std::vector<ScriptBridgeStampedObjectRef> createdNodes;
     std::vector<ScriptBridgeStampedObjectRef> createdLinks;
@@ -1249,7 +1249,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         }
         appliedSourceLinks.clear();
         for (CK_ID localId : createdValueLocalSources) {
-            ScriptBridgeGraphInternal::DestroyGraphEditLocalSource(context, localId);
+            DestroyGraphEditLocalSource(context, localId);
         }
         createdValueLocalSources.clear();
         for (const ScriptBridgeStampedObjectRef &linkRef : createdLinks) {
@@ -1269,15 +1269,15 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
                 continue;
             }
             const bool input = it->Type == LayoutSpec::Kind::EnsureInputCount;
-            while (ScriptBridgeGraphInternal::BehaviorIoCount(behavior, input) > it->OriginalCount) {
-                CKBehaviorIO *removed = ScriptBridgeGraphInternal::RemoveLastBehaviorIo(behavior, input);
+            while (BehaviorIoCount(behavior, input) > it->OriginalCount) {
+                CKBehaviorIO *removed = RemoveLastBehaviorIo(behavior, input);
                 if (removed) {
                     context->DestroyObject(removed);
                 } else {
                     break;
                 }
             }
-            ScriptBridgeGraphInternal::NotifyBehaviorLayoutEdited(m_Bridge, behavior);
+            NotifyBehaviorLayoutEdited(m_Bridge, behavior);
         }
         appliedLayoutEdits.clear();
         for (auto it = appliedTargetEdits.rbegin(); it != appliedTargetEdits.rend(); ++it) {
@@ -1328,7 +1328,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         if (spec.Type == NodeSpec::Kind::Create) {
             behavior = m_Bridge->CreatePersistentBehavior(spec.Request, ctx, spec.Name, error, &operationIds);
         } else {
-            CKBehavior *source = ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
+            CKBehavior *source = StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
             if (!source) {
                 return failApply("BehaviorGraphEdit.Clone source behavior is no longer valid.");
             }
@@ -1367,20 +1367,20 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         }
         const bool input = spec.Type == LayoutSpec::Kind::EnsureInputCount;
         const char *fallbackPrefix = input ? "In" : "Out";
-        const int originalCount = ScriptBridgeGraphInternal::BehaviorIoCount(behavior, input);
+        const int originalCount = BehaviorIoCount(behavior, input);
         appliedLayoutEdits.push_back(AppliedLayoutEdit{behavior->GetID(), spec.Type, originalCount});
         for (int i = originalCount; i < spec.Count; ++i) {
-            const std::string name = ScriptBridgeGraphInternal::BehaviorIoName(spec.Prefix, i, fallbackPrefix);
-            if (!ScriptBridgeGraphInternal::CreateBehaviorIo(behavior, input, name)) {
+            const std::string name = BehaviorIoName(spec.Prefix, i, fallbackPrefix);
+            if (!CreateBehaviorIo(behavior, input, name)) {
                 error = fmt::format("Failed to create {} #{} '{}' on {}.",
                                     input ? "input" : "output",
                                     i,
                                     name,
-                                    ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+                                    BehaviorLabel(behavior));
                 return failApply(error);
             }
         }
-        ScriptBridgeGraphInternal::NotifyBehaviorLayoutEdited(m_Bridge, behavior);
+        NotifyBehaviorLayoutEdited(m_Bridge, behavior);
     }
 
     for (const TargetSpec &spec : m_Targets) {
@@ -1462,9 +1462,9 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         if (err != CK_OK) {
             context->DestroyObject(link);
             error = fmt::format("Failed to add behavior link {}#{} -> {}#{} (CKERROR {}).",
-                                ScriptBridgeGraphInternal::BehaviorLabel(source),
+                                BehaviorLabel(source),
                                 spec.SourceOutputIndex,
-                                ScriptBridgeGraphInternal::BehaviorLabel(target),
+                                BehaviorLabel(target),
                                 spec.TargetInputIndex,
                                 err);
             return failApply(error);
@@ -1524,7 +1524,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
 
     for (const MoveSpec &move : m_Moves) {
         CKBehavior *behavior = ResolveNodeBehavior(move.NodeIndex);
-        CKBehavior *targetRoot = ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, move.TargetRootId, move.TargetRootStamp);
+        CKBehavior *targetRoot = StampedBehaviorById(m_Bridge, move.TargetRootId, move.TargetRootStamp);
         if (!behavior || !targetRoot) {
             continue;
         }
@@ -1553,7 +1553,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             std::vector<CKBehaviorLink *> incident;
             for (int i = 0; i < root->GetSubBehaviorLinkCount(); ++i) {
                 CKBehaviorLink *link = root->GetSubBehaviorLink(i);
-                if (ScriptBridgeGraphInternal::LinkTouches(link, behavior)) {
+                if (LinkTouches(link, behavior)) {
                     incident.push_back(link);
                 }
             }
@@ -1578,11 +1578,11 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
     }
     appliedSourceLinks.clear();
     for (CK_ID localId : replacedValueLocalSources) {
-        ScriptBridgeGraphInternal::DestroyGraphEditLocalSource(context, localId);
+        DestroyGraphEditLocalSource(context, localId);
     }
     replacedValueLocalSources.clear();
     for (CK_ID operationId : replacedOperations) {
-        ScriptBridgeGraphInternal::DestroyReplacedOperation(context, operationId);
+        DestroyReplacedOperation(context, operationId);
     }
     replacedOperations.clear();
     for (ParamOperationRef *operation : appliedOperations) {
@@ -1610,7 +1610,7 @@ const CKBehaviorContext &BehaviorGraphEdit::Context() const { return m_Context; 
 CK_ID BehaviorGraphEdit::RootId() const { return m_RootBehaviorId; }
 
 CKBehavior *BehaviorGraphEdit::RootBehavior() const {
-    return ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, m_RootBehaviorId, m_RootStamp);
+    return StampedBehaviorById(m_Bridge, m_RootBehaviorId, m_RootStamp);
 }
 
 CKBehavior *BehaviorGraphEdit::ResolveNode(const GraphEditNode *node) const {
@@ -1646,7 +1646,7 @@ BehaviorLinkRef *BehaviorGraphEdit::ResolveLink(const GraphEditLink *link) const
     }
     if (link->LinkId()) {
         CKBehaviorLink *rawLink = CKBehaviorLink::Cast(GetCKObjectById(context, link->LinkId()));
-        if (!rawLink || !ScriptBridgeGraphInternal::GraphContainsLink(root, rawLink)) {
+        if (!rawLink || !GraphContainsLink(root, rawLink)) {
             return nullptr;
         }
         return new BehaviorLinkRef(m_Bridge, m_RootBehaviorId, link->LinkId(), ComponentIdFromContext(m_Context));
@@ -1662,7 +1662,7 @@ BehaviorLinkRef *BehaviorGraphEdit::ResolveLink(const GraphEditLink *link) const
     CKBehaviorLink *rawLink = CKBehaviorLink::Cast(GetStampedCKObjectById(context, spec.CreatedLinkId, spec.CreatedLinkStamp));
     if (!rawLink ||
         (spec.CreatedLinkAddress && ScriptBridgeObjectAddress(rawLink) != spec.CreatedLinkAddress) ||
-        !ScriptBridgeGraphInternal::GraphContainsLink(root, rawLink)) {
+        !GraphContainsLink(root, rawLink)) {
         return nullptr;
     }
     return new BehaviorLinkRef(m_Bridge,
@@ -1716,8 +1716,8 @@ GraphEditResult *BehaviorGraphEdit::MakeResult(bool ok,
     return new GraphEditResult(m_Bridge, resultContext, ok, error, description, createdNodes, createdLinks);
 }
 
-bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::string &error) const {
-    CKContext *context = ScriptBridgeGraphInternal::GraphContext(m_Bridge, ctx);
+bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &error) const {
+    CKContext *context = GraphContext(m_Bridge, ctx);
     CKBehavior *root = RootBehavior();
     if (!context || !m_Bridge) {
         error = "BehaviorGraphEdit requires CKContext and ScriptBehaviorBridge.";
@@ -1755,7 +1755,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
     for (int i = 0; i < static_cast<int>(m_Nodes.size()); ++i) {
         const NodeSpec &spec = m_Nodes[i];
         if (spec.Type == NodeSpec::Kind::Existing) {
-            CKBehavior *behavior = ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
+            CKBehavior *behavior = StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
             if (!behavior) {
                 error = fmt::format("Graph edit node #{} is stale or deleted.", i);
                 return false;
@@ -1764,14 +1764,14 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
                 error = "BehaviorGraphEdit cannot mutate the root graph as a child node.";
                 return false;
             }
-            if (!ScriptBridgeGraphInternal::IsDirectChildOf(root, behavior)) {
+            if (!IsDirectChildOf(root, behavior)) {
                 error = fmt::format("Behavior '{}' is not a direct child of graph '{}'.",
                                     SafeString(behavior->GetName()),
                                     SafeString(root->GetName()));
                 return false;
             }
         } else if (spec.Type == NodeSpec::Kind::Clone) {
-            CKBehavior *behavior = ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
+            CKBehavior *behavior = StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
             if (!behavior) {
                 error = fmt::format("Graph edit clone source #{} is stale or deleted.", i);
                 return false;
@@ -1780,7 +1780,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
                 error = "BehaviorGraphEdit cannot clone the root graph as a child node.";
                 return false;
             }
-            if (!ScriptBridgeGraphInternal::IsDirectChildOf(root, behavior)) {
+            if (!IsDirectChildOf(root, behavior)) {
                 error = fmt::format("BehaviorGraphEdit clone source '{}' is not a direct child of graph '{}'.",
                                     SafeString(behavior->GetName()),
                                     SafeString(root->GetName()));
@@ -1843,7 +1843,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
             : behavior->GetOutputCount();
         if (spec.Count < currentCount) {
             error = fmt::format("BehaviorGraphEdit layout edit cannot shrink {} from {} to {}.",
-                                ScriptBridgeGraphInternal::BehaviorLabel(behavior),
+                                BehaviorLabel(behavior),
                                 currentCount,
                                 spec.Count);
             return false;
@@ -1853,7 +1853,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
     for (const LinkSpec &spec : m_Links) {
         if (spec.Type == LinkSpec::Kind::Unlink) {
             CKBehaviorLink *link = ResolveExistingLink(spec);
-            if (!link || !ScriptBridgeGraphInternal::GraphContainsLink(root, link)) {
+            if (!link || !GraphContainsLink(root, link)) {
                 error = "BehaviorGraphEdit.Unlink references a stale or foreign behavior link.";
                 return false;
             }
@@ -1876,7 +1876,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
             if (spec.SourceOutputIndex < 0 || spec.SourceOutputIndex >= PlannedOutputCount(spec.SourceNodeIndex)) {
                 error = fmt::format("Source output index #{} is out of range for {}.",
                                     spec.SourceOutputIndex,
-                                    ScriptBridgeGraphInternal::BehaviorLabel(source));
+                                    BehaviorLabel(source));
                 return false;
             }
         } else {
@@ -1899,7 +1899,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
             if (spec.TargetInputIndex < 0 || spec.TargetInputIndex >= PlannedInputCount(spec.TargetNodeIndex)) {
                 error = fmt::format("Target input index #{} is out of range for {}.",
                                     spec.TargetInputIndex,
-                                    ScriptBridgeGraphInternal::BehaviorLabel(target));
+                                    BehaviorLabel(target));
                 return false;
             }
         } else {
@@ -1995,7 +1995,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
             error = "BehaviorGraphEdit.Move has an invalid or removed node reference.";
             return false;
         }
-        CKBehavior *targetRoot = ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, move.TargetRootId, move.TargetRootStamp);
+        CKBehavior *targetRoot = StampedBehaviorById(m_Bridge, move.TargetRootId, move.TargetRootStamp);
         if (!targetRoot || targetRoot->IsUsingFunction()) {
             error = "BehaviorGraphEdit.Move target graph is not valid.";
             return false;
@@ -2009,12 +2009,12 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
             error = "BehaviorGraphEdit.Move target graph is the current graph; Move requires another non-descendant graph.";
             return false;
         }
-        if (targetRoot == behavior || ScriptBridgeGraphInternal::ContainsSubBehaviorRecursive(behavior, targetRoot)) {
+        if (targetRoot == behavior || ContainsSubBehaviorRecursive(behavior, targetRoot)) {
             error = "BehaviorGraphEdit.Move cannot move a behavior into itself or one of its descendant graphs.";
             return false;
         }
         for (int i = 0; i < root->GetSubBehaviorLinkCount(); ++i) {
-            if (ScriptBridgeGraphInternal::LinkTouches(root->GetSubBehaviorLink(i), behavior)) {
+            if (LinkTouches(root->GetSubBehaviorLink(i), behavior)) {
                 error = "BehaviorGraphEdit.Move requires existing incident links to be unlinked first.";
                 return false;
             }
@@ -2029,7 +2029,7 @@ bool BehaviorGraphEdit::ValidateInternal(const CKBehaviorContext &ctx, std::stri
         }
         if (!remove.RemoveIncidentLinks) {
             for (int i = 0; i < root->GetSubBehaviorLinkCount(); ++i) {
-                if (ScriptBridgeGraphInternal::LinkTouches(root->GetSubBehaviorLink(i), behavior)) {
+                if (LinkTouches(root->GetSubBehaviorLink(i), behavior)) {
                     error = fmt::format("Cannot remove behavior '{}' while incident links remain. Pass removeIncidentLinks=true or unlink first.",
                                         SafeString(behavior->GetName()));
                     return false;
@@ -2068,17 +2068,17 @@ CKBehavior *BehaviorGraphEdit::ResolveNodeBehavior(int index) const {
     const NodeSpec &spec = m_Nodes[index];
     if (spec.Type == NodeSpec::Kind::Create) {
         return spec.CreatedBehaviorId
-            ? ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, spec.CreatedBehaviorId, spec.CreatedBehaviorStamp)
+            ? StampedBehaviorById(m_Bridge, spec.CreatedBehaviorId, spec.CreatedBehaviorStamp)
             : nullptr;
     }
     if (spec.Type == NodeSpec::Kind::Clone && spec.CreatedBehaviorId) {
-        return ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, spec.CreatedBehaviorId, spec.CreatedBehaviorStamp);
+        return StampedBehaviorById(m_Bridge, spec.CreatedBehaviorId, spec.CreatedBehaviorStamp);
     }
-    return ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
+    return StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
 }
 
 CKBehaviorLink *BehaviorGraphEdit::ResolveExistingLink(const LinkSpec &spec) const {
-    return ScriptBridgeGraphInternal::StampedLinkById(m_Bridge, spec.ExistingLinkId, spec.ExistingLinkStamp);
+    return StampedLinkById(m_Bridge, spec.ExistingLinkId, spec.ExistingLinkStamp);
 }
 
 int BehaviorGraphEdit::PlannedInputCount(int nodeIndex) const {
@@ -2123,7 +2123,7 @@ bool BehaviorGraphEdit::ValidateValueSpec(CKContext *context, const ValueSpec &s
             if (!pin) {
                 error = fmt::format("Pin index #{} is out of range for {}.",
                                     spec.SlotIndex,
-                                    ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+                                    BehaviorLabel(behavior));
                 return false;
             }
             targetGuid = pin->GetGUID();
@@ -2135,7 +2135,7 @@ bool BehaviorGraphEdit::ValidateValueSpec(CKContext *context, const ValueSpec &s
             if (!setting || !behavior->IsLocalParameterSetting(spec.SlotIndex)) {
                 error = fmt::format("Setting index #{} is out of range for {}.",
                                     spec.SlotIndex,
-                                    ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+                                    BehaviorLabel(behavior));
                 return false;
             }
             targetGuid = setting->GetGUID();
@@ -2149,10 +2149,10 @@ bool BehaviorGraphEdit::ValidateValueSpec(CKContext *context, const ValueSpec &s
         const ScriptBridgeLayoutRecord *layout = m_Bridge ? m_Bridge->GetPrototypeLayout(m_Context, node.Request) : nullptr;
         const ScriptBridgeLayoutParamSlot *slot = nullptr;
         if (layout && spec.Kind == ScriptBridgeSlotKind::Pin) {
-            slot = ScriptBridgeGraphInternal::FindLayoutSlot(layout->Pins, spec.SlotIndex);
+            slot = FindLayoutSlot(layout->Pins, spec.SlotIndex);
             label = fmt::format("pending pin #{}", spec.SlotIndex);
         } else if (layout && spec.Kind == ScriptBridgeSlotKind::Setting) {
-            slot = ScriptBridgeGraphInternal::FindLayoutSlot(layout->Settings, spec.SlotIndex);
+            slot = FindLayoutSlot(layout->Settings, spec.SlotIndex);
             label = fmt::format("pending setting #{}", spec.SlotIndex);
         }
         if (!slot) {
@@ -2210,11 +2210,11 @@ bool BehaviorGraphEdit::ApplyExistingValue(CKBehavior *behavior,
     if (!pin) {
         error = fmt::format("Input parameter index #{} is out of range for {}.",
                             spec.SlotIndex,
-                            ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+                            BehaviorLabel(behavior));
         return false;
     }
 
-    CKParameterLocal *local = ScriptBridgeGraphInternal::CreateGraphEditInputSource(behavior, spec.SlotIndex, spec.Value, error);
+    CKParameterLocal *local = CreateGraphEditInputSource(behavior, spec.SlotIndex, spec.Value, error);
     if (!local) {
         return false;
     }
@@ -2226,15 +2226,15 @@ bool BehaviorGraphEdit::ApplyExistingValue(CKBehavior *behavior,
                             spec.SlotIndex,
                             SafeString(pin->GetName()),
                             err);
-        ScriptBridgeGraphInternal::DestroyGraphEditLocalSource(behavior->GetCKContext(), local->GetID());
+        DestroyGraphEditLocalSource(behavior->GetCKContext(), local->GetID());
         return false;
     }
 
     sourceLinks.push_back(new ParamSourceLinkRef(m_Bridge, pin, previous, local));
     localSourceIds.push_back(local->GetID());
-    if (ScriptBridgeGraphInternal::IsGraphEditInputSource(previous)) {
+    if (IsGraphEditInputSource(previous)) {
         replacedLocalSourceIds.push_back(previous->GetID());
-    } else if (CKParameterOperation *operation = ScriptBridgeGraphInternal::OperationFromDirectSource(previous, behavior)) {
+    } else if (CKParameterOperation *operation = OperationFromDirectSource(previous, behavior)) {
         replacedOperations.push_back(operation->GetID());
     }
     return true;
@@ -2256,7 +2256,7 @@ bool BehaviorGraphEdit::ApplyExistingSource(CKBehavior *behavior,
     if (!pin) {
         error = fmt::format("Input parameter index #{} is out of range for {}.",
                             spec.PinIndex,
-                            ScriptBridgeGraphInternal::BehaviorLabel(behavior));
+                            BehaviorLabel(behavior));
         return false;
     }
 
@@ -2281,9 +2281,9 @@ bool BehaviorGraphEdit::ApplyExistingSource(CKBehavior *behavior,
     }
 
     sourceLinks.push_back(new ParamSourceLinkRef(m_Bridge, pin, previous, source));
-    if (ScriptBridgeGraphInternal::IsGraphEditInputSource(previous)) {
+    if (IsGraphEditInputSource(previous)) {
         replacedLocalSourceIds.push_back(previous->GetID());
-    } else if (CKParameterOperation *operation = ScriptBridgeGraphInternal::OperationFromDirectSource(previous, behavior)) {
+    } else if (CKParameterOperation *operation = OperationFromDirectSource(previous, behavior)) {
         replacedOperations.push_back(operation->GetID());
     }
     return true;
@@ -2302,7 +2302,7 @@ bool BehaviorGraphEdit::ApplyExistingOperation(CKBehavior *behavior,
         ? behavior->GetInputParameter(spec.Operation.TargetPinIndex)
         : nullptr;
     CKParameter *previous = pin ? pin->GetDirectSource() : nullptr;
-    CKParameterOperation *previousOperation = ScriptBridgeGraphInternal::OperationFromDirectSource(previous, behavior);
+    CKParameterOperation *previousOperation = OperationFromDirectSource(previous, behavior);
     ParamOperationRef *operation = ConnectOperationToInput(m_Bridge, behavior, spec.Operation.TargetPinIndex, spec.Operation, error, true, nullptr);
     if (!operation) {
         return false;
@@ -2542,40 +2542,40 @@ std::string BehaviorNode::Describe() const {
     if (!m_Error.empty()) {
         return m_Error;
     }
-    return ScriptBridgeGraphInternal::BehaviorLabel(Get());
+    return BehaviorLabel(Get());
 }
 
 CKBehavior *BehaviorNode::Get() const {
-    return ScriptBridgeGraphInternal::StampedBehaviorById(m_Bridge, m_BehaviorId, m_BehaviorStamp);
+    return StampedBehaviorById(m_Bridge, m_BehaviorId, m_BehaviorStamp);
 }
 
 CK_ID BehaviorNode::RootId() const { return m_RootBehaviorId; }
 CK_ID BehaviorNode::BehaviorId() const { return m_BehaviorId; }
 
 CScriptArray *BehaviorNode::AdjacentAll(bool next, int ioIndex, BehaviorQuery *query) const {
-    CScriptArray *array = ScriptBridgeGraphInternal::CreateNodeArray(m_Bridge);
+    CScriptArray *array = CreateNodeArray(m_Bridge);
     if (!array) {
         return nullptr;
     }
-    CKBehavior *container = ScriptBridgeGraphInternal::BehaviorById(m_Bridge, m_RootBehaviorId);
+    CKBehavior *container = BehaviorById(m_Bridge, m_RootBehaviorId);
     CKBehavior *self = Get();
     if (!container || !self) {
         return array;
     }
     for (int i = 0; i < container->GetSubBehaviorLinkCount(); ++i) {
         CKBehaviorLink *link = container->GetSubBehaviorLink(i);
-        CKBehavior *source = ScriptBridgeGraphInternal::SourceBehavior(link);
-        CKBehavior *target = ScriptBridgeGraphInternal::TargetBehavior(link);
+        CKBehavior *source = LinkSourceBehavior(link);
+        CKBehavior *target = LinkTargetBehavior(link);
         CKBehavior *candidate = next ? target : source;
         CKBehavior *anchor = next ? source : target;
-        const int linkIndex = next ? ScriptBridgeGraphInternal::SourceOutputIndex(link) : ScriptBridgeGraphInternal::TargetInputIndex(link);
+        const int linkIndex = next ? LinkSourceOutputIndex(link) : LinkTargetInputIndex(link);
         if (anchor != self || !candidate || (ioIndex >= 0 && linkIndex != ioIndex)) {
             continue;
         }
         if (query && !query->Matches(candidate, 0)) {
             continue;
         }
-        ScriptBridgeGraphInternal::AppendNode(array, new BehaviorNode(m_Bridge, m_Context, m_RootBehaviorId, candidate->GetID(), m_ComponentId));
+        AppendNode(array, new BehaviorNode(m_Bridge, m_Context, m_RootBehaviorId, candidate->GetID(), m_ComponentId));
     }
     return array;
 }
@@ -2596,18 +2596,18 @@ BehaviorNode *BehaviorNode::AdjacentFirst(bool next, int ioIndex, BehaviorQuery 
 }
 
 BehaviorLinkRef *BehaviorNode::AdjacentLinkFirst(bool next, int ioIndex, BehaviorQuery *query) const {
-    CKBehavior *container = ScriptBridgeGraphInternal::BehaviorById(m_Bridge, m_RootBehaviorId);
+    CKBehavior *container = BehaviorById(m_Bridge, m_RootBehaviorId);
     CKBehavior *self = Get();
     if (!container || !self) {
         return nullptr;
     }
     for (int i = 0; i < container->GetSubBehaviorLinkCount(); ++i) {
         CKBehaviorLink *link = container->GetSubBehaviorLink(i);
-        CKBehavior *source = ScriptBridgeGraphInternal::SourceBehavior(link);
-        CKBehavior *target = ScriptBridgeGraphInternal::TargetBehavior(link);
+        CKBehavior *source = LinkSourceBehavior(link);
+        CKBehavior *target = LinkTargetBehavior(link);
         CKBehavior *candidate = next ? target : source;
         CKBehavior *anchor = next ? source : target;
-        const int linkIndex = next ? ScriptBridgeGraphInternal::SourceOutputIndex(link) : ScriptBridgeGraphInternal::TargetInputIndex(link);
+        const int linkIndex = next ? LinkSourceOutputIndex(link) : LinkTargetInputIndex(link);
         if (anchor != self || !candidate || (ioIndex >= 0 && linkIndex != ioIndex)) {
             continue;
         }
@@ -2650,7 +2650,7 @@ bool BehaviorLinkRef::IsValid() const {
 }
 
 BehaviorRef *BehaviorLinkRef::SourceBehavior() const {
-    CKBehavior *behavior = ScriptBridgeGraphInternal::SourceBehavior(Get());
+    CKBehavior *behavior = LinkSourceBehavior(Get());
     if (!behavior) {
         return nullptr;
     }
@@ -2659,11 +2659,11 @@ BehaviorRef *BehaviorLinkRef::SourceBehavior() const {
 }
 
 int BehaviorLinkRef::SourceOutputIndex() const {
-    return ScriptBridgeGraphInternal::SourceOutputIndex(Get());
+    return LinkSourceOutputIndex(Get());
 }
 
 BehaviorRef *BehaviorLinkRef::TargetBehavior() const {
-    CKBehavior *behavior = ScriptBridgeGraphInternal::TargetBehavior(Get());
+    CKBehavior *behavior = LinkTargetBehavior(Get());
     if (!behavior) {
         return nullptr;
     }
@@ -2672,7 +2672,7 @@ BehaviorRef *BehaviorLinkRef::TargetBehavior() const {
 }
 
 int BehaviorLinkRef::TargetInputIndex() const {
-    return ScriptBridgeGraphInternal::TargetInputIndex(Get());
+    return LinkTargetInputIndex(Get());
 }
 
 int BehaviorLinkRef::Delay() const {
@@ -2687,9 +2687,9 @@ std::string BehaviorLinkRef::Describe() const {
     }
     return fmt::format("BehaviorLink id={} {}#{} -> {}#{} delay={}",
                        link->GetID(),
-                       ScriptBridgeGraphInternal::BehaviorLabel(ScriptBridgeGraphInternal::SourceBehavior(link)),
+                       BehaviorLabel(LinkSourceBehavior(link)),
                        SourceOutputIndex(),
-                       ScriptBridgeGraphInternal::BehaviorLabel(ScriptBridgeGraphInternal::TargetBehavior(link)),
+                       BehaviorLabel(LinkTargetBehavior(link)),
                        TargetInputIndex(),
                        Delay());
 }

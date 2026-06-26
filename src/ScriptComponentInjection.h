@@ -9,7 +9,7 @@
 
 class BBConfig;
 
-namespace AngelScriptComponentInternal {
+namespace ScriptComponentSupport {
 
 BBConfig *GetBBConfigField(ScriptComponentState *state, const ScriptComponentBinding &binding);
 bool ApplyBBConfigSourceBindings(const CKBehaviorContext &behcontext,
@@ -23,6 +23,6 @@ bool InjectComponentParameters(const CKBehaviorContext &behcontext,
                                bool forceHandles,
                                std::string &error);
 
-} // namespace AngelScriptComponentInternal
+} // namespace ScriptComponentSupport
 
 #endif

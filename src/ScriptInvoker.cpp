@@ -5,7 +5,7 @@
 #include "ScriptAsync.h"
 #include "ScriptManager.h"
 
-namespace ScriptInvokerInternal {
+namespace {
 
 std::string BuildContextStackTrace(asIScriptContext *ctx, const char *prefix) {
     if (!ctx) {
@@ -69,7 +69,7 @@ void ReleaseFinishedContextState(asIScriptContext *ctx) {
     }
 }
 
-} // namespace ScriptInvokerInternal
+} // namespace
 
 ScriptInvoker::ScriptInvoker(ScriptManager *man) : m_ScriptManager(man) {}
 
@@ -281,7 +281,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
 
     r = ctx->Execute();
     m_LastResultCode = r;
-    const ScriptInvocationStatus status = ScriptInvokerInternal::HandleExecutionResult(this, ctx, r, "Script Execution");
+    const ScriptInvocationStatus status = HandleExecutionResult(this, ctx, r, "Script Execution");
     if (status != ScriptInvocationStatus::Finished) {
         if (IsProfiling())
             EndTiming();
@@ -292,7 +292,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
         if (!retHandler(ctx)) {
             m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage("Script result handler rejected execution.");
-            ScriptInvokerInternal::ReleaseFinishedContextState(ctx);
+            ReleaseFinishedContextState(ctx);
             return ScriptInvocationStatus::Failed;
         }
     }
@@ -300,7 +300,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
     if (IsProfiling())
         EndTiming();
 
-    ScriptInvokerInternal::ReleaseFinishedContextState(ctx);
+    ReleaseFinishedContextState(ctx);
     return ScriptInvocationStatus::Finished;
 }
 
@@ -379,7 +379,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
 
     r = ctx->Execute();
     m_LastResultCode = r;
-    const ScriptInvocationStatus status = ScriptInvokerInternal::HandleExecutionResult(this, ctx, r, "Script Method");
+    const ScriptInvocationStatus status = HandleExecutionResult(this, ctx, r, "Script Method");
     if (status != ScriptInvocationStatus::Finished) {
         if (IsProfiling())
             EndTiming();
@@ -389,7 +389,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
     if (IsProfiling())
         EndTiming();
 
-    ScriptInvokerInternal::ReleaseFinishedContextState(ctx);
+    ReleaseFinishedContextState(ctx);
     return ScriptInvocationStatus::Finished;
 }
 
@@ -463,7 +463,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
 
     r = ctx->Execute();
     m_LastResultCode = r;
-    const ScriptInvocationStatus status = ScriptInvokerInternal::HandleExecutionResult(this, ctx, r, "Script Message");
+    const ScriptInvocationStatus status = HandleExecutionResult(this, ctx, r, "Script Message");
     if (status != ScriptInvocationStatus::Finished) {
         if (IsProfiling())
             EndTiming();
@@ -473,7 +473,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
     if (IsProfiling())
         EndTiming();
 
-    ScriptInvokerInternal::ReleaseFinishedContextState(ctx);
+    ReleaseFinishedContextState(ctx);
     return ScriptInvocationStatus::Finished;
 }
 

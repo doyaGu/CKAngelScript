@@ -100,7 +100,7 @@ public:
                                   CKAngelScriptResult *result = nullptr);
     bool RejectHostCall(const char *apiName, CKDWORD flags);
 
-    // Internal low-level AngelScript helpers. The public AngelScript C API
+    // Low-level AngelScript helpers. The public AngelScript C API
     // intentionally exposes only module and execution operations.
     int PrepareMultithread(asIThreadManager *externalMgr = nullptr);
     void UnprepareMultithread();
@@ -381,7 +381,7 @@ protected:
         const std::vector<std::tuple<std::string, std::string>> &sections,
         bool sourceSnapshotSections = false,
         CKAngelScriptResult *result = nullptr);
-    // Internal low-level shims backing the public module API. Do not call these
+    // Low-level shims backing the public module API. Do not call these
     // from behavior blocks or runtime helpers; use LoadModule/CompileModule/
     // UnloadModule and the cache helper methods above.
     int LoadModuleFromDefaultOrFile(const char *moduleName, const char *filename);

@@ -6,7 +6,7 @@
 #include "ScriptComponentInjection.h"
 #include "ScriptComponentMetadata.h"
 
-namespace AngelScriptComponentInternal {
+namespace ScriptComponentSupport {
 
 void StopComponentLifetimeBBConfigs(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
     if (!state || !state->Object) {
@@ -123,4 +123,4 @@ bool StepAutomatedBBConfigs(const CKBehaviorContext &behcontext, ScriptComponent
     return true;
 }
 
-} // namespace AngelScriptComponentInternal
+} // namespace ScriptComponentSupport

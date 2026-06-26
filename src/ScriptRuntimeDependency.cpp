@@ -7,7 +7,7 @@
 
 #include <fmt/format.h>
 
-namespace ScriptRuntimeDependencyInternal {
+namespace {
 
 struct NodeOrder {
     int Order = 1000;
@@ -67,7 +67,7 @@ void AddEdge(int from,
     }
 }
 
-} // namespace ScriptRuntimeDependencyInternal
+} // namespace
 
 namespace ScriptRuntimeDependencyResolver {
 
@@ -98,7 +98,7 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
                                                         ScriptRuntimeMetadata::VersionRequirementText(dependency));
                 diagnostics += message + "\n";
                 skipped[i] = true;
-                ScriptRuntimeDependencyInternal::AddSkipped(plan, script, message);
+                AddSkipped(plan, script, message);
                 continue;
             }
             const ScriptRuntimeManifest &actual = enabled[depIt->second];
@@ -110,7 +110,7 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
                                                         ScriptRuntimeMetadata::VersionRequirementText(dependency));
                 diagnostics += message + "\n";
                 skipped[i] = true;
-                ScriptRuntimeDependencyInternal::AddSkipped(plan, script, message);
+                AddSkipped(plan, script, message);
             }
         }
         for (const ScriptRuntimeDependency &dependency : script.OptionalDependencies) {
@@ -161,7 +161,7 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
         const int from = originalToActive[fromOriginal];
         const int to = originalToActive[toIt->second];
         if (from >= 0 && to >= 0) {
-            ScriptRuntimeDependencyInternal::AddEdge(from, to, edges, indegree);
+            AddEdge(from, to, edges, indegree);
         }
     };
 
@@ -173,7 +173,7 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
             if (depIt != indexById.end()) {
                 const int depActive = originalToActive[depIt->second];
                 if (depActive >= 0) {
-                    ScriptRuntimeDependencyInternal::AddEdge(depActive, activeIndex, edges, indegree);
+                    AddEdge(depActive, activeIndex, edges, indegree);
                 }
             }
         }
@@ -183,7 +183,7 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
                 ScriptRuntimeMetadata::SatisfiesVersion(enabled[depIt->second].Version, dependency)) {
                 const int depActive = originalToActive[depIt->second];
                 if (depActive >= 0) {
-                    ScriptRuntimeDependencyInternal::AddEdge(depActive, activeIndex, edges, indegree);
+                    AddEdge(depActive, activeIndex, edges, indegree);
                 }
             }
         }
@@ -195,15 +195,15 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
             if (afterIt != indexById.end()) {
                 const int afterActive = originalToActive[afterIt->second];
                 if (afterActive >= 0) {
-                    ScriptRuntimeDependencyInternal::AddEdge(afterActive, activeIndex, edges, indegree);
+                    AddEdge(afterActive, activeIndex, edges, indegree);
                 }
             }
         }
     }
 
-    std::priority_queue<ScriptRuntimeDependencyInternal::NodeOrder,
-                        std::vector<ScriptRuntimeDependencyInternal::NodeOrder>,
-                        ScriptRuntimeDependencyInternal::ReadyCompare> ready;
+    std::priority_queue<NodeOrder,
+                        std::vector<NodeOrder>,
+                        ReadyCompare> ready;
     for (int i = 0; i < static_cast<int>(activeToOriginal.size()); ++i) {
         if (indegree[i] == 0) {
             const ScriptRuntimeManifest &script = enabled[activeToOriginal[i]];
@@ -234,18 +234,18 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
         }
         std::sort(cycleIds.begin(), cycleIds.end());
         diagnostics += fmt::format("Skipping runtime scripts with dependency cycle: {}.\n",
-                                   ScriptRuntimeDependencyInternal::JoinIds(cycleIds));
+                                   JoinIds(cycleIds));
         std::set<int> cycleActive;
         for (int i = 0; i < static_cast<int>(activeToOriginal.size()); ++i) {
             if (indegree[i] > 0) {
                 cycleActive.insert(i);
                 const ScriptRuntimeManifest &script = enabled[activeToOriginal[i]];
-                ScriptRuntimeDependencyInternal::AddSkipped(
+                AddSkipped(
                     plan,
                     script,
                     fmt::format("Skipping runtime script '{}' because it is part of a dependency cycle: {}.",
                                 script.Id,
-                                ScriptRuntimeDependencyInternal::JoinIds(cycleIds)));
+                                JoinIds(cycleIds)));
             }
         }
         for (const int activeIndex : sortedActive) {
@@ -267,7 +267,7 @@ bool HasDependencyFailure(const ScriptRuntimeManifest &script,
                           const std::vector<std::string> &failedIds,
                           std::string &error) {
     for (const ScriptRuntimeDependency &dependency : script.RequiredDependencies) {
-        if (ScriptRuntimeDependencyInternal::HasId(failedIds, dependency.Id)) {
+        if (HasId(failedIds, dependency.Id)) {
             error = fmt::format("Runtime script '{}' skipped because required dependency '{}' failed to load.",
                                 script.Id,
                                 dependency.Id);

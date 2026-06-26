@@ -11,7 +11,7 @@
 
 #include <fmt/format.h>
 
-namespace ScriptRuntimeMetadataInternal {
+namespace {
 
 struct KeyValue {
     std::string Key;
@@ -258,7 +258,7 @@ std::string DependencyOperatorText(ScriptRuntimeVersionOp op) {
     }
 }
 
-} // namespace ScriptRuntimeMetadataInternal
+} // namespace
 
 namespace ScriptRuntimeMetadata {
 
@@ -448,7 +448,7 @@ bool SatisfiesVersion(const ScriptRuntimeVersion &actual, const ScriptRuntimeDep
 }
 
 std::string VersionRequirementText(const ScriptRuntimeDependency &dependency) {
-    return dependency.Id + ScriptRuntimeMetadataInternal::DependencyOperatorText(dependency.Op) +
+    return dependency.Id + DependencyOperatorText(dependency.Op) +
            (dependency.Op == ScriptRuntimeVersionOp::Any ? "" : dependency.Version.Text);
 }
 
@@ -493,8 +493,8 @@ bool ParseManifestSource(const std::string &source,
                          const std::filesystem::path &mainPath,
                          ScriptRuntimeManifest &manifest,
                          std::string &error) {
-    std::vector<ScriptRuntimeMetadataInternal::MetadataBlock> blocks;
-    if (!ScriptRuntimeMetadataInternal::ScanMetadataBlocks(source, blocks, error)) {
+    std::vector<MetadataBlock> blocks;
+    if (!ScanMetadataBlocks(source, blocks, error)) {
         return false;
     }
 
@@ -510,68 +510,68 @@ bool ParseManifestSource(const std::string &source,
     std::string attachedClass;
     std::string dependencyErrors;
 
-    for (const ScriptRuntimeMetadataInternal::MetadataBlock &block : blocks) {
+    for (const MetadataBlock &block : blocks) {
         if (!block.AttachedClass.empty()) {
             attachedClass = block.AttachedClass;
         }
         if (block.Kind == "script.meta") {
             std::string explicitKey;
             std::string explicitValue;
-            for (const ScriptRuntimeMetadataInternal::KeyValue &pair : block.Values) {
+            for (const KeyValue &pair : block.Values) {
                 if (pair.Key == "key") {
                     explicitKey = pair.Value;
                 } else if (pair.Key == "value") {
                     explicitValue = pair.Value;
                 } else {
-                    ScriptRuntimeMetadataInternal::SetMetadata(custom, pair.Key, pair.Value);
+                    SetMetadata(custom, pair.Key, pair.Value);
                 }
             }
             if (!explicitKey.empty()) {
-                ScriptRuntimeMetadataInternal::SetMetadata(custom, explicitKey, explicitValue);
+                SetMetadata(custom, explicitKey, explicitValue);
             }
             continue;
         }
 
-        for (const ScriptRuntimeMetadataInternal::KeyValue &pair : block.Values) {
+        for (const KeyValue &pair : block.Values) {
             if (block.Kind == "script.depends") {
                 if (pair.Key == "depends" || pair.Key == "required") {
-                    ScriptRuntimeMetadataInternal::AppendDependencies(required, pair.Value, dependencyErrors);
+                    AppendDependencies(required, pair.Value, dependencyErrors);
                 } else if (pair.Key == "optional") {
-                    ScriptRuntimeMetadataInternal::AppendDependencies(optional, pair.Value, dependencyErrors);
+                    AppendDependencies(optional, pair.Value, dependencyErrors);
                 } else if (pair.Key == "before") {
-                    ScriptRuntimeMetadataInternal::AppendList(before, pair.Value);
+                    AppendList(before, pair.Value);
                 } else if (pair.Key == "after") {
-                    ScriptRuntimeMetadataInternal::AppendList(after, pair.Value);
+                    AppendList(after, pair.Value);
                 } else {
-                    ScriptRuntimeMetadataInternal::SetMetadata(custom, pair.Key, pair.Value);
+                    SetMetadata(custom, pair.Key, pair.Value);
                 }
                 continue;
             }
             if (block.Kind == "script.messages") {
                 if (pair.Key == "topics") {
-                    ScriptRuntimeMetadataInternal::AppendList(messageTopics, pair.Value);
+                    AppendList(messageTopics, pair.Value);
                 } else {
-                    ScriptRuntimeMetadataInternal::SetMetadata(custom, pair.Key, pair.Value);
+                    SetMetadata(custom, pair.Key, pair.Value);
                 }
                 continue;
             }
 
-            if (ScriptRuntimeMetadataInternal::IsScalarKey(pair.Key)) {
+            if (IsScalarKey(pair.Key)) {
                 scalars[pair.Key] = pair.Value;
             } else if (pair.Key == "files") {
-                ScriptRuntimeMetadataInternal::AppendList(files, pair.Value);
+                AppendList(files, pair.Value);
             } else if (pair.Key == "depends" || pair.Key == "required") {
-                ScriptRuntimeMetadataInternal::AppendDependencies(required, pair.Value, dependencyErrors);
+                AppendDependencies(required, pair.Value, dependencyErrors);
             } else if (pair.Key == "optional") {
-                ScriptRuntimeMetadataInternal::AppendDependencies(optional, pair.Value, dependencyErrors);
+                AppendDependencies(optional, pair.Value, dependencyErrors);
             } else if (pair.Key == "tags") {
-                ScriptRuntimeMetadataInternal::AppendList(tags, pair.Value);
+                AppendList(tags, pair.Value);
             } else if (pair.Key == "before") {
-                ScriptRuntimeMetadataInternal::AppendList(before, pair.Value);
+                AppendList(before, pair.Value);
             } else if (pair.Key == "after") {
-                ScriptRuntimeMetadataInternal::AppendList(after, pair.Value);
-            } else if (!ScriptRuntimeMetadataInternal::IsListKey(pair.Key)) {
-                ScriptRuntimeMetadataInternal::SetMetadata(custom, pair.Key, pair.Value);
+                AppendList(after, pair.Value);
+            } else if (!IsListKey(pair.Key)) {
+                SetMetadata(custom, pair.Key, pair.Value);
             }
         }
     }
@@ -628,13 +628,13 @@ bool ParseManifestSource(const std::string &source,
     manifest.FileSpecs = std::move(files);
     manifest.Tags = std::move(tags);
     if (!manifest.Description.empty()) {
-        ScriptRuntimeMetadataInternal::SetMetadata(custom, "description", manifest.Description);
+        SetMetadata(custom, "description", manifest.Description);
     }
     if (!manifest.Author.empty()) {
-        ScriptRuntimeMetadataInternal::SetMetadata(custom, "author", manifest.Author);
+        SetMetadata(custom, "author", manifest.Author);
     }
     if (!manifest.Category.empty()) {
-        ScriptRuntimeMetadataInternal::SetMetadata(custom, "category", manifest.Category);
+        SetMetadata(custom, "category", manifest.Category);
     }
     if (!manifest.Tags.empty()) {
         std::string tagText;
@@ -644,7 +644,7 @@ bool ParseManifestSource(const std::string &source,
             }
             tagText += tag;
         }
-        ScriptRuntimeMetadataInternal::SetMetadata(custom, "tags", tagText);
+        SetMetadata(custom, "tags", tagText);
     }
     manifest.RequiredDependencies = std::move(required);
     manifest.OptionalDependencies = std::move(optional);

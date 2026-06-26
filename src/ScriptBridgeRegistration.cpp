@@ -5,7 +5,7 @@
 #include <fmt/format.h>
 #include "ScriptRegistration.h"
 
-namespace ScriptBridgeRegistrationInternal {
+namespace {
 
 ScriptBehaviorBridge *BridgeFromContext(const CKBehaviorContext &ctx) {
     ScriptManager *manager = ManagerFromContext(ctx);
@@ -1031,7 +1031,7 @@ void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
     r = engine->SetDefaultNamespace(previous.c_str()); CKAS_CHECK_REGISTER(r);
 }
 
-void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
+void RegisterScriptBehaviorBridgeBindings(asIScriptEngine *engine) {
     assert(engine != nullptr);
     int r = 0;
 
@@ -1046,8 +1046,8 @@ void RegisterScriptBehaviorBridgeInternal(asIScriptEngine *engine) {
     RegisterBridgeNamespaces(engine, r);
 }
 
-} // namespace ScriptBridgeRegistrationInternal
+} // namespace
 
 void RegisterScriptBehaviorBridge(asIScriptEngine *engine) {
-    ScriptBridgeRegistrationInternal::RegisterScriptBehaviorBridgeInternal(engine);
+    RegisterScriptBehaviorBridgeBindings(engine);
 }
