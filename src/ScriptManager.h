@@ -304,6 +304,9 @@ protected:
     CKAS_STATUS ValidateFunctionHandle(const CKAngelScriptFunction *function, CKAngelScriptResult *result);
     CKAS_STATUS ValidateObjectHandle(const CKAngelScriptObject *object, CKAngelScriptResult *result);
     CKAS_STATUS ValidateMethodHandle(const CKAngelScriptMethod *method, CKAngelScriptResult *result);
+    CKAS_STATUS ValidateObjectMethodHandles(const CKAngelScriptObject *object,
+                                            const CKAngelScriptMethod *method,
+                                            CKAngelScriptResult *result);
     CKAS_STATUS ValidateExecutionHandle(const CKAngelScriptExecution *execution, CKAngelScriptResult *result);
     bool HasExecutionForModule(const char *moduleName) const;
     bool HasRuntimeHandleForModule(const char *moduleName) const;

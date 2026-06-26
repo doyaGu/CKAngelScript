@@ -64,6 +64,21 @@ CKAS_STATUS ScriptManager::ValidateMethodHandle(const CKAngelScriptMethod *metho
     return CKAS_OK;
 }
 
+CKAS_STATUS ScriptManager::ValidateObjectMethodHandles(const CKAngelScriptObject *object,
+                                                       const CKAngelScriptMethod *method,
+                                                       CKAngelScriptResult *result) {
+    if (!object || !method) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object and method handles are required.");
+    }
+    if ((object->Manager && object->Manager != this) || (method->Manager && method->Manager != this)) {
+        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Object or method handle belongs to another CKAngelScript manager.");
+    }
+    if (!OwnsObject(object) || !OwnsMethod(method) || !object->Object) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object or method handle is invalid.");
+    }
+    return CKAS_OK;
+}
+
 CKAS_STATUS ScriptManager::ValidateExecutionHandle(const CKAngelScriptExecution *execution, CKAngelScriptResult *result) {
     if (!execution) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
@@ -342,14 +357,9 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
     if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_CALL_NO_SUSPEND)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown object method call flags.");
     }
-    if (!object || !method) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object and method handles are required.");
-    }
-    if ((object->Manager && object->Manager != this) || (method->Manager && method->Manager != this)) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Object or method handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsObject(object) || !OwnsMethod(method) || !object->Object) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object or method handle is invalid.");
+    const CKAS_STATUS handleStatus = ValidateObjectMethodHandles(object, method, result);
+    if (handleStatus != CKAS_OK) {
+        return handleStatus;
     }
     if (object->ModuleName != method->ModuleName ||
         object->ClassName != method->ClassName ||
