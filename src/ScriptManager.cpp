@@ -336,7 +336,7 @@ CKAS_STATUS ScriptManager::BorrowActiveContext(asIScriptContext **outContext, CK
 }
 
 CKAS_STATUS ScriptManager::SetActiveContextException(const char *message, CKAngelScriptResult *result) {
-    if (!message || message[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(message)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Exception message is required.");
     }
     if (!m_ScriptEngine) {
@@ -421,7 +421,7 @@ CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExte
                                       &CKAngelScriptEngineExtension::Flags,
                                       static_cast<CKDWORD>(CKAS_ENGINEEXTENSION_DEFAULT));
 
-    if (!name || name[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(name)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension name is required.");
     }
     if (!callback) {
@@ -467,7 +467,7 @@ CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExte
 
 CKAS_STATUS ScriptManager::UnregisterEngineExtension(const char *name,
                                                      CKAngelScriptResult *result) {
-    if (!name || name[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(name)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension name is required.");
     }
     for (auto it = m_EngineExtensions.begin(); it != m_EngineExtensions.end(); ++it) {

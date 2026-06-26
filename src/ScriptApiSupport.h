@@ -26,6 +26,10 @@ inline CKAngelScript *ToPublicHandle(ScriptManager *manager) {
 
 namespace ScriptApiSupport {
 
+inline bool IsNonEmpty(const char *value) {
+    return value && value[0] != '\0';
+}
+
 class CallbackDepthScope {
 public:
     explicit CallbackDepthScope(int &depth)

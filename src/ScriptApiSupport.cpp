@@ -312,7 +312,7 @@ CKAS_STATUS StoreStatelessPublicResult(CKAngelScriptResult *out,
         out->Size = sizeof(*out);
         out->Status = status;
         out->AngelScriptCode = angelScriptCode;
-        out->ErrorMessage = errorMessage && errorMessage[0] != '\0' ? errorMessage : nullptr;
+        out->ErrorMessage = IsNonEmpty(errorMessage) ? errorMessage : nullptr;
         out->StackTrace = nullptr;
         out->CompilerMessages = nullptr;
         out->CompilerMessageCount = 0;
@@ -601,10 +601,10 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
 asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
                                         const char *className,
                                         const char *classNamespace) {
-    if (!module || !className || className[0] == '\0') {
+    if (!module || !IsNonEmpty(className)) {
         return nullptr;
     }
-    if (!classNamespace || classNamespace[0] == '\0') {
+    if (!IsNonEmpty(classNamespace)) {
         return module->GetTypeInfoByName(className);
     }
 

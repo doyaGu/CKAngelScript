@@ -78,7 +78,7 @@ CKAS_STATUS ScriptManager::ValidateExecutionHandle(const CKAngelScriptExecution 
 }
 
 bool ScriptManager::HasExecutionForModule(const char *moduleName) const {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
     }
     for (const CKAngelScriptExecution *execution : m_Executions) {
@@ -93,7 +93,7 @@ bool ScriptManager::HasRuntimeHandleForModule(const char *moduleName) const {
     if (HasExecutionForModule(moduleName)) {
         return true;
     }
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
     }
     for (const CKAngelScriptObject *object : m_Objects) {
@@ -120,8 +120,8 @@ CKAS_STATUS ScriptManager::FindFunction(const CKAngelScriptFunctionOptions &opti
     const char *functionName = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::FunctionName, static_cast<const char *>(nullptr));
     const char *functionDecl = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::FunctionDecl, static_cast<const char *>(nullptr));
     const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::Flags, static_cast<CKDWORD>(0));
-    const bool hasFunctionName = functionName && functionName[0] != '\0';
-    const bool hasFunctionDecl = functionDecl && functionDecl[0] != '\0';
+    const bool hasFunctionName = ScriptApiSupport::IsNonEmpty(functionName);
+    const bool hasFunctionDecl = ScriptApiSupport::IsNonEmpty(functionDecl);
     if (flags != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown FindFunction flags.");
     }
@@ -176,15 +176,15 @@ CKAS_STATUS ScriptManager::CreateObject(const CKAngelScriptObjectOptions &option
     const char *className = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::ClassName, static_cast<const char *>(nullptr));
     const char *classNamespace = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::ClassNamespace, static_cast<const char *>(nullptr));
     const char *typeDecl = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::TypeDecl, static_cast<const char *>(nullptr));
-    const bool hasClassName = className && className[0] != '\0';
-    const bool hasTypeDecl = typeDecl && typeDecl[0] != '\0';
-    if (!moduleName || moduleName[0] == '\0') {
+    const bool hasClassName = ScriptApiSupport::IsNonEmpty(className);
+    const bool hasTypeDecl = ScriptApiSupport::IsNonEmpty(typeDecl);
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (hasClassName == hasTypeDecl) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Exactly one of ClassName or TypeDecl is required.");
     }
-    if (hasTypeDecl && classNamespace && classNamespace[0] != '\0') {
+    if (hasTypeDecl && ScriptApiSupport::IsNonEmpty(classNamespace)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "ClassNamespace cannot be used with TypeDecl.");
     }
     if (!m_ScriptEngine) {
@@ -249,8 +249,8 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
     CKAngelScriptObject *object = ScriptApiSupport::PublicField(options, &CKAngelScriptMethodOptions::Object, static_cast<CKAngelScriptObject *>(nullptr));
     const char *methodName = ScriptApiSupport::PublicField(options, &CKAngelScriptMethodOptions::MethodName, static_cast<const char *>(nullptr));
     const char *methodDecl = ScriptApiSupport::PublicField(options, &CKAngelScriptMethodOptions::MethodDecl, static_cast<const char *>(nullptr));
-    const bool hasMethodName = methodName && methodName[0] != '\0';
-    const bool hasMethodDecl = methodDecl && methodDecl[0] != '\0';
+    const bool hasMethodName = ScriptApiSupport::IsNonEmpty(methodName);
+    const bool hasMethodDecl = ScriptApiSupport::IsNonEmpty(methodDecl);
     if (!object) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is required.");
     }

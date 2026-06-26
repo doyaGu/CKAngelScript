@@ -17,7 +17,7 @@ bool ScriptManager::HasBoundImportConsumersForModule(const char *moduleName,
     if (consumerModule) {
         consumerModule->clear();
     }
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
     }
     for (const auto &stateEntry : m_ModuleStates) {
@@ -80,7 +80,7 @@ CKAS_STATUS ScriptManager::RejectModuleMutationDuringCallback(const char *apiNam
 }
 
 ScriptManager::ModuleState *ScriptManager::FindModuleState(const char *moduleName) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return nullptr;
     }
     const auto it = m_ModuleStates.find(moduleName);
@@ -88,7 +88,7 @@ ScriptManager::ModuleState *ScriptManager::FindModuleState(const char *moduleNam
 }
 
 const ScriptManager::ModuleState *ScriptManager::FindModuleState(const char *moduleName) const {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return nullptr;
     }
     const auto it = m_ModuleStates.find(moduleName);
@@ -100,7 +100,7 @@ ScriptManager::ModuleState &ScriptManager::EnsureModuleState(const char *moduleN
 }
 
 void ScriptManager::SetModuleKind(const char *moduleName, ModuleKind kind) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;
     }
     ModuleState &state = EnsureModuleState(moduleName);
@@ -112,7 +112,7 @@ void ScriptManager::SetModuleKind(const char *moduleName, ModuleKind kind) {
 
 void ScriptManager::SetModuleIncludeEdges(const char *moduleName,
                                           const std::vector<ScriptIncludeEdge> &includeEdges) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;
     }
     ModuleState &state = EnsureModuleState(moduleName);
@@ -121,7 +121,7 @@ void ScriptManager::SetModuleIncludeEdges(const char *moduleName,
 }
 
 void ScriptManager::RefreshModuleIncludeEdgesFromCache(const char *moduleName) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;
     }
     const std::shared_ptr<CachedScript> cached = m_ScriptCache.GetCachedScript(moduleName);
@@ -129,7 +129,7 @@ void ScriptManager::RefreshModuleIncludeEdgesFromCache(const char *moduleName) {
 }
 
 void ScriptManager::ClearModuleIncludeEdges(const char *moduleName) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;
     }
     ModuleState *state = FindModuleState(moduleName);
@@ -230,7 +230,7 @@ std::vector<ScriptManager::ImportBindingEdge> ScriptManager::GetImportBindingsFo
 }
 
 bool ScriptManager::RemoveImportBinding(const char *moduleName, CKDWORD importIndex) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
     }
     ModuleState *state = FindModuleState(moduleName);
@@ -253,7 +253,7 @@ bool ScriptManager::RemoveImportBinding(const char *moduleName, CKDWORD importIn
 }
 
 bool ScriptManager::RemoveImportBindingsForModule(const char *moduleName) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
     }
     ModuleState *state = FindModuleState(moduleName);
@@ -335,7 +335,7 @@ void ScriptManager::RestoreImportBindingsForModule(
     const char *moduleName,
     const std::vector<ImportBindingEdge> &bindings) {
     RemoveImportBindingsForModule(moduleName);
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;
     }
     ModuleState &state = EnsureModuleState(moduleName);
@@ -350,9 +350,9 @@ void ScriptManager::RecordImportBinding(const char *importModuleName,
                                         const char *sourceModuleName,
                                         const char *functionDecl) {
     RemoveImportBinding(importModuleName, importIndex);
-    if (!importModuleName || importModuleName[0] == '\0' ||
-        !sourceModuleName || sourceModuleName[0] == '\0' ||
-        !functionDecl || functionDecl[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(importModuleName) ||
+        !ScriptApiSupport::IsNonEmpty(sourceModuleName) ||
+        !ScriptApiSupport::IsNonEmpty(functionDecl)) {
         return;
     }
     ImportBindingEdge edge;
@@ -366,7 +366,7 @@ void ScriptManager::RecordImportBinding(const char *importModuleName,
 }
 
 void ScriptManager::BumpModuleGeneration(const char *moduleName) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;
     }
     CKDWORD &generation = EnsureModuleState(moduleName).Generation;
@@ -387,7 +387,7 @@ std::shared_ptr<CachedScript> ScriptManager::BuildTransientModule(
     std::vector<CapturedScriptMessage> *messages) {
     angelScriptCode = 0;
     diagnostics.clear();
-    if (!m_ScriptEngine || !moduleName || moduleName[0] == '\0' || sections.empty()) {
+    if (!m_ScriptEngine || !ScriptApiSupport::IsNonEmpty(moduleName) || sections.empty()) {
         angelScriptCode = -1;
         return nullptr;
     }
@@ -419,7 +419,7 @@ bool ScriptManager::CaptureModuleReplacementSnapshot(const char *moduleName,
     snapshot = ModuleReplacementSnapshot();
     angelScriptCode = 0;
     errorMessage.clear();
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         angelScriptCode = -1;
         errorMessage = "Module name is required.";
         return false;
@@ -448,7 +448,7 @@ bool ScriptManager::CaptureModuleReplacementSnapshot(const char *moduleName,
 
 void ScriptManager::RemoveModuleForReplacement(const char *moduleName,
                                                ModuleReplacementSnapshot &snapshot) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;
     }
 
@@ -600,7 +600,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                                       &CKAngelScriptLoadOptions::Flags,
                                       static_cast<CKDWORD>(CKAS_LOAD_DEFAULT));
 
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (IsModuleMutationBlockedByCallback()) {
@@ -613,7 +613,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
     const bool hasCode = code != nullptr;
-    const bool hasFile = filename && filename[0] != '\0';
+    const bool hasFile = ScriptApiSupport::IsNonEmpty(filename);
     const bool hasFiles = fileCount > 0;
     const bool hasSourceSections = sourceSectionCount > 0;
     const int sourceCount = (hasCode ? 1 : 0) + (hasFile ? 1 : 0) + (hasFiles ? 1 : 0) + (hasSourceSections ? 1 : 0);
@@ -656,7 +656,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
             const size_t sectionSize = ScriptApiSupport::PublicField(sourceSection,
                                                    &CKAngelScriptSourceSection::CodeSize,
                                                    static_cast<size_t>(0));
-            if (!sectionName || sectionName[0] == '\0') {
+            if (!ScriptApiSupport::IsNonEmpty(sectionName)) {
                 return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Source section list contains an empty section name.");
             }
             if (!sectionCode) {
@@ -673,7 +673,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
             return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "File list is null.");
         }
         for (size_t i = 0; i < fileCount; ++i) {
-            if (!filenames[i] || filenames[i][0] == '\0') {
+            if (!ScriptApiSupport::IsNonEmpty(filenames[i])) {
                 return StoreResult(result,
                                    CKAS_INVALIDARGUMENT,
                                    0,
@@ -746,7 +746,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
                                                const char *scriptCode,
                                                CKDWORD flags,
                                                CKAngelScriptResult *result) {
-    if (!moduleName || moduleName[0] == '\0' || !scriptCode) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName) || !scriptCode) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name and script code are required.");
     }
     if (IsModuleMutationBlockedByCallback()) {
@@ -791,7 +791,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
 }
 
 CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptResult *result) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (IsModuleMutationBlockedByCallback()) {
@@ -816,7 +816,7 @@ bool ScriptManager::HasModule(const char *moduleName) {
 }
 
 CKDWORD ScriptManager::GetModuleGeneration(const char *moduleName) const {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return 0;
     }
     const ModuleState *state = FindModuleState(moduleName);
@@ -836,7 +836,7 @@ CKAS_STATUS ScriptManager::BorrowModule(const char *moduleName,
     if (!outModule) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module out pointer is required.");
     }
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (!m_ScriptEngine) {
@@ -860,7 +860,7 @@ CKAS_STATUS ScriptManager::BorrowFunctionByName(const char *moduleName,
     if (!outFunction) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function out pointer is required.");
     }
-    if (!functionName || functionName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(functionName)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function name is required.");
     }
     asIScriptModule *module = nullptr;
@@ -899,7 +899,7 @@ CKAS_STATUS ScriptManager::BorrowFunctionByDecl(const char *moduleName,
     if (!outFunction) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function out pointer is required.");
     }
-    if (!functionDecl || functionDecl[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(functionDecl)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function declaration is required.");
     }
     asIScriptModule *module = nullptr;
@@ -919,7 +919,7 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
                                              CKAngelScriptMetadataCallback callback,
                                              void *userData,
                                              CKAngelScriptResult *result) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (!callback) {
@@ -1187,11 +1187,11 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
     const char *defaultSourceModuleName = importModule->GetImportedFunctionSourceModule(importIndex);
     const char *defaultFunctionDecl = importModule->GetImportedFunctionDeclaration(importIndex);
     const std::string sourceModuleName =
-        sourceModuleOverride && sourceModuleOverride[0] != '\0'
+        ScriptApiSupport::IsNonEmpty(sourceModuleOverride)
             ? sourceModuleOverride
             : (defaultSourceModuleName ? defaultSourceModuleName : "");
     const std::string functionDecl =
-        functionDeclOverride && functionDeclOverride[0] != '\0'
+        ScriptApiSupport::IsNonEmpty(functionDeclOverride)
             ? functionDeclOverride
             : (defaultFunctionDecl ? defaultFunctionDecl : "");
     if (sourceModuleName.empty() || functionDecl.empty()) {
@@ -1591,7 +1591,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
     const CKDWORD flags = ScriptApiSupport::PublicField(options,
                                                         &CKAngelScriptBytecodeLoadOptions::Flags,
                                                         static_cast<CKDWORD>(CKAS_BYTECODE_DEFAULT));
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (IsModuleMutationBlockedByCallback()) {
@@ -1698,7 +1698,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
 }
 
 int ScriptManager::LoadModuleFromDefaultOrFile(const char *moduleName, const char *filename) {
-    if (!moduleName || moduleName[0] == '\0')
+    if (!ScriptApiSupport::IsNonEmpty(moduleName))
         return -1;
 
     if (!m_ScriptEngine)
@@ -1719,7 +1719,7 @@ int ScriptManager::LoadModuleFromDefaultOrFile(const char *moduleName, const cha
 }
 
 int ScriptManager::LoadModuleFromFiles(const char *moduleName, const char **filenames, size_t count) {
-    if (!moduleName || moduleName[0] == '\0')
+    if (!ScriptApiSupport::IsNonEmpty(moduleName))
         return -1;
 
     if (!m_ScriptEngine)
@@ -1741,7 +1741,7 @@ int ScriptManager::LoadModuleFromFiles(const char *moduleName, const char **file
 }
 
 int ScriptManager::CompileModuleFromMemory(const char *moduleName, const char *scriptCode) {
-    if (!moduleName || moduleName[0] == '\0')
+    if (!ScriptApiSupport::IsNonEmpty(moduleName))
         return -1;
 
     if (!scriptCode)
@@ -1757,13 +1757,13 @@ int ScriptManager::CompileModuleFromMemory(const char *moduleName, const char *s
 }
 
 bool ScriptManager::DiscardCachedModule(const char *moduleName) {
-    if (!moduleName || moduleName[0] == '\0')
+    if (!ScriptApiSupport::IsNonEmpty(moduleName))
         return false;
     return m_ScriptCache.UnloadScript(moduleName);
 }
 
 bool ScriptManager::DiscardModule(const char *moduleName) {
-    if (!moduleName || moduleName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
     }
     if (DiscardCachedModule(moduleName)) {
@@ -1784,14 +1784,14 @@ asIScriptModule *ScriptManager::GetScript(const char *scriptName) {
 }
 
 std::shared_ptr<CachedScript> ScriptManager::GetCachedScript(const char *scriptName) {
-    if (!scriptName || scriptName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(scriptName)) {
         return nullptr;
     }
     return m_ScriptCache.GetCachedScript(scriptName);
 }
 
 std::shared_ptr<CachedScript> ScriptManager::NewCachedScript(const char *scriptName) {
-    if (!scriptName || scriptName[0] == '\0') {
+    if (!ScriptApiSupport::IsNonEmpty(scriptName)) {
         return nullptr;
     }
     return m_ScriptCache.NewCachedScript(scriptName);
