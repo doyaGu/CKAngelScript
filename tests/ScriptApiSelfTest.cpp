@@ -2357,6 +2357,25 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         RemoveTextFile(defaultFile);
         return false;
     }
+    int fileLoadValue = 0;
+    if (!WriteTextFile(singleFile, "int __ckas_public_file_loaded() { return 21; }\n", error) ||
+        api->LoadModule(singleFileOptions, &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            singleFileModuleName,
+                            "int __ckas_public_file_loaded()",
+                            fileLoadValue,
+                            result,
+                            error) ||
+        fileLoadValue != 21) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected single-file LoadModule replacement to read updated file code.";
+        }
+        RemoveTextFile(singleFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
     api->UnloadModule(singleFileModuleName, nullptr);
 
     constexpr const char *multiFileModuleName = "__CKAS_ManagerApiMultiFileLoadSelfTest";
@@ -2368,6 +2387,26 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     if (api->LoadModule(multiFileOptions, &result) != CKAS_OK ||
         api->BorrowFunctionByDecl(multiFileModuleName, "int __ckas_public_multi_b()", &borrowedFunction, &result) != CKAS_OK) {
         error = "CKAngelScript API self-test expected multi-file LoadModule to expose its function.";
+        RemoveTextFile(singleFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
+    int multiFileLoadValue = 0;
+    if (!WriteTextFile(multiFileA, "int __ckas_public_multi_a() { return 30; }\n", error) ||
+        !WriteTextFile(multiFileB, "int __ckas_public_multi_b() { return __ckas_public_multi_a() + 2; }\n", error) ||
+        api->LoadModule(multiFileOptions, &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            multiFileModuleName,
+                            "int __ckas_public_multi_b()",
+                            multiFileLoadValue,
+                            result,
+                            error) ||
+        multiFileLoadValue != 32) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected multi-file LoadModule replacement to read updated file code.";
+        }
         RemoveTextFile(singleFile);
         RemoveTextFile(multiFileA);
         RemoveTextFile(multiFileB);

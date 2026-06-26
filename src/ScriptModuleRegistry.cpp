@@ -173,7 +173,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                 ResolveScriptFileName(scriptFilename);
                 sections.emplace_back(scriptFilename.CStr(), std::string());
             }
-            return ReplaceModuleFromSections(request.ModuleName, sections, result);
+            return ReplaceModuleFromSections(request.ModuleName, sections, false, result);
         }
         std::vector<CapturedScriptMessage> diagnosticMessages;
         BeginScriptMessageCapture();
@@ -203,7 +203,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(std::move(scriptFilename), std::string());
-        return ReplaceModuleFromSections(request.ModuleName, sections, result);
+        return ReplaceModuleFromSections(request.ModuleName, sections, false, result);
     }
 
     std::vector<CapturedScriptMessage> diagnosticMessages;
@@ -251,7 +251,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(moduleName, scriptCode);
-        return ReplaceModuleFromSections(moduleName, sections, result);
+        return ReplaceModuleFromSections(moduleName, sections, false, result);
     }
 
     std::vector<CapturedScriptMessage> diagnosticMessages;

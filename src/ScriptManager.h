@@ -336,8 +336,8 @@ protected:
     CKAS_STATUS ReplaceModuleFromSections(
         const char *moduleName,
         const std::vector<std::tuple<std::string, std::string>> &sections,
-        bool sourceSnapshotSections = false,
-        CKAngelScriptResult *result = nullptr);
+        bool sourceSnapshotSections,
+        CKAngelScriptResult *result);
     // Low-level shims backing the public module API. Do not call these
     // from behavior blocks or runtime helpers; use LoadModule/CompileModule/
     // UnloadModule and the cache helper methods above.
