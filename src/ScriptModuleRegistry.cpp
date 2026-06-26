@@ -497,7 +497,7 @@ asIScriptModule *ScriptManager::GetModule(const char *moduleName) {
     return GetScript(moduleName);
 }
 
-CKAS_STATUS ScriptModuleRegistry::BorrowModule(ScriptManager &manager,
+CKAS_STATUS ScriptModuleRegistry::BorrowModule(BorrowContext &context,
                                                const char *moduleName,
                                                asIScriptModule **outModule,
                                                CKAngelScriptResult *result) {
@@ -505,23 +505,29 @@ CKAS_STATUS ScriptModuleRegistry::BorrowModule(ScriptManager &manager,
         *outModule = nullptr;
     }
     if (!outModule) {
-        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module out pointer is required.");
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_INVALIDARGUMENT,
+                                               0,
+                                               "Module out pointer is required.");
     }
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
-        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
+        return context.Diagnostics.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
-    if (!manager.GetScriptEngine()) {
-        return manager.StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
+    if (!context.Manager.GetScriptEngine()) {
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_NOTINITIALIZED,
+                                               0,
+                                               "AngelScript engine is not initialized.");
     }
-    asIScriptModule *module = manager.GetModule(moduleName);
+    asIScriptModule *module = context.Manager.GetModule(moduleName);
     if (!module) {
-        return manager.StoreResult(result, CKAS_NOTFOUND, 0, "Module was not found.");
+        return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Module was not found.");
     }
     *outModule = module;
-    return manager.StoreResult(result, CKAS_OK);
+    return context.Diagnostics.StoreResult(result, CKAS_OK);
 }
 
-CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByName(ScriptManager &manager,
+CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByName(BorrowContext &context,
                                                        const char *moduleName,
                                                        const char *functionName,
                                                        asIScriptFunction **outFunction,
@@ -530,13 +536,16 @@ CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByName(ScriptManager &manager,
         *outFunction = nullptr;
     }
     if (!outFunction) {
-        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function out pointer is required.");
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_INVALIDARGUMENT,
+                                               0,
+                                               "Function out pointer is required.");
     }
     if (!ScriptApiSupport::IsNonEmpty(functionName)) {
-        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function name is required.");
+        return context.Diagnostics.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function name is required.");
     }
     asIScriptModule *module = nullptr;
-    CKAS_STATUS status = BorrowModule(manager, moduleName, &module, result);
+    CKAS_STATUS status = BorrowModule(context, moduleName, &module, result);
     if (status != CKAS_OK) {
         return status;
     }
@@ -552,16 +561,19 @@ CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByName(ScriptManager &manager,
         }
     }
     if (matchCount == 0) {
-        return manager.StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
+        return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
     }
     if (matchCount > 1) {
-        return manager.StoreResult(result, CKAS_AMBIGUOUS, 0, "Function name matched multiple overloads.");
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_AMBIGUOUS,
+                                               0,
+                                               "Function name matched multiple overloads.");
     }
     *outFunction = match;
-    return manager.StoreResult(result, CKAS_OK);
+    return context.Diagnostics.StoreResult(result, CKAS_OK);
 }
 
-CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByDecl(ScriptManager &manager,
+CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByDecl(BorrowContext &context,
                                                        const char *moduleName,
                                                        const char *functionDecl,
                                                        asIScriptFunction **outFunction,
@@ -570,75 +582,96 @@ CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByDecl(ScriptManager &manager,
         *outFunction = nullptr;
     }
     if (!outFunction) {
-        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function out pointer is required.");
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_INVALIDARGUMENT,
+                                               0,
+                                               "Function out pointer is required.");
     }
     if (!ScriptApiSupport::IsNonEmpty(functionDecl)) {
-        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function declaration is required.");
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_INVALIDARGUMENT,
+                                               0,
+                                               "Function declaration is required.");
     }
     asIScriptModule *module = nullptr;
-    CKAS_STATUS status = BorrowModule(manager, moduleName, &module, result);
+    CKAS_STATUS status = BorrowModule(context, moduleName, &module, result);
     if (status != CKAS_OK) {
         return status;
     }
     asIScriptFunction *function = module->GetFunctionByDecl(functionDecl);
     if (!function) {
-        return manager.StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
+        return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
     }
     *outFunction = function;
-    return manager.StoreResult(result, CKAS_OK);
+    return context.Diagnostics.StoreResult(result, CKAS_OK);
 }
 
 CKAS_STATUS ScriptManager::BorrowModule(const char *moduleName,
                                         asIScriptModule **outModule,
                                         CKAngelScriptResult *result) {
-    return m_ModuleRegistry.BorrowModule(*this, moduleName, outModule, result);
+    ScriptModuleRegistry::BorrowContext context = {
+        *this,
+        m_Diagnostics};
+    return m_ModuleRegistry.BorrowModule(context, moduleName, outModule, result);
 }
 
 CKAS_STATUS ScriptManager::BorrowFunctionByName(const char *moduleName,
                                                 const char *functionName,
                                                 asIScriptFunction **outFunction,
                                                 CKAngelScriptResult *result) {
-    return m_ModuleRegistry.BorrowFunctionByName(*this, moduleName, functionName, outFunction, result);
+    ScriptModuleRegistry::BorrowContext context = {
+        *this,
+        m_Diagnostics};
+    return m_ModuleRegistry.BorrowFunctionByName(context, moduleName, functionName, outFunction, result);
 }
 
 CKAS_STATUS ScriptManager::BorrowFunctionByDecl(const char *moduleName,
                                                 const char *functionDecl,
                                                 asIScriptFunction **outFunction,
                                                 CKAngelScriptResult *result) {
-    return m_ModuleRegistry.BorrowFunctionByDecl(*this, moduleName, functionDecl, outFunction, result);
+    ScriptModuleRegistry::BorrowContext context = {
+        *this,
+        m_Diagnostics};
+    return m_ModuleRegistry.BorrowFunctionByDecl(context, moduleName, functionDecl, outFunction, result);
 }
 
-CKAS_STATUS ScriptModuleRegistry::EnumerateMetadata(ScriptManager &manager,
+CKAS_STATUS ScriptModuleRegistry::EnumerateMetadata(MetadataContext &context,
                                                     const char *moduleName,
                                                     CKAngelScriptMetadataCallback callback,
                                                     void *userData,
                                                     CKAngelScriptResult *result) {
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
-        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
+        return context.Diagnostics.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
     if (!callback) {
-        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Metadata callback is required.");
+        return context.Diagnostics.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Metadata callback is required.");
     }
-    if (!manager.GetScriptEngine()) {
-        return manager.StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
+    if (!context.Manager.GetScriptEngine()) {
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_NOTINITIALIZED,
+                                               0,
+                                               "AngelScript engine is not initialized.");
     }
 
     std::shared_ptr<CachedScript> cached = GetCachedScript(moduleName);
     if (!cached || !cached->GetScriptModule()) {
-        return manager.StoreResult(result, CKAS_NOTFOUND, 0, "Module metadata was not found.");
+        return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Module metadata was not found.");
     }
 
     asIScriptModule *module = cached->GetScriptModule();
-    auto finish = [&manager, result](CKAS_STATUS status) {
+    auto finish = [&context, result](CKAS_STATUS status) {
         return status == CKAS_OK
-                   ? manager.StoreResult(result, CKAS_OK)
-                   : manager.StoreResult(result, status, 0, "Metadata enumeration stopped by callback.");
+                   ? context.Diagnostics.StoreResult(result, CKAS_OK)
+                   : context.Diagnostics.StoreResult(result,
+                                                     status,
+                                                     0,
+                                                     "Metadata enumeration stopped by callback.");
     };
-    auto dispatchMetadata = [&manager, callback, userData](
+    auto dispatchMetadata = [&context, callback, userData](
                                 const CKAngelScriptMetadataEntry &entry,
                                 CKDWORD metadataCount,
                                 const std::function<const char *(CKDWORD)> &metadataAt) {
-        ScriptApiSupport::CallbackDepthScope callbackScope(manager.m_PublicCallbackDepth);
+        ScriptApiSupport::CallbackDepthScope callbackScope(context.PublicCallbackDepth);
         return ScriptApiSupport::DispatchMetadata(entry, metadataCount, metadataAt, callback, userData);
     };
 
@@ -791,14 +824,18 @@ CKAS_STATUS ScriptModuleRegistry::EnumerateMetadata(ScriptManager &manager,
         }
     }
 
-    return manager.StoreResult(result, CKAS_OK);
+    return context.Diagnostics.StoreResult(result, CKAS_OK);
 }
 
 CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
                                              CKAngelScriptMetadataCallback callback,
                                              void *userData,
                                              CKAngelScriptResult *result) {
-    return m_ModuleRegistry.EnumerateMetadata(*this, moduleName, callback, userData, result);
+    ScriptModuleRegistry::MetadataContext context = {
+        *this,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ModuleRegistry.EnumerateMetadata(context, moduleName, callback, userData, result);
 }
 
 CKAS_STATUS ScriptManager::GetImportedFunctionCount(const char *moduleName,
@@ -887,7 +924,10 @@ CKAS_STATUS ScriptModuleRegistry::EnumerateIncludeEdges(QueryContext &context,
                                                "Include edge callback is required.");
     }
     asIScriptModule *module = nullptr;
-    const CKAS_STATUS borrowStatus = BorrowModule(context.Manager, moduleName, &module, result);
+    BorrowContext borrowContext = {
+        context.Manager,
+        context.Diagnostics};
+    const CKAS_STATUS borrowStatus = BorrowModule(borrowContext, moduleName, &module, result);
     if (borrowStatus != CKAS_OK) {
         return borrowStatus;
     }
@@ -934,7 +974,10 @@ CKAS_STATUS ScriptModuleRegistry::GetFingerprint(QueryContext &context,
     CKAngelScriptInitModuleFingerprint(outFingerprint);
 
     asIScriptModule *module = nullptr;
-    const CKAS_STATUS borrowStatus = BorrowModule(context.Manager, moduleName, &module, result);
+    BorrowContext borrowContext = {
+        context.Manager,
+        context.Diagnostics};
+    const CKAS_STATUS borrowStatus = BorrowModule(borrowContext, moduleName, &module, result);
     if (borrowStatus != CKAS_OK) {
         return borrowStatus;
     }

@@ -53,21 +53,32 @@ public:
     bool Has(ScriptManager &manager, const char *moduleName);
     CKDWORD GetGeneration(const ScriptModuleStateStore &stateStore, const char *moduleName) const;
 
-    CKAS_STATUS BorrowModule(ScriptManager &manager,
+    struct BorrowContext {
+        ScriptManager &Manager;
+        ScriptApiDiagnostics &Diagnostics;
+    };
+
+    struct MetadataContext {
+        ScriptManager &Manager;
+        ScriptApiDiagnostics &Diagnostics;
+        int &PublicCallbackDepth;
+    };
+
+    CKAS_STATUS BorrowModule(BorrowContext &context,
                              const char *moduleName,
                              asIScriptModule **outModule,
                              CKAngelScriptResult *result);
-    CKAS_STATUS BorrowFunctionByName(ScriptManager &manager,
+    CKAS_STATUS BorrowFunctionByName(BorrowContext &context,
                                      const char *moduleName,
                                      const char *functionName,
                                      asIScriptFunction **outFunction,
                                      CKAngelScriptResult *result);
-    CKAS_STATUS BorrowFunctionByDecl(ScriptManager &manager,
+    CKAS_STATUS BorrowFunctionByDecl(BorrowContext &context,
                                      const char *moduleName,
                                      const char *functionDecl,
                                      asIScriptFunction **outFunction,
                                      CKAngelScriptResult *result);
-    CKAS_STATUS EnumerateMetadata(ScriptManager &manager,
+    CKAS_STATUS EnumerateMetadata(MetadataContext &context,
                                   const char *moduleName,
                                   CKAngelScriptMetadataCallback callback,
                                   void *userData,

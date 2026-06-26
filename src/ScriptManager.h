@@ -37,8 +37,6 @@ class ScriptRuntime;
 class ScriptInvoker;
 
 class ScriptManager : public CKBaseManager {
-    friend class ScriptModuleRegistry;
-
 public:
     enum Flag {
         AS_INITED = 0x00000001,
