@@ -74,7 +74,7 @@ Borrowed raw AngelScript pointers are escape hatches. Directly mutating module i
 
 All out pointer APIs clear the out pointer before validation and leave it null on failure.
 
-All public options and engine-extension structs must be zero-initialized and set `Size >= sizeof(v3_struct)`. `Size == 0` or a truncated struct returns `CKAS_INVALIDARGUMENT`; larger sizes are accepted so future struct extensions can be ignored by older binaries.
+All public options and engine-extension structs must be zero-initialized and set `Size >= sizeof(the matching header struct)`. `Size == 0` or a truncated struct returns `CKAS_INVALIDARGUMENT`; larger sizes are accepted so future struct extensions can be ignored by older binaries.
 
 ## Callback User Data Lifetime
 
