@@ -243,6 +243,22 @@ struct ReentrantBytecodeWriteProbe {
     CKAS_STATUS ReentryStatus = CKAS_OK;
 };
 
+struct ReentrantExecutionCallbackProbe {
+    CKAngelScriptApi *Api = nullptr;
+    CKAS_STATUS ReentryStatus = CKAS_OK;
+    CKDWORD CallbackCount = 0;
+    int Input = 0;
+    int Output = 0;
+};
+
+struct ReentrantObjectCallProbe {
+    CKAngelScriptApi *Api = nullptr;
+    CKAS_STATUS ReentryStatus = CKAS_OK;
+    CKDWORD CallbackCount = 0;
+    int Input = 0;
+    int Output = 0;
+};
+
 bool CkasStringEquals(const char *lhs, const char *rhs) {
     return lhs && rhs && std::strcmp(lhs, rhs) == 0;
 }
@@ -263,6 +279,31 @@ CKAS_STATUS ReadIntReturn(asIScriptContext *ctx, void *userData) {
     if (data) {
         data->Output = static_cast<int>(ctx->GetReturnDWord());
     }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ConfigureIntArgumentWithReentry(asIScriptContext *ctx, void *userData) {
+    auto *probe = static_cast<ReentrantExecutionCallbackProbe *>(userData);
+    if (!ctx || !probe || !probe->Api) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    probe->ReentryStatus =
+        probe->Api->CompileModule("__CKAS_ExecutionCallbackReentry",
+                                  "int __ckas_execution_callback_reentry() { return 1; }\n",
+                                  CKAS_COMPILE_REPLACEEXISTING,
+                                  nullptr);
+    return ctx->SetArgDWord(0, static_cast<asDWORD>(probe->Input)) >= 0
+               ? CKAS_OK
+               : CKAS_EXECUTIONFAILED;
+}
+
+CKAS_STATUS ReadIntReturnWithReentryProbe(asIScriptContext *ctx, void *userData) {
+    auto *probe = static_cast<ReentrantExecutionCallbackProbe *>(userData);
+    if (!ctx || !probe) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    probe->Output = static_cast<int>(ctx->GetReturnDWord());
     return CKAS_OK;
 }
 
@@ -297,9 +338,28 @@ CKAS_STATUS WriteObjectInt(CKAngelScriptArgWriter *writer, void *userData) {
     return CKAngelScriptArgSetInt(writer, 0, data ? data->IntInput : 0);
 }
 
+CKAS_STATUS WriteObjectIntWithReentry(CKAngelScriptArgWriter *writer, void *userData) {
+    auto *probe = static_cast<ReentrantObjectCallProbe *>(userData);
+    if (!probe || !probe->Api) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    probe->ReentryStatus =
+        probe->Api->CompileModule("__CKAS_ObjectCallbackReentry",
+                                  "int __ckas_object_callback_reentry() { return 1; }\n",
+                                  CKAS_COMPILE_REPLACEEXISTING,
+                                  nullptr);
+    return CKAngelScriptArgSetInt(writer, 0, probe->Input);
+}
+
 CKAS_STATUS ReadObjectInt(CKAngelScriptResultReader *reader, void *userData) {
     auto *data = static_cast<ObjectExecutionData *>(userData);
     return CKAngelScriptResultGetInt(reader, data ? &data->IntOutput : nullptr);
+}
+
+CKAS_STATUS ReadObjectIntWithReentryProbe(CKAngelScriptResultReader *reader, void *userData) {
+    auto *probe = static_cast<ReentrantObjectCallProbe *>(userData);
+    return CKAngelScriptResultGetInt(reader, probe ? &probe->Output : nullptr);
 }
 
 CKAS_STATUS WriteObjectBool(CKAngelScriptArgWriter *writer, void *userData) {
@@ -1954,6 +2014,28 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->ReleaseExecution(execution);
 
+    ReentrantExecutionCallbackProbe executionReentry;
+    executionReentry.Api = &api;
+    executionReentry.Input = 21;
+    CKAngelScriptExecution *reentrantExecution = nullptr;
+    CKAngelScriptExecutionStepOptions reentrantStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(ConfigureIntArgumentWithReentry,
+                                               ReadIntReturnWithReentryProbe,
+                                               &executionReentry);
+    if (api->CreateFunctionExecution(executeOptions, &reentrantExecution, &result) != CKAS_OK ||
+        !reentrantExecution ||
+        api->StartExecution(reentrantExecution, reentrantStepOptions, &result) != CKAS_OK ||
+        executionReentry.CallbackCount != 1 ||
+        executionReentry.ReentryStatus != CKAS_INVALIDSTATE ||
+        executionReentry.Output != 26) {
+        error = "CKAngelScript API self-test expected execution callbacks to reject module mutation reentry.";
+        api->ReleaseExecution(reentrantExecution);
+        api->UnloadModule("__CKAS_ExecutionCallbackReentry", nullptr);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    api->ReleaseExecution(reentrantExecution);
+
     CKAngelScriptFunctionOptions ckuiFunctionOptions = CKAngelScriptApi::FunctionOptions();
     ckuiFunctionOptions.ModuleName = moduleName;
     ckuiFunctionOptions.FunctionDecl = "int __ckas_public_ckui_callback_struct()";
@@ -2821,6 +2903,25 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseObject(object);
         return false;
     }
+    ReentrantObjectCallProbe objectReentry;
+    objectReentry.Api = &api;
+    objectReentry.Input = 32;
+    objectCall.WriteArgs = WriteObjectIntWithReentry;
+    objectCall.ReadResult = ReadObjectIntWithReentryProbe;
+    objectCall.UserData = &objectReentry;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_OK ||
+        objectReentry.CallbackCount != 1 ||
+        objectReentry.ReentryStatus != CKAS_INVALIDSTATE ||
+        objectReentry.Output != 42) {
+        error = "CKAngelScript API self-test expected object callbacks to reject module mutation reentry.";
+        api->UnloadModule("__CKAS_ObjectCallbackReentry", nullptr);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.WriteArgs = WriteObjectInt;
+    objectCall.ReadResult = ReadObjectInt;
+    objectCall.UserData = &objectData;
     objectCall.Flags = 0x00000004u;
     if (api->CallObjectMethod(objectCall, &result) != CKAS_INVALIDARGUMENT) {
         error = "CKAngelScript API self-test expected deleted object method flags to be invalid.";

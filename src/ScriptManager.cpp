@@ -553,6 +553,7 @@ void ReturnPreparedContext(asIScriptEngine *engine, asIScriptContext *&ctx) {
 }
 
 ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
+                                              int &publicCallbackDepth,
                                               asIScriptObject *object,
                                               asIScriptFunction *function,
                                               const CKAngelScriptMethod *method,
@@ -596,7 +597,10 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
     }
 
     if (configureContext) {
-        status = configureContext(ctx, userData);
+        {
+            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+            status = configureContext(ctx, userData);
+        }
         if (status != CKAS_OK) {
             ReturnPreparedContext(engine, ctx);
             outcome.Status = status;
@@ -609,7 +613,10 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
     writer.Context = ctx;
     writer.Method = method;
     if (writeArgs) {
-        status = writeArgs(&writer, userData);
+        {
+            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+            status = writeArgs(&writer, userData);
+        }
         if (status != CKAS_OK) {
             ReturnPreparedContext(engine, ctx);
             outcome.Status = status;
@@ -625,7 +632,10 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
         reader.Context = ctx;
         reader.Method = method;
         if (readResult) {
-            status = readResult(&reader, userData);
+            {
+                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+                status = readResult(&reader, userData);
+            }
             if (status != CKAS_OK) {
                 ReturnPreparedContext(engine, ctx);
                 outcome.Status = status;
@@ -634,7 +644,10 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
             }
         }
         if (readContextResult) {
-            status = readContextResult(ctx, userData);
+            {
+                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+                status = readContextResult(ctx, userData);
+            }
             if (status != CKAS_OK) {
                 ReturnPreparedContext(engine, ctx);
                 outcome.Status = status;
@@ -817,7 +830,8 @@ CKAngelScriptResult MakeExecutionResult(CKAngelScriptExecution *execution,
 }
 
 CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
-                         const CKAngelScriptExecutionStepOptions *options) {
+                         const CKAngelScriptExecutionStepOptions *options,
+                         int &publicCallbackDepth) {
     if (!execution) {
         return CKAS_INVALIDARGUMENT;
     }
@@ -845,7 +859,7 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
     }
     const ScriptInvocationStatus scriptStatus = execution->Invoker.ExecuteScriptStatus(
         execution->Function,
-        [execution, configureContext, userData, &callbackStatus](asIScriptContext *ctx) {
+        [execution, configureContext, userData, &callbackStatus, &publicCallbackDepth](asIScriptContext *ctx) {
             if (execution->HasBehaviorContext && execution->Function && execution->Function->GetParamCount() > 0) {
                 const int argStatus = ctx->SetArgObject(0, (void *)&execution->BehaviorContextStorage);
                 if (argStatus < 0) {
@@ -854,6 +868,7 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
                 }
             }
             if (configureContext) {
+                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
                 callbackStatus = configureContext(ctx, userData);
                 if (callbackStatus != CKAS_OK) {
                     return false;
@@ -861,15 +876,17 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
             }
             return true;
         },
-        [readResult, userData, &callbackStatus](asIScriptContext *ctx) {
+        [readResult, userData, &callbackStatus, &publicCallbackDepth](asIScriptContext *ctx) {
             if (readResult) {
+                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
                 callbackStatus = readResult(ctx, userData);
                 return callbackStatus == CKAS_OK;
             }
             return true;
         },
-        [configureContext, userData, &callbackStatus](asIScriptContext *ctx) {
+        [configureContext, userData, &callbackStatus, &publicCallbackDepth](asIScriptContext *ctx) {
             if (configureContext) {
+                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
                 callbackStatus = configureContext(ctx, userData);
                 return callbackStatus == CKAS_OK;
             }
@@ -4130,6 +4147,7 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
     void *userData = PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::UserData, static_cast<void *>(nullptr));
 
     const ObjectCallOutcome outcome = ExecutePreparedObjectMethod(this,
+                                                                  m_PublicCallbackDepth,
                                                                   object->Object,
                                                                   function,
                                                                   method,
@@ -4235,7 +4253,7 @@ CKAS_STATUS ScriptManager::StartExecution(CKAngelScriptExecution *execution,
         MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
         return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
     }
-    const CKAS_STATUS status = RunExecution(execution, options);
+    const CKAS_STATUS status = RunExecution(execution, options, m_PublicCallbackDepth);
     StoreResult(result,
                 status,
                 execution->Result.AngelScriptCode,
@@ -4263,7 +4281,7 @@ CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution,
         MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
         return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
     }
-    const CKAS_STATUS status = RunExecution(execution, options);
+    const CKAS_STATUS status = RunExecution(execution, options, m_PublicCallbackDepth);
     StoreResult(result,
                 status,
                 execution->Result.AngelScriptCode,
