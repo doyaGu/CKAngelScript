@@ -1505,6 +1505,60 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    constexpr const char *partialImportConsumerModuleName = "__CKAS_ImportPartialConsumer";
+    const char *partialImportConsumerSource =
+        "import int __ckas_import_add(int value) from \"__CKAS_ImportProvider\";\n"
+        "import int __ckas_import_missing(int value) from \"__CKAS_ImportProvider\";\n"
+        "int __ckas_import_partial_call() { return __ckas_import_add(3); }\n";
+    CKAngelScriptFunction *partialImportFunction = nullptr;
+    if (api->CompileModule(partialImportConsumerModuleName,
+                           partialImportConsumerSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->FindFunction(CKAngelScriptApi::FunctionByDeclOptions(partialImportConsumerModuleName,
+                                                                  "int __ckas_import_partial_call()"),
+                          &partialImportFunction,
+                          &result) != CKAS_OK ||
+        !partialImportFunction) {
+        error = "CKAngelScript API self-test failed to compile partial import consumer.";
+        api->ReleaseFunction(partialImportFunction);
+        api->UnloadModule(partialImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    const CKDWORD partialImportGeneration = api->GetModuleGeneration(partialImportConsumerModuleName);
+    CKAngelScriptExecution *partialImportExecution = nullptr;
+    const CKAS_STATUS partialBindStatus = api->BindAllImportedFunctions(partialImportConsumerModuleName, &result);
+    const CKAS_STATUS partialExecutionStatus =
+        api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(partialImportFunction),
+                                     &partialImportExecution,
+                                     &result);
+    if (partialBindStatus != CKAS_NOTFOUND ||
+        api->GetModuleGeneration(partialImportConsumerModuleName) != partialImportGeneration ||
+        partialExecutionStatus != CKAS_OK ||
+        !partialImportExecution) {
+        error = "CKAngelScript API self-test expected failed BindAllImportedFunctions to preserve the consumer module.";
+        api->ReleaseExecution(partialImportExecution);
+        api->ReleaseFunction(partialImportFunction);
+        api->UnloadModule(partialImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    api->ReleaseExecution(partialImportExecution);
+    api->ReleaseFunction(partialImportFunction);
+    if (api->CompileModule(importProviderModuleName,
+                           importProviderReplacementSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected failed BindAllImportedFunctions to leave no provider edge.";
+        api->UnloadModule(partialImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    api->UnloadModule(partialImportConsumerModuleName, nullptr);
     asIScriptModule *rawImportConsumer = nullptr;
     asIScriptModule *rawImportProvider = nullptr;
     CKAngelScriptFunction *rawBoundImportFunction = nullptr;

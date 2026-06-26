@@ -3538,17 +3538,18 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
     }
 
     const asUINT count = module->GetImportedFunctionCount();
-    bool changedBindings = false;
-    const auto finishChanged = [&]() {
-        if (changedBindings) {
-            BumpModuleGeneration(moduleName);
-        }
+    struct ResolvedImportBinding {
+        CKDWORD Index = 0;
+        std::string SourceModuleName;
+        std::string FunctionDecl;
+        asIScriptFunction *TargetFunction = nullptr;
     };
+    std::vector<ResolvedImportBinding> resolvedBindings;
+    resolvedBindings.reserve(count);
     for (asUINT i = 0; i < count; ++i) {
         const char *sourceModuleName = module->GetImportedFunctionSourceModule(i);
         const char *functionDecl = module->GetImportedFunctionDeclaration(i);
         if (!sourceModuleName || sourceModuleName[0] == '\0' || !functionDecl || functionDecl[0] == '\0') {
-            finishChanged();
             return StoreResult(result,
                                CKAS_INVALIDARGUMENT,
                                0,
@@ -3556,7 +3557,6 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
         }
         asIScriptModule *sourceModule = GetModule(sourceModuleName);
         if (!sourceModule) {
-            finishChanged();
             return StoreResult(result,
                                CKAS_NOTFOUND,
                                0,
@@ -3564,7 +3564,6 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
         }
         asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl);
         if (!targetFunction) {
-            finishChanged();
             return StoreResult(result,
                                CKAS_NOTFOUND,
                                0,
@@ -3573,26 +3572,56 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
                                            functionDecl,
                                            sourceModuleName));
         }
-        if (RemoveImportBinding(moduleName, static_cast<CKDWORD>(i))) {
-            changedBindings = true;
+        const asEFuncType functionType = targetFunction->GetFuncType();
+        if (functionType != asFUNC_SCRIPT && functionType != asFUNC_SYSTEM) {
+            return StoreResult(result,
+                               CKAS_UNSUPPORTED,
+                               asNOT_SUPPORTED,
+                               fmt::format("Import {} target function type is not supported.", i));
         }
-        const int bindResult = module->BindImportedFunction(i, targetFunction);
-        changedBindings = true;
+        ResolvedImportBinding binding;
+        binding.Index = static_cast<CKDWORD>(i);
+        binding.SourceModuleName = sourceModuleName;
+        binding.FunctionDecl = functionDecl;
+        binding.TargetFunction = targetFunction;
+        resolvedBindings.push_back(binding);
+    }
+
+    const std::vector<ImportBindingEdge> previousBindings = GetImportBindingsForModule(moduleName);
+    for (const ResolvedImportBinding &binding : resolvedBindings) {
+        RemoveImportBinding(moduleName, binding.Index);
+        const int bindResult = module->BindImportedFunction(binding.Index, binding.TargetFunction);
         if (bindResult < 0) {
             const CKAS_STATUS status = StatusFromImportBindResult(bindResult);
-            finishChanged();
+            module->UnbindAllImportedFunctions();
+            RemoveImportBindingsForModule(moduleName);
+
+            int rollbackCode = 0;
+            std::string rollbackError;
+            const bool restored = RebindImportBindings(previousBindings, rollbackCode, rollbackError);
+            if (!restored) {
+                BumpModuleGeneration(moduleName);
+                return StoreResult(result,
+                                   CKAS_EXECUTIONFAILED,
+                                   rollbackCode,
+                                   fmt::format("Failed to bind import {}; rollback also failed: {}",
+                                               binding.Index,
+                                               rollbackError));
+            }
+            RestoreImportBindingsForModule(moduleName, previousBindings);
             return StoreResult(result,
                                status,
                                bindResult,
-                               fmt::format("Failed to bind import {}.", i));
+                               fmt::format("Failed to bind import {}.", binding.Index));
         }
         RecordImportBinding(moduleName,
-                            static_cast<CKDWORD>(i),
-                            sourceModuleName,
-                            functionDecl);
-        changedBindings = true;
+                            binding.Index,
+                            binding.SourceModuleName.c_str(),
+                            binding.FunctionDecl.c_str());
     }
-    finishChanged();
+    if (!resolvedBindings.empty()) {
+        BumpModuleGeneration(moduleName);
+    }
     return StoreResult(result, CKAS_OK);
 }
 
