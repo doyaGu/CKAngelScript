@@ -472,6 +472,28 @@ protected:
                              CKDWORD importIndex,
                              const char *sourceModuleName,
                              const char *functionDecl);
+    enum class ModuleKind {
+        RawUnknown,
+        Source,
+        Bytecode
+    };
+    struct IncludeEdge {
+        std::string FromSection;
+        std::string ToSection;
+        bool ResolvedFromSnapshot = false;
+    };
+    struct ModuleState {
+        CKDWORD Generation = 0;
+        ModuleKind Kind = ModuleKind::RawUnknown;
+        std::vector<ImportBindingEdge> BoundImports;
+        std::vector<IncludeEdge> IncludeEdges;
+        bool FingerprintDirty = true;
+    };
+    ModuleState *FindModuleState(const char *moduleName);
+    const ModuleState *FindModuleState(const char *moduleName) const;
+    ModuleState &EnsureModuleState(const char *moduleName);
+    void SetModuleKind(const char *moduleName, ModuleKind kind);
+    void MarkModuleStateDirty(const char *moduleName);
     std::shared_ptr<CachedScript> BuildTransientModule(
         const char *moduleName,
         const std::vector<std::tuple<std::string, std::string>> &sections,
@@ -533,8 +555,7 @@ protected:
     std::unordered_set<CKAngelScriptFunction *> m_Functions;
     std::unordered_set<CKAngelScriptObject *> m_Objects;
     std::unordered_set<CKAngelScriptMethod *> m_Methods;
-    std::unordered_map<std::string, CKDWORD> m_ModuleGenerations;
-    std::vector<ImportBindingEdge> m_ImportBindings;
+    std::unordered_map<std::string, ModuleState> m_ModuleStates;
     std::vector<ScriptEngineExtensionRegistration> m_EngineExtensions;
     CKAngelScriptResult m_LastResult = {sizeof(CKAngelScriptResult), CKAS_OK, 0, nullptr, nullptr, nullptr, 0};
     std::string m_LastErrorMessage;

@@ -2215,7 +2215,7 @@ int ScriptManager::Shutdown() {
     m_ScriptContexts.clear();
 
     ClearCKObjectData();
-    m_ImportBindings.clear();
+    m_ModuleStates.clear();
     m_ScriptCache.Clear();
 
     m_BehaviorBridge.reset();
@@ -2547,12 +2547,14 @@ bool ScriptManager::HasBoundImportConsumersForModule(const char *moduleName,
     if (!moduleName || moduleName[0] == '\0') {
         return false;
     }
-    for (const ImportBindingEdge &edge : m_ImportBindings) {
-        if (edge.SourceModuleName == moduleName && edge.ImportModuleName != moduleName) {
-            if (consumerModule) {
-                *consumerModule = edge.ImportModuleName;
+    for (const auto &stateEntry : m_ModuleStates) {
+        for (const ImportBindingEdge &edge : stateEntry.second.BoundImports) {
+            if (edge.SourceModuleName == moduleName && edge.ImportModuleName != moduleName) {
+                if (consumerModule) {
+                    *consumerModule = edge.ImportModuleName;
+                }
+                return true;
             }
-            return true;
         }
     }
     return false;
@@ -2604,47 +2606,84 @@ CKAS_STATUS ScriptManager::RejectModuleMutationDuringCallback(const char *apiNam
                                    apiName ? apiName : "CKAngelScript"));
 }
 
+ScriptManager::ModuleState *ScriptManager::FindModuleState(const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return nullptr;
+    }
+    const auto it = m_ModuleStates.find(moduleName);
+    return it == m_ModuleStates.end() ? nullptr : &it->second;
+}
+
+const ScriptManager::ModuleState *ScriptManager::FindModuleState(const char *moduleName) const {
+    if (!moduleName || moduleName[0] == '\0') {
+        return nullptr;
+    }
+    const auto it = m_ModuleStates.find(moduleName);
+    return it == m_ModuleStates.end() ? nullptr : &it->second;
+}
+
+ScriptManager::ModuleState &ScriptManager::EnsureModuleState(const char *moduleName) {
+    return m_ModuleStates[moduleName ? moduleName : ""];
+}
+
+void ScriptManager::SetModuleKind(const char *moduleName, ModuleKind kind) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return;
+    }
+    ModuleState &state = EnsureModuleState(moduleName);
+    if (state.Kind != kind) {
+        state.Kind = kind;
+        state.FingerprintDirty = true;
+    }
+}
+
+void ScriptManager::MarkModuleStateDirty(const char *moduleName) {
+    ModuleState *state = FindModuleState(moduleName);
+    if (state) {
+        state->FingerprintDirty = true;
+    }
+}
+
 std::vector<ScriptManager::ImportBindingEdge> ScriptManager::GetImportBindingsForModule(
     const char *moduleName) const {
-    std::vector<ImportBindingEdge> bindings;
-    if (!moduleName || moduleName[0] == '\0') {
-        return bindings;
-    }
-    for (const ImportBindingEdge &edge : m_ImportBindings) {
-        if (edge.ImportModuleName == moduleName) {
-            bindings.push_back(edge);
-        }
-    }
-    return bindings;
+    const ModuleState *state = FindModuleState(moduleName);
+    return state ? state->BoundImports : std::vector<ImportBindingEdge>();
 }
 
 bool ScriptManager::RemoveImportBinding(const char *moduleName, CKDWORD importIndex) {
     if (!moduleName || moduleName[0] == '\0') {
         return false;
     }
-    const auto oldSize = m_ImportBindings.size();
-    m_ImportBindings.erase(std::remove_if(m_ImportBindings.begin(),
-                                          m_ImportBindings.end(),
-                                          [moduleName, importIndex](const ImportBindingEdge &edge) {
-                                              return edge.ImportModuleName == moduleName &&
-                                                     edge.ImportIndex == importIndex;
-                                          }),
-                           m_ImportBindings.end());
-    return m_ImportBindings.size() != oldSize;
+    ModuleState *state = FindModuleState(moduleName);
+    if (!state) {
+        return false;
+    }
+    const auto oldSize = state->BoundImports.size();
+    state->BoundImports.erase(std::remove_if(state->BoundImports.begin(),
+                                             state->BoundImports.end(),
+                                             [moduleName, importIndex](const ImportBindingEdge &edge) {
+                                                 return edge.ImportModuleName == moduleName &&
+                                                        edge.ImportIndex == importIndex;
+                                             }),
+                              state->BoundImports.end());
+    const bool removed = state->BoundImports.size() != oldSize;
+    if (removed) {
+        state->FingerprintDirty = true;
+    }
+    return removed;
 }
 
 bool ScriptManager::RemoveImportBindingsForModule(const char *moduleName) {
     if (!moduleName || moduleName[0] == '\0') {
         return false;
     }
-    const auto oldSize = m_ImportBindings.size();
-    m_ImportBindings.erase(std::remove_if(m_ImportBindings.begin(),
-                                          m_ImportBindings.end(),
-                                          [moduleName](const ImportBindingEdge &edge) {
-                                              return edge.ImportModuleName == moduleName;
-                                          }),
-                           m_ImportBindings.end());
-    return m_ImportBindings.size() != oldSize;
+    ModuleState *state = FindModuleState(moduleName);
+    if (!state || state->BoundImports.empty()) {
+        return false;
+    }
+    state->BoundImports.clear();
+    state->FingerprintDirty = true;
+    return true;
 }
 
 bool ScriptManager::RebindImportBindings(const std::vector<ImportBindingEdge> &bindings,
@@ -2717,9 +2756,14 @@ void ScriptManager::RestoreImportBindingsForModule(
     const char *moduleName,
     const std::vector<ImportBindingEdge> &bindings) {
     RemoveImportBindingsForModule(moduleName);
-    for (const ImportBindingEdge &edge : bindings) {
-        m_ImportBindings.push_back(edge);
+    if (!moduleName || moduleName[0] == '\0') {
+        return;
     }
+    ModuleState &state = EnsureModuleState(moduleName);
+    for (const ImportBindingEdge &edge : bindings) {
+        state.BoundImports.push_back(edge);
+    }
+    state.FingerprintDirty = true;
 }
 
 void ScriptManager::RecordImportBinding(const char *importModuleName,
@@ -2737,19 +2781,22 @@ void ScriptManager::RecordImportBinding(const char *importModuleName,
     edge.ImportIndex = importIndex;
     edge.SourceModuleName = sourceModuleName;
     edge.FunctionDecl = functionDecl;
-    m_ImportBindings.push_back(edge);
+    ModuleState &state = EnsureModuleState(importModuleName);
+    state.BoundImports.push_back(edge);
+    state.FingerprintDirty = true;
 }
 
 void ScriptManager::BumpModuleGeneration(const char *moduleName) {
     if (!moduleName || moduleName[0] == '\0') {
         return;
     }
-    CKDWORD &generation = m_ModuleGenerations[moduleName];
+    CKDWORD &generation = EnsureModuleState(moduleName).Generation;
     if (generation == 0) {
         generation = 1;
     } else {
         ++generation;
     }
+    MarkModuleStateDirty(moduleName);
 }
 
 std::shared_ptr<CachedScript> ScriptManager::BuildTransientModule(
@@ -2950,6 +2997,7 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     committedCache->module = committedModule;
     m_ScriptCache.CacheScript(moduleName, committedCache);
     candidate->Discard();
+    SetModuleKind(moduleName, ModuleKind::Source);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
@@ -3076,6 +3124,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                                std::string(),
                                &diagnosticMessages);
         }
+        SetModuleKind(moduleName, ModuleKind::Source);
         BumpModuleGeneration(moduleName);
         return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
     }
@@ -3105,6 +3154,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                            std::string(),
                            &diagnosticMessages);
     }
+    SetModuleKind(moduleName, ModuleKind::Source);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
@@ -3151,6 +3201,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
                            std::string(),
                            &diagnosticMessages);
     }
+    SetModuleKind(moduleName, ModuleKind::Source);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
@@ -3170,6 +3221,7 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
         return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }
     RemoveImportBindingsForModule(moduleName);
+    SetModuleKind(moduleName, ModuleKind::RawUnknown);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK);
 }
@@ -3182,8 +3234,8 @@ CKDWORD ScriptManager::GetModuleGeneration(const char *moduleName) const {
     if (!moduleName || moduleName[0] == '\0') {
         return 0;
     }
-    const auto it = m_ModuleGenerations.find(moduleName);
-    return it == m_ModuleGenerations.end() ? 0 : it->second;
+    const ModuleState *state = FindModuleState(moduleName);
+    return state ? state->Generation : 0;
 }
 
 asIScriptModule *ScriptManager::GetModule(const char *moduleName) {
@@ -3582,10 +3634,13 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
     }
 
     std::vector<ImportBindingEdge> previousBinding;
-    for (const ImportBindingEdge &edge : m_ImportBindings) {
-        if (edge.ImportModuleName == importModuleName && edge.ImportIndex == importIndex) {
-            previousBinding.push_back(edge);
-            break;
+    const ModuleState *previousState = FindModuleState(importModuleName);
+    if (previousState) {
+        for (const ImportBindingEdge &edge : previousState->BoundImports) {
+            if (edge.ImportModuleName == importModuleName && edge.ImportIndex == importIndex) {
+                previousBinding.push_back(edge);
+                break;
+            }
         }
     }
 
@@ -3937,6 +3992,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
     committedCache->name = moduleName;
     committedCache->module = committedModule;
     m_ScriptCache.CacheScript(moduleName, committedCache);
+    SetModuleKind(moduleName, ModuleKind::Bytecode);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, angelScriptCode);
 }
