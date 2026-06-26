@@ -289,11 +289,6 @@ protected:
     CKAS_STATUS CheckModuleReplaceOrUnloadAllowed(const char *moduleName, CKAngelScriptResult *result);
     bool IsModuleMutationBlockedByCallback() const;
     CKAS_STATUS RejectModuleMutationDuringCallback(const char *apiName, CKAngelScriptResult *result);
-    CKAS_STATUS ReplaceModuleFromSections(
-        const char *moduleName,
-        const std::vector<std::tuple<std::string, std::string>> &sections,
-        bool sourceSnapshotSections,
-        CKAngelScriptResult *result);
     CKAngelScriptResult MakeResult(CKAS_STATUS status,
                                  int angelScriptCode = 0,
                                  const std::string &errorMessage = std::string(),
