@@ -232,7 +232,24 @@ struct ReentrantMetadataProbe {
     CKDWORD CallbackCount = 0;
 };
 
+struct ReentrantMetadataStringProbe {
+    CKAngelScriptApi *Api = nullptr;
+    const char *ModuleName = nullptr;
+    CKAS_STATUS ReentryStatus = CKAS_OK;
+    bool GlobalDeclaration = false;
+    bool TypePropertyDeclaration = false;
+    CKDWORD CallbackCount = 0;
+};
+
 struct ImportProbe {
+    bool SawImport = false;
+    CKDWORD CallbackCount = 0;
+};
+
+struct ReentrantImportStringProbe {
+    CKAngelScriptApi *Api = nullptr;
+    const char *ProviderModuleName = nullptr;
+    CKAS_STATUS ReentryStatus = CKAS_OK;
     bool SawImport = false;
     CKDWORD CallbackCount = 0;
 };
@@ -480,6 +497,66 @@ CKAS_STATUS StopMetadata(const CKAngelScriptMetadataEntry *, CKDWORD, const char
     return CKAS_CANCELLED;
 }
 
+CKAS_STATUS ClobberAngelScriptDeclarationScratch(CKAngelScriptApi *api,
+                                                 const char *moduleName,
+                                                 const char *functionDecl) {
+    if (!api || !moduleName || !functionDecl) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    asIScriptModule *module = nullptr;
+    const CKAS_STATUS status = api->BorrowModule(moduleName, &module, nullptr);
+    if (status != CKAS_OK || !module) {
+        return status == CKAS_OK ? CKAS_NOTFOUND : status;
+    }
+    asIScriptFunction *function = module->GetFunctionByDecl(functionDecl);
+    if (!function) {
+        return CKAS_NOTFOUND;
+    }
+    const char *declaration = function->GetDeclaration(false, true, true);
+    return declaration && declaration[0] != '\0' ? CKAS_OK : CKAS_NOTFOUND;
+}
+
+CKAS_STATUS ProbeMetadataStringsAfterReadOnlyReentry(const CKAngelScriptMetadataEntry *entry,
+                                                     CKDWORD metadataIndex,
+                                                     const char *metadata,
+                                                     void *userData) {
+    auto *probe = static_cast<ReentrantMetadataStringProbe *>(userData);
+    if (!probe || !probe->Api || !entry || entry->Size < sizeof(*entry) ||
+        metadataIndex >= entry->MetadataCount || !metadata) {
+        return CKAS_INVALIDARGUMENT;
+    }
+
+    ++probe->CallbackCount;
+    if (CkasStringEquals(metadata, "ckas_selftest_global") &&
+        entry->Target == CKAS_METADATA_GLOBAL_VARIABLE) {
+        probe->ReentryStatus =
+            ClobberAngelScriptDeclarationScratch(probe->Api,
+                                                 probe->ModuleName,
+                                                 "int __ckas_public_metadata_global()");
+        if (probe->ReentryStatus != CKAS_OK) {
+            return probe->ReentryStatus;
+        }
+        probe->GlobalDeclaration =
+            CkasStringEquals(entry->Name, "__ckas_public_metadata_value") &&
+            CkasStringContains(entry->Declaration, "__ckas_public_metadata_value");
+    } else if (CkasStringEquals(metadata, "ckas_selftest_property") &&
+               entry->Target == CKAS_METADATA_TYPE_PROPERTY) {
+        probe->ReentryStatus =
+            ClobberAngelScriptDeclarationScratch(probe->Api,
+                                                 probe->ModuleName,
+                                                 "int __ckas_public_metadata_global()");
+        if (probe->ReentryStatus != CKAS_OK) {
+            return probe->ReentryStatus;
+        }
+        probe->TypePropertyDeclaration =
+            CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
+            CkasStringEquals(entry->Name, "Value") &&
+            CkasStringContains(entry->Declaration, "Value");
+    }
+
+    return CKAS_OK;
+}
+
 CKAS_STATUS WriteBytecodeWithReentry(const void *data, size_t size, void *userData);
 
 CKAS_STATUS MutateFromMetadataCallback(const CKAngelScriptMetadataEntry *, CKDWORD, const char *, void *userData) {
@@ -518,6 +595,27 @@ CKAS_STATUS ProbeImport(const CKAngelScriptImportEntry *entry, void *userData) {
     if (entry->Index == 0 &&
         CkasStringContains(entry->Declaration, "__ckas_import_add") &&
         CkasStringEquals(entry->SourceModuleName, "__CKAS_ImportProvider")) {
+        probe->SawImport = true;
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ProbeImportAfterReadOnlyReentry(const CKAngelScriptImportEntry *entry, void *userData) {
+    auto *probe = static_cast<ReentrantImportStringProbe *>(userData);
+    if (!probe || !probe->Api || !entry || entry->Size < sizeof(*entry)) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    probe->ReentryStatus =
+        ClobberAngelScriptDeclarationScratch(probe->Api,
+                                             probe->ProviderModuleName,
+                                             "int __ckas_import_alias(int)");
+    if (probe->ReentryStatus != CKAS_OK) {
+        return probe->ReentryStatus;
+    }
+    if (entry->Index == 0 &&
+        CkasStringContains(entry->Declaration, "__ckas_import_add") &&
+        CkasStringEquals(entry->SourceModuleName, probe->ProviderModuleName)) {
         probe->SawImport = true;
     }
     return CKAS_OK;
@@ -1450,6 +1548,17 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         error = "CKAngelScript API self-test expected metadata enumeration for type/method/function/global/property targets.";
         return false;
     }
+    ReentrantMetadataStringProbe metadataStringProbe;
+    metadataStringProbe.Api = &api;
+    metadataStringProbe.ModuleName = moduleName;
+    if (api->EnumerateMetadata(moduleName, ProbeMetadataStringsAfterReadOnlyReentry, &metadataStringProbe, &result) != CKAS_OK ||
+        metadataStringProbe.CallbackCount == 0 ||
+        metadataStringProbe.ReentryStatus != CKAS_OK ||
+        !metadataStringProbe.GlobalDeclaration ||
+        !metadataStringProbe.TypePropertyDeclaration) {
+        error = "CKAngelScript API self-test expected metadata entry strings to survive read-only AngelScript reentry.";
+        return false;
+    }
     ReentrantMetadataProbe metadataReentry;
     metadataReentry.Api = &api;
     metadataReentry.ModuleName = moduleName;
@@ -1571,6 +1680,21 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         importProbe.CallbackCount != 1 ||
         !importProbe.SawImport) {
         error = "CKAngelScript API self-test expected import enumeration to describe the consumer import.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    ReentrantImportStringProbe importStringProbe;
+    importStringProbe.Api = &api;
+    importStringProbe.ProviderModuleName = importProviderModuleName;
+    if (api->EnumerateImportedFunctions(importConsumerModuleName,
+                                        ProbeImportAfterReadOnlyReentry,
+                                        &importStringProbe,
+                                        &result) != CKAS_OK ||
+        importStringProbe.CallbackCount != 1 ||
+        importStringProbe.ReentryStatus != CKAS_OK ||
+        !importStringProbe.SawImport) {
+        error = "CKAngelScript API self-test expected import entry strings to survive read-only AngelScript reentry.";
         api->UnloadModule(importConsumerModuleName, nullptr);
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;

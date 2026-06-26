@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <string>
 #include <fmt/format.h>
 
 #ifndef CKAS_BUILD_SELF_TESTS
@@ -757,6 +758,14 @@ CKAS_EXECUTIONSTATE ToExecutionState(ScriptInvocationStatus status) {
     }
 }
 
+const char *CopyPublicString(const char *value, std::string &storage) {
+    if (!value) {
+        return nullptr;
+    }
+    storage = value;
+    return storage.c_str();
+}
+
 CKAS_STATUS DispatchMetadata(const CKAngelScriptMetadataEntry &entry,
                              CKDWORD metadataCount,
                              const std::function<const char *(CKDWORD)> &metadataAt,
@@ -768,9 +777,20 @@ CKAS_STATUS DispatchMetadata(const CKAngelScriptMetadataEntry &entry,
     CKAngelScriptMetadataEntry publicEntry = entry;
     publicEntry.Size = sizeof(publicEntry);
     publicEntry.MetadataCount = metadataCount;
+    std::string nameStorage;
+    std::string namespaceStorage;
+    std::string declarationStorage;
+    std::string parentTypeNameStorage;
+    std::string parentTypeNamespaceStorage;
+    publicEntry.Name = CopyPublicString(entry.Name, nameStorage);
+    publicEntry.Namespace = CopyPublicString(entry.Namespace, namespaceStorage);
+    publicEntry.Declaration = CopyPublicString(entry.Declaration, declarationStorage);
+    publicEntry.ParentTypeName = CopyPublicString(entry.ParentTypeName, parentTypeNameStorage);
+    publicEntry.ParentTypeNamespace = CopyPublicString(entry.ParentTypeNamespace, parentTypeNamespaceStorage);
     for (CKDWORD i = 0; i < metadataCount; ++i) {
         const char *metadata = metadataAt(i);
-        const CKAS_STATUS status = callback(&publicEntry, i, metadata ? metadata : "", userData);
+        const std::string metadataStorage = metadata ? metadata : "";
+        const CKAS_STATUS status = callback(&publicEntry, i, metadataStorage.c_str(), userData);
         if (status != CKAS_OK) {
             return status;
         }
@@ -786,6 +806,10 @@ CKAS_STATUS DispatchImport(const CKAngelScriptImportEntry &entry,
     }
     CKAngelScriptImportEntry publicEntry = entry;
     publicEntry.Size = sizeof(publicEntry);
+    std::string declarationStorage;
+    std::string sourceModuleStorage;
+    publicEntry.Declaration = CopyPublicString(entry.Declaration, declarationStorage);
+    publicEntry.SourceModuleName = CopyPublicString(entry.SourceModuleName, sourceModuleStorage);
     return callback(&publicEntry, userData);
 }
 
