@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <utility>
+#include <vector>
 
 #include <angelscript.h>
 
@@ -119,10 +120,17 @@ struct ScriptMetadata {
                                ScriptMetadata &outMetadata);
 };
 
+struct ScriptIncludeEdge {
+    std::string FromSection;
+    std::string ToSection;
+    bool ResolvedFromSnapshot = false;
+};
+
 struct CachedScript : ICachedScript {
     asIScriptModule *module = nullptr;
     std::string name;
     std::vector<std::tuple<std::string, std::string>> sections;
+    std::vector<ScriptIncludeEdge> includeEdges;
     bool sourceSnapshotSections = false;
     ScriptMetadata metadata;
 

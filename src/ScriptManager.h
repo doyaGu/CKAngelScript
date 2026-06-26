@@ -477,22 +477,20 @@ protected:
         Source,
         Bytecode
     };
-    struct IncludeEdge {
-        std::string FromSection;
-        std::string ToSection;
-        bool ResolvedFromSnapshot = false;
-    };
     struct ModuleState {
         CKDWORD Generation = 0;
         ModuleKind Kind = ModuleKind::RawUnknown;
         std::vector<ImportBindingEdge> BoundImports;
-        std::vector<IncludeEdge> IncludeEdges;
+        std::vector<ScriptIncludeEdge> IncludeEdges;
         bool FingerprintDirty = true;
     };
     ModuleState *FindModuleState(const char *moduleName);
     const ModuleState *FindModuleState(const char *moduleName) const;
     ModuleState &EnsureModuleState(const char *moduleName);
     void SetModuleKind(const char *moduleName, ModuleKind kind);
+    void SetModuleIncludeEdges(const char *moduleName, const std::vector<ScriptIncludeEdge> &includeEdges);
+    void RefreshModuleIncludeEdgesFromCache(const char *moduleName);
+    void ClearModuleIncludeEdges(const char *moduleName);
     void MarkModuleStateDirty(const char *moduleName);
     std::shared_ptr<CachedScript> BuildTransientModule(
         const char *moduleName,

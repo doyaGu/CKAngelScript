@@ -118,6 +118,7 @@ struct SnapshotSection {
 
 struct SnapshotIncludeContext {
     std::unordered_map<std::string, SnapshotSection> Sections;
+    std::vector<ScriptIncludeEdge> *IncludeEdges = nullptr;
 };
 
 int SnapshotIncludeCallback(const char *include,
@@ -141,6 +142,13 @@ int SnapshotIncludeCallback(const char *include,
     }
 
     const SnapshotSection &section = it->second;
+    if (context->IncludeEdges) {
+        ScriptIncludeEdge edge;
+        edge.FromSection = from ? from : "";
+        edge.ToSection = section.Name;
+        edge.ResolvedFromSnapshot = true;
+        context->IncludeEdges->push_back(std::move(edge));
+    }
     return builder->AddSectionFromMemory(section.Name.c_str(),
                                          section.Code.c_str(),
                                          static_cast<unsigned int>(section.Code.size()),
@@ -475,8 +483,10 @@ bool CachedScript::Build(asIScriptEngine *engine) {
 
     // Prepare the script builder
     CScriptBuilder builder;
+    includeEdges.clear();
     SnapshotIncludeContext snapshotIncludeContext;
     if (sourceSnapshotSections) {
+        snapshotIncludeContext.IncludeEdges = &includeEdges;
         for (const auto &section : sections) {
             SnapshotSection snapshotSection;
             snapshotSection.Name = std::get<0>(section);

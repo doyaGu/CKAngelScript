@@ -2637,6 +2637,36 @@ void ScriptManager::SetModuleKind(const char *moduleName, ModuleKind kind) {
     }
 }
 
+void ScriptManager::SetModuleIncludeEdges(const char *moduleName,
+                                          const std::vector<ScriptIncludeEdge> &includeEdges) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return;
+    }
+    ModuleState &state = EnsureModuleState(moduleName);
+    state.IncludeEdges = includeEdges;
+    state.FingerprintDirty = true;
+}
+
+void ScriptManager::RefreshModuleIncludeEdgesFromCache(const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return;
+    }
+    const std::shared_ptr<CachedScript> cached = m_ScriptCache.GetCachedScript(moduleName);
+    SetModuleIncludeEdges(moduleName, cached ? cached->includeEdges : std::vector<ScriptIncludeEdge>());
+}
+
+void ScriptManager::ClearModuleIncludeEdges(const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return;
+    }
+    ModuleState *state = FindModuleState(moduleName);
+    if (!state || state->IncludeEdges.empty()) {
+        return;
+    }
+    state->IncludeEdges.clear();
+    state->FingerprintDirty = true;
+}
+
 void ScriptManager::MarkModuleStateDirty(const char *moduleName) {
     ModuleState *state = FindModuleState(moduleName);
     if (state) {
@@ -2989,6 +3019,7 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     auto committedCache = std::make_shared<CachedScript>();
     committedCache->name = moduleName ? moduleName : "";
     committedCache->sections = candidate->sections;
+    committedCache->includeEdges = candidate->includeEdges;
     committedCache->sourceSnapshotSections = candidate->sourceSnapshotSections;
     ScriptMetadata::RemapForModule(candidate->module,
                                    committedModule,
@@ -2997,6 +3028,7 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     committedCache->module = committedModule;
     m_ScriptCache.CacheScript(moduleName, committedCache);
     candidate->Discard();
+    SetModuleIncludeEdges(moduleName, committedCache->includeEdges);
     SetModuleKind(moduleName, ModuleKind::Source);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
@@ -3124,6 +3156,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                                std::string(),
                                &diagnosticMessages);
         }
+        RefreshModuleIncludeEdgesFromCache(moduleName);
         SetModuleKind(moduleName, ModuleKind::Source);
         BumpModuleGeneration(moduleName);
         return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
@@ -3154,6 +3187,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                            std::string(),
                            &diagnosticMessages);
     }
+    RefreshModuleIncludeEdgesFromCache(moduleName);
     SetModuleKind(moduleName, ModuleKind::Source);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
@@ -3201,6 +3235,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
                            std::string(),
                            &diagnosticMessages);
     }
+    RefreshModuleIncludeEdgesFromCache(moduleName);
     SetModuleKind(moduleName, ModuleKind::Source);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
@@ -3221,6 +3256,7 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
         return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }
     RemoveImportBindingsForModule(moduleName);
+    ClearModuleIncludeEdges(moduleName);
     SetModuleKind(moduleName, ModuleKind::RawUnknown);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK);
@@ -3992,6 +4028,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
     committedCache->name = moduleName;
     committedCache->module = committedModule;
     m_ScriptCache.CacheScript(moduleName, committedCache);
+    ClearModuleIncludeEdges(moduleName);
     SetModuleKind(moduleName, ModuleKind::Bytecode);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, angelScriptCode);
