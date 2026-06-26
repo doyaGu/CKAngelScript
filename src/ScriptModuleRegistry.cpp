@@ -481,8 +481,8 @@ bool ScriptModuleRegistry::Has(ScriptManager &manager, const char *moduleName) {
     return manager.GetModule(moduleName) != nullptr;
 }
 
-CKDWORD ScriptModuleRegistry::GetGeneration(const ScriptManager &manager, const char *moduleName) const {
-    return manager.m_ModuleStateStore.GetGeneration(moduleName);
+CKDWORD ScriptModuleRegistry::GetGeneration(const ScriptModuleStateStore &stateStore, const char *moduleName) const {
+    return stateStore.GetGeneration(moduleName);
 }
 
 bool ScriptManager::HasModule(const char *moduleName) {
@@ -490,7 +490,7 @@ bool ScriptManager::HasModule(const char *moduleName) {
 }
 
 CKDWORD ScriptManager::GetModuleGeneration(const char *moduleName) const {
-    return m_ModuleRegistry.GetGeneration(*this, moduleName);
+    return m_ModuleRegistry.GetGeneration(m_ModuleStateStore, moduleName);
 }
 
 asIScriptModule *ScriptManager::GetModule(const char *moduleName) {
@@ -875,25 +875,28 @@ CKAS_STATUS ScriptManager::EnumerateBoundImportEdges(const char *moduleName,
     return m_ImportBinder.EnumerateBoundImportEdges(context, moduleName, callback, userData, result);
 }
 
-CKAS_STATUS ScriptModuleRegistry::EnumerateIncludeEdges(ScriptManager &manager,
+CKAS_STATUS ScriptModuleRegistry::EnumerateIncludeEdges(QueryContext &context,
                                                         const char *moduleName,
                                                         CKAngelScriptIncludeEdgeCallback callback,
                                                         void *userData,
                                                         CKAngelScriptResult *result) {
     if (!callback) {
-        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Include edge callback is required.");
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_INVALIDARGUMENT,
+                                               0,
+                                               "Include edge callback is required.");
     }
     asIScriptModule *module = nullptr;
-    const CKAS_STATUS borrowStatus = BorrowModule(manager, moduleName, &module, result);
+    const CKAS_STATUS borrowStatus = BorrowModule(context.Manager, moduleName, &module, result);
     if (borrowStatus != CKAS_OK) {
         return borrowStatus;
     }
     (void)module;
 
     const std::vector<ScriptIncludeEdge> *includeEdges =
-        manager.m_ModuleStateStore.FindIncludeEdges(moduleName);
+        context.StateStore.FindIncludeEdges(moduleName);
     if (!includeEdges) {
-        return manager.StoreResult(result, CKAS_OK);
+        return context.Diagnostics.StoreResult(result, CKAS_OK);
     }
 
     for (const ScriptIncludeEdge &edge : *includeEdges) {
@@ -905,20 +908,20 @@ CKAS_STATUS ScriptModuleRegistry::EnumerateIncludeEdges(ScriptManager &manager,
         publicEdge.ResolvedFromSnapshot = edge.ResolvedFromSnapshot ? TRUE : FALSE;
         CKAS_STATUS callbackStatus = CKAS_OK;
         {
-            ScriptApiSupport::CallbackDepthScope callbackScope(manager.m_PublicCallbackDepth);
+            ScriptApiSupport::CallbackDepthScope callbackScope(context.PublicCallbackDepth);
             callbackStatus = ScriptApiSupport::DispatchIncludeEdge(publicEdge, callback, userData);
         }
         if (callbackStatus != CKAS_OK) {
-            return manager.StoreResult(result,
-                                       callbackStatus,
-                                       0,
-                                       "Include edge enumeration stopped by callback.");
+            return context.Diagnostics.StoreResult(result,
+                                                   callbackStatus,
+                                                   0,
+                                                   "Include edge enumeration stopped by callback.");
         }
     }
-    return manager.StoreResult(result, CKAS_OK);
+    return context.Diagnostics.StoreResult(result, CKAS_OK);
 }
 
-CKAS_STATUS ScriptModuleRegistry::GetFingerprint(ScriptManager &manager,
+CKAS_STATUS ScriptModuleRegistry::GetFingerprint(QueryContext &context,
                                                  const char *moduleName,
                                                  CKAngelScriptModuleFingerprint *outFingerprint,
                                                  CKAngelScriptResult *result) {
@@ -926,38 +929,50 @@ CKAS_STATUS ScriptModuleRegistry::GetFingerprint(ScriptManager &manager,
     CKAS_STATUS optionStatus = ScriptPublicOptions::ValidateModuleFingerprintOutput(outFingerprint,
                                                                                    errorMessage);
     if (optionStatus != CKAS_OK) {
-        return manager.StoreResult(result, optionStatus, 0, errorMessage);
+        return context.Diagnostics.StoreResult(result, optionStatus, 0, errorMessage);
     }
     CKAngelScriptInitModuleFingerprint(outFingerprint);
 
     asIScriptModule *module = nullptr;
-    const CKAS_STATUS borrowStatus = BorrowModule(manager, moduleName, &module, result);
+    const CKAS_STATUS borrowStatus = BorrowModule(context.Manager, moduleName, &module, result);
     if (borrowStatus != CKAS_OK) {
         return borrowStatus;
     }
     (void)module;
 
-    *outFingerprint = manager.m_ModuleStateStore.GetFingerprint(
+    *outFingerprint = context.StateStore.GetFingerprint(
         moduleName,
         CKAS_API_VERSION,
         asGetLibraryVersion(),
         asGetLibraryOptions(),
         BuildSourceHash(moduleName),
-        manager.m_ImportBinder.BuildDeclaredImportHash(manager, moduleName));
-    return manager.StoreResult(result, CKAS_OK);
+        context.ImportBinder.BuildDeclaredImportHash(context.Manager, moduleName));
+    return context.Diagnostics.StoreResult(result, CKAS_OK);
 }
 
 CKAS_STATUS ScriptManager::EnumerateModuleIncludeEdges(const char *moduleName,
                                                        CKAngelScriptIncludeEdgeCallback callback,
                                                        void *userData,
                                                        CKAngelScriptResult *result) {
-    return m_ModuleRegistry.EnumerateIncludeEdges(*this, moduleName, callback, userData, result);
+    ScriptModuleRegistry::QueryContext context = {
+        *this,
+        m_ModuleStateStore,
+        m_ImportBinder,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ModuleRegistry.EnumerateIncludeEdges(context, moduleName, callback, userData, result);
 }
 
 CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
                                                 CKAngelScriptModuleFingerprint *outFingerprint,
                                                 CKAngelScriptResult *result) {
-    return m_ModuleRegistry.GetFingerprint(*this, moduleName, outFingerprint, result);
+    ScriptModuleRegistry::QueryContext context = {
+        *this,
+        m_ModuleStateStore,
+        m_ImportBinder,
+        m_Diagnostics,
+        m_PublicCallbackDepth};
+    return m_ModuleRegistry.GetFingerprint(context, moduleName, outFingerprint, result);
 }
 
 CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOptions &options,

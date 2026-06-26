@@ -41,8 +41,17 @@ public:
                         CKDWORD flags,
                         CKAngelScriptResult *result);
     CKAS_STATUS Unload(MutationContext &context, const char *moduleName, CKAngelScriptResult *result);
+
+    struct QueryContext {
+        ScriptManager &Manager;
+        ScriptModuleStateStore &StateStore;
+        ScriptImportBinder &ImportBinder;
+        ScriptApiDiagnostics &Diagnostics;
+        int &PublicCallbackDepth;
+    };
+
     bool Has(ScriptManager &manager, const char *moduleName);
-    CKDWORD GetGeneration(const ScriptManager &manager, const char *moduleName) const;
+    CKDWORD GetGeneration(const ScriptModuleStateStore &stateStore, const char *moduleName) const;
 
     CKAS_STATUS BorrowModule(ScriptManager &manager,
                              const char *moduleName,
@@ -63,12 +72,12 @@ public:
                                   CKAngelScriptMetadataCallback callback,
                                   void *userData,
                                   CKAngelScriptResult *result);
-    CKAS_STATUS EnumerateIncludeEdges(ScriptManager &manager,
+    CKAS_STATUS EnumerateIncludeEdges(QueryContext &context,
                                       const char *moduleName,
                                       CKAngelScriptIncludeEdgeCallback callback,
                                       void *userData,
                                       CKAngelScriptResult *result);
-    CKAS_STATUS GetFingerprint(ScriptManager &manager,
+    CKAS_STATUS GetFingerprint(QueryContext &context,
                                const char *moduleName,
                                CKAngelScriptModuleFingerprint *outFingerprint,
                                CKAngelScriptResult *result);
