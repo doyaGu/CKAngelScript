@@ -30,19 +30,6 @@ public:
     bool Has(ScriptManager &manager, const char *moduleName);
     CKDWORD GetGeneration(const ScriptManager &manager, const char *moduleName) const;
 
-    CKAS_STATUS CheckRuntimeHandlesReleased(ScriptManager &manager,
-                                            const char *moduleName,
-                                            CKAngelScriptResult *result);
-    CKAS_STATUS CheckNoBoundImportConsumers(ScriptManager &manager,
-                                            const char *moduleName,
-                                            CKAngelScriptResult *result);
-    CKAS_STATUS CheckReplaceOrUnloadAllowed(ScriptManager &manager,
-                                            const char *moduleName,
-                                            CKAngelScriptResult *result);
-    CKAS_STATUS CheckMutationAllowed(ScriptManager &manager,
-                                     const char *apiName,
-                                     CKAngelScriptResult *result);
-
     CKAS_STATUS BorrowModule(ScriptManager &manager,
                              const char *moduleName,
                              asIScriptModule **outModule,

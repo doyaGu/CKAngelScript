@@ -56,6 +56,7 @@ set(CKAS_HEADERS
         ScriptPublicOptions.h
         ScriptModuleBytecode.h
         ScriptModuleBytecodeStore.h
+        ScriptModuleMutationPolicy.h
         ScriptModuleRegistry.h
         ScriptModuleStateStore.h
         ScriptPathResolver.h
@@ -70,6 +71,7 @@ set(CKAS_SOURCES
         ScriptPublicOptions.cpp
         ScriptModuleBytecode.cpp
         ScriptModuleBytecodeStore.cpp
+        ScriptModuleMutationPolicy.cpp
         ScriptModuleStateStore.cpp
         ScriptPathResolver.cpp
         ScriptImportBinder.cpp

@@ -18,6 +18,7 @@
 #include "ScriptEngineHost.h"
 #include "ScriptImportBinder.h"
 #include "ScriptModuleBytecodeStore.h"
+#include "ScriptModuleMutationPolicy.h"
 #include "ScriptModuleRegistry.h"
 #include "ScriptModuleReplacer.h"
 #include "ScriptModuleStateStore.h"
@@ -312,6 +313,7 @@ protected:
     std::unique_ptr<ScriptMessageBus> m_MessageBus;
     ScriptHandleRegistry m_HandleRegistry;
     ScriptModuleStateStore m_ModuleStateStore;
+    ScriptModuleMutationPolicy m_ModuleMutationPolicy;
     ScriptImportBinder m_ImportBinder;
     ScriptModuleBytecodeStore m_ModuleBytecodeStore;
     ScriptModuleReplacer m_ModuleReplacer;
