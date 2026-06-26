@@ -56,6 +56,7 @@ set(CKAS_SOURCES
         Logger.cpp
         ScriptManager.cpp
         ScriptApiDiagnostics.cpp
+        ScriptModuleRegistry.cpp
         ScriptCache.cpp
         ScriptInvoker.cpp
         AngelScriptEventHook.cpp
