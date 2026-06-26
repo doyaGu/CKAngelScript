@@ -32,6 +32,7 @@
 #include "ScriptNativePointer.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptApiSupport.h"
+#include "ScriptPublicOptions.h"
 #include "ScriptRegistration.h"
 #include "ScriptRuntime.h"
 #include "ScriptScene.h"
@@ -51,6 +52,14 @@
 #include "add_on/scriptstdstring/scriptstdstring.h"
 #include "add_on/weakref/weakref.h"
 #include "add_on/scripthelper/scripthelper.h"
+
+namespace {
+
+std::string MakeEngineExtensionConfigGroupName(const char *name) {
+    return fmt::format("CKAngelScript.Extension.{}", name ? name : "");
+}
+
+} // namespace
 
 asIScriptEngine *ScriptEngineHost::Engine() const {
     return m_Engine;
@@ -123,6 +132,93 @@ bool ScriptEngineHost::RejectHostCall(const char *apiName, CKDWORD flags) const 
         return false;
     }
     return m_HostCallFilter(apiName, flags, m_HostCallFilterUserData) != CKAS_OK;
+}
+
+CKAS_STATUS ScriptEngineHost::RegisterExtension(ScriptManager &manager,
+                                                const CKAngelScriptEngineExtension &extension,
+                                                CKAngelScriptResult *result) {
+    ScriptPublicOptions::EngineExtensionRequest request;
+    std::string errorMessage;
+    const CKAS_STATUS optionStatus = ScriptPublicOptions::DecodeEngineExtension(extension,
+                                                                                request,
+                                                                                errorMessage);
+    if (optionStatus != CKAS_OK) {
+        return manager.StoreApiResult(result, optionStatus, 0, errorMessage.c_str());
+    }
+    for (const EngineExtensionRegistration &existing : m_EngineExtensions) {
+        if (existing.Name == request.Name) {
+            const std::string message = fmt::format("Engine extension '{}' is already registered.", request.Name);
+            return manager.StoreApiResult(result, CKAS_ALREADYEXISTS, 0, message.c_str());
+        }
+    }
+
+    EngineExtensionRegistration retained = {};
+    retained.Name = request.Name;
+    retained.ConfigGroupName = MakeEngineExtensionConfigGroupName(request.Name);
+    retained.Register = request.Register;
+    retained.UserData = request.UserData;
+    retained.Flags = request.Flags;
+
+    if (m_Engine &&
+        manager.IsInited() &&
+        !ScriptApiSupport::HasPublicFlag(request.Flags, CKAS_ENGINEEXTENSION_DEFERRED)) {
+        std::string message;
+        const int code = RegisterExtensionGroup(manager, m_Engine, retained, message);
+        if (code < 0) {
+            const std::string summary = message.empty()
+                                            ? fmt::format("Engine extension '{}' failed to register (code {}).",
+                                                          request.Name,
+                                                          code)
+                                            : message;
+            CKContext *context = manager.GetCKContext();
+            if (context) {
+                context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+            }
+            LOG_ERROR("%s", summary.c_str());
+            return manager.StoreApiResult(result, CKAS_EXECUTIONFAILED, code, summary.c_str());
+        }
+    }
+
+    m_EngineExtensions.push_back(retained);
+    return manager.StoreApiResult(result, CKAS_OK, 0, nullptr);
+}
+
+CKAS_STATUS ScriptEngineHost::UnregisterExtension(ScriptManager &manager,
+                                                  const char *name,
+                                                  CKAngelScriptResult *result) {
+    if (!ScriptApiSupport::IsNonEmpty(name)) {
+        return manager.StoreApiResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension name is required.");
+    }
+    for (auto it = m_EngineExtensions.begin(); it != m_EngineExtensions.end(); ++it) {
+        if (it->Name == name) {
+            if (it->ActiveInCurrentEngine && m_Engine) {
+                std::string message;
+                const int code = RemoveExtensionGroup(m_Engine, *it, message);
+                if (code < 0) {
+                    if (code == asCONFIG_GROUP_IS_IN_USE) {
+                        const std::string summary = message.empty()
+                                                        ? fmt::format("Engine extension '{}' is in use.", name)
+                                                        : message;
+                        return manager.StoreApiResult(result, CKAS_INUSE, code, summary.c_str());
+                    }
+                    const std::string summary = message.empty()
+                                                    ? fmt::format("Failed to unregister engine extension '{}' (code {}).", name, code)
+                                                    : message;
+                    return manager.StoreApiResult(result, CKAS_EXECUTIONFAILED, code, summary.c_str());
+                }
+            }
+            m_EngineExtensions.erase(it);
+            return manager.StoreApiResult(result, CKAS_OK, 0, nullptr);
+        }
+    }
+    const std::string message = fmt::format("Engine extension '{}' is not registered.", name);
+    return manager.StoreApiResult(result, CKAS_NOTFOUND, 0, message.c_str());
+}
+
+void ScriptEngineHost::MarkExtensionsInactive() {
+    for (EngineExtensionRegistration &extension : m_EngineExtensions) {
+        extension.ActiveInCurrentEngine = false;
+    }
 }
 
 asIScriptEngine *ScriptManager::GetScriptEngine() {
@@ -314,7 +410,7 @@ int ScriptManager::SetupScriptEngine() {
     // Register host-provided namespaces/types after CKAngelScript's own public
     // API is available. A failing extension is logged but is non-fatal: it must
     // not take down core scripting or the other extensions.
-    RegisterEngineExtensions(engine);
+    m_EngineHost.RegisterExtensions(*this, engine);
 
 #if CKAS_ENABLE_API_EXPORT
     std::string apiExportError;
@@ -380,9 +476,10 @@ void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
     RegisterScriptMessage(engine);
 }
 
-int ScriptManager::RegisterEngineExtensionGroup(asIScriptEngine *engine,
-                                                ScriptEngineExtensionRegistration &extension,
-                                                std::string &message) {
+int ScriptEngineHost::RegisterExtensionGroup(ScriptManager &manager,
+                                             asIScriptEngine *engine,
+                                             EngineExtensionRegistration &extension,
+                                             std::string &message) {
     message.clear();
     extension.ActiveInCurrentEngine = false;
     if (!engine || !extension.Register || extension.ConfigGroupName.empty()) {
@@ -402,7 +499,7 @@ int ScriptManager::RegisterEngineExtensionGroup(asIScriptEngine *engine,
     }
 
     const char *extensionError = nullptr;
-    code = extension.Register(engine, ToPublicHandle(this), extension.UserData, &extensionError);
+    code = extension.Register(engine, ToPublicHandle(&manager), extension.UserData, &extensionError);
     const int namespaceCode = engine->SetDefaultNamespace(previousNamespace.c_str());
     const int endCode = engine->EndConfigGroup();
 
@@ -437,9 +534,9 @@ int ScriptManager::RegisterEngineExtensionGroup(asIScriptEngine *engine,
     return 0;
 }
 
-int ScriptManager::RemoveEngineExtensionGroup(asIScriptEngine *engine,
-                                              ScriptEngineExtensionRegistration &extension,
-                                              std::string &message) {
+int ScriptEngineHost::RemoveExtensionGroup(asIScriptEngine *engine,
+                                           EngineExtensionRegistration &extension,
+                                           std::string &message) {
     message.clear();
     if (!extension.ActiveInCurrentEngine) {
         return 0;
@@ -465,7 +562,7 @@ int ScriptManager::RemoveEngineExtensionGroup(asIScriptEngine *engine,
     return 0;
 }
 
-int ScriptManager::RegisterEngineExtensions(asIScriptEngine *engine) {
+int ScriptEngineHost::RegisterExtensions(ScriptManager &manager, asIScriptEngine *engine) {
     assert(engine != nullptr);
 
     // A failing host extension must not bring down the whole engine: core
@@ -473,21 +570,22 @@ int ScriptManager::RegisterEngineExtensions(asIScriptEngine *engine) {
     // failure is reported individually and the first failure code is returned
     // for callers that want to surface it.
     int firstFailure = 0;
-    for (ScriptEngineExtensionRegistration &extension : m_EngineExtensions) {
+    for (EngineExtensionRegistration &extension : m_EngineExtensions) {
         extension.ActiveInCurrentEngine = false;
         if (!extension.Register) {
             continue;
         }
         std::string message;
-        const int code = RegisterEngineExtensionGroup(engine, extension, message);
+        const int code = RegisterExtensionGroup(manager, engine, extension, message);
         if (code < 0) {
             const std::string summary = message.empty()
                                             ? fmt::format("Engine extension '{}' failed to register (code {}).",
                                                           extension.Name.empty() ? "<unnamed extension>" : extension.Name.c_str(),
                                                           code)
                                             : message;
-            if (m_Context) {
-                m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+            CKContext *context = manager.GetCKContext();
+            if (context) {
+                context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
             }
             LOG_ERROR("%s", summary.c_str());
             if (firstFailure == 0) {

@@ -36,15 +36,6 @@ class ScriptParameterRegistry;
 class ScriptRuntime;
 class ScriptInvoker;
 
-struct ScriptEngineExtensionRegistration {
-    std::string Name;
-    std::string ConfigGroupName;
-    CKAngelScriptEngineExtensionCallback Register = nullptr;
-    void *UserData = nullptr;
-    CKDWORD Flags = CKAS_ENGINEEXTENSION_DEFAULT;
-    bool ActiveInCurrentEngine = false;
-};
-
 class ScriptManager : public CKBaseManager {
     friend class ScriptImportBinder;
     friend class ScriptModuleBytecodeStore;
@@ -298,13 +289,6 @@ protected:
     void RegisterStdTypes(asIScriptEngine *engine);
     void RegisterStdAddons(asIScriptEngine *engine);
     void RegisterVirtools(asIScriptEngine *engine);
-    int RegisterEngineExtensions(asIScriptEngine *engine);
-    int RegisterEngineExtensionGroup(asIScriptEngine *engine,
-                                     ScriptEngineExtensionRegistration &extension,
-                                     std::string &message);
-    int RemoveEngineExtensionGroup(asIScriptEngine *engine,
-                                   ScriptEngineExtensionRegistration &extension,
-                                   std::string &message);
 
     bool HasExecutionForModule(const char *moduleName) const;
     bool HasRuntimeHandleForModule(const char *moduleName) const;
@@ -365,7 +349,6 @@ protected:
     ScriptImportBinder m_ImportBinder;
     ScriptModuleBytecodeStore m_ModuleBytecodeStore;
     ScriptModuleReplacer m_ModuleReplacer;
-    std::vector<ScriptEngineExtensionRegistration> m_EngineExtensions;
     ScriptApiDiagnostics m_Diagnostics;
     int m_PublicCallbackDepth = 0;
     int m_BytecodeCallbackDepth = 0;
