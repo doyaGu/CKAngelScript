@@ -67,6 +67,7 @@ set(CKAS_SOURCES
         ScriptPublicApi.cpp
         Logger.cpp
         ScriptManager.cpp
+        ScriptManagerDiagnostics.cpp
         ScriptManagerEngine.cpp
         ScriptManagerHandles.cpp
         ScriptManagerModules.cpp
