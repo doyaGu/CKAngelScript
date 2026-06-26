@@ -72,7 +72,10 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(ScriptManager &manager,
     if (!ScriptApiSupport::IsNonEmpty(request.ModuleName)) {
         return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
-    CKAS_STATUS mutationStatus = manager.CheckModuleMutationAllowed("LoadModuleBytecode", result);
+    CKAS_STATUS mutationStatus = manager.m_ModuleRegistry.CheckMutationAllowed(
+        manager,
+        "LoadModuleBytecode",
+        result);
     if (mutationStatus != CKAS_OK) {
         return mutationStatus;
     }
@@ -89,12 +92,14 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(ScriptManager &manager,
             return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
     }
-    const CKAS_STATUS runtimeStatus = manager.CheckModuleRuntimeHandlesReleased(request.ModuleName, result);
+    const CKAS_STATUS runtimeStatus =
+        manager.m_ModuleRegistry.CheckRuntimeHandlesReleased(manager, request.ModuleName, result);
     if (runtimeStatus != CKAS_OK) {
         return runtimeStatus;
     }
     if (replacingExisting) {
-        const CKAS_STATUS importStatus = manager.CheckModuleHasNoBoundImportConsumers(request.ModuleName, result);
+        const CKAS_STATUS importStatus =
+            manager.m_ModuleRegistry.CheckNoBoundImportConsumers(manager, request.ModuleName, result);
         if (importStatus != CKAS_OK) {
             return importStatus;
         }

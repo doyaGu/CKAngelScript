@@ -26,6 +26,19 @@ public:
                         CKAngelScriptResult *result);
     CKAS_STATUS Unload(ScriptManager &manager, const char *moduleName, CKAngelScriptResult *result);
 
+    CKAS_STATUS CheckRuntimeHandlesReleased(ScriptManager &manager,
+                                            const char *moduleName,
+                                            CKAngelScriptResult *result);
+    CKAS_STATUS CheckNoBoundImportConsumers(ScriptManager &manager,
+                                            const char *moduleName,
+                                            CKAngelScriptResult *result);
+    CKAS_STATUS CheckReplaceOrUnloadAllowed(ScriptManager &manager,
+                                            const char *moduleName,
+                                            CKAngelScriptResult *result);
+    CKAS_STATUS CheckMutationAllowed(ScriptManager &manager,
+                                     const char *apiName,
+                                     CKAngelScriptResult *result);
+
     int LoadFromDefaultOrFile(ScriptManager &manager, const char *moduleName, const char *filename);
     int LoadFromFiles(ScriptManager &manager, const char *moduleName, const char **filenames, size_t count);
     int CompileFromMemory(ScriptManager &manager, const char *moduleName, const char *scriptCode);

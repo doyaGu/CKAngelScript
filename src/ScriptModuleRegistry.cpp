@@ -196,48 +196,53 @@ unsigned long long ScriptModuleRegistry::BuildSourceHash(const char *moduleName)
     return sourceHash;
 }
 
-CKAS_STATUS ScriptManager::CheckModuleRuntimeHandlesReleased(const char *moduleName,
-                                                             CKAngelScriptResult *result) {
-    if (m_HandleRegistry.HasRuntimeHandleForModule(moduleName)) {
-        return StoreResult(result,
-                           CKAS_INUSE,
-                           0,
-                           "Module has live object or execution handles.");
+CKAS_STATUS ScriptModuleRegistry::CheckRuntimeHandlesReleased(ScriptManager &manager,
+                                                              const char *moduleName,
+                                                              CKAngelScriptResult *result) {
+    if (manager.m_HandleRegistry.HasRuntimeHandleForModule(moduleName)) {
+        return manager.StoreResult(result,
+                                   CKAS_INUSE,
+                                   0,
+                                   "Module has live object or execution handles.");
     }
     return CKAS_OK;
 }
 
-CKAS_STATUS ScriptManager::CheckModuleHasNoBoundImportConsumers(const char *moduleName,
-                                                                CKAngelScriptResult *result) {
+CKAS_STATUS ScriptModuleRegistry::CheckNoBoundImportConsumers(ScriptManager &manager,
+                                                              const char *moduleName,
+                                                              CKAngelScriptResult *result) {
     std::string importConsumer;
-    if (m_ModuleStateStore.HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
-        return StoreResult(result,
-                           CKAS_INUSE,
-                           0,
-                           fmt::format("Module is imported by bound module '{}'.",
-                                       importConsumer));
+    if (manager.m_ModuleStateStore.HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
+        return manager.StoreResult(result,
+                                   CKAS_INUSE,
+                                   0,
+                                   fmt::format("Module is imported by bound module '{}'.",
+                                               importConsumer));
     }
     return CKAS_OK;
 }
 
-CKAS_STATUS ScriptManager::CheckModuleReplaceOrUnloadAllowed(const char *moduleName,
-                                                             CKAngelScriptResult *result) {
-    const CKAS_STATUS runtimeStatus = CheckModuleRuntimeHandlesReleased(moduleName, result);
+CKAS_STATUS ScriptModuleRegistry::CheckReplaceOrUnloadAllowed(ScriptManager &manager,
+                                                              const char *moduleName,
+                                                              CKAngelScriptResult *result) {
+    const CKAS_STATUS runtimeStatus = CheckRuntimeHandlesReleased(manager, moduleName, result);
     if (runtimeStatus != CKAS_OK) {
         return runtimeStatus;
     }
-    return CheckModuleHasNoBoundImportConsumers(moduleName, result);
+    return CheckNoBoundImportConsumers(manager, moduleName, result);
 }
 
-CKAS_STATUS ScriptManager::CheckModuleMutationAllowed(const char *apiName, CKAngelScriptResult *result) {
-    if (m_PublicCallbackDepth <= 0) {
+CKAS_STATUS ScriptModuleRegistry::CheckMutationAllowed(ScriptManager &manager,
+                                                       const char *apiName,
+                                                       CKAngelScriptResult *result) {
+    if (manager.m_PublicCallbackDepth <= 0) {
         return CKAS_OK;
     }
-    return StoreResult(result,
-                       CKAS_INVALIDSTATE,
-                       0,
-                       fmt::format("{} cannot mutate modules while a CKAngelScript callback is active.",
-                                   apiName ? apiName : "CKAngelScript"));
+    return manager.StoreResult(result,
+                               CKAS_INVALIDSTATE,
+                               0,
+                               fmt::format("{} cannot mutate modules while a CKAngelScript callback is active.",
+                                           apiName ? apiName : "CKAngelScript"));
 }
 
 CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
@@ -249,7 +254,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
     if (optionStatus != CKAS_OK) {
         return manager.StoreResult(result, optionStatus, 0, errorMessage);
     }
-    const CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("LoadModule", result);
+    const CKAS_STATUS callbackStatus = CheckMutationAllowed(manager, "LoadModule", result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
@@ -261,7 +266,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
         if (!ScriptApiSupport::HasPublicFlag(request.Flags, CKAS_LOAD_REPLACEEXISTING)) {
             return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
-        const CKAS_STATUS mutationStatus = manager.CheckModuleReplaceOrUnloadAllowed(request.ModuleName, result);
+        const CKAS_STATUS mutationStatus = CheckReplaceOrUnloadAllowed(manager, request.ModuleName, result);
         if (mutationStatus != CKAS_OK) {
             return mutationStatus;
         }
@@ -343,7 +348,7 @@ CKAS_STATUS ScriptModuleRegistry::Compile(ScriptManager &manager,
     if (!ScriptApiSupport::IsNonEmpty(moduleName) || !scriptCode) {
         return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name and script code are required.");
     }
-    const CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("CompileModule", result);
+    const CKAS_STATUS callbackStatus = CheckMutationAllowed(manager, "CompileModule", result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
@@ -358,7 +363,7 @@ CKAS_STATUS ScriptModuleRegistry::Compile(ScriptManager &manager,
         if (!ScriptApiSupport::HasPublicFlag(flags, CKAS_COMPILE_REPLACEEXISTING)) {
             return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
-        const CKAS_STATUS mutationStatus = manager.CheckModuleReplaceOrUnloadAllowed(moduleName, result);
+        const CKAS_STATUS mutationStatus = CheckReplaceOrUnloadAllowed(manager, moduleName, result);
         if (mutationStatus != CKAS_OK) {
             return mutationStatus;
         }
@@ -391,11 +396,11 @@ CKAS_STATUS ScriptModuleRegistry::Unload(ScriptManager &manager,
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
-    const CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("UnloadModule", result);
+    const CKAS_STATUS callbackStatus = CheckMutationAllowed(manager, "UnloadModule", result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
-    const CKAS_STATUS mutationStatus = manager.CheckModuleReplaceOrUnloadAllowed(moduleName, result);
+    const CKAS_STATUS mutationStatus = CheckReplaceOrUnloadAllowed(manager, moduleName, result);
     if (mutationStatus != CKAS_OK) {
         return mutationStatus;
     }
