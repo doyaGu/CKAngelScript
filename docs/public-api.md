@@ -84,7 +84,7 @@ CKAngelScript never owns callback `UserData`. The caller is always responsible f
 | --- | --- |
 | `CKAngelScriptEnumerateMetadata` | `userData`, `CKAngelScriptMetadataEntry`, and metadata strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. Module mutation from the callback returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptEnumerateImportedFunctions` | `userData`, `CKAngelScriptImportEntry`, and import strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. Module mutation from the callback returns `CKAS_INVALIDSTATE`. |
-| `CKAngelScriptSaveModuleBytecode` / `CKAngelScriptLoadModuleBytecode` | `Write`, `Read`, and `UserData` are borrowed only until the bytecode call returns. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`. |
+| `CKAngelScriptSaveModuleBytecode` / `CKAngelScriptLoadModuleBytecode` | `Write`, `Read`, and `UserData` are borrowed only until the bytecode call returns. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`; recursive bytecode save/load from bytecode callbacks is also rejected. |
 | `CKAngelScriptCallObjectMethod` | `WriteArgs`, `ReadResult`, and `UserData` are borrowed only until the synchronous call returns. Do not store `CKAngelScriptArgWriter` or `CKAngelScriptResultReader` pointers. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptStartExecution` / `CKAngelScriptResumeExecution` | `ConfigureContext`, `ReadResult`, and `UserData` from `CKAngelScriptExecutionStepOptions` are borrowed only for that one start/resume call. Suspend does not retain them; pass fresh step options when resuming. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptSetHostCallFilter` | `callback` and `userData` are retained until replaced, cleared, or the CKAngelScript manager is destroyed. The callback must not execute script or unload/replace modules. |
@@ -177,6 +177,8 @@ CKAngelScriptBytecodeSaveOptions save =
     CKAngelScriptApi::BytecodeSaveOptions("score_lib", WriteBytes, userData);
 CKAS_STATUS status = CKAngelScriptSaveModuleBytecode(angelScript, &save, &result);
 ```
+
+`CKAngelScriptSaveModuleBytecode()` is a read-only module operation and may be called from non-bytecode CKAngelScript callbacks, for example metadata enumeration. The bytecode `Write`/`Read` callbacks themselves are not reentrant: calling bytecode save/load again from those callbacks returns `CKAS_INVALIDSTATE`.
 
 `CKAngelScriptLoadModuleBytecode()` creates a module from bytecode. Loading over an existing module requires `CKAS_BYTECODE_REPLACEEXISTING`; without it, duplicates return `CKAS_ALREADYEXISTS`. Live `CKAngelScriptObject` or `CKAngelScriptExecution` handles block bytecode replacement with `CKAS_INUSE`. Replacement is transactional at the public API boundary: CKAngelScript first loads the bytecode into a transient module, snapshots it, then commits it under the requested module name. Failed loads or failed commits leave the previous module and generation unchanged when rollback succeeds. Successful bytecode replacement bumps module generation and stale-checks old symbol handles.
 
