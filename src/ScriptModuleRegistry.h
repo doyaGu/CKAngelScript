@@ -9,6 +9,9 @@
 #include "ScriptCache.h"
 #include "ScriptModuleReplacer.h"
 
+class ScriptApiDiagnostics;
+class ScriptHandleRegistry;
+class ScriptImportBinder;
 class ScriptManager;
 class ScriptModuleStateStore;
 struct CapturedScriptMessage;
@@ -22,13 +25,22 @@ public:
     void CacheScript(const char *scriptName, std::shared_ptr<CachedScript> script);
     void Invalidate(const char *scriptName);
 
-    CKAS_STATUS Load(ScriptManager &manager, const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result);
-    CKAS_STATUS Compile(ScriptManager &manager,
+    struct MutationContext {
+        ScriptManager &Manager;
+        ScriptModuleStateStore &StateStore;
+        ScriptHandleRegistry &HandleRegistry;
+        ScriptImportBinder &ImportBinder;
+        ScriptApiDiagnostics &Diagnostics;
+        int &PublicCallbackDepth;
+    };
+
+    CKAS_STATUS Load(MutationContext &context, const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result);
+    CKAS_STATUS Compile(MutationContext &context,
                         const char *moduleName,
                         const char *scriptCode,
                         CKDWORD flags,
                         CKAngelScriptResult *result);
-    CKAS_STATUS Unload(ScriptManager &manager, const char *moduleName, CKAngelScriptResult *result);
+    CKAS_STATUS Unload(MutationContext &context, const char *moduleName, CKAngelScriptResult *result);
     bool Has(ScriptManager &manager, const char *moduleName);
     CKDWORD GetGeneration(const ScriptManager &manager, const char *moduleName) const;
 
@@ -60,7 +72,7 @@ public:
                                const char *moduleName,
                                CKAngelScriptModuleFingerprint *outFingerprint,
                                CKAngelScriptResult *result);
-    CKAS_STATUS ReplaceFromBytecode(ScriptManager &manager,
+    CKAS_STATUS ReplaceFromBytecode(MutationContext &context,
                                     const char *moduleName,
                                     const std::vector<unsigned char> &byteCode,
                                     CKAngelScriptResult *result);
@@ -78,12 +90,12 @@ public:
 
 private:
     bool DiscardCached(const char *moduleName);
-    CKAS_STATUS ReplaceFromSections(ScriptManager &manager,
+    CKAS_STATUS ReplaceFromSections(MutationContext &context,
                                     const char *moduleName,
                                     const std::vector<std::tuple<std::string, std::string>> &sections,
                                     bool sourceSnapshotSections,
                                     CKAngelScriptResult *result);
-    CKAS_STATUS CompleteSourceLoad(ScriptManager &manager,
+    CKAS_STATUS CompleteSourceLoad(MutationContext &context,
                                    const char *moduleName,
                                    const std::vector<CapturedScriptMessage> &diagnosticMessages,
                                    CKAngelScriptResult *result);

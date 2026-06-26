@@ -5,6 +5,7 @@
 
 class ScriptApiDiagnostics;
 class ScriptHandleRegistry;
+class ScriptImportBinder;
 class ScriptManager;
 class ScriptModuleRegistry;
 class ScriptModuleStateStore;
@@ -23,6 +24,7 @@ public:
         ScriptModuleRegistry &ModuleRegistry;
         ScriptModuleStateStore &ModuleStateStore;
         ScriptHandleRegistry &HandleRegistry;
+        ScriptImportBinder &ImportBinder;
         ScriptApiDiagnostics &Diagnostics;
         int &PublicCallbackDepth;
         int &BytecodeCallbackDepth;

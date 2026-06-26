@@ -6,6 +6,7 @@
 #include "ScriptApiDiagnostics.h"
 #include "ScriptApiSupport.h"
 #include "ScriptHandleRegistry.h"
+#include "ScriptImportBinder.h"
 #include "ScriptManager.h"
 #include "ScriptModuleBytecode.h"
 #include "ScriptModuleMutationPolicy.h"
@@ -175,7 +176,14 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(LoadContext &context,
     candidateModule->Discard();
     candidateModule = nullptr;
 
-    return context.ModuleRegistry.ReplaceFromBytecode(context.Manager,
+    ScriptModuleRegistry::MutationContext mutationContext = {
+        context.Manager,
+        context.ModuleStateStore,
+        context.HandleRegistry,
+        context.ImportBinder,
+        context.Diagnostics,
+        context.PublicCallbackDepth};
+    return context.ModuleRegistry.ReplaceFromBytecode(mutationContext,
                                                       request.ModuleName,
                                                       candidateByteCode,
                                                       result);
