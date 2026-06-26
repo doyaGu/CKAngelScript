@@ -28,6 +28,13 @@ inline CKAngelScript *ToPublicHandle(ScriptManager *manager) {
 
 namespace ScriptManagerInternal {
 
+struct ObjectCallOutcome {
+    CKAS_STATUS Status = CKAS_OK;
+    int AngelScriptCode = 0;
+    std::string ErrorMessage;
+    std::string StackTrace;
+};
+
 const char *StatusName(CKAS_STATUS status);
 const char *StatusMessage(CKAS_STATUS status);
 CKAS_STATUS StoreStatelessPublicResult(CKAngelScriptResult *out,
@@ -68,6 +75,25 @@ void HashValue(unsigned long long &hash, unsigned long long value);
 void HashValue(unsigned long long &hash, CKDWORD value);
 void HashBool(unsigned long long &hash, bool value);
 CKAS_STATUS StatusFromImportBindResult(int code);
+CKAngelScriptResult MakeExecutionResult(CKAngelScriptExecution *execution,
+                                        CKAS_STATUS status,
+                                        int angelScriptCode = 0,
+                                        const std::string &errorMessage = std::string(),
+                                        const std::string &stackTrace = std::string());
+ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
+                                              int &publicCallbackDepth,
+                                              asIScriptObject *object,
+                                              asIScriptFunction *function,
+                                              const CKAngelScriptMethod *method,
+                                              CKAngelScriptWriteArgsCallback writeArgs,
+                                              CKAngelScriptReadResultCallback readResult,
+                                              CKAngelScriptContextCallback configureContext,
+                                              CKAngelScriptContextCallback readContextResult,
+                                              void *userData,
+                                              CKDWORD flags);
+CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
+                         const CKAngelScriptExecutionStepOptions *options,
+                         int &publicCallbackDepth);
 
 template <typename T>
 void InitPublicStruct(T *value) {
