@@ -1541,9 +1541,11 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     constexpr const char *importConsumerModuleName = "__CKAS_ImportConsumer";
     const char *importProviderSource =
         "int __ckas_import_add(int value) { return value + 12; }\n"
+        "int __ckas_import_alias(int value) { return value + 30; }\n"
         "void __ckas_import_wrong() {}\n";
     const char *importProviderReplacementSource =
         "int __ckas_import_add(int value) { return value + 20; }\n"
+        "int __ckas_import_alias(int value) { return value + 40; }\n"
         "void __ckas_import_wrong() {}\n";
     const char *importConsumerSource =
         "import int __ckas_import_add(int value) from \"__CKAS_ImportProvider\";\n"
@@ -1687,6 +1689,26 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    if (api->UnbindImportedFunction(importConsumerModuleName, 0, &result) != CKAS_OK ||
+        api->BindImportedFunction(importConsumerModuleName,
+                                  0,
+                                  importProviderModuleName,
+                                  "int __ckas_import_alias(int)",
+                                  &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            importConsumerModuleName,
+                            "int __ckas_import_call()",
+                            importValue,
+                            result,
+                            error) ||
+        importValue != 45) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected explicit import binds to support provider aliases.";
+        }
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     const CKDWORD failedRebindGeneration = api->GetModuleGeneration(importConsumerModuleName);
     if (api->BindImportedFunction(importConsumerModuleName,
                                   0,
@@ -1704,7 +1726,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                             importValue,
                             result,
                             error) ||
-        importValue != 25) {
+        importValue != 45) {
         if (error.empty()) {
             error = "CKAngelScript API self-test expected failed import rebind to restore the previous binding.";
         }
