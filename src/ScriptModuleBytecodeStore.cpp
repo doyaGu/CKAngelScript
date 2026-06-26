@@ -1,13 +1,9 @@
 #include "ScriptModuleBytecodeStore.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include "ScriptApiSupport.h"
-#include "ScriptCache.h"
 #include "ScriptManager.h"
 #include "ScriptModuleBytecode.h"
 #include "ScriptModuleReplacer.h"
@@ -140,46 +136,8 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(ScriptManager &manager,
     candidateModule->Discard();
     candidateModule = nullptr;
 
-    ScriptModuleReplacer::Snapshot snapshot;
-    std::string snapshotError;
-    if (!manager.m_ModuleReplacer.CaptureSnapshot(manager,
-                                                  request.ModuleName,
-                                                  snapshot,
-                                                  angelScriptCode,
-                                                  snapshotError)) {
-        return manager.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, snapshotError);
-    }
-
-    manager.m_ModuleReplacer.RemoveForReplacement(manager, request.ModuleName, snapshot);
-
-    asIScriptModule *committedModule = nullptr;
-    if (!ScriptModuleBytecode::LoadModuleByteCode(manager.GetScriptEngine(),
-                                                  request.ModuleName,
-                                                  candidateByteCode,
-                                                  &committedModule,
-                                                  angelScriptCode)) {
-        int restoreCode = 0;
-        std::string restoreError;
-        const bool restored = manager.m_ModuleReplacer.RestoreSnapshot(manager,
-                                                                       request.ModuleName,
-                                                                       snapshot,
-                                                                       restoreCode,
-                                                                       restoreError);
-        return manager.StoreResult(result,
-                                   CKAS_EXECUTIONFAILED,
-                                   angelScriptCode,
-                                   restored
-                                       ? "Failed to commit loaded module bytecode."
-                                       : fmt::format("Failed to commit loaded module bytecode; rollback also failed: {}",
-                                                     restoreError));
-    }
-
-    auto committedCache = std::make_shared<CachedScript>();
-    committedCache->name = request.ModuleName;
-    committedCache->module = committedModule;
-    manager.m_ScriptCache.CacheScript(request.ModuleName, committedCache);
-    manager.ClearModuleIncludeEdges(request.ModuleName);
-    manager.SetModuleKind(request.ModuleName, ScriptModuleKind::Bytecode);
-    manager.BumpModuleGeneration(request.ModuleName);
-    return manager.StoreResult(result, CKAS_OK, angelScriptCode);
+    return manager.m_ModuleReplacer.ReplaceFromBytecode(manager,
+                                                        request.ModuleName,
+                                                        candidateByteCode,
+                                                        result);
 }

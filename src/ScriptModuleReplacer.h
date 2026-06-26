@@ -7,29 +7,26 @@
 #include <vector>
 
 #include "CKAngelScript.h"
-#include "ScriptApiDiagnostics.h"
-#include "ScriptCache.h"
-#include "ScriptModuleStateStore.h"
 
 class ScriptManager;
+struct CapturedScriptMessage;
+struct CachedScript;
 
 class ScriptModuleReplacer {
 public:
-    struct Snapshot {
-        std::shared_ptr<CachedScript> Cache;
-        std::vector<std::tuple<std::string, std::string>> Sections;
-        ScriptMetadata Metadata;
-        std::vector<ScriptImportBindingEdge> ImportBindings;
-        std::vector<unsigned char> ByteCode;
-        bool SourceSnapshotSections = false;
-        bool HasModule = false;
-    };
-
     CKAS_STATUS ReplaceFromSections(ScriptManager &manager,
                                     const char *moduleName,
                                     const std::vector<std::tuple<std::string, std::string>> &sections,
                                     bool sourceSnapshotSections,
                                     CKAngelScriptResult *result);
+
+    CKAS_STATUS ReplaceFromBytecode(ScriptManager &manager,
+                                    const char *moduleName,
+                                    const std::vector<unsigned char> &byteCode,
+                                    CKAngelScriptResult *result);
+
+private:
+    struct Snapshot;
 
     bool CaptureSnapshot(ScriptManager &manager,
                          const char *moduleName,
@@ -42,8 +39,15 @@ public:
                          Snapshot &snapshot,
                          int &angelScriptCode,
                          std::string &errorMessage);
+    bool CommitBytecodeCandidate(ScriptManager &manager,
+                                 const char *moduleName,
+                                 const std::vector<unsigned char> &candidateByteCode,
+                                 const char *commitFailedMessage,
+                                 const char *rollbackFailedPrefix,
+                                 asIScriptModule **outCommittedModule,
+                                 int &angelScriptCode,
+                                 std::string &errorMessage);
 
-private:
     std::shared_ptr<CachedScript> BuildTransientModule(
         ScriptManager &manager,
         const char *moduleName,

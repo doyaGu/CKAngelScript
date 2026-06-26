@@ -3,8 +3,20 @@
 #include <fmt/format.h>
 
 #include "ScriptApiSupport.h"
+#include "ScriptCache.h"
 #include "ScriptManager.h"
 #include "ScriptModuleBytecode.h"
+#include "ScriptModuleStateStore.h"
+
+struct ScriptModuleReplacer::Snapshot {
+    std::shared_ptr<CachedScript> Cache;
+    std::vector<std::tuple<std::string, std::string>> Sections;
+    ScriptMetadata Metadata;
+    std::vector<ScriptImportBindingEdge> ImportBindings;
+    std::vector<unsigned char> ByteCode;
+    bool SourceSnapshotSections = false;
+    bool HasModule = false;
+};
 
 std::shared_ptr<CachedScript> ScriptModuleReplacer::BuildTransientModule(
     ScriptManager &manager,
@@ -136,6 +148,56 @@ bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
     return true;
 }
 
+bool ScriptModuleReplacer::CommitBytecodeCandidate(
+    ScriptManager &manager,
+    const char *moduleName,
+    const std::vector<unsigned char> &candidateByteCode,
+    const char *commitFailedMessage,
+    const char *rollbackFailedPrefix,
+    asIScriptModule **outCommittedModule,
+    int &angelScriptCode,
+    std::string &errorMessage) {
+    if (outCommittedModule) {
+        *outCommittedModule = nullptr;
+    }
+    angelScriptCode = 0;
+    errorMessage.clear();
+
+    Snapshot snapshot;
+    std::string snapshotError;
+    if (!CaptureSnapshot(manager, moduleName, snapshot, angelScriptCode, snapshotError)) {
+        errorMessage = snapshotError;
+        return false;
+    }
+
+    RemoveForReplacement(manager, moduleName, snapshot);
+
+    std::vector<unsigned char> loadByteCode = candidateByteCode;
+    asIScriptModule *committedModule = nullptr;
+    if (!ScriptModuleBytecode::LoadModuleByteCode(manager.GetScriptEngine(),
+                                                  moduleName,
+                                                  loadByteCode,
+                                                  &committedModule,
+                                                  angelScriptCode)) {
+        int restoreCode = 0;
+        std::string restoreError;
+        const bool restored = RestoreSnapshot(manager, moduleName, snapshot, restoreCode, restoreError);
+        if (restored) {
+            errorMessage = commitFailedMessage ? commitFailedMessage : "Failed to commit module bytecode.";
+        } else {
+            errorMessage = fmt::format("{}; rollback also failed: {}",
+                                       rollbackFailedPrefix ? rollbackFailedPrefix : "Failed to commit module bytecode",
+                                       restoreError);
+        }
+        return false;
+    }
+
+    if (outCommittedModule) {
+        *outCommittedModule = committedModule;
+    }
+    return true;
+}
+
 CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
     ScriptManager &manager,
     const char *moduleName,
@@ -175,32 +237,18 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                                    "Failed to snapshot replacement script module bytecode.");
     }
 
-    Snapshot snapshot;
-    std::string snapshotError;
-    if (!CaptureSnapshot(manager, moduleName, snapshot, angelScriptCode, snapshotError)) {
-        candidate->Discard();
-        return manager.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, snapshotError);
-    }
-
-    RemoveForReplacement(manager, moduleName, snapshot);
-
     asIScriptModule *committedModule = nullptr;
-    if (!ScriptModuleBytecode::LoadModuleByteCode(manager.GetScriptEngine(),
-                                                  moduleName,
-                                                  candidateByteCode,
-                                                  &committedModule,
-                                                  angelScriptCode)) {
-        int restoreCode = 0;
-        std::string restoreError;
-        const bool restored = RestoreSnapshot(manager, moduleName, snapshot, restoreCode, restoreError);
+    std::string commitError;
+    if (!CommitBytecodeCandidate(manager,
+                                 moduleName,
+                                 candidateByteCode,
+                                 "Failed to commit replacement script module bytecode.",
+                                 "Failed to commit replacement script module bytecode",
+                                 &committedModule,
+                                 angelScriptCode,
+                                 commitError)) {
         candidate->Discard();
-        return manager.StoreResult(result,
-                                   CKAS_EXECUTIONFAILED,
-                                   angelScriptCode,
-                                   restored
-                                       ? "Failed to commit replacement script module bytecode."
-                                       : fmt::format("Failed to commit replacement script module bytecode; rollback also failed: {}",
-                                                     restoreError));
+        return manager.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, commitError);
     }
 
     auto committedCache = std::make_shared<CachedScript>();
@@ -219,4 +267,33 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
     manager.SetModuleKind(moduleName, ScriptModuleKind::Source);
     manager.BumpModuleGeneration(moduleName);
     return manager.StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
+}
+
+CKAS_STATUS ScriptModuleReplacer::ReplaceFromBytecode(
+    ScriptManager &manager,
+    const char *moduleName,
+    const std::vector<unsigned char> &byteCode,
+    CKAngelScriptResult *result) {
+    int angelScriptCode = 0;
+    asIScriptModule *committedModule = nullptr;
+    std::string commitError;
+    if (!CommitBytecodeCandidate(manager,
+                                 moduleName,
+                                 byteCode,
+                                 "Failed to commit loaded module bytecode.",
+                                 "Failed to commit loaded module bytecode",
+                                 &committedModule,
+                                 angelScriptCode,
+                                 commitError)) {
+        return manager.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, commitError);
+    }
+
+    auto committedCache = std::make_shared<CachedScript>();
+    committedCache->name = moduleName ? moduleName : "";
+    committedCache->module = committedModule;
+    manager.m_ScriptCache.CacheScript(moduleName, committedCache);
+    manager.ClearModuleIncludeEdges(moduleName);
+    manager.SetModuleKind(moduleName, ScriptModuleKind::Bytecode);
+    manager.BumpModuleGeneration(moduleName);
+    return manager.StoreResult(result, CKAS_OK, angelScriptCode);
 }
