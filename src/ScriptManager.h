@@ -3,7 +3,6 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include <angelscript.h>
@@ -16,6 +15,7 @@
 #include "ScriptHandleRegistry.h"
 #include "ScriptCache.h"
 #include "ScriptCKObjectRetainer.h"
+#include "ScriptComponentStateStore.h"
 #include "ScriptEngineHost.h"
 #include "ScriptImportBinder.h"
 #include "ScriptModuleBytecodeStore.h"
@@ -354,7 +354,7 @@ protected:
     ScriptEngineHost m_EngineHost;
     ScriptCache m_ScriptCache;
     ScriptCKObjectRetainer m_CKObjectRetainer;
-    std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > m_ComponentStates;
+    ScriptComponentStateStore m_ComponentStates;
     std::unique_ptr<ScriptBehaviorBridge> m_BehaviorBridge;
     std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
     std::unique_ptr<ScriptRuntime> m_Runtime;

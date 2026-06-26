@@ -1,12 +1,19 @@
-#include "ScriptManager.h"
+#include "ScriptComponentStateStore.h"
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "ScriptBehaviorBridge.h"
 #include "ScriptComponentState.h"
 #include "ScriptInvoker.h"
+#include "ScriptManager.h"
 #include "ScriptMessage.h"
+
+struct ScriptComponentStateStore::Impl {
+    std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > States;
+};
+
 static void ReleaseScriptFunction(asIScriptFunction *&func) {
     if (!func) {
         return;
@@ -16,14 +23,20 @@ static void ReleaseScriptFunction(asIScriptFunction *&func) {
     func = nullptr;
 }
 
-ScriptComponentState *ScriptManager::GetOrCreateComponentState(CKBehavior *behavior) {
+ScriptComponentStateStore::ScriptComponentStateStore()
+    : m_Impl(std::make_unique<Impl>()) {
+}
+
+ScriptComponentStateStore::~ScriptComponentStateStore() = default;
+
+ScriptComponentState *ScriptComponentStateStore::GetOrCreate(CKBehavior *behavior, const std::string &messageTarget) {
     if (!behavior) {
         return nullptr;
     }
 
     const CK_ID id = behavior->GetID();
-    auto it = m_ComponentStates.find(id);
-    if (it != m_ComponentStates.end()) {
+    auto it = m_Impl->States.find(id);
+    if (it != m_Impl->States.end()) {
         it->second->Behavior = behavior;
         return it->second.get();
     }
@@ -31,20 +44,53 @@ ScriptComponentState *ScriptManager::GetOrCreateComponentState(CKBehavior *behav
     auto state = std::make_unique<ScriptComponentState>();
     state->BehaviorId = id;
     state->Behavior = behavior;
-    state->MessageTarget = ScriptMessageBus::ComponentTarget(id);
+    state->MessageTarget = messageTarget;
 
     ScriptComponentState *raw = state.get();
-    m_ComponentStates[id] = std::move(state);
+    m_Impl->States[id] = std::move(state);
     return raw;
 }
 
-ScriptComponentState *ScriptManager::GetComponentState(CK_ID id) const {
-    auto it = m_ComponentStates.find(id);
-    if (it == m_ComponentStates.end()) {
+ScriptComponentState *ScriptComponentStateStore::Get(CK_ID id) const {
+    auto it = m_Impl->States.find(id);
+    if (it == m_Impl->States.end()) {
         return nullptr;
     }
 
     return it->second.get();
+}
+
+void ScriptComponentStateStore::Remove(CK_ID id, const StateCallback &beforeRemove) {
+    auto it = m_Impl->States.find(id);
+    if (it == m_Impl->States.end()) {
+        return;
+    }
+
+    if (beforeRemove) {
+        beforeRemove(id, it->second.get());
+    }
+    m_Impl->States.erase(it);
+}
+
+void ScriptComponentStateStore::Clear(const StateCallback &beforeRemove) {
+    for (auto &entry : m_Impl->States) {
+        if (beforeRemove) {
+            beforeRemove(entry.first, entry.second.get());
+        }
+    }
+    m_Impl->States.clear();
+}
+
+ScriptComponentState *ScriptManager::GetOrCreateComponentState(CKBehavior *behavior) {
+    if (!behavior) {
+        return nullptr;
+    }
+
+    return m_ComponentStates.GetOrCreate(behavior, ScriptMessageBus::ComponentTarget(behavior->GetID()));
+}
+
+ScriptComponentState *ScriptManager::GetComponentState(CK_ID id) const {
+    return m_ComponentStates.Get(id);
 }
 
 void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool unloadPrivateModule) {
@@ -117,26 +163,21 @@ void ScriptManager::ReleaseComponentState(CKBehavior *behavior) {
 }
 
 void ScriptManager::ReleaseComponentState(CK_ID id) {
-    auto it = m_ComponentStates.find(id);
-    if (it == m_ComponentStates.end()) {
-        return;
-    }
-
-    if (m_BehaviorBridge) {
-        m_BehaviorBridge->DestroyComponentTasks(id);
-    }
-    ResetComponentStateRuntime(it->second.get(), true);
-    m_ComponentStates.erase(it);
+    m_ComponentStates.Remove(id, [this](CK_ID stateId, ScriptComponentState *state) {
+        if (m_BehaviorBridge) {
+            m_BehaviorBridge->DestroyComponentTasks(stateId);
+        }
+        ResetComponentStateRuntime(state, true);
+    });
 }
 
 void ScriptManager::ClearComponentStates() {
-    for (auto &entry : m_ComponentStates) {
+    m_ComponentStates.Clear([this](CK_ID id, ScriptComponentState *state) {
         if (m_BehaviorBridge) {
-            m_BehaviorBridge->DestroyComponentTasks(entry.first);
+            m_BehaviorBridge->DestroyComponentTasks(id);
         }
-        ResetComponentStateRuntime(entry.second.get(), true);
-    }
-    m_ComponentStates.clear();
+        ResetComponentStateRuntime(state, true);
+    });
 }
 
 bool ScriptManager::DeliverComponentMessage(CK_ID id, const ScriptMessage &message, bool immediate, std::string &error) {

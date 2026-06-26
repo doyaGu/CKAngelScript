@@ -44,6 +44,7 @@ set(CKAS_HEADERS
         ScriptCKObjectRetainer.h
         ScriptComponentMetadata.h
         ScriptComponentState.h
+        ScriptComponentStateStore.h
         ScriptComponentInjection.h
         ScriptComponentAutomation.h
         ScriptBridgeCommon.h
