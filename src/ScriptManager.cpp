@@ -3547,29 +3547,31 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Import index is out of range.");
     }
 
-    const char *sourceModuleName =
+    const char *defaultSourceModuleName = importModule->GetImportedFunctionSourceModule(importIndex);
+    const char *defaultFunctionDecl = importModule->GetImportedFunctionDeclaration(importIndex);
+    const std::string sourceModuleName =
         sourceModuleOverride && sourceModuleOverride[0] != '\0'
             ? sourceModuleOverride
-            : importModule->GetImportedFunctionSourceModule(importIndex);
-    const char *functionDecl =
+            : (defaultSourceModuleName ? defaultSourceModuleName : "");
+    const std::string functionDecl =
         functionDeclOverride && functionDeclOverride[0] != '\0'
             ? functionDeclOverride
-            : importModule->GetImportedFunctionDeclaration(importIndex);
-    if (!sourceModuleName || sourceModuleName[0] == '\0' || !functionDecl || functionDecl[0] == '\0') {
+            : (defaultFunctionDecl ? defaultFunctionDecl : "");
+    if (sourceModuleName.empty() || functionDecl.empty()) {
         return StoreResult(result,
                            CKAS_INVALIDARGUMENT,
                            0,
                            "Import source module and function declaration are required.");
     }
 
-    asIScriptModule *sourceModule = GetModule(sourceModuleName);
+    asIScriptModule *sourceModule = GetModule(sourceModuleName.c_str());
     if (!sourceModule) {
         return StoreResult(result,
                            CKAS_NOTFOUND,
                            0,
                            fmt::format("Import source module '{}' was not found.", sourceModuleName));
     }
-    asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl);
+    asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl.c_str());
     if (!targetFunction) {
         return StoreResult(result,
                            CKAS_NOTFOUND,
@@ -3611,7 +3613,7 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
         BumpModuleGeneration(importModuleName);
         return StoreResult(result, status, bindResult, "Failed to bind imported function.");
     }
-    RecordImportBinding(importModuleName, importIndex, sourceModuleName, functionDecl);
+    RecordImportBinding(importModuleName, importIndex, sourceModuleName.c_str(), functionDecl.c_str());
     BumpModuleGeneration(importModuleName);
     return StoreResult(result, CKAS_OK, bindResult);
 }
@@ -3637,22 +3639,24 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
     std::vector<ResolvedImportBinding> resolvedBindings;
     resolvedBindings.reserve(count);
     for (asUINT i = 0; i < count; ++i) {
-        const char *sourceModuleName = module->GetImportedFunctionSourceModule(i);
-        const char *functionDecl = module->GetImportedFunctionDeclaration(i);
-        if (!sourceModuleName || sourceModuleName[0] == '\0' || !functionDecl || functionDecl[0] == '\0') {
+        const char *sourceModuleNameView = module->GetImportedFunctionSourceModule(i);
+        const char *functionDeclView = module->GetImportedFunctionDeclaration(i);
+        const std::string sourceModuleName = sourceModuleNameView ? sourceModuleNameView : "";
+        const std::string functionDecl = functionDeclView ? functionDeclView : "";
+        if (sourceModuleName.empty() || functionDecl.empty()) {
             return StoreResult(result,
                                CKAS_INVALIDARGUMENT,
                                0,
                                fmt::format("Import {} is missing a source module or declaration.", i));
         }
-        asIScriptModule *sourceModule = GetModule(sourceModuleName);
+        asIScriptModule *sourceModule = GetModule(sourceModuleName.c_str());
         if (!sourceModule) {
             return StoreResult(result,
                                CKAS_NOTFOUND,
                                0,
                                fmt::format("Import {} source module '{}' was not found.", i, sourceModuleName));
         }
-        asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl);
+        asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl.c_str());
         if (!targetFunction) {
             return StoreResult(result,
                                CKAS_NOTFOUND,

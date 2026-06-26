@@ -1794,6 +1794,22 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     if (api->UnbindImportedFunction(importConsumerModuleName, 0, &result) != CKAS_OK ||
+        api->BindImportedFunction(importConsumerModuleName, 0, nullptr, nullptr, &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            importConsumerModuleName,
+                            "int __ckas_import_call()",
+                            importValue,
+                            result,
+                            error) ||
+        importValue != 25) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected single import bind to use declaration defaults.";
+        }
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->UnbindImportedFunction(importConsumerModuleName, 0, &result) != CKAS_OK ||
         api->BindImportedFunction(importConsumerModuleName,
                                   0,
                                   importProviderModuleName,
