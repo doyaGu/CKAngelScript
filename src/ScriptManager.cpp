@@ -2534,6 +2534,39 @@ bool ScriptManager::HasBoundImportConsumersForModule(const char *moduleName,
     return false;
 }
 
+CKAS_STATUS ScriptManager::CheckModuleRuntimeHandlesReleased(const char *moduleName,
+                                                             CKAngelScriptResult *result) {
+    if (HasRuntimeHandleForModule(moduleName)) {
+        return StoreResult(result,
+                           CKAS_INUSE,
+                           0,
+                           "Module has live object or execution handles.");
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ScriptManager::CheckModuleHasNoBoundImportConsumers(const char *moduleName,
+                                                                CKAngelScriptResult *result) {
+    std::string importConsumer;
+    if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
+        return StoreResult(result,
+                           CKAS_INUSE,
+                           0,
+                           fmt::format("Module is imported by bound module '{}'.",
+                                       importConsumer));
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ScriptManager::CheckModuleReplaceOrUnloadAllowed(const char *moduleName,
+                                                             CKAngelScriptResult *result) {
+    const CKAS_STATUS runtimeStatus = CheckModuleRuntimeHandlesReleased(moduleName, result);
+    if (runtimeStatus != CKAS_OK) {
+        return runtimeStatus;
+    }
+    return CheckModuleHasNoBoundImportConsumers(moduleName, result);
+}
+
 bool ScriptManager::IsModuleMutationBlockedByCallback() const {
     return m_PublicCallbackDepth > 0;
 }
@@ -2921,19 +2954,9 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
         if (!HasPublicFlag(flags, CKAS_LOAD_REPLACEEXISTING)) {
             return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
-        if (HasRuntimeHandleForModule(moduleName)) {
-            return StoreResult(result,
-                               CKAS_INUSE,
-                               0,
-                               "Module has live object or execution handles.");
-        }
-        std::string importConsumer;
-        if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
-            return StoreResult(result,
-                               CKAS_INUSE,
-                               0,
-                               fmt::format("Module is imported by bound module '{}'.",
-                                           importConsumer));
+        const CKAS_STATUS mutationStatus = CheckModuleReplaceOrUnloadAllowed(moduleName, result);
+        if (mutationStatus != CKAS_OK) {
+            return mutationStatus;
         }
     }
     if (hasCode) {
@@ -3062,19 +3085,9 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
         if (!HasPublicFlag(flags, CKAS_COMPILE_REPLACEEXISTING)) {
             return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
-        if (HasRuntimeHandleForModule(moduleName)) {
-            return StoreResult(result,
-                               CKAS_INUSE,
-                               0,
-                               "Module has live object or execution handles.");
-        }
-        std::string importConsumer;
-        if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
-            return StoreResult(result,
-                               CKAS_INUSE,
-                               0,
-                               fmt::format("Module is imported by bound module '{}'.",
-                                           importConsumer));
+        const CKAS_STATUS mutationStatus = CheckModuleReplaceOrUnloadAllowed(moduleName, result);
+        if (mutationStatus != CKAS_OK) {
+            return mutationStatus;
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(moduleName, scriptCode);
@@ -3104,19 +3117,9 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
     if (IsModuleMutationBlockedByCallback()) {
         return RejectModuleMutationDuringCallback("UnloadModule", result);
     }
-    if (HasRuntimeHandleForModule(moduleName)) {
-        return StoreResult(result,
-                           CKAS_INUSE,
-                           0,
-                           "Module has live object or execution handles.");
-    }
-    std::string importConsumer;
-    if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
-        return StoreResult(result,
-                           CKAS_INUSE,
-                           0,
-                           fmt::format("Module is imported by bound module '{}'.",
-                                       importConsumer));
+    const CKAS_STATUS mutationStatus = CheckModuleReplaceOrUnloadAllowed(moduleName, result);
+    if (mutationStatus != CKAS_OK) {
+        return mutationStatus;
     }
     if (!DiscardCachedModule(moduleName)) {
         return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
@@ -3778,20 +3781,14 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
             return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
     }
-    if (HasRuntimeHandleForModule(moduleName)) {
-        return StoreResult(result,
-                           CKAS_INUSE,
-                           0,
-                           "Module has live object or execution handles.");
+    const CKAS_STATUS runtimeStatus = CheckModuleRuntimeHandlesReleased(moduleName, result);
+    if (runtimeStatus != CKAS_OK) {
+        return runtimeStatus;
     }
     if (replacingExisting) {
-        std::string importConsumer;
-        if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
-            return StoreResult(result,
-                               CKAS_INUSE,
-                               0,
-                               fmt::format("Module is imported by bound module '{}'.",
-                                           importConsumer));
+        const CKAS_STATUS importStatus = CheckModuleHasNoBoundImportConsumers(moduleName, result);
+        if (importStatus != CKAS_OK) {
+            return importStatus;
         }
     }
 
