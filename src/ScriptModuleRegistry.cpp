@@ -240,35 +240,37 @@ CKAS_STATUS ScriptManager::CheckModuleMutationAllowed(const char *apiName, CKAng
                                    apiName ? apiName : "CKAngelScript"));
 }
 
-CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result) {
+CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
+                                       const CKAngelScriptLoadOptions &options,
+                                       CKAngelScriptResult *result) {
     ScriptPublicOptions::LoadModuleRequest request;
     std::string errorMessage;
     CKAS_STATUS optionStatus = ScriptPublicOptions::DecodeLoadOptions(options, request, errorMessage);
     if (optionStatus != CKAS_OK) {
-        return StoreResult(result, optionStatus, 0, errorMessage);
+        return manager.StoreResult(result, optionStatus, 0, errorMessage);
     }
-    const CKAS_STATUS callbackStatus = CheckModuleMutationAllowed("LoadModule", result);
+    const CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("LoadModule", result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
-    if (!GetScriptEngine()) {
-        return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
+    if (!manager.GetScriptEngine()) {
+        return manager.StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
-    const bool replacingExisting = HasModule(request.ModuleName);
+    const bool replacingExisting = manager.HasModule(request.ModuleName);
     if (replacingExisting) {
         if (!ScriptApiSupport::HasPublicFlag(request.Flags, CKAS_LOAD_REPLACEEXISTING)) {
-            return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
+            return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
-        const CKAS_STATUS mutationStatus = CheckModuleReplaceOrUnloadAllowed(request.ModuleName, result);
+        const CKAS_STATUS mutationStatus = manager.CheckModuleReplaceOrUnloadAllowed(request.ModuleName, result);
         if (mutationStatus != CKAS_OK) {
             return mutationStatus;
         }
     }
     if (request.SourceKind == ScriptPublicOptions::LoadSourceKind::Code) {
-        return CompileModule(request.ModuleName, request.Code, CKAS_COMPILE_REPLACEEXISTING, result);
+        return Compile(manager, request.ModuleName, request.Code, CKAS_COMPILE_REPLACEEXISTING, result);
     }
     if (request.SourceKind == ScriptPublicOptions::LoadSourceKind::Sections) {
-        return m_ModuleReplacer.ReplaceFromSections(*this, request.ModuleName, request.Sections, true, result);
+        return manager.m_ModuleReplacer.ReplaceFromSections(manager, request.ModuleName, request.Sections, true, result);
     }
     if (request.SourceKind == ScriptPublicOptions::LoadSourceKind::Files) {
         if (replacingExisting) {
@@ -279,28 +281,27 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                 if (scriptFilename.Find(".as") == XString::NOTFOUND) {
                     scriptFilename += ".as";
                 }
-                ResolveScriptFileName(scriptFilename);
+                manager.ResolveScriptFileName(scriptFilename);
                 sections.emplace_back(scriptFilename.CStr(), std::string());
             }
-            return m_ModuleReplacer.ReplaceFromSections(*this, request.ModuleName, sections, false, result);
+            return manager.m_ModuleReplacer.ReplaceFromSections(manager, request.ModuleName, sections, false, result);
         }
         std::vector<CapturedScriptMessage> diagnosticMessages;
-        BeginScriptMessageCapture();
-        const int loadResult =
-            m_ModuleRegistry.LoadFromFiles(*this, request.ModuleName, request.Filenames, request.FileCount);
-        const std::string diagnostics = EndScriptMessageCapture(&diagnosticMessages);
+        manager.BeginScriptMessageCapture();
+        const int loadResult = LoadFromFiles(manager, request.ModuleName, request.Filenames, request.FileCount);
+        const std::string diagnostics = manager.EndScriptMessageCapture(&diagnosticMessages);
         if (loadResult < 0) {
-            return StoreResult(result,
-                               CKAS_COMPILEERROR,
-                               loadResult,
-                               diagnostics.empty() ? "Failed to load script files." : diagnostics,
-                               std::string(),
-                               &diagnosticMessages);
+            return manager.StoreResult(result,
+                                       CKAS_COMPILEERROR,
+                                       loadResult,
+                                       diagnostics.empty() ? "Failed to load script files." : diagnostics,
+                                       std::string(),
+                                       &diagnosticMessages);
         }
-        m_ModuleRegistry.ApplyCachedIncludeEdges(m_ModuleStateStore, request.ModuleName);
-        m_ModuleStateStore.SetKind(request.ModuleName, ScriptModuleKind::Source);
-        m_ModuleStateStore.BumpGeneration(request.ModuleName);
-        return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
+        ApplyCachedIncludeEdges(manager.m_ModuleStateStore, request.ModuleName);
+        manager.m_ModuleStateStore.SetKind(request.ModuleName, ScriptModuleKind::Source);
+        manager.m_ModuleStateStore.BumpGeneration(request.ModuleName);
+        return manager.StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
     }
 
     if (replacingExisting) {
@@ -313,96 +314,114 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(std::move(scriptFilename), std::string());
-        return m_ModuleReplacer.ReplaceFromSections(*this, request.ModuleName, sections, false, result);
+        return manager.m_ModuleReplacer.ReplaceFromSections(manager, request.ModuleName, sections, false, result);
     }
 
     std::vector<CapturedScriptMessage> diagnosticMessages;
-    BeginScriptMessageCapture();
-    const int loadResult = m_ModuleRegistry.LoadFromDefaultOrFile(*this, request.ModuleName, request.Filename);
-    const std::string diagnostics = EndScriptMessageCapture(&diagnosticMessages);
+    manager.BeginScriptMessageCapture();
+    const int loadResult = LoadFromDefaultOrFile(manager, request.ModuleName, request.Filename);
+    const std::string diagnostics = manager.EndScriptMessageCapture(&diagnosticMessages);
     if (loadResult < 0) {
-        return StoreResult(result,
-                           CKAS_COMPILEERROR,
-                           loadResult,
-                           diagnostics.empty() ? "Failed to load script file." : diagnostics,
-                           std::string(),
-                           &diagnosticMessages);
+        return manager.StoreResult(result,
+                                   CKAS_COMPILEERROR,
+                                   loadResult,
+                                   diagnostics.empty() ? "Failed to load script file." : diagnostics,
+                                   std::string(),
+                                   &diagnosticMessages);
     }
-    m_ModuleRegistry.ApplyCachedIncludeEdges(m_ModuleStateStore, request.ModuleName);
-    m_ModuleStateStore.SetKind(request.ModuleName, ScriptModuleKind::Source);
-    m_ModuleStateStore.BumpGeneration(request.ModuleName);
-    return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
+    ApplyCachedIncludeEdges(manager.m_ModuleStateStore, request.ModuleName);
+    manager.m_ModuleStateStore.SetKind(request.ModuleName, ScriptModuleKind::Source);
+    manager.m_ModuleStateStore.BumpGeneration(request.ModuleName);
+    return manager.StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
 
-CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
-                                               const char *scriptCode,
-                                               CKDWORD flags,
-                                               CKAngelScriptResult *result) {
+CKAS_STATUS ScriptModuleRegistry::Compile(ScriptManager &manager,
+                                          const char *moduleName,
+                                          const char *scriptCode,
+                                          CKDWORD flags,
+                                          CKAngelScriptResult *result) {
     if (!ScriptApiSupport::IsNonEmpty(moduleName) || !scriptCode) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name and script code are required.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name and script code are required.");
     }
-    const CKAS_STATUS callbackStatus = CheckModuleMutationAllowed("CompileModule", result);
+    const CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("CompileModule", result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
     if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_COMPILE_REPLACEEXISTING)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown CompileModule flags.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown CompileModule flags.");
     }
-    if (!GetScriptEngine()) {
-        return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
+    if (!manager.GetScriptEngine()) {
+        return manager.StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
-    const bool replacingExisting = HasModule(moduleName);
+    const bool replacingExisting = manager.HasModule(moduleName);
     if (replacingExisting) {
         if (!ScriptApiSupport::HasPublicFlag(flags, CKAS_COMPILE_REPLACEEXISTING)) {
-            return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
+            return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
-        const CKAS_STATUS mutationStatus = CheckModuleReplaceOrUnloadAllowed(moduleName, result);
+        const CKAS_STATUS mutationStatus = manager.CheckModuleReplaceOrUnloadAllowed(moduleName, result);
         if (mutationStatus != CKAS_OK) {
             return mutationStatus;
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(moduleName, scriptCode);
-        return m_ModuleReplacer.ReplaceFromSections(*this, moduleName, sections, false, result);
+        return manager.m_ModuleReplacer.ReplaceFromSections(manager, moduleName, sections, false, result);
     }
 
     std::vector<CapturedScriptMessage> diagnosticMessages;
-    BeginScriptMessageCapture();
-    const int compileResult = m_ModuleRegistry.CompileFromMemory(*this, moduleName, scriptCode);
-    const std::string diagnostics = EndScriptMessageCapture(&diagnosticMessages);
+    manager.BeginScriptMessageCapture();
+    const int compileResult = CompileFromMemory(manager, moduleName, scriptCode);
+    const std::string diagnostics = manager.EndScriptMessageCapture(&diagnosticMessages);
     if (compileResult < 0) {
-        return StoreResult(result,
-                           CKAS_COMPILEERROR,
-                           compileResult,
-                           diagnostics.empty() ? "Failed to compile script module." : diagnostics,
-                           std::string(),
-                           &diagnosticMessages);
+        return manager.StoreResult(result,
+                                   CKAS_COMPILEERROR,
+                                   compileResult,
+                                   diagnostics.empty() ? "Failed to compile script module." : diagnostics,
+                                   std::string(),
+                                   &diagnosticMessages);
     }
-    m_ModuleRegistry.ApplyCachedIncludeEdges(m_ModuleStateStore, moduleName);
-    m_ModuleStateStore.SetKind(moduleName, ScriptModuleKind::Source);
-    m_ModuleStateStore.BumpGeneration(moduleName);
-    return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
+    ApplyCachedIncludeEdges(manager.m_ModuleStateStore, moduleName);
+    manager.m_ModuleStateStore.SetKind(moduleName, ScriptModuleKind::Source);
+    manager.m_ModuleStateStore.BumpGeneration(moduleName);
+    return manager.StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
 
-CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptResult *result) {
+CKAS_STATUS ScriptModuleRegistry::Unload(ScriptManager &manager,
+                                         const char *moduleName,
+                                         CKAngelScriptResult *result) {
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
+        return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
-    const CKAS_STATUS callbackStatus = CheckModuleMutationAllowed("UnloadModule", result);
+    const CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("UnloadModule", result);
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
-    const CKAS_STATUS mutationStatus = CheckModuleReplaceOrUnloadAllowed(moduleName, result);
+    const CKAS_STATUS mutationStatus = manager.CheckModuleReplaceOrUnloadAllowed(moduleName, result);
     if (mutationStatus != CKAS_OK) {
         return mutationStatus;
     }
-    if (!m_ModuleRegistry.Discard(*this, moduleName)) {
-        return StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
+    if (!Discard(manager, moduleName)) {
+        return manager.StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }
-    m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
-    m_ModuleStateStore.ClearIncludeEdges(moduleName);
-    m_ModuleStateStore.SetKind(moduleName, ScriptModuleKind::RawUnknown);
-    m_ModuleStateStore.BumpGeneration(moduleName);
-    return StoreResult(result, CKAS_OK);
+    manager.m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
+    manager.m_ModuleStateStore.ClearIncludeEdges(moduleName);
+    manager.m_ModuleStateStore.SetKind(moduleName, ScriptModuleKind::RawUnknown);
+    manager.m_ModuleStateStore.BumpGeneration(moduleName);
+    return manager.StoreResult(result, CKAS_OK);
+}
+
+CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result) {
+    return m_ModuleRegistry.Load(*this, options, result);
+}
+
+CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
+                                         const char *scriptCode,
+                                         CKDWORD flags,
+                                         CKAngelScriptResult *result) {
+    return m_ModuleRegistry.Compile(*this, moduleName, scriptCode, flags, result);
+}
+
+CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptResult *result) {
+    return m_ModuleRegistry.Unload(*this, moduleName, result);
 }
 
 bool ScriptManager::HasModule(const char *moduleName) {

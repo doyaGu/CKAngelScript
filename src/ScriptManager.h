@@ -40,6 +40,7 @@ class ScriptInvoker;
 class ScriptManager : public CKBaseManager {
     friend class ScriptImportBinder;
     friend class ScriptModuleBytecodeStore;
+    friend class ScriptModuleRegistry;
     friend class ScriptModuleReplacer;
 
 public:

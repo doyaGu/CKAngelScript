@@ -18,6 +18,14 @@ public:
     void CacheScript(const char *scriptName, std::shared_ptr<CachedScript> script);
     void Invalidate(const char *scriptName);
 
+    CKAS_STATUS Load(ScriptManager &manager, const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result);
+    CKAS_STATUS Compile(ScriptManager &manager,
+                        const char *moduleName,
+                        const char *scriptCode,
+                        CKDWORD flags,
+                        CKAngelScriptResult *result);
+    CKAS_STATUS Unload(ScriptManager &manager, const char *moduleName, CKAngelScriptResult *result);
+
     int LoadFromDefaultOrFile(ScriptManager &manager, const char *moduleName, const char *filename);
     int LoadFromFiles(ScriptManager &manager, const char *moduleName, const char **filenames, size_t count);
     int CompileFromMemory(ScriptManager &manager, const char *moduleName, const char *scriptCode);
