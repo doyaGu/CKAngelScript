@@ -158,7 +158,7 @@ int ScriptManager::Init() {
         m_ParameterRegistry = std::make_unique<ScriptParameterRegistry>(m_Context);
     }
 
-    int r = SetupScriptEngine();
+    int r = m_EngineHost.Setup(*this, m_Context);
     if (r < 0)
         return r;
 

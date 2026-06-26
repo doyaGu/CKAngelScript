@@ -69,10 +69,6 @@ bool ScriptEngineHost::HasEngine() const {
     return m_Engine != nullptr;
 }
 
-void ScriptEngineHost::SetEngine(asIScriptEngine *engine) {
-    m_Engine = engine;
-}
-
 void ScriptEngineHost::ShutdownAndReleaseEngine() {
     if (m_Engine) {
         m_Engine->ShutDownAndRelease();
@@ -318,7 +314,7 @@ void ScriptManager::SetupScriptPathCategory() {
     }
 }
 
-int ScriptManager::SetupScriptEngine() {
+int ScriptEngineHost::Setup(ScriptManager &manager, CKContext *context) {
     // #if CKVERSION == 0x13022002
     //     asSetGlobalMemoryFunctions(
     //         [](size_t size) { return VxMalloc(size); },
@@ -326,15 +322,17 @@ int ScriptManager::SetupScriptEngine() {
     //     );
     // #endif
 
-    m_EngineHost.SetEngine(asCreateScriptEngine());
-    asIScriptEngine *engine = m_EngineHost.Engine();
+    m_Engine = asCreateScriptEngine();
+    asIScriptEngine *engine = Engine();
     if (!engine) {
-        m_Context->OutputToConsole(const_cast<char *>("Failed to create script engine."));
+        if (context) {
+            context->OutputToConsole(const_cast<char *>("Failed to create script engine."));
+        }
         LOG_ERROR("Failed to create script engine.");
         return -1;
     }
 
-    engine->SetUserData(this, SCRIPT_MANAGER_TYPE);
+    engine->SetUserData(&manager, SCRIPT_MANAGER_TYPE);
     engine->SetEngineProperty(asEP_USE_CHARACTER_LITERALS, true);
     engine->SetEngineProperty(asEP_ALLOW_UNSAFE_REFERENCES, true);
     engine->SetEngineProperty(asEP_ALLOW_IMPLICIT_HANDLE_TYPES, true);
@@ -342,7 +340,7 @@ int ScriptManager::SetupScriptEngine() {
     engine->SetEngineProperty(asEP_PROPERTY_ACCESSOR_MODE, 1);
 
     // The script compiler will send any compiler messages to the callback
-    int r = engine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), this, asCALL_THISCALL);
+    int r = engine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), &manager, asCALL_THISCALL);
     if (r < 0) {
         LOG_ERROR("SetMessageCallback failed with code %d.", r);
         return r;
@@ -355,7 +353,7 @@ int ScriptManager::SetupScriptEngine() {
     }, [](asIScriptEngine *, asIScriptContext *ctx, void *param) {
         auto *man = static_cast<ScriptManager *>(param);
         man->ReturnContextToPool(ctx);
-    }, this);
+    }, &manager);
     if (r < 0) {
         LOG_ERROR("SetContextCallbacks failed with code %d.", r);
         return r;
@@ -401,24 +399,28 @@ int ScriptManager::SetupScriptEngine() {
 
     if (registration.HasFailures()) {
         const std::string summary = registration.GetSummary();
-        m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+        if (context) {
+            context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+        }
         LOG_ERROR("%s", summary.c_str());
-        m_EngineHost.ShutdownAndReleaseEngine();
+        ShutdownAndReleaseEngine();
         return -1;
     }
 
     // Register host-provided namespaces/types after CKAngelScript's own public
     // API is available. A failing extension is logged but is non-fatal: it must
     // not take down core scripting or the other extensions.
-    m_EngineHost.RegisterExtensions(*this, engine);
+    RegisterExtensions(manager, engine);
 
 #if CKAS_ENABLE_API_EXPORT
     std::string apiExportError;
     if (!ExportScriptApiIfRequested(engine, apiExportError)) {
         const std::string summary = "Script API export failed: " + apiExportError;
-        m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+        if (context) {
+            context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+        }
         LOG_ERROR("%s", summary.c_str());
-        m_EngineHost.ShutdownAndReleaseEngine();
+        ShutdownAndReleaseEngine();
         return -1;
     }
 #endif
@@ -426,7 +428,7 @@ int ScriptManager::SetupScriptEngine() {
     return r;
 }
 
-void ScriptManager::RegisterStdTypes(asIScriptEngine *engine) {
+void ScriptEngineHost::RegisterStdTypes(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
     int r = 0;
@@ -444,7 +446,7 @@ void ScriptManager::RegisterStdTypes(asIScriptEngine *engine) {
     }
 }
 
-void ScriptManager::RegisterStdAddons(asIScriptEngine *engine) {
+void ScriptEngineHost::RegisterStdAddons(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
     RegisterStdString(engine);
@@ -463,7 +465,7 @@ void ScriptManager::RegisterStdAddons(asIScriptEngine *engine) {
     RegisterExceptionRoutines(engine);
 }
 
-void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
+void ScriptEngineHost::RegisterVirtools(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
     RegisterVxMath(engine);

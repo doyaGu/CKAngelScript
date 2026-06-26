@@ -8,13 +8,14 @@
 
 #include "CKAngelScript.h"
 
+class CKContext;
 class ScriptManager;
 
 class ScriptEngineHost {
 public:
     asIScriptEngine *Engine() const;
     bool HasEngine() const;
-    void SetEngine(asIScriptEngine *engine);
+    int Setup(ScriptManager &manager, CKContext *context);
     void ShutdownAndReleaseEngine();
 
     asIScriptContext *RequestContext(ScriptManager &manager);
@@ -30,7 +31,6 @@ public:
     CKAS_STATUS UnregisterExtension(ScriptManager &manager,
                                     const char *name,
                                     CKAngelScriptResult *result);
-    int RegisterExtensions(ScriptManager &manager, asIScriptEngine *engine);
     void MarkExtensionsInactive();
 
 private:
@@ -50,6 +50,11 @@ private:
     int RemoveExtensionGroup(asIScriptEngine *engine,
                              EngineExtensionRegistration &extension,
                              std::string &message);
+    int RegisterExtensions(ScriptManager &manager, asIScriptEngine *engine);
+
+    void RegisterStdTypes(asIScriptEngine *engine);
+    void RegisterStdAddons(asIScriptEngine *engine);
+    void RegisterVirtools(asIScriptEngine *engine);
 
     asIScriptEngine *m_Engine = nullptr;
     std::vector<asIScriptContext *> m_ContextPool;

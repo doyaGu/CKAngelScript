@@ -284,11 +284,6 @@ public:
 
 protected:
     void SetupScriptPathCategory();
-    int SetupScriptEngine();
-
-    void RegisterStdTypes(asIScriptEngine *engine);
-    void RegisterStdAddons(asIScriptEngine *engine);
-    void RegisterVirtools(asIScriptEngine *engine);
 
     bool HasExecutionForModule(const char *moduleName) const;
     bool HasRuntimeHandleForModule(const char *moduleName) const;
