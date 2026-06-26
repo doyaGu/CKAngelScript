@@ -6,7 +6,7 @@ This page inventories the public API surface currently exposed by CKAngelScript.
 
 | Surface | Scope | Primary sources |
 | --- | --- | --- |
-| Public API | C ABI functions plus the `CKAngelScriptApi` C++ wrapper, header-only soft-load helpers for optional extension plugins, public struct initializers/status text, load/compile/unload, module import binding, module bytecode save/load, raw borrow helpers, metadata reflection, symbol/runtime handles, typed argument/result helpers, execution handles, engine extension callbacks | `include/CKAngelScript.h`, `docs/public-api.md` |
+| Public API | C ABI functions plus the `CKAngelScriptApi` C++ wrapper, header-only soft-load helpers for optional extension plugins, public struct initializers/status text, load/compile/unload, module import binding, module bytecode save/load, raw borrow helpers, source metadata reflection, symbol/runtime handles, typed argument/result helpers, execution handles, engine extension callbacks | `include/CKAngelScript.h`, `docs/public-api.md` |
 | High-level script API | Runtime scripts, scene refs, behavior bridge, BB runtime helpers, parameter conversion/catalog, messaging, async tasks | `src/ScriptRuntime.cpp`, `src/ScriptScene.cpp`, `src/ScriptBridgeRegistration.cpp`, `src/ScriptParameterRegistry.cpp`, `src/ScriptMessage.cpp`, `src/ScriptAsync.cpp` |
 | Native memory and FFI | `NativePointer`, `NativeBuffer`, DynLoad/DynCall/DynCallback helpers | `src/ScriptNativePointer.cpp`, `src/ScriptNativeBuffer.cpp`, `src/ScriptDynCall.cpp` |
 | Raw CK/Vx SDK bindings | CK context/managers/objects, SDK enums/defines/structs, Vx math types, containers | `src/ScriptCK*.cpp`, `src/ScriptVxMath.cpp`, `src/ScriptX*.cpp` |
@@ -96,6 +96,7 @@ Supporting public structs/enums are `CKAS_STATUS`, `CKAS_FEATURE`, `CKAS_CALLFLA
 
 - Keep user-facing workflow APIs under named namespaces such as `Scene`, `Behavior`, `BB`, `Param`, `Message`, `Async`, or `Runtime`.
 - Prefer SDK-driven metadata over hard-coded Ballance or plugin-specific tables.
+- Treat bytecode as an executable module cache only. CKAngelScript metadata reflection is backed by `CScriptBuilder` source metadata, so bytecode-only module loads need a source/metadata sidecar if callers still need metadata diagnostics or discovery.
 - Add new public entry points only through the C ABI in `include/CKAngelScript.h`, then mirror them in the C++ wrapper and document result lifetime rules.
 - For every public callback, document whether callback functions and `UserData` are call-scope, callback-scope, handle-scope, or registration-scope.
 - When adding raw bindings, update `docs/sdk-bindings.md` if a new binding area appears.

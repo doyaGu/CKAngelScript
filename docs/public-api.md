@@ -180,6 +180,8 @@ CKAS_STATUS status = CKAngelScriptSaveModuleBytecode(angelScript, &save, &result
 
 `CKAngelScriptLoadModuleBytecode()` creates a module from bytecode. Loading over an existing module requires `CKAS_BYTECODE_REPLACEEXISTING`; without it, duplicates return `CKAS_ALREADYEXISTS`. Live `CKAngelScriptObject` or `CKAngelScriptExecution` handles block bytecode replacement with `CKAS_INUSE`. Replacement is transactional at the public API boundary: CKAngelScript first loads the bytecode into a transient module, snapshots it, then commits it under the requested module name. Failed loads or failed commits leave the previous module and generation unchanged when rollback succeeds. Successful bytecode replacement bumps module generation and stale-checks old symbol handles.
 
+Bytecode stores AngelScript module code, not CKAngelScript's `CScriptBuilder` side data. Modules loaded only from bytecode can execute and expose normal AngelScript functions/imports, but `CKAngelScriptEnumerateMetadata()` has no source metadata to report unless the host keeps a separate source/metadata sidecar and loads from source when metadata is needed.
+
 AngelScript bytecode is not a stable interchange format. A persistent cache key must include at least the CKAngelScript API version, AngelScript version, engine options, build flags, and a hash of the registered host API surface. Do not reuse bytecode across CKAngelScript or registration changes unless the cache key proves compatibility.
 
 ## Function Lookup And Execution
@@ -342,7 +344,7 @@ Borrowed pointers are only valid under normal AngelScript/module lifetime rules.
 
 ## Metadata Reflection
 
-CKAngelScript preserves AngelScript `CScriptBuilder` metadata for compiled/loaded modules and exposes it through enumeration:
+CKAngelScript preserves AngelScript `CScriptBuilder` metadata for source-compiled modules and source-loaded modules, then exposes it through enumeration:
 
 ```cpp
 CKAS_STATUS OnMetadata(const CKAngelScriptMetadataEntry *entry,
