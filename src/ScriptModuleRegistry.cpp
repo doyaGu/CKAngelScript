@@ -260,21 +260,6 @@ void ScriptManager::ClearModuleIncludeEdges(const char *moduleName) {
     m_ModuleStateStore.ClearIncludeEdges(moduleName);
 }
 
-unsigned long long ScriptManager::BuildDeclaredImportHash(const char *moduleName) {
-    unsigned long long declaredImportHash = ScriptApiSupport::kFnvOffsetBasis;
-    asIScriptModule *module = GetModule(moduleName);
-    if (module) {
-        const asUINT importCount = module->GetImportedFunctionCount();
-        ScriptApiSupport::HashValue(declaredImportHash, static_cast<unsigned long long>(importCount));
-        for (asUINT i = 0; i < importCount; ++i) {
-            ScriptApiSupport::HashValue(declaredImportHash, static_cast<CKDWORD>(i));
-            ScriptApiSupport::HashString(declaredImportHash, module->GetImportedFunctionSourceModule(i));
-            ScriptApiSupport::HashString(declaredImportHash, module->GetImportedFunctionDeclaration(i));
-        }
-    }
-    return declaredImportHash;
-}
-
 void ScriptManager::MarkModuleStateDirty(const char *moduleName) {
     m_ModuleStateStore.MarkDirty(moduleName);
 }
@@ -848,7 +833,7 @@ CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
                                                         asGetLibraryVersion(),
                                                         asGetLibraryOptions(),
                                                         m_ModuleRegistry.BuildSourceHash(moduleName),
-                                                        BuildDeclaredImportHash(moduleName));
+                                                        m_ImportBinder.BuildDeclaredImportHash(*this, moduleName));
     return StoreResult(result, CKAS_OK);
 }
 

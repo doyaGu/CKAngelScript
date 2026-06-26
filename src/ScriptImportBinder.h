@@ -38,6 +38,8 @@ public:
                                           void *userData,
                                           CKAngelScriptResult *result);
 
+    unsigned long long BuildDeclaredImportHash(ScriptManager &manager, const char *moduleName) const;
+
     bool Rebind(ScriptManager &manager,
                 const std::vector<ScriptImportBindingEdge> &bindings,
                 int &angelScriptCode,

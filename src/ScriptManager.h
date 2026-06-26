@@ -297,7 +297,6 @@ protected:
     void SetModuleIncludeEdges(const char *moduleName, const std::vector<ScriptIncludeEdge> &includeEdges);
     void ClearModuleIncludeEdges(const char *moduleName);
     void MarkModuleStateDirty(const char *moduleName);
-    unsigned long long BuildDeclaredImportHash(const char *moduleName);
     CKAS_STATUS ReplaceModuleFromSections(
         const char *moduleName,
         const std::vector<std::tuple<std::string, std::string>> &sections,

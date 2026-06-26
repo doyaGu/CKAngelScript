@@ -353,6 +353,22 @@ CKAS_STATUS ScriptImportBinder::EnumerateBoundImportEdges(ScriptManager &manager
     return manager.StoreResult(result, CKAS_OK);
 }
 
+unsigned long long ScriptImportBinder::BuildDeclaredImportHash(ScriptManager &manager,
+                                                               const char *moduleName) const {
+    unsigned long long declaredImportHash = ScriptApiSupport::kFnvOffsetBasis;
+    asIScriptModule *module = manager.GetModule(moduleName);
+    if (module) {
+        const asUINT importCount = module->GetImportedFunctionCount();
+        ScriptApiSupport::HashValue(declaredImportHash, static_cast<unsigned long long>(importCount));
+        for (asUINT i = 0; i < importCount; ++i) {
+            ScriptApiSupport::HashValue(declaredImportHash, static_cast<CKDWORD>(i));
+            ScriptApiSupport::HashString(declaredImportHash, module->GetImportedFunctionSourceModule(i));
+            ScriptApiSupport::HashString(declaredImportHash, module->GetImportedFunctionDeclaration(i));
+        }
+    }
+    return declaredImportHash;
+}
+
 bool ScriptImportBinder::Rebind(ScriptManager &manager,
                                 const std::vector<ScriptImportBindingEdge> &bindings,
                                 int &angelScriptCode,
