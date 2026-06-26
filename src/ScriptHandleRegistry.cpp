@@ -267,14 +267,6 @@ bool ScriptManager::OwnsObjectHandle(const CKAngelScriptObject *object) const {
     return m_HandleRegistry.OwnsObject(object);
 }
 
-bool ScriptManager::HasExecutionForModule(const char *moduleName) const {
-    return m_HandleRegistry.HasExecutionForModule(moduleName);
-}
-
-bool ScriptManager::HasRuntimeHandleForModule(const char *moduleName) const {
-    return m_HandleRegistry.HasRuntimeHandleForModule(moduleName);
-}
-
 CKAS_STATUS ScriptManager::FindFunction(const CKAngelScriptFunctionOptions &options,
                                         CKAngelScriptFunction **outFunction,
                                         CKAngelScriptResult *result) {

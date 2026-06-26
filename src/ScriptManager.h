@@ -284,9 +284,6 @@ public:
     static bool RejectActiveHostCall(const char *apiName, CKDWORD flags);
 
 protected:
-    bool HasExecutionForModule(const char *moduleName) const;
-    bool HasRuntimeHandleForModule(const char *moduleName) const;
-    bool HasBoundImportConsumersForModule(const char *moduleName, std::string *consumerModule = nullptr) const;
     CKAS_STATUS CheckModuleRuntimeHandlesReleased(const char *moduleName, CKAngelScriptResult *result);
     CKAS_STATUS CheckModuleHasNoBoundImportConsumers(const char *moduleName, CKAngelScriptResult *result);
     CKAS_STATUS CheckModuleReplaceOrUnloadAllowed(const char *moduleName, CKAngelScriptResult *result);

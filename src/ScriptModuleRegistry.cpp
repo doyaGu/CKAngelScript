@@ -196,14 +196,9 @@ unsigned long long ScriptModuleRegistry::BuildSourceHash(const char *moduleName)
     return sourceHash;
 }
 
-bool ScriptManager::HasBoundImportConsumersForModule(const char *moduleName,
-                                                     std::string *consumerModule) const {
-    return m_ModuleStateStore.HasBoundImportConsumersForModule(moduleName, consumerModule);
-}
-
 CKAS_STATUS ScriptManager::CheckModuleRuntimeHandlesReleased(const char *moduleName,
                                                              CKAngelScriptResult *result) {
-    if (HasRuntimeHandleForModule(moduleName)) {
+    if (m_HandleRegistry.HasRuntimeHandleForModule(moduleName)) {
         return StoreResult(result,
                            CKAS_INUSE,
                            0,
@@ -215,7 +210,7 @@ CKAS_STATUS ScriptManager::CheckModuleRuntimeHandlesReleased(const char *moduleN
 CKAS_STATUS ScriptManager::CheckModuleHasNoBoundImportConsumers(const char *moduleName,
                                                                 CKAngelScriptResult *result) {
     std::string importConsumer;
-    if (HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
+    if (m_ModuleStateStore.HasBoundImportConsumersForModule(moduleName, &importConsumer)) {
         return StoreResult(result,
                            CKAS_INUSE,
                            0,
