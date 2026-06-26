@@ -136,6 +136,9 @@ static CKAngelScriptRawProc ResolveCkasSelfTestApiSymbol(void *, const char *nam
     if (std::strcmp(name, "CKAngelScriptInitBytecodeLoadOptions") == 0) {
         return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitBytecodeLoadOptions);
     }
+    if (std::strcmp(name, "CKAngelScriptInitModuleFingerprint") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitModuleFingerprint);
+    }
     if (std::strcmp(name, "CKAngelScriptInitEngineExtension") == 0) {
         return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptInitEngineExtension);
     }
@@ -174,6 +177,15 @@ static CKAngelScriptRawProc ResolveCkasSelfTestApiSymbol(void *, const char *nam
     }
     if (std::strcmp(name, "CKAngelScriptLoadModuleBytecode") == 0) {
         return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptLoadModuleBytecode);
+    }
+    if (std::strcmp(name, "CKAngelScriptEnumerateBoundImportEdges") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptEnumerateBoundImportEdges);
+    }
+    if (std::strcmp(name, "CKAngelScriptEnumerateModuleIncludeEdges") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptEnumerateModuleIncludeEdges);
+    }
+    if (std::strcmp(name, "CKAngelScriptGetModuleFingerprint") == 0) {
+        return reinterpret_cast<CKAngelScriptRawProc>(&CKAngelScriptGetModuleFingerprint);
     }
     return nullptr;
 }
@@ -243,6 +255,16 @@ struct ReentrantMetadataStringProbe {
 
 struct ImportProbe {
     bool SawImport = false;
+    CKDWORD CallbackCount = 0;
+};
+
+struct BoundImportEdgeProbe {
+    bool SawEdge = false;
+    CKDWORD CallbackCount = 0;
+};
+
+struct IncludeEdgeProbe {
+    bool SawHelperInclude = false;
     CKDWORD CallbackCount = 0;
 };
 
@@ -621,6 +643,38 @@ CKAS_STATUS ProbeImportAfterReadOnlyReentry(const CKAngelScriptImportEntry *entr
     return CKAS_OK;
 }
 
+CKAS_STATUS ProbeBoundImportEdge(const CKAngelScriptBoundImportEdge *edge, void *userData) {
+    auto *probe = static_cast<BoundImportEdgeProbe *>(userData);
+    if (!probe || !edge || edge->Size < sizeof(*edge) ||
+        !edge->ImportModuleName || !edge->SourceModuleName || !edge->FunctionDecl) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    if (edge->ImportIndex == 0 &&
+        CkasStringEquals(edge->ImportModuleName, "__CKAS_ImportConsumer") &&
+        CkasStringEquals(edge->SourceModuleName, "__CKAS_ImportProvider") &&
+        CkasStringContains(edge->FunctionDecl, "__ckas_import_add")) {
+        probe->SawEdge = true;
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ProbeIncludeEdge(const CKAngelScriptIncludeEdge *edge, void *userData) {
+    auto *probe = static_cast<IncludeEdgeProbe *>(userData);
+    if (!probe || !edge || edge->Size < sizeof(*edge) ||
+        !edge->ModuleName || !edge->FromSection || !edge->ToSection) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    if (CkasStringEquals(edge->ModuleName, "__CKAS_ManagerApiSourceSectionsLoadSelfTest") &&
+        CkasStringEquals(edge->FromSection, "entry/main.as") &&
+        CkasStringEquals(edge->ToSection, "entry/lib/helper.as") &&
+        edge->ResolvedFromSnapshot == TRUE) {
+        probe->SawHelperInclude = true;
+    }
+    return CKAS_OK;
+}
+
 CKAS_STATUS WriteBytecode(const void *data, size_t size, void *userData) {
     auto *buffer = static_cast<BytecodeBuffer *>(userData);
     if (!buffer || (!data && size > 0)) {
@@ -852,6 +906,25 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    CKAngelScriptModuleFingerprint initModuleFingerprint;
+    std::memset(&initModuleFingerprint, 0x7f, sizeof(initModuleFingerprint));
+    CKAngelScriptInitModuleFingerprint(&initModuleFingerprint);
+    if (initModuleFingerprint.Size != sizeof(initModuleFingerprint) ||
+        initModuleFingerprint.Kind != CKAS_MODULEKIND_UNKNOWN ||
+        initModuleFingerprint.Generation != 0 ||
+        initModuleFingerprint.ApiVersion != CKAS_API_VERSION ||
+        initModuleFingerprint.AngelScriptVersion ||
+        initModuleFingerprint.AngelScriptOptions ||
+        initModuleFingerprint.SourceHash != 0 ||
+        initModuleFingerprint.IncludeHash != 0 ||
+        initModuleFingerprint.DeclaredImportHash != 0 ||
+        initModuleFingerprint.BoundImportHash != 0 ||
+        initModuleFingerprint.CombinedHash != 0 ||
+        initModuleFingerprint.Flags != 0) {
+        error = "CKAngelScript API self-test expected ModuleFingerprint initializer defaults.";
+        return false;
+    }
+
     CKAngelScriptFunctionOptions initFunctionOptions;
     std::memset(&initFunctionOptions, 0x7f, sizeof(initFunctionOptions));
     CKAngelScriptInitFunctionOptions(&initFunctionOptions);
@@ -940,6 +1013,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     CKAngelScriptInitImportBindOptions(nullptr);
     CKAngelScriptInitBytecodeSaveOptions(nullptr);
     CKAngelScriptInitBytecodeLoadOptions(nullptr);
+    CKAngelScriptInitModuleFingerprint(nullptr);
     CKAngelScriptInitFunctionOptions(nullptr);
     CKAngelScriptInitFunctionExecutionOptions(nullptr);
     CKAngelScriptInitExecutionStepOptions(nullptr);
@@ -993,7 +1067,11 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_FEATURE_MODULE_IMPORTS != 21 ||
         CKAS_FEATURE_MODULE_BYTECODE != 22 ||
         CKAS_FEATURE_MODULE_REPLACE_TRANSACTION != 23 ||
+        CKAS_FEATURE_MODULE_GRAPH != 24 ||
+        CKAS_FEATURE_MODULE_FINGERPRINT != 25 ||
         CKAS_EXECUTION_CANCELLED != 5 ||
+        CKAS_MODULEKIND_SOURCE != 1 ||
+        CKAS_MODULEKIND_BYTECODE != 2 ||
         CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
         CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
         CKAS_ENGINEEXTENSION_DEFERRED != 0x00000001 ||
@@ -1030,7 +1108,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !api->HasFeature(CKAS_FEATURE_HOST_CALL_FILTER) ||
         !api->HasFeature(CKAS_FEATURE_MODULE_IMPORTS) ||
         !api->HasFeature(CKAS_FEATURE_MODULE_BYTECODE) ||
-        !api->HasFeature(CKAS_FEATURE_MODULE_REPLACE_TRANSACTION)) {
+        !api->HasFeature(CKAS_FEATURE_MODULE_REPLACE_TRANSACTION) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_GRAPH) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_FINGERPRINT)) {
         error = "CKAngelScript API self-test found an unexpected feature set.";
         return false;
     }
@@ -1085,8 +1165,21 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     if (CKAngelScriptLoadExtensionApi(&softApi, ResolveCkasSelfTestApiSymbol, nullptr) != TRUE ||
         !CKAngelScriptExtensionApiIsLoaded(&softApi) ||
-        softApi.GetApiVersion() != CKAS_API_VERSION) {
+        softApi.GetApiVersion() != CKAS_API_VERSION ||
+        !softApi.InitModuleFingerprint ||
+        !softApi.EnumerateBoundImportEdges ||
+        !softApi.EnumerateModuleIncludeEdges ||
+        !softApi.GetModuleFingerprint) {
         error = "CKAngelScript API self-test failed to soft-load the extension API table.";
+        return false;
+    }
+    CKAngelScriptModuleFingerprint softFingerprint;
+    std::memset(&softFingerprint, 0x7f, sizeof(softFingerprint));
+    softApi.InitModuleFingerprint(&softFingerprint);
+    if (softFingerprint.Size != sizeof(softFingerprint) ||
+        softFingerprint.Kind != CKAS_MODULEKIND_UNKNOWN ||
+        softFingerprint.ApiVersion != CKAS_API_VERSION) {
+        error = "CKAngelScript API self-test expected soft-loaded fingerprint initializer defaults.";
         return false;
     }
 
@@ -1760,6 +1853,28 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->ReleaseExecution(preBindReadyImportExecution);
     api->ReleaseFunction(preBindImportFunction);
+    BoundImportEdgeProbe boundImportProbe;
+    CKAngelScriptModuleFingerprint importFingerprint = CKAngelScriptApi::ModuleFingerprint();
+    if (api->EnumerateBoundImportEdges(importConsumerModuleName,
+                                       ProbeBoundImportEdge,
+                                       &boundImportProbe,
+                                       &result) != CKAS_OK ||
+        boundImportProbe.CallbackCount != 1 ||
+        !boundImportProbe.SawEdge ||
+        api->EnumerateBoundImportEdges(importConsumerModuleName, nullptr, nullptr, &result) != CKAS_INVALIDARGUMENT ||
+        api->GetModuleFingerprint(importConsumerModuleName, &importFingerprint, &result) != CKAS_OK ||
+        importFingerprint.Kind != CKAS_MODULEKIND_SOURCE ||
+        importFingerprint.Generation == 0 ||
+        importFingerprint.AngelScriptVersion == nullptr ||
+        importFingerprint.AngelScriptOptions == nullptr ||
+        importFingerprint.DeclaredImportHash == 0 ||
+        importFingerprint.BoundImportHash == 0 ||
+        importFingerprint.CombinedHash == 0) {
+        error = "CKAngelScript API self-test expected module graph APIs to describe bound imports.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     if (api->CompileModule(importProviderModuleName,
                            importProviderReplacementSource,
                            CKAS_COMPILE_REPLACEEXISTING,
@@ -1880,6 +1995,21 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    BoundImportEdgeProbe unboundImportProbe;
+    CKAngelScriptModuleFingerprint unboundImportFingerprint = CKAngelScriptApi::ModuleFingerprint();
+    if (api->EnumerateBoundImportEdges(importConsumerModuleName,
+                                       ProbeBoundImportEdge,
+                                       &unboundImportProbe,
+                                       &result) != CKAS_OK ||
+        unboundImportProbe.CallbackCount != 0 ||
+        api->GetModuleFingerprint(importConsumerModuleName, &unboundImportFingerprint, &result) != CKAS_OK ||
+        unboundImportFingerprint.CombinedHash == importFingerprint.CombinedHash ||
+        unboundImportFingerprint.BoundImportHash == importFingerprint.BoundImportHash) {
+        error = "CKAngelScript API self-test expected unbinding imports to clear graph edges and change fingerprint.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     constexpr const char *partialImportConsumerModuleName = "__CKAS_ImportPartialConsumer";
     const char *partialImportConsumerSource =
         "import int __ckas_import_add(int value) from \"__CKAS_ImportProvider\";\n"
@@ -1955,6 +2085,19 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                           &result) != CKAS_OK ||
         !rawBoundImportFunction) {
         error = "CKAngelScript API self-test expected raw import binding setup to succeed.";
+        api->UnbindImportedFunction(importConsumerModuleName, 0, nullptr);
+        api->ReleaseFunction(rawBoundImportFunction);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    BoundImportEdgeProbe rawBoundImportProbe;
+    if (api->EnumerateBoundImportEdges(importConsumerModuleName,
+                                       ProbeBoundImportEdge,
+                                       &rawBoundImportProbe,
+                                       &result) != CKAS_OK ||
+        rawBoundImportProbe.CallbackCount != 0) {
+        error = "CKAngelScript API self-test expected raw AngelScript import binds to stay outside the CKAS graph.";
         api->UnbindImportedFunction(importConsumerModuleName, 0, nullptr);
         api->ReleaseFunction(rawBoundImportFunction);
         api->UnloadModule(importConsumerModuleName, nullptr);
@@ -2145,6 +2288,27 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     if (api->EnumerateMetadata(sourceSectionsModuleName, ProbeMetadata, &sourceSectionMetadataProbe, &result) != CKAS_OK ||
         !sourceSectionMetadataProbe.SourceSectionType) {
         error = "CKAngelScript API self-test expected source-section LoadModule to preserve metadata from included sections.";
+        RemoveTextFile(singleFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
+    IncludeEdgeProbe includeEdgeProbe;
+    CKAngelScriptModuleFingerprint sourceSectionFingerprint = CKAngelScriptApi::ModuleFingerprint();
+    if (api->EnumerateModuleIncludeEdges(sourceSectionsModuleName,
+                                         ProbeIncludeEdge,
+                                         &includeEdgeProbe,
+                                         &result) != CKAS_OK ||
+        includeEdgeProbe.CallbackCount == 0 ||
+        !includeEdgeProbe.SawHelperInclude ||
+        api->EnumerateModuleIncludeEdges(sourceSectionsModuleName, nullptr, nullptr, &result) != CKAS_INVALIDARGUMENT ||
+        api->GetModuleFingerprint(sourceSectionsModuleName, &sourceSectionFingerprint, &result) != CKAS_OK ||
+        sourceSectionFingerprint.Kind != CKAS_MODULEKIND_SOURCE ||
+        sourceSectionFingerprint.SourceHash == 0 ||
+        sourceSectionFingerprint.IncludeHash == 0 ||
+        sourceSectionFingerprint.CombinedHash == 0) {
+        error = "CKAngelScript API self-test expected source-section include edges and fingerprint data.";
         RemoveTextFile(singleFile);
         RemoveTextFile(multiFileA);
         RemoveTextFile(multiFileB);
@@ -2848,6 +3012,23 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
         return false;
     }
+    IncludeEdgeProbe bytecodeIncludeProbe;
+    CKAngelScriptModuleFingerprint bytecodeFingerprint = CKAngelScriptApi::ModuleFingerprint();
+    if (api->EnumerateModuleIncludeEdges(bytecodeTargetModuleName,
+                                         ProbeIncludeEdge,
+                                         &bytecodeIncludeProbe,
+                                         &result) != CKAS_OK ||
+        bytecodeIncludeProbe.CallbackCount != 0 ||
+        api->GetModuleFingerprint(bytecodeTargetModuleName, &bytecodeFingerprint, &result) != CKAS_OK ||
+        bytecodeFingerprint.Kind != CKAS_MODULEKIND_BYTECODE ||
+        bytecodeFingerprint.Generation == 0 ||
+        bytecodeFingerprint.CombinedHash == 0) {
+        error = "CKAngelScript API self-test expected bytecode modules to expose an empty include graph and fingerprint.";
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
     bytecodeRead = bytecode;
     const CKDWORD bytecodeGenerationBeforeFailedReplace = api->GetModuleGeneration(bytecodeTargetModuleName);
     if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeTargetModuleName,
@@ -2968,6 +3149,17 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         if (error.empty()) {
             error = "CKAngelScript API self-test expected bytecode replacement to commit and bump generation.";
         }
+        api->ReleaseFunction(staleBytecodeFunction);
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    CKAngelScriptModuleFingerprint replacedBytecodeFingerprint = CKAngelScriptApi::ModuleFingerprint();
+    if (api->GetModuleFingerprint(bytecodeTargetModuleName, &replacedBytecodeFingerprint, &result) != CKAS_OK ||
+        replacedBytecodeFingerprint.Kind != CKAS_MODULEKIND_BYTECODE ||
+        replacedBytecodeFingerprint.CombinedHash == bytecodeFingerprint.CombinedHash) {
+        error = "CKAngelScript API self-test expected bytecode replacement to change the module fingerprint.";
         api->ReleaseFunction(staleBytecodeFunction);
         api->UnloadModule(bytecodeTargetModuleName, nullptr);
         api->UnloadModule(bytecodeSourceModuleName, nullptr);

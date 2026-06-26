@@ -813,6 +813,74 @@ CKAS_STATUS DispatchImport(const CKAngelScriptImportEntry &entry,
     return callback(&publicEntry, userData);
 }
 
+CKAS_STATUS DispatchBoundImportEdge(const CKAngelScriptBoundImportEdge &edge,
+                                    CKAngelScriptBoundImportEdgeCallback callback,
+                                    void *userData) {
+    if (!callback) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    CKAngelScriptBoundImportEdge publicEdge = edge;
+    publicEdge.Size = sizeof(publicEdge);
+    std::string importModuleStorage;
+    std::string sourceModuleStorage;
+    std::string functionDeclStorage;
+    publicEdge.ImportModuleName = CopyPublicString(edge.ImportModuleName, importModuleStorage);
+    publicEdge.SourceModuleName = CopyPublicString(edge.SourceModuleName, sourceModuleStorage);
+    publicEdge.FunctionDecl = CopyPublicString(edge.FunctionDecl, functionDeclStorage);
+    return callback(&publicEdge, userData);
+}
+
+CKAS_STATUS DispatchIncludeEdge(const CKAngelScriptIncludeEdge &edge,
+                                CKAngelScriptIncludeEdgeCallback callback,
+                                void *userData) {
+    if (!callback) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    CKAngelScriptIncludeEdge publicEdge = edge;
+    publicEdge.Size = sizeof(publicEdge);
+    std::string moduleNameStorage;
+    std::string fromSectionStorage;
+    std::string toSectionStorage;
+    publicEdge.ModuleName = CopyPublicString(edge.ModuleName, moduleNameStorage);
+    publicEdge.FromSection = CopyPublicString(edge.FromSection, fromSectionStorage);
+    publicEdge.ToSection = CopyPublicString(edge.ToSection, toSectionStorage);
+    return callback(&publicEdge, userData);
+}
+
+constexpr unsigned long long kFnvOffsetBasis = 14695981039346656037ull;
+constexpr unsigned long long kFnvPrime = 1099511628211ull;
+
+void HashBytes(unsigned long long &hash, const void *data, size_t size) {
+    const auto *bytes = static_cast<const unsigned char *>(data);
+    for (size_t i = 0; i < size; ++i) {
+        hash ^= static_cast<unsigned long long>(bytes[i]);
+        hash *= kFnvPrime;
+    }
+}
+
+void HashString(unsigned long long &hash, const std::string &value) {
+    HashBytes(hash, value.data(), value.size());
+    const unsigned char terminator = 0;
+    HashBytes(hash, &terminator, sizeof(terminator));
+}
+
+void HashString(unsigned long long &hash, const char *value) {
+    HashString(hash, value ? std::string(value) : std::string());
+}
+
+void HashValue(unsigned long long &hash, unsigned long long value) {
+    HashBytes(hash, &value, sizeof(value));
+}
+
+void HashValue(unsigned long long &hash, CKDWORD value) {
+    HashBytes(hash, &value, sizeof(value));
+}
+
+void HashBool(unsigned long long &hash, bool value) {
+    const unsigned char byte = value ? 1 : 0;
+    HashBytes(hash, &byte, sizeof(byte));
+}
+
 CKAS_STATUS StatusFromImportBindResult(int code) {
     switch (code) {
         case asSUCCESS:
@@ -955,10 +1023,16 @@ using ScriptManagerInternal::HasPublicField;
 using ScriptManagerInternal::HasPublicFlag;
 using ScriptManagerInternal::InitPublicStruct;
 using ScriptManagerInternal::DispatchMetadata;
+using ScriptManagerInternal::DispatchBoundImportEdge;
+using ScriptManagerInternal::DispatchIncludeEdge;
 using ScriptManagerInternal::DispatchImport;
+using ScriptManagerInternal::HashBool;
+using ScriptManagerInternal::HashString;
+using ScriptManagerInternal::HashValue;
 using ScriptManagerInternal::IsIntOrEnumType;
 using ScriptManagerInternal::IsCompatibleObjectHandle;
 using ScriptManagerInternal::IsStringType;
+using ScriptManagerInternal::kFnvOffsetBasis;
 using ScriptManagerInternal::IsValidBorrowedObjectParam;
 using ScriptManagerInternal::IsValidObjectHandleParam;
 using ScriptManagerInternal::IsValidStringParam;
@@ -1018,6 +1092,8 @@ extern "C" CKAS_API CKBOOL CKAngelScriptHasFeature(CKAS_FEATURE feature) {
         case CKAS_FEATURE_MODULE_IMPORTS:
         case CKAS_FEATURE_MODULE_BYTECODE:
         case CKAS_FEATURE_MODULE_REPLACE_TRANSACTION:
+        case CKAS_FEATURE_MODULE_GRAPH:
+        case CKAS_FEATURE_MODULE_FINGERPRINT:
             return TRUE;
         default:
             return FALSE;
@@ -1068,6 +1144,14 @@ extern "C" CKAS_API void CKAngelScriptInitBytecodeSaveOptions(CKAngelScriptBytec
 
 extern "C" CKAS_API void CKAngelScriptInitBytecodeLoadOptions(CKAngelScriptBytecodeLoadOptions *options) {
     InitPublicStruct(options);
+}
+
+extern "C" CKAS_API void CKAngelScriptInitModuleFingerprint(CKAngelScriptModuleFingerprint *fingerprint) {
+    InitPublicStruct(fingerprint);
+    if (fingerprint) {
+        fingerprint->Kind = CKAS_MODULEKIND_UNKNOWN;
+        fingerprint->ApiVersion = CKAS_API_VERSION;
+    }
 }
 
 extern "C" CKAS_API void CKAngelScriptInitFunctionOptions(CKAngelScriptFunctionOptions *options) {
@@ -1613,6 +1697,38 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptLoadModuleBytecode(CKAngelScript *a
     }
     return options ? scriptManager->LoadModuleBytecode(*options, result)
                    : scriptManager->StoreApiResult(result, CKAS_INVALIDARGUMENT, 0, "LoadModuleBytecode options are required.");
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptEnumerateBoundImportEdges(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKAngelScriptBoundImportEdgeCallback callback,
+    void *userData,
+    CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->EnumerateBoundImportEdges(moduleName, callback, userData, result)
+                         : StoreStatelessPublicResult(result, CKAS_INVALIDARGUMENT, 0, "CKAngelScript handle is invalid.");
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptEnumerateModuleIncludeEdges(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKAngelScriptIncludeEdgeCallback callback,
+    void *userData,
+    CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->EnumerateModuleIncludeEdges(moduleName, callback, userData, result)
+                         : StoreStatelessPublicResult(result, CKAS_INVALIDARGUMENT, 0, "CKAngelScript handle is invalid.");
+}
+
+extern "C" CKAS_API CKAS_STATUS CKAngelScriptGetModuleFingerprint(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKAngelScriptModuleFingerprint *outFingerprint,
+    CKAngelScriptResult *result) {
+    ScriptManager *scriptManager = FromPublicHandle(angelScript);
+    return scriptManager ? scriptManager->GetModuleFingerprint(moduleName, outFingerprint, result)
+                         : StoreStatelessPublicResult(result, CKAS_INVALIDARGUMENT, 0, "CKAngelScript handle is invalid.");
 }
 
 extern "C" CKAS_API CKAS_STATUS CKAngelScriptFindFunction(CKAngelScript *angelScript,
@@ -2665,6 +2781,82 @@ void ScriptManager::ClearModuleIncludeEdges(const char *moduleName) {
     }
     state->IncludeEdges.clear();
     state->FingerprintDirty = true;
+}
+
+CKAS_MODULEKIND ScriptManager::ToPublicModuleKind(ModuleKind kind) const {
+    switch (kind) {
+        case ModuleKind::Source:
+            return CKAS_MODULEKIND_SOURCE;
+        case ModuleKind::Bytecode:
+            return CKAS_MODULEKIND_BYTECODE;
+        case ModuleKind::RawUnknown:
+        default:
+            return CKAS_MODULEKIND_UNKNOWN;
+    }
+}
+
+void ScriptManager::RebuildModuleFingerprint(const char *moduleName, ModuleState &state) {
+    CKAngelScriptModuleFingerprint fingerprint;
+    CKAngelScriptInitModuleFingerprint(&fingerprint);
+    fingerprint.Kind = ToPublicModuleKind(state.Kind);
+    fingerprint.Generation = state.Generation;
+    fingerprint.ApiVersion = CKAS_API_VERSION;
+    fingerprint.AngelScriptVersion = asGetLibraryVersion();
+    fingerprint.AngelScriptOptions = asGetLibraryOptions();
+
+    fingerprint.SourceHash = kFnvOffsetBasis;
+    const std::shared_ptr<CachedScript> cached = m_ScriptCache.GetCachedScript(moduleName ? moduleName : "");
+    if (cached) {
+        HashBool(fingerprint.SourceHash, cached->sourceSnapshotSections);
+        HashValue(fingerprint.SourceHash, static_cast<unsigned long long>(cached->sections.size()));
+        for (const auto &section : cached->sections) {
+            HashString(fingerprint.SourceHash, std::get<0>(section));
+            HashString(fingerprint.SourceHash, std::get<1>(section));
+        }
+    }
+
+    fingerprint.IncludeHash = kFnvOffsetBasis;
+    HashValue(fingerprint.IncludeHash, static_cast<unsigned long long>(state.IncludeEdges.size()));
+    for (const ScriptIncludeEdge &edge : state.IncludeEdges) {
+        HashString(fingerprint.IncludeHash, edge.FromSection);
+        HashString(fingerprint.IncludeHash, edge.ToSection);
+        HashBool(fingerprint.IncludeHash, edge.ResolvedFromSnapshot);
+    }
+
+    fingerprint.DeclaredImportHash = kFnvOffsetBasis;
+    asIScriptModule *module = GetModule(moduleName);
+    if (module) {
+        const asUINT importCount = module->GetImportedFunctionCount();
+        HashValue(fingerprint.DeclaredImportHash, static_cast<unsigned long long>(importCount));
+        for (asUINT i = 0; i < importCount; ++i) {
+            HashValue(fingerprint.DeclaredImportHash, static_cast<CKDWORD>(i));
+            HashString(fingerprint.DeclaredImportHash, module->GetImportedFunctionSourceModule(i));
+            HashString(fingerprint.DeclaredImportHash, module->GetImportedFunctionDeclaration(i));
+        }
+    }
+
+    fingerprint.BoundImportHash = kFnvOffsetBasis;
+    HashValue(fingerprint.BoundImportHash, static_cast<unsigned long long>(state.BoundImports.size()));
+    for (const ImportBindingEdge &edge : state.BoundImports) {
+        HashString(fingerprint.BoundImportHash, edge.ImportModuleName);
+        HashValue(fingerprint.BoundImportHash, edge.ImportIndex);
+        HashString(fingerprint.BoundImportHash, edge.SourceModuleName);
+        HashString(fingerprint.BoundImportHash, edge.FunctionDecl);
+    }
+
+    fingerprint.CombinedHash = kFnvOffsetBasis;
+    HashValue(fingerprint.CombinedHash, fingerprint.ApiVersion);
+    HashString(fingerprint.CombinedHash, fingerprint.AngelScriptVersion);
+    HashString(fingerprint.CombinedHash, fingerprint.AngelScriptOptions);
+    HashValue(fingerprint.CombinedHash, static_cast<CKDWORD>(fingerprint.Kind));
+    HashValue(fingerprint.CombinedHash, fingerprint.Generation);
+    HashValue(fingerprint.CombinedHash, fingerprint.SourceHash);
+    HashValue(fingerprint.CombinedHash, fingerprint.IncludeHash);
+    HashValue(fingerprint.CombinedHash, fingerprint.DeclaredImportHash);
+    HashValue(fingerprint.CombinedHash, fingerprint.BoundImportHash);
+
+    state.Fingerprint = fingerprint;
+    state.FingerprintDirty = false;
 }
 
 void ScriptManager::MarkModuleStateDirty(const char *moduleName) {
@@ -3854,6 +4046,114 @@ CKAS_STATUS ScriptManager::UnbindAllImportedFunctions(const char *moduleName,
         BumpModuleGeneration(moduleName);
     }
     return StoreResult(result, CKAS_OK, unbindResult);
+}
+
+CKAS_STATUS ScriptManager::EnumerateBoundImportEdges(const char *moduleName,
+                                                     CKAngelScriptBoundImportEdgeCallback callback,
+                                                     void *userData,
+                                                     CKAngelScriptResult *result) {
+    if (!callback) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bound import edge callback is required.");
+    }
+    asIScriptModule *module = nullptr;
+    const CKAS_STATUS borrowStatus = BorrowModule(moduleName, &module, result);
+    if (borrowStatus != CKAS_OK) {
+        return borrowStatus;
+    }
+    (void)module;
+
+    const ModuleState *state = FindModuleState(moduleName);
+    if (!state) {
+        return StoreResult(result, CKAS_OK);
+    }
+
+    for (const ImportBindingEdge &edge : state->BoundImports) {
+        CKAngelScriptBoundImportEdge publicEdge = {};
+        publicEdge.Size = sizeof(publicEdge);
+        publicEdge.ImportModuleName = edge.ImportModuleName.c_str();
+        publicEdge.ImportIndex = edge.ImportIndex;
+        publicEdge.SourceModuleName = edge.SourceModuleName.c_str();
+        publicEdge.FunctionDecl = edge.FunctionDecl.c_str();
+        CKAS_STATUS callbackStatus = CKAS_OK;
+        {
+            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+            callbackStatus = DispatchBoundImportEdge(publicEdge, callback, userData);
+        }
+        if (callbackStatus != CKAS_OK) {
+            return StoreResult(result,
+                               callbackStatus,
+                               0,
+                               "Bound import edge enumeration stopped by callback.");
+        }
+    }
+    return StoreResult(result, CKAS_OK);
+}
+
+CKAS_STATUS ScriptManager::EnumerateModuleIncludeEdges(const char *moduleName,
+                                                       CKAngelScriptIncludeEdgeCallback callback,
+                                                       void *userData,
+                                                       CKAngelScriptResult *result) {
+    if (!callback) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Include edge callback is required.");
+    }
+    asIScriptModule *module = nullptr;
+    const CKAS_STATUS borrowStatus = BorrowModule(moduleName, &module, result);
+    if (borrowStatus != CKAS_OK) {
+        return borrowStatus;
+    }
+    (void)module;
+
+    const ModuleState *state = FindModuleState(moduleName);
+    if (!state) {
+        return StoreResult(result, CKAS_OK);
+    }
+
+    for (const ScriptIncludeEdge &edge : state->IncludeEdges) {
+        CKAngelScriptIncludeEdge publicEdge = {};
+        publicEdge.Size = sizeof(publicEdge);
+        publicEdge.ModuleName = moduleName;
+        publicEdge.FromSection = edge.FromSection.c_str();
+        publicEdge.ToSection = edge.ToSection.c_str();
+        publicEdge.ResolvedFromSnapshot = edge.ResolvedFromSnapshot ? TRUE : FALSE;
+        CKAS_STATUS callbackStatus = CKAS_OK;
+        {
+            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+            callbackStatus = DispatchIncludeEdge(publicEdge, callback, userData);
+        }
+        if (callbackStatus != CKAS_OK) {
+            return StoreResult(result,
+                               callbackStatus,
+                               0,
+                               "Include edge enumeration stopped by callback.");
+        }
+    }
+    return StoreResult(result, CKAS_OK);
+}
+
+CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
+                                                CKAngelScriptModuleFingerprint *outFingerprint,
+                                                CKAngelScriptResult *result) {
+    if (!outFingerprint) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module fingerprint out pointer is required.");
+    }
+    if (!HasCompletePublicStruct(*outFingerprint)) {
+        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module fingerprint size is invalid.");
+    }
+    CKAngelScriptInitModuleFingerprint(outFingerprint);
+
+    asIScriptModule *module = nullptr;
+    const CKAS_STATUS borrowStatus = BorrowModule(moduleName, &module, result);
+    if (borrowStatus != CKAS_OK) {
+        return borrowStatus;
+    }
+    (void)module;
+
+    ModuleState &state = EnsureModuleState(moduleName);
+    if (state.FingerprintDirty) {
+        RebuildModuleFingerprint(moduleName, state);
+    }
+    *outFingerprint = state.Fingerprint;
+    return StoreResult(result, CKAS_OK);
 }
 
 CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOptions &options,

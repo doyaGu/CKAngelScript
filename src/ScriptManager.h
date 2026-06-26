@@ -309,6 +309,17 @@ public:
                                    CKAngelScriptResult *result = nullptr);
     CKAS_STATUS LoadModuleBytecode(const CKAngelScriptBytecodeLoadOptions &options,
                                    CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS EnumerateBoundImportEdges(const char *moduleName,
+                                          CKAngelScriptBoundImportEdgeCallback callback,
+                                          void *userData = nullptr,
+                                          CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS EnumerateModuleIncludeEdges(const char *moduleName,
+                                            CKAngelScriptIncludeEdgeCallback callback,
+                                            void *userData = nullptr,
+                                            CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS GetModuleFingerprint(const char *moduleName,
+                                     CKAngelScriptModuleFingerprint *outFingerprint,
+                                     CKAngelScriptResult *result = nullptr);
     CKAS_STATUS FindFunction(const CKAngelScriptFunctionOptions &options,
                              CKAngelScriptFunction **outFunction,
                              CKAngelScriptResult *result = nullptr);
@@ -482,6 +493,7 @@ protected:
         ModuleKind Kind = ModuleKind::RawUnknown;
         std::vector<ImportBindingEdge> BoundImports;
         std::vector<ScriptIncludeEdge> IncludeEdges;
+        CKAngelScriptModuleFingerprint Fingerprint = {static_cast<CKDWORD>(sizeof(CKAngelScriptModuleFingerprint))};
         bool FingerprintDirty = true;
     };
     ModuleState *FindModuleState(const char *moduleName);
@@ -492,6 +504,8 @@ protected:
     void RefreshModuleIncludeEdgesFromCache(const char *moduleName);
     void ClearModuleIncludeEdges(const char *moduleName);
     void MarkModuleStateDirty(const char *moduleName);
+    CKAS_MODULEKIND ToPublicModuleKind(ModuleKind kind) const;
+    void RebuildModuleFingerprint(const char *moduleName, ModuleState &state);
     std::shared_ptr<CachedScript> BuildTransientModule(
         const char *moduleName,
         const std::vector<std::tuple<std::string, std::string>> &sections,

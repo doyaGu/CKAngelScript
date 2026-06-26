@@ -29,7 +29,7 @@ typedef struct CKAngelScriptResultReader CKAngelScriptResultReader;
 typedef struct CKBehaviorContext CKBehaviorContext;
 typedef struct CKAngelScript CKAngelScript;
 
-#define CKAS_API_VERSION 5
+#define CKAS_API_VERSION 6
 
 #ifdef __cplusplus
 class CKContext;
@@ -86,7 +86,9 @@ typedef enum CKAS_FEATURE {
     CKAS_FEATURE_HOST_CALL_FILTER = 20,
     CKAS_FEATURE_MODULE_IMPORTS = 21,
     CKAS_FEATURE_MODULE_BYTECODE = 22,
-    CKAS_FEATURE_MODULE_REPLACE_TRANSACTION = 23
+    CKAS_FEATURE_MODULE_REPLACE_TRANSACTION = 23,
+    CKAS_FEATURE_MODULE_GRAPH = 24,
+    CKAS_FEATURE_MODULE_FINGERPRINT = 25
 } CKAS_FEATURE;
 
 typedef enum CKAS_EXECUTIONSTATE {
@@ -136,6 +138,12 @@ typedef enum CKAS_METADATA_TARGET {
     CKAS_METADATA_GLOBAL_VARIABLE = 4,
     CKAS_METADATA_TYPE_PROPERTY = 5
 } CKAS_METADATA_TARGET;
+
+typedef enum CKAS_MODULEKIND {
+    CKAS_MODULEKIND_UNKNOWN = 0,
+    CKAS_MODULEKIND_SOURCE = 1,
+    CKAS_MODULEKIND_BYTECODE = 2
+} CKAS_MODULEKIND;
 
 // Callback user data is never owned by CKAngelScript. See each options struct
 // for whether the pointer is borrowed only for the current call or retained by
@@ -193,6 +201,34 @@ typedef CKAS_STATUS (*CKAngelScriptImportCallback)(
     const CKAngelScriptImportEntry *entry,
     void *userData);
 
+typedef struct CKAngelScriptBoundImportEdge {
+    CKDWORD Size;
+    const char *ImportModuleName;
+    CKDWORD ImportIndex;
+    const char *SourceModuleName;
+    const char *FunctionDecl;
+} CKAngelScriptBoundImportEdge;
+
+// Bound import edge callback pointers are borrowed only for the current
+// callback invocation. Copy entry strings if they must outlive the callback.
+typedef CKAS_STATUS (*CKAngelScriptBoundImportEdgeCallback)(
+    const CKAngelScriptBoundImportEdge *edge,
+    void *userData);
+
+typedef struct CKAngelScriptIncludeEdge {
+    CKDWORD Size;
+    const char *ModuleName;
+    const char *FromSection;
+    const char *ToSection;
+    CKBOOL ResolvedFromSnapshot;
+} CKAngelScriptIncludeEdge;
+
+// Include edge callback pointers are borrowed only for the current callback
+// invocation. Copy entry strings if they must outlive the callback.
+typedef CKAS_STATUS (*CKAngelScriptIncludeEdgeCallback)(
+    const CKAngelScriptIncludeEdge *edge,
+    void *userData);
+
 typedef struct CKAngelScriptSourceSection {
     CKDWORD Size;
     // SectionName is used for diagnostics and relative include resolution.
@@ -245,6 +281,21 @@ typedef struct CKAngelScriptBytecodeLoadOptions {
     void *UserData;
     CKDWORD Flags;
 } CKAngelScriptBytecodeLoadOptions;
+
+typedef struct CKAngelScriptModuleFingerprint {
+    CKDWORD Size;
+    CKAS_MODULEKIND Kind;
+    CKDWORD Generation;
+    CKDWORD ApiVersion;
+    const char *AngelScriptVersion;
+    const char *AngelScriptOptions;
+    unsigned long long SourceHash;
+    unsigned long long IncludeHash;
+    unsigned long long DeclaredImportHash;
+    unsigned long long BoundImportHash;
+    unsigned long long CombinedHash;
+    CKDWORD Flags;
+} CKAngelScriptModuleFingerprint;
 
 typedef struct CKAngelScriptFunctionOptions {
     CKDWORD Size;
@@ -374,6 +425,7 @@ typedef void (*CKAngelScriptInitResultProc)(CKAngelScriptResult *result);
 typedef void (*CKAngelScriptInitImportBindOptionsProc)(CKAngelScriptImportBindOptions *options);
 typedef void (*CKAngelScriptInitBytecodeSaveOptionsProc)(CKAngelScriptBytecodeSaveOptions *options);
 typedef void (*CKAngelScriptInitBytecodeLoadOptionsProc)(CKAngelScriptBytecodeLoadOptions *options);
+typedef void (*CKAngelScriptInitModuleFingerprintProc)(CKAngelScriptModuleFingerprint *fingerprint);
 typedef void (*CKAngelScriptInitEngineExtensionProc)(CKAngelScriptEngineExtension *extension);
 typedef const char *(*CKAngelScriptGetStatusNameProc)(CKAS_STATUS status);
 typedef const char *(*CKAngelScriptGetStatusDescriptionProc)(CKAS_STATUS status);
@@ -470,6 +522,23 @@ typedef CKAS_STATUS (*CKAngelScriptLoadModuleBytecodeProc)(
     CKAngelScript *angelScript,
     const CKAngelScriptBytecodeLoadOptions *options,
     CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptEnumerateBoundImportEdgesProc)(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKAngelScriptBoundImportEdgeCallback callback,
+    void *userData,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptEnumerateModuleIncludeEdgesProc)(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKAngelScriptIncludeEdgeCallback callback,
+    void *userData,
+    CKAngelScriptResult *result);
+typedef CKAS_STATUS (*CKAngelScriptGetModuleFingerprintProc)(
+    CKAngelScript *angelScript,
+    const char *moduleName,
+    CKAngelScriptModuleFingerprint *outFingerprint,
+    CKAngelScriptResult *result);
 
 typedef struct CKAngelScriptExtensionApi {
     CKDWORD Size;
@@ -480,6 +549,7 @@ typedef struct CKAngelScriptExtensionApi {
     CKAngelScriptInitImportBindOptionsProc InitImportBindOptions;
     CKAngelScriptInitBytecodeSaveOptionsProc InitBytecodeSaveOptions;
     CKAngelScriptInitBytecodeLoadOptionsProc InitBytecodeLoadOptions;
+    CKAngelScriptInitModuleFingerprintProc InitModuleFingerprint;
     CKAngelScriptInitEngineExtensionProc InitEngineExtension;
     CKAngelScriptGetStatusNameProc GetStatusName;
     CKAngelScriptGetStatusDescriptionProc GetStatusDescription;
@@ -493,6 +563,9 @@ typedef struct CKAngelScriptExtensionApi {
     CKAngelScriptUnbindAllImportedFunctionsProc UnbindAllImportedFunctions;
     CKAngelScriptSaveModuleBytecodeProc SaveModuleBytecode;
     CKAngelScriptLoadModuleBytecodeProc LoadModuleBytecode;
+    CKAngelScriptEnumerateBoundImportEdgesProc EnumerateBoundImportEdges;
+    CKAngelScriptEnumerateModuleIncludeEdgesProc EnumerateModuleIncludeEdges;
+    CKAngelScriptGetModuleFingerprintProc GetModuleFingerprint;
 } CKAngelScriptExtensionApi;
 
 static inline void CKAngelScriptInitExtensionApi(CKAngelScriptExtensionApi *api) {
@@ -507,6 +580,7 @@ static inline void CKAngelScriptInitExtensionApi(CKAngelScriptExtensionApi *api)
     api->InitImportBindOptions = NULL;
     api->InitBytecodeSaveOptions = NULL;
     api->InitBytecodeLoadOptions = NULL;
+    api->InitModuleFingerprint = NULL;
     api->InitEngineExtension = NULL;
     api->GetStatusName = NULL;
     api->GetStatusDescription = NULL;
@@ -520,6 +594,9 @@ static inline void CKAngelScriptInitExtensionApi(CKAngelScriptExtensionApi *api)
     api->UnbindAllImportedFunctions = NULL;
     api->SaveModuleBytecode = NULL;
     api->LoadModuleBytecode = NULL;
+    api->EnumerateBoundImportEdges = NULL;
+    api->EnumerateModuleIncludeEdges = NULL;
+    api->GetModuleFingerprint = NULL;
 }
 
 static inline CKBOOL CKAngelScriptExtensionApiIsLoaded(const CKAngelScriptExtensionApi *api) {
@@ -532,6 +609,7 @@ static inline CKBOOL CKAngelScriptExtensionApiIsLoaded(const CKAngelScriptExtens
            api->InitImportBindOptions &&
            api->InitBytecodeSaveOptions &&
            api->InitBytecodeLoadOptions &&
+           api->InitModuleFingerprint &&
            api->InitEngineExtension &&
            api->GetStatusName &&
            api->GetStatusDescription &&
@@ -544,7 +622,10 @@ static inline CKBOOL CKAngelScriptExtensionApiIsLoaded(const CKAngelScriptExtens
            api->UnbindImportedFunction &&
            api->UnbindAllImportedFunctions &&
            api->SaveModuleBytecode &&
-           api->LoadModuleBytecode
+           api->LoadModuleBytecode &&
+           api->EnumerateBoundImportEdges &&
+           api->EnumerateModuleIncludeEdges &&
+           api->GetModuleFingerprint
                ? TRUE
                : FALSE;
 }
@@ -571,6 +652,8 @@ static inline CKBOOL CKAngelScriptLoadExtensionApi(CKAngelScriptExtensionApi *ap
         (CKAngelScriptInitBytecodeSaveOptionsProc)resolver(userData, "CKAngelScriptInitBytecodeSaveOptions");
     api->InitBytecodeLoadOptions =
         (CKAngelScriptInitBytecodeLoadOptionsProc)resolver(userData, "CKAngelScriptInitBytecodeLoadOptions");
+    api->InitModuleFingerprint =
+        (CKAngelScriptInitModuleFingerprintProc)resolver(userData, "CKAngelScriptInitModuleFingerprint");
     api->InitEngineExtension =
         (CKAngelScriptInitEngineExtensionProc)resolver(userData, "CKAngelScriptInitEngineExtension");
     api->GetStatusName =
@@ -597,6 +680,12 @@ static inline CKBOOL CKAngelScriptLoadExtensionApi(CKAngelScriptExtensionApi *ap
         (CKAngelScriptSaveModuleBytecodeProc)resolver(userData, "CKAngelScriptSaveModuleBytecode");
     api->LoadModuleBytecode =
         (CKAngelScriptLoadModuleBytecodeProc)resolver(userData, "CKAngelScriptLoadModuleBytecode");
+    api->EnumerateBoundImportEdges =
+        (CKAngelScriptEnumerateBoundImportEdgesProc)resolver(userData, "CKAngelScriptEnumerateBoundImportEdges");
+    api->EnumerateModuleIncludeEdges =
+        (CKAngelScriptEnumerateModuleIncludeEdgesProc)resolver(userData, "CKAngelScriptEnumerateModuleIncludeEdges");
+    api->GetModuleFingerprint =
+        (CKAngelScriptGetModuleFingerprintProc)resolver(userData, "CKAngelScriptGetModuleFingerprint");
 
     if (!CKAngelScriptExtensionApiIsLoaded(api) ||
         api->GetApiVersion() != CKAS_API_VERSION ||
@@ -605,7 +694,9 @@ static inline CKBOOL CKAngelScriptLoadExtensionApi(CKAngelScriptExtensionApi *ap
         !api->HasFeature(CKAS_FEATURE_STATUS_TEXT) ||
         !api->HasFeature(CKAS_FEATURE_MODULE_IMPORTS) ||
         !api->HasFeature(CKAS_FEATURE_MODULE_BYTECODE) ||
-        !api->HasFeature(CKAS_FEATURE_MODULE_REPLACE_TRANSACTION)) {
+        !api->HasFeature(CKAS_FEATURE_MODULE_REPLACE_TRANSACTION) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_GRAPH) ||
+        !api->HasFeature(CKAS_FEATURE_MODULE_FINGERPRINT)) {
         CKAngelScriptInitExtensionApi(api);
         return FALSE;
     }
@@ -707,6 +798,7 @@ CKAS_API void CKAngelScriptInitLoadOptions(CKAngelScriptLoadOptions *options);
 CKAS_API void CKAngelScriptInitImportBindOptions(CKAngelScriptImportBindOptions *options);
 CKAS_API void CKAngelScriptInitBytecodeSaveOptions(CKAngelScriptBytecodeSaveOptions *options);
 CKAS_API void CKAngelScriptInitBytecodeLoadOptions(CKAngelScriptBytecodeLoadOptions *options);
+CKAS_API void CKAngelScriptInitModuleFingerprint(CKAngelScriptModuleFingerprint *fingerprint);
 CKAS_API void CKAngelScriptInitFunctionOptions(CKAngelScriptFunctionOptions *options);
 CKAS_API void CKAngelScriptInitFunctionExecutionOptions(CKAngelScriptFunctionExecutionOptions *options);
 CKAS_API void CKAngelScriptInitExecutionStepOptions(CKAngelScriptExecutionStepOptions *options);
@@ -838,6 +930,20 @@ CKAS_API CKAS_STATUS CKAngelScriptSaveModuleBytecode(CKAngelScript *angelScript,
 CKAS_API CKAS_STATUS CKAngelScriptLoadModuleBytecode(CKAngelScript *angelScript,
                                                      const CKAngelScriptBytecodeLoadOptions *options,
                                                      CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptEnumerateBoundImportEdges(CKAngelScript *angelScript,
+                                                            const char *moduleName,
+                                                            CKAngelScriptBoundImportEdgeCallback callback,
+                                                            void *userData,
+                                                            CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptEnumerateModuleIncludeEdges(CKAngelScript *angelScript,
+                                                              const char *moduleName,
+                                                              CKAngelScriptIncludeEdgeCallback callback,
+                                                              void *userData,
+                                                              CKAngelScriptResult *result);
+CKAS_API CKAS_STATUS CKAngelScriptGetModuleFingerprint(CKAngelScript *angelScript,
+                                                       const char *moduleName,
+                                                       CKAngelScriptModuleFingerprint *outFingerprint,
+                                                       CKAngelScriptResult *result);
 CKAS_API CKAS_STATUS CKAngelScriptFindFunction(CKAngelScript *angelScript,
                                                const CKAngelScriptFunctionOptions *options,
                                                CKAngelScriptFunction **outFunction,
@@ -1275,6 +1381,12 @@ public:
         return options;
     }
 
+    static CKAngelScriptModuleFingerprint ModuleFingerprint() {
+        CKAngelScriptModuleFingerprint fingerprint;
+        CKAngelScriptInitModuleFingerprint(&fingerprint);
+        return fingerprint;
+    }
+
     static CKAngelScriptFunctionOptions FunctionOptions() {
         CKAngelScriptFunctionOptions options;
         CKAngelScriptInitFunctionOptions(&options);
@@ -1700,6 +1812,26 @@ public:
                                    CKDWORD flags = CKAS_BYTECODE_DEFAULT,
                                    CKAngelScriptResult *result = nullptr) const {
         return LoadModuleBytecode(BytecodeLoadOptions(moduleName, read, userData, flags), result);
+    }
+
+    CKAS_STATUS EnumerateBoundImportEdges(const char *moduleName,
+                                          CKAngelScriptBoundImportEdgeCallback callback,
+                                          void *userData = nullptr,
+                                          CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptEnumerateBoundImportEdges(m_AngelScript, moduleName, callback, userData, result);
+    }
+
+    CKAS_STATUS EnumerateModuleIncludeEdges(const char *moduleName,
+                                            CKAngelScriptIncludeEdgeCallback callback,
+                                            void *userData = nullptr,
+                                            CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptEnumerateModuleIncludeEdges(m_AngelScript, moduleName, callback, userData, result);
+    }
+
+    CKAS_STATUS GetModuleFingerprint(const char *moduleName,
+                                     CKAngelScriptModuleFingerprint *outFingerprint,
+                                     CKAngelScriptResult *result = nullptr) const {
+        return CKAngelScriptGetModuleFingerprint(m_AngelScript, moduleName, outFingerprint, result);
     }
 
     CKAS_STATUS FindFunction(const CKAngelScriptFunctionOptions &options,
