@@ -150,7 +150,7 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(ScriptManager &manager,
     candidateModule->Discard();
     candidateModule = nullptr;
 
-    return manager.m_ModuleReplacer.ReplaceFromBytecode(manager,
+    return manager.m_ModuleRegistry.ReplaceFromBytecode(manager,
                                                         request.ModuleName,
                                                         candidateByteCode,
                                                         result);

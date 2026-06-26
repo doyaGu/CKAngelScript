@@ -206,6 +206,37 @@ unsigned long long ScriptModuleRegistry::BuildSourceHash(const char *moduleName)
     return sourceHash;
 }
 
+CKAS_STATUS ScriptModuleRegistry::ReplaceFromSections(
+    ScriptManager &manager,
+    const char *moduleName,
+    const std::vector<std::tuple<std::string, std::string>> &sections,
+    bool sourceSnapshotSections,
+    CKAngelScriptResult *result) {
+    return m_Replacer.ReplaceFromSections(manager,
+                                          *this,
+                                          manager.m_ModuleStateStore,
+                                          manager.m_ImportBinder,
+                                          manager.m_Diagnostics,
+                                          moduleName,
+                                          sections,
+                                          sourceSnapshotSections,
+                                          result);
+}
+
+CKAS_STATUS ScriptModuleRegistry::ReplaceFromBytecode(ScriptManager &manager,
+                                                      const char *moduleName,
+                                                      const std::vector<unsigned char> &byteCode,
+                                                      CKAngelScriptResult *result) {
+    return m_Replacer.ReplaceFromBytecode(manager,
+                                          *this,
+                                          manager.m_ModuleStateStore,
+                                          manager.m_ImportBinder,
+                                          manager.m_Diagnostics,
+                                          moduleName,
+                                          byteCode,
+                                          result);
+}
+
 CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
                                        const CKAngelScriptLoadOptions &options,
                                        CKAngelScriptResult *result) {
@@ -245,7 +276,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
         return Compile(manager, request.ModuleName, request.Code, CKAS_COMPILE_REPLACEEXISTING, result);
     }
     if (request.SourceKind == ScriptPublicOptions::LoadSourceKind::Sections) {
-        return manager.m_ModuleReplacer.ReplaceFromSections(manager, request.ModuleName, request.Sections, true, result);
+        return ReplaceFromSections(manager, request.ModuleName, request.Sections, true, result);
     }
     if (request.SourceKind == ScriptPublicOptions::LoadSourceKind::Files) {
         if (replacingExisting) {
@@ -259,7 +290,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
                 manager.ResolveScriptFileName(scriptFilename);
                 sections.emplace_back(scriptFilename.CStr(), std::string());
             }
-            return manager.m_ModuleReplacer.ReplaceFromSections(manager, request.ModuleName, sections, false, result);
+            return ReplaceFromSections(manager, request.ModuleName, sections, false, result);
         }
         std::vector<CapturedScriptMessage> diagnosticMessages;
         manager.BeginScriptMessageCapture();
@@ -286,7 +317,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(std::move(scriptFilename), std::string());
-        return manager.m_ModuleReplacer.ReplaceFromSections(manager, request.ModuleName, sections, false, result);
+        return ReplaceFromSections(manager, request.ModuleName, sections, false, result);
     }
 
     std::vector<CapturedScriptMessage> diagnosticMessages;
@@ -342,7 +373,7 @@ CKAS_STATUS ScriptModuleRegistry::Compile(ScriptManager &manager,
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(moduleName, scriptCode);
-        return manager.m_ModuleReplacer.ReplaceFromSections(manager, moduleName, sections, false, result);
+        return ReplaceFromSections(manager, moduleName, sections, false, result);
     }
 
     std::vector<CapturedScriptMessage> diagnosticMessages;

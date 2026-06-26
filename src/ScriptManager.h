@@ -19,7 +19,6 @@
 #include "ScriptImportBinder.h"
 #include "ScriptModuleBytecodeStore.h"
 #include "ScriptModuleRegistry.h"
-#include "ScriptModuleReplacer.h"
 #include "ScriptModuleStateStore.h"
 #include "ScriptPathResolver.h"
 
@@ -41,7 +40,6 @@ class ScriptManager : public CKBaseManager {
     friend class ScriptImportBinder;
     friend class ScriptModuleBytecodeStore;
     friend class ScriptModuleRegistry;
-    friend class ScriptModuleReplacer;
 
 public:
     enum Flag {
@@ -314,7 +312,6 @@ protected:
     ScriptModuleStateStore m_ModuleStateStore;
     ScriptImportBinder m_ImportBinder;
     ScriptModuleBytecodeStore m_ModuleBytecodeStore;
-    ScriptModuleReplacer m_ModuleReplacer;
     ScriptApiDiagnostics m_Diagnostics;
     int m_PublicCallbackDepth = 0;
     int m_BytecodeCallbackDepth = 0;

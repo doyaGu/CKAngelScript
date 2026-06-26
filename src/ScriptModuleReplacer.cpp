@@ -2,10 +2,13 @@
 
 #include <fmt/format.h>
 
+#include "ScriptApiDiagnostics.h"
 #include "ScriptApiSupport.h"
 #include "ScriptCache.h"
+#include "ScriptImportBinder.h"
 #include "ScriptManager.h"
 #include "ScriptModuleBytecode.h"
+#include "ScriptModuleRegistry.h"
 #include "ScriptModuleStateStore.h"
 
 struct ScriptModuleReplacer::Snapshot {
@@ -23,6 +26,7 @@ std::shared_ptr<CachedScript> ScriptModuleReplacer::BuildTransientModule(
     const char *moduleName,
     const std::vector<std::tuple<std::string, std::string>> &sections,
     bool sourceSnapshotSections,
+    ScriptApiDiagnostics &diagnosticsStore,
     int &angelScriptCode,
     std::string &diagnostics,
     std::vector<CapturedScriptMessage> *messages) {
@@ -40,9 +44,9 @@ std::shared_ptr<CachedScript> ScriptModuleReplacer::BuildTransientModule(
         script->AddSection(std::get<0>(section), std::get<1>(section));
     }
 
-    manager.BeginScriptMessageCapture();
+    diagnosticsStore.BeginScriptMessageCapture();
     const bool built = script->Build(manager.GetScriptEngine());
-    diagnostics = manager.EndScriptMessageCapture(messages);
+    diagnostics = diagnosticsStore.EndScriptMessageCapture(messages);
     if (!built) {
         angelScriptCode = -3;
         if (script->module) {
@@ -54,6 +58,8 @@ std::shared_ptr<CachedScript> ScriptModuleReplacer::BuildTransientModule(
 }
 
 bool ScriptModuleReplacer::CaptureSnapshot(ScriptManager &manager,
+                                           ScriptModuleRegistry &registry,
+                                           const ScriptModuleStateStore &stateStore,
                                            const char *moduleName,
                                            Snapshot &snapshot,
                                            int &angelScriptCode,
@@ -67,8 +73,8 @@ bool ScriptModuleReplacer::CaptureSnapshot(ScriptManager &manager,
         return false;
     }
 
-    snapshot.Cache = manager.m_ModuleRegistry.GetCachedScript(moduleName);
-    snapshot.ImportBindings = manager.m_ModuleStateStore.GetImportBindingsForModule(moduleName);
+    snapshot.Cache = registry.GetCachedScript(moduleName);
+    snapshot.ImportBindings = stateStore.GetImportBindingsForModule(moduleName);
     if (snapshot.Cache) {
         snapshot.Sections = snapshot.Cache->sections;
         snapshot.Metadata = snapshot.Cache->metadata;
@@ -89,14 +95,16 @@ bool ScriptModuleReplacer::CaptureSnapshot(ScriptManager &manager,
 }
 
 void ScriptModuleReplacer::RemoveForReplacement(ScriptManager &manager,
+                                                ScriptModuleRegistry &registry,
+                                                ScriptModuleStateStore &stateStore,
                                                 const char *moduleName,
                                                 Snapshot &snapshot) {
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;
     }
 
-    manager.m_ModuleRegistry.Invalidate(moduleName);
-    manager.m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
+    registry.Invalidate(moduleName);
+    stateStore.RemoveImportBindingsForModule(moduleName);
     if (snapshot.Cache && snapshot.Cache->module) {
         snapshot.Cache->module->Discard();
         snapshot.Cache->module = nullptr;
@@ -110,6 +118,9 @@ void ScriptModuleReplacer::RemoveForReplacement(ScriptManager &manager,
 }
 
 bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
+                                           ScriptModuleRegistry &registry,
+                                           ScriptModuleStateStore &stateStore,
+                                           ScriptImportBinder &importBinder,
                                            const char *moduleName,
                                            Snapshot &snapshot,
                                            int &angelScriptCode,
@@ -137,19 +148,22 @@ bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
     restoredCache->sourceSnapshotSections = snapshot.SourceSnapshotSections;
     restoredCache->metadata = snapshot.Metadata;
     restoredCache->module = restoredModule;
-    manager.m_ModuleRegistry.CacheScript(moduleName, restoredCache);
-    if (!manager.m_ImportBinder.Rebind(manager,
-                                       snapshot.ImportBindings,
-                                       angelScriptCode,
-                                       errorMessage)) {
+    registry.CacheScript(moduleName, restoredCache);
+    if (!importBinder.Rebind(manager,
+                             snapshot.ImportBindings,
+                             angelScriptCode,
+                             errorMessage)) {
         return false;
     }
-    manager.m_ModuleStateStore.RestoreImportBindingsForModule(moduleName, snapshot.ImportBindings);
+    stateStore.RestoreImportBindingsForModule(moduleName, snapshot.ImportBindings);
     return true;
 }
 
 bool ScriptModuleReplacer::CommitBytecodeCandidate(
     ScriptManager &manager,
+    ScriptModuleRegistry &registry,
+    ScriptModuleStateStore &stateStore,
+    ScriptImportBinder &importBinder,
     const char *moduleName,
     const std::vector<unsigned char> &candidateByteCode,
     const char *commitFailedMessage,
@@ -165,12 +179,12 @@ bool ScriptModuleReplacer::CommitBytecodeCandidate(
 
     Snapshot snapshot;
     std::string snapshotError;
-    if (!CaptureSnapshot(manager, moduleName, snapshot, angelScriptCode, snapshotError)) {
+    if (!CaptureSnapshot(manager, registry, stateStore, moduleName, snapshot, angelScriptCode, snapshotError)) {
         errorMessage = snapshotError;
         return false;
     }
 
-    RemoveForReplacement(manager, moduleName, snapshot);
+    RemoveForReplacement(manager, registry, stateStore, moduleName, snapshot);
 
     std::vector<unsigned char> loadByteCode = candidateByteCode;
     asIScriptModule *committedModule = nullptr;
@@ -181,7 +195,8 @@ bool ScriptModuleReplacer::CommitBytecodeCandidate(
                                                   angelScriptCode)) {
         int restoreCode = 0;
         std::string restoreError;
-        const bool restored = RestoreSnapshot(manager, moduleName, snapshot, restoreCode, restoreError);
+        const bool restored =
+            RestoreSnapshot(manager, registry, stateStore, importBinder, moduleName, snapshot, restoreCode, restoreError);
         if (restored) {
             errorMessage = commitFailedMessage ? commitFailedMessage : "Failed to commit module bytecode.";
         } else {
@@ -200,6 +215,10 @@ bool ScriptModuleReplacer::CommitBytecodeCandidate(
 
 CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
     ScriptManager &manager,
+    ScriptModuleRegistry &registry,
+    ScriptModuleStateStore &stateStore,
+    ScriptImportBinder &importBinder,
+    ScriptApiDiagnostics &diagnosticsStore,
     const char *moduleName,
     const std::vector<std::tuple<std::string, std::string>> &sections,
     bool sourceSnapshotSections,
@@ -214,16 +233,18 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                              transientName.c_str(),
                              sections,
                              sourceSnapshotSections,
+                             diagnosticsStore,
                              angelScriptCode,
                              diagnostics,
                              &diagnosticMessages);
     if (!candidate || !candidate->module) {
-        return manager.StoreResult(result,
-                                   CKAS_COMPILEERROR,
-                                   angelScriptCode,
-                                   diagnostics.empty() ? "Failed to compile replacement script module." : diagnostics,
-                                   std::string(),
-                                   &diagnosticMessages);
+        return diagnosticsStore.StoreResult(
+            result,
+            CKAS_COMPILEERROR,
+            angelScriptCode,
+            diagnostics.empty() ? "Failed to compile replacement script module." : diagnostics,
+            std::string(),
+            &diagnosticMessages);
     }
 
     std::vector<unsigned char> candidateByteCode;
@@ -231,15 +252,18 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                                                   candidateByteCode,
                                                   angelScriptCode)) {
         candidate->Discard();
-        return manager.StoreResult(result,
-                                   CKAS_EXECUTIONFAILED,
-                                   angelScriptCode,
-                                   "Failed to snapshot replacement script module bytecode.");
+        return diagnosticsStore.StoreResult(result,
+                                            CKAS_EXECUTIONFAILED,
+                                            angelScriptCode,
+                                            "Failed to snapshot replacement script module bytecode.");
     }
 
     asIScriptModule *committedModule = nullptr;
     std::string commitError;
     if (!CommitBytecodeCandidate(manager,
+                                 registry,
+                                 stateStore,
+                                 importBinder,
                                  moduleName,
                                  candidateByteCode,
                                  "Failed to commit replacement script module bytecode.",
@@ -248,7 +272,7 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                                  angelScriptCode,
                                  commitError)) {
         candidate->Discard();
-        return manager.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, commitError);
+        return diagnosticsStore.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, commitError);
     }
 
     auto committedCache = std::make_shared<CachedScript>();
@@ -261,16 +285,20 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                                    candidate->metadata,
                                    committedCache->metadata);
     committedCache->module = committedModule;
-    manager.m_ModuleRegistry.CacheScript(moduleName, committedCache);
+    registry.CacheScript(moduleName, committedCache);
     candidate->Discard();
-    manager.m_ModuleStateStore.SetIncludeEdges(moduleName, committedCache->includeEdges);
-    manager.m_ModuleStateStore.SetKind(moduleName, ScriptModuleKind::Source);
-    manager.m_ModuleStateStore.BumpGeneration(moduleName);
-    return manager.StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
+    stateStore.SetIncludeEdges(moduleName, committedCache->includeEdges);
+    stateStore.SetKind(moduleName, ScriptModuleKind::Source);
+    stateStore.BumpGeneration(moduleName);
+    return diagnosticsStore.StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
 }
 
 CKAS_STATUS ScriptModuleReplacer::ReplaceFromBytecode(
     ScriptManager &manager,
+    ScriptModuleRegistry &registry,
+    ScriptModuleStateStore &stateStore,
+    ScriptImportBinder &importBinder,
+    ScriptApiDiagnostics &diagnosticsStore,
     const char *moduleName,
     const std::vector<unsigned char> &byteCode,
     CKAngelScriptResult *result) {
@@ -278,6 +306,9 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromBytecode(
     asIScriptModule *committedModule = nullptr;
     std::string commitError;
     if (!CommitBytecodeCandidate(manager,
+                                 registry,
+                                 stateStore,
+                                 importBinder,
                                  moduleName,
                                  byteCode,
                                  "Failed to commit loaded module bytecode.",
@@ -285,15 +316,15 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromBytecode(
                                  &committedModule,
                                  angelScriptCode,
                                  commitError)) {
-        return manager.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, commitError);
+        return diagnosticsStore.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, commitError);
     }
 
     auto committedCache = std::make_shared<CachedScript>();
     committedCache->name = moduleName ? moduleName : "";
     committedCache->module = committedModule;
-    manager.m_ModuleRegistry.CacheScript(moduleName, committedCache);
-    manager.m_ModuleStateStore.ClearIncludeEdges(moduleName);
-    manager.m_ModuleStateStore.SetKind(moduleName, ScriptModuleKind::Bytecode);
-    manager.m_ModuleStateStore.BumpGeneration(moduleName);
-    return manager.StoreResult(result, CKAS_OK, angelScriptCode);
+    registry.CacheScript(moduleName, committedCache);
+    stateStore.ClearIncludeEdges(moduleName);
+    stateStore.SetKind(moduleName, ScriptModuleKind::Bytecode);
+    stateStore.BumpGeneration(moduleName);
+    return diagnosticsStore.StoreResult(result, CKAS_OK, angelScriptCode);
 }

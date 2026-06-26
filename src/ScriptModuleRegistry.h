@@ -3,9 +3,11 @@
 
 #include <cstddef>
 #include <memory>
+#include <tuple>
 #include <vector>
 
 #include "ScriptCache.h"
+#include "ScriptModuleReplacer.h"
 
 class ScriptManager;
 class ScriptModuleStateStore;
@@ -58,6 +60,10 @@ public:
                                const char *moduleName,
                                CKAngelScriptModuleFingerprint *outFingerprint,
                                CKAngelScriptResult *result);
+    CKAS_STATUS ReplaceFromBytecode(ScriptManager &manager,
+                                    const char *moduleName,
+                                    const std::vector<unsigned char> &byteCode,
+                                    CKAngelScriptResult *result);
 
     int LoadFromDefaultOrFile(ScriptManager &manager, const char *moduleName, const char *filename);
     int LoadFromFiles(ScriptManager &manager, const char *moduleName, const char **filenames, size_t count);
@@ -72,12 +78,18 @@ public:
 
 private:
     bool DiscardCached(const char *moduleName);
+    CKAS_STATUS ReplaceFromSections(ScriptManager &manager,
+                                    const char *moduleName,
+                                    const std::vector<std::tuple<std::string, std::string>> &sections,
+                                    bool sourceSnapshotSections,
+                                    CKAngelScriptResult *result);
     CKAS_STATUS CompleteSourceLoad(ScriptManager &manager,
                                    const char *moduleName,
                                    const std::vector<CapturedScriptMessage> &diagnosticMessages,
                                    CKAngelScriptResult *result);
 
     ScriptCache m_Cache;
+    ScriptModuleReplacer m_Replacer;
 };
 
 #endif // CK_SCRIPT_MODULE_REGISTRY_H
