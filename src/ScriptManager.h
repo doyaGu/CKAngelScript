@@ -4,7 +4,6 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include <angelscript.h>
@@ -14,8 +13,13 @@
 #include "CKAngelScript.h"
 
 #include "ScriptApiDiagnostics.h"
+#include "ScriptHandleRegistry.h"
 #include "ScriptCache.h"
 #include "ScriptCKObjectRetainer.h"
+#include "ScriptEngineHost.h"
+#include "ScriptImportBinder.h"
+#include "ScriptModuleReplacer.h"
+#include "ScriptModuleStateStore.h"
 
 #define SCRIPT_MANAGER_GUID CKGUID(0x70955bd2,0x30684456)
 
@@ -41,6 +45,8 @@ struct ScriptEngineExtensionRegistration {
 };
 
 class ScriptManager : public CKBaseManager {
+    friend class ScriptModuleReplacer;
+
 public:
     enum Flag {
         AS_INITED = 0x00000001,
@@ -317,72 +323,13 @@ protected:
     bool IsModuleMutationBlockedByCallback() const;
     CKAS_STATUS RejectModuleMutationDuringCallback(const char *apiName, CKAngelScriptResult *result);
     void BumpModuleGeneration(const char *moduleName);
-    struct ImportBindingEdge {
-        std::string ImportModuleName;
-        CKDWORD ImportIndex = 0;
-        std::string SourceModuleName;
-        std::string FunctionDecl;
-    };
-    struct ModuleReplacementSnapshot {
-        std::shared_ptr<CachedScript> Cache;
-        std::vector<std::tuple<std::string, std::string>> Sections;
-        ScriptMetadata Metadata;
-        std::vector<ImportBindingEdge> ImportBindings;
-        std::vector<unsigned char> ByteCode;
-        bool SourceSnapshotSections = false;
-        bool HasModule = false;
-    };
-    std::vector<ImportBindingEdge> GetImportBindingsForModule(const char *moduleName) const;
-    bool RemoveImportBinding(const char *moduleName, CKDWORD importIndex);
-    bool RemoveImportBindingsForModule(const char *moduleName);
-    bool RebindImportBindings(const std::vector<ImportBindingEdge> &bindings,
-                              int &angelScriptCode,
-                              std::string &errorMessage);
-    void RestoreImportBindingsForModule(const char *moduleName, const std::vector<ImportBindingEdge> &bindings);
-    void RecordImportBinding(const char *importModuleName,
-                             CKDWORD importIndex,
-                             const char *sourceModuleName,
-                             const char *functionDecl);
-    enum class ModuleKind {
-        RawUnknown,
-        Source,
-        Bytecode
-    };
-    struct ModuleState {
-        CKDWORD Generation = 0;
-        ModuleKind Kind = ModuleKind::RawUnknown;
-        std::vector<ImportBindingEdge> BoundImports;
-        std::vector<ScriptIncludeEdge> IncludeEdges;
-        CKAngelScriptModuleFingerprint Fingerprint = {static_cast<CKDWORD>(sizeof(CKAngelScriptModuleFingerprint))};
-        bool FingerprintDirty = true;
-    };
-    ModuleState *FindModuleState(const char *moduleName);
-    const ModuleState *FindModuleState(const char *moduleName) const;
-    ModuleState &EnsureModuleState(const char *moduleName);
-    void SetModuleKind(const char *moduleName, ModuleKind kind);
+    void SetModuleKind(const char *moduleName, ScriptModuleKind kind);
     void SetModuleIncludeEdges(const char *moduleName, const std::vector<ScriptIncludeEdge> &includeEdges);
     void RefreshModuleIncludeEdgesFromCache(const char *moduleName);
     void ClearModuleIncludeEdges(const char *moduleName);
     void MarkModuleStateDirty(const char *moduleName);
-    CKAS_MODULEKIND ToPublicModuleKind(ModuleKind kind) const;
-    void RebuildModuleFingerprint(const char *moduleName, ModuleState &state);
-    std::shared_ptr<CachedScript> BuildTransientModule(
-        const char *moduleName,
-        const std::vector<std::tuple<std::string, std::string>> &sections,
-        bool sourceSnapshotSections,
-        int &angelScriptCode,
-        std::string &diagnostics,
-        std::vector<CapturedScriptMessage> *messages = nullptr);
-    bool CaptureModuleReplacementSnapshot(const char *moduleName,
-                                          ModuleReplacementSnapshot &snapshot,
-                                          int &angelScriptCode,
-                                          std::string &errorMessage);
-    void RemoveModuleForReplacement(const char *moduleName,
-                                    ModuleReplacementSnapshot &snapshot);
-    bool RestoreModuleReplacementSnapshot(const char *moduleName,
-                                          ModuleReplacementSnapshot &snapshot,
-                                          int &angelScriptCode,
-                                          std::string &errorMessage);
+    unsigned long long BuildModuleSourceHash(const char *moduleName);
+    unsigned long long BuildDeclaredImportHash(const char *moduleName);
     CKAS_STATUS ReplaceModuleFromSections(
         const char *moduleName,
         const std::vector<std::tuple<std::string, std::string>> &sections,
@@ -412,9 +359,8 @@ protected:
 
     int m_Flags = 0;
     int m_ScriptPathCategoryIndex = -1;
-    asIScriptEngine *m_ScriptEngine = nullptr;
+    ScriptEngineHost m_EngineHost;
     ScriptCache m_ScriptCache;
-    std::vector<asIScriptContext *> m_ScriptContexts;
     ScriptCKObjectRetainer m_CKObjectRetainer;
     std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > m_ComponentStates;
     std::unique_ptr<ScriptBehaviorBridge> m_BehaviorBridge;
@@ -422,15 +368,12 @@ protected:
     std::unique_ptr<ScriptRuntime> m_Runtime;
     std::unique_ptr<ScriptAsyncScheduler> m_AsyncScheduler;
     std::unique_ptr<ScriptMessageBus> m_MessageBus;
-    std::unordered_set<CKAngelScriptExecution *> m_Executions;
-    std::unordered_set<CKAngelScriptFunction *> m_Functions;
-    std::unordered_set<CKAngelScriptObject *> m_Objects;
-    std::unordered_set<CKAngelScriptMethod *> m_Methods;
-    std::unordered_map<std::string, ModuleState> m_ModuleStates;
+    ScriptHandleRegistry m_HandleRegistry;
+    ScriptModuleStateStore m_ModuleStateStore;
+    ScriptImportBinder m_ImportBinder;
+    ScriptModuleReplacer m_ModuleReplacer;
     std::vector<ScriptEngineExtensionRegistration> m_EngineExtensions;
     ScriptApiDiagnostics m_Diagnostics;
-    CKAngelScriptHostCallFilterCallback m_HostCallFilter = nullptr;
-    void *m_HostCallFilterUserData = nullptr;
     int m_PublicCallbackDepth = 0;
     int m_BytecodeCallbackDepth = 0;
 };

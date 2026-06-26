@@ -16,6 +16,7 @@
 
 #include "CKPathManager.h"
 #include "Logger.h"
+#include "ScriptEngineHost.h"
 #include "ScriptAsync.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptCK2.h"
@@ -50,8 +51,82 @@
 #include "add_on/scriptstdstring/scriptstdstring.h"
 #include "add_on/weakref/weakref.h"
 #include "add_on/scripthelper/scripthelper.h"
+
+asIScriptEngine *ScriptEngineHost::Engine() const {
+    return m_Engine;
+}
+
+bool ScriptEngineHost::HasEngine() const {
+    return m_Engine != nullptr;
+}
+
+void ScriptEngineHost::SetEngine(asIScriptEngine *engine) {
+    m_Engine = engine;
+}
+
+void ScriptEngineHost::ShutdownAndReleaseEngine() {
+    if (m_Engine) {
+        m_Engine->ShutDownAndRelease();
+        m_Engine = nullptr;
+    }
+}
+
+asIScriptContext *ScriptEngineHost::RequestContext(ScriptManager &manager) {
+    asIScriptContext *ctx = nullptr;
+    if (!m_ContextPool.empty()) {
+        ctx = *m_ContextPool.rbegin();
+        m_ContextPool.pop_back();
+    } else if (m_Engine) {
+        ctx = m_Engine->CreateContext();
+    }
+    if (!ctx) {
+        return nullptr;
+    }
+
+    const int state = ctx->GetState();
+    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
+        ctx->Abort();
+    }
+    ctx->Unprepare();
+    ctx->SetExceptionCallback(asMETHOD(ScriptManager, ExceptionCallback), &manager, asCALL_THISCALL);
+    return ctx;
+}
+
+void ScriptEngineHost::ReturnContext(ScriptManager &, asIScriptContext *context) {
+    if (!context) {
+        return;
+    }
+
+    const int state = context->GetState();
+    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
+        context->Abort();
+    }
+    context->Unprepare();
+    m_ContextPool.push_back(context);
+}
+
+void ScriptEngineHost::ReleaseContextPool() {
+    for (auto *context : m_ContextPool) {
+        context->Release();
+    }
+    m_ContextPool.clear();
+}
+
+void ScriptEngineHost::SetHostCallFilter(CKAngelScriptHostCallFilterCallback callback,
+                                         void *userData) {
+    m_HostCallFilter = callback;
+    m_HostCallFilterUserData = userData;
+}
+
+bool ScriptEngineHost::RejectHostCall(const char *apiName, CKDWORD flags) const {
+    if (!m_HostCallFilter) {
+        return false;
+    }
+    return m_HostCallFilter(apiName, flags, m_HostCallFilterUserData) != CKAS_OK;
+}
+
 asIScriptEngine *ScriptManager::GetScriptEngine() {
-    return m_ScriptEngine;
+    return m_EngineHost.Engine();
 }
 
 void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
@@ -130,35 +205,11 @@ std::string ScriptManager::GetCallStack(asIScriptContext *context) {
 }
 
 asIScriptContext *ScriptManager::RequestContextFromPool() {
-    asIScriptContext *ctx = nullptr;
-    if (!m_ScriptContexts.empty()) {
-        ctx = *m_ScriptContexts.rbegin();
-        m_ScriptContexts.pop_back();
-    } else
-        ctx = m_ScriptEngine->CreateContext();
-
-    const int state = ctx->GetState();
-    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
-        ctx->Abort();
-    }
-    ctx->Unprepare();
-    ctx->SetExceptionCallback(asMETHOD(ScriptManager, ExceptionCallback), this, asCALL_THISCALL);
-    return ctx;
+    return m_EngineHost.RequestContext(*this);
 }
 
 void ScriptManager::ReturnContextToPool(asIScriptContext *ctx) {
-    if (!ctx) {
-        return;
-    }
-
-    // Unprepare the context to free any objects that might be held
-    // as we don't know when the context will be used again.
-    const int state = ctx->GetState();
-    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
-        ctx->Abort();
-    }
-    ctx->Unprepare();
-    m_ScriptContexts.push_back(ctx);
+    m_EngineHost.ReturnContext(*this, ctx);
 }
 
 void ScriptManager::SetupScriptPathCategory() {
@@ -179,29 +230,30 @@ int ScriptManager::SetupScriptEngine() {
     //     );
     // #endif
 
-    m_ScriptEngine = asCreateScriptEngine();
-    if (!m_ScriptEngine) {
+    m_EngineHost.SetEngine(asCreateScriptEngine());
+    asIScriptEngine *engine = m_EngineHost.Engine();
+    if (!engine) {
         m_Context->OutputToConsole(const_cast<char *>("Failed to create script engine."));
         LOG_ERROR("Failed to create script engine.");
         return -1;
     }
 
-    m_ScriptEngine->SetUserData(this, SCRIPT_MANAGER_TYPE);
-    m_ScriptEngine->SetEngineProperty(asEP_USE_CHARACTER_LITERALS, true);
-    m_ScriptEngine->SetEngineProperty(asEP_ALLOW_UNSAFE_REFERENCES, true);
-    m_ScriptEngine->SetEngineProperty(asEP_ALLOW_IMPLICIT_HANDLE_TYPES, true);
-    m_ScriptEngine->SetEngineProperty(asEP_BUILD_WITHOUT_LINE_CUES, true);
-    m_ScriptEngine->SetEngineProperty(asEP_PROPERTY_ACCESSOR_MODE, 1);
+    engine->SetUserData(this, SCRIPT_MANAGER_TYPE);
+    engine->SetEngineProperty(asEP_USE_CHARACTER_LITERALS, true);
+    engine->SetEngineProperty(asEP_ALLOW_UNSAFE_REFERENCES, true);
+    engine->SetEngineProperty(asEP_ALLOW_IMPLICIT_HANDLE_TYPES, true);
+    engine->SetEngineProperty(asEP_BUILD_WITHOUT_LINE_CUES, true);
+    engine->SetEngineProperty(asEP_PROPERTY_ACCESSOR_MODE, 1);
 
     // The script compiler will send any compiler messages to the callback
-    int r = m_ScriptEngine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), this, asCALL_THISCALL);
+    int r = engine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), this, asCALL_THISCALL);
     if (r < 0) {
         LOG_ERROR("SetMessageCallback failed with code %d.", r);
         return r;
     }
 
     // The script handle the pool of script contexts.
-    r = m_ScriptEngine->SetContextCallbacks([](asIScriptEngine *, void *param) {
+    r = engine->SetContextCallbacks([](asIScriptEngine *, void *param) {
         auto *man = static_cast<ScriptManager *>(param);
         return man->RequestContextFromPool();
     }, [](asIScriptEngine *, asIScriptContext *ctx, void *param) {
@@ -213,13 +265,13 @@ int ScriptManager::SetupScriptEngine() {
         return r;
     }
 
-    m_ScriptEngine->SetEngineUserDataCleanupCallback([](asIScriptEngine *engine) {
+    engine->SetEngineUserDataCleanupCallback([](asIScriptEngine *engine) {
         engine->SetUserData(nullptr, SCRIPT_MANAGER_TYPE);
     }, SCRIPT_MANAGER_TYPE);
-    m_ScriptEngine->SetFunctionUserDataCleanupCallback([](asIScriptFunction *func) {
+    engine->SetFunctionUserDataCleanupCallback([](asIScriptFunction *func) {
         func->SetUserData(nullptr, AS_TEMPORARY_FLAG_TYPE);
     }, AS_TEMPORARY_FLAG_TYPE);
-    m_ScriptEngine->SetFunctionUserDataCleanupCallback([](asIScriptFunction *func) {
+    engine->SetFunctionUserDataCleanupCallback([](asIScriptFunction *func) {
         func->SetUserData(nullptr, AS_RELEASED_ONCE_FLAG_TYPE);
     }, AS_RELEASED_ONCE_FLAG_TYPE);
 
@@ -228,51 +280,49 @@ int ScriptManager::SetupScriptEngine() {
         ScriptRegistrationScope registrationScope(registration);
 
         // Register the standard types
-        RegisterStdTypes(m_ScriptEngine);
+        RegisterStdTypes(engine);
 
         // Register the standard add-ons
-        RegisterStdAddons(m_ScriptEngine);
+        RegisterStdAddons(engine);
 
         // Register the native types
-        RegisterNativePointer(m_ScriptEngine);
-        RegisterNativeBuffer(m_ScriptEngine);
+        RegisterNativePointer(engine);
+        RegisterNativeBuffer(engine);
 
 #if CKAS_ENABLE_DYNCALL
         // Register the DynCall APIs
-        RegisterScriptDynCall(m_ScriptEngine);
-        RegisterScriptDynCallback(m_ScriptEngine);
-        RegisterScriptDynLoad(m_ScriptEngine);
+        RegisterScriptDynCall(engine);
+        RegisterScriptDynCallback(engine);
+        RegisterScriptDynLoad(engine);
 #endif
 
         // Register the function that we want the scripts to call
-        RegisterScriptFormat(m_ScriptEngine);
+        RegisterScriptFormat(engine);
 
         // Register the Virtools API
-        RegisterVirtools(m_ScriptEngine);
+        RegisterVirtools(engine);
     }
 
     if (registration.HasFailures()) {
         const std::string summary = registration.GetSummary();
         m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
         LOG_ERROR("%s", summary.c_str());
-        m_ScriptEngine->ShutDownAndRelease();
-        m_ScriptEngine = nullptr;
+        m_EngineHost.ShutdownAndReleaseEngine();
         return -1;
     }
 
     // Register host-provided namespaces/types after CKAngelScript's own public
     // API is available. A failing extension is logged but is non-fatal: it must
     // not take down core scripting or the other extensions.
-    RegisterEngineExtensions(m_ScriptEngine);
+    RegisterEngineExtensions(engine);
 
 #if CKAS_ENABLE_API_EXPORT
     std::string apiExportError;
-    if (!ExportScriptApiIfRequested(m_ScriptEngine, apiExportError)) {
+    if (!ExportScriptApiIfRequested(engine, apiExportError)) {
         const std::string summary = "Script API export failed: " + apiExportError;
         m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
         LOG_ERROR("%s", summary.c_str());
-        m_ScriptEngine->ShutDownAndRelease();
-        m_ScriptEngine = nullptr;
+        m_EngineHost.ShutdownAndReleaseEngine();
         return -1;
     }
 #endif
@@ -320,14 +370,14 @@ void ScriptManager::RegisterStdAddons(asIScriptEngine *engine) {
 void ScriptManager::RegisterVirtools(asIScriptEngine *engine) {
     assert(engine != nullptr);
 
-    RegisterVxMath(m_ScriptEngine);
-    RegisterCK2(m_ScriptEngine);
-    RegisterScriptParameterRegistry(m_ScriptEngine);
-    RegisterScriptBehaviorBridge(m_ScriptEngine);
-    RegisterScriptSceneCore(m_ScriptEngine);
-    RegisterScriptRuntime(m_ScriptEngine);
-    RegisterScriptAsync(m_ScriptEngine);
-    RegisterScriptMessage(m_ScriptEngine);
+    RegisterVxMath(engine);
+    RegisterCK2(engine);
+    RegisterScriptParameterRegistry(engine);
+    RegisterScriptBehaviorBridge(engine);
+    RegisterScriptSceneCore(engine);
+    RegisterScriptRuntime(engine);
+    RegisterScriptAsync(engine);
+    RegisterScriptMessage(engine);
 }
 
 int ScriptManager::RegisterEngineExtensionGroup(asIScriptEngine *engine,

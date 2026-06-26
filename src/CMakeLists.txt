@@ -7,8 +7,12 @@ set(CKAS_HEADERS
         AngelScriptEventHook.h
         ScriptApiDiagnostics.h
         ScriptApiHandles.h
+        ScriptHandleRegistry.h
         ScriptCache.h
+        ScriptEngineHost.h
+        ScriptImportBinder.h
         ScriptInvoker.h
+        ScriptModuleReplacer.h
         ScriptFormat.h
         ScriptNativePointer.h
         ScriptNativeBuffer.h
@@ -48,7 +52,9 @@ set(CKAS_HEADERS
         ScriptBridgeSnapshot.h
         ScriptRegistration.h
         ScriptApiSupport.h
+        ScriptPublicOptions.h
         ScriptModuleBytecode.h
+        ScriptModuleStateStore.h
 )
 
 set(CKAS_SOURCES
@@ -57,7 +63,11 @@ set(CKAS_SOURCES
         Logger.cpp
         ScriptManager.cpp
         ScriptApiSupport.cpp
+        ScriptPublicOptions.cpp
         ScriptModuleBytecode.cpp
+        ScriptModuleStateStore.cpp
+        ScriptImportBinder.cpp
+        ScriptModuleReplacer.cpp
         ScriptApiDiagnostics.cpp
         ScriptEngineHost.cpp
         ScriptHandleRegistry.cpp

@@ -14,6 +14,7 @@
 #include "CKPathManager.h"
 #include "Logger.h"
 #include "ScriptApiSupport.h"
+#include "ScriptPublicOptions.h"
 
 #include "ScriptFormat.h"
 #include "ScriptNativePointer.h"
@@ -227,29 +228,7 @@ int ScriptManager::Shutdown() {
     if (!IsInited())
         return -2;
 
-    for (auto *execution : m_Executions) {
-        delete execution;
-    }
-    m_Executions.clear();
-
-    for (auto *function : m_Functions) {
-        delete function;
-    }
-    m_Functions.clear();
-
-    for (auto *method : m_Methods) {
-        delete method;
-    }
-    m_Methods.clear();
-
-    for (auto *object : m_Objects) {
-        if (object && object->Object) {
-            object->Object->Release();
-            object->Object = nullptr;
-        }
-        delete object;
-    }
-    m_Objects.clear();
+    m_HandleRegistry.Clear();
 
     if (m_AsyncScheduler) {
         m_AsyncScheduler->Clear();
@@ -265,13 +244,10 @@ int ScriptManager::Shutdown() {
     }
     ClearComponentStates();
 
-    for (auto *context : m_ScriptContexts) {
-        context->Release();
-    }
-    m_ScriptContexts.clear();
+    m_EngineHost.ReleaseContextPool();
 
     ClearCKObjectData();
-    m_ModuleStates.clear();
+    m_ModuleStateStore.Clear();
     m_ScriptCache.Clear();
 
     m_BehaviorBridge.reset();
@@ -279,10 +255,7 @@ int ScriptManager::Shutdown() {
     m_AsyncScheduler.reset();
     m_ParameterRegistry.reset();
 
-    if (m_ScriptEngine) {
-        m_ScriptEngine->ShutDownAndRelease();
-        m_ScriptEngine = nullptr;
-    }
+    m_EngineHost.ShutdownAndReleaseEngine();
     for (ScriptEngineExtensionRegistration &extension : m_EngineExtensions) {
         extension.ActiveInCurrentEngine = false;
     }
@@ -306,10 +279,11 @@ CKAS_STATUS ScriptManager::BorrowEngine(asIScriptEngine **outEngine, CKAngelScri
     if (!outEngine) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine out pointer is required.");
     }
-    if (!m_ScriptEngine) {
+    asIScriptEngine *engine = GetScriptEngine();
+    if (!engine) {
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
-    *outEngine = m_ScriptEngine;
+    *outEngine = engine;
     return StoreResult(result, CKAS_OK);
 }
 
@@ -324,11 +298,12 @@ CKAS_STATUS ScriptManager::BorrowActiveContext(asIScriptContext **outContext, CK
     if (!outContext) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Active context out pointer is required.");
     }
-    if (!m_ScriptEngine) {
+    asIScriptEngine *engine = GetScriptEngine();
+    if (!engine) {
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
     asIScriptContext *ctx = GetActiveContext();
-    if (!ctx || ctx->GetEngine() != m_ScriptEngine) {
+    if (!ctx || ctx->GetEngine() != engine) {
         return StoreResult(result, CKAS_NOTFOUND, 0, "No active context belongs to this CKAngelScript manager.");
     }
     *outContext = ctx;
@@ -339,11 +314,12 @@ CKAS_STATUS ScriptManager::SetActiveContextException(const char *message, CKAnge
     if (!ScriptApiSupport::IsNonEmpty(message)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Exception message is required.");
     }
-    if (!m_ScriptEngine) {
+    asIScriptEngine *engine = GetScriptEngine();
+    if (!engine) {
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
     asIScriptContext *ctx = GetActiveContext();
-    if (!ctx || ctx->GetEngine() != m_ScriptEngine) {
+    if (!ctx || ctx->GetEngine() != engine) {
         return StoreResult(result, CKAS_NOTFOUND, 0, "No active context belongs to this CKAngelScript manager.");
     }
     ctx->SetException(message);
@@ -353,16 +329,12 @@ CKAS_STATUS ScriptManager::SetActiveContextException(const char *message, CKAnge
 CKAS_STATUS ScriptManager::SetHostCallFilter(CKAngelScriptHostCallFilterCallback callback,
                                              void *userData,
                                              CKAngelScriptResult *result) {
-    m_HostCallFilter = callback;
-    m_HostCallFilterUserData = userData;
+    m_EngineHost.SetHostCallFilter(callback, userData);
     return StoreResult(result, CKAS_OK);
 }
 
 bool ScriptManager::RejectHostCall(const char *apiName, CKDWORD flags) {
-    if (!m_HostCallFilter) {
-        return false;
-    }
-    return m_HostCallFilter(apiName, flags, m_HostCallFilterUserData) != CKAS_OK;
+    return m_EngineHost.RejectHostCall(apiName, flags);
 }
 
 bool ScriptManager::RejectActiveHostCall(const char *apiName, CKDWORD flags) {
@@ -410,48 +382,41 @@ CKAS_STATUS ScriptManager::StoreApiResult(CKAngelScriptResult *out,
 
 CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExtension &extension,
                                                          CKAngelScriptResult *result) {
-    if (!ScriptApiSupport::HasCompletePublicStruct(extension)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension size is invalid.");
-    }
-    const char *name = ScriptApiSupport::PublicField(extension, &CKAngelScriptEngineExtension::Name, static_cast<const char *>(nullptr));
-    CKAngelScriptEngineExtensionCallback callback =
-        ScriptApiSupport::PublicField(extension, &CKAngelScriptEngineExtension::Register, static_cast<CKAngelScriptEngineExtensionCallback>(nullptr));
-    void *userData = ScriptApiSupport::PublicField(extension, &CKAngelScriptEngineExtension::UserData, static_cast<void *>(nullptr));
-    const CKDWORD flags = ScriptApiSupport::PublicField(extension,
-                                      &CKAngelScriptEngineExtension::Flags,
-                                      static_cast<CKDWORD>(CKAS_ENGINEEXTENSION_DEFAULT));
-
-    if (!ScriptApiSupport::IsNonEmpty(name)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension name is required.");
-    }
-    if (!callback) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension callback is required.");
-    }
-    if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_ENGINEEXTENSION_DEFERRED)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown engine extension flags.");
+    ScriptPublicOptions::EngineExtensionRequest request;
+    std::string errorMessage;
+    CKAS_STATUS optionStatus = ScriptPublicOptions::DecodeEngineExtension(extension,
+                                                                          request,
+                                                                          errorMessage);
+    if (optionStatus != CKAS_OK) {
+        return StoreResult(result, optionStatus, 0, errorMessage);
     }
     for (const ScriptEngineExtensionRegistration &existing : m_EngineExtensions) {
-        if (existing.Name == name) {
+        if (existing.Name == request.Name) {
             return StoreResult(result,
                                CKAS_ALREADYEXISTS,
                                0,
-                               fmt::format("Engine extension '{}' is already registered.", name));
+                               fmt::format("Engine extension '{}' is already registered.", request.Name));
         }
     }
 
     ScriptEngineExtensionRegistration retained = {};
-    retained.Name = name;
-    retained.ConfigGroupName = MakeEngineExtensionConfigGroupName(name);
-    retained.Register = callback;
-    retained.UserData = userData;
-    retained.Flags = flags;
+    retained.Name = request.Name;
+    retained.ConfigGroupName = MakeEngineExtensionConfigGroupName(request.Name);
+    retained.Register = request.Register;
+    retained.UserData = request.UserData;
+    retained.Flags = request.Flags;
 
-    if (m_ScriptEngine && IsInited() && !ScriptApiSupport::HasPublicFlag(flags, CKAS_ENGINEEXTENSION_DEFERRED)) {
+    asIScriptEngine *engine = GetScriptEngine();
+    if (engine &&
+        IsInited() &&
+        !ScriptApiSupport::HasPublicFlag(request.Flags, CKAS_ENGINEEXTENSION_DEFERRED)) {
         std::string message;
-        const int code = RegisterEngineExtensionGroup(m_ScriptEngine, retained, message);
+        const int code = RegisterEngineExtensionGroup(engine, retained, message);
         if (code < 0) {
             const std::string summary = message.empty()
-                                            ? fmt::format("Engine extension '{}' failed to register (code {}).", name, code)
+                                            ? fmt::format("Engine extension '{}' failed to register (code {}).",
+                                                          request.Name,
+                                                          code)
                                             : message;
             if (m_Context) {
                 m_Context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
@@ -472,9 +437,10 @@ CKAS_STATUS ScriptManager::UnregisterEngineExtension(const char *name,
     }
     for (auto it = m_EngineExtensions.begin(); it != m_EngineExtensions.end(); ++it) {
         if (it->Name == name) {
-            if (it->ActiveInCurrentEngine && m_ScriptEngine) {
+            asIScriptEngine *engine = GetScriptEngine();
+            if (it->ActiveInCurrentEngine && engine) {
                 std::string message;
-                const int code = RemoveEngineExtensionGroup(m_ScriptEngine, *it, message);
+                const int code = RemoveEngineExtensionGroup(engine, *it, message);
                 if (code < 0) {
                     if (code == asCONFIG_GROUP_IS_IN_USE) {
                         return StoreResult(result,
