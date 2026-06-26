@@ -427,7 +427,7 @@ CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExte
     if (!callback) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension callback is required.");
     }
-    if ((flags & ~static_cast<CKDWORD>(CKAS_ENGINEEXTENSION_DEFERRED)) != 0) {
+    if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_ENGINEEXTENSION_DEFERRED)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown engine extension flags.");
     }
     for (const ScriptEngineExtensionRegistration &existing : m_EngineExtensions) {

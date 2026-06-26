@@ -606,7 +606,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
     if (IsModuleMutationBlockedByCallback()) {
         return RejectModuleMutationDuringCallback("LoadModule", result);
     }
-    if ((flags & ~static_cast<CKDWORD>(CKAS_LOAD_REPLACEEXISTING)) != 0) {
+    if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_LOAD_REPLACEEXISTING)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown LoadModule flags.");
     }
     if (!m_ScriptEngine) {
@@ -752,7 +752,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
     if (IsModuleMutationBlockedByCallback()) {
         return RejectModuleMutationDuringCallback("CompileModule", result);
     }
-    if ((flags & ~static_cast<CKDWORD>(CKAS_COMPILE_REPLACEEXISTING)) != 0) {
+    if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_COMPILE_REPLACEEXISTING)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown CompileModule flags.");
     }
     if (!m_ScriptEngine) {
@@ -1170,7 +1170,7 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
     const char *functionDeclOverride =
         ScriptApiSupport::PublicField(options, &CKAngelScriptImportBindOptions::FunctionDecl, static_cast<const char *>(nullptr));
     const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptImportBindOptions::Flags, static_cast<CKDWORD>(0));
-    if (flags != 0) {
+    if (ScriptApiSupport::HasUnknownPublicFlags(flags, 0)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown BindImportedFunction flags.");
     }
 
@@ -1531,7 +1531,7 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
     const CKDWORD flags = ScriptApiSupport::PublicField(options,
                                                         &CKAngelScriptBytecodeSaveOptions::Flags,
                                                         static_cast<CKDWORD>(CKAS_BYTECODE_DEFAULT));
-    if ((flags & ~static_cast<CKDWORD>(CKAS_BYTECODE_STRIP_DEBUG_INFO)) != 0) {
+    if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_BYTECODE_STRIP_DEBUG_INFO)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown SaveModuleBytecode flags.");
     }
     if (m_BytecodeCallbackDepth > 0) {
@@ -1600,7 +1600,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
     if (!read) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode read callback is required.");
     }
-    if ((flags & ~static_cast<CKDWORD>(CKAS_BYTECODE_REPLACEEXISTING)) != 0) {
+    if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_BYTECODE_REPLACEEXISTING)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown LoadModuleBytecode flags.");
     }
     if (!m_ScriptEngine) {

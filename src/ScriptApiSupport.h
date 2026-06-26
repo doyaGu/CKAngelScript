@@ -72,6 +72,7 @@ bool IsCompatibleObjectHandle(asIScriptEngine *engine,
                               int expectedTypeId,
                               const CKAngelScriptObject *objectHandle);
 bool HasPublicFlag(CKDWORD flags, CKDWORD flag);
+bool HasUnknownPublicFlags(CKDWORD flags, CKDWORD knownFlags);
 
 CKAS_STATUS DispatchMetadata(const CKAngelScriptMetadataEntry &entry,
                              CKDWORD metadataCount,

@@ -122,7 +122,7 @@ CKAS_STATUS ScriptManager::FindFunction(const CKAngelScriptFunctionOptions &opti
     const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::Flags, static_cast<CKDWORD>(0));
     const bool hasFunctionName = ScriptApiSupport::IsNonEmpty(functionName);
     const bool hasFunctionDecl = ScriptApiSupport::IsNonEmpty(functionDecl);
-    if (flags != 0) {
+    if (ScriptApiSupport::HasUnknownPublicFlags(flags, 0)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown FindFunction flags.");
     }
     if (hasFunctionName == hasFunctionDecl) {
@@ -339,8 +339,7 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
     CKAngelScriptObject *object = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Object, static_cast<CKAngelScriptObject *>(nullptr));
     CKAngelScriptMethod *method = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Method, static_cast<CKAngelScriptMethod *>(nullptr));
     const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Flags, static_cast<CKDWORD>(CKAS_CALL_DEFAULT));
-    const CKDWORD knownFlags = CKAS_CALL_NO_SUSPEND;
-    if ((flags & ~knownFlags) != 0) {
+    if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_CALL_NO_SUSPEND)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown object method call flags.");
     }
     if (!object || !method) {
@@ -411,9 +410,7 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
     const CKBehaviorContext *behaviorContext =
         ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionExecutionOptions::BehaviorContext, static_cast<const CKBehaviorContext *>(nullptr));
     const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionExecutionOptions::Flags, static_cast<CKDWORD>(CKAS_CALL_DEFAULT));
-    const CKDWORD knownFlags = CKAS_CALL_NO_SUSPEND;
-
-    if ((flags & ~knownFlags) != 0) {
+    if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_CALL_NO_SUSPEND)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown function execution flags.");
     }
     if (!functionHandle) {

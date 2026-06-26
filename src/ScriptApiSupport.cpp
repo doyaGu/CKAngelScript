@@ -304,6 +304,10 @@ bool HasPublicFlag(CKDWORD flags, CKDWORD flag) {
     return (flags & flag) != 0;
 }
 
+bool HasUnknownPublicFlags(CKDWORD flags, CKDWORD knownFlags) {
+    return (flags & ~knownFlags) != 0;
+}
+
 CKAS_STATUS StoreStatelessPublicResult(CKAngelScriptResult *out,
                                        CKAS_STATUS status,
                                        int angelScriptCode,
