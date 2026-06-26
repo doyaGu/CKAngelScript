@@ -26,6 +26,24 @@ inline CKAngelScript *ToPublicHandle(ScriptManager *manager) {
 
 namespace ScriptApiSupport {
 
+class CallbackDepthScope {
+public:
+    explicit CallbackDepthScope(int &depth)
+        : m_Depth(depth) {
+        ++m_Depth;
+    }
+
+    CallbackDepthScope(const CallbackDepthScope &) = delete;
+    CallbackDepthScope &operator=(const CallbackDepthScope &) = delete;
+
+    ~CallbackDepthScope() {
+        --m_Depth;
+    }
+
+private:
+    int &m_Depth;
+};
+
 struct ObjectCallOutcome {
     CKAS_STATUS Status = CKAS_OK;
     int AngelScriptCode = 0;

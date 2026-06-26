@@ -944,7 +944,7 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
                                 const CKAngelScriptMetadataEntry &entry,
                                 CKDWORD metadataCount,
                                 const std::function<const char *(CKDWORD)> &metadataAt) {
-        ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+        ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
         return ScriptApiSupport::DispatchMetadata(entry, metadataCount, metadataAt, callback, userData);
     };
 
@@ -1140,7 +1140,7 @@ CKAS_STATUS ScriptManager::EnumerateImportedFunctions(const char *moduleName,
         entry.SourceModuleName = module->GetImportedFunctionSourceModule(i);
         CKAS_STATUS callbackStatus = CKAS_OK;
         {
-            ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+            ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
             callbackStatus = ScriptApiSupport::DispatchImport(entry, callback, userData);
         }
         if (callbackStatus != CKAS_OK) {
@@ -1433,7 +1433,7 @@ CKAS_STATUS ScriptManager::EnumerateBoundImportEdges(const char *moduleName,
         publicEdge.FunctionDecl = edge.FunctionDecl.c_str();
         CKAS_STATUS callbackStatus = CKAS_OK;
         {
-            ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+            ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
             callbackStatus = ScriptApiSupport::DispatchBoundImportEdge(publicEdge, callback, userData);
         }
         if (callbackStatus != CKAS_OK) {
@@ -1474,7 +1474,7 @@ CKAS_STATUS ScriptManager::EnumerateModuleIncludeEdges(const char *moduleName,
         publicEdge.ResolvedFromSnapshot = edge.ResolvedFromSnapshot ? TRUE : FALSE;
         CKAS_STATUS callbackStatus = CKAS_OK;
         {
-            ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+            ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
             callbackStatus = ScriptApiSupport::DispatchIncludeEdge(publicEdge, callback, userData);
         }
         if (callbackStatus != CKAS_OK) {
@@ -1518,16 +1518,19 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
     if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode save options size is invalid.");
     }
-    const char *moduleName =
-        ScriptApiSupport::PublicField(options, &CKAngelScriptBytecodeSaveOptions::ModuleName, static_cast<const char *>(nullptr));
+    const char *moduleName = ScriptApiSupport::PublicField(options,
+                                                           &CKAngelScriptBytecodeSaveOptions::ModuleName,
+                                                           static_cast<const char *>(nullptr));
     CKAngelScriptBytecodeWriteCallback write =
         ScriptApiSupport::PublicField(options,
-                    &CKAngelScriptBytecodeSaveOptions::Write,
-                    static_cast<CKAngelScriptBytecodeWriteCallback>(nullptr));
-    void *userData = ScriptApiSupport::PublicField(options, &CKAngelScriptBytecodeSaveOptions::UserData, static_cast<void *>(nullptr));
+                                      &CKAngelScriptBytecodeSaveOptions::Write,
+                                      static_cast<CKAngelScriptBytecodeWriteCallback>(nullptr));
+    void *userData = ScriptApiSupport::PublicField(options,
+                                                   &CKAngelScriptBytecodeSaveOptions::UserData,
+                                                   static_cast<void *>(nullptr));
     const CKDWORD flags = ScriptApiSupport::PublicField(options,
-                                      &CKAngelScriptBytecodeSaveOptions::Flags,
-                                      static_cast<CKDWORD>(CKAS_BYTECODE_DEFAULT));
+                                                        &CKAngelScriptBytecodeSaveOptions::Flags,
+                                                        static_cast<CKDWORD>(CKAS_BYTECODE_DEFAULT));
     if ((flags & ~static_cast<CKDWORD>(CKAS_BYTECODE_STRIP_DEBUG_INFO)) != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown SaveModuleBytecode flags.");
     }
@@ -1552,14 +1555,14 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
     const bool stripDebugInfo = ScriptApiSupport::HasPublicFlag(flags, CKAS_BYTECODE_STRIP_DEBUG_INFO);
     bool saved = false;
     {
-        ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
-        ScriptModuleBytecode::PublicCallbackScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
+        ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
+        ScriptApiSupport::CallbackDepthScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
         saved = ScriptModuleBytecode::SaveModuleByteCode(module,
-                                                                           write,
-                                                                           userData,
-                                                                           stripDebugInfo,
-                                                                           angelScriptCode,
-                                                                           callbackStatus);
+                                                         write,
+                                                         userData,
+                                                         stripDebugInfo,
+                                                         angelScriptCode,
+                                                         callbackStatus);
     }
     if (!saved) {
         if (callbackStatus != CKAS_OK) {
@@ -1575,16 +1578,19 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
     if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode load options size is invalid.");
     }
-    const char *moduleName =
-        ScriptApiSupport::PublicField(options, &CKAngelScriptBytecodeLoadOptions::ModuleName, static_cast<const char *>(nullptr));
+    const char *moduleName = ScriptApiSupport::PublicField(options,
+                                                           &CKAngelScriptBytecodeLoadOptions::ModuleName,
+                                                           static_cast<const char *>(nullptr));
     CKAngelScriptBytecodeReadCallback read =
         ScriptApiSupport::PublicField(options,
-                    &CKAngelScriptBytecodeLoadOptions::Read,
-                    static_cast<CKAngelScriptBytecodeReadCallback>(nullptr));
-    void *userData = ScriptApiSupport::PublicField(options, &CKAngelScriptBytecodeLoadOptions::UserData, static_cast<void *>(nullptr));
+                                      &CKAngelScriptBytecodeLoadOptions::Read,
+                                      static_cast<CKAngelScriptBytecodeReadCallback>(nullptr));
+    void *userData = ScriptApiSupport::PublicField(options,
+                                                   &CKAngelScriptBytecodeLoadOptions::UserData,
+                                                   static_cast<void *>(nullptr));
     const CKDWORD flags = ScriptApiSupport::PublicField(options,
-                                      &CKAngelScriptBytecodeLoadOptions::Flags,
-                                      static_cast<CKDWORD>(CKAS_BYTECODE_DEFAULT));
+                                                        &CKAngelScriptBytecodeLoadOptions::Flags,
+                                                        static_cast<CKDWORD>(CKAS_BYTECODE_DEFAULT));
     if (!moduleName || moduleName[0] == '\0') {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
@@ -1620,20 +1626,20 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
 
     int angelScriptCode = 0;
     CKAS_STATUS callbackStatus = CKAS_OK;
-    const std::string transientName = ScriptModuleBytecode::MakeTransientModuleName(m_ScriptEngine,
-                                                                                                      moduleName);
+    const std::string transientName =
+        ScriptModuleBytecode::MakeTransientModuleName(m_ScriptEngine, moduleName);
     asIScriptModule *candidateModule = nullptr;
     bool loaded = false;
     {
-        ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
-        ScriptModuleBytecode::PublicCallbackScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
+        ScriptApiSupport::CallbackDepthScope callbackScope(m_PublicCallbackDepth);
+        ScriptApiSupport::CallbackDepthScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
         loaded = ScriptModuleBytecode::LoadModuleByteCode(m_ScriptEngine,
-                                                                            transientName.c_str(),
-                                                                            read,
-                                                                            userData,
-                                                                            &candidateModule,
-                                                                            angelScriptCode,
-                                                                            callbackStatus);
+                                                          transientName.c_str(),
+                                                          read,
+                                                          userData,
+                                                          &candidateModule,
+                                                          angelScriptCode,
+                                                          callbackStatus);
     }
     if (!loaded) {
         if (callbackStatus != CKAS_OK) {
@@ -1644,8 +1650,8 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
 
     std::vector<unsigned char> candidateByteCode;
     if (!ScriptModuleBytecode::SaveModuleByteCode(candidateModule,
-                                                                    candidateByteCode,
-                                                                    angelScriptCode)) {
+                                                  candidateByteCode,
+                                                  angelScriptCode)) {
         candidateModule->Discard();
         return StoreResult(result,
                            CKAS_EXECUTIONFAILED,
@@ -1665,10 +1671,10 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
 
     asIScriptModule *committedModule = nullptr;
     if (!ScriptModuleBytecode::LoadModuleByteCode(m_ScriptEngine,
-                                                                    moduleName,
-                                                                    candidateByteCode,
-                                                                    &committedModule,
-                                                                    angelScriptCode)) {
+                                                  moduleName,
+                                                  candidateByteCode,
+                                                  &committedModule,
+                                                  angelScriptCode)) {
         int restoreCode = 0;
         std::string restoreError;
         const bool restored = RestoreModuleReplacementSnapshot(moduleName, snapshot, restoreCode, restoreError);

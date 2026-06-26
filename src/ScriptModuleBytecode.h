@@ -10,21 +10,6 @@
 
 namespace ScriptModuleBytecode {
 
-class PublicCallbackScope {
-public:
-    explicit PublicCallbackScope(int &depth)
-        : m_Depth(depth) {
-        ++m_Depth;
-    }
-
-    ~PublicCallbackScope() {
-        --m_Depth;
-    }
-
-private:
-    int &m_Depth;
-};
-
 bool SaveModuleByteCode(asIScriptModule *module,
                         std::vector<unsigned char> &byteCode,
                         int &angelScriptCode,

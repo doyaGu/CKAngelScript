@@ -5,11 +5,45 @@
 #include <fmt/format.h>
 
 #include "ScriptManager.h"
-#include "ScriptModuleBytecode.h"
 
 namespace ScriptApiSupport {
 
 namespace {
+
+struct StatusText {
+    CKAS_STATUS Status;
+    const char *Name;
+    const char *Message;
+};
+
+constexpr StatusText kStatusTexts[] = {
+    {CKAS_OK, "CKAS_OK", "OK."},
+    {CKAS_INVALIDARGUMENT, "CKAS_INVALIDARGUMENT", "Invalid argument."},
+    {CKAS_NOTINITIALIZED, "CKAS_NOTINITIALIZED", "AngelScript engine is not initialized."},
+    {CKAS_NOTFOUND, "CKAS_NOTFOUND", "Requested script item was not found."},
+    {CKAS_COMPILEERROR, "CKAS_COMPILEERROR", "Script compile failed."},
+    {CKAS_EXECUTIONFAILED, "CKAS_EXECUTIONFAILED", "Script execution failed."},
+    {CKAS_SUSPENDED, "CKAS_SUSPENDED", "Script execution suspended."},
+    {CKAS_CANCELLED, "CKAS_CANCELLED", "Script execution was cancelled."},
+    {CKAS_STALEHANDLE, "CKAS_STALEHANDLE", "Script handle is stale."},
+    {CKAS_UNSUPPORTED, "CKAS_UNSUPPORTED", "Operation is unsupported."},
+    {CKAS_TYPEMISMATCH, "CKAS_TYPEMISMATCH", "Script type mismatch."},
+    {CKAS_BUFFERTOOSMALL, "CKAS_BUFFERTOOSMALL", "Result buffer is too small."},
+    {CKAS_INVALIDSTATE, "CKAS_INVALIDSTATE", "Operation is invalid for the current handle state."},
+    {CKAS_INUSE, "CKAS_INUSE", "Requested script item is in use."},
+    {CKAS_ALREADYEXISTS, "CKAS_ALREADYEXISTS", "Requested script item already exists."},
+    {CKAS_AMBIGUOUS, "CKAS_AMBIGUOUS", "Requested script symbol is ambiguous."},
+    {CKAS_FOREIGNHANDLE, "CKAS_FOREIGNHANDLE", "Handle belongs to another CKAngelScript manager."},
+};
+
+const StatusText *FindStatusText(CKAS_STATUS status) {
+    for (const StatusText &text : kStatusTexts) {
+        if (text.Status == status) {
+            return &text;
+        }
+    }
+    return nullptr;
+}
 
 CKAS_STATUS ToCKAS_STATUS(ScriptInvocationStatus status) {
     switch (status) {
@@ -90,85 +124,13 @@ bool IsCompatibleObjectHandle(asIScriptEngine *engine,
 }
 
 const char *StatusName(CKAS_STATUS status) {
-    switch (status) {
-        case CKAS_OK:
-            return "CKAS_OK";
-        case CKAS_INVALIDARGUMENT:
-            return "CKAS_INVALIDARGUMENT";
-        case CKAS_NOTINITIALIZED:
-            return "CKAS_NOTINITIALIZED";
-        case CKAS_NOTFOUND:
-            return "CKAS_NOTFOUND";
-        case CKAS_COMPILEERROR:
-            return "CKAS_COMPILEERROR";
-        case CKAS_EXECUTIONFAILED:
-            return "CKAS_EXECUTIONFAILED";
-        case CKAS_SUSPENDED:
-            return "CKAS_SUSPENDED";
-        case CKAS_CANCELLED:
-            return "CKAS_CANCELLED";
-        case CKAS_STALEHANDLE:
-            return "CKAS_STALEHANDLE";
-        case CKAS_UNSUPPORTED:
-            return "CKAS_UNSUPPORTED";
-        case CKAS_TYPEMISMATCH:
-            return "CKAS_TYPEMISMATCH";
-        case CKAS_BUFFERTOOSMALL:
-            return "CKAS_BUFFERTOOSMALL";
-        case CKAS_INVALIDSTATE:
-            return "CKAS_INVALIDSTATE";
-        case CKAS_INUSE:
-            return "CKAS_INUSE";
-        case CKAS_ALREADYEXISTS:
-            return "CKAS_ALREADYEXISTS";
-        case CKAS_AMBIGUOUS:
-            return "CKAS_AMBIGUOUS";
-        case CKAS_FOREIGNHANDLE:
-            return "CKAS_FOREIGNHANDLE";
-        default:
-            return "CKAS_UNKNOWN";
-    }
+    const StatusText *text = FindStatusText(status);
+    return text ? text->Name : "CKAS_UNKNOWN";
 }
 
 const char *StatusMessage(CKAS_STATUS status) {
-    switch (status) {
-        case CKAS_OK:
-            return "OK.";
-        case CKAS_INVALIDARGUMENT:
-            return "Invalid argument.";
-        case CKAS_NOTINITIALIZED:
-            return "AngelScript engine is not initialized.";
-        case CKAS_NOTFOUND:
-            return "Requested script item was not found.";
-        case CKAS_COMPILEERROR:
-            return "Script compile failed.";
-        case CKAS_EXECUTIONFAILED:
-            return "Script execution failed.";
-        case CKAS_SUSPENDED:
-            return "Script execution suspended.";
-        case CKAS_CANCELLED:
-            return "Script execution was cancelled.";
-        case CKAS_STALEHANDLE:
-            return "Script handle is stale.";
-        case CKAS_UNSUPPORTED:
-            return "Operation is unsupported.";
-        case CKAS_TYPEMISMATCH:
-            return "Script type mismatch.";
-        case CKAS_BUFFERTOOSMALL:
-            return "Result buffer is too small.";
-        case CKAS_INVALIDSTATE:
-            return "Operation is invalid for the current handle state.";
-        case CKAS_INUSE:
-            return "Requested script item is in use.";
-        case CKAS_ALREADYEXISTS:
-            return "Requested script item already exists.";
-        case CKAS_AMBIGUOUS:
-            return "Requested script symbol is ambiguous.";
-        case CKAS_FOREIGNHANDLE:
-            return "Handle belongs to another CKAngelScript manager.";
-        default:
-            return "Unknown CKAngelScript status.";
-    }
+    const StatusText *text = FindStatusText(status);
+    return text ? text->Message : "Unknown CKAngelScript status.";
 }
 
 bool ValidateArgIndex(const CKAngelScriptArgWriter *writer, CKDWORD index) {
@@ -243,7 +205,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
 
     if (configureContext) {
         {
-            ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
+            CallbackDepthScope callbackScope(publicCallbackDepth);
             status = configureContext(ctx, userData);
         }
         if (status != CKAS_OK) {
@@ -259,7 +221,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
     writer.Method = method;
     if (writeArgs) {
         {
-            ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
+            CallbackDepthScope callbackScope(publicCallbackDepth);
             status = writeArgs(&writer, userData);
         }
         if (status != CKAS_OK) {
@@ -278,7 +240,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
         reader.Method = method;
         if (readResult) {
             {
-                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
+                CallbackDepthScope callbackScope(publicCallbackDepth);
                 status = readResult(&reader, userData);
             }
             if (status != CKAS_OK) {
@@ -290,7 +252,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
         }
         if (readContextResult) {
             {
-                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
+                CallbackDepthScope callbackScope(publicCallbackDepth);
                 status = readContextResult(ctx, userData);
             }
             if (status != CKAS_OK) {
@@ -581,7 +543,7 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
                 }
             }
             if (configureContext) {
-                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
+                CallbackDepthScope callbackScope(publicCallbackDepth);
                 callbackStatus = configureContext(ctx, userData);
                 if (callbackStatus != CKAS_OK) {
                     return false;
@@ -591,7 +553,7 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
         },
         [readResult, userData, &callbackStatus, &publicCallbackDepth](asIScriptContext *ctx) {
             if (readResult) {
-                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
+                CallbackDepthScope callbackScope(publicCallbackDepth);
                 callbackStatus = readResult(ctx, userData);
                 return callbackStatus == CKAS_OK;
             }
@@ -599,7 +561,7 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
         },
         [configureContext, userData, &callbackStatus, &publicCallbackDepth](asIScriptContext *ctx) {
             if (configureContext) {
-                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
+                CallbackDepthScope callbackScope(publicCallbackDepth);
                 callbackStatus = configureContext(ctx, userData);
                 return callbackStatus == CKAS_OK;
             }
