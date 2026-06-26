@@ -3,11 +3,13 @@
 
 #include <cstddef>
 #include <memory>
+#include <vector>
 
 #include "ScriptCache.h"
 
 class ScriptManager;
 class ScriptModuleStateStore;
+struct CapturedScriptMessage;
 
 class ScriptModuleRegistry {
 public:
@@ -83,6 +85,10 @@ public:
 
 private:
     bool DiscardCached(const char *moduleName);
+    CKAS_STATUS CompleteSourceLoad(ScriptManager &manager,
+                                   const char *moduleName,
+                                   const std::vector<CapturedScriptMessage> &diagnosticMessages,
+                                   CKAngelScriptResult *result);
 
     ScriptCache m_Cache;
 };
