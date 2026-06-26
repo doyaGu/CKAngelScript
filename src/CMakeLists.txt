@@ -64,6 +64,7 @@ set(CKAS_SOURCES
         AngelScriptEventHook.cpp
         AngelScriptComponent.cpp
         ScriptComponentMetadata.cpp
+        ScriptComponentStateStore.cpp
         ScriptComponentInjection.cpp
         ScriptComponentAutomation.cpp
         ScriptFormat.cpp
