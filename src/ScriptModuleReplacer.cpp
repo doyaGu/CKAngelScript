@@ -132,7 +132,6 @@ bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
                                        errorMessage)) {
         return false;
     }
-    manager.m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
     manager.m_ModuleStateStore.RestoreImportBindingsForModule(moduleName, snapshot.ImportBindings);
     return true;
 }

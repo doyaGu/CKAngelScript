@@ -249,7 +249,6 @@ CKAS_STATUS ScriptImportBinder::BindAllImportedFunctions(ScriptManager &manager,
                                                        binding.Index,
                                                        rollbackError));
             }
-            manager.m_ModuleStateStore.RemoveImportBindingsForModule(moduleName);
             manager.m_ModuleStateStore.RestoreImportBindingsForModule(moduleName, previousBindings);
             return manager.StoreResult(result,
                                        status,

@@ -4,8 +4,31 @@
 
 #include "ScriptApiSupport.h"
 
+namespace {
+
+bool ImportBindingLess(const ScriptImportBindingEdge &lhs,
+                       const ScriptImportBindingEdge &rhs) {
+    if (lhs.ImportModuleName != rhs.ImportModuleName) {
+        return lhs.ImportModuleName < rhs.ImportModuleName;
+    }
+    if (lhs.ImportIndex != rhs.ImportIndex) {
+        return lhs.ImportIndex < rhs.ImportIndex;
+    }
+    if (lhs.SourceModuleName != rhs.SourceModuleName) {
+        return lhs.SourceModuleName < rhs.SourceModuleName;
+    }
+    return lhs.FunctionDecl < rhs.FunctionDecl;
+}
+
+void SortImportBindings(std::vector<ScriptImportBindingEdge> &bindings) {
+    std::sort(bindings.begin(), bindings.end(), ImportBindingLess);
+}
+
+} // namespace
+
 void ScriptModuleStateStore::Clear() {
     m_States.clear();
+    m_ModuleOrder.clear();
 }
 
 CKDWORD ScriptModuleStateStore::GetGeneration(const char *moduleName) const {
@@ -73,8 +96,12 @@ bool ScriptModuleStateStore::HasBoundImportConsumersForModule(const char *module
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
     }
-    for (const auto &stateEntry : m_States) {
-        for (const ScriptImportBindingEdge &edge : stateEntry.second.BoundImports) {
+    for (const std::string &stateModuleName : m_ModuleOrder) {
+        const auto stateIt = m_States.find(stateModuleName);
+        if (stateIt == m_States.end()) {
+            continue;
+        }
+        for (const ScriptImportBindingEdge &edge : stateIt->second.BoundImports) {
             if (edge.SourceModuleName == moduleName && edge.ImportModuleName != moduleName) {
                 if (consumerModule) {
                     *consumerModule = edge.ImportModuleName;
@@ -152,11 +179,13 @@ void ScriptModuleStateStore::RestoreImportBindingsForModule(
         return;
     }
     ModuleState &state = EnsureState(moduleName);
+    state.BoundImports.clear();
     for (const ScriptImportBindingEdge &edge : bindings) {
         if (edge.ImportModuleName == moduleName) {
             state.BoundImports.push_back(edge);
         }
     }
+    SortImportBindings(state.BoundImports);
     state.FingerprintDirty = true;
 }
 
@@ -175,6 +204,7 @@ void ScriptModuleStateStore::RecordImportBinding(const char *importModuleName,
     ModuleState &state = EnsureState(importModuleName);
     RemoveImportBinding(importModuleName, importIndex);
     state.BoundImports.push_back(edge);
+    SortImportBindings(state.BoundImports);
     state.FingerprintDirty = true;
 }
 
@@ -271,5 +301,10 @@ const ScriptModuleStateStore::ModuleState *ScriptModuleStateStore::FindState(
 }
 
 ScriptModuleStateStore::ModuleState &ScriptModuleStateStore::EnsureState(const char *moduleName) {
-    return m_States[moduleName ? moduleName : ""];
+    const std::string key = moduleName ? moduleName : "";
+    const auto inserted = m_States.emplace(key, ModuleState());
+    if (inserted.second) {
+        m_ModuleOrder.push_back(key);
+    }
+    return inserted.first->second;
 }

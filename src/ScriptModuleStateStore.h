@@ -72,6 +72,7 @@ private:
     ModuleState &EnsureState(const char *moduleName);
 
     std::unordered_map<std::string, ModuleState> m_States;
+    std::vector<std::string> m_ModuleOrder;
 };
 
 #endif // CK_SCRIPT_MODULE_STATE_STORE_H
