@@ -135,12 +135,11 @@ CKAS_STATUS ScriptManager::FindFunction(const CKAngelScriptFunctionOptions &opti
     const char *functionName = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::FunctionName, static_cast<const char *>(nullptr));
     const char *functionDecl = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::FunctionDecl, static_cast<const char *>(nullptr));
     const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::Flags, static_cast<CKDWORD>(0));
-    const bool hasFunctionName = ScriptApiSupport::IsNonEmpty(functionName);
     const bool hasFunctionDecl = ScriptApiSupport::IsNonEmpty(functionDecl);
     if (ScriptApiSupport::HasUnknownPublicFlags(flags, 0)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown FindFunction flags.");
     }
-    if (hasFunctionName == hasFunctionDecl) {
+    if (!ScriptApiSupport::HasExactlyOneNonEmpty(functionName, functionDecl)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Exactly one of FunctionName or FunctionDecl is required.");
     }
     asIScriptFunction *scriptFunction = nullptr;
@@ -191,12 +190,11 @@ CKAS_STATUS ScriptManager::CreateObject(const CKAngelScriptObjectOptions &option
     const char *className = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::ClassName, static_cast<const char *>(nullptr));
     const char *classNamespace = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::ClassNamespace, static_cast<const char *>(nullptr));
     const char *typeDecl = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::TypeDecl, static_cast<const char *>(nullptr));
-    const bool hasClassName = ScriptApiSupport::IsNonEmpty(className);
     const bool hasTypeDecl = ScriptApiSupport::IsNonEmpty(typeDecl);
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
-    if (hasClassName == hasTypeDecl) {
+    if (!ScriptApiSupport::HasExactlyOneNonEmpty(className, typeDecl)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Exactly one of ClassName or TypeDecl is required.");
     }
     if (hasTypeDecl && ScriptApiSupport::IsNonEmpty(classNamespace)) {
@@ -264,7 +262,6 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
     CKAngelScriptObject *object = ScriptApiSupport::PublicField(options, &CKAngelScriptMethodOptions::Object, static_cast<CKAngelScriptObject *>(nullptr));
     const char *methodName = ScriptApiSupport::PublicField(options, &CKAngelScriptMethodOptions::MethodName, static_cast<const char *>(nullptr));
     const char *methodDecl = ScriptApiSupport::PublicField(options, &CKAngelScriptMethodOptions::MethodDecl, static_cast<const char *>(nullptr));
-    const bool hasMethodName = ScriptApiSupport::IsNonEmpty(methodName);
     const bool hasMethodDecl = ScriptApiSupport::IsNonEmpty(methodDecl);
     if (!object) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is required.");
@@ -276,7 +273,7 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
     if (!object->Object) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is invalid.");
     }
-    if (hasMethodName == hasMethodDecl) {
+    if (!ScriptApiSupport::HasExactlyOneNonEmpty(methodName, methodDecl)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Exactly one of MethodName or MethodDecl is required.");
     }
     if (!HasModule(object->ModuleName.c_str()) || GetModuleGeneration(object->ModuleName.c_str()) != object->ModuleGeneration) {

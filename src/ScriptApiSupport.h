@@ -30,6 +30,10 @@ inline bool IsNonEmpty(const char *value) {
     return value && value[0] != '\0';
 }
 
+inline bool HasExactlyOneNonEmpty(const char *first, const char *second) {
+    return IsNonEmpty(first) != IsNonEmpty(second);
+}
+
 class CallbackDepthScope {
 public:
     explicit CallbackDepthScope(int &depth)
