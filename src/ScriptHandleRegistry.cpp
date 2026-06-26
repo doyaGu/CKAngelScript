@@ -73,20 +73,167 @@ void ScriptHandleRegistry::AddMethod(CKAngelScriptMethod *method) {
     }
 }
 
-void ScriptHandleRegistry::RemoveExecution(CKAngelScriptExecution *execution) {
-    m_Executions.erase(execution);
+CKAS_STATUS ScriptHandleRegistry::ValidateFunction(const CKAngelScriptFunction *function,
+                                                   const ScriptManager *owner,
+                                                   const char **errorMessage) const {
+    if (errorMessage) {
+        *errorMessage = nullptr;
+    }
+    if (!function) {
+        if (errorMessage) {
+            *errorMessage = "Function handle is invalid.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    if (function->Manager && function->Manager != owner) {
+        if (errorMessage) {
+            *errorMessage = "Function handle belongs to another CKAngelScript manager.";
+        }
+        return CKAS_FOREIGNHANDLE;
+    }
+    if (!OwnsFunction(function)) {
+        if (errorMessage) {
+            *errorMessage = "Function handle is invalid.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    return CKAS_OK;
 }
 
-void ScriptHandleRegistry::RemoveFunction(CKAngelScriptFunction *function) {
+CKAS_STATUS ScriptHandleRegistry::ValidateObject(const CKAngelScriptObject *object,
+                                                 const ScriptManager *owner,
+                                                 const char **errorMessage) const {
+    if (errorMessage) {
+        *errorMessage = nullptr;
+    }
+    if (!object) {
+        if (errorMessage) {
+            *errorMessage = "Object handle is invalid.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    if (object->Manager && object->Manager != owner) {
+        if (errorMessage) {
+            *errorMessage = "Object handle belongs to another CKAngelScript manager.";
+        }
+        return CKAS_FOREIGNHANDLE;
+    }
+    if (!OwnsObject(object)) {
+        if (errorMessage) {
+            *errorMessage = "Object handle is invalid.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ScriptHandleRegistry::ValidateMethod(const CKAngelScriptMethod *method,
+                                                 const ScriptManager *owner,
+                                                 const char **errorMessage) const {
+    if (errorMessage) {
+        *errorMessage = nullptr;
+    }
+    if (!method) {
+        if (errorMessage) {
+            *errorMessage = "Method handle is invalid.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    if (method->Manager && method->Manager != owner) {
+        if (errorMessage) {
+            *errorMessage = "Method handle belongs to another CKAngelScript manager.";
+        }
+        return CKAS_FOREIGNHANDLE;
+    }
+    if (!OwnsMethod(method)) {
+        if (errorMessage) {
+            *errorMessage = "Method handle is invalid.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ScriptHandleRegistry::ValidateObjectMethod(const CKAngelScriptObject *object,
+                                                       const CKAngelScriptMethod *method,
+                                                       const ScriptManager *owner,
+                                                       const char **errorMessage) const {
+    if (errorMessage) {
+        *errorMessage = nullptr;
+    }
+    if (!object || !method) {
+        if (errorMessage) {
+            *errorMessage = "Object and method handles are required.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    if ((object->Manager && object->Manager != owner) || (method->Manager && method->Manager != owner)) {
+        if (errorMessage) {
+            *errorMessage = "Object or method handle belongs to another CKAngelScript manager.";
+        }
+        return CKAS_FOREIGNHANDLE;
+    }
+    if (!OwnsObject(object) || !OwnsMethod(method) || !object->Object) {
+        if (errorMessage) {
+            *errorMessage = "Object or method handle is invalid.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    return CKAS_OK;
+}
+
+CKAS_STATUS ScriptHandleRegistry::ValidateExecution(const CKAngelScriptExecution *execution,
+                                                    const ScriptManager *owner,
+                                                    const char **errorMessage) const {
+    if (errorMessage) {
+        *errorMessage = nullptr;
+    }
+    if (!execution) {
+        if (errorMessage) {
+            *errorMessage = "Execution handle is invalid.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    if (execution->Manager && execution->Manager != owner) {
+        if (errorMessage) {
+            *errorMessage = "Execution handle belongs to another CKAngelScript manager.";
+        }
+        return CKAS_FOREIGNHANDLE;
+    }
+    if (!OwnsExecution(execution)) {
+        if (errorMessage) {
+            *errorMessage = "Execution handle is invalid.";
+        }
+        return CKAS_INVALIDARGUMENT;
+    }
+    return CKAS_OK;
+}
+
+void ScriptHandleRegistry::ReleaseFunction(CKAngelScriptFunction *function) {
     m_Functions.erase(function);
+    delete function;
 }
 
-void ScriptHandleRegistry::RemoveObject(CKAngelScriptObject *object) {
+void ScriptHandleRegistry::ReleaseObject(CKAngelScriptObject *object) {
     m_Objects.erase(object);
+    if (object && object->Object) {
+        object->Object->Release();
+        object->Object = nullptr;
+    }
+    delete object;
 }
 
-void ScriptHandleRegistry::RemoveMethod(CKAngelScriptMethod *method) {
+void ScriptHandleRegistry::ReleaseMethod(CKAngelScriptMethod *method) {
     m_Methods.erase(method);
+    delete method;
+}
+
+void ScriptHandleRegistry::ReleaseExecution(CKAngelScriptExecution *execution) {
+    m_Executions.erase(execution);
+    if (execution && execution->Invoker.IsContextSuspended()) {
+        execution->Invoker.AbortContext();
+    }
+    delete execution;
 }
 
 bool ScriptHandleRegistry::HasExecutionForModule(const char *moduleName) const {
@@ -116,91 +263,8 @@ bool ScriptHandleRegistry::HasRuntimeHandleForModule(const char *moduleName) con
     return false;
 }
 
-bool ScriptManager::OwnsExecution(const CKAngelScriptExecution *execution) const {
-    return m_HandleRegistry.OwnsExecution(execution);
-}
-
-bool ScriptManager::OwnsFunction(const CKAngelScriptFunction *function) const {
-    return m_HandleRegistry.OwnsFunction(function);
-}
-
-bool ScriptManager::OwnsObject(const CKAngelScriptObject *object) const {
-    return m_HandleRegistry.OwnsObject(object);
-}
-
 bool ScriptManager::OwnsObjectHandle(const CKAngelScriptObject *object) const {
-    return OwnsObject(object);
-}
-
-bool ScriptManager::OwnsMethod(const CKAngelScriptMethod *method) const {
-    return m_HandleRegistry.OwnsMethod(method);
-}
-
-CKAS_STATUS ScriptManager::ValidateFunctionHandle(const CKAngelScriptFunction *function, CKAngelScriptResult *result) {
-    if (!function) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function handle is invalid.");
-    }
-    if (function->Manager && function->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Function handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsFunction(function)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function handle is invalid.");
-    }
-    return CKAS_OK;
-}
-
-CKAS_STATUS ScriptManager::ValidateObjectHandle(const CKAngelScriptObject *object, CKAngelScriptResult *result) {
-    if (!object) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is invalid.");
-    }
-    if (object->Manager && object->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Object handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsObject(object)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is invalid.");
-    }
-    return CKAS_OK;
-}
-
-CKAS_STATUS ScriptManager::ValidateMethodHandle(const CKAngelScriptMethod *method, CKAngelScriptResult *result) {
-    if (!method) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Method handle is invalid.");
-    }
-    if (method->Manager && method->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Method handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsMethod(method)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Method handle is invalid.");
-    }
-    return CKAS_OK;
-}
-
-CKAS_STATUS ScriptManager::ValidateObjectMethodHandles(const CKAngelScriptObject *object,
-                                                       const CKAngelScriptMethod *method,
-                                                       CKAngelScriptResult *result) {
-    if (!object || !method) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object and method handles are required.");
-    }
-    if ((object->Manager && object->Manager != this) || (method->Manager && method->Manager != this)) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Object or method handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsObject(object) || !OwnsMethod(method) || !object->Object) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object or method handle is invalid.");
-    }
-    return CKAS_OK;
-}
-
-CKAS_STATUS ScriptManager::ValidateExecutionHandle(const CKAngelScriptExecution *execution, CKAngelScriptResult *result) {
-    if (!execution) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
-    }
-    if (execution->Manager && execution->Manager != this) {
-        return StoreResult(result, CKAS_FOREIGNHANDLE, 0, "Execution handle belongs to another CKAngelScript manager.");
-    }
-    if (!OwnsExecution(execution)) {
-        return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
-    }
-    return CKAS_OK;
+    return m_HandleRegistry.OwnsObject(object);
 }
 
 bool ScriptManager::HasExecutionForModule(const char *moduleName) const {
@@ -249,12 +313,12 @@ CKAS_STATUS ScriptManager::ReleaseFunction(CKAngelScriptFunction *function, CKAn
     if (!function) {
         return StoreResult(result, CKAS_OK);
     }
-    const CKAS_STATUS handleStatus = ValidateFunctionHandle(function, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateFunction(function, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
-    m_HandleRegistry.RemoveFunction(function);
-    delete function;
+    m_HandleRegistry.ReleaseFunction(function);
     return StoreResult(result, CKAS_OK);
 }
 
@@ -309,16 +373,12 @@ CKAS_STATUS ScriptManager::ReleaseObject(CKAngelScriptObject *object, CKAngelScr
     if (!object) {
         return StoreResult(result, CKAS_OK);
     }
-    const CKAS_STATUS handleStatus = ValidateObjectHandle(object, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateObject(object, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
-    m_HandleRegistry.RemoveObject(object);
-    if (object->Object) {
-        object->Object->Release();
-        object->Object = nullptr;
-    }
-    delete object;
+    m_HandleRegistry.ReleaseObject(object);
     return StoreResult(result, CKAS_OK);
 }
 
@@ -337,9 +397,10 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
     if (optionStatus != CKAS_OK) {
         return StoreResult(result, optionStatus, 0, errorMessage);
     }
-    const CKAS_STATUS objectStatus = ValidateObjectHandle(request.Object, result);
+    const char *objectError = nullptr;
+    const CKAS_STATUS objectStatus = m_HandleRegistry.ValidateObject(request.Object, this, &objectError);
     if (objectStatus != CKAS_OK) {
-        return objectStatus;
+        return StoreResult(result, objectStatus, 0, objectError ? objectError : "");
     }
     if (!request.Object->Object) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object handle is invalid.");
@@ -403,12 +464,12 @@ CKAS_STATUS ScriptManager::ReleaseMethod(CKAngelScriptMethod *method, CKAngelScr
     if (!method) {
         return StoreResult(result, CKAS_OK);
     }
-    const CKAS_STATUS handleStatus = ValidateMethodHandle(method, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateMethod(method, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
-    m_HandleRegistry.RemoveMethod(method);
-    delete method;
+    m_HandleRegistry.ReleaseMethod(method);
     return StoreResult(result, CKAS_OK);
 }
 
@@ -421,9 +482,11 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
     if (optionStatus != CKAS_OK) {
         return StoreResult(result, optionStatus, 0, errorMessage);
     }
-    const CKAS_STATUS handleStatus = ValidateObjectMethodHandles(request.Object, request.Method, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus =
+        m_HandleRegistry.ValidateObjectMethod(request.Object, request.Method, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
     if (request.Object->ModuleName != request.Method->ModuleName ||
         request.Object->ClassName != request.Method->ClassName ||
@@ -475,9 +538,10 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
     if (optionStatus != CKAS_OK) {
         return StoreResult(result, optionStatus, 0, errorMessage);
     }
-    const CKAS_STATUS functionStatus = ValidateFunctionHandle(request.Function, result);
+    const char *functionError = nullptr;
+    const CKAS_STATUS functionStatus = m_HandleRegistry.ValidateFunction(request.Function, this, &functionError);
     if (functionStatus != CKAS_OK) {
-        return functionStatus;
+        return StoreResult(result, functionStatus, 0, functionError ? functionError : "");
     }
     if (!GetScriptEngine()) {
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
@@ -532,9 +596,10 @@ CKAS_STATUS ScriptManager::StartExecution(CKAngelScriptExecution *execution,
     if (optionStatus != CKAS_OK) {
         return StoreResult(result, optionStatus, 0, errorMessage);
     }
-    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateExecution(execution, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
     if (execution->State != CKAS_EXECUTION_READY) {
         ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
@@ -559,9 +624,10 @@ CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution,
     if (optionStatus != CKAS_OK) {
         return StoreResult(result, optionStatus, 0, errorMessage);
     }
-    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateExecution(execution, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
     if (execution->State != CKAS_EXECUTION_SUSPENDED) {
         ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
@@ -577,9 +643,10 @@ CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution,
 }
 
 CKAS_STATUS ScriptManager::CancelExecution(CKAngelScriptExecution *execution, CKAngelScriptResult *result) {
-    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateExecution(execution, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
     execution->Invoker.AbortContext();
     execution->State = CKAS_EXECUTION_CANCELLED;
@@ -591,15 +658,12 @@ CKAS_STATUS ScriptManager::ReleaseExecution(CKAngelScriptExecution *execution, C
     if (!execution) {
         return StoreResult(result, CKAS_OK);
     }
-    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateExecution(execution, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
-    if (execution->Invoker.IsContextSuspended()) {
-        execution->Invoker.AbortContext();
-    }
-    m_HandleRegistry.RemoveExecution(execution);
-    delete execution;
+    m_HandleRegistry.ReleaseExecution(execution);
     return StoreResult(result, CKAS_OK);
 }
 
@@ -612,9 +676,10 @@ CKAS_STATUS ScriptManager::GetExecutionState(const CKAngelScriptExecution *execu
     if (!outState) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution state out pointer is required.");
     }
-    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateExecution(execution, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
     *outState = execution->State;
     return StoreResult(result, CKAS_OK);
@@ -629,9 +694,10 @@ CKAS_STATUS ScriptManager::BorrowExecutionResult(const CKAngelScriptExecution *e
     if (!outResult) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution result out pointer is required.");
     }
-    const CKAS_STATUS handleStatus = ValidateExecutionHandle(execution, result);
+    const char *handleError = nullptr;
+    const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateExecution(execution, this, &handleError);
     if (handleStatus != CKAS_OK) {
-        return handleStatus;
+        return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
     *outResult = &execution->Result;
     return StoreResult(result, CKAS_OK);
