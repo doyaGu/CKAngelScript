@@ -227,6 +227,7 @@ struct ReentrantMetadataProbe {
     CKAS_STATUS ReentryStatus = CKAS_OK;
     CKAS_STATUS BytecodeSaveStatus = CKAS_OK;
     CKAS_STATUS BytecodeWriteReentryStatus = CKAS_OK;
+    CKAS_STATUS BytecodeNestedSaveStatus = CKAS_OK;
     size_t BytecodeSize = 0;
     CKDWORD CallbackCount = 0;
 };
@@ -244,7 +245,9 @@ struct BytecodeBuffer {
 struct ReentrantBytecodeWriteProbe {
     BytecodeBuffer Buffer;
     CKAngelScriptApi *Api = nullptr;
+    const char *ModuleName = nullptr;
     CKAS_STATUS ReentryStatus = CKAS_OK;
+    CKAS_STATUS BytecodeSaveReentryStatus = CKAS_OK;
 };
 
 struct ReentrantExecutionCallbackProbe {
@@ -493,12 +496,14 @@ CKAS_STATUS MutateFromMetadataCallback(const CKAngelScriptMetadataEntry *, CKDWO
     if (probe->CallbackCount == 1) {
         ReentrantBytecodeWriteProbe bytecodeWrite;
         bytecodeWrite.Api = probe->Api;
+        bytecodeWrite.ModuleName = probe->ModuleName;
         probe->BytecodeSaveStatus =
             probe->Api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(probe->ModuleName,
                                                                                   WriteBytecodeWithReentry,
                                                                                   &bytecodeWrite),
                                            nullptr);
         probe->BytecodeWriteReentryStatus = bytecodeWrite.ReentryStatus;
+        probe->BytecodeNestedSaveStatus = bytecodeWrite.BytecodeSaveReentryStatus;
         probe->BytecodeSize = bytecodeWrite.Buffer.Bytes.size();
     }
     return CKAS_OK;
@@ -540,6 +545,12 @@ CKAS_STATUS WriteBytecodeWithReentry(const void *data, size_t size, void *userDa
                                   "int __ckas_bytecode_callback_reentry() { return 1; }\n",
                                   CKAS_COMPILE_REPLACEEXISTING,
                                   nullptr);
+    BytecodeBuffer nestedSaveBuffer;
+    probe->BytecodeSaveReentryStatus =
+        probe->Api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(probe->ModuleName,
+                                                                              WriteBytecode,
+                                                                              &nestedSaveBuffer),
+                                       nullptr);
     return WriteBytecode(data, size, &probe->Buffer);
 }
 
@@ -1447,6 +1458,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         metadataReentry.ReentryStatus != CKAS_INVALIDSTATE ||
         metadataReentry.BytecodeSaveStatus != CKAS_OK ||
         metadataReentry.BytecodeWriteReentryStatus != CKAS_INVALIDSTATE ||
+        metadataReentry.BytecodeNestedSaveStatus != CKAS_INVALIDSTATE ||
         metadataReentry.BytecodeSize == 0) {
         error = "CKAngelScript API self-test expected metadata callbacks to allow bytecode save while rejecting module mutation reentry.";
         api->UnloadModule("__CKAS_MetadataCallbackReentry", nullptr);
@@ -2640,12 +2652,14 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     ReentrantBytecodeWriteProbe reentrantBytecodeWrite;
     reentrantBytecodeWrite.Api = &api;
+    reentrantBytecodeWrite.ModuleName = bytecodeSourceModuleName;
     if (api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(bytecodeSourceModuleName,
                                                                       WriteBytecodeWithReentry,
                                                                       &reentrantBytecodeWrite),
                                 &result) != CKAS_OK ||
         reentrantBytecodeWrite.Buffer.Bytes.empty() ||
-        reentrantBytecodeWrite.ReentryStatus != CKAS_INVALIDSTATE) {
+        reentrantBytecodeWrite.ReentryStatus != CKAS_INVALIDSTATE ||
+        reentrantBytecodeWrite.BytecodeSaveReentryStatus != CKAS_INVALIDSTATE) {
         error = "CKAngelScript API self-test expected bytecode callbacks to reject module mutation reentry.";
         api->UnloadModule(bytecodeSourceModuleName, nullptr);
         api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);

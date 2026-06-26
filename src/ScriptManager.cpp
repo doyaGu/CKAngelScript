@@ -3755,6 +3755,12 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
     if ((flags & ~static_cast<CKDWORD>(CKAS_BYTECODE_STRIP_DEBUG_INFO)) != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown SaveModuleBytecode flags.");
     }
+    if (m_BytecodeCallbackDepth > 0) {
+        return StoreResult(result,
+                           CKAS_INVALIDSTATE,
+                           0,
+                           "SaveModuleBytecode cannot be called from a CKAngelScript bytecode callback.");
+    }
     if (!write) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode write callback is required.");
     }
@@ -3771,6 +3777,7 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
     bool saved = false;
     {
         ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+        ScriptManagerModuleReplacementInternal::PublicCallbackScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
         saved = ScriptManagerModuleReplacementInternal::SaveModuleByteCode(module,
                                                                            write,
                                                                            userData,
@@ -3843,6 +3850,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
     bool loaded = false;
     {
         ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+        ScriptManagerModuleReplacementInternal::PublicCallbackScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
         loaded = ScriptManagerModuleReplacementInternal::LoadModuleByteCode(m_ScriptEngine,
                                                                             transientName.c_str(),
                                                                             read,

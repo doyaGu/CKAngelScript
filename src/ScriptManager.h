@@ -547,6 +547,7 @@ protected:
     CKAngelScriptHostCallFilterCallback m_HostCallFilter = nullptr;
     void *m_HostCallFilterUserData = nullptr;
     int m_PublicCallbackDepth = 0;
+    int m_BytecodeCallbackDepth = 0;
 };
 
 #endif // CK_SCRIPTMANAGER_H
