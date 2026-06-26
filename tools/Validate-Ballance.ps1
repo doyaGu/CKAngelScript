@@ -152,6 +152,7 @@ function Stop-BallanceValidationPlayer {
             ExitCode = $null
             ClosedByTest = $false
             KilledByTest = $false
+            CloseElapsedSeconds = 0.0
         }
     }
 
@@ -159,6 +160,7 @@ function Stop-BallanceValidationPlayer {
     $hasExitedBeforeClose = $Process.HasExited
     $closedByTest = $false
     $killedByTest = $false
+    $closeElapsedSeconds = 0.0
 
     if (-not $Process.HasExited) {
         $closedByTest = $Process.CloseMainWindow()
@@ -174,6 +176,8 @@ function Stop-BallanceValidationPlayer {
             Start-Sleep -Milliseconds 500
             $Process.Refresh()
         }
+        $closeStopwatch.Stop()
+        $closeElapsedSeconds = [Math]::Round($closeStopwatch.Elapsed.TotalSeconds, 3)
     }
 
     return [pscustomobject]@{
@@ -181,6 +185,7 @@ function Stop-BallanceValidationPlayer {
         ExitCode = if ($Process.HasExited) { $Process.ExitCode } else { $null }
         ClosedByTest = $closedByTest
         KilledByTest = $killedByTest
+        CloseElapsedSeconds = $closeElapsedSeconds
     }
 }
 
@@ -506,6 +511,7 @@ if (-not $SkipPlayer) {
         ExitCode = $closeResult.ExitCode
         ClosedByTest = $closeResult.ClosedByTest
         KilledByTest = $closeResult.KilledByTest
+        CloseElapsedSeconds = $closeResult.CloseElapsedSeconds
         StartupSelfTest = ($waitResult.MarkerText.Trim() -replace "`r?`n", "; ")
     }
 }
