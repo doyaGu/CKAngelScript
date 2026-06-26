@@ -13,6 +13,7 @@
 #include "CKContext.h"
 #include "CKAngelScript.h"
 
+#include "ScriptApiDiagnostics.h"
 #include "ScriptCache.h"
 #include "ScriptCKObjectRetainer.h"
 
@@ -29,14 +30,6 @@ class ScriptMessageBus;
 class ScriptParameterRegistry;
 class ScriptRuntime;
 class ScriptInvoker;
-
-struct CapturedScriptMessage {
-    std::string Section;
-    int Row = 0;
-    int Column = 0;
-    CKAS_MESSAGETYPE Type = CKAS_MESSAGE_INFORMATION;
-    std::string Message;
-};
 
 struct ScriptEngineExtensionRegistration {
     std::string Name;
@@ -428,14 +421,7 @@ protected:
     std::unordered_set<CKAngelScriptMethod *> m_Methods;
     std::unordered_map<std::string, ModuleState> m_ModuleStates;
     std::vector<ScriptEngineExtensionRegistration> m_EngineExtensions;
-    CKAngelScriptResult m_LastResult = {sizeof(CKAngelScriptResult), CKAS_OK, 0, nullptr, nullptr, nullptr, 0};
-    std::string m_LastErrorMessage;
-    std::string m_LastStackTrace;
-    std::vector<CapturedScriptMessage> m_LastCompilerMessageStorage;
-    std::vector<CKAngelScriptCompilerMessage> m_LastCompilerMessages;
-    bool m_CapturingScriptMessages = false;
-    std::string m_CapturedScriptMessages;
-    std::vector<CapturedScriptMessage> m_CapturedCompilerMessages;
+    ScriptApiDiagnostics m_Diagnostics;
     CKAngelScriptHostCallFilterCallback m_HostCallFilter = nullptr;
     void *m_HostCallFilterUserData = nullptr;
     int m_PublicCallbackDepth = 0;

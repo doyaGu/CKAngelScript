@@ -5,6 +5,7 @@ set(CKAS_HEADERS
         Logger.h
         ScriptManager.h
         AngelScriptEventHook.h
+        ScriptApiDiagnostics.h
         ScriptApiHandles.h
         ScriptCache.h
         ScriptInvoker.h
@@ -54,6 +55,7 @@ set(CKAS_SOURCES
         ScriptPublicApi.cpp
         Logger.cpp
         ScriptManager.cpp
+        ScriptApiDiagnostics.cpp
         ScriptCache.cpp
         ScriptInvoker.cpp
         AngelScriptEventHook.cpp
