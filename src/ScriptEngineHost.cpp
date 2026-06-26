@@ -14,7 +14,6 @@
 #define CKAS_ENABLE_API_EXPORT 0
 #endif
 
-#include "CKPathManager.h"
 #include "Logger.h"
 #include "ScriptEngineHost.h"
 #include "ScriptAsync.h"
@@ -302,16 +301,6 @@ asIScriptContext *ScriptManager::RequestContextFromPool() {
 
 void ScriptManager::ReturnContextToPool(asIScriptContext *ctx) {
     m_EngineHost.ReturnContext(*this, ctx);
-}
-
-void ScriptManager::SetupScriptPathCategory() {
-    if (m_ScriptPathCategoryIndex == -1) {
-        XString category = "Script Paths";
-        CKPathManager *pm = m_Context->GetPathManager();
-        m_ScriptPathCategoryIndex = pm->GetCategoryIndex(category);
-        if (m_ScriptPathCategoryIndex == -1)
-            m_ScriptPathCategoryIndex = pm->AddCategory(category);
-    }
 }
 
 int ScriptEngineHost::Setup(ScriptManager &manager, CKContext *context) {

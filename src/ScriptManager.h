@@ -21,6 +21,7 @@
 #include "ScriptModuleBytecodeStore.h"
 #include "ScriptModuleReplacer.h"
 #include "ScriptModuleStateStore.h"
+#include "ScriptPathResolver.h"
 
 #define SCRIPT_MANAGER_GUID CKGUID(0x70955bd2,0x30684456)
 
@@ -283,8 +284,6 @@ public:
     static bool RejectActiveHostCall(const char *apiName, CKDWORD flags);
 
 protected:
-    void SetupScriptPathCategory();
-
     bool HasExecutionForModule(const char *moduleName) const;
     bool HasRuntimeHandleForModule(const char *moduleName) const;
     bool HasBoundImportConsumersForModule(const char *moduleName, std::string *consumerModule = nullptr) const;
@@ -329,7 +328,7 @@ protected:
     std::string EndScriptMessageCapture(std::vector<CapturedScriptMessage> *messages = nullptr);
 
     int m_Flags = 0;
-    int m_ScriptPathCategoryIndex = -1;
+    ScriptPathResolver m_PathResolver;
     ScriptEngineHost m_EngineHost;
     ScriptCache m_ScriptCache;
     ScriptCKObjectRetainer m_CKObjectRetainer;

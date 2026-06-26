@@ -57,6 +57,7 @@ set(CKAS_HEADERS
         ScriptModuleBytecode.h
         ScriptModuleBytecodeStore.h
         ScriptModuleStateStore.h
+        ScriptPathResolver.h
 )
 
 set(CKAS_SOURCES
@@ -69,6 +70,7 @@ set(CKAS_SOURCES
         ScriptModuleBytecode.cpp
         ScriptModuleBytecodeStore.cpp
         ScriptModuleStateStore.cpp
+        ScriptPathResolver.cpp
         ScriptImportBinder.cpp
         ScriptModuleReplacer.cpp
         ScriptApiDiagnostics.cpp

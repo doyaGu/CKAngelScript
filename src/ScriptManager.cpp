@@ -6,7 +6,6 @@
 #define CKAS_BUILD_SELF_TESTS 0
 #endif
 
-#include "CKPathManager.h"
 #include "ScriptApiSupport.h"
 
 #include "ScriptBehaviorBridge.h"
@@ -409,11 +408,7 @@ asILockableSharedBool *ScriptManager::CreateLockableSharedBool() {
 }
 
 CKERROR ScriptManager::ResolveScriptFileName(XString &filename) {
-    CKPathManager *pm = m_Context->GetPathManager();
-    if (m_ScriptPathCategoryIndex == -1) {
-        SetupScriptPathCategory();
-    }
-    return pm->ResolveFileName(filename, m_ScriptPathCategoryIndex);
+    return m_PathResolver.ResolveScriptFileName(m_Context, filename);
 }
 
 void * ScriptManager::GetCKObjectData(CK_ID id) const {
