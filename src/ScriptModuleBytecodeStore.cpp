@@ -86,7 +86,7 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(ScriptManager &manager,
         return manager.StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
 
-    const bool replacingExisting = manager.HasModule(request.ModuleName);
+    const bool replacingExisting = manager.m_ModuleRegistry.Has(manager, request.ModuleName);
     if (replacingExisting) {
         if (!ScriptApiSupport::HasPublicFlag(request.Flags, CKAS_BYTECODE_REPLACEEXISTING)) {
             return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");

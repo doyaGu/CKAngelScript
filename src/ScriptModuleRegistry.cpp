@@ -272,7 +272,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(ScriptManager &manager,
     if (!manager.GetScriptEngine()) {
         return manager.StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
-    const bool replacingExisting = manager.HasModule(request.ModuleName);
+    const bool replacingExisting = Has(manager, request.ModuleName);
     if (replacingExisting) {
         if (!ScriptApiSupport::HasPublicFlag(request.Flags, CKAS_LOAD_REPLACEEXISTING)) {
             return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
@@ -363,7 +363,7 @@ CKAS_STATUS ScriptModuleRegistry::Compile(ScriptManager &manager,
     if (!manager.GetScriptEngine()) {
         return manager.StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
     }
-    const bool replacingExisting = manager.HasModule(moduleName);
+    const bool replacingExisting = Has(manager, moduleName);
     if (replacingExisting) {
         if (!ScriptApiSupport::HasPublicFlag(flags, CKAS_COMPILE_REPLACEEXISTING)) {
             return manager.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
