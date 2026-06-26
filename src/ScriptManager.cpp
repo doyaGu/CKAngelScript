@@ -18,7 +18,7 @@
 #include "Logger.h"
 #include "ScriptApiHandles.h"
 #include "ScriptInvoker.h"
-#include "ScriptPublicApiInternal.h"
+#include "ScriptApiSupport.h"
 
 #include "ScriptFormat.h"
 #include "ScriptNativePointer.h"
@@ -63,7 +63,17 @@
 #include "add_on/scriptgrid/scriptgrid.h"
 #include "add_on/datetime/datetime.h"
 
-namespace ScriptManagerInternal {
+namespace {
+
+std::string MakeEngineExtensionConfigGroupName(const char *name) {
+    return fmt::format("CKAngelScript.Extension.{}", name ? name : "");
+}
+
+} // namespace
+
+namespace ScriptApiSupport {
+
+namespace {
 
 CKAS_STATUS ToCKAS_STATUS(ScriptInvocationStatus status) {
     switch (status) {
@@ -76,6 +86,8 @@ CKAS_STATUS ToCKAS_STATUS(ScriptInvocationStatus status) {
             return CKAS_EXECUTIONFAILED;
     }
 }
+
+} // namespace
 
 bool IsStringType(asIScriptEngine *engine, int typeId) {
     if (!engine) {
@@ -230,6 +242,8 @@ bool ValidateArgIndex(const CKAngelScriptArgWriter *writer, CKDWORD index) {
            index < writer->Method->ParamTypes.size();
 }
 
+namespace {
+
 void ReturnPreparedContext(asIScriptEngine *engine, asIScriptContext *&ctx) {
     if (!engine || !ctx) {
         ctx = nullptr;
@@ -244,6 +258,8 @@ void ReturnPreparedContext(asIScriptEngine *engine, asIScriptContext *&ctx) {
     engine->ReturnContext(ctx);
     ctx = nullptr;
 }
+
+} // namespace
 
 ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
                                               int &publicCallbackDepth,
@@ -291,7 +307,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
 
     if (configureContext) {
         {
-            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+            ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
             status = configureContext(ctx, userData);
         }
         if (status != CKAS_OK) {
@@ -307,7 +323,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
     writer.Method = method;
     if (writeArgs) {
         {
-            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+            ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
             status = writeArgs(&writer, userData);
         }
         if (status != CKAS_OK) {
@@ -326,7 +342,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
         reader.Method = method;
         if (readResult) {
             {
-                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
                 status = readResult(&reader, userData);
             }
             if (status != CKAS_OK) {
@@ -338,7 +354,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
         }
         if (readContextResult) {
             {
-                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
                 status = readContextResult(ctx, userData);
             }
             if (status != CKAS_OK) {
@@ -390,10 +406,6 @@ bool HasPublicFlag(CKDWORD flags, CKDWORD flag) {
     return (flags & flag) != 0;
 }
 
-std::string MakeEngineExtensionConfigGroupName(const char *name) {
-    return fmt::format("CKAngelScript.Extension.{}", name ? name : "");
-}
-
 CKAS_STATUS StoreStatelessPublicResult(CKAngelScriptResult *out,
                                        CKAS_STATUS status,
                                        int angelScriptCode,
@@ -409,6 +421,8 @@ CKAS_STATUS StoreStatelessPublicResult(CKAngelScriptResult *out,
     }
     return status;
 }
+
+namespace {
 
 CKAS_EXECUTIONSTATE ToExecutionState(ScriptInvocationStatus status) {
     switch (status) {
@@ -429,6 +443,8 @@ const char *CopyPublicString(const char *value, std::string &storage) {
     storage = value;
     return storage.c_str();
 }
+
+} // namespace
 
 CKAS_STATUS DispatchMetadata(const CKAngelScriptMetadataEntry &entry,
                              CKDWORD metadataCount,
@@ -512,6 +528,9 @@ CKAS_STATUS DispatchIncludeEdge(const CKAngelScriptIncludeEdge &edge,
 }
 
 const unsigned long long kFnvOffsetBasis = 14695981039346656037ull;
+
+namespace {
+
 constexpr unsigned long long kFnvPrime = 1099511628211ull;
 
 void HashBytes(unsigned long long &hash, const void *data, size_t size) {
@@ -521,6 +540,8 @@ void HashBytes(unsigned long long &hash, const void *data, size_t size) {
         hash *= kFnvPrime;
     }
 }
+
+} // namespace
 
 void HashString(unsigned long long &hash, const std::string &value) {
     HashBytes(hash, value.data(), value.size());
@@ -624,7 +645,7 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
                 }
             }
             if (configureContext) {
-                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
                 callbackStatus = configureContext(ctx, userData);
                 if (callbackStatus != CKAS_OK) {
                     return false;
@@ -634,7 +655,7 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
         },
         [readResult, userData, &callbackStatus, &publicCallbackDepth](asIScriptContext *ctx) {
             if (readResult) {
-                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
                 callbackStatus = readResult(ctx, userData);
                 return callbackStatus == CKAS_OK;
             }
@@ -642,7 +663,7 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
         },
         [configureContext, userData, &callbackStatus, &publicCallbackDepth](asIScriptContext *ctx) {
             if (configureContext) {
-                ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(publicCallbackDepth);
+                ScriptModuleBytecode::PublicCallbackScope callbackScope(publicCallbackDepth);
                 callbackStatus = configureContext(ctx, userData);
                 return callbackStatus == CKAS_OK;
             }
@@ -679,37 +700,9 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
     return status;
 }
 
-} // namespace ScriptManagerInternal
+} // namespace ScriptApiSupport
 
-using ScriptManagerInternal::ExecutePreparedObjectMethod;
-using ScriptManagerInternal::HasCompletePublicStruct;
-using ScriptManagerInternal::HasPublicField;
-using ScriptManagerInternal::HasPublicFlag;
-using ScriptManagerInternal::InitPublicStruct;
-using ScriptManagerInternal::DispatchMetadata;
-using ScriptManagerInternal::DispatchBoundImportEdge;
-using ScriptManagerInternal::DispatchIncludeEdge;
-using ScriptManagerInternal::DispatchImport;
-using ScriptManagerInternal::HashBool;
-using ScriptManagerInternal::HashString;
-using ScriptManagerInternal::HashValue;
-using ScriptManagerInternal::IsIntOrEnumType;
-using ScriptManagerInternal::IsCompatibleObjectHandle;
-using ScriptManagerInternal::IsStringType;
-using ScriptManagerInternal::kFnvOffsetBasis;
-using ScriptManagerInternal::IsValidBorrowedObjectParam;
-using ScriptManagerInternal::IsValidObjectHandleParam;
-using ScriptManagerInternal::IsValidStringParam;
-using ScriptManagerInternal::MakeEngineExtensionConfigGroupName;
-using ScriptManagerInternal::MakeExecutionResult;
-using ScriptManagerInternal::ObjectCallOutcome;
-using ScriptManagerInternal::PublicField;
-using ScriptManagerInternal::RunExecution;
-using ScriptManagerInternal::StoreStatelessPublicResult;
-using ScriptManagerInternal::StatusMessage;
-using ScriptManagerInternal::StatusName;
-using ScriptManagerInternal::StatusFromImportBindResult;
-using ScriptManagerInternal::ValidateArgIndex;
+
 
 asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
                                         const char *className,
@@ -1081,14 +1074,14 @@ CKAS_STATUS ScriptManager::StoreApiResult(CKAngelScriptResult *out,
 
 CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExtension &extension,
                                                          CKAngelScriptResult *result) {
-    if (!HasCompletePublicStruct(extension)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(extension)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Engine extension size is invalid.");
     }
-    const char *name = PublicField(extension, &CKAngelScriptEngineExtension::Name, static_cast<const char *>(nullptr));
+    const char *name = ScriptApiSupport::PublicField(extension, &CKAngelScriptEngineExtension::Name, static_cast<const char *>(nullptr));
     CKAngelScriptEngineExtensionCallback callback =
-        PublicField(extension, &CKAngelScriptEngineExtension::Register, static_cast<CKAngelScriptEngineExtensionCallback>(nullptr));
-    void *userData = PublicField(extension, &CKAngelScriptEngineExtension::UserData, static_cast<void *>(nullptr));
-    const CKDWORD flags = PublicField(extension,
+        ScriptApiSupport::PublicField(extension, &CKAngelScriptEngineExtension::Register, static_cast<CKAngelScriptEngineExtensionCallback>(nullptr));
+    void *userData = ScriptApiSupport::PublicField(extension, &CKAngelScriptEngineExtension::UserData, static_cast<void *>(nullptr));
+    const CKDWORD flags = ScriptApiSupport::PublicField(extension,
                                       &CKAngelScriptEngineExtension::Flags,
                                       static_cast<CKDWORD>(CKAS_ENGINEEXTENSION_DEFAULT));
 
@@ -1117,7 +1110,7 @@ CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExte
     retained.UserData = userData;
     retained.Flags = flags;
 
-    if (m_ScriptEngine && IsInited() && !HasPublicFlag(flags, CKAS_ENGINEEXTENSION_DEFERRED)) {
+    if (m_ScriptEngine && IsInited() && !ScriptApiSupport::HasPublicFlag(flags, CKAS_ENGINEEXTENSION_DEFERRED)) {
         std::string message;
         const int code = RegisterEngineExtensionGroup(m_ScriptEngine, retained, message);
         if (code < 0) {

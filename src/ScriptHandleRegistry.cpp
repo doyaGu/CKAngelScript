@@ -3,14 +3,9 @@
 #include <cstring>
 #include <string>
 
-#include "ScriptPublicApiInternal.h"
+#include "ScriptApiSupport.h"
 
-using ScriptManagerInternal::ExecutePreparedObjectMethod;
-using ScriptManagerInternal::HasCompletePublicStruct;
-using ScriptManagerInternal::MakeExecutionResult;
-using ScriptManagerInternal::ObjectCallOutcome;
-using ScriptManagerInternal::PublicField;
-using ScriptManagerInternal::RunExecution;
+
 bool ScriptManager::OwnsExecution(const CKAngelScriptExecution *execution) const {
     return execution && m_Executions.find(const_cast<CKAngelScriptExecution *>(execution)) != m_Executions.end();
 }
@@ -67,13 +62,13 @@ CKAS_STATUS ScriptManager::FindFunction(const CKAngelScriptFunctionOptions &opti
     if (!outFunction) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Function handle out pointer is required.");
     }
-    if (!HasCompletePublicStruct(options)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "FindFunction options size is invalid.");
     }
-    const char *moduleName = PublicField(options, &CKAngelScriptFunctionOptions::ModuleName, static_cast<const char *>(nullptr));
-    const char *functionName = PublicField(options, &CKAngelScriptFunctionOptions::FunctionName, static_cast<const char *>(nullptr));
-    const char *functionDecl = PublicField(options, &CKAngelScriptFunctionOptions::FunctionDecl, static_cast<const char *>(nullptr));
-    const CKDWORD flags = PublicField(options, &CKAngelScriptFunctionOptions::Flags, static_cast<CKDWORD>(0));
+    const char *moduleName = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::ModuleName, static_cast<const char *>(nullptr));
+    const char *functionName = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::FunctionName, static_cast<const char *>(nullptr));
+    const char *functionDecl = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::FunctionDecl, static_cast<const char *>(nullptr));
+    const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionOptions::Flags, static_cast<CKDWORD>(0));
     const bool hasFunctionName = functionName && functionName[0] != '\0';
     const bool hasFunctionDecl = functionDecl && functionDecl[0] != '\0';
     if (flags != 0) {
@@ -125,13 +120,13 @@ CKAS_STATUS ScriptManager::CreateObject(const CKAngelScriptObjectOptions &option
     if (!outObject) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Object out pointer is required.");
     }
-    if (!HasCompletePublicStruct(options)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "CreateObject options size is invalid.");
     }
-    const char *moduleName = PublicField(options, &CKAngelScriptObjectOptions::ModuleName, static_cast<const char *>(nullptr));
-    const char *className = PublicField(options, &CKAngelScriptObjectOptions::ClassName, static_cast<const char *>(nullptr));
-    const char *classNamespace = PublicField(options, &CKAngelScriptObjectOptions::ClassNamespace, static_cast<const char *>(nullptr));
-    const char *typeDecl = PublicField(options, &CKAngelScriptObjectOptions::TypeDecl, static_cast<const char *>(nullptr));
+    const char *moduleName = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::ModuleName, static_cast<const char *>(nullptr));
+    const char *className = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::ClassName, static_cast<const char *>(nullptr));
+    const char *classNamespace = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::ClassNamespace, static_cast<const char *>(nullptr));
+    const char *typeDecl = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectOptions::TypeDecl, static_cast<const char *>(nullptr));
     const bool hasClassName = className && className[0] != '\0';
     const bool hasTypeDecl = typeDecl && typeDecl[0] != '\0';
     if (!moduleName || moduleName[0] == '\0') {
@@ -201,12 +196,12 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
     if (!outMethod) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Method handle out pointer is required.");
     }
-    if (!HasCompletePublicStruct(options)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "FindObjectMethod options size is invalid.");
     }
-    CKAngelScriptObject *object = PublicField(options, &CKAngelScriptMethodOptions::Object, static_cast<CKAngelScriptObject *>(nullptr));
-    const char *methodName = PublicField(options, &CKAngelScriptMethodOptions::MethodName, static_cast<const char *>(nullptr));
-    const char *methodDecl = PublicField(options, &CKAngelScriptMethodOptions::MethodDecl, static_cast<const char *>(nullptr));
+    CKAngelScriptObject *object = ScriptApiSupport::PublicField(options, &CKAngelScriptMethodOptions::Object, static_cast<CKAngelScriptObject *>(nullptr));
+    const char *methodName = ScriptApiSupport::PublicField(options, &CKAngelScriptMethodOptions::MethodName, static_cast<const char *>(nullptr));
+    const char *methodDecl = ScriptApiSupport::PublicField(options, &CKAngelScriptMethodOptions::MethodDecl, static_cast<const char *>(nullptr));
     const bool hasMethodName = methodName && methodName[0] != '\0';
     const bool hasMethodDecl = methodDecl && methodDecl[0] != '\0';
     if (!object) {
@@ -292,12 +287,12 @@ CKAS_STATUS ScriptManager::ReleaseMethod(CKAngelScriptMethod *method, CKAngelScr
 
 CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecuteOptions &options,
                                             CKAngelScriptResult *result) {
-    if (!HasCompletePublicStruct(options)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "CallObjectMethod options size is invalid.");
     }
-    CKAngelScriptObject *object = PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Object, static_cast<CKAngelScriptObject *>(nullptr));
-    CKAngelScriptMethod *method = PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Method, static_cast<CKAngelScriptMethod *>(nullptr));
-    const CKDWORD flags = PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Flags, static_cast<CKDWORD>(CKAS_CALL_DEFAULT));
+    CKAngelScriptObject *object = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Object, static_cast<CKAngelScriptObject *>(nullptr));
+    CKAngelScriptMethod *method = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Method, static_cast<CKAngelScriptMethod *>(nullptr));
+    const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::Flags, static_cast<CKDWORD>(CKAS_CALL_DEFAULT));
     const CKDWORD knownFlags = CKAS_CALL_NO_SUSPEND;
     if ((flags & ~knownFlags) != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown object method call flags.");
@@ -330,16 +325,16 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
         return StoreResult(result, CKAS_STALEHANDLE, 0, "Object method handle is stale.");
     }
     CKAngelScriptWriteArgsCallback writeArgs =
-        PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::WriteArgs, static_cast<CKAngelScriptWriteArgsCallback>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::WriteArgs, static_cast<CKAngelScriptWriteArgsCallback>(nullptr));
     CKAngelScriptReadResultCallback readResult =
-        PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::ReadResult, static_cast<CKAngelScriptReadResultCallback>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::ReadResult, static_cast<CKAngelScriptReadResultCallback>(nullptr));
     CKAngelScriptContextCallback configureContext =
-        PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::ConfigureContext, static_cast<CKAngelScriptContextCallback>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::ConfigureContext, static_cast<CKAngelScriptContextCallback>(nullptr));
     CKAngelScriptContextCallback readContextResult =
-        PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::ReadContextResult, static_cast<CKAngelScriptContextCallback>(nullptr));
-    void *userData = PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::UserData, static_cast<void *>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::ReadContextResult, static_cast<CKAngelScriptContextCallback>(nullptr));
+    void *userData = ScriptApiSupport::PublicField(options, &CKAngelScriptObjectMethodExecuteOptions::UserData, static_cast<void *>(nullptr));
 
-    const ObjectCallOutcome outcome = ExecutePreparedObjectMethod(this,
+    const ScriptApiSupport::ObjectCallOutcome outcome = ScriptApiSupport::ExecutePreparedObjectMethod(this,
                                                                   m_PublicCallbackDepth,
                                                                   object->Object,
                                                                   function,
@@ -362,14 +357,14 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
     if (!outExecution) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution out pointer is required.");
     }
-    if (!HasCompletePublicStruct(options)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "CreateFunctionExecution options size is invalid.");
     }
     CKAngelScriptFunction *functionHandle =
-        PublicField(options, &CKAngelScriptFunctionExecutionOptions::Function, static_cast<CKAngelScriptFunction *>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionExecutionOptions::Function, static_cast<CKAngelScriptFunction *>(nullptr));
     const CKBehaviorContext *behaviorContext =
-        PublicField(options, &CKAngelScriptFunctionExecutionOptions::BehaviorContext, static_cast<const CKBehaviorContext *>(nullptr));
-    const CKDWORD flags = PublicField(options, &CKAngelScriptFunctionExecutionOptions::Flags, static_cast<CKDWORD>(CKAS_CALL_DEFAULT));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionExecutionOptions::BehaviorContext, static_cast<const CKBehaviorContext *>(nullptr));
+    const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptFunctionExecutionOptions::Flags, static_cast<CKDWORD>(CKAS_CALL_DEFAULT));
     const CKDWORD knownFlags = CKAS_CALL_NO_SUSPEND;
 
     if ((flags & ~knownFlags) != 0) {
@@ -421,7 +416,7 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
         return StoreResult(result, CKAS_NOTFOUND, 0, error.empty() ? "Module cache was not found." : error);
     }
 
-    MakeExecutionResult(execution, CKAS_OK);
+    ScriptApiSupport::MakeExecutionResult(execution, CKAS_OK);
     m_Executions.insert(execution);
     *outExecution = execution;
     return StoreResult(result, CKAS_OK);
@@ -430,7 +425,7 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
 CKAS_STATUS ScriptManager::StartExecution(CKAngelScriptExecution *execution,
                                           const CKAngelScriptExecutionStepOptions *options,
                                           CKAngelScriptResult *result) {
-    if (options && !HasCompletePublicStruct(*options)) {
+    if (options && !ScriptApiSupport::HasCompletePublicStruct(*options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "StartExecution step options size is invalid.");
     }
     if (!execution) {
@@ -443,10 +438,10 @@ CKAS_STATUS ScriptManager::StartExecution(CKAngelScriptExecution *execution,
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
     }
     if (execution->State != CKAS_EXECUTION_READY) {
-        MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
+        ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
         return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
     }
-    const CKAS_STATUS status = RunExecution(execution, options, m_PublicCallbackDepth);
+    const CKAS_STATUS status = ScriptApiSupport::RunExecution(execution, options, m_PublicCallbackDepth);
     StoreResult(result,
                 status,
                 execution->Result.AngelScriptCode,
@@ -458,7 +453,7 @@ CKAS_STATUS ScriptManager::StartExecution(CKAngelScriptExecution *execution,
 CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution,
                                            const CKAngelScriptExecutionStepOptions *options,
                                            CKAngelScriptResult *result) {
-    if (options && !HasCompletePublicStruct(*options)) {
+    if (options && !ScriptApiSupport::HasCompletePublicStruct(*options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "ResumeExecution step options size is invalid.");
     }
     if (!execution) {
@@ -471,10 +466,10 @@ CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution,
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Execution handle is invalid.");
     }
     if (execution->State != CKAS_EXECUTION_SUSPENDED) {
-        MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
+        ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
         return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
     }
-    const CKAS_STATUS status = RunExecution(execution, options, m_PublicCallbackDepth);
+    const CKAS_STATUS status = ScriptApiSupport::RunExecution(execution, options, m_PublicCallbackDepth);
     StoreResult(result,
                 status,
                 execution->Result.AngelScriptCode,
@@ -495,7 +490,7 @@ CKAS_STATUS ScriptManager::CancelExecution(CKAngelScriptExecution *execution, CK
     }
     execution->Invoker.AbortContext();
     execution->State = CKAS_EXECUTION_CANCELLED;
-    MakeExecutionResult(execution, CKAS_CANCELLED);
+    ScriptApiSupport::MakeExecutionResult(execution, CKAS_CANCELLED);
     return StoreResult(result, CKAS_OK);
 }
 

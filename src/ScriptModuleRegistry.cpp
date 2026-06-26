@@ -9,9 +9,12 @@
 
 #include <fmt/format.h>
 
-#include "ScriptPublicApiInternal.h"
+#include "ScriptApiSupport.h"
 
-namespace ScriptManagerModuleReplacementInternal {
+
+namespace ScriptModuleBytecode {
+
+namespace {
 
 class MemoryByteCodeStream : public asIBinaryStream {
 public:
@@ -115,6 +118,8 @@ private:
     void *m_UserData = nullptr;
     CKAS_STATUS m_Status = CKAS_OK;
 };
+
+} // namespace
 
 bool SaveModuleByteCode(asIScriptModule *module,
                         std::vector<unsigned char> &byteCode,
@@ -224,21 +229,9 @@ std::string MakeTransientModuleName(asIScriptEngine *engine, const char *moduleN
     return candidate;
 }
 
-} // namespace ScriptManagerModuleReplacementInternal
+} // namespace ScriptModuleBytecode
 
 
-using ScriptManagerInternal::DispatchBoundImportEdge;
-using ScriptManagerInternal::DispatchIncludeEdge;
-using ScriptManagerInternal::DispatchImport;
-using ScriptManagerInternal::DispatchMetadata;
-using ScriptManagerInternal::HashBool;
-using ScriptManagerInternal::HashString;
-using ScriptManagerInternal::HashValue;
-using ScriptManagerInternal::HasCompletePublicStruct;
-using ScriptManagerInternal::HasPublicFlag;
-using ScriptManagerInternal::kFnvOffsetBasis;
-using ScriptManagerInternal::PublicField;
-using ScriptManagerInternal::StatusFromImportBindResult;
 bool ScriptManager::HasBoundImportConsumersForModule(const char *moduleName,
                                                      std::string *consumerModule) const {
     if (consumerModule) {
@@ -388,56 +381,56 @@ void ScriptManager::RebuildModuleFingerprint(const char *moduleName, ModuleState
     fingerprint.AngelScriptVersion = asGetLibraryVersion();
     fingerprint.AngelScriptOptions = asGetLibraryOptions();
 
-    fingerprint.SourceHash = kFnvOffsetBasis;
+    fingerprint.SourceHash = ScriptApiSupport::kFnvOffsetBasis;
     const std::shared_ptr<CachedScript> cached = m_ScriptCache.GetCachedScript(moduleName ? moduleName : "");
     if (cached) {
-        HashBool(fingerprint.SourceHash, cached->sourceSnapshotSections);
-        HashValue(fingerprint.SourceHash, static_cast<unsigned long long>(cached->sections.size()));
+        ScriptApiSupport::HashBool(fingerprint.SourceHash, cached->sourceSnapshotSections);
+        ScriptApiSupport::HashValue(fingerprint.SourceHash, static_cast<unsigned long long>(cached->sections.size()));
         for (const auto &section : cached->sections) {
-            HashString(fingerprint.SourceHash, std::get<0>(section));
-            HashString(fingerprint.SourceHash, std::get<1>(section));
+            ScriptApiSupport::HashString(fingerprint.SourceHash, std::get<0>(section));
+            ScriptApiSupport::HashString(fingerprint.SourceHash, std::get<1>(section));
         }
     }
 
-    fingerprint.IncludeHash = kFnvOffsetBasis;
-    HashValue(fingerprint.IncludeHash, static_cast<unsigned long long>(state.IncludeEdges.size()));
+    fingerprint.IncludeHash = ScriptApiSupport::kFnvOffsetBasis;
+    ScriptApiSupport::HashValue(fingerprint.IncludeHash, static_cast<unsigned long long>(state.IncludeEdges.size()));
     for (const ScriptIncludeEdge &edge : state.IncludeEdges) {
-        HashString(fingerprint.IncludeHash, edge.FromSection);
-        HashString(fingerprint.IncludeHash, edge.ToSection);
-        HashBool(fingerprint.IncludeHash, edge.ResolvedFromSnapshot);
+        ScriptApiSupport::HashString(fingerprint.IncludeHash, edge.FromSection);
+        ScriptApiSupport::HashString(fingerprint.IncludeHash, edge.ToSection);
+        ScriptApiSupport::HashBool(fingerprint.IncludeHash, edge.ResolvedFromSnapshot);
     }
 
-    fingerprint.DeclaredImportHash = kFnvOffsetBasis;
+    fingerprint.DeclaredImportHash = ScriptApiSupport::kFnvOffsetBasis;
     asIScriptModule *module = GetModule(moduleName);
     if (module) {
         const asUINT importCount = module->GetImportedFunctionCount();
-        HashValue(fingerprint.DeclaredImportHash, static_cast<unsigned long long>(importCount));
+        ScriptApiSupport::HashValue(fingerprint.DeclaredImportHash, static_cast<unsigned long long>(importCount));
         for (asUINT i = 0; i < importCount; ++i) {
-            HashValue(fingerprint.DeclaredImportHash, static_cast<CKDWORD>(i));
-            HashString(fingerprint.DeclaredImportHash, module->GetImportedFunctionSourceModule(i));
-            HashString(fingerprint.DeclaredImportHash, module->GetImportedFunctionDeclaration(i));
+            ScriptApiSupport::HashValue(fingerprint.DeclaredImportHash, static_cast<CKDWORD>(i));
+            ScriptApiSupport::HashString(fingerprint.DeclaredImportHash, module->GetImportedFunctionSourceModule(i));
+            ScriptApiSupport::HashString(fingerprint.DeclaredImportHash, module->GetImportedFunctionDeclaration(i));
         }
     }
 
-    fingerprint.BoundImportHash = kFnvOffsetBasis;
-    HashValue(fingerprint.BoundImportHash, static_cast<unsigned long long>(state.BoundImports.size()));
+    fingerprint.BoundImportHash = ScriptApiSupport::kFnvOffsetBasis;
+    ScriptApiSupport::HashValue(fingerprint.BoundImportHash, static_cast<unsigned long long>(state.BoundImports.size()));
     for (const ImportBindingEdge &edge : state.BoundImports) {
-        HashString(fingerprint.BoundImportHash, edge.ImportModuleName);
-        HashValue(fingerprint.BoundImportHash, edge.ImportIndex);
-        HashString(fingerprint.BoundImportHash, edge.SourceModuleName);
-        HashString(fingerprint.BoundImportHash, edge.FunctionDecl);
+        ScriptApiSupport::HashString(fingerprint.BoundImportHash, edge.ImportModuleName);
+        ScriptApiSupport::HashValue(fingerprint.BoundImportHash, edge.ImportIndex);
+        ScriptApiSupport::HashString(fingerprint.BoundImportHash, edge.SourceModuleName);
+        ScriptApiSupport::HashString(fingerprint.BoundImportHash, edge.FunctionDecl);
     }
 
-    fingerprint.CombinedHash = kFnvOffsetBasis;
-    HashValue(fingerprint.CombinedHash, fingerprint.ApiVersion);
-    HashString(fingerprint.CombinedHash, fingerprint.AngelScriptVersion);
-    HashString(fingerprint.CombinedHash, fingerprint.AngelScriptOptions);
-    HashValue(fingerprint.CombinedHash, static_cast<CKDWORD>(fingerprint.Kind));
-    HashValue(fingerprint.CombinedHash, fingerprint.Generation);
-    HashValue(fingerprint.CombinedHash, fingerprint.SourceHash);
-    HashValue(fingerprint.CombinedHash, fingerprint.IncludeHash);
-    HashValue(fingerprint.CombinedHash, fingerprint.DeclaredImportHash);
-    HashValue(fingerprint.CombinedHash, fingerprint.BoundImportHash);
+    fingerprint.CombinedHash = ScriptApiSupport::kFnvOffsetBasis;
+    ScriptApiSupport::HashValue(fingerprint.CombinedHash, fingerprint.ApiVersion);
+    ScriptApiSupport::HashString(fingerprint.CombinedHash, fingerprint.AngelScriptVersion);
+    ScriptApiSupport::HashString(fingerprint.CombinedHash, fingerprint.AngelScriptOptions);
+    ScriptApiSupport::HashValue(fingerprint.CombinedHash, static_cast<CKDWORD>(fingerprint.Kind));
+    ScriptApiSupport::HashValue(fingerprint.CombinedHash, fingerprint.Generation);
+    ScriptApiSupport::HashValue(fingerprint.CombinedHash, fingerprint.SourceHash);
+    ScriptApiSupport::HashValue(fingerprint.CombinedHash, fingerprint.IncludeHash);
+    ScriptApiSupport::HashValue(fingerprint.CombinedHash, fingerprint.DeclaredImportHash);
+    ScriptApiSupport::HashValue(fingerprint.CombinedHash, fingerprint.BoundImportHash);
 
     state.Fingerprint = fingerprint;
     state.FingerprintDirty = false;
@@ -666,7 +659,7 @@ bool ScriptManager::CaptureModuleReplacementSnapshot(const char *moduleName,
     }
 
     snapshot.HasModule = true;
-    if (!ScriptManagerModuleReplacementInternal::SaveModuleByteCode(module, snapshot.ByteCode, angelScriptCode)) {
+    if (!ScriptModuleBytecode::SaveModuleByteCode(module, snapshot.ByteCode, angelScriptCode)) {
         errorMessage = "Failed to snapshot existing script module bytecode.";
         return false;
     }
@@ -704,7 +697,7 @@ bool ScriptManager::RestoreModuleReplacementSnapshot(const char *moduleName,
     }
 
     asIScriptModule *restoredModule = nullptr;
-    if (!ScriptManagerModuleReplacementInternal::LoadModuleByteCode(m_ScriptEngine,
+    if (!ScriptModuleBytecode::LoadModuleByteCode(m_ScriptEngine,
                                                                     moduleName,
                                                                     snapshot.ByteCode,
                                                                     &restoredModule,
@@ -735,7 +728,7 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     int angelScriptCode = 0;
     std::string diagnostics;
     std::vector<CapturedScriptMessage> diagnosticMessages;
-    const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(m_ScriptEngine,
+    const std::string transientName = ScriptModuleBytecode::MakeTransientModuleName(m_ScriptEngine,
                                                                                                       moduleName);
     std::shared_ptr<CachedScript> candidate =
         BuildTransientModule(transientName.c_str(),
@@ -754,7 +747,7 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     }
 
     std::vector<unsigned char> candidateByteCode;
-    if (!ScriptManagerModuleReplacementInternal::SaveModuleByteCode(candidate->module,
+    if (!ScriptModuleBytecode::SaveModuleByteCode(candidate->module,
                                                                     candidateByteCode,
                                                                     angelScriptCode)) {
         candidate->Discard();
@@ -774,7 +767,7 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     RemoveModuleForReplacement(moduleName, snapshot);
 
     asIScriptModule *committedModule = nullptr;
-    if (!ScriptManagerModuleReplacementInternal::LoadModuleByteCode(m_ScriptEngine,
+    if (!ScriptModuleBytecode::LoadModuleByteCode(m_ScriptEngine,
                                                                     moduleName,
                                                                     candidateByteCode,
                                                                     &committedModule,
@@ -811,19 +804,19 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
 }
 
 CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result) {
-    if (!HasCompletePublicStruct(options)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "LoadModule options size is invalid.");
     }
-    const char *moduleName = PublicField(options, &CKAngelScriptLoadOptions::ModuleName, static_cast<const char *>(nullptr));
-    const char *filename = PublicField(options, &CKAngelScriptLoadOptions::Filename, static_cast<const char *>(nullptr));
-    const char **filenames = PublicField(options, &CKAngelScriptLoadOptions::Filenames, static_cast<const char **>(nullptr));
-    const size_t fileCount = PublicField(options, &CKAngelScriptLoadOptions::FileCount, static_cast<size_t>(0));
-    const char *code = PublicField(options, &CKAngelScriptLoadOptions::Code, static_cast<const char *>(nullptr));
+    const char *moduleName = ScriptApiSupport::PublicField(options, &CKAngelScriptLoadOptions::ModuleName, static_cast<const char *>(nullptr));
+    const char *filename = ScriptApiSupport::PublicField(options, &CKAngelScriptLoadOptions::Filename, static_cast<const char *>(nullptr));
+    const char **filenames = ScriptApiSupport::PublicField(options, &CKAngelScriptLoadOptions::Filenames, static_cast<const char **>(nullptr));
+    const size_t fileCount = ScriptApiSupport::PublicField(options, &CKAngelScriptLoadOptions::FileCount, static_cast<size_t>(0));
+    const char *code = ScriptApiSupport::PublicField(options, &CKAngelScriptLoadOptions::Code, static_cast<const char *>(nullptr));
     const CKAngelScriptSourceSection *sourceSections =
-        PublicField(options, &CKAngelScriptLoadOptions::Sections, static_cast<const CKAngelScriptSourceSection *>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptLoadOptions::Sections, static_cast<const CKAngelScriptSourceSection *>(nullptr));
     const size_t sourceSectionCount =
-        PublicField(options, &CKAngelScriptLoadOptions::SectionCount, static_cast<size_t>(0));
-    const CKDWORD flags = PublicField(options,
+        ScriptApiSupport::PublicField(options, &CKAngelScriptLoadOptions::SectionCount, static_cast<size_t>(0));
+    const CKDWORD flags = ScriptApiSupport::PublicField(options,
                                       &CKAngelScriptLoadOptions::Flags,
                                       static_cast<CKDWORD>(CKAS_LOAD_DEFAULT));
 
@@ -852,7 +845,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
     }
     const bool replacingExisting = HasModule(moduleName);
     if (replacingExisting) {
-        if (!HasPublicFlag(flags, CKAS_LOAD_REPLACEEXISTING)) {
+        if (!ScriptApiSupport::HasPublicFlag(flags, CKAS_LOAD_REPLACEEXISTING)) {
             return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
         const CKAS_STATUS mutationStatus = CheckModuleReplaceOrUnloadAllowed(moduleName, result);
@@ -871,16 +864,16 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
         sections.reserve(sourceSectionCount);
         for (size_t i = 0; i < sourceSectionCount; ++i) {
             const CKAngelScriptSourceSection &sourceSection = sourceSections[i];
-            if (!HasCompletePublicStruct(sourceSection)) {
+            if (!ScriptApiSupport::HasCompletePublicStruct(sourceSection)) {
                 return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Source section options size is invalid.");
             }
-            const char *sectionName = PublicField(sourceSection,
+            const char *sectionName = ScriptApiSupport::PublicField(sourceSection,
                                                   &CKAngelScriptSourceSection::SectionName,
                                                   static_cast<const char *>(nullptr));
-            const char *sectionCode = PublicField(sourceSection,
+            const char *sectionCode = ScriptApiSupport::PublicField(sourceSection,
                                                   &CKAngelScriptSourceSection::Code,
                                                   static_cast<const char *>(nullptr));
-            const size_t sectionSize = PublicField(sourceSection,
+            const size_t sectionSize = ScriptApiSupport::PublicField(sourceSection,
                                                    &CKAngelScriptSourceSection::CodeSize,
                                                    static_cast<size_t>(0));
             if (!sectionName || sectionName[0] == '\0') {
@@ -987,7 +980,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
     }
     const bool replacingExisting = HasModule(moduleName);
     if (replacingExisting) {
-        if (!HasPublicFlag(flags, CKAS_COMPILE_REPLACEEXISTING)) {
+        if (!ScriptApiSupport::HasPublicFlag(flags, CKAS_COMPILE_REPLACEEXISTING)) {
             return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
         const CKAS_STATUS mutationStatus = CheckModuleReplaceOrUnloadAllowed(moduleName, result);
@@ -1171,8 +1164,8 @@ CKAS_STATUS ScriptManager::EnumerateMetadata(const char *moduleName,
                                 const CKAngelScriptMetadataEntry &entry,
                                 CKDWORD metadataCount,
                                 const std::function<const char *(CKDWORD)> &metadataAt) {
-        ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
-        return DispatchMetadata(entry, metadataCount, metadataAt, callback, userData);
+        ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+        return ScriptApiSupport::DispatchMetadata(entry, metadataCount, metadataAt, callback, userData);
     };
 
     const asUINT typeCount = module->GetObjectTypeCount();
@@ -1367,8 +1360,8 @@ CKAS_STATUS ScriptManager::EnumerateImportedFunctions(const char *moduleName,
         entry.SourceModuleName = module->GetImportedFunctionSourceModule(i);
         CKAS_STATUS callbackStatus = CKAS_OK;
         {
-            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
-            callbackStatus = DispatchImport(entry, callback, userData);
+            ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+            callbackStatus = ScriptApiSupport::DispatchImport(entry, callback, userData);
         }
         if (callbackStatus != CKAS_OK) {
             return StoreResult(result,
@@ -1385,18 +1378,18 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
     if (IsModuleMutationBlockedByCallback()) {
         return RejectModuleMutationDuringCallback("BindImportedFunction", result);
     }
-    if (!HasCompletePublicStruct(options)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Import bind options size is invalid.");
     }
     const char *importModuleName =
-        PublicField(options, &CKAngelScriptImportBindOptions::ImportModuleName, static_cast<const char *>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptImportBindOptions::ImportModuleName, static_cast<const char *>(nullptr));
     const CKDWORD importIndex =
-        PublicField(options, &CKAngelScriptImportBindOptions::ImportIndex, static_cast<CKDWORD>(0));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptImportBindOptions::ImportIndex, static_cast<CKDWORD>(0));
     const char *sourceModuleOverride =
-        PublicField(options, &CKAngelScriptImportBindOptions::SourceModuleName, static_cast<const char *>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptImportBindOptions::SourceModuleName, static_cast<const char *>(nullptr));
     const char *functionDeclOverride =
-        PublicField(options, &CKAngelScriptImportBindOptions::FunctionDecl, static_cast<const char *>(nullptr));
-    const CKDWORD flags = PublicField(options, &CKAngelScriptImportBindOptions::Flags, static_cast<CKDWORD>(0));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptImportBindOptions::FunctionDecl, static_cast<const char *>(nullptr));
+    const CKDWORD flags = ScriptApiSupport::PublicField(options, &CKAngelScriptImportBindOptions::Flags, static_cast<CKDWORD>(0));
     if (flags != 0) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown BindImportedFunction flags.");
     }
@@ -1458,7 +1451,7 @@ CKAS_STATUS ScriptManager::BindImportedFunction(const CKAngelScriptImportBindOpt
 
     const int bindResult = importModule->BindImportedFunction(importIndex, targetFunction);
     if (bindResult < 0) {
-        status = StatusFromImportBindResult(bindResult);
+        status = ScriptApiSupport::StatusFromImportBindResult(bindResult);
         if (!previousBinding.empty()) {
             int rollbackCode = 0;
             std::string rollbackError;
@@ -1553,7 +1546,7 @@ CKAS_STATUS ScriptManager::BindAllImportedFunctions(const char *moduleName,
         RemoveImportBinding(moduleName, binding.Index);
         const int bindResult = module->BindImportedFunction(binding.Index, binding.TargetFunction);
         if (bindResult < 0) {
-            const CKAS_STATUS status = StatusFromImportBindResult(bindResult);
+            const CKAS_STATUS status = ScriptApiSupport::StatusFromImportBindResult(bindResult);
             module->UnbindAllImportedFunctions();
             RemoveImportBindingsForModule(moduleName);
 
@@ -1602,7 +1595,7 @@ CKAS_STATUS ScriptManager::UnbindImportedFunction(const char *moduleName,
     }
     const int unbindResult = module->UnbindImportedFunction(importIndex);
     if (unbindResult < 0) {
-        status = StatusFromImportBindResult(unbindResult);
+        status = ScriptApiSupport::StatusFromImportBindResult(unbindResult);
         return StoreResult(result, status, unbindResult, "Failed to unbind imported function.");
     }
     RemoveImportBinding(moduleName, importIndex);
@@ -1622,7 +1615,7 @@ CKAS_STATUS ScriptManager::UnbindAllImportedFunctions(const char *moduleName,
     }
     const int unbindResult = module->UnbindAllImportedFunctions();
     if (unbindResult < 0) {
-        status = StatusFromImportBindResult(unbindResult);
+        status = ScriptApiSupport::StatusFromImportBindResult(unbindResult);
         return StoreResult(result, status, unbindResult, "Failed to unbind imported functions.");
     }
     RemoveImportBindingsForModule(moduleName);
@@ -1660,8 +1653,8 @@ CKAS_STATUS ScriptManager::EnumerateBoundImportEdges(const char *moduleName,
         publicEdge.FunctionDecl = edge.FunctionDecl.c_str();
         CKAS_STATUS callbackStatus = CKAS_OK;
         {
-            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
-            callbackStatus = DispatchBoundImportEdge(publicEdge, callback, userData);
+            ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+            callbackStatus = ScriptApiSupport::DispatchBoundImportEdge(publicEdge, callback, userData);
         }
         if (callbackStatus != CKAS_OK) {
             return StoreResult(result,
@@ -1701,8 +1694,8 @@ CKAS_STATUS ScriptManager::EnumerateModuleIncludeEdges(const char *moduleName,
         publicEdge.ResolvedFromSnapshot = edge.ResolvedFromSnapshot ? TRUE : FALSE;
         CKAS_STATUS callbackStatus = CKAS_OK;
         {
-            ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
-            callbackStatus = DispatchIncludeEdge(publicEdge, callback, userData);
+            ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+            callbackStatus = ScriptApiSupport::DispatchIncludeEdge(publicEdge, callback, userData);
         }
         if (callbackStatus != CKAS_OK) {
             return StoreResult(result,
@@ -1720,7 +1713,7 @@ CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
     if (!outFingerprint) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module fingerprint out pointer is required.");
     }
-    if (!HasCompletePublicStruct(*outFingerprint)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(*outFingerprint)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module fingerprint size is invalid.");
     }
     CKAngelScriptInitModuleFingerprint(outFingerprint);
@@ -1742,17 +1735,17 @@ CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
 
 CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOptions &options,
                                               CKAngelScriptResult *result) {
-    if (!HasCompletePublicStruct(options)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode save options size is invalid.");
     }
     const char *moduleName =
-        PublicField(options, &CKAngelScriptBytecodeSaveOptions::ModuleName, static_cast<const char *>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptBytecodeSaveOptions::ModuleName, static_cast<const char *>(nullptr));
     CKAngelScriptBytecodeWriteCallback write =
-        PublicField(options,
+        ScriptApiSupport::PublicField(options,
                     &CKAngelScriptBytecodeSaveOptions::Write,
                     static_cast<CKAngelScriptBytecodeWriteCallback>(nullptr));
-    void *userData = PublicField(options, &CKAngelScriptBytecodeSaveOptions::UserData, static_cast<void *>(nullptr));
-    const CKDWORD flags = PublicField(options,
+    void *userData = ScriptApiSupport::PublicField(options, &CKAngelScriptBytecodeSaveOptions::UserData, static_cast<void *>(nullptr));
+    const CKDWORD flags = ScriptApiSupport::PublicField(options,
                                       &CKAngelScriptBytecodeSaveOptions::Flags,
                                       static_cast<CKDWORD>(CKAS_BYTECODE_DEFAULT));
     if ((flags & ~static_cast<CKDWORD>(CKAS_BYTECODE_STRIP_DEBUG_INFO)) != 0) {
@@ -1776,12 +1769,12 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
 
     int angelScriptCode = 0;
     CKAS_STATUS callbackStatus = CKAS_OK;
-    const bool stripDebugInfo = HasPublicFlag(flags, CKAS_BYTECODE_STRIP_DEBUG_INFO);
+    const bool stripDebugInfo = ScriptApiSupport::HasPublicFlag(flags, CKAS_BYTECODE_STRIP_DEBUG_INFO);
     bool saved = false;
     {
-        ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
-        ScriptManagerModuleReplacementInternal::PublicCallbackScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
-        saved = ScriptManagerModuleReplacementInternal::SaveModuleByteCode(module,
+        ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+        ScriptModuleBytecode::PublicCallbackScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
+        saved = ScriptModuleBytecode::SaveModuleByteCode(module,
                                                                            write,
                                                                            userData,
                                                                            stripDebugInfo,
@@ -1799,17 +1792,17 @@ CKAS_STATUS ScriptManager::SaveModuleBytecode(const CKAngelScriptBytecodeSaveOpt
 
 CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOptions &options,
                                               CKAngelScriptResult *result) {
-    if (!HasCompletePublicStruct(options)) {
+    if (!ScriptApiSupport::HasCompletePublicStruct(options)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode load options size is invalid.");
     }
     const char *moduleName =
-        PublicField(options, &CKAngelScriptBytecodeLoadOptions::ModuleName, static_cast<const char *>(nullptr));
+        ScriptApiSupport::PublicField(options, &CKAngelScriptBytecodeLoadOptions::ModuleName, static_cast<const char *>(nullptr));
     CKAngelScriptBytecodeReadCallback read =
-        PublicField(options,
+        ScriptApiSupport::PublicField(options,
                     &CKAngelScriptBytecodeLoadOptions::Read,
                     static_cast<CKAngelScriptBytecodeReadCallback>(nullptr));
-    void *userData = PublicField(options, &CKAngelScriptBytecodeLoadOptions::UserData, static_cast<void *>(nullptr));
-    const CKDWORD flags = PublicField(options,
+    void *userData = ScriptApiSupport::PublicField(options, &CKAngelScriptBytecodeLoadOptions::UserData, static_cast<void *>(nullptr));
+    const CKDWORD flags = ScriptApiSupport::PublicField(options,
                                       &CKAngelScriptBytecodeLoadOptions::Flags,
                                       static_cast<CKDWORD>(CKAS_BYTECODE_DEFAULT));
     if (!moduleName || moduleName[0] == '\0') {
@@ -1830,7 +1823,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
 
     const bool replacingExisting = HasModule(moduleName);
     if (replacingExisting) {
-        if (!HasPublicFlag(flags, CKAS_BYTECODE_REPLACEEXISTING)) {
+        if (!ScriptApiSupport::HasPublicFlag(flags, CKAS_BYTECODE_REPLACEEXISTING)) {
             return StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
     }
@@ -1847,14 +1840,14 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
 
     int angelScriptCode = 0;
     CKAS_STATUS callbackStatus = CKAS_OK;
-    const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(m_ScriptEngine,
+    const std::string transientName = ScriptModuleBytecode::MakeTransientModuleName(m_ScriptEngine,
                                                                                                       moduleName);
     asIScriptModule *candidateModule = nullptr;
     bool loaded = false;
     {
-        ScriptManagerModuleReplacementInternal::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
-        ScriptManagerModuleReplacementInternal::PublicCallbackScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
-        loaded = ScriptManagerModuleReplacementInternal::LoadModuleByteCode(m_ScriptEngine,
+        ScriptModuleBytecode::PublicCallbackScope callbackScope(m_PublicCallbackDepth);
+        ScriptModuleBytecode::PublicCallbackScope bytecodeCallbackScope(m_BytecodeCallbackDepth);
+        loaded = ScriptModuleBytecode::LoadModuleByteCode(m_ScriptEngine,
                                                                             transientName.c_str(),
                                                                             read,
                                                                             userData,
@@ -1870,7 +1863,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
     }
 
     std::vector<unsigned char> candidateByteCode;
-    if (!ScriptManagerModuleReplacementInternal::SaveModuleByteCode(candidateModule,
+    if (!ScriptModuleBytecode::SaveModuleByteCode(candidateModule,
                                                                     candidateByteCode,
                                                                     angelScriptCode)) {
         candidateModule->Discard();
@@ -1891,7 +1884,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
     RemoveModuleForReplacement(moduleName, snapshot);
 
     asIScriptModule *committedModule = nullptr;
-    if (!ScriptManagerModuleReplacementInternal::LoadModuleByteCode(m_ScriptEngine,
+    if (!ScriptModuleBytecode::LoadModuleByteCode(m_ScriptEngine,
                                                                     moduleName,
                                                                     candidateByteCode,
                                                                     &committedModule,

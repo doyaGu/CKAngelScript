@@ -47,7 +47,7 @@ set(CKAS_HEADERS
         ScriptBridgeParameterIO.h
         ScriptBridgeSnapshot.h
         ScriptRegistration.h
-        ScriptPublicApiInternal.h
+        ScriptApiSupport.h
 )
 
 set(CKAS_SOURCES

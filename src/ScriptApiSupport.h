@@ -1,5 +1,5 @@
-#ifndef CK_SCRIPT_PUBLIC_API_INTERNAL_H
-#define CK_SCRIPT_PUBLIC_API_INTERNAL_H
+#ifndef CK_SCRIPT_API_SUPPORT_H
+#define CK_SCRIPT_API_SUPPORT_H
 
 #include <cstring>
 #include <functional>
@@ -26,7 +26,7 @@ inline CKAngelScript *ToPublicHandle(ScriptManager *manager) {
     return reinterpret_cast<CKAngelScript *>(manager);
 }
 
-namespace ScriptManagerInternal {
+namespace ScriptApiSupport {
 
 struct ObjectCallOutcome {
     CKAS_STATUS Status = CKAS_OK;
@@ -123,9 +123,9 @@ M PublicField(const T &value, M T::*field, M fallback = M()) {
     return HasPublicField(value, field) ? value.*field : fallback;
 }
 
-} // namespace ScriptManagerInternal
+} // namespace ScriptApiSupport
 
-namespace ScriptManagerModuleReplacementInternal {
+namespace ScriptModuleBytecode {
 
 class PublicCallbackScope {
 public:
@@ -166,10 +166,10 @@ bool LoadModuleByteCode(asIScriptEngine *engine,
                         CKAS_STATUS &callbackStatus);
 std::string MakeTransientModuleName(asIScriptEngine *engine, const char *moduleName);
 
-} // namespace ScriptManagerModuleReplacementInternal
+} // namespace ScriptModuleBytecode
 
 asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
                                         const char *className,
                                         const char *classNamespace);
 
-#endif // CK_SCRIPT_PUBLIC_API_INTERNAL_H
+#endif // CK_SCRIPT_API_SUPPORT_H

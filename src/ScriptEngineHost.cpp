@@ -30,7 +30,7 @@
 #include "ScriptNativeBuffer.h"
 #include "ScriptNativePointer.h"
 #include "ScriptParameterRegistry.h"
-#include "ScriptPublicApiInternal.h"
+#include "ScriptApiSupport.h"
 #include "ScriptRegistration.h"
 #include "ScriptRuntime.h"
 #include "ScriptScene.h"
