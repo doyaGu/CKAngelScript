@@ -26,7 +26,7 @@ if (!api.IsValid()) {
 
 The handle is owned by CKAngelScript. Do not allocate, delete, or cast it to CKAngelScript internals.
 
-Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. Feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, metadata reflection, script array access, active-context host exceptions, source-section loading, object handle argument writing, host-call filtering, module imports, module bytecode, and module replacement transactions.
+Use `CKAngelScriptGetApiVersion()` and `CKAngelScriptHasFeature()` before consuming optional ABI surfaces from a soft loader. `CKAS_FEATURE` describes the binary API surface only; it does not mean the script engine is initialized or a module is loaded. Feature names are exact: module lifecycle, raw AngelScript access, function handles/execution/resume, object handles, object type namespace lookup, synchronous object method calls, typed arg/result helpers, stack traces, engine extensions, public struct initializers, status text, metadata reflection, script array access, active-context host exceptions, source-section loading, object handle argument writing, host-call filtering, module imports, module bytecode, module replacement transactions, module graph diagnostics, and module fingerprints.
 
 ## Optional Plugin Integration
 
@@ -59,7 +59,7 @@ CKAS_STATUS status =
         &result);
 ```
 
-Call `CKAngelScriptUnregisterEngineExtensionWithApi(&ckas, context, "BML", &result)` before the owning plugin state is destroyed. The v5 helper table also resolves module import and bytecode entry points for optional integrations that need script-library mechanics without taking a hard DLL link dependency.
+Call `CKAngelScriptUnregisterEngineExtensionWithApi(&ckas, context, "BML", &result)` before the owning plugin state is destroyed. The v6 helper table also resolves module import, bytecode, module graph, and fingerprint entry points for optional integrations that need script-library mechanics without taking a hard DLL link dependency.
 
 ## Handle Model
 
@@ -84,6 +84,7 @@ CKAngelScript never owns callback `UserData`. The caller is always responsible f
 | --- | --- |
 | `CKAngelScriptEnumerateMetadata` | `userData`, `CKAngelScriptMetadataEntry`, and metadata strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. Module mutation from the callback returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptEnumerateImportedFunctions` | `userData`, `CKAngelScriptImportEntry`, and import strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. Module mutation from the callback returns `CKAS_INVALIDSTATE`. |
+| `CKAngelScriptEnumerateBoundImportEdges` / `CKAngelScriptEnumerateModuleIncludeEdges` | `userData`, edge structs, and edge strings are borrowed only for the current enumeration callback. Copy anything that must survive the callback. Module mutation from the callback returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptSaveModuleBytecode` / `CKAngelScriptLoadModuleBytecode` | `Write`, `Read`, and `UserData` are borrowed only until the bytecode call returns. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`; recursive bytecode save/load from bytecode callbacks is also rejected. |
 | `CKAngelScriptCallObjectMethod` | `WriteArgs`, `ReadResult`, and `UserData` are borrowed only until the synchronous call returns. Do not store `CKAngelScriptArgWriter` or `CKAngelScriptResultReader` pointers. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`. |
 | `CKAngelScriptStartExecution` / `CKAngelScriptResumeExecution` | `ConfigureContext`, `ReadResult`, and `UserData` from `CKAngelScriptExecutionStepOptions` are borrowed only for that one start/resume call. Suspend does not retain them; pass fresh step options when resuming. Module mutation from these callbacks returns `CKAS_INVALIDSTATE`. |
@@ -170,6 +171,10 @@ CKAS_STATUS status = CKAngelScriptBindImportedFunction(angelScript, &bind, &resu
 
 `CKAngelScriptUnbindImportedFunction()` and `CKAngelScriptUnbindAllImportedFunctions()` remove bindings from the importing module. Bind and unbind operations change the importing module generation, so old consumer symbol/execution handles become stale. Bindings point at the provider function resolved at bind time; replacing or unloading a provider module with CKAngelScript-tracked bound consumers returns `CKAS_INUSE`. Reload coordinators should replace or unbind affected consumers before replacing the provider, then rebind consumers after provider generation changes.
 
+`CKAngelScriptEnumerateBoundImportEdges()` reports only CKAngelScript-tracked import bindings, i.e. bindings made through `CKAngelScriptBindImportedFunction()` or `CKAngelScriptBindAllImportedFunctions()`. Raw `asIScriptModule::BindImportedFunction()` calls remain possible through borrowed modules, but they do not enter the CKAngelScript graph and do not participate in provider reload blocking.
+
+`CKAngelScriptEnumerateModuleIncludeEdges()` reports source-section snapshot includes that CKAngelScript resolved through its in-memory include callback. It is an explanation graph for diagnostics and reload planning; it does not replace AngelScript/`CScriptBuilder` include resolution, and manifest/catalog policy must not be treated as the source of truth. File-backed includes resolved internally by `CScriptBuilder` are not synthesized into this graph. Bytecode-only modules have no include edge side data unless the host supplies its own sidecar.
+
 Bytecode APIs use caller-provided read/write callbacks, so CKAngelScript never allocates byte buffers that the caller must free:
 
 ```cpp
@@ -184,7 +189,9 @@ CKAS_STATUS status = CKAngelScriptSaveModuleBytecode(angelScript, &save, &result
 
 Bytecode stores AngelScript module code, not CKAngelScript's `CScriptBuilder` side data. Modules loaded only from bytecode can execute and expose normal AngelScript functions/imports, but `CKAngelScriptEnumerateMetadata()` has no source metadata to report unless the host keeps a separate source/metadata sidecar and loads from source when metadata is needed.
 
-AngelScript bytecode is not a stable interchange format. A persistent cache key must include at least the CKAngelScript API version, AngelScript version, engine options, build flags, and a hash of the registered host API surface. Do not reuse bytecode across CKAngelScript or registration changes unless the cache key proves compatibility.
+`CKAngelScriptGetModuleFingerprint()` returns a lightweight diagnostic summary for an active module: CKAS API version, AngelScript version/options, module kind, generation, source snapshot hash, include edge hash, declared import hash, bound import hash, and a combined FNV-1a 64-bit hash. It is meant for cache diagnostics and hot-reload decisions, not as a security boundary. The source hash is based on CKAngelScript's cached source sections; file-backed modules whose code is not retained only hash their section identities.
+
+AngelScript bytecode is not a stable interchange format. A persistent cache key must include at least the CKAngelScript API version, AngelScript version, engine options, build flags, and a hash of the registered host API surface. The module fingerprint can contribute diagnostics to that key, but it is not a replacement for a real host registration surface hash. Do not reuse bytecode across CKAngelScript or registration changes unless the cache key proves compatibility.
 
 ## Function Lookup And Execution
 
@@ -342,7 +349,7 @@ CKAS_STATUS status =
     CKAngelScriptBorrowModule(angelScript, "example_api", &module, &result);
 ```
 
-Borrowed pointers are only valid under normal AngelScript/module lifetime rules. CKAngelScript does not extend their lifetime. Raw modules created directly on the borrowed engine are visible to `CKAngelScriptHasModule()`, `CKAngelScriptBorrowModule()`, replacement APIs, and `CKAngelScriptUnloadModule()`, but CKAngelScript only tracks import dependency edges created through its public import binding APIs. `BorrowActiveContext` only returns a context whose engine belongs to the same CKAngelScript manager; otherwise it returns `CKAS_NOTFOUND`.
+Borrowed pointers are only valid under normal AngelScript/module lifetime rules. CKAngelScript does not extend their lifetime. Raw modules created directly on the borrowed engine are visible to `CKAngelScriptHasModule()`, `CKAngelScriptBorrowModule()`, replacement APIs, and `CKAngelScriptUnloadModule()`, but CKAngelScript only tracks import dependency and include explanation edges created through its public load/import APIs. Raw module mutation can make CKAngelScript graph and fingerprint data advisory until the module is reloaded through CKAngelScript. `BorrowActiveContext` only returns a context whose engine belongs to the same CKAngelScript manager; otherwise it returns `CKAS_NOTFOUND`.
 
 ## Metadata Reflection
 
