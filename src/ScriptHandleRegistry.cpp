@@ -147,7 +147,7 @@ CKAS_STATUS ScriptManager::CreateObject(const CKAngelScriptObjectOptions &option
     }
     asITypeInfo *type = hasTypeDecl
                             ? module->GetTypeInfoByDecl(typeDecl)
-                            : FindTypeByNameAndNamespace(module, className, classNamespace);
+                            : ScriptApiSupport::FindTypeByNameAndNamespace(module, className, classNamespace);
     if (!type) {
         return StoreResult(result, CKAS_NOTFOUND, 0, "Script class was not found.");
     }

@@ -48,6 +48,7 @@ set(CKAS_HEADERS
         ScriptBridgeSnapshot.h
         ScriptRegistration.h
         ScriptApiSupport.h
+        ScriptModuleBytecode.h
 )
 
 set(CKAS_SOURCES
@@ -55,6 +56,8 @@ set(CKAS_SOURCES
         ScriptPublicApi.cpp
         Logger.cpp
         ScriptManager.cpp
+        ScriptApiSupport.cpp
+        ScriptModuleBytecode.cpp
         ScriptApiDiagnostics.cpp
         ScriptEngineHost.cpp
         ScriptHandleRegistry.cpp

@@ -4,12 +4,10 @@
 #include <cstring>
 #include <functional>
 #include <string>
-#include <vector>
 
 #include <angelscript.h>
 
 #include "CKAngelScript.h"
-#include "ScriptCache.h"
 #include "ScriptApiHandles.h"
 
 class ScriptManager;
@@ -94,6 +92,9 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
 CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
                          const CKAngelScriptExecutionStepOptions *options,
                          int &publicCallbackDepth);
+asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
+                                        const char *className,
+                                        const char *classNamespace);
 
 template <typename T>
 void InitPublicStruct(T *value) {
@@ -124,52 +125,5 @@ M PublicField(const T &value, M T::*field, M fallback = M()) {
 }
 
 } // namespace ScriptApiSupport
-
-namespace ScriptModuleBytecode {
-
-class PublicCallbackScope {
-public:
-    explicit PublicCallbackScope(int &depth)
-        : m_Depth(depth) {
-        ++m_Depth;
-    }
-
-    ~PublicCallbackScope() {
-        --m_Depth;
-    }
-
-private:
-    int &m_Depth;
-};
-
-bool SaveModuleByteCode(asIScriptModule *module,
-                        std::vector<unsigned char> &byteCode,
-                        int &angelScriptCode,
-                        bool stripDebugInfo = false);
-bool SaveModuleByteCode(asIScriptModule *module,
-                        CKAngelScriptBytecodeWriteCallback callback,
-                        void *userData,
-                        bool stripDebugInfo,
-                        int &angelScriptCode,
-                        CKAS_STATUS &callbackStatus);
-bool LoadModuleByteCode(asIScriptEngine *engine,
-                        const char *moduleName,
-                        std::vector<unsigned char> &byteCode,
-                        asIScriptModule **outModule,
-                        int &angelScriptCode);
-bool LoadModuleByteCode(asIScriptEngine *engine,
-                        const char *moduleName,
-                        CKAngelScriptBytecodeReadCallback callback,
-                        void *userData,
-                        asIScriptModule **outModule,
-                        int &angelScriptCode,
-                        CKAS_STATUS &callbackStatus);
-std::string MakeTransientModuleName(asIScriptEngine *engine, const char *moduleName);
-
-} // namespace ScriptModuleBytecode
-
-asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
-                                        const char *className,
-                                        const char *classNamespace);
 
 #endif // CK_SCRIPT_API_SUPPORT_H
