@@ -352,9 +352,13 @@ bool LoadModuleByteCode(asIScriptEngine *engine,
     return true;
 }
 
-std::string MakeTransientModuleName(const char *moduleName) {
+std::string MakeTransientModuleName(asIScriptEngine *engine, const char *moduleName) {
     static unsigned int counter = 0;
-    return fmt::format("__ckas_replace_candidate_{}_{}", moduleName ? moduleName : "module", ++counter);
+    std::string candidate;
+    do {
+        candidate = fmt::format("__ckas_replace_candidate_{}_{}", moduleName ? moduleName : "module", ++counter);
+    } while (engine && engine->GetModule(candidate.c_str(), asGM_ONLY_IF_EXISTS));
+    return candidate;
 }
 
 } // namespace ScriptManagerModuleReplacementInternal
@@ -2783,7 +2787,8 @@ CKAS_STATUS ScriptManager::ReplaceModuleFromSections(
     int angelScriptCode = 0;
     std::string diagnostics;
     std::vector<CapturedScriptMessage> diagnosticMessages;
-    const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(moduleName);
+    const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(m_ScriptEngine,
+                                                                                                      moduleName);
     std::shared_ptr<CachedScript> candidate =
         BuildTransientModule(transientName.c_str(),
                              sections,
@@ -3746,7 +3751,8 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
 
     int angelScriptCode = 0;
     CKAS_STATUS callbackStatus = CKAS_OK;
-    const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(moduleName);
+    const std::string transientName = ScriptManagerModuleReplacementInternal::MakeTransientModuleName(m_ScriptEngine,
+                                                                                                      moduleName);
     asIScriptModule *candidateModule = nullptr;
     bool loaded = false;
     {

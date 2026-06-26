@@ -1313,6 +1313,71 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    constexpr const char *transientCollisionModuleName = "__CKAS_TransientCollisionTarget";
+    std::vector<std::string> transientCollisionModules;
+    const auto cleanupTransientCollisionModules = [&]() {
+        api->UnloadModule(transientCollisionModuleName, nullptr);
+        for (const std::string &name : transientCollisionModules) {
+            api->UnloadModule(name.c_str(), nullptr);
+        }
+    };
+    for (int i = 1; i <= 16; ++i) {
+        std::string collisionModuleName = "__ckas_replace_candidate_";
+        collisionModuleName += transientCollisionModuleName;
+        collisionModuleName += "_";
+        collisionModuleName += std::to_string(i);
+        transientCollisionModules.push_back(collisionModuleName);
+        std::string collisionSource = "int __ckas_transient_collision_value() { return ";
+        collisionSource += std::to_string(1000 + i);
+        collisionSource += "; }\n";
+        if (api->CompileModule(collisionModuleName.c_str(),
+                               collisionSource.c_str(),
+                               CKAS_COMPILE_REPLACEEXISTING,
+                               &result) != CKAS_OK) {
+            error = "CKAngelScript API self-test failed to compile transient collision guard module.";
+            cleanupTransientCollisionModules();
+            return false;
+        }
+    }
+    int transientCollisionValue = 0;
+    if (api->CompileModule(transientCollisionModuleName,
+                           "int __ckas_transient_collision_target() { return 1; }\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->CompileModule(transientCollisionModuleName,
+                           "int __ckas_transient_collision_target() { return 2; }\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            transientCollisionModuleName,
+                            "int __ckas_transient_collision_target()",
+                            transientCollisionValue,
+                            result,
+                            error) ||
+        transientCollisionValue != 2) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected replacement to survive transient name collisions.";
+        }
+        cleanupTransientCollisionModules();
+        return false;
+    }
+    for (int i = 0; i < static_cast<int>(transientCollisionModules.size()); ++i) {
+        if (!ExecuteIntFunction(api,
+                                transientCollisionModules[static_cast<size_t>(i)].c_str(),
+                                "int __ckas_transient_collision_value()",
+                                transientCollisionValue,
+                                result,
+                                error) ||
+            transientCollisionValue != 1001 + i) {
+            if (error.empty()) {
+                error = "CKAngelScript API self-test expected transient collision modules to remain loaded.";
+            }
+            cleanupTransientCollisionModules();
+            return false;
+        }
+    }
+    cleanupTransientCollisionModules();
+
     constexpr const char *importProviderModuleName = "__CKAS_ImportProvider";
     constexpr const char *importConsumerModuleName = "__CKAS_ImportConsumer";
     const char *importProviderSource =
