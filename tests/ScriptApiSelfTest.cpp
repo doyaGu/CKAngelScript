@@ -259,6 +259,10 @@ struct ImportProbe {
 };
 
 struct BoundImportEdgeProbe {
+    const char *ExpectedImportModuleName = "__CKAS_ImportConsumer";
+    const char *ExpectedSourceModuleName = "__CKAS_ImportProvider";
+    const char *ExpectedFunctionName = "__ckas_import_add";
+    CKDWORD ExpectedImportIndex = 0;
     bool SawEdge = false;
     CKDWORD CallbackCount = 0;
 };
@@ -650,10 +654,10 @@ CKAS_STATUS ProbeBoundImportEdge(const CKAngelScriptBoundImportEdge *edge, void 
         return CKAS_INVALIDARGUMENT;
     }
     ++probe->CallbackCount;
-    if (edge->ImportIndex == 0 &&
-        CkasStringEquals(edge->ImportModuleName, "__CKAS_ImportConsumer") &&
-        CkasStringEquals(edge->SourceModuleName, "__CKAS_ImportProvider") &&
-        CkasStringContains(edge->FunctionDecl, "__ckas_import_add")) {
+    if (edge->ImportIndex == probe->ExpectedImportIndex &&
+        CkasStringEquals(edge->ImportModuleName, probe->ExpectedImportModuleName) &&
+        CkasStringEquals(edge->SourceModuleName, probe->ExpectedSourceModuleName) &&
+        CkasStringContains(edge->FunctionDecl, probe->ExpectedFunctionName)) {
         probe->SawEdge = true;
     }
     return CKAS_OK;
@@ -2171,6 +2175,82 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->ReleaseFunction(rawBoundImportFunction);
+    constexpr const char *rawCkasImportConsumerModuleName = "__CKAS_RawCkasImportConsumer";
+    const char *rawCkasImportConsumerSource =
+        "import int __ckas_import_add(int value) from \"__CKAS_ImportProvider\";\n"
+        "int __ckas_raw_ckas_import_call() { return __ckas_import_add(9); }\n";
+    asIScriptModule *rawCkasImportConsumer =
+        engine->GetModule(rawCkasImportConsumerModuleName, asGM_ALWAYS_CREATE);
+    if (!rawCkasImportConsumer ||
+        rawCkasImportConsumer->AddScriptSection(rawCkasImportConsumerModuleName,
+                                                rawCkasImportConsumerSource,
+                                                static_cast<unsigned int>(std::strlen(rawCkasImportConsumerSource))) < 0 ||
+        rawCkasImportConsumer->Build() < 0) {
+        error = "CKAngelScript API self-test failed to create a raw import consumer module.";
+        if (rawCkasImportConsumer) {
+            rawCkasImportConsumer->Discard();
+        }
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    BoundImportEdgeProbe rawCkasBoundImportProbe;
+    rawCkasBoundImportProbe.ExpectedImportModuleName = rawCkasImportConsumerModuleName;
+    const CKAS_STATUS rawCkasBindStatus =
+        api->BindAllImportedFunctions(rawCkasImportConsumerModuleName, &result);
+    if (rawCkasBindStatus != CKAS_OK) {
+        error = "CKAngelScript API self-test expected CKAS binding of a raw import consumer to succeed: ";
+        error += std::to_string(static_cast<int>(rawCkasBindStatus));
+        api->UnbindAllImportedFunctions(rawCkasImportConsumerModuleName, nullptr);
+        api->UnloadModule(rawCkasImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->EnumerateBoundImportEdges(rawCkasImportConsumerModuleName,
+                                       ProbeBoundImportEdge,
+                                       &rawCkasBoundImportProbe,
+                                       &result) != CKAS_OK ||
+        rawCkasBoundImportProbe.CallbackCount != 1 ||
+        !rawCkasBoundImportProbe.SawEdge) {
+        error = "CKAngelScript API self-test expected CKAS-bound raw import consumers to appear in the bound graph.";
+        api->UnbindAllImportedFunctions(rawCkasImportConsumerModuleName, nullptr);
+        api->UnloadModule(rawCkasImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    const CKAS_STATUS rawCkasProviderReplaceStatus =
+        api->CompileModule(importProviderModuleName,
+                           importProviderSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result);
+    if (rawCkasProviderReplaceStatus != CKAS_INUSE ||
+        !CkasStringContains(result.ErrorMessage, rawCkasImportConsumerModuleName)) {
+        error = "CKAngelScript API self-test expected CKAS-bound raw import consumers to block provider replacement: ";
+        error += std::to_string(static_cast<int>(rawCkasProviderReplaceStatus));
+        if (result.ErrorMessage) {
+            error += " ";
+            error += result.ErrorMessage;
+        }
+        api->UnbindAllImportedFunctions(rawCkasImportConsumerModuleName, nullptr);
+        api->UnloadModule(rawCkasImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    if (api->UnbindAllImportedFunctions(rawCkasImportConsumerModuleName, &result) != CKAS_OK ||
+        api->CompileModule(importProviderModuleName,
+                           importProviderSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->UnloadModule(rawCkasImportConsumerModuleName, &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected unbound raw import consumers to leave provider replacement unblocked.";
+        api->UnloadModule(rawCkasImportConsumerModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     if (api->BindImportedFunction(importConsumerModuleName,
                                   3,
                                   importProviderModuleName,

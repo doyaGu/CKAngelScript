@@ -160,6 +160,9 @@ bool ScriptModuleStateStore::RemoveImportBinding(const char *moduleName, CKDWORD
     const bool removed = state->BoundImports.size() != oldSize;
     if (removed) {
         state->FingerprintDirty = true;
+        if (state->Kind == ScriptModuleKind::RawUnknown && state->BoundImports.empty()) {
+            MarkModuleUnloaded(moduleName);
+        }
     }
     return removed;
 }
@@ -174,6 +177,9 @@ bool ScriptModuleStateStore::RemoveImportBindingsForModule(const char *moduleNam
     }
     state->BoundImports.clear();
     state->FingerprintDirty = true;
+    if (state->Kind == ScriptModuleKind::RawUnknown) {
+        MarkModuleUnloaded(moduleName);
+    }
     return true;
 }
 
@@ -192,6 +198,13 @@ void ScriptModuleStateStore::RestoreImportBindingsForModule(
     }
     SortImportBindings(state.BoundImports);
     state.FingerprintDirty = true;
+    if (state.BoundImports.empty()) {
+        if (state.Kind == ScriptModuleKind::RawUnknown) {
+            MarkModuleUnloaded(moduleName);
+        }
+    } else {
+        EnsureModuleOrdered(moduleName);
+    }
 }
 
 void ScriptModuleStateStore::RecordImportBinding(const char *importModuleName,
@@ -211,6 +224,7 @@ void ScriptModuleStateStore::RecordImportBinding(const char *importModuleName,
     state.BoundImports.push_back(edge);
     SortImportBindings(state.BoundImports);
     state.FingerprintDirty = true;
+    EnsureModuleOrdered(importModuleName);
 }
 
 void ScriptModuleStateStore::MarkDirty(const char *moduleName) {
@@ -308,6 +322,15 @@ const ScriptModuleStateStore::ModuleState *ScriptModuleStateStore::FindState(
 ScriptModuleStateStore::ModuleState &ScriptModuleStateStore::EnsureState(const char *moduleName) {
     const std::string key = moduleName ? moduleName : "";
     return m_States.emplace(key, ModuleState()).first->second;
+}
+
+void ScriptModuleStateStore::EnsureModuleOrdered(const char *moduleName) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
+        return;
+    }
+    if (std::find(m_ModuleOrder.begin(), m_ModuleOrder.end(), moduleName) == m_ModuleOrder.end()) {
+        m_ModuleOrder.emplace_back(moduleName);
+    }
 }
 
 void ScriptModuleStateStore::MarkModuleLoaded(const char *moduleName) {
