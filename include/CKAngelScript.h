@@ -626,6 +626,8 @@ static inline CKAS_STATUS CKAngelScriptRegisterEngineExtensionWithApi(
         result->AngelScriptCode = 0;
         result->ErrorMessage = NULL;
         result->StackTrace = NULL;
+        result->CompilerMessages = NULL;
+        result->CompilerMessageCount = 0;
     }
     if (!CKAngelScriptExtensionApiIsLoaded(api)) {
         if (result) {
@@ -665,6 +667,8 @@ static inline CKAS_STATUS CKAngelScriptUnregisterEngineExtensionWithApi(
         result->AngelScriptCode = 0;
         result->ErrorMessage = NULL;
         result->StackTrace = NULL;
+        result->CompilerMessages = NULL;
+        result->CompilerMessageCount = 0;
     }
     if (!CKAngelScriptExtensionApiIsLoaded(api)) {
         if (result) {

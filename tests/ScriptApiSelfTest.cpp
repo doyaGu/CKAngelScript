@@ -965,6 +965,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
 
     CKAngelScriptResult softResult = CKAngelScriptApi::Result();
+    softResult.CompilerMessages =
+        reinterpret_cast<const CKAngelScriptCompilerMessage *>(static_cast<uintptr_t>(1));
+    softResult.CompilerMessageCount = 99;
     if (CKAngelScriptRegisterEngineExtensionWithApi(nullptr,
                                                     context,
                                                     "__ckas_soft_api_extension",
@@ -972,8 +975,23 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                                     nullptr,
                                                     CKAS_ENGINEEXTENSION_DEFERRED,
                                                     &softResult) != CKAS_INVALIDARGUMENT ||
-        softResult.Status != CKAS_INVALIDARGUMENT) {
-        error = "CKAngelScript API self-test expected an unloaded extension API table to fail registration.";
+        softResult.Status != CKAS_INVALIDARGUMENT ||
+        softResult.CompilerMessages ||
+        softResult.CompilerMessageCount != 0) {
+        error = "CKAngelScript API self-test expected an unloaded extension API table to fail registration with a clean result.";
+        return false;
+    }
+    softResult.CompilerMessages =
+        reinterpret_cast<const CKAngelScriptCompilerMessage *>(static_cast<uintptr_t>(1));
+    softResult.CompilerMessageCount = 99;
+    if (CKAngelScriptUnregisterEngineExtensionWithApi(nullptr,
+                                                      context,
+                                                      "__ckas_soft_api_extension",
+                                                      &softResult) != CKAS_INVALIDARGUMENT ||
+        softResult.Status != CKAS_INVALIDARGUMENT ||
+        softResult.CompilerMessages ||
+        softResult.CompilerMessageCount != 0) {
+        error = "CKAngelScript API self-test expected an unloaded extension API table to fail unregistration with a clean result.";
         return false;
     }
     if (CKAngelScriptRegisterEngineExtensionWithApi(&softApi,
