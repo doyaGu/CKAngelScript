@@ -287,8 +287,7 @@ protected:
     CKAS_STATUS CheckModuleRuntimeHandlesReleased(const char *moduleName, CKAngelScriptResult *result);
     CKAS_STATUS CheckModuleHasNoBoundImportConsumers(const char *moduleName, CKAngelScriptResult *result);
     CKAS_STATUS CheckModuleReplaceOrUnloadAllowed(const char *moduleName, CKAngelScriptResult *result);
-    bool IsModuleMutationBlockedByCallback() const;
-    CKAS_STATUS RejectModuleMutationDuringCallback(const char *apiName, CKAngelScriptResult *result);
+    CKAS_STATUS CheckModuleMutationAllowed(const char *apiName, CKAngelScriptResult *result);
     CKAngelScriptResult MakeResult(CKAS_STATUS status,
                                  int angelScriptCode = 0,
                                  const std::string &errorMessage = std::string(),

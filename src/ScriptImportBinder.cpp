@@ -75,8 +75,9 @@ CKAS_STATUS ScriptImportBinder::EnumerateImportedFunctions(ScriptManager &manage
 CKAS_STATUS ScriptImportBinder::BindImportedFunction(ScriptManager &manager,
                                                      const CKAngelScriptImportBindOptions &options,
                                                      CKAngelScriptResult *result) {
-    if (manager.IsModuleMutationBlockedByCallback()) {
-        return manager.RejectModuleMutationDuringCallback("BindImportedFunction", result);
+    CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("BindImportedFunction", result);
+    if (callbackStatus != CKAS_OK) {
+        return callbackStatus;
     }
     ScriptPublicOptions::ImportBindRequest request;
     std::string errorMessage;
@@ -167,8 +168,9 @@ CKAS_STATUS ScriptImportBinder::BindImportedFunction(ScriptManager &manager,
 CKAS_STATUS ScriptImportBinder::BindAllImportedFunctions(ScriptManager &manager,
                                                          const char *moduleName,
                                                          CKAngelScriptResult *result) {
-    if (manager.IsModuleMutationBlockedByCallback()) {
-        return manager.RejectModuleMutationDuringCallback("BindAllImportedFunctions", result);
+    CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("BindAllImportedFunctions", result);
+    if (callbackStatus != CKAS_OK) {
+        return callbackStatus;
     }
     asIScriptModule *module = nullptr;
     const CKAS_STATUS borrowStatus = manager.BorrowModule(moduleName, &module, result);
@@ -270,8 +272,9 @@ CKAS_STATUS ScriptImportBinder::UnbindImportedFunction(ScriptManager &manager,
                                                        const char *moduleName,
                                                        CKDWORD importIndex,
                                                        CKAngelScriptResult *result) {
-    if (manager.IsModuleMutationBlockedByCallback()) {
-        return manager.RejectModuleMutationDuringCallback("UnbindImportedFunction", result);
+    CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("UnbindImportedFunction", result);
+    if (callbackStatus != CKAS_OK) {
+        return callbackStatus;
     }
     asIScriptModule *module = nullptr;
     CKAS_STATUS status = manager.BorrowModule(moduleName, &module, result);
@@ -294,8 +297,9 @@ CKAS_STATUS ScriptImportBinder::UnbindImportedFunction(ScriptManager &manager,
 CKAS_STATUS ScriptImportBinder::UnbindAllImportedFunctions(ScriptManager &manager,
                                                            const char *moduleName,
                                                            CKAngelScriptResult *result) {
-    if (manager.IsModuleMutationBlockedByCallback()) {
-        return manager.RejectModuleMutationDuringCallback("UnbindAllImportedFunctions", result);
+    CKAS_STATUS callbackStatus = manager.CheckModuleMutationAllowed("UnbindAllImportedFunctions", result);
+    if (callbackStatus != CKAS_OK) {
+        return callbackStatus;
     }
     asIScriptModule *module = nullptr;
     CKAS_STATUS status = manager.BorrowModule(moduleName, &module, result);

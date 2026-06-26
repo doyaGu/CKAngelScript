@@ -72,8 +72,9 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(ScriptManager &manager,
     if (!ScriptApiSupport::IsNonEmpty(request.ModuleName)) {
         return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
-    if (manager.IsModuleMutationBlockedByCallback()) {
-        return manager.RejectModuleMutationDuringCallback("LoadModuleBytecode", result);
+    CKAS_STATUS mutationStatus = manager.CheckModuleMutationAllowed("LoadModuleBytecode", result);
+    if (mutationStatus != CKAS_OK) {
+        return mutationStatus;
     }
     if (!request.Read) {
         return manager.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Bytecode read callback is required.");

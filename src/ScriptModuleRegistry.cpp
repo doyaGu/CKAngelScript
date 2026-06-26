@@ -229,12 +229,10 @@ CKAS_STATUS ScriptManager::CheckModuleReplaceOrUnloadAllowed(const char *moduleN
     return CheckModuleHasNoBoundImportConsumers(moduleName, result);
 }
 
-bool ScriptManager::IsModuleMutationBlockedByCallback() const {
-    return m_PublicCallbackDepth > 0;
-}
-
-CKAS_STATUS ScriptManager::RejectModuleMutationDuringCallback(const char *apiName,
-                                                              CKAngelScriptResult *result) {
+CKAS_STATUS ScriptManager::CheckModuleMutationAllowed(const char *apiName, CKAngelScriptResult *result) {
+    if (m_PublicCallbackDepth <= 0) {
+        return CKAS_OK;
+    }
     return StoreResult(result,
                        CKAS_INVALIDSTATE,
                        0,
@@ -249,8 +247,9 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
     if (optionStatus != CKAS_OK) {
         return StoreResult(result, optionStatus, 0, errorMessage);
     }
-    if (IsModuleMutationBlockedByCallback()) {
-        return RejectModuleMutationDuringCallback("LoadModule", result);
+    const CKAS_STATUS callbackStatus = CheckModuleMutationAllowed("LoadModule", result);
+    if (callbackStatus != CKAS_OK) {
+        return callbackStatus;
     }
     if (!GetScriptEngine()) {
         return StoreResult(result, CKAS_NOTINITIALIZED, 0, "AngelScript engine is not initialized.");
@@ -342,8 +341,9 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
     if (!ScriptApiSupport::IsNonEmpty(moduleName) || !scriptCode) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name and script code are required.");
     }
-    if (IsModuleMutationBlockedByCallback()) {
-        return RejectModuleMutationDuringCallback("CompileModule", result);
+    const CKAS_STATUS callbackStatus = CheckModuleMutationAllowed("CompileModule", result);
+    if (callbackStatus != CKAS_OK) {
+        return callbackStatus;
     }
     if (ScriptApiSupport::HasUnknownPublicFlags(flags, CKAS_COMPILE_REPLACEEXISTING)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Unknown CompileModule flags.");
@@ -387,8 +387,9 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
-    if (IsModuleMutationBlockedByCallback()) {
-        return RejectModuleMutationDuringCallback("UnloadModule", result);
+    const CKAS_STATUS callbackStatus = CheckModuleMutationAllowed("UnloadModule", result);
+    if (callbackStatus != CKAS_OK) {
+        return callbackStatus;
     }
     const CKAS_STATUS mutationStatus = CheckModuleReplaceOrUnloadAllowed(moduleName, result);
     if (mutationStatus != CKAS_OK) {
