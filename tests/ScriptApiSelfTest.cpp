@@ -2915,6 +2915,43 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     BytecodeBuffer replacementBytecodeRead = replacementBytecode;
+    CKAngelScriptExecution *liveBytecodeExecution = nullptr;
+    if (api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(staleBytecodeFunction),
+                                     &liveBytecodeExecution,
+                                     &result) != CKAS_OK ||
+        !liveBytecodeExecution) {
+        error = "CKAngelScript API self-test expected to create a live bytecode execution handle.";
+        api->ReleaseFunction(staleBytecodeFunction);
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeTargetModuleName,
+                                                                      ReadBytecode,
+                                                                      &replacementBytecodeRead,
+                                                                      CKAS_BYTECODE_REPLACEEXISTING),
+                                &result) != CKAS_INUSE ||
+        api->GetModuleGeneration(bytecodeTargetModuleName) != bytecodeGenerationBeforeFailedReplace ||
+        !ExecuteIntFunction(api,
+                            bytecodeTargetModuleName,
+                            "int __ckas_bytecode_value()",
+                            bytecodeValue,
+                            result,
+                            error) ||
+        bytecodeValue != 31) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected live execution handles to block bytecode replacement.";
+        }
+        api->ReleaseExecution(liveBytecodeExecution);
+        api->ReleaseFunction(staleBytecodeFunction);
+        api->UnloadModule(bytecodeTargetModuleName, nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    api->ReleaseExecution(liveBytecodeExecution);
+    replacementBytecodeRead = replacementBytecode;
     if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeTargetModuleName,
                                                                       ReadBytecode,
                                                                       &replacementBytecodeRead,
