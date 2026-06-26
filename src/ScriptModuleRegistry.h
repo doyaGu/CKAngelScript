@@ -7,6 +7,7 @@
 #include "ScriptCache.h"
 
 class ScriptManager;
+class ScriptModuleStateStore;
 
 class ScriptModuleRegistry {
 public:
@@ -25,6 +26,7 @@ public:
     bool RestoreFromChunk(const char *scriptName, CKStateChunk *chunk);
     bool SaveToChunk(const char *scriptName, CKStateChunk *chunk);
     bool ClearCode(const char *scriptName);
+    void ApplyCachedIncludeEdges(ScriptModuleStateStore &stateStore, const char *moduleName);
     unsigned long long BuildSourceHash(const char *moduleName);
 
 private:

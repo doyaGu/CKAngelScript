@@ -174,6 +174,14 @@ bool ScriptModuleRegistry::ClearCode(const char *scriptName) {
     return true;
 }
 
+void ScriptModuleRegistry::ApplyCachedIncludeEdges(ScriptModuleStateStore &stateStore, const char *moduleName) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
+        return;
+    }
+    const std::shared_ptr<CachedScript> cached = GetCachedScript(moduleName);
+    stateStore.SetIncludeEdges(moduleName, cached ? cached->includeEdges : std::vector<ScriptIncludeEdge>());
+}
+
 unsigned long long ScriptModuleRegistry::BuildSourceHash(const char *moduleName) {
     unsigned long long sourceHash = ScriptApiSupport::kFnvOffsetBasis;
     const std::shared_ptr<CachedScript> cached = GetCachedScript(moduleName ? moduleName : "");
@@ -248,20 +256,8 @@ void ScriptManager::SetModuleIncludeEdges(const char *moduleName,
     m_ModuleStateStore.SetIncludeEdges(moduleName, includeEdges);
 }
 
-void ScriptManager::RefreshModuleIncludeEdgesFromCache(const char *moduleName) {
-    if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
-        return;
-    }
-    const std::shared_ptr<CachedScript> cached = m_ModuleRegistry.GetCachedScript(moduleName);
-    SetModuleIncludeEdges(moduleName, cached ? cached->includeEdges : std::vector<ScriptIncludeEdge>());
-}
-
 void ScriptManager::ClearModuleIncludeEdges(const char *moduleName) {
     m_ModuleStateStore.ClearIncludeEdges(moduleName);
-}
-
-unsigned long long ScriptManager::BuildModuleSourceHash(const char *moduleName) {
-    return m_ModuleRegistry.BuildSourceHash(moduleName);
 }
 
 unsigned long long ScriptManager::BuildDeclaredImportHash(const char *moduleName) {
@@ -355,7 +351,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                                std::string(),
                                &diagnosticMessages);
         }
-        RefreshModuleIncludeEdgesFromCache(request.ModuleName);
+        m_ModuleRegistry.ApplyCachedIncludeEdges(m_ModuleStateStore, request.ModuleName);
         SetModuleKind(request.ModuleName, ScriptModuleKind::Source);
         BumpModuleGeneration(request.ModuleName);
         return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
@@ -386,7 +382,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
                            std::string(),
                            &diagnosticMessages);
     }
-    RefreshModuleIncludeEdgesFromCache(request.ModuleName);
+    m_ModuleRegistry.ApplyCachedIncludeEdges(m_ModuleStateStore, request.ModuleName);
     SetModuleKind(request.ModuleName, ScriptModuleKind::Source);
     BumpModuleGeneration(request.ModuleName);
     return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
@@ -434,7 +430,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
                            std::string(),
                            &diagnosticMessages);
     }
-    RefreshModuleIncludeEdgesFromCache(moduleName);
+    m_ModuleRegistry.ApplyCachedIncludeEdges(m_ModuleStateStore, moduleName);
     SetModuleKind(moduleName, ScriptModuleKind::Source);
     BumpModuleGeneration(moduleName);
     return StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);
@@ -851,7 +847,7 @@ CKAS_STATUS ScriptManager::GetModuleFingerprint(const char *moduleName,
                                                         CKAS_API_VERSION,
                                                         asGetLibraryVersion(),
                                                         asGetLibraryOptions(),
-                                                        BuildModuleSourceHash(moduleName),
+                                                        m_ModuleRegistry.BuildSourceHash(moduleName),
                                                         BuildDeclaredImportHash(moduleName));
     return StoreResult(result, CKAS_OK);
 }

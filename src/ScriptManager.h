@@ -295,10 +295,8 @@ protected:
     void BumpModuleGeneration(const char *moduleName);
     void SetModuleKind(const char *moduleName, ScriptModuleKind kind);
     void SetModuleIncludeEdges(const char *moduleName, const std::vector<ScriptIncludeEdge> &includeEdges);
-    void RefreshModuleIncludeEdgesFromCache(const char *moduleName);
     void ClearModuleIncludeEdges(const char *moduleName);
     void MarkModuleStateDirty(const char *moduleName);
-    unsigned long long BuildModuleSourceHash(const char *moduleName);
     unsigned long long BuildDeclaredImportHash(const char *moduleName);
     CKAS_STATUS ReplaceModuleFromSections(
         const char *moduleName,
