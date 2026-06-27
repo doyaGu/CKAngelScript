@@ -1888,6 +1888,16 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         }
         return false;
     }
+    if (api->UnloadModule(rawModuleName, &result) != CKAS_INUSE) {
+        error = "CKAngelScript API self-test expected raw module execution handles to block unload.";
+        api->ReleaseExecution(rawModuleExecution);
+        api->ReleaseFunction(rawModuleFunction);
+        rawModule = engine->GetModule(rawModuleName, asGM_ONLY_IF_EXISTS);
+        if (rawModule) {
+            rawModule->Discard();
+        }
+        return false;
+    }
     api->ReleaseExecution(rawModuleExecution);
     if (api->UnloadModule(rawModuleName, &result) != CKAS_OK ||
         api->HasModule(rawModuleName)) {
