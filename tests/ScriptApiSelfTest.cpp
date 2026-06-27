@@ -1858,8 +1858,38 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                                                   "int __ckas_raw_module_value()"),
                           &rawModuleFunction,
                           &result) != CKAS_OK ||
-        !rawModuleFunction ||
-        api->UnloadModule(rawModuleName, &result) != CKAS_OK ||
+        !rawModuleFunction) {
+        error = "CKAngelScript API self-test expected raw engine modules to expose public function handles.";
+        api->ReleaseFunction(rawModuleFunction);
+        rawModule = engine->GetModule(rawModuleName, asGM_ONLY_IF_EXISTS);
+        if (rawModule) {
+            rawModule->Discard();
+        }
+        return false;
+    }
+    CKAngelScriptExecution *rawModuleExecution = nullptr;
+    IntExecutionData rawModuleExecutionData;
+    CKAngelScriptExecutionStepOptions rawModuleStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(nullptr, ReadIntReturn, &rawModuleExecutionData);
+    if (api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(rawModuleFunction),
+                                     &rawModuleExecution,
+                                     &result) != CKAS_OK ||
+        !rawModuleExecution ||
+        api->StartExecution(rawModuleExecution, rawModuleStepOptions, &result) != CKAS_OK ||
+        rawModuleExecutionData.Output != 73) {
+        error = "CKAngelScript API self-test expected raw module functions to execute through public handles.";
+        if (rawModuleExecution) {
+            api->ReleaseExecution(rawModuleExecution);
+        }
+        api->ReleaseFunction(rawModuleFunction);
+        rawModule = engine->GetModule(rawModuleName, asGM_ONLY_IF_EXISTS);
+        if (rawModule) {
+            rawModule->Discard();
+        }
+        return false;
+    }
+    api->ReleaseExecution(rawModuleExecution);
+    if (api->UnloadModule(rawModuleName, &result) != CKAS_OK ||
         api->HasModule(rawModuleName)) {
         error = "CKAngelScript API self-test expected UnloadModule to discard raw engine modules.";
         api->ReleaseFunction(rawModuleFunction);
@@ -1869,8 +1899,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         }
         return false;
     }
-    CKAngelScriptExecution *rawModuleExecution =
-        reinterpret_cast<CKAngelScriptExecution *>(static_cast<uintptr_t>(1));
+    rawModuleExecution = reinterpret_cast<CKAngelScriptExecution *>(static_cast<uintptr_t>(1));
     if (api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(rawModuleFunction),
                                      &rawModuleExecution,
                                      &result) != CKAS_STALEHANDLE ||

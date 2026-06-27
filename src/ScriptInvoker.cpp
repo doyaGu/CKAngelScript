@@ -217,11 +217,6 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
     m_ErrorMessage.clear();
     m_StackTrace.clear();
 
-    if (!m_CachedScript) {
-        SetErrorMessage("No script to execute.");
-        return ScriptInvocationStatus::Failed;
-    }
-
     if (!func) {
         SetErrorMessage("No function to execute.");
         return ScriptInvocationStatus::Failed;

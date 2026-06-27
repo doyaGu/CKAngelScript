@@ -310,10 +310,11 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
     }
     function->AddRef();
     execution->Function = function;
-    if (!execution->Invoker.SetScript(request.Function->ModuleName.c_str())) {
+    const bool hasCachedScript = execution->Invoker.SetScript(request.Function->ModuleName.c_str());
+    if (!hasCachedScript && !function->GetModule()) {
         const std::string error = execution->Invoker.GetErrorMessage();
         delete execution;
-        return StoreResult(result, CKAS_NOTFOUND, 0, error.empty() ? "Module cache was not found." : error);
+        return StoreResult(result, CKAS_NOTFOUND, 0, error.empty() ? "Function module was not found." : error);
     }
 
     ScriptApiSupport::MakeExecutionResult(execution, CKAS_OK);
