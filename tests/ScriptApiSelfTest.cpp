@@ -1490,6 +1490,27 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             error = "CKAngelScript API self-test expected chunk restore to reject mismatched cache names.";
             return false;
         }
+
+        std::unique_ptr<CKStateChunk, void (*)(CKStateChunk *)> truncatedChunk(
+            CreateCKStateChunk(CKCID_OBJECT, nullptr),
+            DeleteCKStateChunk);
+        if (!truncatedChunk) {
+            error = "CKAngelScript API self-test failed to allocate truncated cache chunk.";
+            return false;
+        }
+        truncatedChunk->StartWrite();
+        truncatedChunk->WriteIdentifier(SCRIPTCACHE_IDENTIFIER);
+        truncatedChunk->WriteInt(SCRIPTCACHE_VERSION);
+        truncatedChunk->WriteString(const_cast<CKSTRING>(cacheChunkModuleName));
+        truncatedChunk->WriteInt(1);
+        truncatedChunk->WriteInt(1);
+        truncatedChunk->CloseChunk();
+        CachedScript truncatedRestore;
+        if (truncatedRestore.LoadFromChunk(truncatedChunk.get())) {
+            truncatedRestore.Discard();
+            error = "CKAngelScript API self-test expected truncated cache chunks to be rejected.";
+            return false;
+        }
     }
 
     {

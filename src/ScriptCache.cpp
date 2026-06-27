@@ -648,8 +648,8 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
     for (int i = 0; i < numSections; ++i) {
         chunk->ReadString(&str);
         if (!str) {
-            str = nullptr;
-            continue;
+            chunk->CloseChunk();
+            return false;
         }
         std::string filename = str;
         CKDeletePointer(str);
