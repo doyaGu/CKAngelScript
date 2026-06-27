@@ -115,6 +115,35 @@ asITypeInfo *TypeInfoById(asIScriptEngine *engine, int typeId) {
     return type;
 }
 
+bool TypeUsesModule(asITypeInfo *type,
+                    const char *moduleName,
+                    std::unordered_set<asITypeInfo *> &visited) {
+    if (!type || !moduleName || moduleName[0] == '\0' || visited.find(type) != visited.end()) {
+        return false;
+    }
+    visited.insert(type);
+
+    asIScriptModule *module = type->GetModule();
+    const char *typeModuleName = module ? module->GetName() : nullptr;
+    if (typeModuleName && std::strcmp(typeModuleName, moduleName) == 0) {
+        return true;
+    }
+
+    const asUINT subtypeCount = type->GetSubTypeCount();
+    for (asUINT i = 0; i < subtypeCount; ++i) {
+        if (TypeUsesModule(type->GetSubType(i), moduleName, visited)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool TypeIdUsesModule(asIScriptEngine *engine, int typeId, const char *moduleName) {
+    asITypeInfo *type = TypeInfoById(engine, typeId);
+    std::unordered_set<asITypeInfo *> visited;
+    return TypeUsesModule(type, moduleName, visited);
+}
+
 bool IsAsyncTaskType(asIScriptEngine *engine, int typeId, int &subtypeId, std::string &error) {
     if (!(typeId & asTYPEID_OBJHANDLE)) {
         error = fmt::format("Expected AsyncTask<T>@ handle, got {}.", TypeName(engine, typeId));
@@ -603,6 +632,23 @@ void ScriptAsyncStoredValue::ReleaseReferences() {
     Clear();
 }
 
+bool ScriptAsyncStoredValue::UsesModule(const char *moduleName) const {
+    if (!m_HasValue || !m_Engine || !(m_TypeId & asTYPEID_MASK_OBJECT)) {
+        return false;
+    }
+    if (TypeIdUsesModule(m_Engine, m_TypeId, moduleName)) {
+        return true;
+    }
+
+    asITypeInfo *declaredType = TypeInfoById(m_Engine, m_TypeId);
+    if (!declaredType || !m_Object || (declaredType->GetFlags() & asOBJ_SCRIPT_OBJECT) == 0) {
+        return false;
+    }
+    auto *scriptObject = static_cast<asIScriptObject *>(m_Object);
+    std::unordered_set<asITypeInfo *> visited;
+    return TypeUsesModule(scriptObject->GetObjectType(), moduleName, visited);
+}
+
 void ScriptAsyncStoredValue::Store(asIScriptEngine *engine, void *address, int typeId) {
     Clear();
     m_Engine = engine;
@@ -750,13 +796,7 @@ ScriptAsyncTaskBase::ScriptAsyncTaskBase(ScriptAsyncScheduler *scheduler,
     : m_Scheduler(scheduler), m_Engine(engine), m_Kind(kind), m_SubTypeId(subtypeId) {}
 
 ScriptAsyncTaskBase::~ScriptAsyncTaskBase() {
-    ReleaseContext();
-    if (m_Function) {
-        m_Function->Release();
-        m_Function = nullptr;
-    }
-    ReleaseChildren();
-    ReleaseBridgeTasks();
+    ReleaseExecutionReferences();
     ReleaseResult();
 }
 
@@ -780,7 +820,7 @@ bool ScriptAsyncTaskBase::UsesModule(
     }
     visited.insert(this);
 
-    if (ModuleNamesContain(m_ModuleNames, moduleName)) {
+    if (ModuleNamesContain(m_ModuleNames, moduleName) || m_Result.UsesModule(moduleName)) {
         return true;
     }
     for (ScriptAsyncTaskBase *child : m_Children) {
@@ -848,14 +888,7 @@ void ScriptAsyncTaskBase::EnumReferences(asIScriptEngine *engine) {
 }
 
 void ScriptAsyncTaskBase::ReleaseAllReferences(asIScriptEngine *) {
-    ReleaseContext();
-    if (m_Function) {
-        m_Function->Release();
-        m_Function = nullptr;
-    }
-    m_ModuleNames.clear();
-    ReleaseChildren();
-    ReleaseBridgeTasks();
+    ReleaseExecutionReferences();
     m_Result.ReleaseReferences();
 }
 
@@ -1026,6 +1059,20 @@ void ScriptAsyncTaskBase::Fail(const std::string &error) {
 
 void ScriptAsyncTaskBase::SetState(ScriptAsyncTaskState state) {
     m_State = state;
+    if (IsDone()) {
+        ReleaseExecutionReferences();
+    }
+}
+
+void ScriptAsyncTaskBase::ReleaseExecutionReferences() {
+    ReleaseContext();
+    if (m_Function) {
+        m_Function->Release();
+        m_Function = nullptr;
+    }
+    m_ModuleNames.clear();
+    ReleaseChildren();
+    ReleaseBridgeTasks();
 }
 
 void ScriptAsyncTaskBase::ReleaseResult() {

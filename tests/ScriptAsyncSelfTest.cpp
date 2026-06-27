@@ -210,6 +210,90 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
     CKAngelScriptResult result = {};
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptAsyncScheduler *managerScheduler = manager ? manager->GetAsyncScheduler() : nullptr;
+    if (!managerScheduler) {
+        error = "Async completed result self-test could not retrieve the manager scheduler.";
+        return false;
+    }
+
+    WriteAsyncSelfTestStage("completed-result-dependencies");
+    constexpr const char *primitiveResultModuleName = "__CKAS_AsyncCompletedPrimitiveSelfTest";
+    if (api->CompileModule(primitiveResultModuleName,
+                           "int __ckas_async_completed_int() { return 3; }\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Async completed primitive result self-test compile failed.";
+        return false;
+    }
+    asIScriptModule *primitiveResultModule = engine->GetModule(primitiveResultModuleName, asGM_ONLY_IF_EXISTS);
+    asIScriptFunction *primitiveResultFunction = primitiveResultModule
+        ? primitiveResultModule->GetFunctionByDecl("int __ckas_async_completed_int()")
+        : nullptr;
+    if (!primitiveResultFunction) {
+        api->UnloadModule(primitiveResultModuleName, nullptr);
+        error = "Async completed primitive result self-test could not resolve function.";
+        return false;
+    }
+    ScriptAsyncTaskBase *primitiveResultTask =
+        managerScheduler->CreateScriptTask(primitiveResultFunction, primitiveResultFunction->GetReturnTypeId());
+    primitiveResultTask->Advance();
+    if (!primitiveResultTask->IsCompleted() ||
+        primitiveResultTask->UsesModule(primitiveResultModuleName) ||
+        api->UnloadModule(primitiveResultModuleName, &result) != CKAS_OK) {
+        primitiveResultTask->Release();
+        managerScheduler->Clear();
+        api->UnloadModule(primitiveResultModuleName, nullptr);
+        error = "Async completed primitive result self-test expected completed primitive tasks not to block unload.";
+        return false;
+    }
+    primitiveResultTask->Release();
+    managerScheduler->Clear();
+
+    constexpr const char *objectResultModuleName = "__CKAS_AsyncCompletedObjectSelfTest";
+    if (api->CompileModule(objectResultModuleName,
+                           "class __CKAS_AsyncCompletedBox { int value; }\n"
+                           "__CKAS_AsyncCompletedBox@ __ckas_async_completed_box() {\n"
+                           "  __CKAS_AsyncCompletedBox@ box = __CKAS_AsyncCompletedBox();\n"
+                           "  box.value = 7;\n"
+                           "  return box;\n"
+                           "}\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Async completed object result self-test compile failed.";
+        return false;
+    }
+    asIScriptModule *objectResultModule = engine->GetModule(objectResultModuleName, asGM_ONLY_IF_EXISTS);
+    asIScriptFunction *objectResultFunction = objectResultModule
+        ? objectResultModule->GetFunctionByDecl("__CKAS_AsyncCompletedBox@ __ckas_async_completed_box()")
+        : nullptr;
+    if (!objectResultFunction) {
+        api->UnloadModule(objectResultModuleName, nullptr);
+        error = "Async completed object result self-test could not resolve function.";
+        return false;
+    }
+    ScriptAsyncTaskBase *objectResultTask =
+        managerScheduler->CreateScriptTask(objectResultFunction, objectResultFunction->GetReturnTypeId());
+    objectResultTask->Advance();
+    if (!objectResultTask->IsCompleted() ||
+        !objectResultTask->UsesModule(objectResultModuleName) ||
+        api->UnloadModule(objectResultModuleName, &result) != CKAS_INUSE) {
+        objectResultTask->Release();
+        managerScheduler->Clear();
+        api->UnloadModule(objectResultModuleName, nullptr);
+        error = "Async completed object result self-test expected script object results to block unload.";
+        return false;
+    }
+    objectResultTask->Release();
+    managerScheduler->Clear();
+    if (api->UnloadModule(objectResultModuleName, &result) != CKAS_OK) {
+        error = "Async completed object result self-test failed to unload after task release.";
+        return false;
+    }
 
     WriteAsyncSelfTestStage("tick-reentrant-track");
     if (api->CompileModule("__CKAS_AsyncTickMutationSelfTest",

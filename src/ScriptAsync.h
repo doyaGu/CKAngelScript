@@ -50,6 +50,7 @@ public:
     void Clear();
     void EnumReferences(asIScriptEngine *engine) const;
     void ReleaseReferences();
+    bool UsesModule(const char *moduleName) const;
     void Store(asIScriptEngine *engine, void *address, int typeId);
     bool CopyTo(void *address, int typeId, std::string &error) const;
     bool CopyFrom(const ScriptAsyncStoredValue &other, std::string &error);
@@ -109,6 +110,7 @@ private:
     bool UsesModule(const char *moduleName,
                     std::unordered_set<const ScriptAsyncTaskBase *> &visited) const;
     void SetState(ScriptAsyncTaskState state);
+    void ReleaseExecutionReferences();
     void ReleaseResult();
     void ReleaseContext();
     void ReleaseChildren();

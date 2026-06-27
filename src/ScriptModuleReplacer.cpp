@@ -53,6 +53,7 @@ std::shared_ptr<CachedScript> ScriptModuleReplacer::BuildTransientModule(
         if (script->module) {
             asIScriptEngine *engine = manager.GetScriptEngine();
             ScriptAutoGarbageCollectScope suppressAutoGc(engine, false);
+            ScriptRunBoundedGarbageCollection(engine);
             script->Discard();
             ScriptRunBoundedGarbageCollection(engine);
         }
@@ -111,6 +112,7 @@ void ScriptModuleReplacer::RemoveForReplacement(ScriptManager &manager,
     stateStore.RemoveImportBindingsForModule(moduleName);
     asIScriptEngine *engine = manager.GetScriptEngine();
     ScriptAutoGarbageCollectScope suppressAutoGc(engine, false);
+    ScriptRunBoundedGarbageCollection(engine);
     if (snapshot.Cache && snapshot.Cache->module) {
         snapshot.Cache->module->Discard();
         snapshot.Cache->module = nullptr;
@@ -260,6 +262,7 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                                                   candidateByteCode,
                                                   angelScriptCode)) {
         ScriptAutoGarbageCollectScope suppressAutoGc(manager.GetScriptEngine(), false);
+        ScriptRunBoundedGarbageCollection(manager.GetScriptEngine());
         candidate->Discard();
         ScriptRunBoundedGarbageCollection(manager.GetScriptEngine());
         return diagnosticsStore.StoreResult(result,
@@ -282,6 +285,7 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                                  angelScriptCode,
                                  commitError)) {
         ScriptAutoGarbageCollectScope suppressAutoGc(manager.GetScriptEngine(), false);
+        ScriptRunBoundedGarbageCollection(manager.GetScriptEngine());
         candidate->Discard();
         ScriptRunBoundedGarbageCollection(manager.GetScriptEngine());
         return diagnosticsStore.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, commitError);
@@ -300,6 +304,7 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
     registry.CacheScript(moduleName, committedCache);
     {
         ScriptAutoGarbageCollectScope suppressAutoGc(manager.GetScriptEngine(), false);
+        ScriptRunBoundedGarbageCollection(manager.GetScriptEngine());
         candidate->Discard();
         ScriptRunBoundedGarbageCollection(manager.GetScriptEngine());
     }

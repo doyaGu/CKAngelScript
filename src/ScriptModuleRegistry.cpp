@@ -135,6 +135,7 @@ bool ScriptModuleRegistry::Discard(ScriptManager &manager, const char *moduleNam
     }
     asIScriptEngine *engine = manager.GetScriptEngine();
     ScriptAutoGarbageCollectScope suppressAutoGc(engine, false);
+    ScriptRunBoundedGarbageCollection(engine);
     bool discarded = false;
     if (DiscardCached(moduleName)) {
         discarded = true;
