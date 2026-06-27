@@ -9,6 +9,7 @@
 
 #include "ScriptApiDiagnostics.h"
 #include "ScriptApiSupport.h"
+#include "ScriptAngelScriptGc.h"
 #include "ScriptModuleMutationPolicy.h"
 #include "ScriptModuleRegistry.h"
 #include "ScriptPublicOptions.h"
@@ -132,15 +133,21 @@ bool ScriptModuleRegistry::Discard(ScriptManager &manager, const char *moduleNam
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
     }
+    asIScriptEngine *engine = manager.GetScriptEngine();
+    ScriptAutoGarbageCollectScope suppressAutoGc(engine, false);
+    bool discarded = false;
     if (DiscardCached(moduleName)) {
-        return true;
+        discarded = true;
+    } else {
+        asIScriptModule *module = manager.GetModule(moduleName);
+        if (!module) {
+            return false;
+        }
+        module->Discard();
+        discarded = true;
     }
-    asIScriptModule *module = manager.GetModule(moduleName);
-    if (!module) {
-        return false;
-    }
-    module->Discard();
-    return true;
+    ScriptRunBoundedGarbageCollection(engine);
+    return discarded;
 }
 
 bool ScriptModuleRegistry::RestoreFromChunk(const char *scriptName, CKStateChunk *chunk) {
@@ -268,6 +275,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(MutationContext &context,
         }
         const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
             context.HandleRegistry,
+            context.AsyncScheduler,
             context.StateStore,
             context.Diagnostics,
             request.ModuleName,
@@ -380,6 +388,7 @@ CKAS_STATUS ScriptModuleRegistry::Compile(MutationContext &context,
         }
         const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
             context.HandleRegistry,
+            context.AsyncScheduler,
             context.StateStore,
             context.Diagnostics,
             moduleName,
@@ -424,6 +433,7 @@ CKAS_STATUS ScriptModuleRegistry::Unload(MutationContext &context,
     }
     const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
         context.HandleRegistry,
+        context.AsyncScheduler,
         context.StateStore,
         context.Diagnostics,
         moduleName,

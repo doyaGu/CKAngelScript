@@ -116,6 +116,7 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(LoadContext &context,
     }
     const CKAS_STATUS runtimeStatus = ScriptModuleMutationPolicy::CheckRuntimeHandlesReleased(
         context.HandleRegistry,
+        context.AsyncScheduler,
         context.Diagnostics,
         request.ModuleName,
         result);
@@ -180,6 +181,7 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(LoadContext &context,
         context.Manager,
         context.ModuleStateStore,
         context.HandleRegistry,
+        context.AsyncScheduler,
         context.ImportBinder,
         context.Diagnostics,
         context.PublicCallbackDepth};

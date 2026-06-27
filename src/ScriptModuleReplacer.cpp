@@ -4,6 +4,7 @@
 
 #include "ScriptApiDiagnostics.h"
 #include "ScriptApiSupport.h"
+#include "ScriptAngelScriptGc.h"
 #include "ScriptCache.h"
 #include "ScriptImportBinder.h"
 #include "ScriptManager.h"
@@ -50,7 +51,10 @@ std::shared_ptr<CachedScript> ScriptModuleReplacer::BuildTransientModule(
     if (!built) {
         angelScriptCode = -3;
         if (script->module) {
+            asIScriptEngine *engine = manager.GetScriptEngine();
+            ScriptAutoGarbageCollectScope suppressAutoGc(engine, false);
             script->Discard();
+            ScriptRunBoundedGarbageCollection(engine);
         }
         return nullptr;
     }
@@ -105,9 +109,12 @@ void ScriptModuleReplacer::RemoveForReplacement(ScriptManager &manager,
 
     registry.Invalidate(moduleName);
     stateStore.RemoveImportBindingsForModule(moduleName);
+    asIScriptEngine *engine = manager.GetScriptEngine();
+    ScriptAutoGarbageCollectScope suppressAutoGc(engine, false);
     if (snapshot.Cache && snapshot.Cache->module) {
         snapshot.Cache->module->Discard();
         snapshot.Cache->module = nullptr;
+        ScriptRunBoundedGarbageCollection(engine);
         return;
     }
 
@@ -115,6 +122,7 @@ void ScriptModuleReplacer::RemoveForReplacement(ScriptManager &manager,
     if (module) {
         module->Discard();
     }
+    ScriptRunBoundedGarbageCollection(engine);
 }
 
 bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
@@ -251,7 +259,9 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
     if (!ScriptModuleBytecode::SaveModuleByteCode(candidate->module,
                                                   candidateByteCode,
                                                   angelScriptCode)) {
+        ScriptAutoGarbageCollectScope suppressAutoGc(manager.GetScriptEngine(), false);
         candidate->Discard();
+        ScriptRunBoundedGarbageCollection(manager.GetScriptEngine());
         return diagnosticsStore.StoreResult(result,
                                             CKAS_EXECUTIONFAILED,
                                             angelScriptCode,
@@ -271,7 +281,9 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                                  &committedModule,
                                  angelScriptCode,
                                  commitError)) {
+        ScriptAutoGarbageCollectScope suppressAutoGc(manager.GetScriptEngine(), false);
         candidate->Discard();
+        ScriptRunBoundedGarbageCollection(manager.GetScriptEngine());
         return diagnosticsStore.StoreResult(result, CKAS_EXECUTIONFAILED, angelScriptCode, commitError);
     }
 
@@ -286,7 +298,11 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                                    committedCache->metadata);
     committedCache->module = committedModule;
     registry.CacheScript(moduleName, committedCache);
-    candidate->Discard();
+    {
+        ScriptAutoGarbageCollectScope suppressAutoGc(manager.GetScriptEngine(), false);
+        candidate->Discard();
+        ScriptRunBoundedGarbageCollection(manager.GetScriptEngine());
+    }
     stateStore.SetIncludeEdges(moduleName, committedCache->includeEdges);
     stateStore.SetKind(moduleName, ScriptModuleKind::Source);
     stateStore.BumpGeneration(moduleName);

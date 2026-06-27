@@ -10,6 +10,7 @@
 #include "ScriptModuleReplacer.h"
 
 class ScriptApiDiagnostics;
+class ScriptAsyncScheduler;
 class ScriptHandleRegistry;
 class ScriptImportBinder;
 class ScriptManager;
@@ -29,6 +30,7 @@ public:
         ScriptManager &Manager;
         ScriptModuleStateStore &StateStore;
         ScriptHandleRegistry &HandleRegistry;
+        ScriptAsyncScheduler *AsyncScheduler;
         ScriptImportBinder &ImportBinder;
         ScriptApiDiagnostics &Diagnostics;
         int &PublicCallbackDepth;

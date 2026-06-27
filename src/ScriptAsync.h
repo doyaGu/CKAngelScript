@@ -3,6 +3,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <angelscript.h>
@@ -80,6 +81,7 @@ public:
     bool IsDone() const;
     std::string Error() const;
     bool Cancel();
+    bool UsesModule(const char *moduleName) const;
     void EnumReferences(asIScriptEngine *engine);
     void ReleaseAllReferences(asIScriptEngine *engine);
 
@@ -103,6 +105,9 @@ public:
     void Fail(const std::string &error);
 
 private:
+    bool CancelVisited(std::unordered_set<ScriptAsyncTaskBase *> &visited);
+    bool UsesModule(const char *moduleName,
+                    std::unordered_set<const ScriptAsyncTaskBase *> &visited) const;
     void SetState(ScriptAsyncTaskState state);
     void ReleaseResult();
     void ReleaseContext();
@@ -130,6 +135,7 @@ private:
     asIScriptFunction *m_Function = nullptr;
     asIScriptContext *m_Context = nullptr;
     bool m_Started = false;
+    std::vector<std::string> m_ModuleNames;
     std::vector<ScriptAsyncTaskBase *> m_Children;
     BBTask *m_BBTask = nullptr;
     GraphTask *m_GraphTask = nullptr;
@@ -173,6 +179,7 @@ public:
                      std::string &error);
     ResumeState PrepareContextResume(asIScriptContext *context, std::string &error);
     void ForgetContext(asIScriptContext *context);
+    bool HasTaskForModule(const char *moduleName) const;
     void Clear();
 
 private:
@@ -180,6 +187,7 @@ private:
         ScriptAsyncTaskBase *Task = nullptr;
         void *OutAddress = nullptr;
         int OutTypeId = asTYPEID_VOID;
+        std::vector<std::string> ContextModuleNames;
     };
 
     void ReleaseWaitRecord(WaitRecord &record);

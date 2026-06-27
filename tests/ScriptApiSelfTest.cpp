@@ -1470,6 +1470,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "int __ckas_public_side_effect() { __ckas_public_side_effect_value = 1; return 0; }\n"
         "int __ckas_public_get_side_effect() { return __ckas_public_side_effect_value; }\n"
         "int __ckas_public_async() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 9; }\n"
+        "void __ckas_public_async_spawn_worker() { AsyncTask<void>@ delay = Async::Delay(1000); Await(delay); }\n"
+        "void __ckas_public_spawn_async_dependency() { Async::Spawn(AsyncVoidFunc(__ckas_public_async_spawn_worker)); }\n"
         "int __ckas_public_exception() { array<int> values; return values[1]; }\n"
         "int __ckas_public_ckui_callback_struct() {\n"
         "    CKUICallbackStruct first;\n"
@@ -3091,6 +3093,48 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->ReleaseExecution(execution);
     api->ReleaseFunction(asyncFunction);
+
+    CKAngelScriptFunctionOptions spawnAsyncOptions = CKAngelScriptApi::FunctionOptions();
+    spawnAsyncOptions.ModuleName = moduleName;
+    spawnAsyncOptions.FunctionDecl = "void __ckas_public_spawn_async_dependency()";
+    CKAngelScriptFunction *spawnAsyncFunction = nullptr;
+    if (api->FindFunction(spawnAsyncOptions, &spawnAsyncFunction, &result) != CKAS_OK ||
+        !spawnAsyncFunction) {
+        error = "CKAngelScript API self-test failed to find async dependency spawner.";
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    CKAngelScriptExecution *spawnAsyncExecution = nullptr;
+    if (api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(spawnAsyncFunction),
+                                     &spawnAsyncExecution,
+                                     &result) != CKAS_OK ||
+        !spawnAsyncExecution ||
+        api->StartExecution(spawnAsyncExecution, nullptr, &result) != CKAS_OK) {
+        error = std::string("CKAngelScript API self-test failed to spawn an internal async module dependency: ") +
+                (result.ErrorMessage && result.ErrorMessage[0] ? result.ErrorMessage : CKAngelScriptGetStatusName(result.Status));
+        if (result.StackTrace && result.StackTrace[0]) {
+            error += " ";
+            error += result.StackTrace;
+        }
+        api->ReleaseExecution(spawnAsyncExecution);
+        api->ReleaseFunction(spawnAsyncFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    api->ReleaseExecution(spawnAsyncExecution);
+    api->ReleaseFunction(spawnAsyncFunction);
+    if (api->UnloadModule(moduleName, &result) != CKAS_INUSE ||
+        api->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_INUSE) {
+        error = "CKAngelScript API self-test expected internal async tasks to block module unload/replace.";
+        if (manager && manager->GetAsyncScheduler()) {
+            manager->GetAsyncScheduler()->Clear();
+        }
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    if (manager && manager->GetAsyncScheduler()) {
+        manager->GetAsyncScheduler()->Clear();
+    }
 
     if (!ExpectStatus(api->UnloadModule(moduleName, &result),
                       CKAS_OK,

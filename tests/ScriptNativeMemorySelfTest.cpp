@@ -67,6 +67,14 @@ bool ExecuteNativeMemoryFunction(asIScriptEngine *engine,
         error = fmt::format("Native memory self-test '{}' execution failed ({}).", label, r);
     }
 
+    const int state = context->GetState();
+    if (state == asEXECUTION_ACTIVE ||
+        state == asEXECUTION_SUSPENDED ||
+        state == asEXECUTION_PREPARED ||
+        state == asEXECUTION_EXCEPTION ||
+        state == asEXECUTION_ABORTED) {
+        context->Abort();
+    }
     context->Unprepare();
     engine->ReturnContext(context);
     return ok;
@@ -273,8 +281,8 @@ bool RunScriptNativeMemorySelfTest(CKContext *context, asIScriptEngine *engine, 
                                          error);
     }
 
-    std::remove("ckas-native-memory-selftest.bin");
-    engine->GarbageCollect(asGC_FULL_CYCLE);
     manager->UnloadModule(moduleName, nullptr);
+    engine->GarbageCollect(asGC_ONE_STEP | asGC_DETECT_GARBAGE | asGC_DESTROY_GARBAGE);
+    std::remove("ckas-native-memory-selftest.bin");
     return ok;
 }

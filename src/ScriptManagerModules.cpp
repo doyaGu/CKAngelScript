@@ -5,6 +5,7 @@ CKAS_STATUS ScriptManager::LoadModule(const CKAngelScriptLoadOptions &options, C
         *this,
         m_ModuleStateStore,
         m_HandleRegistry,
+        m_AsyncScheduler.get(),
         m_ImportBinder,
         m_Diagnostics,
         m_PublicCallbackDepth};
@@ -19,6 +20,7 @@ CKAS_STATUS ScriptManager::CompileModule(const char *moduleName,
         *this,
         m_ModuleStateStore,
         m_HandleRegistry,
+        m_AsyncScheduler.get(),
         m_ImportBinder,
         m_Diagnostics,
         m_PublicCallbackDepth};
@@ -30,6 +32,7 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
         *this,
         m_ModuleStateStore,
         m_HandleRegistry,
+        m_AsyncScheduler.get(),
         m_ImportBinder,
         m_Diagnostics,
         m_PublicCallbackDepth};
@@ -204,6 +207,7 @@ CKAS_STATUS ScriptManager::LoadModuleBytecode(const CKAngelScriptBytecodeLoadOpt
         m_ModuleRegistry,
         m_ModuleStateStore,
         m_HandleRegistry,
+        m_AsyncScheduler.get(),
         m_ImportBinder,
         m_Diagnostics,
         m_PublicCallbackDepth,

@@ -186,8 +186,15 @@ CKAS_STATUS ScriptEngineHost::UnregisterExtension(ScriptManager &manager,
     for (auto it = m_EngineExtensions.begin(); it != m_EngineExtensions.end(); ++it) {
         if (it->Name == name) {
             if (it->ActiveInCurrentEngine && m_Engine) {
+                ReleaseContextPool();
+
                 std::string message;
-                const int code = RemoveExtensionGroup(m_Engine, *it, message);
+                int code = RemoveExtensionGroup(m_Engine, *it, message);
+                if (code == asCONFIG_GROUP_IS_IN_USE) {
+                    m_Engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DESTROY_GARBAGE | asGC_DETECT_GARBAGE);
+                    message.clear();
+                    code = RemoveExtensionGroup(m_Engine, *it, message);
+                }
                 if (code < 0) {
                     if (code == asCONFIG_GROUP_IS_IN_USE) {
                         const std::string summary = message.empty()

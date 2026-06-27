@@ -38,6 +38,13 @@ void SetGenericReturnSize(asIScriptGeneric *gen, size_t size) {
     }
 }
 
+void ClearGenericObjectHandleOut(asIScriptGeneric *gen, asUINT arg) {
+    void *address = gen ? gen->GetArgAddress(arg) : nullptr;
+    if (address) {
+        *static_cast<void **>(address) = nullptr;
+    }
+}
+
 } // namespace
 
 std::string NativePointer::ToString() const {
@@ -194,6 +201,7 @@ static void NativePointerReadGeneric(asIScriptGeneric *gen) {
     size_t size = 0;
 
     if (typeId & asTYPEID_OBJHANDLE) {
+        ClearGenericObjectHandleOut(gen, 0);
         asIScriptContext *ctx = asGetActiveContext();
         if (ctx)
             ctx->SetException("Cannot read object handle from buffer");

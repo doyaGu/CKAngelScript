@@ -54,6 +54,7 @@ set(CKAS_HEADERS
         ScriptRegistration.h
         ScriptApiSupport.h
         ScriptPublicOptions.h
+        ScriptAngelScriptGc.h
         ScriptModuleBytecode.h
         ScriptModuleBytecodeStore.h
         ScriptModuleMutationPolicy.h

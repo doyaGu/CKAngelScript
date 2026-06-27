@@ -4,6 +4,7 @@
 
 #include <fmt/format.h>
 
+#include "ScriptAsync.h"
 #include "ScriptManager.h"
 
 namespace ScriptApiSupport {
@@ -142,7 +143,7 @@ bool ValidateArgIndex(const CKAngelScriptArgWriter *writer, CKDWORD index) {
 
 namespace {
 
-void ReturnPreparedContext(asIScriptEngine *engine, asIScriptContext *&ctx) {
+void ReturnPreparedContext(ScriptManager *manager, asIScriptEngine *engine, asIScriptContext *&ctx) {
     if (!engine || !ctx) {
         ctx = nullptr;
         return;
@@ -151,6 +152,9 @@ void ReturnPreparedContext(asIScriptEngine *engine, asIScriptContext *&ctx) {
     const int state = ctx->GetState();
     if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
         ctx->Abort();
+    }
+    if (manager && manager->GetAsyncScheduler()) {
+        manager->GetAsyncScheduler()->ForgetContext(ctx);
     }
     ctx->Unprepare();
     engine->ReturnContext(ctx);
@@ -196,7 +200,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
         r = ctx->SetObject(object);
     }
     if (r < 0) {
-        ReturnPreparedContext(engine, ctx);
+        ReturnPreparedContext(manager, engine, ctx);
         outcome.Status = CKAS_EXECUTIONFAILED;
         outcome.AngelScriptCode = r;
         outcome.ErrorMessage = "Failed to prepare script object method.";
@@ -209,7 +213,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
             status = configureContext(ctx, userData);
         }
         if (status != CKAS_OK) {
-            ReturnPreparedContext(engine, ctx);
+            ReturnPreparedContext(manager, engine, ctx);
             outcome.Status = status;
             outcome.ErrorMessage = StatusMessage(status);
             return outcome;
@@ -225,7 +229,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
             status = writeArgs(&writer, userData);
         }
         if (status != CKAS_OK) {
-            ReturnPreparedContext(engine, ctx);
+            ReturnPreparedContext(manager, engine, ctx);
             outcome.Status = status;
             outcome.ErrorMessage = StatusMessage(status);
             return outcome;
@@ -244,7 +248,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
                 status = readResult(&reader, userData);
             }
             if (status != CKAS_OK) {
-                ReturnPreparedContext(engine, ctx);
+                ReturnPreparedContext(manager, engine, ctx);
                 outcome.Status = status;
                 outcome.ErrorMessage = StatusMessage(status);
                 return outcome;
@@ -256,20 +260,20 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
                 status = readContextResult(ctx, userData);
             }
             if (status != CKAS_OK) {
-                ReturnPreparedContext(engine, ctx);
+                ReturnPreparedContext(manager, engine, ctx);
                 outcome.Status = status;
                 outcome.ErrorMessage = StatusMessage(status);
                 return outcome;
             }
         }
-        ReturnPreparedContext(engine, ctx);
+        ReturnPreparedContext(manager, engine, ctx);
         outcome.Status = CKAS_OK;
         return outcome;
     }
 
     if (r == asEXECUTION_SUSPENDED) {
         ctx->Abort();
-        ReturnPreparedContext(engine, ctx);
+        ReturnPreparedContext(manager, engine, ctx);
         outcome.Status = CKAS_UNSUPPORTED;
         outcome.ErrorMessage = "Suspended object method executions are not supported by this ABI path.";
         return outcome;
@@ -294,7 +298,7 @@ ObjectCallOutcome ExecutePreparedObjectMethod(ScriptManager *manager,
     } else {
         outcome.ErrorMessage = fmt::format("Script object method failed with result code: {}", r);
     }
-    ReturnPreparedContext(engine, ctx);
+    ReturnPreparedContext(manager, engine, ctx);
     (void)flags;
     outcome.Status = CKAS_EXECUTIONFAILED;
     return outcome;

@@ -38,6 +38,64 @@ asIScriptEngine *EngineFromActiveContext(const char *apiName) {
     return engine;
 }
 
+void AppendUniqueModuleName(std::vector<std::string> &moduleNames, const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return;
+    }
+    if (std::find(moduleNames.begin(), moduleNames.end(), moduleName) == moduleNames.end()) {
+        moduleNames.emplace_back(moduleName);
+    }
+}
+
+void CollectFunctionModuleNames(asIScriptFunction *function,
+                                std::vector<std::string> &moduleNames,
+                                std::unordered_set<asIScriptFunction *> &visited) {
+    if (!function || visited.find(function) != visited.end()) {
+        return;
+    }
+    visited.insert(function);
+
+    AppendUniqueModuleName(moduleNames, function->GetModuleName());
+    if (function->GetFuncType() == asFUNC_DELEGATE) {
+        CollectFunctionModuleNames(function->GetDelegateFunction(), moduleNames, visited);
+    }
+}
+
+std::vector<std::string> CollectFunctionModuleNames(asIScriptFunction *function) {
+    std::vector<std::string> moduleNames;
+    std::unordered_set<asIScriptFunction *> visited;
+    CollectFunctionModuleNames(function, moduleNames, visited);
+    return moduleNames;
+}
+
+std::vector<std::string> CollectContextModuleNames(asIScriptContext *context) {
+    std::vector<std::string> moduleNames;
+    if (!context) {
+        return moduleNames;
+    }
+    const asUINT callstackSize = context->GetCallstackSize();
+    if (callstackSize == 0) {
+        return CollectFunctionModuleNames(context->GetFunction());
+    }
+    std::unordered_set<asIScriptFunction *> visited;
+    for (asUINT i = 0; i < callstackSize; ++i) {
+        CollectFunctionModuleNames(context->GetFunction(i), moduleNames, visited);
+    }
+    return moduleNames;
+}
+
+bool ModuleNamesContain(const std::vector<std::string> &moduleNames, const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return false;
+    }
+    for (const std::string &name : moduleNames) {
+        if (name == moduleName) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string TypeName(asIScriptEngine *engine, int typeId) {
     if (!engine) {
         return "<no engine>";
@@ -285,8 +343,9 @@ ScriptAsyncTaskBase *AsyncSpawn(asIScriptFunction *function, const char *typeDec
         return nullptr;
     }
 
-    const int typeId = typeDecl && typeDecl[0] != '\0' ? engine->GetTypeIdByDecl(typeDecl) : asTYPEID_VOID;
-    if (typeId == 0) {
+    const bool isVoidResult = !typeDecl || typeDecl[0] == '\0' || std::strcmp(typeDecl, "void") == 0;
+    const int typeId = isVoidResult ? asTYPEID_VOID : engine->GetTypeIdByDecl(typeDecl);
+    if (!isVoidResult && typeId == 0) {
         SetScriptException(fmt::format("Async::Spawn result type '{}' is not registered.", typeDecl ? typeDecl : "void"));
         return nullptr;
     }
@@ -708,6 +767,30 @@ bool ScriptAsyncTaskBase::IsFailed() const { return m_State == ScriptAsyncTaskSt
 bool ScriptAsyncTaskBase::IsCancelled() const { return m_State == ScriptAsyncTaskState::Cancelled; }
 bool ScriptAsyncTaskBase::IsDone() const { return IsCompleted() || IsFailed() || IsCancelled(); }
 
+bool ScriptAsyncTaskBase::UsesModule(const char *moduleName) const {
+    std::unordered_set<const ScriptAsyncTaskBase *> visited;
+    return UsesModule(moduleName, visited);
+}
+
+bool ScriptAsyncTaskBase::UsesModule(
+    const char *moduleName,
+    std::unordered_set<const ScriptAsyncTaskBase *> &visited) const {
+    if (visited.find(this) != visited.end()) {
+        return false;
+    }
+    visited.insert(this);
+
+    if (ModuleNamesContain(m_ModuleNames, moduleName)) {
+        return true;
+    }
+    for (ScriptAsyncTaskBase *child : m_Children) {
+        if (child && child->UsesModule(moduleName, visited)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string ScriptAsyncTaskBase::Error() const {
     if (m_State == ScriptAsyncTaskState::Cancelled && m_Error.empty()) {
         return "Async task was cancelled.";
@@ -716,6 +799,16 @@ std::string ScriptAsyncTaskBase::Error() const {
 }
 
 bool ScriptAsyncTaskBase::Cancel() {
+    std::unordered_set<ScriptAsyncTaskBase *> visited;
+    return CancelVisited(visited);
+}
+
+bool ScriptAsyncTaskBase::CancelVisited(std::unordered_set<ScriptAsyncTaskBase *> &visited) {
+    if (visited.find(this) != visited.end()) {
+        return false;
+    }
+    visited.insert(this);
+
     if (IsDone()) {
         return false;
     }
@@ -724,7 +817,7 @@ bool ScriptAsyncTaskBase::Cancel() {
     }
     for (ScriptAsyncTaskBase *child : m_Children) {
         if (child) {
-            child->Cancel();
+            child->CancelVisited(visited);
         }
     }
     if (m_BBTask) {
@@ -760,6 +853,7 @@ void ScriptAsyncTaskBase::ReleaseAllReferences(asIScriptEngine *) {
         m_Function->Release();
         m_Function = nullptr;
     }
+    m_ModuleNames.clear();
     ReleaseChildren();
     ReleaseBridgeTasks();
     m_Result.ReleaseReferences();
@@ -800,6 +894,7 @@ void ScriptAsyncTaskBase::SetFunction(asIScriptFunction *function) {
     if (m_Function) {
         m_Function->AddRef();
     }
+    m_ModuleNames = CollectFunctionModuleNames(m_Function);
 }
 
 void ScriptAsyncTaskBase::SetChildren(const std::vector<ScriptAsyncTaskBase *> &children) {
@@ -1346,6 +1441,7 @@ bool ScriptAsyncScheduler::WaitForTask(asIScriptContext *context,
     record.Task = task;
     record.OutAddress = outAddress;
     record.OutTypeId = outTypeId;
+    record.ContextModuleNames = CollectContextModuleNames(context);
     record.Task->AddRef();
     m_Waits[context] = record;
     return true;
@@ -1395,7 +1491,26 @@ void ScriptAsyncScheduler::ForgetContext(asIScriptContext *context) {
     m_Waits.erase(it);
 }
 
+bool ScriptAsyncScheduler::HasTaskForModule(const char *moduleName) const {
+    if (!moduleName || moduleName[0] == '\0') {
+        return false;
+    }
+    for (ScriptAsyncTaskBase *task : m_Tasks) {
+        if (task && task->UsesModule(moduleName)) {
+            return true;
+        }
+    }
+    for (const auto &entry : m_Waits) {
+        if (ModuleNamesContain(entry.second.ContextModuleNames, moduleName) ||
+            (entry.second.Task && entry.second.Task->UsesModule(moduleName))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void ScriptAsyncScheduler::Clear() {
+    asIScriptEngine *engine = GetEngine();
     std::unordered_map<asIScriptContext *, WaitRecord> waits;
     waits.swap(m_Waits);
     for (auto &entry : waits) {
@@ -1407,6 +1522,7 @@ void ScriptAsyncScheduler::Clear() {
     for (ScriptAsyncTaskBase *task : tasks) {
         if (task) {
             task->Cancel();
+            task->ReleaseAllReferences(engine);
             task->Release();
         }
     }
@@ -1419,6 +1535,7 @@ void ScriptAsyncScheduler::ReleaseWaitRecord(WaitRecord &record) {
     }
     record.OutAddress = nullptr;
     record.OutTypeId = asTYPEID_VOID;
+    record.ContextModuleNames.clear();
 }
 
 void ScriptAsyncScheduler::RemoveFinishedTrackedTasks() {
@@ -1474,17 +1591,17 @@ void RegisterScriptAsync(asIScriptEngine *engine) {
     r = engine->SetDefaultNamespace("Async"); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Delay(int frames)", asFUNCTION(AsyncDelay), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Spawn(AsyncVoidFunc@ fn)", asFUNCTION(AsyncSpawnVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Spawn(AsyncIntFunc@ fn)", asFUNCTION(AsyncSpawnInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Spawn(AsyncFloatFunc@ fn)", asFUNCTION(AsyncSpawnFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Spawn(AsyncStringFunc@ fn)", asFUNCTION(AsyncSpawnString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Spawn(AsyncObjectFunc@ fn)", asFUNCTION(AsyncSpawnObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Spawn(AsyncVoidFunc@+ fn)", asFUNCTION(AsyncSpawnVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Spawn(AsyncIntFunc@+ fn)", asFUNCTION(AsyncSpawnInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Spawn(AsyncFloatFunc@+ fn)", asFUNCTION(AsyncSpawnFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Spawn(AsyncStringFunc@+ fn)", asFUNCTION(AsyncSpawnString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Spawn(AsyncObjectFunc@+ fn)", asFUNCTION(AsyncSpawnObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void Spawn(?&in fn, ?&out task)", asFUNCTION(AsyncSpawnGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Create(AsyncVoidFunc@ fn)", asFUNCTION(AsyncSpawnVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Create(AsyncIntFunc@ fn)", asFUNCTION(AsyncSpawnInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Create(AsyncFloatFunc@ fn)", asFUNCTION(AsyncSpawnFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Create(AsyncStringFunc@ fn)", asFUNCTION(AsyncSpawnString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Create(AsyncObjectFunc@ fn)", asFUNCTION(AsyncSpawnObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Create(AsyncVoidFunc@+ fn)", asFUNCTION(AsyncSpawnVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<int>@ Create(AsyncIntFunc@+ fn)", asFUNCTION(AsyncSpawnInt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<float>@ Create(AsyncFloatFunc@+ fn)", asFUNCTION(AsyncSpawnFloat), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<string>@ Create(AsyncStringFunc@+ fn)", asFUNCTION(AsyncSpawnString), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<CKObject@>@ Create(AsyncObjectFunc@+ fn)", asFUNCTION(AsyncSpawnObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("void Create(?&in fn, ?&out task)", asFUNCTION(AsyncSpawnGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ All(array<AsyncTask<void>@>@ tasks)", asFUNCTION(AsyncAllVoid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);

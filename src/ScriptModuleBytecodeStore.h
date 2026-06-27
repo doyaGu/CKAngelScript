@@ -4,6 +4,7 @@
 #include "CKAngelScript.h"
 
 class ScriptApiDiagnostics;
+class ScriptAsyncScheduler;
 class ScriptHandleRegistry;
 class ScriptImportBinder;
 class ScriptManager;
@@ -24,6 +25,7 @@ public:
         ScriptModuleRegistry &ModuleRegistry;
         ScriptModuleStateStore &ModuleStateStore;
         ScriptHandleRegistry &HandleRegistry;
+        ScriptAsyncScheduler *AsyncScheduler;
         ScriptImportBinder &ImportBinder;
         ScriptApiDiagnostics &Diagnostics;
         int &PublicCallbackDepth;
