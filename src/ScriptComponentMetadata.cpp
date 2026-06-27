@@ -50,6 +50,15 @@ bool ParseBoolText(const std::string &value, bool fallback) {
     return fallback;
 }
 
+int ObjectBaseTypeIdFromProperty(int typeId) {
+    static constexpr int kHandleTypeFlags = asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST;
+    return (typeId & asTYPEID_OBJHANDLE) ? (typeId & ~kHandleTypeFlags) : typeId;
+}
+
+asITypeInfo *TypeInfoFromPropertyType(asIScriptEngine *engine, int typeId) {
+    return engine ? engine->GetTypeInfoById(ObjectBaseTypeIdFromProperty(typeId)) : nullptr;
+}
+
 std::vector<std::string> TokenizeArguments(const std::string &args) {
     std::vector<std::string> tokens;
     std::string current;
@@ -196,6 +205,20 @@ ScriptComponentBindingKind KindFromTypeName(const std::string &typeName) {
     return ScriptComponentBindingKind::Auto;
 }
 
+bool IsCKObjectPropertyType(asIScriptEngine *engine, int typeId) {
+    asITypeInfo *type = TypeInfoFromPropertyType(engine, typeId);
+    if (!type || !type->GetName()) {
+        return false;
+    }
+
+    if (KindFromTypeName(type->GetName()) == ScriptComponentBindingKind::Object) {
+        return true;
+    }
+
+    asITypeInfo *objectType = engine ? engine->GetTypeInfoByName("CKObject") : nullptr;
+    return objectType && (type == objectType || type->DerivesFrom(objectType));
+}
+
 CKGUID GuidFromClassId(CKContext *context, CK_CLASSID cid, CKGUID fallback = CKPGUID_OBJECT) {
     CKParameterManager *parameterManager = context ? context->GetParameterManager() : nullptr;
     if (parameterManager && cid != 0) {
@@ -272,7 +295,7 @@ CKGUID GuidFromTypeName(CKContext *context, const std::string &typeName, ScriptC
 }
 
 CKGUID GuidFromPropertyType(CKContext *context, asIScriptEngine *engine, int typeId) {
-    asITypeInfo *type = engine ? engine->GetTypeInfoById(typeId) : nullptr;
+    asITypeInfo *type = TypeInfoFromPropertyType(engine, typeId);
     if (!type) {
         return GuidFromClassId(context, CKCID_OBJECT, CKPGUID_OBJECT);
     }
@@ -322,7 +345,7 @@ CKGUID GuidFromPropertyType(CKContext *context, asIScriptEngine *engine, int typ
 }
 
 CK_CLASSID ClassIdFromPropertyType(asIScriptEngine *engine, int typeId) {
-    asITypeInfo *type = engine ? engine->GetTypeInfoById(typeId) : nullptr;
+    asITypeInfo *type = TypeInfoFromPropertyType(engine, typeId);
     if (!type || !type->GetName()) {
         return CKCID_OBJECT;
     }
@@ -420,9 +443,7 @@ ScriptComponentBindingKind InferKindFromProperty(asIScriptEngine *engine, int ty
         return ScriptComponentBindingKind::BBConfig;
     }
 
-    asITypeInfo *type = engine->GetTypeInfoById(typeId);
-    asITypeInfo *objectType = engine->GetTypeInfoByName("CKObject");
-    if (type && objectType && (type == objectType || type->DerivesFrom(objectType))) {
+    if (IsCKObjectPropertyType(engine, typeId)) {
         return ScriptComponentBindingKind::Object;
     }
 
@@ -485,9 +506,7 @@ bool IsCompatiblePropertyType(asIScriptEngine *engine,
             return typeId == engine->GetTypeIdByDecl("BBConfig@");
         case ScriptComponentBindingKind::Object: {
             expected = "CKObject@ or subclass";
-            asITypeInfo *type = engine->GetTypeInfoById(typeId);
-            asITypeInfo *objectType = engine->GetTypeInfoByName("CKObject");
-            return type && objectType && (type == objectType || type->DerivesFrom(objectType));
+            return IsCKObjectPropertyType(engine, typeId);
         }
         default:
             expected = "supported component field type";

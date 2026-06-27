@@ -107,7 +107,9 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
 #endif
 
     WriteStartupSelfTestMarker("running", "component-metadata", std::string());
-    if (!RunScriptComponentMetadataSelfTest(error)) {
+    if (!RunScriptComponentMetadataSelfTest(manager ? manager->GetCKContext() : nullptr,
+                                            manager ? manager->GetScriptEngine() : nullptr,
+                                            error)) {
         ReportSelfTestFailure(manager,
                                                              "component-metadata",
                                                              "Component metadata",

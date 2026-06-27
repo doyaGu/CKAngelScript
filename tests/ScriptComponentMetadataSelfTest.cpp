@@ -5,7 +5,35 @@
 
 #include "ScriptComponentMetadata.h"
 
-bool RunScriptComponentMetadataSelfTest(std::string &error) {
+bool RunScriptComponentMetadataSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "Component metadata self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    const int constEntityHandleType = engine->GetTypeIdByDecl("const CK3dEntity@");
+    if (constEntityHandleType < 0) {
+        error = "Component metadata self-test could not resolve const CK3dEntity@.";
+        return false;
+    }
+    if (ScriptComponentSupport::InferKindFromProperty(engine, constEntityHandleType) != ScriptComponentBindingKind::Object) {
+        error = "Component metadata self-test did not infer const CK object handles as Object bindings.";
+        return false;
+    }
+    std::string expected;
+    if (!ScriptComponentSupport::IsCompatiblePropertyType(engine, constEntityHandleType, ScriptComponentBindingKind::Object, expected)) {
+        error = "Component metadata self-test did not accept const CK object handles as Object fields.";
+        return false;
+    }
+    if (ScriptComponentSupport::ClassIdFromPropertyType(engine, constEntityHandleType) != CKCID_3DENTITY) {
+        error = "Component metadata self-test lost const CK object handle class identity.";
+        return false;
+    }
+    if (ScriptComponentSupport::GuidFromPropertyType(context, engine, constEntityHandleType) != CKPGUID_3DENTITY) {
+        error = "Component metadata self-test lost const CK object handle parameter GUID.";
+        return false;
+    }
+
     std::vector<ScriptComponentBinding> bindings;
     auto addMetadata = [&](const std::string &metadata) -> bool {
         ScriptComponentBinding binding;
