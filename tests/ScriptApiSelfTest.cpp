@@ -1362,6 +1362,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     {
         constexpr const char *invokerRejectedArgsModuleName = "__CKAS_InvokerRejectedArgsSelfTest";
         if (api->CompileModule(invokerRejectedArgsModuleName,
+                               "class __CKAS_InvokerRejectedArgsBox {\n"
+                               "  void __ckas_invoker_bad_context(int value) {}\n"
+                               "  int __ckas_invoker_good_context() { return 42; }\n"
+                               "}\n"
                                "int __ckas_invoker_reuse_after_rejected_args() { return 41; }\n",
                                CKAS_COMPILE_REPLACEEXISTING,
                                &result) != CKAS_OK) {
@@ -1396,11 +1400,32 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                             invokerResult = *static_cast<const int *>(address);
                                             return true;
                                         });
+        asITypeInfo *invokerBoxType = invoker.GetTypeInfoByName("__CKAS_InvokerRejectedArgsBox");
+        asIScriptObject *invokerBox = invoker.CreateScriptObject(invokerBoxType);
+        asIScriptFunction *badContextMethod = invokerBoxType
+            ? invokerBoxType->GetMethodByDecl("void __ckas_invoker_bad_context(int)")
+            : nullptr;
+        asIScriptFunction *goodContextMethod = invokerBoxType
+            ? invokerBoxType->GetMethodByDecl("int __ckas_invoker_good_context()")
+            : nullptr;
+        CKBehaviorContext emptyBehaviorContext = {};
+        const ScriptInvocationStatus rejectedMethodStatus =
+            invoker.ExecuteObjectMethodStatus(invokerBox, badContextMethod, emptyBehaviorContext);
+        const ScriptInvocationStatus retryMethodStatus =
+            invoker.ExecuteObjectMethodStatus(invokerBox, goodContextMethod, emptyBehaviorContext);
+        if (invokerBox) {
+            engine->ReleaseScriptObject(invokerBox, invokerBoxType);
+        }
         invoker.Reset();
         if (!invokerFunction ||
+            !invokerBoxType ||
+            !badContextMethod ||
+            !goodContextMethod ||
             rejectedStatus != ScriptInvocationStatus::Failed ||
             retryStatus != ScriptInvocationStatus::Finished ||
             invokerResult != 41 ||
+            rejectedMethodStatus != ScriptInvocationStatus::Failed ||
+            retryMethodStatus != ScriptInvocationStatus::Finished ||
             api->UnloadModule(invokerRejectedArgsModuleName, &result) != CKAS_OK) {
             api->UnloadModule(invokerRejectedArgsModuleName, nullptr);
             error = "CKAngelScript API self-test expected ScriptInvoker to clear context after rejected argument callbacks.";

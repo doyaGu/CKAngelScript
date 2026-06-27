@@ -272,10 +272,15 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
     } else {
         if (func->GetFuncType() == asFUNC_DELEGATE) {
             asIScriptFunction *delegate = func->GetDelegateFunction();
-            void *delegateObject = func->GetDelegateObject();
-            r = ctx->Prepare(delegate);
-            if (r >= 0)
-                ctx->SetObject(delegateObject);
+            if (!delegate) {
+                r = asNO_FUNCTION;
+            } else {
+                void *delegateObject = func->GetDelegateObject();
+                r = ctx->Prepare(delegate);
+                if (r >= 0) {
+                    r = ctx->SetObject(delegateObject);
+                }
+            }
         } else {
             r = ctx->Prepare(func);
         }
@@ -401,7 +406,13 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
         }
 
         if (func->GetParamCount() > 0) {
-            ctx->SetArgObject(0, (void *) &m_BehaviorContextStorage);
+            r = ctx->SetArgObject(0, (void *) &m_BehaviorContextStorage);
+            if (r < 0) {
+                m_LastResultCode = r;
+                SetErrorMessage("Failed to bind script method behavior context.");
+                ReleaseAbortedContextState(ctx);
+                return ScriptInvocationStatus::Failed;
+            }
         }
     }
 

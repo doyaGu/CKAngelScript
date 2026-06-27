@@ -41,10 +41,9 @@ void ScriptModuleStateStore::BumpGeneration(const char *moduleName) {
         return;
     }
     CKDWORD &generation = EnsureState(moduleName).Generation;
+    ++generation;
     if (generation == 0) {
         generation = 1;
-    } else {
-        ++generation;
     }
     MarkDirty(moduleName);
 }

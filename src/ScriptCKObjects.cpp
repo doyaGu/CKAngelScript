@@ -992,43 +992,82 @@ static VX_PIXELFORMAT CKRenderContextGetPixelFormat(CKRenderContext *self, int *
     return self->GetPixelFormat(bpp, zbpp, stencilBpp);
 }
 
+static void ReleaseTemporaryScriptCallbackOnce(asIScriptFunction *func) {
+    if (func && IsMarkedAsTemporary(func)) {
+        ClearTemporaryMark(func);
+        MarkAsReleasedOnce(func);
+        func->Release();
+    }
+}
+
+static int PrepareScriptCallbackContext(asIScriptContext *ctx, asIScriptFunction *func) {
+    if (func->GetFuncType() == asFUNC_DELEGATE) {
+        asIScriptFunction *callback = func->GetDelegateFunction();
+        if (!callback) {
+            return asNO_FUNCTION;
+        }
+        void *callbackObject = func->GetDelegateObject();
+        int r = ctx->Prepare(callback);
+        if (r >= 0) {
+            r = ctx->SetObject(callbackObject);
+        }
+        return r;
+    }
+    return ctx->Prepare(func);
+}
+
+static void ReportScriptCallbackFailure(asIScriptEngine *engine,
+                                        asIScriptContext *ctx,
+                                        const char *callbackName,
+                                        const char *phase,
+                                        int code) {
+    if (!engine) {
+        return;
+    }
+
+    std::string message = std::string(callbackName) + " " + phase + " failed with code " + std::to_string(code) + ".";
+    if (code == asEXECUTION_EXCEPTION && ctx) {
+        const char *exception = ctx->GetExceptionString();
+        if (exception && exception[0]) {
+            message += " Exception: ";
+            message += exception;
+        }
+    }
+    engine->WriteMessage(callbackName, 0, 0, asMSGTYPE_ERROR, message.c_str());
+}
+
 static void CKRenderContext_RenderCallback(CKRenderContext *dev, void *data) {
     auto *func = static_cast<asIScriptFunction *>(data);
     if (!func)
         return;
 
     asIScriptEngine *engine = func->GetEngine();
+    if (!engine) {
+        ReleaseTemporaryScriptCallbackOnce(func);
+        return;
+    }
     asIScriptContext *ctx = engine->RequestContext();
-    if (!ctx)
-        return;
-
-    int r = 0;
-    if (func->GetFuncType() == asFUNC_DELEGATE) {
-        asIScriptFunction *callback = func->GetDelegateFunction();
-        void *callbackObject = func->GetDelegateObject();
-        r = ctx->Prepare(callback);
-        if (r >= 0)
-            ctx->SetObject(callbackObject);
-    } else {
-        r = ctx->Prepare(func);
-    }
-
-    if (r < 0) {
-        engine->ReturnContext(ctx);
+    if (!ctx) {
+        ReleaseTemporaryScriptCallbackOnce(func);
         return;
     }
 
-    ctx->SetArgObject(0, dev);
-
-    ctx->Execute();
+    const char *phase = "prepare";
+    int r = PrepareScriptCallbackContext(ctx, func);
+    if (r >= 0) {
+        phase = "argument binding";
+        r = ctx->SetArgObject(0, dev);
+    }
+    if (r >= 0) {
+        phase = "execution";
+        r = ctx->Execute();
+    }
+    if (r != asEXECUTION_FINISHED) {
+        ReportScriptCallbackFailure(engine, ctx, "CKRenderContext callback", phase, r);
+    }
 
     engine->ReturnContext(ctx);
-
-    if (IsMarkedAsTemporary(func)) {
-        ClearTemporaryMark(func);
-        MarkAsReleasedOnce(func);
-        func->Release();
-    }
+    ReleaseTemporaryScriptCallbackOnce(func);
 }
 
 static void ReleaseTrackedScriptCallback(asIScriptFunction *scriptFunc) {
@@ -2807,39 +2846,38 @@ static void CKMesh_MeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, CKM
         return;
 
     asIScriptEngine *engine = func->GetEngine();
+    if (!engine) {
+        ReleaseTemporaryScriptCallbackOnce(func);
+        return;
+    }
     asIScriptContext *ctx = engine->RequestContext();
-    if (!ctx)
-        return;
-
-    int r = 0;
-    if (func->GetFuncType() == asFUNC_DELEGATE) {
-        asIScriptFunction *callback = func->GetDelegateFunction();
-        void *callbackObject = func->GetDelegateObject();
-        r = ctx->Prepare(callback);
-        if (r >= 0)
-            ctx->SetObject(callbackObject);
-    } else {
-        r = ctx->Prepare(func);
-    }
-
-    if (r < 0) {
-        engine->ReturnContext(ctx);
+    if (!ctx) {
+        ReleaseTemporaryScriptCallbackOnce(func);
         return;
     }
 
-    ctx->SetArgObject(0, dev);
-    ctx->SetArgObject(1, mov);
-    ctx->SetArgObject(2, object);
-
-    ctx->Execute();
+    const char *phase = "prepare";
+    int r = PrepareScriptCallbackContext(ctx, func);
+    if (r >= 0) {
+        phase = "argument binding";
+        r = ctx->SetArgObject(0, dev);
+    }
+    if (r >= 0) {
+        r = ctx->SetArgObject(1, mov);
+    }
+    if (r >= 0) {
+        r = ctx->SetArgObject(2, object);
+    }
+    if (r >= 0) {
+        phase = "execution";
+        r = ctx->Execute();
+    }
+    if (r != asEXECUTION_FINISHED) {
+        ReportScriptCallbackFailure(engine, ctx, "CKMesh render callback", phase, r);
+    }
 
     engine->ReturnContext(ctx);
-
-    if (IsMarkedAsTemporary(func)) {
-        ClearTemporaryMark(func);
-        MarkAsReleasedOnce(func);
-        func->Release();
-    }
+    ReleaseTemporaryScriptCallbackOnce(func);
 }
 
 static void CKMesh_SubMeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, CKMesh *object, CKMaterial *mat, void *data) {
@@ -2848,40 +2886,41 @@ static void CKMesh_SubMeshRenderCallback(CKRenderContext *dev, CK3dEntity *mov, 
         return;
 
     asIScriptEngine *engine = func->GetEngine();
+    if (!engine) {
+        ReleaseTemporaryScriptCallbackOnce(func);
+        return;
+    }
     asIScriptContext *ctx = engine->RequestContext();
-    if (!ctx)
-        return;
-
-    int r = 0;
-    if (func->GetFuncType() == asFUNC_DELEGATE) {
-        asIScriptFunction *callback = func->GetDelegateFunction();
-        void *callbackObject = func->GetDelegateObject();
-        r = ctx->Prepare(callback);
-        if (r >= 0)
-            ctx->SetObject(callbackObject);
-    } else {
-        r = ctx->Prepare(func);
-    }
-
-    if (r < 0) {
-        engine->ReturnContext(ctx);
+    if (!ctx) {
+        ReleaseTemporaryScriptCallbackOnce(func);
         return;
     }
 
-    ctx->SetArgObject(0, dev);
-    ctx->SetArgObject(1, mov);
-    ctx->SetArgObject(2, object);
-    ctx->SetArgObject(3, mat);
-
-    ctx->Execute();
+    const char *phase = "prepare";
+    int r = PrepareScriptCallbackContext(ctx, func);
+    if (r >= 0) {
+        phase = "argument binding";
+        r = ctx->SetArgObject(0, dev);
+    }
+    if (r >= 0) {
+        r = ctx->SetArgObject(1, mov);
+    }
+    if (r >= 0) {
+        r = ctx->SetArgObject(2, object);
+    }
+    if (r >= 0) {
+        r = ctx->SetArgObject(3, mat);
+    }
+    if (r >= 0) {
+        phase = "execution";
+        r = ctx->Execute();
+    }
+    if (r != asEXECUTION_FINISHED) {
+        ReportScriptCallbackFailure(engine, ctx, "CKMesh submesh render callback", phase, r);
+    }
 
     engine->ReturnContext(ctx);
-
-    if (IsMarkedAsTemporary(func)) {
-        ClearTemporaryMark(func);
-        MarkAsReleasedOnce(func);
-        func->Release();
-    }
+    ReleaseTemporaryScriptCallbackOnce(func);
 }
 
 static void SetCKMeshException(const char *message) {
@@ -3799,63 +3838,38 @@ static CKBOOL CKRenderObject_Callback(CKRenderContext *dev, CKRenderObject *ent,
         return FALSE;
 
     asIScriptEngine *engine = func->GetEngine();
+    if (!engine) {
+        ReleaseTemporaryScriptCallbackOnce(func);
+        return FALSE;
+    }
     asIScriptContext *ctx = engine->RequestContext();
-    if (!ctx)
-        return FALSE;
-
-    auto releaseTemporary = [func]() {
-        if (IsMarkedAsTemporary(func)) {
-            ClearTemporaryMark(func);
-            MarkAsReleasedOnce(func);
-            func->Release();
-        }
-    };
-
-    auto reportFailure = [engine, ctx](const char *phase, int code) {
-        std::string message = std::string("CKRenderObject callback ") + phase + " failed with code " + std::to_string(code) + ".";
-        if (code == asEXECUTION_EXCEPTION) {
-            const char *exception = ctx->GetExceptionString();
-            if (exception && exception[0]) {
-                message += " Exception: ";
-                message += exception;
-            }
-        }
-        engine->WriteMessage("CKRenderObject callback", 0, 0, asMSGTYPE_ERROR, message.c_str());
-    };
-
-    int r = 0;
-    if (func->GetFuncType() == asFUNC_DELEGATE) {
-        asIScriptFunction *callback = func->GetDelegateFunction();
-        void *callbackObject = func->GetDelegateObject();
-        r = ctx->Prepare(callback);
-        if (r >= 0)
-            r = ctx->SetObject(callbackObject);
-    } else {
-        r = ctx->Prepare(func);
-    }
-
-    if (r < 0) {
-        reportFailure("prepare", r);
-        engine->ReturnContext(ctx);
-        releaseTemporary();
+    if (!ctx) {
+        ReleaseTemporaryScriptCallbackOnce(func);
         return FALSE;
     }
 
-    if (r >= 0)
+    const char *phase = "prepare";
+    int r = PrepareScriptCallbackContext(ctx, func);
+    if (r >= 0) {
+        phase = "argument binding";
         r = ctx->SetArgObject(0, dev);
-    if (r >= 0)
+    }
+    if (r >= 0) {
         r = ctx->SetArgObject(1, ent);
+    }
 
-    if (r >= 0)
+    if (r >= 0) {
+        phase = "execution";
         r = ctx->Execute();
+    }
 
     const CKBOOL result = r == asEXECUTION_FINISHED && ctx->GetReturnDWord() != 0 ? TRUE : FALSE;
     if (r != asEXECUTION_FINISHED) {
-        reportFailure(r == asEXECUTION_EXCEPTION ? "execution" : "argument binding", r);
+        ReportScriptCallbackFailure(engine, ctx, "CKRenderObject callback", phase, r);
     }
 
     engine->ReturnContext(ctx);
-    releaseTemporary();
+    ReleaseTemporaryScriptCallbackOnce(func);
 
     return result;
 }

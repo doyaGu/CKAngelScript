@@ -564,6 +564,9 @@ public:
             return DC_SIGCHAR_VOID;
 
         asIScriptEngine *engine = func->GetEngine();
+        if (!engine)
+            return DC_SIGCHAR_VOID;
+
         asIScriptContext *ctx = engine->RequestContext();
         if (!ctx)
             return DC_SIGCHAR_VOID;
@@ -577,10 +580,14 @@ public:
         int r = 0;
         if (func->GetFuncType() == asFUNC_DELEGATE) {
             asIScriptFunction *callback = func->GetDelegateFunction();
+            if (!callback)
+                return finish(DC_SIGCHAR_VOID);
+
             void *callbackObject = func->GetDelegateObject();
             r = ctx->Prepare(callback);
-            if (r >= 0)
-                ctx->SetObject(callbackObject);
+            if (r >= 0) {
+                r = ctx->SetObject(callbackObject);
+            }
         } else {
             r = ctx->Prepare(func);
         }

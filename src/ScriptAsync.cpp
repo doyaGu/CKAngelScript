@@ -1143,10 +1143,14 @@ void ScriptAsyncTaskBase::AdvanceScript() {
     if (!m_Started) {
         if (m_Function->GetFuncType() == asFUNC_DELEGATE) {
             asIScriptFunction *delegate = m_Function->GetDelegateFunction();
-            void *delegateObject = m_Function->GetDelegateObject();
-            r = m_Context->Prepare(delegate);
-            if (r >= 0) {
-                r = m_Context->SetObject(delegateObject);
+            if (!delegate) {
+                r = asNO_FUNCTION;
+            } else {
+                void *delegateObject = m_Function->GetDelegateObject();
+                r = m_Context->Prepare(delegate);
+                if (r >= 0) {
+                    r = m_Context->SetObject(delegateObject);
+                }
             }
         } else {
             r = m_Context->Prepare(m_Function);
