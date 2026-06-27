@@ -77,6 +77,12 @@ CKAS_STATUS DecodeLoadOptions(const CKAngelScriptLoadOptions &options,
     const bool hasFile = ScriptApiSupport::IsNonEmpty(request.Filename);
     const bool hasFiles = request.FileCount > 0;
     const bool hasSourceSections = sourceSectionCount > 0;
+    if (request.Filenames && request.FileCount == 0) {
+        return Fail(errorMessage, "File list count is zero.");
+    }
+    if (sourceSections && sourceSectionCount == 0) {
+        return Fail(errorMessage, "Source section count is zero.");
+    }
     const int sourceCount = (hasCode ? 1 : 0) + (hasFile ? 1 : 0) +
                             (hasFiles ? 1 : 0) + (hasSourceSections ? 1 : 0);
     if (sourceCount > 1) {

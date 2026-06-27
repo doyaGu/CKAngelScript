@@ -2784,6 +2784,35 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->UnloadModule(defaultFileModuleName, nullptr);
 
+    const char *emptyFileList[] = { multiFilePathA.c_str() };
+    CKAngelScriptLoadOptions emptyFileListOptions = CKAngelScriptApi::LoadOptions();
+    emptyFileListOptions.ModuleName = "__CKAS_ManagerApiEmptyFileListSelfTest";
+    emptyFileListOptions.Filenames = emptyFileList;
+    emptyFileListOptions.FileCount = 0;
+    emptyFileListOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
+    if (api->LoadModule(emptyFileListOptions, &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected LoadModule with Filenames and zero FileCount to fail.";
+        RemoveTextFile(singleFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
+
+    CKAngelScriptLoadOptions emptySectionListOptions = CKAngelScriptApi::LoadOptions();
+    emptySectionListOptions.ModuleName = "__CKAS_ManagerApiEmptySectionListSelfTest";
+    emptySectionListOptions.Sections = sourceSections;
+    emptySectionListOptions.SectionCount = 0;
+    emptySectionListOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
+    if (api->LoadModule(emptySectionListOptions, &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected LoadModule with Sections and zero SectionCount to fail.";
+        RemoveTextFile(singleFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
+
     const char *invalidFiles[] = { multiFilePathA.c_str(), nullptr };
     CKAngelScriptLoadOptions invalidFileListOptions = CKAngelScriptApi::LoadOptions();
     invalidFileListOptions.ModuleName = "__CKAS_ManagerApiInvalidFileListSelfTest";
