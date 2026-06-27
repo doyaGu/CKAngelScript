@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <climits>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -1514,6 +1515,50 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         if (truncatedRestore.LoadFromChunk(truncatedChunk.get())) {
             truncatedRestore.Discard();
             error = "CKAngelScript API self-test expected truncated cache chunks to be rejected.";
+            return false;
+        }
+
+        std::unique_ptr<CKStateChunk, void (*)(CKStateChunk *)> hugeSectionCountChunk(
+            CreateCKStateChunk(CKCID_OBJECT, nullptr),
+            DeleteCKStateChunk);
+        if (!hugeSectionCountChunk) {
+            error = "CKAngelScript API self-test failed to allocate huge section count cache chunk.";
+            return false;
+        }
+        hugeSectionCountChunk->StartWrite();
+        hugeSectionCountChunk->WriteIdentifier(SCRIPTCACHE_IDENTIFIER);
+        hugeSectionCountChunk->WriteInt(SCRIPTCACHE_VERSION);
+        hugeSectionCountChunk->WriteString(const_cast<CKSTRING>(cacheChunkModuleName));
+        hugeSectionCountChunk->WriteInt(1);
+        hugeSectionCountChunk->WriteInt(INT_MAX);
+        hugeSectionCountChunk->CloseChunk();
+        CachedScript hugeSectionCountRestore;
+        if (hugeSectionCountRestore.LoadFromChunk(hugeSectionCountChunk.get())) {
+            hugeSectionCountRestore.Discard();
+            error = "CKAngelScript API self-test expected huge section count cache chunks to be rejected.";
+            return false;
+        }
+
+        std::unique_ptr<CKStateChunk, void (*)(CKStateChunk *)> hugeCodeSizeChunk(
+            CreateCKStateChunk(CKCID_OBJECT, nullptr),
+            DeleteCKStateChunk);
+        if (!hugeCodeSizeChunk) {
+            error = "CKAngelScript API self-test failed to allocate huge code size cache chunk.";
+            return false;
+        }
+        hugeCodeSizeChunk->StartWrite();
+        hugeCodeSizeChunk->WriteIdentifier(SCRIPTCACHE_IDENTIFIER);
+        hugeCodeSizeChunk->WriteInt(SCRIPTCACHE_VERSION);
+        hugeCodeSizeChunk->WriteString(const_cast<CKSTRING>(cacheChunkModuleName));
+        hugeCodeSizeChunk->WriteInt(1);
+        hugeCodeSizeChunk->WriteInt(1);
+        hugeCodeSizeChunk->WriteString(const_cast<CKSTRING>("chunk/huge.as"));
+        hugeCodeSizeChunk->WriteDword(static_cast<CKDWORD>(INT_MAX));
+        hugeCodeSizeChunk->CloseChunk();
+        CachedScript hugeCodeSizeRestore;
+        if (hugeCodeSizeRestore.LoadFromChunk(hugeCodeSizeChunk.get())) {
+            hugeCodeSizeRestore.Discard();
+            error = "CKAngelScript API self-test expected huge code size cache chunks to be rejected.";
             return false;
         }
     }

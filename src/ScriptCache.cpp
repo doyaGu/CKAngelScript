@@ -521,13 +521,6 @@ bool CachedScript::Build(asIScriptEngine *engine) {
         XString resolvedFilename = filename.c_str();
         man->ResolveScriptFileName(resolvedFilename);
 
-        bool exists = false;
-        FILE *fp = fopen(resolvedFilename.CStr(), "rb");
-        if (fp) {
-            exists = true;
-            fclose(fp);
-        }
-
         if (sourceSnapshotSections || code.size() != 0) {
             r = builder.AddSectionFromMemory(filename.c_str(),
                                              code.c_str(),
@@ -632,24 +625,26 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
     }
 
     chunk->StartRead();
-
-    if (!chunk->SeekIdentifier(SCRIPTCACHE_IDENTIFIER)) {
+    const int chunkDataSize = chunk->GetDataSize();
+    auto fail = [chunk]() {
         chunk->CloseChunk();
         return false;
+    };
+
+    if (!chunk->SeekIdentifier(SCRIPTCACHE_IDENTIFIER)) {
+        return fail();
     }
 
     const int version = chunk->ReadInt();
     if (version != SCRIPTCACHE_VERSION) {
-        chunk->CloseChunk();
-        return false;
+        return fail();
     }
 
     // Read the script name
     char *str = nullptr;
     chunk->ReadString(&str);
     if (!str) {
-        chunk->CloseChunk();
-        return false;
+        return fail();
     }
     std::string loadedName = str;
     CKDeletePointer(str);
@@ -658,18 +653,18 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
     const bool loadedSourceSnapshotSections = chunk->ReadInt() != 0;
 
     const int numSections = chunk->ReadInt();
-    if (numSections < 0) {
-        chunk->CloseChunk();
-        return false;
+    if (chunkDataSize <= 0 || numSections < 0 || numSections > chunkDataSize) {
+        return fail();
     }
 
     std::vector<std::tuple<std::string, std::string>> loadedSections;
     loadedSections.reserve(static_cast<size_t>(numSections));
+    size_t declaredCodeBytes = 0;
+    const size_t maxDeclaredCodeBytes = static_cast<size_t>(chunkDataSize);
     for (int i = 0; i < numSections; ++i) {
         chunk->ReadString(&str);
         if (!str) {
-            chunk->CloseChunk();
-            return false;
+            return fail();
         }
         std::string filename = str;
         CKDeletePointer(str);
@@ -677,10 +672,13 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
 
         std::string buffer;
         CKDWORD size = chunk->ReadDword();
-        if (size > static_cast<CKDWORD>(INT_MAX)) {
-            chunk->CloseChunk();
-            return false;
+        const size_t codeSize = static_cast<size_t>(size);
+        if (size > static_cast<CKDWORD>(INT_MAX) ||
+            codeSize > maxDeclaredCodeBytes ||
+            declaredCodeBytes > maxDeclaredCodeBytes - codeSize) {
+            return fail();
         }
+        declaredCodeBytes += codeSize;
         if (size != 0) {
             buffer.resize(size);
             chunk->ReadAndFillBuffer(static_cast<int>(size), buffer.data());
@@ -707,18 +705,18 @@ bool CachedScript::SaveToChunk(CKStateChunk *chunk) {
     chunk->WriteInt(SCRIPTCACHE_VERSION);
 
     // Write the script name
-    chunk->WriteString(name.data());
+    chunk->WriteString(const_cast<char *>(name.c_str()));
 
     chunk->WriteInt(sourceSnapshotSections ? 1 : 0);
 
     // Write the number of sections
     chunk->WriteInt((int) sections.size());
 
-    for (auto section: sections) {
-        std::string &filename = std::get<0>(section);
-        chunk->WriteString(filename.data());
+    for (const auto &section: sections) {
+        const std::string &filename = std::get<0>(section);
+        chunk->WriteString(const_cast<char *>(filename.c_str()));
 
-        std::string &code = std::get<1>(section);
+        const std::string &code = std::get<1>(section);
 
         if (code.size() > static_cast<size_t>(INT_MAX)) {
             chunk->CloseChunk();
@@ -727,7 +725,8 @@ bool CachedScript::SaveToChunk(CKStateChunk *chunk) {
 
         chunk->WriteDword(static_cast<CKDWORD>(code.size()));
         if (code.size() != 0) {
-            chunk->WriteBufferNoSize(static_cast<int>(code.size()), code.data());
+            chunk->WriteBufferNoSize(static_cast<int>(code.size()),
+                                     const_cast<char *>(code.data()));
         }
     }
 
