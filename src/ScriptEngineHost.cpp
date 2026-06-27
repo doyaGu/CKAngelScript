@@ -68,6 +68,7 @@ bool ScriptEngineHost::HasEngine() const {
 }
 
 void ScriptEngineHost::ShutdownAndReleaseEngine() {
+    ReleaseContextPool();
     if (m_Engine) {
         m_Engine->ShutDownAndRelease();
         m_Engine = nullptr;
