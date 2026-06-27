@@ -1075,6 +1075,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         initObjectCallOptions.Method ||
         initObjectCallOptions.WriteArgs ||
         initObjectCallOptions.ReadResult ||
+        initObjectCallOptions.ConfigureContext ||
+        initObjectCallOptions.ReadContextResult ||
         initObjectCallOptions.UserData ||
         initObjectCallOptions.Flags != CKAS_CALL_DEFAULT) {
         error = "CKAngelScript API self-test expected ObjectMethodExecuteOptions initializer defaults.";
