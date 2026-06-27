@@ -257,7 +257,7 @@ if (status == CKAS_OK) {
 CKAngelScriptReleaseFunction(angelScript, function, &result);
 ```
 
-`StartExecution` only accepts `CKAS_EXECUTION_READY`. `ResumeExecution` only accepts `CKAS_EXECUTION_SUSPENDED`. Invalid transitions return `CKAS_INVALIDSTATE`. On resume, `ConfigureContext` is an optional raw context hook called before the suspended context continues; it must not rewrite initial arguments that have already been consumed. `ReadResult` is called only when the script reaches a finished state, not when it suspends. `CancelExecution` returns `CKAS_OK` when accepted and stores `CKAS_CANCELLED` in the execution result. If `CKAS_CALL_NO_SUSPEND` is set and a script suspends, CKAngelScript aborts the context and returns `CKAS_UNSUPPORTED`.
+`StartExecution` only accepts `CKAS_EXECUTION_READY`. `ResumeExecution` only accepts `CKAS_EXECUTION_SUSPENDED`. Invalid transitions return `CKAS_INVALIDSTATE`. On resume, `ConfigureContext` is an optional raw context hook called before the suspended context continues; it must not rewrite initial arguments that have already been consumed. `ReadResult` is called only when the script reaches a finished state, not when it suspends. `CancelExecution` accepts ready, running, or suspended executions, returns `CKAS_OK` when accepted, and stores `CKAS_CANCELLED` in the execution result. Cancelling a finished, failed, or already cancelled execution returns `CKAS_INVALIDSTATE` and leaves the stored execution result unchanged. If `CKAS_CALL_NO_SUSPEND` is set and a script suspends, CKAngelScript aborts the context and returns `CKAS_UNSUPPORTED`.
 
 ## Object And Method Calls
 

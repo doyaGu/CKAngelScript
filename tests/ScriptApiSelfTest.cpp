@@ -3583,6 +3583,18 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseFunction(addFunction);
         return false;
     }
+    if (api->CancelExecution(execution, &result) != CKAS_INVALIDSTATE ||
+        result.Status != CKAS_INVALIDSTATE ||
+        api->GetExecutionState(execution, &state, &result) != CKAS_OK ||
+        state != CKAS_EXECUTION_FINISHED ||
+        api->BorrowExecutionResult(execution, &executionResult, &result) != CKAS_OK ||
+        !executionResult ||
+        executionResult->AngelScriptCode != asEXECUTION_FINISHED) {
+        error = "CKAngelScript API self-test expected cancelling a finished execution to preserve its result.";
+        api->ReleaseExecution(execution);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
     api->ReleaseExecution(execution);
 
     ReentrantExecutionCallbackProbe executionReentry;
