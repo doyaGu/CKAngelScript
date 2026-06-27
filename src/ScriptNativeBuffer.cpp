@@ -202,7 +202,7 @@ size_t NativeBuffer::ReadString(std::string &str) {
     while (m_CursorPos < m_Size) {
         const char c = data[m_CursorPos++];
         if (c == '\0')
-            break;
+            return count + 1;
         ++count;
         str.push_back(c);
     }
