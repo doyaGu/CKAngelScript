@@ -270,6 +270,10 @@ struct BoundImportEdgeProbe {
 };
 
 struct IncludeEdgeProbe {
+    const char *ExpectedModuleName = "__CKAS_ManagerApiSourceSectionsLoadSelfTest";
+    const char *ExpectedFromSection = "entry/main.as";
+    const char *ExpectedToSection = "entry/lib/helper.as";
+    CKBOOL ExpectedResolvedFromSnapshot = TRUE;
     bool SawHelperInclude = false;
     CKDWORD CallbackCount = 0;
 };
@@ -672,10 +676,10 @@ CKAS_STATUS ProbeIncludeEdge(const CKAngelScriptIncludeEdge *edge, void *userDat
         return CKAS_INVALIDARGUMENT;
     }
     ++probe->CallbackCount;
-    if (CkasStringEquals(edge->ModuleName, "__CKAS_ManagerApiSourceSectionsLoadSelfTest") &&
-        CkasStringEquals(edge->FromSection, "entry/main.as") &&
-        CkasStringEquals(edge->ToSection, "entry/lib/helper.as") &&
-        edge->ResolvedFromSnapshot == TRUE) {
+    if (CkasStringEquals(edge->ModuleName, probe->ExpectedModuleName) &&
+        CkasStringEquals(edge->FromSection, probe->ExpectedFromSection) &&
+        CkasStringEquals(edge->ToSection, probe->ExpectedToSection) &&
+        edge->ResolvedFromSnapshot == probe->ExpectedResolvedFromSnapshot) {
         probe->SawHelperInclude = true;
     }
     return CKAS_OK;
@@ -2742,13 +2746,26 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
     const std::filesystem::path tempDir = std::filesystem::temp_directory_path();
     const std::filesystem::path singleFile = tempDir / "__ckas_public_api_single.as";
+    const std::filesystem::path singleIncludeFile = tempDir / "__ckas_public_api_single_include.as";
     const std::filesystem::path multiFileA = tempDir / "__ckas_public_api_multi_a.as";
     const std::filesystem::path multiFileB = tempDir / "__ckas_public_api_multi_b.as";
     const std::filesystem::path defaultFile = std::filesystem::current_path() / "__CKAS_ManagerApiDefaultFileLoadSelfTest.as";
-    if (!WriteTextFile(singleFile, "int __ckas_public_file_loaded() { return 11; }\n", error) ||
+    auto cleanupLoadFiles = [&]() {
+        RemoveTextFile(singleFile);
+        RemoveTextFile(singleIncludeFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+    };
+    if (!WriteTextFile(singleIncludeFile, "int __ckas_public_file_include_value() { return 10; }\n", error) ||
+        !WriteTextFile(singleFile,
+                       "#include \"__ckas_public_api_single_include.as\"\n"
+                       "int __ckas_public_file_loaded() { return __ckas_public_file_include_value() + 1; }\n",
+                       error) ||
         !WriteTextFile(multiFileA, "int __ckas_public_multi_a() { return 12; }\n", error) ||
         !WriteTextFile(multiFileB, "int __ckas_public_multi_b() { return __ckas_public_multi_a() + 1; }\n", error) ||
         !WriteTextFile(defaultFile, "int __ckas_public_default_file_loaded() { return 14; }\n", error)) {
+        cleanupLoadFiles();
         return false;
     }
 
@@ -2759,10 +2776,24 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     if (api->LoadModule(singleFileOptions, &result) != CKAS_OK ||
         api->BorrowFunctionByDecl(singleFileModuleName, "int __ckas_public_file_loaded()", &borrowedFunction, &result) != CKAS_OK) {
         error = "CKAngelScript API self-test expected single-file LoadModule to expose its function.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
+        return false;
+    }
+    const std::string singleFileSection = singleFile.generic_string();
+    const std::string singleIncludeFileSection = singleIncludeFile.generic_string();
+    IncludeEdgeProbe fileIncludeEdgeProbe;
+    fileIncludeEdgeProbe.ExpectedModuleName = singleFileModuleName;
+    fileIncludeEdgeProbe.ExpectedFromSection = singleFileSection.c_str();
+    fileIncludeEdgeProbe.ExpectedToSection = singleIncludeFileSection.c_str();
+    fileIncludeEdgeProbe.ExpectedResolvedFromSnapshot = FALSE;
+    if (api->EnumerateModuleIncludeEdges(singleFileModuleName,
+                                         ProbeIncludeEdge,
+                                         &fileIncludeEdgeProbe,
+                                         &result) != CKAS_OK ||
+        fileIncludeEdgeProbe.CallbackCount == 0 ||
+        !fileIncludeEdgeProbe.SawHelperInclude) {
+        error = "CKAngelScript API self-test expected file LoadModule include edges.";
+        cleanupLoadFiles();
         return false;
     }
     int fileLoadValue = 0;
@@ -2778,10 +2809,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         if (error.empty()) {
             error = "CKAngelScript API self-test expected single-file LoadModule replacement to read updated file code.";
         }
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
     api->UnloadModule(singleFileModuleName, nullptr);
@@ -2795,10 +2823,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     if (api->LoadModule(multiFileOptions, &result) != CKAS_OK ||
         api->BorrowFunctionByDecl(multiFileModuleName, "int __ckas_public_multi_b()", &borrowedFunction, &result) != CKAS_OK) {
         error = "CKAngelScript API self-test expected multi-file LoadModule to expose its function.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
     int multiFileLoadValue = 0;
@@ -2815,10 +2840,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         if (error.empty()) {
             error = "CKAngelScript API self-test expected multi-file LoadModule replacement to read updated file code.";
         }
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
     api->UnloadModule(multiFileModuleName, nullptr);
@@ -2853,20 +2875,14 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                   &result) != CKAS_OK ||
         !borrowedFunction) {
         error = "CKAngelScript API self-test expected source-section LoadModule to resolve in-memory includes.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
     MetadataProbe sourceSectionMetadataProbe;
     if (api->EnumerateMetadata(sourceSectionsModuleName, ProbeMetadata, &sourceSectionMetadataProbe, &result) != CKAS_OK ||
         !sourceSectionMetadataProbe.SourceSectionType) {
         error = "CKAngelScript API self-test expected source-section LoadModule to preserve metadata from included sections.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
     IncludeEdgeProbe includeEdgeProbe;
@@ -2884,10 +2900,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         sourceSectionFingerprint.IncludeHash == 0 ||
         sourceSectionFingerprint.CombinedHash == 0) {
         error = "CKAngelScript API self-test expected source-section include edges and fingerprint data.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
     api->UnloadModule(sourceSectionsModuleName, nullptr);
@@ -2903,10 +2916,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                               CKAS_LOAD_REPLACEEXISTING);
     if (api->LoadModule(invalidSourceSectionOptions, &result) != CKAS_INVALIDARGUMENT) {
         error = "CKAngelScript API self-test expected LoadModule with an invalid source section to fail.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
 
@@ -2924,10 +2934,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                               CKAS_LOAD_REPLACEEXISTING);
     if (api->LoadModule(duplicateSourceSectionOptions, &result) != CKAS_INVALIDARGUMENT) {
         error = "CKAngelScript API self-test expected LoadModule with duplicate source sections to fail.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
 
@@ -2938,10 +2945,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     if (api->LoadModule(defaultFileOptions, &result) != CKAS_OK ||
         api->BorrowFunctionByDecl(defaultFileModuleName, "int __ckas_public_default_file_loaded()", &borrowedFunction, &result) != CKAS_OK) {
         error = "CKAngelScript API self-test expected default-file LoadModule to expose its function.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
     api->UnloadModule(defaultFileModuleName, nullptr);
@@ -2954,10 +2958,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     emptyFileListOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
     if (api->LoadModule(emptyFileListOptions, &result) != CKAS_INVALIDARGUMENT) {
         error = "CKAngelScript API self-test expected LoadModule with Filenames and zero FileCount to fail.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
 
@@ -2968,10 +2969,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     emptySectionListOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
     if (api->LoadModule(emptySectionListOptions, &result) != CKAS_INVALIDARGUMENT) {
         error = "CKAngelScript API self-test expected LoadModule with Sections and zero SectionCount to fail.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
 
@@ -2983,10 +2981,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     invalidFileListOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
     if (api->LoadModule(invalidFileListOptions, &result) != CKAS_INVALIDARGUMENT) {
         error = "CKAngelScript API self-test expected LoadModule with an invalid file list entry to fail.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
 
@@ -2997,16 +2992,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     conflictingOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
     if (api->LoadModule(conflictingOptions, &result) != CKAS_INVALIDARGUMENT) {
         error = "CKAngelScript API self-test expected LoadModule with multiple sources to fail.";
-        RemoveTextFile(singleFile);
-        RemoveTextFile(multiFileA);
-        RemoveTextFile(multiFileB);
-        RemoveTextFile(defaultFile);
+        cleanupLoadFiles();
         return false;
     }
-    RemoveTextFile(singleFile);
-    RemoveTextFile(multiFileA);
-    RemoveTextFile(multiFileB);
-    RemoveTextFile(defaultFile);
+    cleanupLoadFiles();
 
     CKAngelScriptFunctionOptions invalidFunctionOptions = CKAngelScriptApi::FunctionOptions();
     invalidFunctionOptions.ModuleName = moduleName;

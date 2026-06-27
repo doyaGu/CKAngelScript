@@ -67,18 +67,43 @@ struct SnapshotSection {
     std::string Code;
 };
 
-struct SnapshotIncludeContext {
+struct BuildIncludeContext {
     std::unordered_map<std::string, SnapshotSection> Sections;
     std::vector<ScriptIncludeEdge> *IncludeEdges = nullptr;
+    bool UseSnapshotSections = false;
 };
 
-int SnapshotIncludeCallback(const char *include,
-                            const char *from,
-                            CScriptBuilder *builder,
-                            void *userParam) {
-    auto *context = static_cast<SnapshotIncludeContext *>(userParam);
+void RecordIncludeEdge(std::vector<ScriptIncludeEdge> *includeEdges,
+                       const char *from,
+                       const std::string &to,
+                       bool resolvedFromSnapshot) {
+    if (!includeEdges) {
+        return;
+    }
+    ScriptIncludeEdge edge;
+    edge.FromSection = from ? from : "";
+    edge.ToSection = to;
+    edge.ResolvedFromSnapshot = resolvedFromSnapshot;
+    includeEdges->push_back(std::move(edge));
+}
+
+int RecordingIncludeCallback(const char *include,
+                             const char *from,
+                             CScriptBuilder *builder,
+                             void *userParam) {
+    auto *context = static_cast<BuildIncludeContext *>(userParam);
     if (!context || !builder)
         return -1;
+
+    if (!context->UseSnapshotSections) {
+        const std::string resolved = ScriptSourcePaths::ResolveFileIncludeName(include, from);
+        const int r = builder->AddSectionFromFile(resolved.c_str());
+        if (r < 0) {
+            return r;
+        }
+        RecordIncludeEdge(context->IncludeEdges, from, resolved, false);
+        return r;
+    }
 
     const std::string key = ScriptSourcePaths::ResolveSnapshotIncludeName(include, from);
     const auto it = context->Sections.find(key);
@@ -93,13 +118,7 @@ int SnapshotIncludeCallback(const char *include,
     }
 
     const SnapshotSection &section = it->second;
-    if (context->IncludeEdges) {
-        ScriptIncludeEdge edge;
-        edge.FromSection = from ? from : "";
-        edge.ToSection = section.Name;
-        edge.ResolvedFromSnapshot = true;
-        context->IncludeEdges->push_back(std::move(edge));
-    }
+    RecordIncludeEdge(context->IncludeEdges, from, section.Name, true);
     return builder->AddSectionFromMemory(section.Name.c_str(),
                                          section.Code.c_str(),
                                          static_cast<unsigned int>(section.Code.size()),
@@ -435,18 +454,19 @@ bool CachedScript::Build(asIScriptEngine *engine) {
     // Prepare the script builder
     CScriptBuilder builder;
     includeEdges.clear();
-    SnapshotIncludeContext snapshotIncludeContext;
+    BuildIncludeContext includeContext;
+    includeContext.IncludeEdges = &includeEdges;
+    includeContext.UseSnapshotSections = sourceSnapshotSections;
     if (sourceSnapshotSections) {
-        snapshotIncludeContext.IncludeEdges = &includeEdges;
         for (const auto &section : sections) {
             SnapshotSection snapshotSection;
             snapshotSection.Name = std::get<0>(section);
             snapshotSection.Code = std::get<1>(section);
-            snapshotIncludeContext.Sections[ScriptSourcePaths::NormalizeSectionName(snapshotSection.Name)] =
+            includeContext.Sections[ScriptSourcePaths::NormalizeSectionName(snapshotSection.Name)] =
                 std::move(snapshotSection);
         }
-        builder.SetIncludeCallback(SnapshotIncludeCallback, &snapshotIncludeContext);
     }
+    builder.SetIncludeCallback(RecordingIncludeCallback, &includeContext);
     builder.SetPragmaCallback(PragmaCallback, nullptr);
 
 #if CKVERSION == 0x13022002

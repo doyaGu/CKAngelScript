@@ -2,9 +2,47 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
+#include <system_error>
 #include <vector>
 
 namespace ScriptSourcePaths {
+
+namespace {
+
+bool IsBuilderAbsolutePath(const std::string &path) {
+    return !path.empty() &&
+           (path[0] == '/' || path[0] == '\\' || path.find(':') != std::string::npos);
+}
+
+std::string MakeBuilderAbsolutePath(std::string path) {
+    if (!IsBuilderAbsolutePath(path)) {
+        std::error_code ec;
+        std::filesystem::path currentPath = std::filesystem::current_path(ec);
+        if (!ec) {
+            path = (currentPath / path).generic_string();
+        }
+    }
+
+    std::replace(path.begin(), path.end(), '\\', '/');
+
+    size_t pos = 0;
+    while ((pos = path.find("/./", pos)) != std::string::npos) {
+        path.erase(pos + 1, 2);
+    }
+
+    while ((pos = path.find("/../")) != std::string::npos) {
+        const size_t parent = path.rfind('/', pos - 1);
+        if (parent == std::string::npos) {
+            break;
+        }
+        path.erase(parent, pos + 3 - parent);
+    }
+
+    return path;
+}
+
+} // namespace
 
 std::string NormalizeSectionName(std::string path) {
     std::replace(path.begin(), path.end(), '\\', '/');
@@ -77,6 +115,22 @@ std::string ResolveSnapshotIncludeName(const char *include, const char *from) {
         includeName = base.substr(0, slash + 1) + includeName;
     }
     return NormalizeSectionName(includeName);
+}
+
+std::string ResolveFileIncludeName(const char *include, const char *from) {
+    std::string includeName = include ? include : "";
+    std::replace(includeName.begin(), includeName.end(), '\\', '/');
+
+    if (!IsBuilderAbsolutePath(includeName)) {
+        std::string base = from ? from : "";
+        std::replace(base.begin(), base.end(), '\\', '/');
+        const size_t slash = base.find_last_of('/');
+        if (slash != std::string::npos) {
+            includeName = base.substr(0, slash + 1) + includeName;
+        }
+    }
+
+    return MakeBuilderAbsolutePath(includeName);
 }
 
 } // namespace ScriptSourcePaths

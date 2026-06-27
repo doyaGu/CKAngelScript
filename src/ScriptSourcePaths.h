@@ -7,6 +7,7 @@ namespace ScriptSourcePaths {
 
 std::string NormalizeSectionName(std::string path);
 std::string ResolveSnapshotIncludeName(const char *include, const char *from);
+std::string ResolveFileIncludeName(const char *include, const char *from);
 
 } // namespace ScriptSourcePaths
 
