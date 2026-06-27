@@ -16,7 +16,8 @@ public:
         : m_Buffer(buffer) {}
 
     int Read(void *ptr, asUINT size) override {
-        if (!m_Buffer || !ptr || m_ReadOffset > m_Buffer->size() || size > m_Buffer->size() - m_ReadOffset) {
+        if (!m_Buffer || (!ptr && size > 0) || m_ReadOffset > m_Buffer->size() ||
+            size > m_Buffer->size() - m_ReadOffset) {
             return -1;
         }
         if (size > 0) {
