@@ -1668,6 +1668,15 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "    if (fmt(\"{}\", @live) != text) return 6;\n"
         "    return 0;\n"
         "}\n"
+        "int __ckas_public_format_const_handle() {\n"
+        "    __CKAS_PublicFormatBox@ live = __CKAS_PublicFormatBox();\n"
+        "    const __CKAS_PublicFormatBox@ constLive = live;\n"
+        "    string text = toString(@constLive);\n"
+        "    if (text == \"null\" || text == \"unknown\") return 12;\n"
+        "    if (fmt(\"{}\", @constLive) != text) return 13;\n"
+        "    if (typeof(@constLive) != \"const __CKAS_PublicFormatBox@\") return 14;\n"
+        "    return 0;\n"
+        "}\n"
         "int __ckas_public_fmt_numeric() {\n"
         "    if (fmt(\"{:04}\", 12) != \"0012\") return 7;\n"
         "    return 0;\n"
@@ -1784,6 +1793,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "int __ckas_public_fmt_null_handle()",
         "int __ckas_public_format_enum_first()",
         "int __ckas_public_format_live_handle()",
+        "int __ckas_public_format_const_handle()",
         "int __ckas_public_fmt_numeric()",
         "int __ckas_public_format_simple()",
         "int __ckas_public_typeof_values()",

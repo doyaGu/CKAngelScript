@@ -170,8 +170,9 @@ static const char *FindEnumValueName(const asITypeInfo *type, int value) {
     return nullptr;
 }
 
-static int ObjectTypeIdFromArgument(int typeId) {
-    return (typeId & asTYPEID_OBJHANDLE) ? (typeId & ~asTYPEID_OBJHANDLE) : typeId;
+static int ObjectBaseTypeIdFromArgument(int typeId) {
+    static constexpr int kHandleTypeFlags = asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST;
+    return (typeId & asTYPEID_OBJHANDLE) ? (typeId & ~kHandleTypeFlags) : typeId;
 }
 
 static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstream &stream) {
@@ -261,7 +262,7 @@ static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstrea
             stream << value;
         }
     } else if (typeId & asTYPEID_MASK_OBJECT) {
-        const int objectTypeId = ObjectTypeIdFromArgument(typeId);
+        const int objectTypeId = ObjectBaseTypeIdFromArgument(typeId);
         asITypeInfo *type = engine->GetTypeInfoById(objectTypeId);
         if (!type) {
             stream << "unknown";
@@ -421,7 +422,7 @@ static std::string FormatString(asIScriptGeneric *gen) {
                 store.push_back(value);
             }
         } else if (typeId & asTYPEID_MASK_OBJECT) {
-            const int objectTypeId = ObjectTypeIdFromArgument(typeId);
+            const int objectTypeId = ObjectBaseTypeIdFromArgument(typeId);
             asITypeInfo *type = engine->GetTypeInfoById(objectTypeId);
             if (!type) {
                 pushString("unknown");
@@ -559,14 +560,21 @@ static std::string TypeOf(asIScriptGeneric *gen) {
         return "null";
     }
 
-    const int objectTypeId = ObjectTypeIdFromArgument(typeId);
+    const int objectTypeId = ObjectBaseTypeIdFromArgument(typeId);
     asITypeInfo *type = engine->GetTypeInfoById(objectTypeId);
     if (!type) {
         return "unknown";
     }
 
-    if (typeId & asTYPEID_OBJHANDLE)
-        return std::string(type->GetName()) + "@";
+    if (typeId & asTYPEID_OBJHANDLE) {
+        std::string name;
+        if (typeId & asTYPEID_HANDLETOCONST) {
+            name += "const ";
+        }
+        name += type->GetName();
+        name += "@";
+        return name;
+    }
     return type->GetName();
 }
 
