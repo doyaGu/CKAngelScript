@@ -1506,6 +1506,134 @@ void ScriptRuntime::ReleaseCachedFunctions(Module &module) const {
     ReleaseScriptFunction(module.OnMessage);
 }
 
+#if CKAS_BUILD_SELF_TESTS
+bool ScriptRuntime::RunPauseLifecycleSelfTest(std::string &error) {
+    if (!m_Manager || !m_Manager->GetScriptEngine()) {
+        error = "Runtime pause lifecycle self-test requires an initialized ScriptManager.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_RuntimePauseLifecycleSelfTest";
+    constexpr const char *scriptId = "ckas.runtime.pause.selftest";
+    constexpr const char *source =
+        "int pauseCount = 0;\n"
+        "int disableCount = 0;\n"
+        "int badPhaseCount = 0;\n"
+        "void OnPause(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"OnPause\") { badPhaseCount++; }\n"
+        "  pauseCount++;\n"
+        "}\n"
+        "void OnDisable(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"OnDisable\") { badPhaseCount++; }\n"
+        "  disableCount++;\n"
+        "  AsyncTask<void>@ delay = Async::Delay(1);\n"
+        "  Await(delay);\n"
+        "}\n";
+
+    CKAngelScriptResult result = {};
+    if (m_Manager->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Runtime pause lifecycle self-test failed to compile.";
+        return false;
+    }
+
+    Module module;
+    module.Meta.Id = scriptId;
+    module.Meta.Name = scriptId;
+    module.MessageTarget = ScriptMessageBus::RuntimeTarget(scriptId);
+    module.ModuleName = moduleName;
+    module.Generation = ++m_Generation;
+    module.Cached = m_Manager->GetCachedScript(moduleName);
+    module.Enabled = true;
+    module.Loaded = true;
+    module.LoadCalled = true;
+    module.AwakeCalled = true;
+    module.EnableCalled = true;
+    module.StartCalled = true;
+
+    auto cleanup = [&]() {
+        ReleaseCachedFunctions(module);
+        if (m_Manager->GetAsyncScheduler()) {
+            m_Manager->GetAsyncScheduler()->Clear();
+        }
+        m_Manager->UnloadModule(moduleName, nullptr);
+    };
+
+    if (!module.Cached || !module.Cached->module) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test could not retrieve compiled module.";
+        return false;
+    }
+
+    if (!CacheLifecycleFunctions(module, error)) {
+        cleanup();
+        if (error.empty()) {
+            error = "Runtime pause lifecycle self-test could not cache lifecycle functions.";
+        }
+        return false;
+    }
+
+    ScriptContext ctx = MakeRuntimeContext(m_Manager->GetCKContext(),
+                                           module.Meta,
+                                           "OnPause",
+                                           ModuleState(module),
+                                           module.Generation,
+                                           m_FrameIndex,
+                                           0.0f,
+                                           0.0f);
+    if (PauseModule(module, ctx)) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test expected OnDisable to suspend.";
+        return false;
+    }
+    if (!module.ActiveContext || module.ActiveInvocation != "OnDisable" || !module.PendingPause) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test did not retain suspended OnDisable state.";
+        return false;
+    }
+
+    if (!PauseModule(module, ctx)) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test failed to resume suspended OnDisable.";
+        return false;
+    }
+
+    asIScriptModule *scriptModule = module.Cached->module;
+    auto readGlobalInt = [&](const char *name, int &value) -> bool {
+        const int index = scriptModule ? scriptModule->GetGlobalVarIndexByName(name) : -1;
+        void *address = index >= 0 ? scriptModule->GetAddressOfGlobalVar(static_cast<asUINT>(index)) : nullptr;
+        if (!address) {
+            return false;
+        }
+        value = *static_cast<int *>(address);
+        return true;
+    };
+
+    int pauseCount = 0;
+    int disableCount = 0;
+    int badPhaseCount = 0;
+    if (!readGlobalInt("pauseCount", pauseCount) ||
+        !readGlobalInt("disableCount", disableCount) ||
+        !readGlobalInt("badPhaseCount", badPhaseCount)) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test could not read probe counters.";
+        return false;
+    }
+    if (pauseCount != 1 || disableCount != 1 || badPhaseCount != 0) {
+        cleanup();
+        error = fmt::format("Runtime pause lifecycle self-test observed pause={}, disable={}, badPhase={}; expected 1, 1, 0.",
+                            pauseCount,
+                            disableCount,
+                            badPhaseCount);
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
+#endif
+
 bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module) {
     for (std::unique_ptr<Module> &existing : m_Modules) {
         if (existing && existing->Meta.Id == metadata.Id) {
@@ -1622,6 +1750,30 @@ bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
         module.PendingPause = false;
         return true;
     }
+
+    auto makeDisableContext = [&]() {
+        return MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                  module.Meta,
+                                  "OnDisable",
+                                  ModuleState(module),
+                                  module.Generation,
+                                  m_FrameIndex,
+                                  context.DeltaTime(),
+                                  context.TimeSeconds());
+    };
+
+    if (module.ActiveContext && module.ActiveInvocation == "OnDisable") {
+        const InvokeStatus status = Invoke(module, "OnDisable", makeDisableContext());
+        if (status == InvokeStatus::Suspended) {
+            return false;
+        }
+        if (module.EnableCalled) {
+            module.EnableCalled = false;
+        }
+        module.PendingPause = false;
+        return true;
+    }
+
     InvokeStatus status = Invoke(module, "OnPause", context);
     if (status == InvokeStatus::Suspended) {
         return false;
@@ -1631,7 +1783,7 @@ bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
         return true;
     }
     if (module.EnableCalled) {
-        status = Invoke(module, "OnDisable", context);
+        status = Invoke(module, "OnDisable", makeDisableContext());
         if (status == InvokeStatus::Suspended) {
             return false;
         }

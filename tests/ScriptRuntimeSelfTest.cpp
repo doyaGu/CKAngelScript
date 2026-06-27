@@ -268,5 +268,10 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         return false;
     }
     api->UnloadModule(oldApiModuleName, nullptr);
+
+    ScriptRuntime runtime(manager);
+    if (!runtime.RunPauseLifecycleSelfTest(error)) {
+        return false;
+    }
     return true;
 }
