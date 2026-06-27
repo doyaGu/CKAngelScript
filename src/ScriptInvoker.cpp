@@ -527,6 +527,16 @@ bool ScriptInvoker::IsContextSuspended() const {
     return m_Context && m_Context->GetState() == asEXECUTION_SUSPENDED;
 }
 
+void ScriptInvoker::AbortActiveContext() {
+    if (!m_Context) {
+        return;
+    }
+    const int state = m_Context->GetState();
+    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
+        m_Context->Abort();
+    }
+}
+
 void ScriptInvoker::AbortContext() {
     ReleaseContext();
 }

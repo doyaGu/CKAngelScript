@@ -395,7 +395,11 @@ CKAS_STATUS ScriptManager::CancelExecution(CKAngelScriptExecution *execution, CK
         execution->State != CKAS_EXECUTION_SUSPENDED) {
         return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution cannot be cancelled from its current state.");
     }
-    execution->Invoker.AbortContext();
+    if (execution->State == CKAS_EXECUTION_RUNNING) {
+        execution->Invoker.AbortActiveContext();
+    } else {
+        execution->Invoker.AbortContext();
+    }
     execution->State = CKAS_EXECUTION_CANCELLED;
     ScriptApiSupport::MakeExecutionResult(execution, CKAS_CANCELLED);
     return StoreResult(result, CKAS_OK);

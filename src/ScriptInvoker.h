@@ -53,6 +53,7 @@ public:
     ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
     ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const ScriptMessage &message, const CKBehaviorContext &behcontext);
     bool IsContextSuspended() const;
+    void AbortActiveContext();
     void AbortContext();
 
     // Timing / metrics

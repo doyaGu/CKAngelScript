@@ -594,6 +594,11 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
 
     CKAS_STATUS status = ToCKAS_STATUS(scriptStatus);
     const int resultCode = execution->Invoker.GetLastResultCode();
+    if (execution->State == CKAS_EXECUTION_CANCELLED) {
+        execution->Invoker.AbortContext();
+        MakeExecutionResult(execution, CKAS_CANCELLED, resultCode);
+        return CKAS_CANCELLED;
+    }
     if (scriptStatus == ScriptInvocationStatus::Suspended &&
         HasPublicFlag(execution->Flags, CKAS_CALL_NO_SUSPEND)) {
         execution->Invoker.AbortContext();

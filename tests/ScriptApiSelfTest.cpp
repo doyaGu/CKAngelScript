@@ -320,6 +320,14 @@ struct ReentrantExecutionCallbackProbe {
     int Output = 0;
 };
 
+struct CancelRunningExecutionProbe {
+    CKAngelScriptApi *Api = nullptr;
+    CKAngelScriptExecution *Execution = nullptr;
+    CKAS_STATUS CancelStatus = CKAS_OK;
+    CKAS_STATUS CancelResultStatus = CKAS_OK;
+    CKDWORD CallbackCount = 0;
+};
+
 struct ReentrantObjectCallProbe {
     CKAngelScriptApi *Api = nullptr;
     CKAS_STATUS ReentryStatus = CKAS_OK;
@@ -373,6 +381,19 @@ CKAS_STATUS ReadIntReturnWithReentryProbe(asIScriptContext *ctx, void *userData)
         return CKAS_INVALIDARGUMENT;
     }
     probe->Output = static_cast<int>(ctx->GetReturnDWord());
+    return CKAS_OK;
+}
+
+CKAS_STATUS CancelRunningExecution(asIScriptContext *ctx, void *userData) {
+    auto *probe = static_cast<CancelRunningExecutionProbe *>(userData);
+    if (!ctx || !probe || !probe->Api || !probe->Execution) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    CKAngelScriptResult cancelResult;
+    CKAngelScriptInitResult(&cancelResult);
+    probe->CancelStatus = probe->Api->CancelExecution(probe->Execution, &cancelResult);
+    probe->CancelResultStatus = cancelResult.Status;
     return CKAS_OK;
 }
 
@@ -3740,6 +3761,61 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->ReleaseExecution(execution);
+
+    CancelRunningExecutionProbe cancelRunningProbe;
+    cancelRunningProbe.Api = &api;
+    CKAngelScriptExecutionStepOptions cancelRunningStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(CancelRunningExecution, nullptr, &cancelRunningProbe);
+    data.Output = -1;
+    execution = nullptr;
+    if (api->CreateFunctionExecution(rejectedOptions, &execution, &result) != CKAS_OK || !execution) {
+        error = "CKAngelScript API self-test failed to create cancellable running execution.";
+        if (execution) {
+            api->ReleaseExecution(execution);
+        }
+        api->ReleaseFunction(sideEffectFunction);
+        api->ReleaseFunction(sideEffectGetter);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    cancelRunningProbe.Execution = execution;
+    const CKAS_STATUS cancelledStartStatus =
+        api->StartExecution(execution, cancelRunningStepOptions, &result);
+    if (cancelledStartStatus != CKAS_CANCELLED ||
+        result.Status != CKAS_CANCELLED ||
+        cancelRunningProbe.CallbackCount != 1 ||
+        cancelRunningProbe.CancelStatus != CKAS_OK ||
+        cancelRunningProbe.CancelResultStatus != CKAS_OK ||
+        api->GetExecutionState(execution, &state, &result) != CKAS_OK ||
+        state != CKAS_EXECUTION_CANCELLED ||
+        api->BorrowExecutionResult(execution, &executionResult, &result) != CKAS_OK ||
+        !executionResult ||
+        executionResult->Status != CKAS_CANCELLED) {
+        error = "CKAngelScript API self-test expected running execution cancellation to persist.";
+        api->ReleaseExecution(execution);
+        api->ReleaseFunction(sideEffectFunction);
+        api->ReleaseFunction(sideEffectGetter);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    api->ReleaseExecution(execution);
+    execution = nullptr;
+    data.Output = -1;
+    if (api->CreateFunctionExecution(getterOptions, &execution, &result) != CKAS_OK ||
+        !execution ||
+        api->StartExecution(execution, getterStepOptions, &result) != CKAS_OK ||
+        data.Output != 0) {
+        error = "CKAngelScript API self-test expected running cancellation to prevent script side effects.";
+        if (execution) {
+            api->ReleaseExecution(execution);
+        }
+        api->ReleaseFunction(sideEffectFunction);
+        api->ReleaseFunction(sideEffectGetter);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    api->ReleaseExecution(execution);
+
     api->ReleaseFunction(sideEffectFunction);
     api->ReleaseFunction(sideEffectGetter);
 
