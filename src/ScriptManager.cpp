@@ -21,6 +21,28 @@
 #include "ScriptSelfTests.h"
 #endif
 
+namespace {
+
+void ClearRuntimeQueues(ScriptMessageBus *messageBus, ScriptAsyncScheduler *asyncScheduler) {
+    if (messageBus) {
+        messageBus->Clear();
+    }
+    if (asyncScheduler) {
+        asyncScheduler->Clear();
+    }
+}
+
+void ClearPausedRuntimeQueues(ScriptMessageBus *messageBus, ScriptAsyncScheduler *asyncScheduler) {
+    if (messageBus) {
+        messageBus->ClearPendingRequests("Message requests were cancelled because CK is pausing.");
+    }
+    if (asyncScheduler) {
+        asyncScheduler->Clear();
+    }
+}
+
+} // namespace
+
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
     int r = Init();
     if (r < 0)
@@ -44,12 +66,6 @@ CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
 
 
 CKERROR ScriptManager::PostClearAll() {
-    if (m_MessageBus) {
-        m_MessageBus->Clear();
-    }
-    if (m_AsyncScheduler) {
-        m_AsyncScheduler->Clear();
-    }
     if (m_Runtime) {
         m_Runtime->Clear();
     }
@@ -57,6 +73,7 @@ CKERROR ScriptManager::PostClearAll() {
         m_BehaviorBridge->Clear();
     }
     ClearComponentStates();
+    ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
     ClearCKObjectData();
     return CK_OK;
 }
@@ -92,12 +109,6 @@ CKERROR ScriptManager::OnCKInit() {
 }
 
 CKERROR ScriptManager::OnCKEnd() {
-    if (m_MessageBus) {
-        m_MessageBus->Clear();
-    }
-    if (m_AsyncScheduler) {
-        m_AsyncScheduler->Clear();
-    }
     if (m_Runtime) {
         m_Runtime->OnEnd();
     }
@@ -105,35 +116,26 @@ CKERROR ScriptManager::OnCKEnd() {
         m_BehaviorBridge->Clear();
     }
     ClearComponentStates();
+    ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
     return CK_OK;
 }
 
 CKERROR ScriptManager::OnCKReset() {
-    if (m_MessageBus) {
-        m_MessageBus->Clear();
-    }
-    if (m_AsyncScheduler) {
-        m_AsyncScheduler->Clear();
-    }
     if (m_Runtime) {
         m_Runtime->OnReset();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
+    ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
     return CK_OK;
 }
 
 CKERROR ScriptManager::OnCKPause() {
-    if (m_MessageBus) {
-        m_MessageBus->ClearPendingRequests("Message requests were cancelled because CK is pausing.");
-    }
-    if (m_AsyncScheduler) {
-        m_AsyncScheduler->Clear();
-    }
     if (m_Runtime) {
         m_Runtime->OnPause();
     }
+    ClearPausedRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
     return CK_OK;
 }
 
@@ -187,19 +189,14 @@ int ScriptManager::Shutdown() {
 
     m_HandleRegistry.Clear();
 
-    if (m_MessageBus) {
-        m_MessageBus->Clear();
-    }
-    if (m_AsyncScheduler) {
-        m_AsyncScheduler->Clear();
-    }
-    if (m_BehaviorBridge) {
-        m_BehaviorBridge->Clear();
-    }
     if (m_Runtime) {
         m_Runtime->Clear();
     }
     ClearComponentStates();
+    if (m_BehaviorBridge) {
+        m_BehaviorBridge->Clear();
+    }
+    ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
 
     m_EngineHost.ReleaseContextPool();
 
