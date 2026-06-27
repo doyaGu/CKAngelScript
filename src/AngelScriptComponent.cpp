@@ -398,8 +398,7 @@ bool CacheMessageMethod(asITypeInfo *type, ScriptComponentState *state) {
         return false;
     }
     if (state->OnMessage) {
-        state->OnMessage->Release();
-        state->OnMessage = nullptr;
+        ScriptComponentState::ReleaseFunction(state->OnMessage);
     }
     bool sawName = false;
     std::string invalidDecl;
@@ -536,40 +535,12 @@ LifecycleInvokeStatus InvokeLifecycle(CKBehavior *beh, ScriptComponentState *sta
     return LifecycleInvokeStatus::Finished;
 }
 
-void ReleaseComponentMethod(asIScriptFunction *&method) {
-    if (!method) {
-        return;
-    }
-    method->Release();
-    method = nullptr;
-}
-
-void ReleaseCachedComponentMethods(ScriptComponentState *state) {
-    if (!state) {
-        return;
-    }
-    ReleaseComponentMethod(state->OnLoad);
-    ReleaseComponentMethod(state->Awake);
-    ReleaseComponentMethod(state->OnEnable);
-    ReleaseComponentMethod(state->Start);
-    ReleaseComponentMethod(state->Update);
-    ReleaseComponentMethod(state->OnDisable);
-    ReleaseComponentMethod(state->OnDestroy);
-    ReleaseComponentMethod(state->OnReset);
-    ReleaseComponentMethod(state->OnMessage);
-    state->ActiveLifecycle = nullptr;
-    state->ActiveLifecycleName.clear();
-}
-
 void ReleasePartialInstanceSetup(ScriptComponentState *state) {
     if (!state || state->Loaded) {
         return;
     }
-    ReleaseCachedComponentMethods(state);
-    if (state->Object) {
-        state->Object->Release();
-        state->Object = nullptr;
-    }
+    state->ReleaseCachedMethods();
+    state->ReleaseObject();
 }
 
 bool LifecycleFinished(LifecycleInvokeStatus status) {

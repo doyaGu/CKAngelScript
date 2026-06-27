@@ -151,6 +151,36 @@ struct ScriptComponentState {
     bool PendingDestroy = false;
     bool PendingDisableOutput = false;
     bool PendingResetRuntime = false;
+
+    static void ReleaseFunction(asIScriptFunction *&function) {
+        if (!function) {
+            return;
+        }
+        function->Release();
+        function = nullptr;
+    }
+
+    void ReleaseCachedMethods() {
+        ReleaseFunction(OnLoad);
+        ReleaseFunction(Awake);
+        ReleaseFunction(OnEnable);
+        ReleaseFunction(Start);
+        ReleaseFunction(Update);
+        ReleaseFunction(OnDisable);
+        ReleaseFunction(OnDestroy);
+        ReleaseFunction(OnReset);
+        ReleaseFunction(OnMessage);
+        ActiveLifecycle = nullptr;
+        ActiveLifecycleName.clear();
+    }
+
+    void ReleaseObject() {
+        if (!Object) {
+            return;
+        }
+        Object->Release();
+        Object = nullptr;
+    }
 };
 
 #endif // CK_SCRIPT_COMPONENT_STATE_H

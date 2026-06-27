@@ -14,15 +14,6 @@ struct ScriptComponentStateStore::Impl {
     std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > States;
 };
 
-static void ReleaseScriptFunction(asIScriptFunction *&func) {
-    if (!func) {
-        return;
-    }
-
-    func->Release();
-    func = nullptr;
-}
-
 ScriptComponentStateStore::ScriptComponentStateStore()
     : m_Impl(std::make_unique<Impl>()) {
 }
@@ -102,22 +93,8 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
         m_BehaviorBridge->DestroyComponentTasks(state->BehaviorId);
     }
 
-    ReleaseScriptFunction(state->OnLoad);
-    ReleaseScriptFunction(state->Awake);
-    ReleaseScriptFunction(state->OnEnable);
-    ReleaseScriptFunction(state->Start);
-    ReleaseScriptFunction(state->Update);
-    ReleaseScriptFunction(state->OnDisable);
-    ReleaseScriptFunction(state->OnDestroy);
-    ReleaseScriptFunction(state->OnReset);
-    ReleaseScriptFunction(state->OnMessage);
-    state->ActiveLifecycle = nullptr;
-    state->ActiveLifecycleName.clear();
-
-    if (state->Object) {
-        state->Object->Release();
-        state->Object = nullptr;
-    }
+    state->ReleaseCachedMethods();
+    state->ReleaseObject();
 
     if (state->Invoker) {
         state->Invoker->Reset();
