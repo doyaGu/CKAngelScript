@@ -2809,6 +2809,43 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    asIScriptModule *mismatchRawConsumer = nullptr;
+    asIScriptModule *mismatchRawProvider = nullptr;
+    int mismatchImportValue = 0;
+    if (api->BorrowModule(mismatchImportConsumerModuleName, &mismatchRawConsumer, &result) != CKAS_OK ||
+        api->BorrowModule(mismatchImportProviderModuleName, &mismatchRawProvider, &result) != CKAS_OK ||
+        !mismatchRawConsumer ||
+        !mismatchRawProvider) {
+        error = "CKAngelScript API self-test expected to borrow mismatch import modules.";
+        api->UnloadModule(mismatchImportConsumerModuleName, nullptr);
+        api->UnloadModule(mismatchImportProviderModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    asIScriptFunction *mismatchRawTarget =
+        mismatchRawProvider->GetFunctionByDecl("int __ckas_import_mismatch_ok()");
+    if (!mismatchRawTarget ||
+        mismatchRawConsumer->BindImportedFunction(0, mismatchRawTarget) < 0 ||
+        !ExecuteIntFunction(api,
+                            mismatchImportConsumerModuleName,
+                            "int __ckas_import_mismatch_call()",
+                            mismatchImportValue,
+                            result,
+                            error) ||
+        mismatchImportValue != 7) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test failed to create a raw mismatch import binding.";
+        }
+        if (mismatchRawConsumer) {
+            mismatchRawConsumer->UnbindImportedFunction(0);
+        }
+        api->UnloadModule(mismatchImportConsumerModuleName, nullptr);
+        api->UnloadModule(mismatchImportProviderModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     BoundImportEdgeProbe mismatchImportProbe;
     const CKDWORD mismatchImportGeneration = api->GetModuleGeneration(mismatchImportConsumerModuleName);
     if (api->BindAllImportedFunctions(mismatchImportConsumerModuleName, &result) != CKAS_TYPEMISMATCH ||
@@ -2818,11 +2855,31 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                                        &mismatchImportProbe,
                                        &result) != CKAS_OK ||
         mismatchImportProbe.CallbackCount != 0 ||
-        api->CompileModule(mismatchImportProviderModuleName,
+        !ExecuteIntFunction(api,
+                            mismatchImportConsumerModuleName,
+                            "int __ckas_import_mismatch_call()",
+                            mismatchImportValue,
+                            result,
+                            error) ||
+        mismatchImportValue != 7) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected failed BindAllImportedFunctions to preserve raw import bindings.";
+        }
+        if (mismatchRawConsumer) {
+            mismatchRawConsumer->UnbindImportedFunction(0);
+        }
+        api->UnloadModule(mismatchImportConsumerModuleName, nullptr);
+        api->UnloadModule(mismatchImportProviderModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    mismatchRawConsumer->UnbindImportedFunction(0);
+    if (api->CompileModule(mismatchImportProviderModuleName,
                            mismatchImportProviderReplacementSource,
                            CKAS_COMPILE_REPLACEEXISTING,
                            &result) != CKAS_OK) {
-        error = "CKAngelScript API self-test expected partially failed BindAllImportedFunctions to roll back applied bindings.";
+        error = "CKAngelScript API self-test expected failed BindAllImportedFunctions to leave no tracked provider edge.";
         api->UnloadModule(mismatchImportConsumerModuleName, nullptr);
         api->UnloadModule(mismatchImportProviderModuleName, nullptr);
         api->UnloadModule(importConsumerModuleName, nullptr);

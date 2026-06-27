@@ -4,7 +4,9 @@
 
 #include "ScriptApiDiagnostics.h"
 #include "ScriptApiSupport.h"
+#include "ScriptAngelScriptGc.h"
 #include "ScriptManager.h"
+#include "ScriptModuleBytecode.h"
 #include "ScriptModuleMutationPolicy.h"
 #include "ScriptPublicOptions.h"
 
@@ -16,6 +18,55 @@ struct ResolvedImportBinding {
     std::string FunctionDecl;
     asIScriptFunction *TargetFunction = nullptr;
 };
+
+bool CreateTransientImportModule(ScriptManager &manager,
+                                 asIScriptModule *sourceModule,
+                                 const char *moduleName,
+                                 asIScriptModule **outModule,
+                                 int &angelScriptCode,
+                                 std::string &errorMessage) {
+    if (outModule) {
+        *outModule = nullptr;
+    }
+    angelScriptCode = 0;
+    errorMessage.clear();
+    if (!sourceModule || !manager.GetScriptEngine()) {
+        angelScriptCode = -1;
+        errorMessage = "Import binding preflight arguments are invalid.";
+        return false;
+    }
+
+    std::vector<unsigned char> byteCode;
+    if (!ScriptModuleBytecode::SaveModuleByteCode(sourceModule, byteCode, angelScriptCode)) {
+        errorMessage = "Failed to snapshot importing module for import binding preflight.";
+        return false;
+    }
+
+    const std::string transientName =
+        ScriptModuleBytecode::MakeTransientModuleName(manager.GetScriptEngine(), moduleName);
+    std::vector<unsigned char> loadByteCode = byteCode;
+    asIScriptModule *transientModule = nullptr;
+    if (!ScriptModuleBytecode::LoadModuleByteCode(manager.GetScriptEngine(),
+                                                  transientName.c_str(),
+                                                  loadByteCode,
+                                                  &transientModule,
+                                                  angelScriptCode)) {
+        errorMessage = "Failed to load import binding preflight module.";
+        return false;
+    }
+
+    if (outModule) {
+        *outModule = transientModule;
+    }
+    return true;
+}
+
+void DiscardTransientImportModule(asIScriptModule *&module) {
+    if (module) {
+        ScriptDiscardModuleWithGarbageCollection(module);
+        module = nullptr;
+    }
+}
 
 } // namespace
 
@@ -146,6 +197,31 @@ CKAS_STATUS ScriptImportBinder::BindImportedFunction(BindContext &context,
     std::vector<ScriptImportBindingEdge> previousBinding =
         context.StateStore.GetImportBindingForModuleIndex(request.ImportModuleName, request.ImportIndex);
 
+    asIScriptModule *preflightModule = nullptr;
+    int preflightCode = 0;
+    std::string preflightError;
+    if (!CreateTransientImportModule(context.Manager,
+                                     importModule,
+                                     request.ImportModuleName,
+                                     &preflightModule,
+                                     preflightCode,
+                                     preflightError)) {
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_EXECUTIONFAILED,
+                                               preflightCode,
+                                               preflightError);
+    }
+    const int preflightBindResult =
+        preflightModule->BindImportedFunction(request.ImportIndex, targetFunction);
+    DiscardTransientImportModule(preflightModule);
+    if (preflightBindResult < 0) {
+        return context.Diagnostics.StoreResult(
+            result,
+            ScriptApiSupport::StatusFromImportBindResult(preflightBindResult),
+            preflightBindResult,
+            "Failed to bind imported function.");
+    }
+
     const int bindResult = importModule->BindImportedFunction(request.ImportIndex, targetFunction);
     if (bindResult < 0) {
         status = ScriptApiSupport::StatusFromImportBindResult(bindResult);
@@ -253,12 +329,47 @@ CKAS_STATUS ScriptImportBinder::BindAllImportedFunctions(BindContext &context,
 
     const std::vector<ScriptImportBindingEdge> previousBindings =
         context.StateStore.GetImportBindingsForModule(moduleName);
+    if (resolvedBindings.empty()) {
+        return context.Diagnostics.StoreResult(result, CKAS_OK);
+    }
+
+    asIScriptModule *preflightModule = nullptr;
+    int preflightCode = 0;
+    std::string preflightError;
+    if (!CreateTransientImportModule(context.Manager,
+                                     module,
+                                     moduleName,
+                                     &preflightModule,
+                                     preflightCode,
+                                     preflightError)) {
+        return context.Diagnostics.StoreResult(result,
+                                               CKAS_EXECUTIONFAILED,
+                                               preflightCode,
+                                               preflightError);
+    }
+    for (const ResolvedImportBinding &binding : resolvedBindings) {
+        preflightCode = preflightModule->BindImportedFunction(binding.Index, binding.TargetFunction);
+        if (preflightCode < 0) {
+            DiscardTransientImportModule(preflightModule);
+            return context.Diagnostics.StoreResult(result,
+                                                   ScriptApiSupport::StatusFromImportBindResult(preflightCode),
+                                                   preflightCode,
+                                                   fmt::format("Failed to bind import {}.", binding.Index));
+        }
+    }
+    DiscardTransientImportModule(preflightModule);
+
+    std::vector<ResolvedImportBinding> appliedBindings;
+    appliedBindings.reserve(resolvedBindings.size());
     for (const ResolvedImportBinding &binding : resolvedBindings) {
         context.StateStore.RemoveImportBinding(moduleName, binding.Index);
         const int bindResult = module->BindImportedFunction(binding.Index, binding.TargetFunction);
         if (bindResult < 0) {
             const CKAS_STATUS status = ScriptApiSupport::StatusFromImportBindResult(bindResult);
-            module->UnbindAllImportedFunctions();
+            module->UnbindImportedFunction(binding.Index);
+            for (auto it = appliedBindings.rbegin(); it != appliedBindings.rend(); ++it) {
+                module->UnbindImportedFunction(it->Index);
+            }
             context.StateStore.RemoveImportBindingsForModule(moduleName);
 
             int rollbackCode = 0;
@@ -287,6 +398,7 @@ CKAS_STATUS ScriptImportBinder::BindAllImportedFunctions(BindContext &context,
                                                binding.Index,
                                                binding.SourceModuleName.c_str(),
                                                binding.FunctionDecl.c_str());
+        appliedBindings.push_back(binding);
     }
     if (!resolvedBindings.empty()) {
         context.StateStore.BumpGeneration(moduleName);
