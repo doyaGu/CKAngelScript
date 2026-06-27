@@ -796,7 +796,20 @@ bool ExecuteIntFunction(const CKAngelScriptApi &api,
     const CKAS_STATUS releaseExecutionStatus = api.ReleaseExecution(execution);
     api.ReleaseFunction(function);
     if (startStatus != CKAS_OK || releaseExecutionStatus != CKAS_OK) {
-        error = "CKAngelScript API self-test function execution failed.";
+        error = std::string("CKAngelScript API self-test function execution failed for ") +
+                (functionDecl ? functionDecl : "<null>") +
+                ": start=" +
+                CKAngelScriptApi::StatusName(startStatus) +
+                ", release=" +
+                CKAngelScriptApi::StatusName(releaseExecutionStatus) +
+                ", result=" +
+                CKAngelScriptApi::StatusName(result.Status) +
+                ", asCode=" +
+                std::to_string(result.AngelScriptCode);
+        if (result.ErrorMessage && result.ErrorMessage[0] != '\0') {
+            error += ", message=";
+            error += result.ErrorMessage;
+        }
         return false;
     }
     value = data.Output;
@@ -1627,6 +1640,50 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "    if (CKStrlwr(\"\") != \"\") return 0;\n"
         "    return 1;\n"
         "}\n"
+        "enum __CKAS_PublicFormatEnum { __CKAS_FormatFirst = 7, __CKAS_FormatSecond = 8 }\n"
+        "class __CKAS_PublicFormatBox {\n"
+        "    string Text;\n"
+        "    string opImplConv() const { return Text; }\n"
+        "}\n"
+        "int __ckas_public_to_string_null_handle() {\n"
+        "    __CKAS_PublicFormatBox@ box = null;\n"
+        "    if (toString(@box) != \"null\") return 1;\n"
+        "    return 0;\n"
+        "}\n"
+        "int __ckas_public_fmt_null_handle() {\n"
+        "    __CKAS_PublicFormatBox@ box = null;\n"
+        "    if (fmt(\"{}\", @box) != \"null\") return 2;\n"
+        "    return 0;\n"
+        "}\n"
+        "int __ckas_public_format_enum_first() {\n"
+        "    if (toString(__CKAS_FormatFirst) != \"__CKAS_FormatFirst\") return 3;\n"
+        "    if (fmt(\"{}\", __CKAS_FormatFirst) != \"__CKAS_FormatFirst\") return 4;\n"
+        "    return 0;\n"
+        "}\n"
+        "int __ckas_public_format_live_handle() {\n"
+        "    __CKAS_PublicFormatBox@ live = __CKAS_PublicFormatBox();\n"
+        "    live.Text = \"box\";\n"
+        "    string text = toString(@live);\n"
+        "    if (text == \"null\" || text == \"box\") return 5;\n"
+        "    if (fmt(\"{}\", @live) != text) return 6;\n"
+        "    return 0;\n"
+        "}\n"
+        "int __ckas_public_fmt_numeric() {\n"
+        "    if (fmt(\"{:04}\", 12) != \"0012\") return 7;\n"
+        "    return 0;\n"
+        "}\n"
+        "int __ckas_public_format_simple() {\n"
+        "    if (format(\"{}\", 12) != \"12\") return 8;\n"
+        "    return 0;\n"
+        "}\n"
+        "int __ckas_public_typeof_values() {\n"
+        "    if (typeof(0) != \"int32\") return 9;\n"
+        "    __CKAS_PublicFormatBox@ box = null;\n"
+        "    if (typeof(@box) != \"null\") return 10;\n"
+        "    @box = __CKAS_PublicFormatBox();\n"
+        "    if (typeof(@box) != \"__CKAS_PublicFormatBox@\") return 11;\n"
+        "    return 0;\n"
+        "}\n"
         "[ckas_selftest_type]\n"
         "class __CKAS_PublicMetadataType {\n"
         "    [ckas_selftest_property]\n"
@@ -1720,6 +1777,35 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         borrowedFunction != nullptr) {
         error = "CKAngelScript API self-test expected overloaded borrowed function lookup to be ambiguous.";
         return false;
+    }
+
+    const char *formatHelperDecls[] = {
+        "int __ckas_public_to_string_null_handle()",
+        "int __ckas_public_fmt_null_handle()",
+        "int __ckas_public_format_enum_first()",
+        "int __ckas_public_format_live_handle()",
+        "int __ckas_public_fmt_numeric()",
+        "int __ckas_public_format_simple()",
+        "int __ckas_public_typeof_values()",
+    };
+    for (const char *formatHelperDecl : formatHelperDecls) {
+        int formatHelperResult = -1;
+        if (!ExecuteIntFunction(api,
+                                moduleName,
+                                formatHelperDecl,
+                                formatHelperResult,
+                                result,
+                                error) ||
+            formatHelperResult != 0) {
+            if (error.empty()) {
+                error = std::string("CKAngelScript API self-test format helper ") +
+                        formatHelperDecl +
+                        " returned " +
+                        std::to_string(formatHelperResult) +
+                        ".";
+            }
+            return false;
+        }
     }
 
     constexpr const char *rawModuleName = "__CKAS_RawModuleUnloadSelfTest";

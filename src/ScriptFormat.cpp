@@ -1,10 +1,12 @@
 #include "ScriptFormat.h"
 
 #include <cassert>
+#include <exception>
 #include <string>
 #include <sstream>
 #include <unordered_map>
 #include <mutex>
+#include <vector>
 
 #include <fmt/format.h>
 #include <fmt/args.h>
@@ -89,7 +91,7 @@ private:
     std::unordered_map<int, asIScriptFunction *> m_ToStringMap;
 };
 
-asIScriptFunction *FindToStringCallback(asIScriptEngine *engine, int typeId) {
+asIScriptFunction *FindNativeToStringCallback(asIScriptEngine *engine, int typeId) {
     auto *map = static_cast<ToStringMap *>(engine->GetUserData(TOSTRINGMAP_TYPE));
     if (!map) {
         engine->WriteMessage("print", 0, 0, asMSGTYPE_ERROR, "ToStringMap has been overwritten.");
@@ -125,14 +127,57 @@ asIScriptFunction *FindToStringCallback(asIScriptEngine *engine, int typeId) {
         func = type->GetMethodByDecl("string opConv()");
     }
 
+    if (func && func->GetFuncType() != asFUNC_SYSTEM) {
+        return nullptr;
+    }
+
     map->SetToStringFunction(typeId, func);
     return func;
+}
+
+static void *GetGenericArgValueAddress(asIScriptGeneric *gen, int index, int typeId) {
+    if (!gen) {
+        return nullptr;
+    }
+
+    void *addr = gen->GetArgAddress(index);
+    if (addr && (typeId & asTYPEID_OBJHANDLE)) {
+        return *static_cast<void **>(addr);
+    }
+    if (addr) {
+        return addr;
+    }
+
+    if (typeId & asTYPEID_MASK_OBJECT) {
+        return gen->GetArgObject(index);
+    }
+    return nullptr;
+}
+
+static const char *FindEnumValueName(const asITypeInfo *type, int value) {
+    if (!type) {
+        return nullptr;
+    }
+
+    const asUINT count = type->GetEnumValueCount();
+    for (asUINT n = 0; n < count; ++n) {
+        int enumVal = 0;
+        const char *enumName = type->GetEnumValueByIndex(n, &enumVal);
+        if (enumVal == value) {
+            return enumName;
+        }
+    }
+    return nullptr;
+}
+
+static int ObjectTypeIdFromArgument(int typeId) {
+    return (typeId & asTYPEID_OBJHANDLE) ? (typeId & ~asTYPEID_OBJHANDLE) : typeId;
 }
 
 static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstream &stream) {
     asIScriptEngine *engine = gen->GetEngine();
     const int typeId = gen->GetArgTypeId(index);
-    void *addr = *static_cast<void **>(gen->GetAddressOfArg(index));
+    void *addr = GetGenericArgValueAddress(gen, index, typeId);
 
     if (addr == nullptr) {
         stream << "null";
@@ -203,27 +248,21 @@ static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstrea
         }
     } else if (!(typeId & asTYPEID_MASK_OBJECT)) {
         // The type is an enum, check if the value matches one of the defined enums
-        bool found = false;
         const asITypeInfo *type = engine->GetTypeInfoById(typeId);
-        const int value = *static_cast<int *>(addr);
-        for (int n = static_cast<int>(type->GetEnumValueCount()); --n > 0;) {
-            int enumVal;
-            const char *enumName = type->GetEnumValueByIndex(n, &enumVal);
-            if (enumVal == value) {
-                stream << enumName;
-                found = true;
-                break;
-            }
+        if (!type) {
+            stream << "unknown";
+            return;
         }
-        if (!found) {
+        const int value = *static_cast<int *>(addr);
+        const char *enumName = FindEnumValueName(type, value);
+        if (enumName) {
+            stream << enumName;
+        } else {
             stream << value;
         }
     } else if (typeId & asTYPEID_MASK_OBJECT) {
-        // Dereference handles, so we can see what it points to
-        if (typeId & asTYPEID_OBJHANDLE)
-            addr = *static_cast<void **>(addr);
-
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        const int objectTypeId = ObjectTypeIdFromArgument(typeId);
+        asITypeInfo *type = engine->GetTypeInfoById(objectTypeId);
         if (!type) {
             stream << "unknown";
             return;
@@ -235,7 +274,7 @@ static void ArgToStringStream(asIScriptGeneric *gen, int index, std::stringstrea
             return;
         }
 
-        asIScriptFunction *func = FindToStringCallback(engine, typeId);
+        asIScriptFunction *func = FindNativeToStringCallback(engine, objectTypeId);
         if (func) {
             // Call function
             asIScriptContext *ctx = engine->RequestContext();
@@ -284,26 +323,34 @@ static void ToStringGeneric(asIScriptGeneric *gen) {
 
 static std::string FormatString(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
-    const std::string &fmt = **static_cast<std::string **>(gen->GetAddressOfArg(0));
+    auto *fmtValue = static_cast<const std::string *>(gen->GetArgAddress(0));
+    const std::string emptyFormat;
+    const std::string &fmt = fmtValue ? *fmtValue : emptyFormat;
     fmt::dynamic_format_arg_store<fmt::format_context> store;
+    std::vector<std::string> ownedStrings;
+    ownedStrings.reserve(static_cast<size_t>(gen->GetArgCount()));
+    auto pushString = [&store, &ownedStrings](std::string value) {
+        ownedStrings.push_back(std::move(value));
+        store.push_back(ownedStrings.back());
+    };
 
     const int count = gen->GetArgCount();
     for (int i = 1; i < count; ++i) {
         const int typeId = gen->GetArgTypeId(i);
-        void *addr = *static_cast<void**>(gen->GetAddressOfArg(i));
+        void *addr = GetGenericArgValueAddress(gen, i, typeId);
 
         if (addr == nullptr) {
-            store.push_back("null");
+            pushString("null");
             continue;
         }
 
         if (typeId == asTYPEID_VOID) {
-            store.push_back("void");
+            pushString("void");
         } else if (typeId >= asTYPEID_BOOL && typeId <= asTYPEID_DOUBLE) {
             switch (typeId) {
                 case asTYPEID_BOOL: {
                     const bool value = *static_cast<bool *>(addr);
-                    store.push_back(value ? "true" : "false");
+                    pushString(value ? "true" : "false");
                 }
                 break;
                 case asTYPEID_INT8: {
@@ -361,49 +408,39 @@ static std::string FormatString(asIScriptGeneric *gen) {
             }
         } else if (!(typeId & asTYPEID_MASK_OBJECT)) {
             // The type is an enum, check if the value matches one of the defined enums
-            bool found = false;
             const asITypeInfo *type = engine->GetTypeInfoById(typeId);
             if (!type) {
-                store.push_back("unknown");
+                pushString("unknown");
                 continue;
             }
             const int value = *static_cast<int *>(addr);
-            for (int n = static_cast<int>(type->GetEnumValueCount()); --n > 0;) {
-                int enumVal;
-                const char *enumName = type->GetEnumValueByIndex(n, &enumVal);
-                if (enumVal == value) {
-                    store.push_back(enumName);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
+            const char *enumName = FindEnumValueName(type, value);
+            if (enumName) {
+                pushString(enumName);
+            } else {
                 store.push_back(value);
             }
         } else if (typeId & asTYPEID_MASK_OBJECT) {
-            // Dereference handles, so we can see what it points to
-            if (typeId & asTYPEID_OBJHANDLE)
-                addr = *static_cast<void **>(addr);
-
-            asITypeInfo *type = engine->GetTypeInfoById(typeId);
+            const int objectTypeId = ObjectTypeIdFromArgument(typeId);
+            asITypeInfo *type = engine->GetTypeInfoById(objectTypeId);
             if (!type) {
-                store.push_back("unknown");
+                pushString("unknown");
                 continue;
             }
             const char *typeName = type->GetName();
             if (strcmp(typeName, "string") == 0) {
-                store.push_back(*static_cast<std::string *>(addr));
+                pushString(*static_cast<std::string *>(addr));
                 continue;
             }
 
-            asIScriptFunction *func = FindToStringCallback(engine, typeId);
+            asIScriptFunction *func = FindNativeToStringCallback(engine, objectTypeId);
             if (func) {
                 // Call function
                 asIScriptContext *ctx = engine->RequestContext();
                 if (!ctx) {
                     std::stringstream stream;
                     stream << "<" << typeName << ":" << addr << ">";
-                    store.push_back(stream.str());
+                    pushString(stream.str());
                     continue;
                 }
                 int r = ctx->Prepare(func);
@@ -415,30 +452,31 @@ static std::string FormatString(asIScriptGeneric *gen) {
                 if (r != asEXECUTION_FINISHED) {
                     std::stringstream stream;
                     stream << "<" << typeName << ":" << addr << ">";
-                    store.push_back(stream.str());
+                    pushString(stream.str());
                     engine->ReturnContext(ctx);
                     continue;
                 }
 
                 void *retAddr = ctx->GetReturnAddress();
-                store.push_back(*static_cast<std::string *>(retAddr));
+                const std::string text = retAddr ? *static_cast<std::string *>(retAddr) : std::string();
                 engine->ReturnContext(ctx);
+                pushString(text);
             } else {
                 std::stringstream stream;
                 stream << "<" << typeName << ":" << addr << ">";
-                store.push_back(stream.str());
+                pushString(stream.str());
             }
         } else {
             asITypeInfo *type = engine->GetTypeInfoById(typeId);
             if (!type) {
-                store.push_back("unknown");
+                pushString("unknown");
                 continue;
             }
             const char *typeName = type->GetName();
 
             std::stringstream stream;
             stream << "<" << typeName << ":" << addr << ">";
-            store.push_back(stream.str());
+            pushString(stream.str());
         }
     }
 
@@ -446,7 +484,21 @@ static std::string FormatString(asIScriptGeneric *gen) {
 }
 
 static void FormatStringGeneric(asIScriptGeneric *gen) {
-    new(gen->GetAddressOfReturnLocation()) std::string(std::move(FormatString(gen)));
+    try {
+        new(gen->GetAddressOfReturnLocation()) std::string(std::move(FormatString(gen)));
+    } catch (const std::exception &e) {
+        new(gen->GetAddressOfReturnLocation()) std::string();
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx) {
+            ctx->SetException(e.what());
+        }
+    } catch (...) {
+        new(gen->GetAddressOfReturnLocation()) std::string();
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx) {
+            ctx->SetException("fmt failed with an unknown native exception.");
+        }
+    }
 }
 
 static void Print(const std::string &str) {
@@ -468,11 +520,6 @@ static void PrintGeneric(asIScriptGeneric *gen) {
 static std::string TypeOf(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     const auto typeId = gen->GetArgTypeId(0);
-    void *addr = *static_cast<void **>(gen->GetAddressOfArg(0));
-
-    if (addr == nullptr) {
-        return "null";
-    }
 
     if (typeId == asTYPEID_VOID) {
         return "void";
@@ -507,7 +554,13 @@ static std::string TypeOf(asIScriptGeneric *gen) {
         }
     }
 
-    asITypeInfo *type = engine->GetTypeInfoById(typeId);
+    void *addr = GetGenericArgValueAddress(gen, 0, typeId);
+    if (addr == nullptr && (typeId & asTYPEID_OBJHANDLE)) {
+        return "null";
+    }
+
+    const int objectTypeId = ObjectTypeIdFromArgument(typeId);
+    asITypeInfo *type = engine->GetTypeInfoById(objectTypeId);
     if (!type) {
         return "unknown";
     }
@@ -554,7 +607,7 @@ void RegisterScriptFormat(asIScriptEngine *engine, int argc) {
 
     r = engine->RegisterGlobalFunction("string toString(?&in)", asFUNCTION(ToStringGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
 
-    std::string decl = "string format(const string &in)";
+    std::string decl = "string fmt(const string &in)";
     for (int i = 0; i <= argc; ++i) {
         r = engine->RegisterGlobalFunction(decl.c_str(), asFUNCTION(FormatStringGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
         decl.pop_back();
