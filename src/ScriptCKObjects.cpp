@@ -74,6 +74,15 @@ bool GetCKLayerSquareArraySize(CKLayer *layer, const char *method, size_t &size)
     return true;
 }
 
+int ObjectBaseTypeIdFromGenericArgument(int typeId) {
+    static constexpr int kHandleTypeFlags = asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST;
+    return (typeId & asTYPEID_OBJHANDLE) ? (typeId & ~kHandleTypeFlags) : typeId;
+}
+
+asITypeInfo *GetObjectTypeInfoFromGenericArgument(asIScriptEngine *engine, int typeId) {
+    return engine ? engine->GetTypeInfoById(ObjectBaseTypeIdFromGenericArgument(typeId)) : nullptr;
+}
+
 void SetCKLayerValueBuffer(CKLayer *layer, int x, int y, NativeBuffer *buffer) {
     if (!ValidateCKLayerValueBuffer(layer, buffer, "CKLayer.SetValue")) {
         return;
@@ -365,7 +374,7 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
     }
 
     if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
         if (!type) {
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
@@ -576,7 +585,7 @@ static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
     }
 
     if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
         if (!type) {
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
@@ -641,7 +650,7 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
     }
 
     if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
         if (!type) {
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
@@ -1551,7 +1560,7 @@ static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
     }
 
     if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
         if (!type) {
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
@@ -1660,7 +1669,7 @@ static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
     }
 
     if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
         if (!type) {
             gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
             return;
@@ -3354,7 +3363,7 @@ static void CKDataArrayGetElementValueGeneric(asIScriptGeneric *gen) {
     }
 
     if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
         if (!type) {
             gen->SetReturnByte(0);
             return;
@@ -3417,7 +3426,7 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
     }
 
     if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
         if (!type) {
             gen->SetReturnByte(0);
             return;

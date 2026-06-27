@@ -10775,6 +10775,14 @@ bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "}\n"
         "void RejectCKDataArrayFindRowMissing(CKDataArray@ array, CKObject@ object) {\n"
         "  array.FindRow(0, CKEQUAL, 999999);\n"
+        "}\n"
+        "void RejectCKDataArraySetConstObjectHandle(CKDataArray@ array, CKObject@ object) {\n"
+        "  const CKObject@ value = object;\n"
+        "  array.SetElementValue(0, 2, @value);\n"
+        "}\n"
+        "void RejectCKDataArrayGetConstObjectHandle(CKDataArray@ array, CKObject@ object) {\n"
+        "  const CKObject@ value;\n"
+        "  array.GetElementValue(0, 2, @value);\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -10800,7 +10808,9 @@ bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *invalidGetRow = module->GetFunctionByDecl("void RejectCKDataArrayGetRowInvalid(CKDataArray@, CKObject@)");
     asIScriptFunction *invalidInsertRow = module->GetFunctionByDecl("void RejectCKDataArrayInsertRowInvalid(CKDataArray@, CKObject@)");
     asIScriptFunction *missingFindRow = module->GetFunctionByDecl("void RejectCKDataArrayFindRowMissing(CKDataArray@, CKObject@)");
-    if (!probe || !invalidGetRow || !invalidInsertRow || !missingFindRow) {
+    asIScriptFunction *setConstObjectHandle = module->GetFunctionByDecl("void RejectCKDataArraySetConstObjectHandle(CKDataArray@, CKObject@)");
+    asIScriptFunction *getConstObjectHandle = module->GetFunctionByDecl("void RejectCKDataArrayGetConstObjectHandle(CKDataArray@, CKObject@)");
+    if (!probe || !invalidGetRow || !invalidInsertRow || !missingFindRow || !setConstObjectHandle || !getConstObjectHandle) {
         engine->DiscardModule(moduleName);
         error = "CKDataArray self-test function was not found.";
         return false;
@@ -10832,7 +10842,9 @@ bool RunCKDataArrayScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     const bool ok = ExecuteCKDataArrayProbe(engine, probe, array, object, false, "CKDataArray surface probe", error) &&
                     ExecuteCKDataArrayProbe(engine, invalidGetRow, array, object, true, "CKDataArray invalid GetRow probe", error) &&
                     ExecuteCKDataArrayProbe(engine, invalidInsertRow, array, object, true, "CKDataArray invalid InsertRow probe", error) &&
-                    ExecuteCKDataArrayProbe(engine, missingFindRow, array, object, true, "CKDataArray missing FindRow probe", error);
+                    ExecuteCKDataArrayProbe(engine, missingFindRow, array, object, true, "CKDataArray missing FindRow probe", error) &&
+                    ExecuteCKDataArrayProbe(engine, setConstObjectHandle, array, object, true, "CKDataArray SetElementValue const object-handle probe", error) &&
+                    ExecuteCKDataArrayProbe(engine, getConstObjectHandle, array, object, true, "CKDataArray GetElementValue const object-handle probe", error);
 
     context->DestroyObject(object);
     context->DestroyObject(array);
@@ -14034,6 +14046,14 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  CKObject@ obj;\n"
         "  local.GetValue(@obj);\n"
         "}\n"
+        "void ProbeCKParameterGenericSetConstObjectHandle(CKParameterLocal@ local) {\n"
+        "  const CKObject@ obj;\n"
+        "  local.SetValue(@obj);\n"
+        "}\n"
+        "void ProbeCKParameterGenericGetConstObjectHandle(CKParameterLocal@ local) {\n"
+        "  const CKObject@ obj;\n"
+        "  local.GetValue(@obj);\n"
+        "}\n"
         "void ProbeCKParameterGenericSetNonPodObject(CKParameterLocal@ local) {\n"
         "  XString value(\"blocked\");\n"
         "  local.SetValue(value);\n"
@@ -14075,6 +14095,10 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "}\n"
         "void ProbeCKParameterInGenericGetObjectHandle(CKParameterIn@ pin) {\n"
         "  CKObject@ obj;\n"
+        "  pin.GetValue(@obj);\n"
+        "}\n"
+        "void ProbeCKParameterInGenericGetConstObjectHandle(CKParameterIn@ pin) {\n"
+        "  const CKObject@ obj;\n"
         "  pin.GetValue(@obj);\n"
         "}\n"
         "void ProbeCKParameterInGenericGetNonPodObject(CKParameterIn@ pin) {\n"
@@ -14255,6 +14279,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *genericGetScriptObject = module->GetFunctionByDecl("void ProbeCKParameterGenericGetScriptObject(CKParameterLocal@)");
     asIScriptFunction *genericSetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterGenericSetObjectHandle(CKParameterLocal@)");
     asIScriptFunction *genericGetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterGenericGetObjectHandle(CKParameterLocal@)");
+    asIScriptFunction *genericSetConstObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterGenericSetConstObjectHandle(CKParameterLocal@)");
+    asIScriptFunction *genericGetConstObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterGenericGetConstObjectHandle(CKParameterLocal@)");
     asIScriptFunction *genericSetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterGenericSetNonPodObject(CKParameterLocal@)");
     asIScriptFunction *genericGetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterGenericGetNonPodObject(CKParameterLocal@)");
     asIScriptFunction *pinString = module->GetFunctionByDecl("int ProbeCKParameterInGenericStringValue(CKParameterIn@)");
@@ -14263,6 +14289,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *pinMissingSource = module->GetFunctionByDecl("int ProbeCKParameterInGenericMissingSource(CKParameterIn@)");
     asIScriptFunction *pinGetScriptObject = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetScriptObject(CKParameterIn@)");
     asIScriptFunction *pinGetObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetObjectHandle(CKParameterIn@)");
+    asIScriptFunction *pinGetConstObjectHandle = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetConstObjectHandle(CKParameterIn@)");
     asIScriptFunction *pinGetNonPodObject = module->GetFunctionByDecl("void ProbeCKParameterInGenericGetNonPodObject(CKParameterIn@)");
     asIScriptFunction *pinSetTypeGuid = module->GetFunctionByDecl("int ProbeCKParameterInSetTypeAndGuid(CKParameterIn@)");
     asIScriptFunction *pinSourceGraph = module->GetFunctionByDecl("int ProbeCKParameterInSourceGraph(CKParameterIn@, CKParameter@, CKParameter@, CKParameterIn@)");
@@ -14283,8 +14310,9 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     if (!probe || !parameterTypeProbe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
         !localMyselfState || !localOwnerGraph ||
         !genericSetScriptObject || !genericGetScriptObject || !genericSetObjectHandle || !genericGetObjectHandle ||
+        !genericSetConstObjectHandle || !genericGetConstObjectHandle ||
         !genericSetNonPodObject || !genericGetNonPodObject || !pinString || !pinInt || !pinVector ||
-        !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetNonPodObject ||
+        !pinMissingSource || !pinGetScriptObject || !pinGetObjectHandle || !pinGetConstObjectHandle || !pinGetNonPodObject ||
         !pinSetTypeGuid || !pinSourceGraph || !pinShareNull || !pinSetOwnerNull || !pinSetOwnerInvalid ||
         !pinSetOwnerValid || !operationBasics || !operationOwner || !operationOwnerNull || !outDestinations || !outAddNull || !outRemoveNull ||
         !outGetInvalid || !outOwnerGraph || !copyValueNull || !compatibleNull) {
@@ -14330,6 +14358,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                      ExecuteCKParameterLocalProbe(engine, genericGetScriptObject, local, true, "CKParameter generic GetValue script-object probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericSetObjectHandle, local, true, "CKParameter generic SetValue object-handle probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericGetObjectHandle, local, true, "CKParameter generic GetValue object-handle probe", error) &&
+                     ExecuteCKParameterLocalProbe(engine, genericSetConstObjectHandle, local, true, "CKParameter generic SetValue const object-handle probe", error) &&
+                     ExecuteCKParameterLocalProbe(engine, genericGetConstObjectHandle, local, true, "CKParameter generic GetValue const object-handle probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericSetNonPodObject, local, true, "CKParameter generic SetValue non-POD probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericGetNonPodObject, local, true, "CKParameter generic GetValue non-POD probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, copyValueNull, local, true, "CKParameter CopyValue null probe", error) &&
@@ -14401,6 +14431,7 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                      ExecuteCKParameterInProbe(engine, pinMissingSource, inputMissing, false, "CKParameterIn generic missing-source probe", error) &&
                      ExecuteCKParameterInProbe(engine, pinGetScriptObject, inputString, true, "CKParameterIn generic script-object probe", error) &&
                      ExecuteCKParameterInProbe(engine, pinGetObjectHandle, inputString, true, "CKParameterIn generic object-handle probe", error) &&
+                     ExecuteCKParameterInProbe(engine, pinGetConstObjectHandle, inputString, true, "CKParameterIn generic const object-handle probe", error) &&
                      ExecuteCKParameterInProbe(engine, pinGetNonPodObject, inputString, true, "CKParameterIn generic non-POD probe", error) &&
                      ExecuteCKParameterInProbe(engine, pinSetTypeGuid, inputInt, false, "CKParameterIn SetType/SetGUID probe", error) &&
                      ExecuteCKParameterInSourceProbe(engine, pinSourceGraph, inputGraph, sourceGraphA, sourceGraphB, inputShared, false, "CKParameterIn source graph probe", error) &&
