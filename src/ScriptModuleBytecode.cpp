@@ -1,5 +1,6 @@
 #include "ScriptModuleBytecode.h"
 
+#include <atomic>
 #include <cstring>
 
 #include <fmt/format.h>
@@ -216,10 +217,11 @@ bool LoadModuleByteCode(asIScriptEngine *engine,
 }
 
 std::string MakeTransientModuleName(asIScriptEngine *engine, const char *moduleName) {
-    static unsigned int counter = 0;
+    static std::atomic<unsigned int> counter{0};
     std::string candidate;
     do {
-        candidate = fmt::format("__ckas_replace_candidate_{}_{}", moduleName ? moduleName : "module", ++counter);
+        const unsigned int id = counter.fetch_add(1, std::memory_order_relaxed) + 1;
+        candidate = fmt::format("__ckas_replace_candidate_{}_{}", moduleName ? moduleName : "module", id);
     } while (engine && engine->GetModule(candidate.c_str(), asGM_ONLY_IF_EXISTS));
     return candidate;
 }
