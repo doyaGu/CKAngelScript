@@ -308,16 +308,31 @@ static asIScriptFunction *FindMatchingGlobalFunction(asIScriptModule *module, as
     if (!module || !sourceFunction)
         return nullptr;
 
-    const char *decl = sourceFunction->GetDeclaration(false, true, false);
-    if (decl && decl[0] != '\0') {
-        asIScriptFunction *target = module->GetFunctionByDecl(decl);
-        if (target)
-            return target;
+    const char *declView = sourceFunction->GetDeclaration(false, true, false);
+    const std::string decl = declView ? declView : "";
+    if (!decl.empty()) {
+        for (asUINT i = 0; i < module->GetFunctionCount(); ++i) {
+            asIScriptFunction *candidate = module->GetFunctionByIndex(i);
+            const char *candidateDecl = candidate ? candidate->GetDeclaration(false, true, false) : nullptr;
+            if (candidateDecl && decl == candidateDecl)
+                return candidate;
+        }
+    }
+    return nullptr;
+}
+
+static asIScriptFunction *FindMatchingMethod(asITypeInfo *type, const char *declaration) {
+    if (!type || !declaration || declaration[0] == '\0')
+        return nullptr;
+
+    const std::string requestedDeclaration = declaration;
+    for (asUINT i = 0; i < type->GetMethodCount(); ++i) {
+        asIScriptFunction *candidate = type->GetMethodByIndex(i, false);
+        const char *candidateDecl = candidate ? candidate->GetDeclaration(false, true, false) : nullptr;
+        if (candidateDecl && requestedDeclaration == candidateDecl)
+            return candidate;
     }
 
-    const char *name = sourceFunction->GetName();
-    if (name && name[0] != '\0')
-        return module->GetFunctionByName(name);
     return nullptr;
 }
 
@@ -339,9 +354,10 @@ static int FindMatchingGlobalVar(asIScriptModule *module, const char *declaratio
 static int FindMatchingProperty(asITypeInfo *type, const char *declaration) {
     if (!type || !declaration || declaration[0] == '\0')
         return -1;
+    const std::string requestedDeclaration = declaration;
     for (asUINT i = 0; i < type->GetPropertyCount(); ++i) {
-        const char *candidateDecl = type->GetPropertyDeclaration(i, false);
-        if (candidateDecl && std::strcmp(candidateDecl, declaration) == 0)
+        const char *candidateDecl = type->GetPropertyDeclaration(i, true);
+        if (candidateDecl && requestedDeclaration == candidateDecl)
             return static_cast<int>(i);
     }
     return -1;
@@ -383,8 +399,9 @@ bool ScriptMetadata::RemapForModule(asIScriptModule *fromModule,
     }
 
     for (const auto &entry : fromMetadata.varMetadataMap) {
-        const char *declaration = fromModule->GetGlobalVarDeclaration(static_cast<asUINT>(entry.first), true);
-        const int targetIndex = FindMatchingGlobalVar(toModule, declaration);
+        const char *declarationView = fromModule->GetGlobalVarDeclaration(static_cast<asUINT>(entry.first), true);
+        const std::string declaration = declarationView ? declarationView : "";
+        const int targetIndex = FindMatchingGlobalVar(toModule, declaration.c_str());
         if (targetIndex >= 0) {
             outMetadata.varMetadataMap[targetIndex] = entry.second;
         } else {
@@ -403,8 +420,9 @@ bool ScriptMetadata::RemapForModule(asIScriptModule *fromModule,
         ScriptMetadata::ClassMetadata classMetadata(targetType->GetName() ? targetType->GetName() : "");
         for (const auto &methodEntry : entry.second.funcMetadataMap) {
             asIScriptFunction *sourceMethod = engine->GetFunctionById(methodEntry.first);
-            const char *declaration = sourceMethod ? sourceMethod->GetDeclaration(false, false, false) : nullptr;
-            asIScriptFunction *targetMethod = declaration ? targetType->GetMethodByDecl(declaration, false) : nullptr;
+            const char *declarationView = sourceMethod ? sourceMethod->GetDeclaration(false, true, false) : nullptr;
+            const std::string declaration = declarationView ? declarationView : "";
+            asIScriptFunction *targetMethod = FindMatchingMethod(targetType, declaration.c_str());
             if (targetMethod) {
                 classMetadata.funcMetadataMap[targetMethod->GetId()] = methodEntry.second;
             } else {
@@ -413,8 +431,10 @@ bool ScriptMetadata::RemapForModule(asIScriptModule *fromModule,
         }
 
         for (const auto &propertyEntry : entry.second.varMetadataMap) {
-            const char *declaration = sourceType->GetPropertyDeclaration(static_cast<asUINT>(propertyEntry.first), false);
-            const int targetIndex = FindMatchingProperty(targetType, declaration);
+            const char *declarationView =
+                sourceType->GetPropertyDeclaration(static_cast<asUINT>(propertyEntry.first), true);
+            const std::string declaration = declarationView ? declarationView : "";
+            const int targetIndex = FindMatchingProperty(targetType, declaration.c_str());
             if (targetIndex >= 0) {
                 classMetadata.varMetadataMap[targetIndex] = propertyEntry.second;
             } else {

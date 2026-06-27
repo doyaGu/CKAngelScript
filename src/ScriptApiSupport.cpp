@@ -648,4 +648,40 @@ asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
     return nullptr;
 }
 
+asIScriptFunction *FindFunctionByDecl(asIScriptModule *module, const char *declaration) {
+    if (!module || !IsNonEmpty(declaration)) {
+        return nullptr;
+    }
+
+    const asUINT functionCount = module->GetFunctionCount();
+    for (asUINT i = 0; i < functionCount; ++i) {
+        asIScriptFunction *function = module->GetFunctionByIndex(i);
+        const char *functionDecl = function ? function->GetDeclaration(true, true, false) : nullptr;
+        if (functionDecl && std::strcmp(functionDecl, declaration) == 0) {
+            return function;
+        }
+    }
+
+    return module->GetFunctionByDecl(declaration);
+}
+
+asIScriptFunction *FindMethodByDecl(asITypeInfo *type,
+                                    const char *declaration,
+                                    bool getVirtual) {
+    if (!type || !IsNonEmpty(declaration)) {
+        return nullptr;
+    }
+
+    const asUINT methodCount = type->GetMethodCount();
+    for (asUINT i = 0; i < methodCount; ++i) {
+        asIScriptFunction *method = type->GetMethodByIndex(i, getVirtual);
+        const char *methodDecl = method ? method->GetDeclaration(false, true, false) : nullptr;
+        if (methodDecl && std::strcmp(methodDecl, declaration) == 0) {
+            return method;
+        }
+    }
+
+    return type->GetMethodByDecl(declaration, getVirtual);
+}
+
 } // namespace ScriptApiSupport

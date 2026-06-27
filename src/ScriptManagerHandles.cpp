@@ -152,7 +152,7 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
 
     asIScriptFunction *function = nullptr;
     if (request.HasMethodDecl) {
-        function = type->GetMethodByDecl(request.MethodDecl);
+        function = ScriptApiSupport::FindMethodByDecl(type, request.MethodDecl);
     } else {
         asUINT matchCount = 0;
         const asUINT count = type->GetMethodCount();
@@ -239,7 +239,8 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
     if (!type) {
         return StoreResult(result, CKAS_EXECUTIONFAILED, 0, "Script object has no type information.");
     }
-    asIScriptFunction *function = type->GetMethodByDecl(request.Method->MethodDecl.c_str());
+    asIScriptFunction *function =
+        ScriptApiSupport::FindMethodByDecl(type, request.Method->MethodDecl.c_str());
     if (!function) {
         return StoreResult(result, CKAS_STALEHANDLE, 0, "Object method handle is stale.");
     }
@@ -295,7 +296,9 @@ CKAS_STATUS ScriptManager::CreateFunctionExecution(const CKAngelScriptFunctionEx
 
     asIScriptFunction *function = request.Function->FunctionDecl.empty()
                                       ? nullptr
-                                      : module->GetFunctionByDecl(request.Function->FunctionDecl.c_str());
+                                      : ScriptApiSupport::FindFunctionByDecl(
+                                            module,
+                                            request.Function->FunctionDecl.c_str());
     if (!function) {
         return StoreResult(result, CKAS_STALEHANDLE, 0, "Function handle is stale.");
     }

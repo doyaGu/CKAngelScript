@@ -556,7 +556,7 @@ CKAS_STATUS ScriptModuleRegistry::BorrowFunctionByDecl(BorrowContext &context,
     if (status != CKAS_OK) {
         return status;
     }
-    asIScriptFunction *function = module->GetFunctionByDecl(functionDecl);
+    asIScriptFunction *function = ScriptApiSupport::FindFunctionByDecl(module, functionDecl);
     if (!function) {
         return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Function was not found.");
     }

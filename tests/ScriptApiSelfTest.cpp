@@ -1514,6 +1514,123 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
 
     {
+        constexpr const char *metadataRemapSourceModuleName = "__CKAS_MetadataRemapSourceSelfTest";
+        constexpr const char *metadataRemapTargetModuleName = "__CKAS_MetadataRemapTargetSelfTest";
+        const char *metadataRemapSource =
+            "namespace __CKAS_RemapMain { class Arg {} }\n"
+            "namespace __CKAS_RemapOther { class Arg {} }\n"
+            "class __CKAS_RemapHolder {\n"
+            "  int Use(__CKAS_RemapMain::Arg@ arg) { return 1; }\n"
+            "  int Use(__CKAS_RemapOther::Arg@ arg) { return 2; }\n"
+            "}\n";
+        asIScriptModule *metadataRemapSourceModule =
+            engine->GetModule(metadataRemapSourceModuleName, asGM_ALWAYS_CREATE);
+        asIScriptModule *metadataRemapTargetModule =
+            engine->GetModule(metadataRemapTargetModuleName, asGM_ALWAYS_CREATE);
+        auto discardMetadataRemapModules = [&]() {
+            if (metadataRemapSourceModule) {
+                metadataRemapSourceModule->Discard();
+                metadataRemapSourceModule = nullptr;
+            }
+            if (metadataRemapTargetModule) {
+                metadataRemapTargetModule->Discard();
+                metadataRemapTargetModule = nullptr;
+            }
+        };
+        const asUINT metadataRemapSourceSize =
+            static_cast<asUINT>(std::strlen(metadataRemapSource));
+        if (!metadataRemapSourceModule ||
+            !metadataRemapTargetModule ||
+            metadataRemapSourceModule->AddScriptSection("metadata-remap-source.as",
+                                                        metadataRemapSource,
+                                                        metadataRemapSourceSize) < 0 ||
+            metadataRemapTargetModule->AddScriptSection("metadata-remap-target.as",
+                                                        metadataRemapSource,
+                                                        metadataRemapSourceSize) < 0 ||
+            metadataRemapSourceModule->Build() < 0 ||
+            metadataRemapTargetModule->Build() < 0) {
+            discardMetadataRemapModules();
+            error = "CKAngelScript API self-test failed to build metadata remap modules.";
+            return false;
+        }
+        asITypeInfo *sourceHolder = metadataRemapSourceModule->GetTypeInfoByDecl("__CKAS_RemapHolder");
+        asITypeInfo *targetHolder = metadataRemapTargetModule->GetTypeInfoByDecl("__CKAS_RemapHolder");
+        asIScriptFunction *sourceOtherUse =
+            sourceHolder && sourceHolder->GetMethodCount() > 1 ? sourceHolder->GetMethodByIndex(1, false) : nullptr;
+        asIScriptFunction *targetMainUse =
+            targetHolder && targetHolder->GetMethodCount() > 0 ? targetHolder->GetMethodByIndex(0, false) : nullptr;
+        asIScriptFunction *targetOtherUse =
+            targetHolder && targetHolder->GetMethodCount() > 1 ? targetHolder->GetMethodByIndex(1, false) : nullptr;
+        if (!sourceHolder || !targetHolder || !sourceOtherUse || !targetMainUse || !targetOtherUse) {
+            discardMetadataRemapModules();
+            error = "CKAngelScript API self-test failed to inspect metadata remap overloads.";
+            return false;
+        }
+        const char *sourceOtherUseDeclView = sourceOtherUse->GetDeclaration(false, true, false);
+        const std::string sourceOtherUseDecl = sourceOtherUseDeclView ? sourceOtherUseDeclView : "";
+        const char *targetMainUseDeclView = targetMainUse->GetDeclaration(false, true, false);
+        const std::string targetMainUseDecl = targetMainUseDeclView ? targetMainUseDeclView : "";
+        const char *targetOtherUseDeclView = targetOtherUse->GetDeclaration(false, true, false);
+        const std::string targetOtherUseDecl = targetOtherUseDeclView ? targetOtherUseDeclView : "";
+        if (sourceOtherUseDecl != "int Use(__CKAS_RemapOther::Arg@)" ||
+            targetMainUseDecl != "int Use(__CKAS_RemapMain::Arg@)" ||
+            targetOtherUseDecl != "int Use(__CKAS_RemapOther::Arg@)") {
+            discardMetadataRemapModules();
+            error = "CKAngelScript API self-test failed to inspect metadata remap overload declarations.";
+            return false;
+        }
+        ScriptMetadata sourceMetadata;
+        ScriptMetadata::ClassMetadata classMetadata;
+        classMetadata.className = "__CKAS_RemapHolder";
+        classMetadata.funcMetadataMap[sourceOtherUse->GetId()] = {"ckas_remap_other_overload"};
+        sourceMetadata.classMetadataMap[sourceHolder->GetTypeId()] = classMetadata;
+        ScriptMetadata remappedMetadata;
+        const bool remapComplete = ScriptMetadata::RemapForModule(metadataRemapSourceModule,
+                                                                  metadataRemapTargetModule,
+                                                                  sourceMetadata,
+                                                                  remappedMetadata);
+        const auto remappedClassIt =
+            remappedMetadata.classMetadataMap.find(targetHolder->GetTypeId());
+        bool remappedOther = false;
+        bool remappedMain = false;
+        if (remappedClassIt != remappedMetadata.classMetadataMap.end()) {
+            const auto otherIt =
+                remappedClassIt->second.funcMetadataMap.find(targetOtherUse->GetId());
+            remappedOther =
+                otherIt != remappedClassIt->second.funcMetadataMap.end() &&
+                otherIt->second.size() == 1 &&
+                otherIt->second[0] == "ckas_remap_other_overload";
+            remappedMain =
+                remappedClassIt->second.funcMetadataMap.find(targetMainUse->GetId()) !=
+                remappedClassIt->second.funcMetadataMap.end();
+        }
+        if (!remapComplete || !remappedOther || remappedMain) {
+            const char *sourceOtherDeclView = sourceOtherUse->GetDeclaration(false, true, false);
+            const std::string sourceOtherDecl = sourceOtherDeclView ? sourceOtherDeclView : "<null>";
+            const char *targetMainDeclView = targetMainUse->GetDeclaration(false, true, false);
+            const std::string targetMainDecl = targetMainDeclView ? targetMainDeclView : "<null>";
+            const char *targetOtherDeclView = targetOtherUse->GetDeclaration(false, true, false);
+            const std::string targetOtherDecl = targetOtherDeclView ? targetOtherDeclView : "<null>";
+            const size_t remappedMethodCount =
+                remappedClassIt != remappedMetadata.classMetadataMap.end()
+                    ? remappedClassIt->second.funcMetadataMap.size()
+                    : 0;
+            error = std::string("CKAngelScript API self-test expected metadata remap to preserve namespaced overload identity")
+                    + " (complete=" + (remapComplete ? "true" : "false")
+                    + ", other=" + (remappedOther ? "true" : "false")
+                    + ", main=" + (remappedMain ? "true" : "false")
+                    + ", count=" + std::to_string(remappedMethodCount)
+                    + ", sourceDecl=" + sourceOtherDecl
+                    + ", targetMainDecl=" + targetMainDecl
+                    + ", targetOtherDecl=" + targetOtherDecl
+                    + ").";
+            discardMetadataRemapModules();
+            return false;
+        }
+        discardMetadataRemapModules();
+    }
+
+    {
         constexpr const char *invokerRejectedArgsModuleName = "__CKAS_InvokerRejectedArgsSelfTest";
         if (api->CompileModule(invokerRejectedArgsModuleName,
                                "class __CKAS_InvokerRejectedArgsBox {\n"
@@ -4100,6 +4217,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "namespace __CKAS_TestNS {\n"
         "  class __CKAS_NamespacedObject {\n"
         "    int Value() { return 7; }\n"
+        "    int UseOther(__CKAS_TestNS::__CKAS_NamespacedObject@ other) { return other is null ? -2 : 100 + other.Value(); }\n"
         "    int UseOther(__CKAS_OtherNS::__CKAS_NamespacedObject@ other) { return other is null ? -1 : Value() + other.Value(); }\n"
         "  }\n"
         "  int NamespacedFunction() { return 13; }\n"
@@ -4108,6 +4226,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  class __CKAS_NamespacedObject {\n"
         "    int Value() { return 9; }\n"
         "  }\n"
+        "  int NamespacedFunction() { return 99; }\n"
         "}\n";
     if (!ExpectStatus(api->CompileModule(objectModuleName, objectSource, CKAS_COMPILE_REPLACEEXISTING, &result),
                       CKAS_OK,

@@ -131,7 +131,8 @@ CKAS_STATUS ScriptImportBinder::BindImportedFunction(BindContext &context,
             0,
             fmt::format("Import source module '{}' was not found.", sourceModuleName));
     }
-    asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl.c_str());
+    asIScriptFunction *targetFunction =
+        ScriptApiSupport::FindFunctionByDecl(sourceModule, functionDecl.c_str());
     if (!targetFunction) {
         return context.Diagnostics.StoreResult(
             result,
@@ -222,7 +223,8 @@ CKAS_STATUS ScriptImportBinder::BindAllImportedFunctions(BindContext &context,
                             i,
                             sourceModuleName));
         }
-        asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(functionDecl.c_str());
+        asIScriptFunction *targetFunction =
+            ScriptApiSupport::FindFunctionByDecl(sourceModule, functionDecl.c_str());
         if (!targetFunction) {
             return context.Diagnostics.StoreResult(
                 result,
@@ -443,7 +445,8 @@ bool ScriptImportBinder::Rebind(ScriptManager &manager,
                                        edge.SourceModuleName);
             return false;
         }
-        asIScriptFunction *targetFunction = sourceModule->GetFunctionByDecl(edge.FunctionDecl.c_str());
+        asIScriptFunction *targetFunction =
+            ScriptApiSupport::FindFunctionByDecl(sourceModule, edge.FunctionDecl.c_str());
         if (!targetFunction) {
             angelScriptCode = asNO_FUNCTION;
             errorMessage = fmt::format("Failed to restore import binding: function '{}' was not found in module '{}'.",

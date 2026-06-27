@@ -122,6 +122,10 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
 asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
                                         const char *className,
                                         const char *classNamespace);
+asIScriptFunction *FindFunctionByDecl(asIScriptModule *module, const char *declaration);
+asIScriptFunction *FindMethodByDecl(asITypeInfo *type,
+                                    const char *declaration,
+                                    bool getVirtual = true);
 
 template <typename T>
 void InitPublicStruct(T *value) {
