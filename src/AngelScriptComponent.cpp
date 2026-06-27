@@ -540,6 +540,16 @@ bool LifecycleFinished(LifecycleInvokeStatus status) {
     return status == LifecycleInvokeStatus::Finished;
 }
 
+bool IsLifecycleSuspended(ScriptComponentState *state) {
+    return state && state->Invoker && state->Invoker->IsContextSuspended();
+}
+
+void ActivateForSuspendedLifecycle(CKBehavior *beh, ScriptComponentState *state) {
+    if (beh && IsLifecycleSuspended(state)) {
+        beh->Activate(TRUE);
+    }
+}
+
 void CancelSuspendedLifecycle(ScriptComponentState *state, const char *unlessName = nullptr) {
     if (!state || !state->Invoker || !state->Invoker->IsContextSuspended()) {
         return;
@@ -917,6 +927,19 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         return CKBR_OK;
     }
 
+    if (state->ActiveLifecycleName == "OnReset") {
+        const ScriptComponentSupport::LifecycleInvokeStatus status =
+            ScriptComponentSupport::InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset");
+        if (status != ScriptComponentSupport::LifecycleInvokeStatus::Finished) {
+            return status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended
+                ? CKBR_ACTIVATENEXTFRAME
+                : CKBR_OK;
+        }
+        return state->DesiredEnabled && state->ScriptActive && !state->Paused
+            ? CKBR_ACTIVATENEXTFRAME
+            : CKBR_OK;
+    }
+
     if (state->ActiveLifecycleName == "OnDisable") {
         if (!ScriptComponentSupport::DisableInstance(behcontext, state)) {
             return state->Invoker && state->Invoker->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
@@ -1041,7 +1064,9 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
             state = ScriptComponentSupport::GetState(behcontext);
             if (state) {
                 state->ScriptActive = false;
-                ScriptComponentSupport::DisableInstance(behcontext, state);
+                if (!ScriptComponentSupport::DisableInstance(behcontext, state)) {
+                    ScriptComponentSupport::ActivateForSuspendedLifecycle(beh, state);
+                }
             }
         }
         break;
@@ -1053,7 +1078,9 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                     man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), true);
                 }
                 state->Paused = true;
-                ScriptComponentSupport::DisableInstance(behcontext, state);
+                if (!ScriptComponentSupport::DisableInstance(behcontext, state)) {
+                    ScriptComponentSupport::ActivateForSuspendedLifecycle(beh, state);
+                }
             }
         }
         break;
@@ -1086,6 +1113,10 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                     ScriptComponentSupport::CancelSuspendedLifecycle(state, "OnReset");
                     const ScriptComponentSupport::LifecycleInvokeStatus status =
                         ScriptComponentSupport::InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset");
+                    if (status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended) {
+                        beh->Activate(TRUE);
+                        return CKBR_OK;
+                    }
                     if (status == ScriptComponentSupport::LifecycleInvokeStatus::Failed) {
                         return CKBR_OK;
                     }
