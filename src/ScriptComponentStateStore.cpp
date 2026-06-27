@@ -93,14 +93,14 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
         m_BehaviorBridge->DestroyComponentTasks(state->BehaviorId);
     }
 
-    state->ReleaseCachedMethods();
-    state->ReleaseObject();
-
     if (state->Invoker) {
         state->Invoker->Reset();
         delete state->Invoker;
         state->Invoker = nullptr;
     }
+
+    state->ReleaseCachedMethods();
+    state->ReleaseObject();
 
     if (unloadPrivateModule && state->PrivateModule && !state->RuntimeModuleName.empty()) {
         UnloadModule(state->RuntimeModuleName.c_str(), nullptr);

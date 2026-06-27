@@ -1527,6 +1527,65 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
 
     {
+        constexpr const char *invokerResetSuspendedModuleName = "__CKAS_InvokerResetSuspendedSelfTest";
+        if (api->CompileModule(invokerResetSuspendedModuleName,
+                               "int __ckas_invoker_wait_then_reset() {\n"
+                               "  AsyncTask<void>@ delay = Async::Delay(100);\n"
+                               "  Await(delay);\n"
+                               "  return 7;\n"
+                               "}\n"
+                               "int __ckas_invoker_after_reset() { return 8; }\n",
+                               CKAS_COMPILE_REPLACEEXISTING,
+                               &result) != CKAS_OK) {
+            error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+                ? result.ErrorMessage
+                : "CKAngelScript API self-test failed to compile invoker suspended reset test module.";
+            return false;
+        }
+        asIScriptModule *invokerResetModule = engine->GetModule(invokerResetSuspendedModuleName, asGM_ONLY_IF_EXISTS);
+        asIScriptFunction *waitFunction = invokerResetModule
+            ? invokerResetModule->GetFunctionByDecl("int __ckas_invoker_wait_then_reset()")
+            : nullptr;
+        asIScriptFunction *afterFunction = invokerResetModule
+            ? invokerResetModule->GetFunctionByDecl("int __ckas_invoker_after_reset()")
+            : nullptr;
+        int afterResetResult = 0;
+        ScriptInvoker invoker(manager);
+        const bool scriptSet = invoker.SetScript(invokerResetSuspendedModuleName);
+        const ScriptInvocationStatus waitStatus = scriptSet
+            ? invoker.ExecuteScriptStatus(waitFunction)
+            : ScriptInvocationStatus::Failed;
+        invoker.Reset();
+        const bool scriptReset = invoker.SetScript(invokerResetSuspendedModuleName);
+        const ScriptInvocationStatus afterStatus = scriptReset
+            ? invoker.ExecuteScriptStatus(afterFunction,
+                                          nullptr,
+                                          [&afterResetResult](asIScriptContext *ctx) {
+                                              const void *address = ctx ? ctx->GetAddressOfReturnValue() : nullptr;
+                                              if (!address) {
+                                                  return false;
+                                              }
+                                              afterResetResult = *static_cast<const int *>(address);
+                                              return true;
+                                          })
+            : ScriptInvocationStatus::Failed;
+        invoker.Reset();
+        if (manager && manager->GetAsyncScheduler()) {
+            manager->GetAsyncScheduler()->Clear();
+        }
+        if (!waitFunction ||
+            !afterFunction ||
+            waitStatus != ScriptInvocationStatus::Suspended ||
+            afterStatus != ScriptInvocationStatus::Finished ||
+            afterResetResult != 8 ||
+            api->UnloadModule(invokerResetSuspendedModuleName, &result) != CKAS_OK) {
+            api->UnloadModule(invokerResetSuspendedModuleName, nullptr);
+            error = "CKAngelScript API self-test expected ScriptInvoker reset to abort suspended contexts.";
+            return false;
+        }
+    }
+
+    {
         void *intArray = nullptr;
         if (api->CreateArray("array<int>", 2, &intArray) != CKAS_OK || !intArray) {
             error = "CKAngelScript API self-test failed to create array<int> through public API.";

@@ -117,6 +117,7 @@ void ScriptInvoker::ReleaseContext() {
     if (m_ScriptManager && m_ScriptManager->GetAsyncScheduler()) {
         m_ScriptManager->GetAsyncScheduler()->ForgetContext(ctx);
     }
+    ReleaseAbortedContextState(ctx);
     if (m_ScriptManager && m_ScriptManager->GetScriptEngine()) {
         m_ScriptManager->GetScriptEngine()->ReturnContext(ctx);
     } else {
@@ -527,9 +528,6 @@ bool ScriptInvoker::IsContextSuspended() const {
 }
 
 void ScriptInvoker::AbortContext() {
-    if (m_Context) {
-        m_Context->Abort();
-    }
     ReleaseContext();
 }
 
