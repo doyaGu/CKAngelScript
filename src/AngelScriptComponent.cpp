@@ -536,6 +536,42 @@ LifecycleInvokeStatus InvokeLifecycle(CKBehavior *beh, ScriptComponentState *sta
     return LifecycleInvokeStatus::Finished;
 }
 
+void ReleaseComponentMethod(asIScriptFunction *&method) {
+    if (!method) {
+        return;
+    }
+    method->Release();
+    method = nullptr;
+}
+
+void ReleaseCachedComponentMethods(ScriptComponentState *state) {
+    if (!state) {
+        return;
+    }
+    ReleaseComponentMethod(state->OnLoad);
+    ReleaseComponentMethod(state->Awake);
+    ReleaseComponentMethod(state->OnEnable);
+    ReleaseComponentMethod(state->Start);
+    ReleaseComponentMethod(state->Update);
+    ReleaseComponentMethod(state->OnDisable);
+    ReleaseComponentMethod(state->OnDestroy);
+    ReleaseComponentMethod(state->OnReset);
+    ReleaseComponentMethod(state->OnMessage);
+    state->ActiveLifecycle = nullptr;
+    state->ActiveLifecycleName.clear();
+}
+
+void ReleasePartialInstanceSetup(ScriptComponentState *state) {
+    if (!state || state->Loaded) {
+        return;
+    }
+    ReleaseCachedComponentMethods(state);
+    if (state->Object) {
+        state->Object->Release();
+        state->Object = nullptr;
+    }
+}
+
 bool LifecycleFinished(LifecycleInvokeStatus status) {
     return status == LifecycleInvokeStatus::Finished;
 }
@@ -736,11 +772,13 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
 
     std::string injectError;
     if (!InjectComponentParameters(behcontext, state, true, injectError)) {
+        ReleasePartialInstanceSetup(state);
         SetErrorOutput(beh, state, injectError);
         return false;
     }
 
     if (!CacheComponentMethods(state, type)) {
+        ReleasePartialInstanceSetup(state);
         SetInvocationErrorOutput(beh, state, "Failed to cache component lifecycle methods");
         return false;
     }
