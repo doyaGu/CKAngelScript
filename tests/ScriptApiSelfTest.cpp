@@ -2362,6 +2362,58 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->UnloadModule(partialImportConsumerModuleName, nullptr);
+    constexpr const char *mismatchImportProviderModuleName = "__CKAS_ImportMismatchProvider";
+    constexpr const char *mismatchImportConsumerModuleName = "__CKAS_ImportMismatchConsumer";
+    const char *mismatchImportProviderSource =
+        "class Foo {}\n"
+        "int __ckas_import_mismatch_ok() { return 7; }\n"
+        "Foo __ckas_import_mismatch_make() { Foo value; return value; }\n";
+    const char *mismatchImportProviderReplacementSource =
+        "class Foo {}\n"
+        "int __ckas_import_mismatch_ok() { return 8; }\n"
+        "Foo __ckas_import_mismatch_make() { Foo value; return value; }\n";
+    const char *mismatchImportConsumerSource =
+        "class Foo {}\n"
+        "import int __ckas_import_mismatch_ok() from \"__CKAS_ImportMismatchProvider\";\n"
+        "import Foo __ckas_import_mismatch_make() from \"__CKAS_ImportMismatchProvider\";\n"
+        "int __ckas_import_mismatch_call() { return __ckas_import_mismatch_ok(); }\n";
+    if (api->CompileModule(mismatchImportProviderModuleName,
+                           mismatchImportProviderSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK ||
+        api->CompileModule(mismatchImportConsumerModuleName,
+                           mismatchImportConsumerSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to compile mismatched import probe modules.";
+        api->UnloadModule(mismatchImportConsumerModuleName, nullptr);
+        api->UnloadModule(mismatchImportProviderModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    BoundImportEdgeProbe mismatchImportProbe;
+    const CKDWORD mismatchImportGeneration = api->GetModuleGeneration(mismatchImportConsumerModuleName);
+    if (api->BindAllImportedFunctions(mismatchImportConsumerModuleName, &result) != CKAS_TYPEMISMATCH ||
+        api->GetModuleGeneration(mismatchImportConsumerModuleName) != mismatchImportGeneration ||
+        api->EnumerateBoundImportEdges(mismatchImportConsumerModuleName,
+                                       ProbeBoundImportEdge,
+                                       &mismatchImportProbe,
+                                       &result) != CKAS_OK ||
+        mismatchImportProbe.CallbackCount != 0 ||
+        api->CompileModule(mismatchImportProviderModuleName,
+                           mismatchImportProviderReplacementSource,
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = "CKAngelScript API self-test expected partially failed BindAllImportedFunctions to roll back applied bindings.";
+        api->UnloadModule(mismatchImportConsumerModuleName, nullptr);
+        api->UnloadModule(mismatchImportProviderModuleName, nullptr);
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
+    api->UnloadModule(mismatchImportConsumerModuleName, nullptr);
+    api->UnloadModule(mismatchImportProviderModuleName, nullptr);
     asIScriptModule *rawImportConsumer = nullptr;
     asIScriptModule *rawImportProvider = nullptr;
     CKAngelScriptFunction *rawBoundImportFunction = nullptr;
