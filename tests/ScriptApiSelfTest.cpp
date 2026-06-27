@@ -2200,6 +2200,18 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(importProviderModuleName, nullptr);
         return false;
     }
+    const CKDWORD failedUnboundBindGeneration = api->GetModuleGeneration(importConsumerModuleName);
+    if (api->BindImportedFunction(importConsumerModuleName,
+                                  0,
+                                  importProviderModuleName,
+                                  "void __ckas_import_wrong()",
+                                  &result) != CKAS_TYPEMISMATCH ||
+        api->GetModuleGeneration(importConsumerModuleName) != failedUnboundBindGeneration) {
+        error = "CKAngelScript API self-test expected failed unbound import bind to preserve generation.";
+        api->UnloadModule(importConsumerModuleName, nullptr);
+        api->UnloadModule(importProviderModuleName, nullptr);
+        return false;
+    }
     constexpr const char *partialImportConsumerModuleName = "__CKAS_ImportPartialConsumer";
     const char *partialImportConsumerSource =
         "import int __ckas_import_add(int value) from \"__CKAS_ImportProvider\";\n"

@@ -167,8 +167,9 @@ CKAS_STATUS ScriptImportBinder::BindImportedFunction(BindContext &context,
                 fmt::format("Failed to bind imported function; rollback also failed: {}",
                             rollbackError));
         }
-        context.StateStore.RemoveImportBinding(request.ImportModuleName, request.ImportIndex);
-        context.StateStore.BumpGeneration(request.ImportModuleName);
+        if (context.StateStore.RemoveImportBinding(request.ImportModuleName, request.ImportIndex)) {
+            context.StateStore.BumpGeneration(request.ImportModuleName);
+        }
         return context.Diagnostics.StoreResult(result, status, bindResult, "Failed to bind imported function.");
     }
     context.StateStore.RecordImportBinding(request.ImportModuleName,
