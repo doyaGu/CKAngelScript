@@ -241,7 +241,11 @@ CKAngelScriptModuleFingerprint ScriptModuleStateStore::GetFingerprint(
     unsigned long long sourceHash,
     unsigned long long declaredImportHash) {
     ModuleState &state = EnsureState(moduleName);
-    if (state.FingerprintDirty) {
+    const bool fingerprintInputsChanged =
+        !state.FingerprintInputsValid ||
+        state.FingerprintSourceHash != sourceHash ||
+        state.FingerprintDeclaredImportHash != declaredImportHash;
+    if (state.FingerprintDirty || fingerprintInputsChanged) {
         CKAngelScriptModuleFingerprint fingerprint;
         CKAngelScriptInitModuleFingerprint(&fingerprint);
         fingerprint.Kind = ToPublicKind(state.Kind);
@@ -284,6 +288,9 @@ CKAngelScriptModuleFingerprint ScriptModuleStateStore::GetFingerprint(
         ScriptApiSupport::HashValue(fingerprint.CombinedHash, fingerprint.BoundImportHash);
 
         state.Fingerprint = fingerprint;
+        state.FingerprintSourceHash = sourceHash;
+        state.FingerprintDeclaredImportHash = declaredImportHash;
+        state.FingerprintInputsValid = true;
         state.FingerprintDirty = false;
     }
     return state.Fingerprint;

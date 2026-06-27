@@ -64,6 +64,9 @@ private:
         std::vector<ScriptIncludeEdge> IncludeEdges;
         CKAngelScriptModuleFingerprint Fingerprint = {
             static_cast<CKDWORD>(sizeof(CKAngelScriptModuleFingerprint))};
+        unsigned long long FingerprintSourceHash = 0;
+        unsigned long long FingerprintDeclaredImportHash = 0;
+        bool FingerprintInputsValid = false;
         bool FingerprintDirty = true;
     };
 

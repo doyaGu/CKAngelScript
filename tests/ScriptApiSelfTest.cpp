@@ -1884,6 +1884,58 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->ReleaseFunction(rawModuleFunction);
 
+    constexpr const char *rawFingerprintModuleName = "__CKAS_RawFingerprintModule";
+    const char *rawFingerprintInitialSource =
+        "int __ckas_raw_fingerprint_value() { return 1; }\n";
+    asIScriptModule *rawFingerprintModule =
+        engine->GetModule(rawFingerprintModuleName, asGM_ALWAYS_CREATE);
+    if (!rawFingerprintModule ||
+        rawFingerprintModule->AddScriptSection(rawFingerprintModuleName,
+                                               rawFingerprintInitialSource,
+                                               static_cast<unsigned int>(
+                                                   std::strlen(rawFingerprintInitialSource))) < 0 ||
+        rawFingerprintModule->Build() < 0) {
+        error = "CKAngelScript API self-test failed to create a raw fingerprint module.";
+        if (rawFingerprintModule) {
+            rawFingerprintModule->Discard();
+        }
+        return false;
+    }
+    CKAngelScriptModuleFingerprint rawFingerprintBefore = CKAngelScriptApi::ModuleFingerprint();
+    if (api->GetModuleFingerprint(rawFingerprintModuleName, &rawFingerprintBefore, &result) != CKAS_OK ||
+        rawFingerprintBefore.Kind != CKAS_MODULEKIND_UNKNOWN ||
+        rawFingerprintBefore.DeclaredImportHash == 0 ||
+        rawFingerprintBefore.CombinedHash == 0) {
+        error = "CKAngelScript API self-test expected raw module fingerprint queries to work.";
+        api->UnloadModule(rawFingerprintModuleName, nullptr);
+        return false;
+    }
+    const char *rawFingerprintImportSource =
+        "import int __ckas_raw_fingerprint_imported() from \"__CKAS_RawFingerprintProvider\";\n"
+        "int __ckas_raw_fingerprint_value() { return 2; }\n";
+    rawFingerprintModule = engine->GetModule(rawFingerprintModuleName, asGM_ALWAYS_CREATE);
+    if (!rawFingerprintModule ||
+        rawFingerprintModule->AddScriptSection(rawFingerprintModuleName,
+                                               rawFingerprintImportSource,
+                                               static_cast<unsigned int>(
+                                                   std::strlen(rawFingerprintImportSource))) < 0 ||
+        rawFingerprintModule->Build() < 0) {
+        error = "CKAngelScript API self-test failed to rebuild a raw fingerprint module.";
+        if (rawFingerprintModule) {
+            rawFingerprintModule->Discard();
+        }
+        return false;
+    }
+    CKAngelScriptModuleFingerprint rawFingerprintAfter = CKAngelScriptApi::ModuleFingerprint();
+    if (api->GetModuleFingerprint(rawFingerprintModuleName, &rawFingerprintAfter, &result) != CKAS_OK ||
+        rawFingerprintAfter.DeclaredImportHash == rawFingerprintBefore.DeclaredImportHash ||
+        rawFingerprintAfter.CombinedHash == rawFingerprintBefore.CombinedHash) {
+        error = "CKAngelScript API self-test expected raw module fingerprint declared imports to refresh.";
+        api->UnloadModule(rawFingerprintModuleName, nullptr);
+        return false;
+    }
+    api->UnloadModule(rawFingerprintModuleName, nullptr);
+
     MetadataProbe metadataProbe;
     if (api->EnumerateMetadata(moduleName, ProbeMetadata, &metadataProbe, &result) != CKAS_OK ||
         metadataProbe.CallbackCount < 5 ||
