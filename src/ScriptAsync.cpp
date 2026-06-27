@@ -1316,9 +1316,17 @@ void ScriptAsyncScheduler::Track(ScriptAsyncTaskBase *task) {
 }
 
 void ScriptAsyncScheduler::Tick() {
-    for (ScriptAsyncTaskBase *task : m_Tasks) {
+    std::vector<ScriptAsyncTaskBase *> tasks = m_Tasks;
+    for (ScriptAsyncTaskBase *task : tasks) {
+        if (task) {
+            task->AddRef();
+        }
+    }
+
+    for (ScriptAsyncTaskBase *task : tasks) {
         if (task) {
             task->Advance();
+            task->Release();
         }
     }
     RemoveFinishedTrackedTasks();
@@ -1388,18 +1396,20 @@ void ScriptAsyncScheduler::ForgetContext(asIScriptContext *context) {
 }
 
 void ScriptAsyncScheduler::Clear() {
-    for (auto &entry : m_Waits) {
+    std::unordered_map<asIScriptContext *, WaitRecord> waits;
+    waits.swap(m_Waits);
+    for (auto &entry : waits) {
         ReleaseWaitRecord(entry.second);
     }
-    m_Waits.clear();
 
-    for (ScriptAsyncTaskBase *task : m_Tasks) {
+    std::vector<ScriptAsyncTaskBase *> tasks;
+    tasks.swap(m_Tasks);
+    for (ScriptAsyncTaskBase *task : tasks) {
         if (task) {
             task->Cancel();
             task->Release();
         }
     }
-    m_Tasks.clear();
 }
 
 void ScriptAsyncScheduler::ReleaseWaitRecord(WaitRecord &record) {

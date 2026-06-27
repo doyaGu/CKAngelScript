@@ -117,6 +117,7 @@ public:
     bool Unsubscribe(const std::string &target, const std::string &topic);
     void ClearDynamicSubscriptions(const std::string &target);
     void FailPendingForTarget(const std::string &target, const std::string &error);
+    void ClearPendingRequests(const std::string &error);
     void ClearTarget(const std::string &target, const std::string &error = std::string());
     void Clear();
     void Tick();

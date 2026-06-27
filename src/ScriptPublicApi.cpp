@@ -659,8 +659,11 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptGetModuleFingerprint(
     CKAngelScriptModuleFingerprint *outFingerprint,
     CKAngelScriptResult *result) {
     ScriptManager *scriptManager = FromPublicHandle(angelScript);
-    return scriptManager ? scriptManager->GetModuleFingerprint(moduleName, outFingerprint, result)
-                         : StoreInvalidPublicHandleResult(result);
+    if (!scriptManager) {
+        CKAngelScriptInitModuleFingerprint(outFingerprint);
+        return StoreInvalidPublicHandleResult(result);
+    }
+    return scriptManager->GetModuleFingerprint(moduleName, outFingerprint, result);
 }
 
 extern "C" CKAS_API CKAS_STATUS CKAngelScriptFindFunction(CKAngelScript *angelScript,

@@ -210,6 +210,44 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
     CKAngelScriptResult result = {};
+
+    WriteAsyncSelfTestStage("tick-reentrant-track");
+    if (api->CompileModule("__CKAS_AsyncTickMutationSelfTest",
+                           "void __ckas_async_tick_mutates() {\n"
+                           "  AsyncTask<void>@ delay = Async::Delay(1);\n"
+                           "  if (delay !is null) { delay.IsPending(); }\n"
+                           "}\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Async tick mutation self-test compile failed.";
+        return false;
+    }
+    asIScriptModule *tickModule = engine->GetModule("__CKAS_AsyncTickMutationSelfTest", asGM_ONLY_IF_EXISTS);
+    asIScriptFunction *tickFunction = tickModule
+        ? tickModule->GetFunctionByDecl("void __ckas_async_tick_mutates()")
+        : nullptr;
+    if (!tickFunction) {
+        api->UnloadModule("__CKAS_AsyncTickMutationSelfTest", nullptr);
+        error = "Async tick mutation self-test could not resolve script function.";
+        return false;
+    }
+    ScriptAsyncTaskBase *tickTask = scheduler.CreateScriptTask(tickFunction, asTYPEID_VOID);
+    scheduler.Tick();
+    if (!tickTask || !tickTask->IsCompleted()) {
+        if (tickTask) {
+            tickTask->Release();
+        }
+        scheduler.Clear();
+        api->UnloadModule("__CKAS_AsyncTickMutationSelfTest", nullptr);
+        error = "Async scheduler did not complete a script task that tracked another task during Tick().";
+        return false;
+    }
+    tickTask->Release();
+    scheduler.Clear();
+    api->UnloadModule("__CKAS_AsyncTickMutationSelfTest", nullptr);
+
     if (api->CompileModule("__CKAS_AsyncGCCycleSelfTest",
                            "class __CKAS_AsyncCycleBox {\n"
                            "  AsyncTask<__CKAS_AsyncCycleBox@>@ task;\n"

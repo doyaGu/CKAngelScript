@@ -44,14 +44,14 @@ CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
 
 
 CKERROR ScriptManager::PostClearAll() {
+    if (m_MessageBus) {
+        m_MessageBus->Clear();
+    }
     if (m_AsyncScheduler) {
         m_AsyncScheduler->Clear();
     }
     if (m_Runtime) {
         m_Runtime->Clear();
-    }
-    if (m_MessageBus) {
-        m_MessageBus->Clear();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
@@ -92,14 +92,14 @@ CKERROR ScriptManager::OnCKInit() {
 }
 
 CKERROR ScriptManager::OnCKEnd() {
+    if (m_MessageBus) {
+        m_MessageBus->Clear();
+    }
     if (m_AsyncScheduler) {
         m_AsyncScheduler->Clear();
     }
     if (m_Runtime) {
         m_Runtime->OnEnd();
-    }
-    if (m_MessageBus) {
-        m_MessageBus->Clear();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
@@ -109,14 +109,14 @@ CKERROR ScriptManager::OnCKEnd() {
 }
 
 CKERROR ScriptManager::OnCKReset() {
+    if (m_MessageBus) {
+        m_MessageBus->Clear();
+    }
     if (m_AsyncScheduler) {
         m_AsyncScheduler->Clear();
     }
     if (m_Runtime) {
         m_Runtime->OnReset();
-    }
-    if (m_MessageBus) {
-        m_MessageBus->Clear();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
@@ -125,6 +125,9 @@ CKERROR ScriptManager::OnCKReset() {
 }
 
 CKERROR ScriptManager::OnCKPause() {
+    if (m_MessageBus) {
+        m_MessageBus->ClearPendingRequests("Message requests were cancelled because CK is pausing.");
+    }
     if (m_AsyncScheduler) {
         m_AsyncScheduler->Clear();
     }
@@ -184,11 +187,11 @@ int ScriptManager::Shutdown() {
 
     m_HandleRegistry.Clear();
 
-    if (m_AsyncScheduler) {
-        m_AsyncScheduler->Clear();
-    }
     if (m_MessageBus) {
         m_MessageBus->Clear();
+    }
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->Clear();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
@@ -206,6 +209,7 @@ int ScriptManager::Shutdown() {
 
     m_BehaviorBridge.reset();
     m_Runtime.reset();
+    m_MessageBus.reset();
     m_AsyncScheduler.reset();
     m_ParameterRegistry.reset();
 

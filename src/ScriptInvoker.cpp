@@ -202,6 +202,10 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
                                                           const ScriptFunctionArgumentHandler &argsHandler,
                                                           const ScriptFunctionArgumentHandler &retHandler,
                                                           const ScriptFunctionArgumentHandler &resumeHandler) {
+    m_LastResultCode = 0;
+    m_ErrorMessage.clear();
+    m_StackTrace.clear();
+
     if (!m_CachedScript) {
         SetErrorMessage("No script to execute.");
         return ScriptInvocationStatus::Failed;
@@ -237,9 +241,11 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
             ? scheduler->PrepareContextResume(ctx, waitError)
             : ScriptAsyncScheduler::ResumeState::Ready;
         if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
+            m_LastResultCode = asEXECUTION_SUSPENDED;
             return ScriptInvocationStatus::Suspended;
         }
         if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
+            m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
             ctx->Abort();
             return ScriptInvocationStatus::Failed;
@@ -263,6 +269,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
         }
 
         if (r < 0) {
+            m_LastResultCode = r;
             SetErrorMessage("Failed to prepare script function.");
             return ScriptInvocationStatus::Failed;
         }
@@ -309,6 +316,10 @@ bool ScriptInvoker::ExecuteObjectMethod(asIScriptObject *object, asIScriptFuncti
 }
 
 ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext) {
+    m_LastResultCode = 0;
+    m_ErrorMessage.clear();
+    m_StackTrace.clear();
+
     if (!m_CachedScript) {
         SetErrorMessage("No script to execute.");
         return ScriptInvocationStatus::Failed;
@@ -349,9 +360,11 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
             ? scheduler->PrepareContextResume(ctx, waitError)
             : ScriptAsyncScheduler::ResumeState::Ready;
         if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
+            m_LastResultCode = asEXECUTION_SUSPENDED;
             return ScriptInvocationStatus::Suspended;
         }
         if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
+            m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
             ctx->Abort();
             return ScriptInvocationStatus::Failed;
@@ -359,12 +372,14 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
     } else {
         r = ctx->Prepare(func);
         if (r < 0) {
+            m_LastResultCode = r;
             SetErrorMessage("Failed to prepare script method.");
             return ScriptInvocationStatus::Failed;
         }
 
         r = ctx->SetObject(object);
         if (r < 0) {
+            m_LastResultCode = r;
             SetErrorMessage("Failed to bind script method object.");
             return ScriptInvocationStatus::Failed;
         }
@@ -397,6 +412,10 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
                                                               asIScriptFunction *func,
                                                               const ScriptMessage &message,
                                                               const CKBehaviorContext &behcontext) {
+    m_LastResultCode = 0;
+    m_ErrorMessage.clear();
+    m_StackTrace.clear();
+
     if (!m_CachedScript) {
         SetErrorMessage("No script to execute.");
         return ScriptInvocationStatus::Failed;
@@ -432,9 +451,11 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
             ? scheduler->PrepareContextResume(ctx, waitError)
             : ScriptAsyncScheduler::ResumeState::Ready;
         if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
+            m_LastResultCode = asEXECUTION_SUSPENDED;
             return ScriptInvocationStatus::Suspended;
         }
         if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
+            m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
             ctx->Abort();
             return ScriptInvocationStatus::Failed;
@@ -453,6 +474,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
             r = ctx->SetArgObject(1, &m_BehaviorContextStorage);
         }
         if (r < 0) {
+            m_LastResultCode = r;
             SetErrorMessage("Failed to prepare script message method.");
             return ScriptInvocationStatus::Failed;
         }

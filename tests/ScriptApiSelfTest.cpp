@@ -1262,6 +1262,24 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    CKAngelScriptModuleFingerprint invalidHandleFingerprint = CKAngelScriptApi::ModuleFingerprint();
+    invalidHandleFingerprint.Kind = CKAS_MODULEKIND_SOURCE;
+    invalidHandleFingerprint.Generation = 123;
+    invalidHandleFingerprint.CombinedHash = 456;
+    result = {};
+    if (CKAngelScriptGetModuleFingerprint(nullptr, "__ckas_invalid", &invalidHandleFingerprint, &result) !=
+            CKAS_INVALIDARGUMENT ||
+        invalidHandleFingerprint.Size != sizeof(invalidHandleFingerprint) ||
+        invalidHandleFingerprint.ApiVersion != CKAS_API_VERSION ||
+        invalidHandleFingerprint.Kind != CKAS_MODULEKIND_UNKNOWN ||
+        invalidHandleFingerprint.Generation != 0 ||
+        invalidHandleFingerprint.CombinedHash != 0 ||
+        result.Status != CKAS_INVALIDARGUMENT ||
+        !result.ErrorMessage) {
+        error = "CKAngelScript API self-test expected invalid public handle fingerprint calls to clear outputs.";
+        return false;
+    }
+
     CKAngelScriptEngineExtension invalidSizeExtension = CKAngelScriptApi::EngineExtension();
     invalidSizeExtension.Size = 0;
     invalidSizeExtension.Name = "__ckas_invalid_size_extension";
@@ -2680,6 +2698,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->BorrowExecutionResult(execution, &executionResult, &result) != CKAS_OK ||
         !executionResult ||
         executionResult->AngelScriptCode != asEXECUTION_FINISHED ||
+        executionResult->CompilerMessages ||
+        executionResult->CompilerMessageCount != 0 ||
         data.Output != 42) {
         error = "CKAngelScript API self-test returned the wrong synchronous execution result.";
         api->ReleaseExecution(execution);
@@ -3092,7 +3112,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     constexpr const char *badModuleName = "__CKAS_ManagerApiBadCompileSelfTest";
     if (api->CompileModule(badModuleName, "int __ckas_bad_compile( {", CKAS_COMPILE_REPLACEEXISTING, &result) !=
         CKAS_COMPILEERROR ||
-        !ContainsStructuredCompileDiagnostic(result)) {
+        !ContainsStructuredCompileDiagnostic(result) ||
+        api->HasModule(badModuleName)) {
         error = "CKAngelScript API self-test expected compile errors to include structured AngelScript diagnostics.";
         api->UnloadModule(badModuleName, nullptr);
         return false;

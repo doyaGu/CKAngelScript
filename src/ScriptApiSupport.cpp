@@ -490,14 +490,18 @@ CKAS_STATUS StatusFromImportBindResult(int code) {
 }
 
 CKAngelScriptResult MakeExecutionResult(CKAngelScriptExecution *execution,
-                                      CKAS_STATUS status,
-                                      int angelScriptCode,
-                                      const std::string &errorMessage,
-                                      const std::string &stackTrace) {
-    CKAngelScriptResult result;
+                                       CKAS_STATUS status,
+                                       int angelScriptCode,
+                                       const std::string &errorMessage,
+                                       const std::string &stackTrace) {
+    CKAngelScriptResult result = {};
     result.Size = sizeof(result);
     result.Status = status;
     result.AngelScriptCode = angelScriptCode;
+    result.ErrorMessage = nullptr;
+    result.StackTrace = nullptr;
+    result.CompilerMessages = nullptr;
+    result.CompilerMessageCount = 0;
     if (execution) {
         execution->ErrorMessage = errorMessage;
         execution->StackTrace = stackTrace;

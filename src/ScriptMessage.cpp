@@ -542,13 +542,7 @@ void ScriptMessageBus::ClearTarget(const std::string &target, const std::string 
 void ScriptMessageBus::Clear() {
     m_Queue.clear();
     m_DrainQueue.clear();
-    for (auto &entry : m_PendingRequests) {
-        entry.second.Task->Fail("Message bus was cleared.");
-        ReleasePending(entry.second);
-    }
-    m_PendingRequests.clear();
-    m_PendingByTarget.clear();
-    m_Timeouts = {};
+    ClearPendingRequests("Message bus was cleared.");
     m_Subscriptions.clear();
     m_TopicSubscriptions.clear();
 }
@@ -738,6 +732,17 @@ void ScriptMessageBus::FailPendingForTarget(const std::string &target, const std
             m_PendingRequests.erase(it);
         }
     }
+}
+
+void ScriptMessageBus::ClearPendingRequests(const std::string &error) {
+    const std::string failure = error.empty() ? "Message requests were cleared." : error;
+    for (auto &entry : m_PendingRequests) {
+        entry.second.Task->Fail(failure);
+        ReleasePending(entry.second);
+    }
+    m_PendingRequests.clear();
+    m_PendingByTarget.clear();
+    m_Timeouts = {};
 }
 
 ScriptMessageBusPerfStats ScriptMessageBus::PerfStats() const {

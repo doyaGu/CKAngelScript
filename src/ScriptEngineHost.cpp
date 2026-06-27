@@ -244,6 +244,7 @@ int ScriptEngineHost::Setup(ScriptManager &manager, CKContext *context) {
     int r = engine->SetMessageCallback(asMETHOD(ScriptManager, MessageCallback), &manager, asCALL_THISCALL);
     if (r < 0) {
         LOG_ERROR("SetMessageCallback failed with code %d.", r);
+        ShutdownAndReleaseEngine();
         return r;
     }
 
@@ -257,6 +258,7 @@ int ScriptEngineHost::Setup(ScriptManager &manager, CKContext *context) {
     }, &manager);
     if (r < 0) {
         LOG_ERROR("SetContextCallbacks failed with code %d.", r);
+        ShutdownAndReleaseEngine();
         return r;
     }
 

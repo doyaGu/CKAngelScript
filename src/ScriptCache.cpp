@@ -508,6 +508,12 @@ bool CachedScript::Build(asIScriptEngine *engine) {
 
     // Start a new module
     int r = builder.StartNewModule(engine, name.c_str());
+    auto discardBuilderModule = [&builder]() {
+        asIScriptModule *builderModule = builder.GetModule();
+        if (builderModule) {
+            builderModule->Discard();
+        }
+    };
     if (r < 0) {
         engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Failed to create module");
         return false;
@@ -537,12 +543,14 @@ bool CachedScript::Build(asIScriptEngine *engine) {
                                              static_cast<unsigned int>(code.size()),
                                              0);
             if (r < 0) {
+                discardBuilderModule();
                 engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Failed to load section from memory");
                 return false;
             }
         } else {
             r = builder.AddSectionFromFile(resolvedFilename.CStr());
             if (r < 0) {
+                discardBuilderModule();
                 engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Failed to load section from file");
                 return false;
             }
@@ -552,6 +560,7 @@ bool CachedScript::Build(asIScriptEngine *engine) {
     // Build the module
     r = builder.BuildModule();
     if (r < 0) {
+        discardBuilderModule();
         engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Failed to build module");
         return false;
     }
@@ -559,6 +568,7 @@ bool CachedScript::Build(asIScriptEngine *engine) {
     // Retrieve the compiled module
     module = builder.GetModule();
     if (!module) {
+        discardBuilderModule();
         engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Failed to retrieve module");
         return false;
     }
