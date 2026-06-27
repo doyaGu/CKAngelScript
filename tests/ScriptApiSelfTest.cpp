@@ -302,6 +302,16 @@ struct ReentrantBytecodeWriteProbe {
     CKAS_STATUS BytecodeSaveReentryStatus = CKAS_OK;
 };
 
+struct ReentrantBytecodeReadProbe {
+    BytecodeBuffer Buffer;
+    BytecodeBuffer NestedLoadBuffer;
+    CKAngelScriptApi *Api = nullptr;
+    const char *ModuleName = nullptr;
+    CKAS_STATUS ReentryStatus = CKAS_OK;
+    CKAS_STATUS BytecodeSaveReentryStatus = CKAS_OK;
+    CKAS_STATUS BytecodeLoadReentryStatus = CKAS_OK;
+};
+
 struct ReentrantExecutionCallbackProbe {
     CKAngelScriptApi *Api = nullptr;
     CKAS_STATUS ReentryStatus = CKAS_OK;
@@ -734,6 +744,30 @@ CKAS_STATUS ReadBytecode(void *data, size_t size, void *userData) {
         buffer->Offset += size;
     }
     return CKAS_OK;
+}
+
+CKAS_STATUS ReadBytecodeWithReentry(void *data, size_t size, void *userData) {
+    auto *probe = static_cast<ReentrantBytecodeReadProbe *>(userData);
+    if (!probe || !probe->Api) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    probe->ReentryStatus =
+        probe->Api->CompileModule("__CKAS_BytecodeReadCallbackReentry",
+                                  "int __ckas_bytecode_read_callback_reentry() { return 1; }\n",
+                                  CKAS_COMPILE_REPLACEEXISTING,
+                                  nullptr);
+    BytecodeBuffer nestedSaveBuffer;
+    probe->BytecodeSaveReentryStatus =
+        probe->Api->SaveModuleBytecode(CKAngelScriptApi::BytecodeSaveOptions(probe->ModuleName,
+                                                                              WriteBytecode,
+                                                                              &nestedSaveBuffer),
+                                       nullptr);
+    probe->BytecodeLoadReentryStatus =
+        probe->Api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions("__CKAS_BytecodeReadNestedLoad",
+                                                                              ReadBytecode,
+                                                                              &probe->NestedLoadBuffer),
+                                       nullptr);
+    return ReadBytecode(data, size, &probe->Buffer);
 }
 
 CKAS_STATUS RejectBytecodeWrite(const void *, size_t, void *) {
@@ -4055,6 +4089,29 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
         return false;
     }
+    ReentrantBytecodeReadProbe reentrantBytecodeRead;
+    reentrantBytecodeRead.Api = &api;
+    reentrantBytecodeRead.ModuleName = bytecodeSourceModuleName;
+    reentrantBytecodeRead.Buffer = bytecode;
+    reentrantBytecodeRead.NestedLoadBuffer = bytecode;
+    if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions("__CKAS_BytecodeReadReentryTarget",
+                                                                      ReadBytecodeWithReentry,
+                                                                      &reentrantBytecodeRead),
+                                &result) != CKAS_OK ||
+        reentrantBytecodeRead.ReentryStatus != CKAS_INVALIDSTATE ||
+        reentrantBytecodeRead.BytecodeSaveReentryStatus != CKAS_INVALIDSTATE ||
+        reentrantBytecodeRead.BytecodeLoadReentryStatus != CKAS_INVALIDSTATE) {
+        error = "CKAngelScript API self-test expected bytecode read callbacks to reject module and bytecode reentry.";
+        api->UnloadModule("__CKAS_BytecodeReadReentryTarget", nullptr);
+        api->UnloadModule("__CKAS_BytecodeReadCallbackReentry", nullptr);
+        api->UnloadModule("__CKAS_BytecodeReadNestedLoad", nullptr);
+        api->UnloadModule(bytecodeSourceModuleName, nullptr);
+        api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
+        return false;
+    }
+    api->UnloadModule("__CKAS_BytecodeReadReentryTarget", nullptr);
+    api->UnloadModule("__CKAS_BytecodeReadCallbackReentry", nullptr);
+    api->UnloadModule("__CKAS_BytecodeReadNestedLoad", nullptr);
     BytecodeBuffer bytecodeRead = bytecode;
     int bytecodeValue = 0;
     if (api->LoadModuleBytecode(CKAngelScriptApi::BytecodeLoadOptions(bytecodeTargetModuleName,

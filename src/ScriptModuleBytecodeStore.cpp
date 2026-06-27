@@ -85,6 +85,13 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(LoadContext &context,
     if (optionStatus != CKAS_OK) {
         return context.Diagnostics.StoreResult(result, optionStatus, 0, errorMessage);
     }
+    if (context.BytecodeCallbackDepth > 0) {
+        return context.Diagnostics.StoreResult(
+            result,
+            CKAS_INVALIDSTATE,
+            0,
+            "LoadModuleBytecode cannot be called from a CKAngelScript bytecode callback.");
+    }
     if (!ScriptApiSupport::IsNonEmpty(request.ModuleName)) {
         return context.Diagnostics.StoreResult(result, CKAS_INVALIDARGUMENT, 0, "Module name is required.");
     }
