@@ -1450,6 +1450,39 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             return false;
         }
         restoredCache.Clear();
+
+        ScriptCache restoreOverExistingCache;
+        std::shared_ptr<CachedScript> existing =
+            restoreOverExistingCache.CompileScript(engine,
+                                                   cacheChunkModuleName,
+                                                   "int __ckas_cache_chunk_value() { return 7; }\n");
+        if (!existing || !existing->module) {
+            error = "CKAngelScript API self-test failed to build existing cache entry for chunk restore replacement.";
+            restoreOverExistingCache.Clear();
+            return false;
+        }
+        if (!existing->LoadFromChunk(chunk.get()) ||
+            existing->module ||
+            !existing->Build(engine)) {
+            error = "CKAngelScript API self-test expected chunk restore to replace an existing cache entry.";
+            restoreOverExistingCache.Clear();
+            return false;
+        }
+        chunkValue = 0;
+        if (!ExecuteIntFunction(api,
+                                cacheChunkModuleName,
+                                "int __ckas_cache_chunk_value()",
+                                chunkValue,
+                                result,
+                                error) ||
+            chunkValue != 42) {
+            if (error.empty()) {
+                error = "CKAngelScript API self-test expected restored cache entry to replace the old module.";
+            }
+            restoreOverExistingCache.Clear();
+            return false;
+        }
+        restoreOverExistingCache.Clear();
     }
 
     {

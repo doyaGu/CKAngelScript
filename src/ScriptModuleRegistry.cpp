@@ -155,9 +155,6 @@ bool ScriptModuleRegistry::RestoreFromChunk(const char *scriptName, CKStateChunk
     if (!script) {
         return false;
     }
-    if (script->module) {
-        return true;
-    }
     return script->LoadFromChunk(chunk);
 }
 

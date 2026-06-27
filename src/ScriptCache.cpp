@@ -607,6 +607,10 @@ bool CachedScript::AddSection(const std::string &name, const std::string &code) 
 }
 
 bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
+    if (!chunk) {
+        return false;
+    }
+
     chunk->StartRead();
 
     if (!chunk->SeekIdentifier(SCRIPTCACHE_IDENTIFIER)) {
@@ -621,7 +625,7 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
     }
 
     // Read the script name
-    char *str;
+    char *str = nullptr;
     chunk->ReadString(&str);
     if (!str) {
         chunk->CloseChunk();
@@ -665,10 +669,12 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         loadedSections.emplace_back(std::move(filename), std::move(buffer));
     }
 
+    Discard();
     name = std::move(loadedName);
     sections = std::move(loadedSections);
     sourceSnapshotSections = loadedSourceSnapshotSections;
     includeEdges.clear();
+    ClearMetadata();
     chunk->CloseChunk();
     return true;
 }
