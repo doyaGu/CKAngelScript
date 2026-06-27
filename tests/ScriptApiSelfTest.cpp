@@ -4244,6 +4244,19 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseObject(object);
         return false;
     }
+    CKAngelScriptObject foreignObject = *object;
+    foreignObject.Manager = reinterpret_cast<ScriptManager *>(static_cast<uintptr_t>(1));
+    objectData.ObjectInput = &foreignObject;
+    objectData.IntOutput = 0;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_FOREIGNHANDLE ||
+        objectData.IntOutput != 0) {
+        error = "CKAngelScript API self-test expected foreign object-handle args to be rejected.";
+        api->ReleaseMethod(handleMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectData.ObjectInput = object;
     api->ReleaseMethod(handleMethod);
 
     methodOptions.MethodDecl = "bool Flip(bool)";

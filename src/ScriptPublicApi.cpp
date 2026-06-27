@@ -844,11 +844,18 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptArgSetObjectHandle(CKAngelScriptArg
     asIScriptObject *scriptObject = nullptr;
     if (object) {
         auto *objectHandle = static_cast<CKAngelScriptObject *>(object);
-        if (!objectHandle->Manager || !objectHandle->Manager->OwnsObjectHandle(objectHandle) || !objectHandle->Object) {
+        ScriptManager *owner = ScriptManager::GetManager(writer->Context->GetEngine());
+        if (!owner || !objectHandle->Manager) {
             return CKAS_INVALIDARGUMENT;
         }
-        if (!objectHandle->Manager->HasModule(objectHandle->ModuleName.c_str()) ||
-            objectHandle->Manager->GetModuleGeneration(objectHandle->ModuleName.c_str()) != objectHandle->ModuleGeneration) {
+        if (objectHandle->Manager != owner) {
+            return CKAS_FOREIGNHANDLE;
+        }
+        if (!owner->OwnsObjectHandle(objectHandle) || !objectHandle->Object) {
+            return CKAS_INVALIDARGUMENT;
+        }
+        if (!owner->HasModule(objectHandle->ModuleName.c_str()) ||
+            owner->GetModuleGeneration(objectHandle->ModuleName.c_str()) != objectHandle->ModuleGeneration) {
             return CKAS_STALEHANDLE;
         }
         if (!ScriptApiSupport::IsCompatibleObjectHandle(writer->Context->GetEngine(),
