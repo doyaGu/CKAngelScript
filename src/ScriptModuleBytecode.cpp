@@ -4,6 +4,8 @@
 
 #include <fmt/format.h>
 
+#include "ScriptAngelScriptGc.h"
+
 namespace ScriptModuleBytecode {
 
 namespace {
@@ -169,7 +171,7 @@ bool LoadModuleByteCode(asIScriptEngine *engine,
     MemoryByteCodeStream stream(&byteCode);
     angelScriptCode = module->LoadByteCode(&stream);
     if (angelScriptCode < 0) {
-        module->Discard();
+        ScriptDiscardModuleWithGarbageCollection(module);
         return false;
     }
     if (outModule) {
@@ -203,7 +205,7 @@ bool LoadModuleByteCode(asIScriptEngine *engine,
     angelScriptCode = module->LoadByteCode(&stream);
     callbackStatus = stream.Status();
     if (angelScriptCode < 0 || callbackStatus != CKAS_OK) {
-        module->Discard();
+        ScriptDiscardModuleWithGarbageCollection(module);
         return false;
     }
     if (outModule) {

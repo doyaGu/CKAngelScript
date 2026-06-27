@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "ScriptAngelScriptGc.h"
 #include "ScriptManager.h"
 #include "add_on/scriptbuilder/scriptbuilder.h"
 
@@ -460,7 +461,7 @@ bool ScriptMetadata::RemapForModule(asIScriptModule *fromModule,
 
 CachedScript::~CachedScript() {
     if (module) {
-        module->Discard();
+        ScriptDiscardModuleWithGarbageCollection(module);
         module = nullptr;
     }
 }
@@ -511,7 +512,7 @@ bool CachedScript::Build(asIScriptEngine *engine) {
     auto discardBuilderModule = [&builder]() {
         asIScriptModule *builderModule = builder.GetModule();
         if (builderModule) {
-            builderModule->Discard();
+            ScriptDiscardModuleWithGarbageCollection(builderModule);
         }
     };
     if (r < 0) {
@@ -583,7 +584,7 @@ bool CachedScript::Build(asIScriptEngine *engine) {
 
 bool CachedScript::Discard() {
     if (module) {
-        module->Discard();
+        ScriptDiscardModuleWithGarbageCollection(module);
         module = nullptr;
         ClearMetadata();
         return true;

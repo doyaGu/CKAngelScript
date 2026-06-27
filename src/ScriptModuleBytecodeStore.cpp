@@ -5,6 +5,7 @@
 
 #include "ScriptApiDiagnostics.h"
 #include "ScriptApiSupport.h"
+#include "ScriptAngelScriptGc.h"
 #include "ScriptHandleRegistry.h"
 #include "ScriptImportBinder.h"
 #include "ScriptManager.h"
@@ -168,13 +169,13 @@ CKAS_STATUS ScriptModuleBytecodeStore::Load(LoadContext &context,
     if (!ScriptModuleBytecode::SaveModuleByteCode(candidateModule,
                                                   candidateByteCode,
                                                   angelScriptCode)) {
-        candidateModule->Discard();
+        ScriptDiscardModuleWithGarbageCollection(candidateModule);
         return context.Diagnostics.StoreResult(result,
                                                CKAS_EXECUTIONFAILED,
                                                angelScriptCode,
                                                "Failed to snapshot loaded module bytecode.");
     }
-    candidateModule->Discard();
+    ScriptDiscardModuleWithGarbageCollection(candidateModule);
     candidateModule = nullptr;
 
     ScriptModuleRegistry::MutationContext mutationContext = {

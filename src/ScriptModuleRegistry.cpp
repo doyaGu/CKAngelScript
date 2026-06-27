@@ -133,9 +133,6 @@ bool ScriptModuleRegistry::Discard(ScriptManager &manager, const char *moduleNam
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
     }
-    asIScriptEngine *engine = manager.GetScriptEngine();
-    ScriptAutoGarbageCollectScope suppressAutoGc(engine, false);
-    ScriptRunBoundedGarbageCollection(engine);
     bool discarded = false;
     if (DiscardCached(moduleName)) {
         discarded = true;
@@ -144,10 +141,9 @@ bool ScriptModuleRegistry::Discard(ScriptManager &manager, const char *moduleNam
         if (!module) {
             return false;
         }
-        module->Discard();
+        ScriptDiscardModuleWithGarbageCollection(module);
         discarded = true;
     }
-    ScriptRunBoundedGarbageCollection(engine);
     return discarded;
 }
 
