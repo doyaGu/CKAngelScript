@@ -69,6 +69,17 @@ void ReleaseFinishedContextState(asIScriptContext *ctx) {
     }
 }
 
+void ReleaseAbortedContextState(asIScriptContext *ctx) {
+    if (!ctx) {
+        return;
+    }
+    const int state = ctx->GetState();
+    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
+        ctx->Abort();
+    }
+    ctx->Unprepare();
+}
+
 } // namespace
 
 ScriptInvoker::ScriptInvoker(ScriptManager *man) : m_ScriptManager(man) {}
@@ -247,13 +258,14 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
         if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
             m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
-            ctx->Abort();
+            ReleaseAbortedContextState(ctx);
             return ScriptInvocationStatus::Failed;
         }
         if (resumeHandler) {
             if (!resumeHandler(ctx)) {
                 m_LastResultCode = asEXECUTION_ABORTED;
                 SetErrorMessage("Script resume handler rejected execution.");
+                ReleaseAbortedContextState(ctx);
                 return ScriptInvocationStatus::Failed;
             }
         }
@@ -271,6 +283,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
         if (r < 0) {
             m_LastResultCode = r;
             SetErrorMessage("Failed to prepare script function.");
+            ReleaseAbortedContextState(ctx);
             return ScriptInvocationStatus::Failed;
         }
 
@@ -278,6 +291,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *fun
             if (!argsHandler(ctx)) {
                 m_LastResultCode = asEXECUTION_ABORTED;
                 SetErrorMessage("Script argument handler rejected execution.");
+                ReleaseAbortedContextState(ctx);
                 return ScriptInvocationStatus::Failed;
             }
         }
@@ -366,7 +380,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
         if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
             m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
-            ctx->Abort();
+            ReleaseAbortedContextState(ctx);
             return ScriptInvocationStatus::Failed;
         }
     } else {
@@ -374,6 +388,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
         if (r < 0) {
             m_LastResultCode = r;
             SetErrorMessage("Failed to prepare script method.");
+            ReleaseAbortedContextState(ctx);
             return ScriptInvocationStatus::Failed;
         }
 
@@ -381,6 +396,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
         if (r < 0) {
             m_LastResultCode = r;
             SetErrorMessage("Failed to bind script method object.");
+            ReleaseAbortedContextState(ctx);
             return ScriptInvocationStatus::Failed;
         }
 
@@ -457,7 +473,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
         if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
             m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
-            ctx->Abort();
+            ReleaseAbortedContextState(ctx);
             return ScriptInvocationStatus::Failed;
         }
     } else {
@@ -476,6 +492,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
         if (r < 0) {
             m_LastResultCode = r;
             SetErrorMessage("Failed to prepare script message method.");
+            ReleaseAbortedContextState(ctx);
             return ScriptInvocationStatus::Failed;
         }
     }

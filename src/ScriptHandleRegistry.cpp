@@ -3,29 +3,21 @@
 #include "ScriptApiSupport.h"
 
 void ScriptHandleRegistry::Clear() {
-    for (auto *execution : m_Executions) {
-        delete execution;
+    while (!m_Executions.empty()) {
+        ReleaseExecution(*m_Executions.begin());
     }
-    m_Executions.clear();
 
-    for (auto *function : m_Functions) {
-        delete function;
+    while (!m_Functions.empty()) {
+        ReleaseFunction(*m_Functions.begin());
     }
-    m_Functions.clear();
 
-    for (auto *method : m_Methods) {
-        delete method;
+    while (!m_Methods.empty()) {
+        ReleaseMethod(*m_Methods.begin());
     }
-    m_Methods.clear();
 
-    for (auto *object : m_Objects) {
-        if (object && object->Object) {
-            object->Object->Release();
-            object->Object = nullptr;
-        }
-        delete object;
+    while (!m_Objects.empty()) {
+        ReleaseObject(*m_Objects.begin());
     }
-    m_Objects.clear();
 }
 
 bool ScriptHandleRegistry::OwnsExecution(const CKAngelScriptExecution *execution) const {

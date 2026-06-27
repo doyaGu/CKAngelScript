@@ -10,6 +10,7 @@
 #include "CKAngelScript.h"
 #include "ScriptAsync.h"
 #include "ScriptCache.h"
+#include "ScriptInvoker.h"
 #include "ScriptManager.h"
 
 static int CkasSelfTestExtensionValue() {
@@ -1354,6 +1355,55 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             engine->GetModule(cacheInvalidateModuleName, asGM_ONLY_IF_EXISTS) != nullptr) {
             retained->Discard();
             error = "CKAngelScript API self-test expected ScriptCache::Invalidate to discard retained cached modules.";
+            return false;
+        }
+    }
+
+    {
+        constexpr const char *invokerRejectedArgsModuleName = "__CKAS_InvokerRejectedArgsSelfTest";
+        if (api->CompileModule(invokerRejectedArgsModuleName,
+                               "int __ckas_invoker_reuse_after_rejected_args() { return 41; }\n",
+                               CKAS_COMPILE_REPLACEEXISTING,
+                               &result) != CKAS_OK) {
+            error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+                ? result.ErrorMessage
+                : "CKAngelScript API self-test failed to compile invoker rejected-args test module.";
+            return false;
+        }
+
+        asIScriptModule *invokerModule = engine->GetModule(invokerRejectedArgsModuleName, asGM_ONLY_IF_EXISTS);
+        asIScriptFunction *invokerFunction = invokerModule
+            ? invokerModule->GetFunctionByDecl("int __ckas_invoker_reuse_after_rejected_args()")
+            : nullptr;
+        int invokerResult = 0;
+        ScriptInvoker invoker(manager);
+        const ScriptInvocationStatus rejectedStatus =
+            invoker.SetScript(invokerRejectedArgsModuleName)
+                ? invoker.ExecuteScriptStatus(invokerFunction,
+                                              [](asIScriptContext *) {
+                                                  return false;
+                                              },
+                                              nullptr)
+                : ScriptInvocationStatus::Failed;
+        const ScriptInvocationStatus retryStatus =
+            invoker.ExecuteScriptStatus(invokerFunction,
+                                        nullptr,
+                                        [&invokerResult](asIScriptContext *ctx) {
+                                            const void *address = ctx ? ctx->GetAddressOfReturnValue() : nullptr;
+                                            if (!address) {
+                                                return false;
+                                            }
+                                            invokerResult = *static_cast<const int *>(address);
+                                            return true;
+                                        });
+        invoker.Reset();
+        if (!invokerFunction ||
+            rejectedStatus != ScriptInvocationStatus::Failed ||
+            retryStatus != ScriptInvocationStatus::Finished ||
+            invokerResult != 41 ||
+            api->UnloadModule(invokerRejectedArgsModuleName, &result) != CKAS_OK) {
+            api->UnloadModule(invokerRejectedArgsModuleName, nullptr);
+            error = "CKAngelScript API self-test expected ScriptInvoker to clear context after rejected argument callbacks.";
             return false;
         }
     }
