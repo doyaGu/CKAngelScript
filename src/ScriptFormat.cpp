@@ -587,11 +587,12 @@ static size_t SizeOf(asIScriptGeneric *gen) {
     const int typeId = gen->GetArgTypeId(0);
     size_t size = engine->GetSizeOfPrimitiveType(typeId);
     if (size == 0) {
-        asITypeInfo *type = engine->GetTypeInfoById(typeId);
+        const int objectTypeId = ObjectBaseTypeIdFromArgument(typeId);
+        asITypeInfo *type = engine->GetTypeInfoById(objectTypeId);
         if (!type) {
             return 0;
         }
-        size = type->GetSize();
+        size = (typeId & asTYPEID_OBJHANDLE) ? sizeof(void *) : type->GetSize();
     }
     return size;
 }
