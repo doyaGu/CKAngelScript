@@ -534,6 +534,11 @@ bool ScriptImportBinder::Rebind(ScriptManager &manager,
         asIScriptModule *ImportModule = nullptr;
         asIScriptFunction *TargetFunction = nullptr;
     };
+    struct PreflightImportModule {
+        std::string Name;
+        asIScriptModule *Source = nullptr;
+        asIScriptModule *Transient = nullptr;
+    };
     std::vector<ResolvedImportBinding> resolvedBindings;
     resolvedBindings.reserve(bindings.size());
     for (const ScriptImportBindingEdge &edge : bindings) {
@@ -572,6 +577,56 @@ bool ScriptImportBinder::Rebind(ScriptManager &manager,
         resolved.TargetFunction = targetFunction;
         resolvedBindings.push_back(resolved);
     }
+
+    std::vector<PreflightImportModule> preflightModules;
+    auto discardPreflightModules = [&preflightModules]() {
+        for (PreflightImportModule &module : preflightModules) {
+            DiscardTransientImportModule(module.Transient);
+        }
+        preflightModules.clear();
+    };
+    for (const ResolvedImportBinding &resolved : resolvedBindings) {
+        const ScriptImportBindingEdge &edge = *resolved.Edge;
+        PreflightImportModule *preflight = nullptr;
+        for (PreflightImportModule &candidate : preflightModules) {
+            if (candidate.Source == resolved.ImportModule &&
+                candidate.Name == edge.ImportModuleName) {
+                preflight = &candidate;
+                break;
+            }
+        }
+        if (!preflight) {
+            PreflightImportModule module;
+            module.Name = edge.ImportModuleName;
+            module.Source = resolved.ImportModule;
+            if (!CreateTransientImportModule(manager,
+                                             resolved.ImportModule,
+                                             edge.ImportModuleName.c_str(),
+                                             &module.Transient,
+                                             angelScriptCode,
+                                             errorMessage)) {
+                discardPreflightModules();
+                if (errorMessage.empty()) {
+                    errorMessage = "Failed to preflight import binding restore.";
+                }
+                return false;
+            }
+            preflightModules.push_back(module);
+            preflight = &preflightModules.back();
+        }
+
+        angelScriptCode =
+            preflight->Transient->BindImportedFunction(edge.ImportIndex, resolved.TargetFunction);
+        if (angelScriptCode < 0) {
+            errorMessage = fmt::format("Failed to preflight import binding {} in module '{}'.",
+                                       edge.ImportIndex,
+                                       edge.ImportModuleName);
+            discardPreflightModules();
+            return false;
+        }
+    }
+    discardPreflightModules();
+
     std::vector<ResolvedImportBinding> appliedBindings;
     appliedBindings.reserve(resolvedBindings.size());
     for (const ResolvedImportBinding &resolved : resolvedBindings) {
