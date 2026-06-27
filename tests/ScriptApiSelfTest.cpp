@@ -4100,7 +4100,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "namespace __CKAS_TestNS {\n"
         "  class __CKAS_NamespacedObject {\n"
         "    int Value() { return 7; }\n"
+        "    int UseOther(__CKAS_OtherNS::__CKAS_NamespacedObject@ other) { return other is null ? -1 : Value() + other.Value(); }\n"
         "  }\n"
+        "  int NamespacedFunction() { return 13; }\n"
         "}\n"
         "namespace __CKAS_OtherNS {\n"
         "  class __CKAS_NamespacedObject {\n"
@@ -4115,6 +4117,19 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     const CKDWORD objectGeneration = api->GetModuleGeneration(objectModuleName);
+    int namespacedFunctionValue = 0;
+    if (!ExecuteIntFunction(api,
+                            objectModuleName,
+                            "int __CKAS_TestNS::NamespacedFunction()",
+                            namespacedFunctionValue,
+                            result,
+                            error) ||
+        namespacedFunctionValue != 13) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected namespaced function handles to execute.";
+        }
+        return false;
+    }
     CKAngelScriptObjectOptions objectOptions =
         CKAngelScriptApi::ObjectOptions(objectModuleName, "__CKAS_PublicObject");
 
@@ -4220,6 +4235,43 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseObject(otherNamespaceObject);
         return false;
     }
+    CKAngelScriptMethod *namespaceUseOtherMethod = nullptr;
+    if (api->FindObjectMethod(
+            CKAngelScriptApi::MethodByDeclOptions(
+                namespaceObject,
+                "int UseOther(__CKAS_OtherNS::__CKAS_NamespacedObject@)"),
+            &namespaceUseOtherMethod,
+            &result) != CKAS_OK ||
+        !namespaceUseOtherMethod) {
+        error = "CKAngelScript API self-test failed to find a namespaced object method with namespaced parameter.";
+        if (namespaceUseOtherMethod)
+            api->ReleaseMethod(namespaceUseOtherMethod);
+        api->ReleaseMethod(namespaceValueMethod);
+        api->ReleaseMethod(otherNamespaceValueMethod);
+        api->ReleaseObject(namespaceObject);
+        api->ReleaseObject(otherNamespaceObject);
+        return false;
+    }
+    CKAngelScriptObjectMethodExecuteOptions namespacedParamCall =
+        CKAngelScriptApi::ObjectMethodExecuteOptions(namespaceObject,
+                                                    namespaceUseOtherMethod,
+                                                    WriteObjectHandle,
+                                                    ReadObjectInt,
+                                                    &namespaceObjectData,
+                                                    CKAS_CALL_NO_SUSPEND);
+    namespaceObjectData.ObjectInput = otherNamespaceObject;
+    namespaceObjectData.IntOutput = 0;
+    if (api->CallObjectMethod(namespacedParamCall, &result) != CKAS_OK ||
+        namespaceObjectData.IntOutput != 16) {
+        error = "CKAngelScript API self-test expected namespaced object method handles with namespaced parameters to execute.";
+        api->ReleaseMethod(namespaceUseOtherMethod);
+        api->ReleaseMethod(namespaceValueMethod);
+        api->ReleaseMethod(otherNamespaceValueMethod);
+        api->ReleaseObject(namespaceObject);
+        api->ReleaseObject(otherNamespaceObject);
+        return false;
+    }
+    api->ReleaseMethod(namespaceUseOtherMethod);
     CKAngelScriptObjectMethodExecuteOptions namespaceCall =
         CKAngelScriptApi::ObjectMethodExecuteOptions(namespaceObject,
                                                     namespaceValueMethod,

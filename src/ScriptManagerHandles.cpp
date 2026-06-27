@@ -34,10 +34,11 @@ CKAS_STATUS ScriptManager::FindFunction(const CKAngelScriptFunctionOptions &opti
     }
 
     auto *function = new CKAngelScriptFunction();
+    const char *functionDecl = scriptFunction->GetDeclaration(true, true, false);
     function->Manager = this;
     function->ModuleName = request.ModuleName ? request.ModuleName : "";
     function->FunctionName = scriptFunction->GetName() ? scriptFunction->GetName() : "";
-    function->FunctionDecl = scriptFunction->GetDeclaration() ? scriptFunction->GetDeclaration() : "";
+    function->FunctionDecl = functionDecl ? functionDecl : "";
     function->ModuleGeneration = GetModuleGeneration(request.ModuleName);
     m_HandleRegistry.AddFunction(function);
     *outFunction = function;
@@ -172,12 +173,13 @@ CKAS_STATUS ScriptManager::FindObjectMethod(const CKAngelScriptMethodOptions &op
     }
 
     auto *method = new CKAngelScriptMethod();
+    const char *methodDecl = function->GetDeclaration(false, true, false);
     method->Manager = this;
     method->ModuleName = request.Object->ModuleName;
     method->ClassName = request.Object->ClassName;
     method->ClassNamespace = request.Object->ClassNamespace;
     method->MethodName = function->GetName() ? function->GetName() : "";
-    method->MethodDecl = function->GetDeclaration(false) ? function->GetDeclaration(false) : "";
+    method->MethodDecl = methodDecl ? methodDecl : "";
     method->ModuleGeneration = request.Object->ModuleGeneration;
     const asUINT paramCount = function->GetParamCount();
     method->ParamTypes.resize(paramCount);
