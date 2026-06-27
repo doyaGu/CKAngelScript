@@ -522,6 +522,69 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     arrayTask->Release();
     arrayIn->Release();
 
+    WriteAsyncSelfTestStage("const-handle-all-result");
+    constexpr const char *constAllModuleName = "__CKAS_AsyncConstAllSelfTest";
+    if (api->CompileModule(constAllModuleName,
+                           "class __CKAS_AsyncConstAllBox { int Value; }\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Async const-handle All self-test compile failed.";
+        return false;
+    }
+    asIScriptModule *constAllModule = engine->GetModule(constAllModuleName, asGM_ONLY_IF_EXISTS);
+    asITypeInfo *constBoxType = constAllModule ? constAllModule->GetTypeInfoByDecl("__CKAS_AsyncConstAllBox") : nullptr;
+    const int constBoxHandleType =
+        constAllModule ? constAllModule->GetTypeIdByDecl("const __CKAS_AsyncConstAllBox@") : 0;
+    const int constBoxArrayHandleType =
+        constAllModule ? constAllModule->GetTypeIdByDecl("array<const __CKAS_AsyncConstAllBox@>@") : 0;
+    if (!constBoxType || constBoxHandleType == 0 || constBoxArrayHandleType == 0) {
+        api->UnloadModule(constAllModuleName, nullptr);
+        error = "Async const-handle All self-test could not resolve const handle array types.";
+        return false;
+    }
+
+    auto *constBox = static_cast<asIScriptObject *>(engine->CreateScriptObject(constBoxType));
+    if (!constBox) {
+        api->UnloadModule(constAllModuleName, nullptr);
+        error = "Async const-handle All self-test could not create script object.";
+        return false;
+    }
+    void *constBoxHandle = constBox;
+    ScriptAsyncTaskBase *constChild = scheduler.CreateManualTask(constBoxHandleType);
+    constChild->CompleteFromAddress(&constBoxHandle, constBoxHandleType);
+    std::vector<ScriptAsyncTaskBase *> constChildren{constChild};
+    ScriptAsyncTaskBase *constAllTask =
+        scheduler.CreateAggregate(ScriptAsyncTaskKind::All, constBoxArrayHandleType, constChildren);
+    scheduler.Tick();
+    CScriptArray *constArrayOut = nullptr;
+    const bool constAllCopied =
+        constAllTask->CopyResultTo(&constArrayOut, constBoxArrayHandleType, error) &&
+        constArrayOut &&
+        constArrayOut->GetSize() == 1 &&
+        *static_cast<void **>(constArrayOut->At(0)) == constBox;
+    if (constArrayOut) {
+        constArrayOut->Release();
+    }
+    constAllTask->Release();
+    constChild->Release();
+    constBox->Release();
+    scheduler.Clear();
+    if (!constAllCopied) {
+        if (error.empty()) {
+            error = "Async const-handle All self-test returned the wrong array result.";
+        }
+        api->UnloadModule(constAllModuleName, nullptr);
+        return false;
+    }
+    if (api->UnloadModule(constAllModuleName, &result) != CKAS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Async const-handle All self-test could not unload its module.";
+        return false;
+    }
+
     WriteAsyncSelfTestStage("clear");
     scheduler.Clear();
     WriteAsyncSelfTestStage("done");

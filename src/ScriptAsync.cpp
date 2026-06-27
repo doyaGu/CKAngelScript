@@ -110,7 +110,8 @@ asITypeInfo *TypeInfoById(asIScriptEngine *engine, int typeId) {
     }
     asITypeInfo *type = engine->GetTypeInfoById(typeId);
     if (!type && (typeId & asTYPEID_OBJHANDLE)) {
-        type = engine->GetTypeInfoById(typeId & ~asTYPEID_OBJHANDLE);
+        static constexpr int kHandleTypeFlags = asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST;
+        type = engine->GetTypeInfoById(typeId & ~kHandleTypeFlags);
     }
     return type;
 }
@@ -1358,8 +1359,8 @@ bool ScriptAsyncTaskBase::CompleteAllArray(std::string &error) {
         return false;
     }
 
-    asITypeInfo *arrayType = m_Engine->GetTypeInfoById(m_SubTypeId & ~asTYPEID_OBJHANDLE);
-    if (!arrayType) {
+    asITypeInfo *arrayType = TypeInfoById(m_Engine, m_SubTypeId);
+    if (!arrayType || !arrayType->GetName() || std::strcmp(arrayType->GetName(), "array") != 0) {
         error = fmt::format("Async::All result type '{}' is not registered.", TypeName(m_Engine, m_SubTypeId));
         return false;
     }
