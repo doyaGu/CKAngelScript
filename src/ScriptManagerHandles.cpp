@@ -6,6 +6,53 @@
 #include "ScriptApiSupport.h"
 #include "ScriptPublicOptions.h"
 
+namespace {
+
+class ScopedExecutionPin {
+public:
+    ScopedExecutionPin(ScriptHandleRegistry &registry, const CKAngelScriptExecution *execution)
+        : m_Registry(registry), m_Execution(execution) {
+        m_Registry.PinExecution(m_Execution);
+    }
+
+    ScopedExecutionPin(const ScopedExecutionPin &) = delete;
+    ScopedExecutionPin &operator=(const ScopedExecutionPin &) = delete;
+
+    ~ScopedExecutionPin() {
+        m_Registry.UnpinExecution(m_Execution);
+    }
+
+private:
+    ScriptHandleRegistry &m_Registry;
+    const CKAngelScriptExecution *m_Execution = nullptr;
+};
+
+class ScopedObjectMethodPin {
+public:
+    ScopedObjectMethodPin(ScriptHandleRegistry &registry,
+                          const CKAngelScriptObject *object,
+                          const CKAngelScriptMethod *method)
+        : m_Registry(registry), m_Object(object), m_Method(method) {
+        m_Registry.PinObject(m_Object);
+        m_Registry.PinMethod(m_Method);
+    }
+
+    ScopedObjectMethodPin(const ScopedObjectMethodPin &) = delete;
+    ScopedObjectMethodPin &operator=(const ScopedObjectMethodPin &) = delete;
+
+    ~ScopedObjectMethodPin() {
+        m_Registry.UnpinMethod(m_Method);
+        m_Registry.UnpinObject(m_Object);
+    }
+
+private:
+    ScriptHandleRegistry &m_Registry;
+    const CKAngelScriptObject *m_Object = nullptr;
+    const CKAngelScriptMethod *m_Method = nullptr;
+};
+
+} // namespace
+
 bool ScriptManager::OwnsObjectHandle(const CKAngelScriptObject *object) const {
     return m_HandleRegistry.OwnsObject(object);
 }
@@ -114,6 +161,9 @@ CKAS_STATUS ScriptManager::ReleaseObject(CKAngelScriptObject *object, CKAngelScr
     if (handleStatus != CKAS_OK) {
         return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
+    if (m_HandleRegistry.IsObjectPinned(object)) {
+        return StoreResult(result, CKAS_INVALIDSTATE, 0, "Object handle is in use.");
+    }
     m_HandleRegistry.ReleaseObject(object);
     return StoreResult(result, CKAS_OK);
 }
@@ -206,6 +256,9 @@ CKAS_STATUS ScriptManager::ReleaseMethod(CKAngelScriptMethod *method, CKAngelScr
     if (handleStatus != CKAS_OK) {
         return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
+    if (m_HandleRegistry.IsMethodPinned(method)) {
+        return StoreResult(result, CKAS_INVALIDSTATE, 0, "Method handle is in use.");
+    }
     m_HandleRegistry.ReleaseMethod(method);
     return StoreResult(result, CKAS_OK);
 }
@@ -245,6 +298,7 @@ CKAS_STATUS ScriptManager::CallObjectMethod(const CKAngelScriptObjectMethodExecu
         return StoreResult(result, CKAS_STALEHANDLE, 0, "Object method handle is stale.");
     }
 
+    ScopedObjectMethodPin pin(m_HandleRegistry, request.Object, request.Method);
     const ScriptApiSupport::ObjectCallOutcome outcome = ScriptApiSupport::ExecutePreparedObjectMethod(
         this,
         m_PublicCallbackDepth,
@@ -347,6 +401,7 @@ CKAS_STATUS ScriptManager::StartExecution(CKAngelScriptExecution *execution,
         ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
         return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
     }
+    ScopedExecutionPin pin(m_HandleRegistry, execution);
     const CKAS_STATUS status = ScriptApiSupport::RunExecution(execution, options, m_PublicCallbackDepth);
     StoreResult(result,
                 status,
@@ -375,6 +430,7 @@ CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution,
         ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
         return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
     }
+    ScopedExecutionPin pin(m_HandleRegistry, execution);
     const CKAS_STATUS status = ScriptApiSupport::RunExecution(execution, options, m_PublicCallbackDepth);
     StoreResult(result,
                 status,
@@ -413,6 +469,9 @@ CKAS_STATUS ScriptManager::ReleaseExecution(CKAngelScriptExecution *execution, C
     const CKAS_STATUS handleStatus = m_HandleRegistry.ValidateExecution(execution, this, &handleError);
     if (handleStatus != CKAS_OK) {
         return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
+    }
+    if (m_HandleRegistry.IsExecutionPinned(execution)) {
+        return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution handle is in use.");
     }
     m_HandleRegistry.ReleaseExecution(execution);
     return StoreResult(result, CKAS_OK);

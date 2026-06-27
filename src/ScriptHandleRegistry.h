@@ -1,6 +1,7 @@
 #ifndef CK_SCRIPT_HANDLE_REGISTRY_H
 #define CK_SCRIPT_HANDLE_REGISTRY_H
 
+#include <unordered_map>
 #include <unordered_set>
 
 #include "ScriptApiHandles.h"
@@ -38,6 +39,16 @@ public:
                                      const ScriptManager *owner,
                                      const char **errorMessage) const;
 
+    void PinExecution(const CKAngelScriptExecution *execution);
+    void UnpinExecution(const CKAngelScriptExecution *execution);
+    void PinObject(const CKAngelScriptObject *object);
+    void UnpinObject(const CKAngelScriptObject *object);
+    void PinMethod(const CKAngelScriptMethod *method);
+    void UnpinMethod(const CKAngelScriptMethod *method);
+    bool IsExecutionPinned(const CKAngelScriptExecution *execution) const;
+    bool IsObjectPinned(const CKAngelScriptObject *object) const;
+    bool IsMethodPinned(const CKAngelScriptMethod *method) const;
+
     void ReleaseExecution(CKAngelScriptExecution *execution);
     void ReleaseFunction(CKAngelScriptFunction *function);
     void ReleaseObject(CKAngelScriptObject *object);
@@ -51,6 +62,9 @@ private:
     std::unordered_set<CKAngelScriptFunction *> m_Functions;
     std::unordered_set<CKAngelScriptObject *> m_Objects;
     std::unordered_set<CKAngelScriptMethod *> m_Methods;
+    std::unordered_map<const CKAngelScriptExecution *, unsigned int> m_PinnedExecutions;
+    std::unordered_map<const CKAngelScriptObject *, unsigned int> m_PinnedObjects;
+    std::unordered_map<const CKAngelScriptMethod *, unsigned int> m_PinnedMethods;
 };
 
 #endif // CK_SCRIPT_HANDLE_REGISTRY_H

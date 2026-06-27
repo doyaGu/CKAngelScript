@@ -328,9 +328,32 @@ struct CancelRunningExecutionProbe {
     CKDWORD CallbackCount = 0;
 };
 
+struct ReleaseExecutionDuringCallbackProbe {
+    CKAngelScriptApi *Api = nullptr;
+    CKAngelScriptExecution *Execution = nullptr;
+    CKAS_STATUS ReleaseStatus = CKAS_OK;
+    CKAS_STATUS ReleaseResultStatus = CKAS_OK;
+    CKDWORD CallbackCount = 0;
+    int Input = 0;
+    int Output = 0;
+};
+
 struct ReentrantObjectCallProbe {
     CKAngelScriptApi *Api = nullptr;
     CKAS_STATUS ReentryStatus = CKAS_OK;
+    CKDWORD CallbackCount = 0;
+    int Input = 0;
+    int Output = 0;
+};
+
+struct ReleaseObjectMethodDuringCallbackProbe {
+    CKAngelScriptApi *Api = nullptr;
+    CKAngelScriptObject *Object = nullptr;
+    CKAngelScriptMethod *Method = nullptr;
+    CKAS_STATUS ReleaseObjectStatus = CKAS_OK;
+    CKAS_STATUS ReleaseObjectResultStatus = CKAS_OK;
+    CKAS_STATUS ReleaseMethodStatus = CKAS_OK;
+    CKAS_STATUS ReleaseMethodResultStatus = CKAS_OK;
     CKDWORD CallbackCount = 0;
     int Input = 0;
     int Output = 0;
@@ -397,6 +420,30 @@ CKAS_STATUS CancelRunningExecution(asIScriptContext *ctx, void *userData) {
     return CKAS_OK;
 }
 
+CKAS_STATUS ConfigureIntArgumentAndReleaseExecution(asIScriptContext *ctx, void *userData) {
+    auto *probe = static_cast<ReleaseExecutionDuringCallbackProbe *>(userData);
+    if (!ctx || !probe || !probe->Api || !probe->Execution) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    CKAngelScriptResult releaseResult;
+    CKAngelScriptInitResult(&releaseResult);
+    probe->ReleaseStatus = probe->Api->ReleaseExecution(probe->Execution, &releaseResult);
+    probe->ReleaseResultStatus = releaseResult.Status;
+    return ctx->SetArgDWord(0, static_cast<asDWORD>(probe->Input)) >= 0
+               ? CKAS_OK
+               : CKAS_EXECUTIONFAILED;
+}
+
+CKAS_STATUS ReadIntReturnReleaseExecutionProbe(asIScriptContext *ctx, void *userData) {
+    auto *probe = static_cast<ReleaseExecutionDuringCallbackProbe *>(userData);
+    if (!ctx || !probe) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    probe->Output = static_cast<int>(ctx->GetReturnDWord());
+    return CKAS_OK;
+}
+
 CKAS_STATUS MarkResumeHook(asIScriptContext *ctx, void *userData) {
     if (!ctx || ctx->GetState() != asEXECUTION_SUSPENDED) {
         return CKAS_INVALIDSTATE;
@@ -442,6 +489,23 @@ CKAS_STATUS WriteObjectIntWithReentry(CKAngelScriptArgWriter *writer, void *user
     return CKAngelScriptArgSetInt(writer, 0, probe->Input);
 }
 
+CKAS_STATUS WriteObjectIntAndReleaseHandles(CKAngelScriptArgWriter *writer, void *userData) {
+    auto *probe = static_cast<ReleaseObjectMethodDuringCallbackProbe *>(userData);
+    if (!probe || !probe->Api || !probe->Object || !probe->Method) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    CKAngelScriptResult objectReleaseResult;
+    CKAngelScriptResult methodReleaseResult;
+    CKAngelScriptInitResult(&objectReleaseResult);
+    CKAngelScriptInitResult(&methodReleaseResult);
+    probe->ReleaseObjectStatus = probe->Api->ReleaseObject(probe->Object, &objectReleaseResult);
+    probe->ReleaseObjectResultStatus = objectReleaseResult.Status;
+    probe->ReleaseMethodStatus = probe->Api->ReleaseMethod(probe->Method, &methodReleaseResult);
+    probe->ReleaseMethodResultStatus = methodReleaseResult.Status;
+    return CKAngelScriptArgSetInt(writer, 0, probe->Input);
+}
+
 CKAS_STATUS ReadObjectInt(CKAngelScriptResultReader *reader, void *userData) {
     auto *data = static_cast<ObjectExecutionData *>(userData);
     return CKAngelScriptResultGetInt(reader, data ? &data->IntOutput : nullptr);
@@ -449,6 +513,11 @@ CKAS_STATUS ReadObjectInt(CKAngelScriptResultReader *reader, void *userData) {
 
 CKAS_STATUS ReadObjectIntWithReentryProbe(CKAngelScriptResultReader *reader, void *userData) {
     auto *probe = static_cast<ReentrantObjectCallProbe *>(userData);
+    return CKAngelScriptResultGetInt(reader, probe ? &probe->Output : nullptr);
+}
+
+CKAS_STATUS ReadObjectIntReleaseProbe(CKAngelScriptResultReader *reader, void *userData) {
+    auto *probe = static_cast<ReleaseObjectMethodDuringCallbackProbe *>(userData);
     return CKAngelScriptResultGetInt(reader, probe ? &probe->Output : nullptr);
 }
 
@@ -3642,6 +3711,33 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->ReleaseExecution(reentrantExecution);
 
+    ReleaseExecutionDuringCallbackProbe releaseExecutionProbe;
+    releaseExecutionProbe.Api = &api;
+    releaseExecutionProbe.Input = 21;
+    CKAngelScriptExecution *pinnedExecution = nullptr;
+    CKAngelScriptExecutionStepOptions pinnedExecutionStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(ConfigureIntArgumentAndReleaseExecution,
+                                               ReadIntReturnReleaseExecutionProbe,
+                                               &releaseExecutionProbe);
+    if (api->CreateFunctionExecution(executeOptions, &pinnedExecution, &result) != CKAS_OK ||
+        !pinnedExecution) {
+        error = "CKAngelScript API self-test failed to create a release-pinned execution.";
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    releaseExecutionProbe.Execution = pinnedExecution;
+    if (api->StartExecution(pinnedExecution, pinnedExecutionStepOptions, &result) != CKAS_OK ||
+        releaseExecutionProbe.CallbackCount != 1 ||
+        releaseExecutionProbe.ReleaseStatus != CKAS_INVALIDSTATE ||
+        releaseExecutionProbe.ReleaseResultStatus != CKAS_INVALIDSTATE ||
+        releaseExecutionProbe.Output != 26) {
+        error = "CKAngelScript API self-test expected active execution handles to reject callback release.";
+        api->ReleaseExecution(pinnedExecution);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    api->ReleaseExecution(pinnedExecution);
+
     CKAngelScriptFunctionOptions ckuiFunctionOptions = CKAngelScriptApi::FunctionOptions();
     ckuiFunctionOptions.ModuleName = moduleName;
     ckuiFunctionOptions.FunctionDecl = "int __ckas_public_ckui_callback_struct()";
@@ -4786,6 +4882,26 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         objectReentry.Output != 42) {
         error = "CKAngelScript API self-test expected object callbacks to reject module mutation reentry.";
         api->UnloadModule("__CKAS_ObjectCallbackReentry", nullptr);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    ReleaseObjectMethodDuringCallbackProbe objectReleaseProbe;
+    objectReleaseProbe.Api = &api;
+    objectReleaseProbe.Object = object;
+    objectReleaseProbe.Method = addMethod;
+    objectReleaseProbe.Input = 32;
+    objectCall.WriteArgs = WriteObjectIntAndReleaseHandles;
+    objectCall.ReadResult = ReadObjectIntReleaseProbe;
+    objectCall.UserData = &objectReleaseProbe;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_OK ||
+        objectReleaseProbe.CallbackCount != 1 ||
+        objectReleaseProbe.ReleaseObjectStatus != CKAS_INVALIDSTATE ||
+        objectReleaseProbe.ReleaseObjectResultStatus != CKAS_INVALIDSTATE ||
+        objectReleaseProbe.ReleaseMethodStatus != CKAS_INVALIDSTATE ||
+        objectReleaseProbe.ReleaseMethodResultStatus != CKAS_INVALIDSTATE ||
+        objectReleaseProbe.Output != 42) {
+        error = "CKAngelScript API self-test expected active object method handles to reject callback release.";
         api->ReleaseMethod(addMethod);
         api->ReleaseObject(object);
         return false;

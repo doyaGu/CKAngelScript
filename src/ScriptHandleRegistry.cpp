@@ -60,6 +60,39 @@ void ScriptHandleRegistry::AddMethod(CKAngelScriptMethod *method) {
     }
 }
 
+namespace {
+
+template <typename T>
+void PinHandle(std::unordered_map<const T *, unsigned int> &pins, const T *handle) {
+    if (!handle) {
+        return;
+    }
+    ++pins[handle];
+}
+
+template <typename T>
+void UnpinHandle(std::unordered_map<const T *, unsigned int> &pins, const T *handle) {
+    if (!handle) {
+        return;
+    }
+    auto it = pins.find(handle);
+    if (it == pins.end()) {
+        return;
+    }
+    if (it->second <= 1) {
+        pins.erase(it);
+    } else {
+        --it->second;
+    }
+}
+
+template <typename T>
+bool IsHandlePinned(const std::unordered_map<const T *, unsigned int> &pins, const T *handle) {
+    return handle && pins.find(handle) != pins.end();
+}
+
+} // namespace
+
 CKAS_STATUS ScriptHandleRegistry::ValidateFunction(const CKAngelScriptFunction *function,
                                                    const ScriptManager *owner,
                                                    const char **errorMessage) const {
@@ -196,6 +229,42 @@ CKAS_STATUS ScriptHandleRegistry::ValidateExecution(const CKAngelScriptExecution
     return CKAS_OK;
 }
 
+void ScriptHandleRegistry::PinExecution(const CKAngelScriptExecution *execution) {
+    PinHandle(m_PinnedExecutions, execution);
+}
+
+void ScriptHandleRegistry::UnpinExecution(const CKAngelScriptExecution *execution) {
+    UnpinHandle(m_PinnedExecutions, execution);
+}
+
+void ScriptHandleRegistry::PinObject(const CKAngelScriptObject *object) {
+    PinHandle(m_PinnedObjects, object);
+}
+
+void ScriptHandleRegistry::UnpinObject(const CKAngelScriptObject *object) {
+    UnpinHandle(m_PinnedObjects, object);
+}
+
+void ScriptHandleRegistry::PinMethod(const CKAngelScriptMethod *method) {
+    PinHandle(m_PinnedMethods, method);
+}
+
+void ScriptHandleRegistry::UnpinMethod(const CKAngelScriptMethod *method) {
+    UnpinHandle(m_PinnedMethods, method);
+}
+
+bool ScriptHandleRegistry::IsExecutionPinned(const CKAngelScriptExecution *execution) const {
+    return IsHandlePinned(m_PinnedExecutions, execution);
+}
+
+bool ScriptHandleRegistry::IsObjectPinned(const CKAngelScriptObject *object) const {
+    return IsHandlePinned(m_PinnedObjects, object);
+}
+
+bool ScriptHandleRegistry::IsMethodPinned(const CKAngelScriptMethod *method) const {
+    return IsHandlePinned(m_PinnedMethods, method);
+}
+
 void ScriptHandleRegistry::ReleaseFunction(CKAngelScriptFunction *function) {
     m_Functions.erase(function);
     delete function;
@@ -203,6 +272,7 @@ void ScriptHandleRegistry::ReleaseFunction(CKAngelScriptFunction *function) {
 
 void ScriptHandleRegistry::ReleaseObject(CKAngelScriptObject *object) {
     m_Objects.erase(object);
+    m_PinnedObjects.erase(object);
     if (object && object->Object) {
         object->Object->Release();
         object->Object = nullptr;
@@ -212,11 +282,13 @@ void ScriptHandleRegistry::ReleaseObject(CKAngelScriptObject *object) {
 
 void ScriptHandleRegistry::ReleaseMethod(CKAngelScriptMethod *method) {
     m_Methods.erase(method);
+    m_PinnedMethods.erase(method);
     delete method;
 }
 
 void ScriptHandleRegistry::ReleaseExecution(CKAngelScriptExecution *execution) {
     m_Executions.erase(execution);
+    m_PinnedExecutions.erase(execution);
     if (execution && execution->Invoker.IsContextSuspended()) {
         execution->Invoker.AbortContext();
     }
