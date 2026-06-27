@@ -12,6 +12,17 @@
 #include "ScriptModuleRegistry.h"
 #include "ScriptModuleStateStore.h"
 
+namespace {
+
+void MarkIncompleteRollback(ScriptModuleStateStore &stateStore, const char *moduleName) {
+    stateStore.RemoveImportBindingsForModule(moduleName);
+    stateStore.ClearIncludeEdges(moduleName);
+    stateStore.SetKind(moduleName, ScriptModuleKind::RawUnknown);
+    stateStore.BumpGeneration(moduleName);
+}
+
+} // namespace
+
 struct ScriptModuleReplacer::Snapshot {
     std::shared_ptr<CachedScript> Cache;
     std::vector<std::tuple<std::string, std::string>> Sections;
@@ -138,6 +149,7 @@ bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
                                                   &restoredModule,
                                                   angelScriptCode)) {
         errorMessage = "Failed to restore previous script module bytecode.";
+        MarkIncompleteRollback(stateStore, moduleName);
         return false;
     }
 
@@ -153,6 +165,7 @@ bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
                              snapshot.ImportBindings,
                              angelScriptCode,
                              errorMessage)) {
+        MarkIncompleteRollback(stateStore, moduleName);
         return false;
     }
     stateStore.RestoreImportBindingsForModule(moduleName, snapshot.ImportBindings);
