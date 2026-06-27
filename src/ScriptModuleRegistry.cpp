@@ -14,6 +14,20 @@
 #include "ScriptModuleRegistry.h"
 #include "ScriptPublicOptions.h"
 
+namespace {
+
+std::string MakeQualifiedTypeDeclaration(const char *typeNamespace, const char *typeName) {
+    std::string declaration;
+    if (typeNamespace && typeNamespace[0] != '\0') {
+        declaration += typeNamespace;
+        declaration += "::";
+    }
+    declaration += typeName ? typeName : "";
+    return declaration;
+}
+
+} // namespace
+
 void ScriptModuleRegistry::Clear() {
     m_Cache.Clear();
 }
@@ -613,7 +627,7 @@ CKAS_STATUS ScriptModuleRegistry::EnumerateMetadata(MetadataContext &context,
         const int typeId = type->GetTypeId();
         const char *typeName = type->GetName();
         const char *typeNamespace = type->GetNamespace();
-        const std::string typeDeclaration = typeName ? typeName : "";
+        const std::string typeDeclaration = MakeQualifiedTypeDeclaration(typeNamespace, typeName);
         const int rawTypeMetadataCount = cached->GetTypeMetadataCount(typeId);
         const CKDWORD typeMetadataCount =
             static_cast<CKDWORD>(XMax(0, rawTypeMetadataCount));

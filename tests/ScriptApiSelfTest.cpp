@@ -232,6 +232,7 @@ struct MetadataProbe {
     bool Declaration = false;
     bool SourceSectionType = false;
     int NamespacedTypes = 0;
+    int NamespacedTypeDeclarations = 0;
     int NamespacedMethods = 0;
     CKDWORD CallbackCount = 0;
 };
@@ -511,6 +512,10 @@ CKAS_STATUS ProbeMetadata(const CKAngelScriptMetadataEntry *entry,
                CkasStringEquals(entry->Name, "Duplicate") &&
                CkasStringContains(entry->Namespace, "CKASMetadata")) {
         ++probe->NamespacedTypes;
+        if (CkasStringContains(entry->Declaration, entry->Namespace) &&
+            CkasStringContains(entry->Declaration, "Duplicate")) {
+            ++probe->NamespacedTypeDeclarations;
+        }
     } else if (CkasStringEquals(metadata, "ckas_selftest_method_namespace") &&
                entry->Target == CKAS_METADATA_TYPE_METHOD &&
                CkasStringEquals(entry->ParentTypeName, "Duplicate") &&
@@ -2286,6 +2291,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !metadataProbe.TypeProperty ||
         !metadataProbe.Declaration ||
         metadataProbe.NamespacedTypes != 2 ||
+        metadataProbe.NamespacedTypeDeclarations != 2 ||
         metadataProbe.NamespacedMethods != 2) {
         error = "CKAngelScript API self-test expected metadata enumeration for type/method/function/global/property targets.";
         return false;
