@@ -9,6 +9,7 @@
 
 #include "CKAngelScript.h"
 #include "ScriptAsync.h"
+#include "ScriptCache.h"
 #include "ScriptManager.h"
 
 static int CkasSelfTestExtensionValue() {
@@ -1313,6 +1314,48 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         engine->GetGlobalFunctionByDecl("NativePointer CKStrlwr(const string &in str)")) {
         error = "CKAngelScript API self-test found unsafe CKStrupr/CKStrlwr string overload declarations.";
         return false;
+    }
+
+    {
+        ScriptCache cache;
+        constexpr const char *cacheClearModuleName = "__CKAS_CacheClearLifetimeSelfTest";
+        std::shared_ptr<CachedScript> retained =
+            cache.CompileScript(engine,
+                                cacheClearModuleName,
+                                "int __ckas_cache_clear_value() { return 1; }\n");
+        if (!retained || !retained->module ||
+            engine->GetModule(cacheClearModuleName, asGM_ONLY_IF_EXISTS) == nullptr) {
+            error = "CKAngelScript API self-test failed to set up ScriptCache clear lifetime test.";
+            return false;
+        }
+        cache.Clear();
+        if (retained->module ||
+            engine->GetModule(cacheClearModuleName, asGM_ONLY_IF_EXISTS) != nullptr) {
+            retained->Discard();
+            error = "CKAngelScript API self-test expected ScriptCache::Clear to discard retained cached modules.";
+            return false;
+        }
+    }
+
+    {
+        ScriptCache cache;
+        constexpr const char *cacheInvalidateModuleName = "__CKAS_CacheInvalidateLifetimeSelfTest";
+        std::shared_ptr<CachedScript> retained =
+            cache.CompileScript(engine,
+                                cacheInvalidateModuleName,
+                                "int __ckas_cache_invalidate_value() { return 1; }\n");
+        if (!retained || !retained->module ||
+            engine->GetModule(cacheInvalidateModuleName, asGM_ONLY_IF_EXISTS) == nullptr) {
+            error = "CKAngelScript API self-test failed to set up ScriptCache invalidate lifetime test.";
+            return false;
+        }
+        cache.Invalidate(cacheInvalidateModuleName);
+        if (retained->module ||
+            engine->GetModule(cacheInvalidateModuleName, asGM_ONLY_IF_EXISTS) != nullptr) {
+            retained->Discard();
+            error = "CKAngelScript API self-test expected ScriptCache::Invalidate to discard retained cached modules.";
+            return false;
+        }
     }
 
     {

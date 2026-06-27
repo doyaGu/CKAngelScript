@@ -21,6 +21,22 @@ static const std::vector<std::string> &GetVectorMetadata(const std::map<int, std
     return g_EmptyMetadata;
 }
 
+namespace {
+
+void DiscardCachedScript(const std::shared_ptr<CachedScript> &script) {
+    if (script) {
+        script->Discard();
+    }
+}
+
+void DiscardCachedScripts(const std::vector<std::shared_ptr<CachedScript>> &scripts) {
+    for (const std::shared_ptr<CachedScript> &script : scripts) {
+        DiscardCachedScript(script);
+    }
+}
+
+} // namespace
+
 static int PragmaCallback(const std::string &pragmaText, CScriptBuilder &builder, void * /*userParam*/) {
     asIScriptEngine *engine = builder.GetEngine();
 
@@ -836,8 +852,7 @@ void CachedScript::ClearMetadata() {
 ScriptCache::ScriptCache() = default;
 
 ScriptCache::~ScriptCache() {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    m_CachedScripts.clear();
+    Clear();
 }
 
 std::shared_ptr<CachedScript> ScriptCache::NewCachedScript(const std::string &scriptName) {
@@ -860,26 +875,42 @@ std::shared_ptr<CachedScript> ScriptCache::GetCachedScript(const std::string &sc
 }
 
 void ScriptCache::CacheScript(const std::string &scriptName, std::shared_ptr<CachedScript> script) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    // If there's an existing module with this name, release it first
-    auto it = m_CachedScripts.find(scriptName);
-    if (it != m_CachedScripts.end()) {
-        it->second.reset();
+    std::shared_ptr<CachedScript> previous;
+    {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        auto it = m_CachedScripts.find(scriptName);
+        if (it != m_CachedScripts.end() && it->second != script) {
+            previous = it->second;
+        }
+        m_CachedScripts[scriptName] = std::move(script);
     }
-    m_CachedScripts[scriptName] = std::move(script);
+    DiscardCachedScript(previous);
 }
 
 void ScriptCache::Invalidate(const std::string &scriptName) {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    auto it = m_CachedScripts.find(scriptName);
-    if (it != m_CachedScripts.end()) {
-        m_CachedScripts.erase(it);
+    std::shared_ptr<CachedScript> removed;
+    {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        auto it = m_CachedScripts.find(scriptName);
+        if (it != m_CachedScripts.end()) {
+            removed = it->second;
+            m_CachedScripts.erase(it);
+        }
     }
+    DiscardCachedScript(removed);
 }
 
 void ScriptCache::Clear() {
-    std::lock_guard<std::mutex> lock(m_Mutex);
-    m_CachedScripts.clear();
+    std::vector<std::shared_ptr<CachedScript>> scripts;
+    {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        scripts.reserve(m_CachedScripts.size());
+        for (const auto &entry : m_CachedScripts) {
+            scripts.push_back(entry.second);
+        }
+        m_CachedScripts.clear();
+    }
+    DiscardCachedScripts(scripts);
 }
 
 std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
