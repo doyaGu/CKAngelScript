@@ -148,14 +148,16 @@ bool ScriptModuleRegistry::Discard(ScriptManager &manager, const char *moduleNam
 }
 
 bool ScriptModuleRegistry::RestoreFromChunk(const char *scriptName, CKStateChunk *chunk) {
-    if (!chunk) {
+    if (!ScriptApiSupport::IsNonEmpty(scriptName) || !chunk) {
         return false;
     }
-    std::shared_ptr<CachedScript> script = NewCachedScript(scriptName);
-    if (!script) {
+
+    auto restored = std::make_shared<CachedScript>();
+    if (!restored->LoadFromChunk(chunk) || restored->name != scriptName) {
         return false;
     }
-    return script->LoadFromChunk(chunk);
+    CacheScript(scriptName, std::move(restored));
+    return true;
 }
 
 bool ScriptModuleRegistry::SaveToChunk(const char *scriptName, CKStateChunk *chunk) {

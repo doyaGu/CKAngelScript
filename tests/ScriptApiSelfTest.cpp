@@ -1483,6 +1483,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             return false;
         }
         restoreOverExistingCache.Clear();
+
+        constexpr const char *cacheChunkMismatchModuleName = "__CKAS_CacheChunkMismatchSelfTest";
+        if (manager->RestoreCachedScriptFromChunk(cacheChunkMismatchModuleName, chunk.get()) ||
+            manager->GetCachedScript(cacheChunkMismatchModuleName)) {
+            error = "CKAngelScript API self-test expected chunk restore to reject mismatched cache names.";
+            return false;
+        }
     }
 
     {
