@@ -84,6 +84,17 @@ std::vector<std::string> CollectContextModuleNames(asIScriptContext *context) {
     return moduleNames;
 }
 
+void ReleaseContextExecutionState(asIScriptContext *context) {
+    if (!context) {
+        return;
+    }
+    const int state = context->GetState();
+    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
+        context->Abort();
+    }
+    context->Unprepare();
+}
+
 bool ModuleNamesContain(const std::vector<std::string> &moduleNames, const char *moduleName) {
     if (!moduleName || moduleName[0] == '\0') {
         return false;
@@ -1088,6 +1099,7 @@ void ScriptAsyncTaskBase::ReleaseContext() {
     if (m_Scheduler) {
         m_Scheduler->ForgetContext(ctx);
     }
+    ReleaseContextExecutionState(ctx);
     if (m_Engine) {
         m_Engine->ReturnContext(ctx);
     } else {

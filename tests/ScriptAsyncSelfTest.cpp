@@ -295,6 +295,67 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
 
+    WriteAsyncSelfTestStage("cancel-script-context-release");
+    constexpr const char *cancelContextModuleName = "__CKAS_AsyncCancelContextSelfTest";
+    if (api->CompileModule(cancelContextModuleName,
+                           "void __ckas_async_cancel_wait() {\n"
+                           "  AsyncTask<void>@ delay = Async::Delay(100);\n"
+                           "  Await(delay);\n"
+                           "}\n"
+                           "int __ckas_async_after_cancel() { return 8; }\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Async cancel context self-test compile failed.";
+        return false;
+    }
+    asIScriptModule *cancelContextModule = engine->GetModule(cancelContextModuleName, asGM_ONLY_IF_EXISTS);
+    asIScriptFunction *cancelWaitFunction = cancelContextModule
+        ? cancelContextModule->GetFunctionByDecl("void __ckas_async_cancel_wait()")
+        : nullptr;
+    asIScriptFunction *afterCancelFunction = cancelContextModule
+        ? cancelContextModule->GetFunctionByDecl("int __ckas_async_after_cancel()")
+        : nullptr;
+    if (!cancelWaitFunction || !afterCancelFunction) {
+        managerScheduler->Clear();
+        api->UnloadModule(cancelContextModuleName, nullptr);
+        error = "Async cancel context self-test could not resolve script functions.";
+        return false;
+    }
+    ScriptAsyncTaskBase *cancelTask = managerScheduler->CreateScriptTask(cancelWaitFunction, asTYPEID_VOID);
+    cancelTask->Advance();
+    if (!cancelTask->IsRunning() || cancelTask->IsDone()) {
+        cancelTask->Release();
+        managerScheduler->Clear();
+        api->UnloadModule(cancelContextModuleName, nullptr);
+        error = "Async cancel context self-test expected script task to suspend.";
+        return false;
+    }
+    cancelTask->Cancel();
+    cancelTask->Release();
+    managerScheduler->Clear();
+
+    asIScriptContext *afterCancelContext = engine->RequestContext();
+    int afterCancelCode = afterCancelContext ? afterCancelContext->Prepare(afterCancelFunction) : asERROR;
+    if (afterCancelCode >= 0) {
+        afterCancelCode = afterCancelContext->Execute();
+    }
+    const int afterCancelValue = afterCancelCode == asEXECUTION_FINISHED
+        ? static_cast<int>(afterCancelContext->GetReturnDWord())
+        : 0;
+    if (afterCancelContext) {
+        afterCancelContext->Unprepare();
+        engine->ReturnContext(afterCancelContext);
+    }
+    if (afterCancelCode != asEXECUTION_FINISHED ||
+        afterCancelValue != 8 ||
+        api->UnloadModule(cancelContextModuleName, &result) != CKAS_OK) {
+        api->UnloadModule(cancelContextModuleName, nullptr);
+        error = "Async cancel context self-test expected cancelled script task contexts to be reusable.";
+        return false;
+    }
+
     WriteAsyncSelfTestStage("tick-reentrant-track");
     if (api->CompileModule("__CKAS_AsyncTickMutationSelfTest",
                            "void __ckas_async_tick_mutates() {\n"
