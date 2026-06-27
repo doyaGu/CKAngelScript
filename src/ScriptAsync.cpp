@@ -617,14 +617,13 @@ void ScriptAsyncStoredValue::EnumReferences(asIScriptEngine *engine) const {
 
     const asQWORD flags = type->GetFlags();
     if ((m_TypeId & asTYPEID_OBJHANDLE) != 0) {
-        if ((flags & asOBJ_GC) != 0) {
-            engine->GCEnumCallback(m_Object);
-        }
-        return;
+        engine->GCEnumCallback(m_Object);
+    } else if ((flags & asOBJ_VALUE) != 0 && (flags & asOBJ_GC) != 0) {
+        engine->ForwardGCEnumReferences(m_Object, type);
     }
 
-    if ((flags & asOBJ_VALUE) != 0 && (flags & asOBJ_GC) != 0) {
-        engine->ForwardGCEnumReferences(m_Object, type);
+    if (asITypeInfo *heldType = engine->GetTypeInfoById(m_TypeId)) {
+        engine->GCEnumCallback(heldType);
     }
 }
 
