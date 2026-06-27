@@ -1089,13 +1089,24 @@ ScriptRuntimeLoadPlan ScriptRuntime::Discover(std::string &error) const {
         for (int i = 0; i < count; ++i) {
             XString pathName;
             if (paths->GetPathName(DATA_PATH_IDX, i, pathName) == CK_OK && pathName.Length() > 0) {
-                roots.emplace_back(pathName.CStr());
+                roots.emplace_back(fs::path(pathName.CStr()) / "Scripts");
             }
         }
     }
     if (const char *envRoots = std::getenv("CKAS_SCRIPT_ROOTS")) {
         for (const std::string &root : ScriptRuntimeMetadata::SplitList(envRoots)) {
-            roots.emplace_back(root);
+            fs::path path(root);
+            if (ScriptRuntimeMetadata::ToLower(path.filename().string()) == "scripts") {
+                roots.push_back(std::move(path));
+                continue;
+            }
+            std::error_code ec;
+            fs::path scripts = path / "Scripts";
+            if (fs::is_directory(scripts, ec)) {
+                roots.push_back(std::move(scripts));
+            } else {
+                roots.push_back(std::move(path));
+            }
         }
     }
 
@@ -1103,7 +1114,7 @@ ScriptRuntimeLoadPlan ScriptRuntime::Discover(std::string &error) const {
     std::unordered_set<std::string> seenRoots;
     std::set<std::string> seenIds;
     for (fs::path root : roots) {
-        root = fs::absolute(root) / "Scripts";
+        root = fs::absolute(root);
         std::error_code ec;
         root = fs::weakly_canonical(root, ec);
         if (ec) {
