@@ -608,7 +608,7 @@ ScriptAsyncStoredValue::~ScriptAsyncStoredValue() {
 
 void ScriptAsyncStoredValue::Clear() {
     if (m_HasValue && m_Object && m_Engine && (m_TypeId & asTYPEID_MASK_OBJECT)) {
-        m_Engine->ReleaseScriptObject(m_Object, m_Engine->GetTypeInfoById(m_TypeId));
+        m_Engine->ReleaseScriptObject(m_Object, TypeInfoById(m_Engine, m_TypeId));
     }
     m_Engine = nullptr;
     m_TypeId = asTYPEID_VOID;
@@ -634,7 +634,7 @@ void ScriptAsyncStoredValue::EnumReferences(asIScriptEngine *engine) const {
         engine->ForwardGCEnumReferences(m_Object, type);
     }
 
-    if (asITypeInfo *heldType = engine->GetTypeInfoById(m_TypeId)) {
+    if (asITypeInfo *heldType = TypeInfoById(engine, m_TypeId)) {
         engine->GCEnumCallback(heldType);
     }
 }
@@ -673,13 +673,13 @@ void ScriptAsyncStoredValue::Store(asIScriptEngine *engine, void *address, int t
     if (typeId & asTYPEID_OBJHANDLE) {
         m_Object = address ? *static_cast<void **>(address) : nullptr;
         if (m_Object) {
-            m_Engine->AddRefScriptObject(m_Object, m_Engine->GetTypeInfoById(typeId));
+            m_Engine->AddRefScriptObject(m_Object, TypeInfoById(m_Engine, typeId));
         }
         return;
     }
 
     if (typeId & asTYPEID_MASK_OBJECT) {
-        m_Object = address ? m_Engine->CreateScriptObjectCopy(address, m_Engine->GetTypeInfoById(typeId)) : nullptr;
+        m_Object = address ? m_Engine->CreateScriptObjectCopy(address, TypeInfoById(m_Engine, typeId)) : nullptr;
         return;
     }
 
@@ -714,8 +714,8 @@ bool ScriptAsyncStoredValue::CopyTo(void *address, int typeId, std::string &erro
             return true;
         }
 
-        asITypeInfo *fromType = m_Engine->GetTypeInfoById(m_TypeId);
-        asITypeInfo *toType = m_Engine->GetTypeInfoById(typeId);
+        asITypeInfo *fromType = TypeInfoById(m_Engine, m_TypeId);
+        asITypeInfo *toType = TypeInfoById(m_Engine, typeId);
         if (!fromType || !toType) {
             error = fmt::format("Async task result type mismatch: stored {}, requested {}.",
                                 TypeName(m_Engine, m_TypeId),
@@ -746,7 +746,7 @@ bool ScriptAsyncStoredValue::CopyTo(void *address, int typeId, std::string &erro
                                 TypeName(m_Engine, typeId));
             return false;
         }
-        if (m_Engine->AssignScriptObject(address, m_Object, m_Engine->GetTypeInfoById(typeId)) < 0) {
+        if (m_Engine->AssignScriptObject(address, m_Object, TypeInfoById(m_Engine, typeId)) < 0) {
             error = fmt::format("Async task failed to assign result of type {}.", TypeName(m_Engine, typeId));
             return false;
         }
@@ -779,7 +779,7 @@ bool ScriptAsyncStoredValue::CopyFrom(const ScriptAsyncStoredValue &other, std::
         return true;
     }
 
-    asITypeInfo *type = m_Engine->GetTypeInfoById(m_TypeId);
+    asITypeInfo *type = TypeInfoById(m_Engine, m_TypeId);
     if (!type) {
         error = fmt::format("Async task result type '{}' is not registered.", TypeName(m_Engine, m_TypeId));
         Clear();

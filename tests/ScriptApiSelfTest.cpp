@@ -4069,6 +4069,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  float Half(float value) { return value * 0.5f; }\n"
         "  string Echo(const string &in value) { return \"echo:\" + value; }\n"
         "  int UseHandle(__CKAS_PublicObject@ other) { return other is null ? -1 : other.Add(base); }\n"
+        "  int UseConstHandle(const __CKAS_PublicObject@ other) { return other is null ? -1 : other.base + base; }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
         "}\n"
@@ -4389,6 +4390,29 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseObject(object);
         return false;
     }
+    methodOptions.MethodDecl = "int UseConstHandle(const __CKAS_PublicObject@)";
+    CKAngelScriptMethod *constHandleMethod = nullptr;
+    objectData.ObjectInput = object;
+    objectData.IntOutput = 0;
+    if (api->FindObjectMethod(methodOptions, &constHandleMethod, &result) != CKAS_OK || !constHandleMethod) {
+        error = "CKAngelScript API self-test failed to find const object-handle arg method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = constHandleMethod;
+    objectCall.WriteArgs = WriteObjectHandle;
+    objectCall.ReadResult = ReadObjectInt;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_OK || objectData.IntOutput != 20) {
+        error = "CKAngelScript API self-test expected const object handle arg round-trip.";
+        api->ReleaseMethod(constHandleMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseMethod(constHandleMethod);
+
+    objectCall.Method = handleMethod;
     CKAngelScriptObject foreignObject = *object;
     foreignObject.Manager = reinterpret_cast<ScriptManager *>(static_cast<uintptr_t>(1));
     objectData.ObjectInput = &foreignObject;

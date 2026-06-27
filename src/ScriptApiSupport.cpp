@@ -58,6 +58,18 @@ CKAS_STATUS ToCKAS_STATUS(ScriptInvocationStatus status) {
     }
 }
 
+asITypeInfo *TypeInfoById(asIScriptEngine *engine, int typeId) {
+    if (!engine || typeId == asTYPEID_VOID) {
+        return nullptr;
+    }
+    asITypeInfo *type = engine->GetTypeInfoById(typeId);
+    if (!type && (typeId & asTYPEID_OBJHANDLE)) {
+        static constexpr int kHandleTypeFlags = asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST;
+        type = engine->GetTypeInfoById(typeId & ~kHandleTypeFlags);
+    }
+    return type;
+}
+
 } // namespace
 
 bool IsStringType(asIScriptEngine *engine, int typeId) {
@@ -114,7 +126,7 @@ bool IsCompatibleObjectHandle(asIScriptEngine *engine,
     if (!engine || !objectHandle || !objectHandle->Object) {
         return false;
     }
-    asITypeInfo *expectedType = engine->GetTypeInfoById(expectedTypeId);
+    asITypeInfo *expectedType = TypeInfoById(engine, expectedTypeId);
     asITypeInfo *actualType = objectHandle->Object->GetObjectType();
     if (!expectedType || !actualType) {
         return false;
