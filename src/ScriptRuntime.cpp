@@ -1420,12 +1420,6 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
             loaded->AwakeCalled = true;
         }
     }
-    if (m_Manager && m_Manager->GetMessageBus()) {
-        std::string subscribeError;
-        for (const std::string &topic : metadata.MessageTopics) {
-            m_Manager->GetMessageBus()->Subscribe(loaded->MessageTarget, topic, true, subscribeError);
-        }
-    }
     module = std::move(loaded);
     return true;
 }
@@ -1645,11 +1639,22 @@ bool ScriptRuntime::RunPauseLifecycleSelfTest(std::string &error) {
 }
 #endif
 
+void ScriptRuntime::SubscribeStaticTopics(Module &module) const {
+    if (!m_Manager || !m_Manager->GetMessageBus() || module.Failed || !module.Loaded) {
+        return;
+    }
+    std::string subscribeError;
+    for (const std::string &topic : module.Meta.MessageTopics) {
+        m_Manager->GetMessageBus()->Subscribe(module.MessageTarget, topic, true, subscribeError);
+    }
+}
+
 bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module) {
     for (std::unique_ptr<Module> &existing : m_Modules) {
         if (existing && existing->Meta.Id == metadata.Id) {
             if (DestroyModule(*existing)) {
                 existing = std::move(module);
+                SubscribeStaticTopics(*existing);
                 m_ModulesById[metadata.Id] = existing.get();
             } else {
                 existing->PendingReplacement = std::move(module);
@@ -1658,6 +1663,7 @@ bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::un
         }
     }
     m_Modules.push_back(std::move(module));
+    SubscribeStaticTopics(*m_Modules.back());
     m_ModulesById[metadata.Id] = m_Modules.back().get();
     return true;
 }
@@ -1926,6 +1932,7 @@ void ScriptRuntime::FinalizePendingModules() {
         }
         if (module->PendingReplacement && !module->PendingDestroy && !module->ActiveContext) {
             *it = std::move(module->PendingReplacement);
+            SubscribeStaticTopics(**it);
             changed = true;
             ++it;
             continue;

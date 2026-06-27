@@ -185,6 +185,7 @@ private:
     bool LoadModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> &module, std::string &error);
     bool CacheLifecycleFunctions(Module &module, std::string &error) const;
     void ReleaseCachedFunctions(Module &module) const;
+    void SubscribeStaticTopics(Module &module) const;
     bool ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module);
     bool RemoveModuleById(const std::string &id);
     void RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts);
