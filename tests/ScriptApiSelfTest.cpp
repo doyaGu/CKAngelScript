@@ -4,6 +4,7 @@
 #include <fstream>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -1393,6 +1394,62 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             error = "CKAngelScript API self-test expected ScriptCache::Invalidate to discard retained cached modules.";
             return false;
         }
+    }
+
+    {
+        ScriptCache cache;
+        constexpr const char *cacheChunkModuleName = "__CKAS_CacheChunkSnapshotSelfTest";
+        std::shared_ptr<CachedScript> snapshot = cache.NewCachedScript(cacheChunkModuleName);
+        if (!snapshot) {
+            error = "CKAngelScript API self-test failed to allocate source snapshot cache entry.";
+            return false;
+        }
+        snapshot->sourceSnapshotSections = true;
+        snapshot->AddSection("chunk/main.as",
+                             "#include \"lib/helper.as\"\n"
+                             "int __ckas_cache_chunk_value() { return __ckas_cache_chunk_helper() + 1; }\n");
+        snapshot->AddSection("chunk/lib/helper.as",
+                             "int __ckas_cache_chunk_helper() { return 41; }\n");
+        if (!snapshot->Build(engine) ||
+            engine->GetModule(cacheChunkModuleName, asGM_ONLY_IF_EXISTS) == nullptr) {
+            error = "CKAngelScript API self-test failed to build source snapshot cache entry.";
+            return false;
+        }
+
+        std::unique_ptr<CKStateChunk, void (*)(CKStateChunk *)> chunk(
+            CreateCKStateChunk(CKCID_OBJECT, nullptr),
+            DeleteCKStateChunk);
+        if (!chunk || !snapshot->SaveToChunk(chunk.get())) {
+            error = "CKAngelScript API self-test failed to save source snapshot cache entry.";
+            return false;
+        }
+        cache.Clear();
+
+        ScriptCache restoredCache;
+        std::shared_ptr<CachedScript> restored = restoredCache.NewCachedScript(cacheChunkModuleName);
+        if (!restored ||
+            !restored->LoadFromChunk(chunk.get()) ||
+            !restored->sourceSnapshotSections ||
+            !restored->Build(engine)) {
+            restoredCache.Clear();
+            error = "CKAngelScript API self-test expected cached source snapshot chunks to restore include semantics.";
+            return false;
+        }
+        int chunkValue = 0;
+        if (!ExecuteIntFunction(api,
+                                cacheChunkModuleName,
+                                "int __ckas_cache_chunk_value()",
+                                chunkValue,
+                                result,
+                                error) ||
+            chunkValue != 42) {
+            if (error.empty()) {
+                error = "CKAngelScript API self-test expected restored source snapshot chunk to execute.";
+            }
+            restoredCache.Clear();
+            return false;
+        }
+        restoredCache.Clear();
     }
 
     {
