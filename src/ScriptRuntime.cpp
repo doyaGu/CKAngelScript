@@ -1271,11 +1271,10 @@ bool ScriptRuntime::RemoveModuleById(const std::string &id) {
         if (!module || (module->Meta.Id != canonical && module->Meta.Id != id)) {
             continue;
         }
+        module->PendingErase = true;
         if (DestroyModule(*module)) {
             m_ModulesById.erase(module->Meta.Id);
             m_Modules.erase(it);
-        } else {
-            module->PendingErase = true;
         }
         return true;
     }
@@ -1292,11 +1291,11 @@ void ScriptRuntime::RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> 
     for (auto it = m_Modules.begin(); it != m_Modules.end();) {
         Module *module = it->get();
         if (module && allowedIds.find(module->Meta.Id) == allowedIds.end()) {
+            module->PendingErase = true;
             if (DestroyModule(*module)) {
                 it = m_Modules.erase(it);
                 changed = true;
             } else {
-                module->PendingErase = true;
                 ++it;
             }
         } else {
@@ -1637,6 +1636,119 @@ bool ScriptRuntime::RunPauseLifecycleSelfTest(std::string &error) {
     cleanup();
     return true;
 }
+
+bool ScriptRuntime::RunPendingReplacementSelfTest(std::string &error) {
+    if (!m_Manager || !m_Manager->GetScriptEngine()) {
+        error = "Runtime pending replacement self-test requires an initialized ScriptManager.";
+        return false;
+    }
+
+    constexpr const char *scriptId = "ckas.runtime.pending.selftest";
+    constexpr const char *oldName = "__CKAS_RuntimePendingOldSelfTest";
+    constexpr const char *replacementName = "__CKAS_RuntimePendingReplacementSelfTest";
+    constexpr const char *oldSource =
+        "void OnDestroy(const ScriptContext &in ctx) {\n"
+        "  AsyncTask<void>@ delay = Async::Delay(1);\n"
+        "  Await(delay);\n"
+        "}\n";
+    constexpr const char *replacementSource = "void ReplacementMarker(const ScriptContext &in ctx) {}\n";
+
+    auto cleanup = [&]() {
+        Clear();
+        if (m_Manager->GetAsyncScheduler()) {
+            m_Manager->GetAsyncScheduler()->Clear();
+        }
+        m_Manager->UnloadModule(oldName, nullptr);
+        m_Manager->UnloadModule(replacementName, nullptr);
+    };
+
+    auto compile = [&](const char *moduleName, const char *source) -> bool {
+        CKAngelScriptResult result = {};
+        if (m_Manager->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &result) == CKAS_OK) {
+            return true;
+        }
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : fmt::format("Runtime pending replacement self-test failed to compile '{}'.", moduleName);
+        return false;
+    };
+
+    auto makeModule = [&](const char *moduleName, std::unique_ptr<Module> &out) -> bool {
+        std::unique_ptr<Module> module = std::make_unique<Module>();
+        module->Meta.Id = scriptId;
+        module->Meta.Name = scriptId;
+        module->MessageTarget = ScriptMessageBus::RuntimeTarget(scriptId);
+        module->ModuleName = moduleName;
+        module->Generation = ++m_Generation;
+        module->Cached = m_Manager->GetCachedScript(moduleName);
+        module->Enabled = true;
+        module->Loaded = true;
+        module->LoadCalled = true;
+        module->AwakeCalled = true;
+        module->StartCalled = true;
+        if (!module->Cached || !module->Cached->module) {
+            error = fmt::format("Runtime pending replacement self-test could not retrieve '{}'.", moduleName);
+            return false;
+        }
+        if (!CacheLifecycleFunctions(*module, error)) {
+            if (error.empty()) {
+                error = fmt::format("Runtime pending replacement self-test could not cache lifecycle functions for '{}'.", moduleName);
+            }
+            return false;
+        }
+        out = std::move(module);
+        return true;
+    };
+
+    if (!compile(oldName, oldSource)) {
+        cleanup();
+        return false;
+    }
+    std::unique_ptr<Module> oldModule;
+    if (!makeModule(oldName, oldModule)) {
+        cleanup();
+        return false;
+    }
+    const ScriptRuntimeManifest metadata = oldModule->Meta;
+    ReplaceModule(metadata, std::move(oldModule));
+
+    if (!compile(replacementName, replacementSource)) {
+        cleanup();
+        return false;
+    }
+    std::unique_ptr<Module> replacement;
+    if (!makeModule(replacementName, replacement)) {
+        cleanup();
+        return false;
+    }
+    ReplaceModule(metadata, std::move(replacement));
+
+    Module *active = FindModule(scriptId);
+    if (!active || !active->PendingReplacement || !m_Manager->HasModule(replacementName)) {
+        cleanup();
+        error = "Runtime pending replacement self-test did not retain a pending replacement module.";
+        return false;
+    }
+
+    if (!RemoveModuleById(scriptId)) {
+        cleanup();
+        error = "Runtime pending replacement self-test could not remove the active module.";
+        return false;
+    }
+    if (m_Manager->HasModule(replacementName)) {
+        cleanup();
+        error = "Runtime pending replacement self-test leaked a pending replacement module after erase.";
+        return false;
+    }
+    if (m_Manager->HasModule(oldName)) {
+        cleanup();
+        error = "Runtime pending replacement self-test leaked the old module after erase.";
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
 #endif
 
 void ScriptRuntime::SubscribeStaticTopics(Module &module) const {
@@ -1649,9 +1761,18 @@ void ScriptRuntime::SubscribeStaticTopics(Module &module) const {
     }
 }
 
+void ScriptRuntime::DiscardPendingReplacement(Module &module) {
+    if (!module.PendingReplacement) {
+        return;
+    }
+    DestroyModule(*module.PendingReplacement, true);
+    module.PendingReplacement.reset();
+}
+
 bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module) {
     for (std::unique_ptr<Module> &existing : m_Modules) {
         if (existing && existing->Meta.Id == metadata.Id) {
+            DiscardPendingReplacement(*existing);
             if (DestroyModule(*existing)) {
                 existing = std::move(module);
                 SubscribeStaticTopics(*existing);
@@ -1669,6 +1790,9 @@ bool ScriptRuntime::ReplaceModule(const ScriptRuntimeManifest &metadata, std::un
 }
 
 bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
+    if (hard || module.PendingErase) {
+        DiscardPendingReplacement(module);
+    }
     if (m_Manager && m_Manager->GetMessageBus()) {
         m_Manager->GetMessageBus()->ClearTarget(module.MessageTarget, "Runtime script was destroyed.");
     }
@@ -1930,16 +2054,17 @@ void ScriptRuntime::FinalizePendingModules() {
             changed = true;
             continue;
         }
+        if (module->PendingErase && !module->PendingDestroy && !module->ActiveContext) {
+            DiscardPendingReplacement(*module);
+            it = m_Modules.erase(it);
+            changed = true;
+            continue;
+        }
         if (module->PendingReplacement && !module->PendingDestroy && !module->ActiveContext) {
             *it = std::move(module->PendingReplacement);
             SubscribeStaticTopics(**it);
             changed = true;
             ++it;
-            continue;
-        }
-        if (module->PendingErase && !module->PendingDestroy && !module->ActiveContext) {
-            it = m_Modules.erase(it);
-            changed = true;
             continue;
         }
         ++it;

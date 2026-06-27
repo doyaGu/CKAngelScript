@@ -168,6 +168,7 @@ public:
 
 #if CKAS_BUILD_SELF_TESTS
     bool RunPauseLifecycleSelfTest(std::string &error);
+    bool RunPendingReplacementSelfTest(std::string &error);
 #endif
 
 private:
@@ -186,6 +187,7 @@ private:
     bool CacheLifecycleFunctions(Module &module, std::string &error) const;
     void ReleaseCachedFunctions(Module &module) const;
     void SubscribeStaticTopics(Module &module) const;
+    void DiscardPendingReplacement(Module &module);
     bool ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module);
     bool RemoveModuleById(const std::string &id);
     void RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts);

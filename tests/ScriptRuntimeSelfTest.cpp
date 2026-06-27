@@ -273,5 +273,8 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     if (!runtime.RunPauseLifecycleSelfTest(error)) {
         return false;
     }
+    if (!runtime.RunPendingReplacementSelfTest(error)) {
+        return false;
+    }
     return true;
 }
