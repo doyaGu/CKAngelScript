@@ -54,6 +54,7 @@ set(CKAS_HEADERS
         ScriptRegistration.h
         ScriptApiSupport.h
         ScriptPublicOptions.h
+        ScriptSourcePaths.h
         ScriptAngelScriptGc.h
         ScriptModuleBytecode.h
         ScriptModuleBytecodeStore.h
@@ -72,6 +73,7 @@ set(CKAS_SOURCES
         ScriptManagerModules.cpp
         ScriptApiSupport.cpp
         ScriptPublicOptions.cpp
+        ScriptSourcePaths.cpp
         ScriptModuleBytecode.cpp
         ScriptModuleBytecodeStore.cpp
         ScriptModuleMutationPolicy.cpp

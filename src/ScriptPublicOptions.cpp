@@ -1,8 +1,10 @@
 #include "ScriptPublicOptions.h"
 
 #include <string>
+#include <unordered_set>
 
 #include "ScriptApiSupport.h"
+#include "ScriptSourcePaths.h"
 
 namespace ScriptPublicOptions {
 
@@ -108,6 +110,7 @@ CKAS_STATUS DecodeLoadOptions(const CKAngelScriptLoadOptions &options,
             return Fail(errorMessage, "Source section list is null.");
         }
         request.Sections.reserve(sourceSectionCount);
+        std::unordered_set<std::string> sectionNames;
         for (size_t i = 0; i < sourceSectionCount; ++i) {
             const CKAngelScriptSourceSection &sourceSection = sourceSections[i];
             if (!ScriptApiSupport::HasCompletePublicStruct(sourceSection)) {
@@ -130,6 +133,10 @@ CKAS_STATUS DecodeLoadOptions(const CKAngelScriptLoadOptions &options,
             }
             if (!sectionCode) {
                 return Fail(errorMessage, "Source section list contains null code.");
+            }
+            const std::string sectionKey = ScriptSourcePaths::NormalizeSectionName(sectionName);
+            if (!sectionNames.insert(sectionKey).second) {
+                return Fail(errorMessage, "Source section list contains duplicate section names.");
             }
             request.Sections.emplace_back(sectionName,
                                           sectionSize == 0

@@ -249,7 +249,8 @@ typedef struct CKAngelScriptLoadOptions {
     const char *Code;
     CKDWORD Flags;
     // Sections[0] is the entry section; remaining sections are only used to
-    // resolve #include directives from the same snapshot.
+    // resolve #include directives from the same snapshot. Section names must
+    // be unique after the same path normalization used for include resolution.
     const CKAngelScriptSourceSection *Sections;
     size_t SectionCount;
 } CKAngelScriptLoadOptions;

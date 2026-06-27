@@ -2652,6 +2652,27 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
 
+    CKAngelScriptSourceSection duplicateSourceSections[2] = {};
+    duplicateSourceSections[0].Size = sizeof(duplicateSourceSections[0]);
+    duplicateSourceSections[0].SectionName = "entry/lib/../duplicate.as";
+    duplicateSourceSections[0].Code = sourceSectionEntry;
+    duplicateSourceSections[1].Size = sizeof(duplicateSourceSections[1]);
+    duplicateSourceSections[1].SectionName = "entry/duplicate.as";
+    duplicateSourceSections[1].Code = sourceSectionHelper;
+    CKAngelScriptLoadOptions duplicateSourceSectionOptions =
+        CKAngelScriptApi::LoadSectionsOptions("__CKAS_ManagerApiDuplicateSourceSectionsSelfTest",
+                                              duplicateSourceSections,
+                                              2,
+                                              CKAS_LOAD_REPLACEEXISTING);
+    if (api->LoadModule(duplicateSourceSectionOptions, &result) != CKAS_INVALIDARGUMENT) {
+        error = "CKAngelScript API self-test expected LoadModule with duplicate source sections to fail.";
+        RemoveTextFile(singleFile);
+        RemoveTextFile(multiFileA);
+        RemoveTextFile(multiFileB);
+        RemoveTextFile(defaultFile);
+        return false;
+    }
+
     constexpr const char *defaultFileModuleName = "__CKAS_ManagerApiDefaultFileLoadSelfTest";
     CKAngelScriptLoadOptions defaultFileOptions = CKAngelScriptApi::LoadOptions();
     defaultFileOptions.ModuleName = defaultFileModuleName;
