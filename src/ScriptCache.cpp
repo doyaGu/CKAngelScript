@@ -87,17 +87,6 @@ void RecordIncludeEdge(std::vector<ScriptIncludeEdge> *includeEdges,
     includeEdges->push_back(std::move(edge));
 }
 
-bool InferLegacySourceSnapshotSections(
-    const std::vector<std::tuple<std::string, std::string>> &loadedSections) {
-    int memorySectionCount = 0;
-    for (const auto &section : loadedSections) {
-        if (!std::get<1>(section).empty()) {
-            ++memorySectionCount;
-        }
-    }
-    return memorySectionCount > 1;
-}
-
 int RecordingIncludeCallback(const char *include,
                              const char *from,
                              CScriptBuilder *builder,
@@ -626,7 +615,7 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
     }
 
     const int version = chunk->ReadInt();
-    if (version != SCRIPTCACHE_VERSION1 && version != SCRIPTCACHE_VERSION2) {
+    if (version != SCRIPTCACHE_VERSION) {
         chunk->CloseChunk();
         return false;
     }
@@ -642,10 +631,7 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
     CKDeletePointer(str);
     str = nullptr;
 
-    bool loadedSourceSnapshotSections = false;
-    if (version >= SCRIPTCACHE_VERSION2) {
-        loadedSourceSnapshotSections = chunk->ReadInt() != 0;
-    }
+    const bool loadedSourceSnapshotSections = chunk->ReadInt() != 0;
 
     const int numSections = chunk->ReadInt();
     if (numSections < 0) {
@@ -679,10 +665,6 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         loadedSections.emplace_back(std::move(filename), std::move(buffer));
     }
 
-    if (version == SCRIPTCACHE_VERSION1) {
-        loadedSourceSnapshotSections = InferLegacySourceSnapshotSections(loadedSections);
-    }
-
     name = std::move(loadedName);
     sections = std::move(loadedSections);
     sourceSnapshotSections = loadedSourceSnapshotSections;
@@ -696,7 +678,7 @@ bool CachedScript::SaveToChunk(CKStateChunk *chunk) {
     // start identifier
     chunk->WriteIdentifier(SCRIPTCACHE_IDENTIFIER);
     // version
-    chunk->WriteInt(SCRIPTCACHE_CURRENT_VERSION);
+    chunk->WriteInt(SCRIPTCACHE_VERSION);
 
     // Write the script name
     chunk->WriteString(name.data());
