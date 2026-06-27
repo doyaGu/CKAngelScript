@@ -660,7 +660,9 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptGetModuleFingerprint(
     CKAngelScriptResult *result) {
     ScriptManager *scriptManager = FromPublicHandle(angelScript);
     if (!scriptManager) {
-        CKAngelScriptInitModuleFingerprint(outFingerprint);
+        if (outFingerprint && ScriptApiSupport::HasCompletePublicStruct(*outFingerprint)) {
+            CKAngelScriptInitModuleFingerprint(outFingerprint);
+        }
         return StoreInvalidPublicHandleResult(result);
     }
     return scriptManager->GetModuleFingerprint(moduleName, outFingerprint, result);

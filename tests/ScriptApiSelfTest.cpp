@@ -1294,6 +1294,25 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         error = "CKAngelScript API self-test expected invalid public handle fingerprint calls to clear outputs.";
         return false;
     }
+    CKAngelScriptModuleFingerprint invalidSizedHandleFingerprint = CKAngelScriptApi::ModuleFingerprint();
+    invalidSizedHandleFingerprint.Size = 0;
+    invalidSizedHandleFingerprint.Kind = CKAS_MODULEKIND_SOURCE;
+    invalidSizedHandleFingerprint.Generation = 123;
+    invalidSizedHandleFingerprint.CombinedHash = 456;
+    result = {};
+    if (CKAngelScriptGetModuleFingerprint(nullptr,
+                                          "__ckas_invalid",
+                                          &invalidSizedHandleFingerprint,
+                                          &result) != CKAS_INVALIDARGUMENT ||
+        invalidSizedHandleFingerprint.Size != 0 ||
+        invalidSizedHandleFingerprint.Kind != CKAS_MODULEKIND_SOURCE ||
+        invalidSizedHandleFingerprint.Generation != 123 ||
+        invalidSizedHandleFingerprint.CombinedHash != 456 ||
+        result.Status != CKAS_INVALIDARGUMENT ||
+        !result.ErrorMessage) {
+        error = "CKAngelScript API self-test expected invalid public handle fingerprint calls to respect output size.";
+        return false;
+    }
 
     CKAngelScriptEngineExtension invalidSizeExtension = CKAngelScriptApi::EngineExtension();
     invalidSizeExtension.Size = 0;
