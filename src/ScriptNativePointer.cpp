@@ -73,10 +73,9 @@ size_t NativePointer::WriteString(const char *str) {
     char *ptr = Get();
     if (!ptr) return 0;
     if (!str) return 0;
-    size_t len = strlen(str);
-    if (len == 0) return 0;
-    memcpy(ptr, str, len + 1);
-    return len + 1;
+    const size_t len = strlen(str) + 1;
+    memcpy(ptr, str, len);
+    return len;
 }
 
 size_t NativePointer::WriteString(const std::string &str) {
@@ -89,7 +88,6 @@ size_t NativePointer::ReadString(char *outStr, size_t maxSize) {
     if (!outStr) return 0;
     if (maxSize == 0) return 0;
     size_t len = strlen(ptr);
-    if (len == 0) return 0;
     if (len + 1 > maxSize) return 0;
     memcpy(outStr, ptr, len + 1);
     return len + 1;
@@ -99,7 +97,6 @@ size_t NativePointer::ReadString(std::string &str) {
     char *ptr = Get();
     if (!ptr) return 0;
     size_t len = strlen(ptr);
-    if (len == 0) return 0;
     str.assign(ptr, len);
     return len + 1;
 }
