@@ -203,6 +203,9 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptAssignObjectHandle(void **handleSlo
         return CKAS_INVALIDARGUMENT;
     }
 
+    if (*handleSlot == object) {
+        return CKAS_OK;
+    }
     if (*handleSlot) {
         engine->ReleaseScriptObject(*handleSlot, type);
         *handleSlot = nullptr;

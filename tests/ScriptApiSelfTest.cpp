@@ -2067,6 +2067,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             handleSlot != intArray ||
             CKAngelScriptApi::ArrayGetRefCount(intArray, &refCount) != CKAS_OK ||
             refCount != 2 ||
+            CKAngelScriptApi::AssignObjectHandle(&handleSlot, intArray, arrayType) != CKAS_OK ||
+            handleSlot != intArray ||
+            CKAngelScriptApi::ArrayGetRefCount(intArray, &refCount) != CKAS_OK ||
+            refCount != 2 ||
             CKAngelScriptApi::AssignObjectHandle(&handleSlot, nullptr, arrayType) != CKAS_OK ||
             handleSlot != nullptr ||
             CKAngelScriptApi::ArrayGetRefCount(intArray, &refCount) != CKAS_OK ||
