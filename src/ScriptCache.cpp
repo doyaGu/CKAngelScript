@@ -4,6 +4,7 @@
 #include <climits>
 #include <cstring>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "ScriptAngelScriptGc.h"
@@ -33,6 +34,38 @@ void DiscardCachedScripts(const std::vector<std::shared_ptr<CachedScript>> &scri
     for (const std::shared_ptr<CachedScript> &script : scripts) {
         DiscardCachedScript(script);
     }
+}
+
+bool HasValidSectionLayout(const CachedScript &script) {
+    if (script.sectionHasCode.size() != script.sections.size()) {
+        return false;
+    }
+
+    std::unordered_set<std::string> sectionNames;
+    std::unordered_set<std::string> snapshotNames;
+    for (size_t i = 0; i < script.sections.size(); ++i) {
+        const std::string &sectionName = std::get<0>(script.sections[i]);
+        if (sectionName.empty() || !sectionNames.insert(sectionName).second) {
+            return false;
+        }
+
+        if (script.sourceSnapshotSections) {
+            const std::string normalized = ScriptSourcePaths::NormalizeSectionName(sectionName);
+            if (normalized.empty() || !snapshotNames.insert(normalized).second) {
+                return false;
+            }
+        }
+    }
+
+    if (script.sourceSnapshotSections) {
+        for (size_t i = 0; i < script.sections.size(); ++i) {
+            if (!script.HasSectionCode(i)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 } // namespace
@@ -465,11 +498,14 @@ bool CachedScript::Build(asIScriptEngine *engine) {
         return false;
     }
 
-    auto *man = ScriptManager::GetManager(engine);
-
     // We will only initialize the global variables once we're
     // ready to execute, so disable the automatic initialization
     // m_ScriptEngine->SetEngineProperty(asEP_INIT_GLOBAL_VARS_AFTER_BUILD, false);
+
+    if (!HasValidSectionLayout(*this)) {
+        engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Invalid section cache layout");
+        return false;
+    }
 
     // Prepare the script builder
     CScriptBuilder builder;
@@ -519,9 +555,6 @@ bool CachedScript::Build(asIScriptEngine *engine) {
         std::string &code = std::get<1>(section);
         const bool hasCode = HasSectionCode(i);
 
-        XString resolvedFilename = filename.c_str();
-        man->ResolveScriptFileName(resolvedFilename);
-
         if (hasCode) {
             if (code.size() > static_cast<size_t>(UINT_MAX)) {
                 discardBuilderModule();
@@ -540,6 +573,15 @@ bool CachedScript::Build(asIScriptEngine *engine) {
                 return false;
             }
         } else {
+            auto *man = ScriptManager::GetManager(engine);
+            if (!man) {
+                discardBuilderModule();
+                engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Script manager is unavailable");
+                return false;
+            }
+            XString resolvedFilename = filename.c_str();
+            man->ResolveScriptFileName(resolvedFilename);
+
             r = builder.AddSectionFromFile(resolvedFilename.CStr());
             if (r < 0) {
                 discardBuilderModule();
@@ -612,6 +654,10 @@ void CachedScript::ClearCodeCache() {
 }
 
 bool CachedScript::AddFileSection(const std::string &name) {
+    if (module || name.empty() || sectionHasCode.size() != sections.size()) {
+        return false;
+    }
+
     auto it = std::find_if(sections.begin(), sections.end(),
                            [&name](const std::tuple<std::string, std::string> &section) {
                                return std::get<0>(section) == name;
@@ -626,6 +672,10 @@ bool CachedScript::AddFileSection(const std::string &name) {
 }
 
 bool CachedScript::AddMemorySection(const std::string &name, const std::string &code) {
+    if (module || name.empty() || sectionHasCode.size() != sections.size()) {
+        return false;
+    }
+
     auto it = std::find_if(sections.begin(), sections.end(),
                            [&name](const std::tuple<std::string, std::string> &section) {
                                return std::get<0>(section) == name;
@@ -633,9 +683,6 @@ bool CachedScript::AddMemorySection(const std::string &name, const std::string &
     if (it != sections.end()) {
         const size_t index = static_cast<size_t>(it - sections.begin());
         std::get<1>(*it) = code;
-        if (index >= sectionHasCode.size()) {
-            sectionHasCode.resize(sections.size(), 0);
-        }
         sectionHasCode[index] = 1;
         return true;
     }
@@ -645,13 +692,8 @@ bool CachedScript::AddMemorySection(const std::string &name, const std::string &
     return true;
 }
 
-bool CachedScript::AddSection(const std::string &name, const std::string &code) {
-    return code.empty() ? AddFileSection(name) : AddMemorySection(name, code);
-}
-
 bool CachedScript::HasSectionCode(size_t index) const {
-    return sourceSnapshotSections ||
-           (index < sectionHasCode.size() && sectionHasCode[index] != 0);
+    return index < sectionHasCode.size() && sectionHasCode[index] != 0;
 }
 
 bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
@@ -711,6 +753,9 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         std::string buffer;
         CKDWORD size = chunk->ReadDword();
         const size_t codeSize = static_cast<size_t>(size);
+        if (loadedSourceSnapshotSections && !hasCode) {
+            return fail();
+        }
         if (!hasCode && size != 0) {
             return fail();
         }
@@ -729,6 +774,14 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         loadedSectionHasCode.push_back(hasCode ? 1 : 0);
     }
 
+    CachedScript loadedScript;
+    loadedScript.sections = loadedSections;
+    loadedScript.sectionHasCode = loadedSectionHasCode;
+    loadedScript.sourceSnapshotSections = loadedSourceSnapshotSections;
+    if (!HasValidSectionLayout(loadedScript)) {
+        return fail();
+    }
+
     Discard();
     name = std::move(loadedName);
     sections = std::move(loadedSections);
@@ -741,6 +794,17 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
 }
 
 bool CachedScript::SaveToChunk(CKStateChunk *chunk) {
+    if (!chunk || !HasValidSectionLayout(*this) || sections.size() > static_cast<size_t>(INT_MAX)) {
+        return false;
+    }
+
+    for (size_t index = 0; index < sections.size(); ++index) {
+        const std::string &code = std::get<1>(sections[index]);
+        if (HasSectionCode(index) && code.size() > static_cast<size_t>(INT_MAX)) {
+            return false;
+        }
+    }
+
     chunk->StartWrite();
     // start identifier
     chunk->WriteIdentifier(SCRIPTCACHE_IDENTIFIER);
@@ -762,11 +826,6 @@ bool CachedScript::SaveToChunk(CKStateChunk *chunk) {
 
         const std::string &code = std::get<1>(section);
         const bool hasCode = HasSectionCode(index);
-
-        if (hasCode && code.size() > static_cast<size_t>(INT_MAX)) {
-            chunk->CloseChunk();
-            return false;
-        }
 
         chunk->WriteInt(hasCode ? 1 : 0);
         chunk->WriteDword(hasCode ? static_cast<CKDWORD>(code.size()) : 0);
@@ -891,6 +950,10 @@ ScriptCache::~ScriptCache() {
 }
 
 std::shared_ptr<CachedScript> ScriptCache::NewCachedScript(const std::string &scriptName) {
+    if (scriptName.empty()) {
+        return nullptr;
+    }
+
     auto script = GetCachedScript(scriptName);
     if (!script) {
         script = std::make_shared<CachedScript>();
@@ -901,6 +964,10 @@ std::shared_ptr<CachedScript> ScriptCache::NewCachedScript(const std::string &sc
 }
 
 std::shared_ptr<CachedScript> ScriptCache::GetCachedScript(const std::string &scriptName) {
+    if (scriptName.empty()) {
+        return nullptr;
+    }
+
     std::lock_guard<std::mutex> lock(m_Mutex);
     auto it = m_CachedScripts.find(scriptName);
     if (it != m_CachedScripts.end()) {
@@ -910,6 +977,15 @@ std::shared_ptr<CachedScript> ScriptCache::GetCachedScript(const std::string &sc
 }
 
 void ScriptCache::CacheScript(const std::string &scriptName, std::shared_ptr<CachedScript> script) {
+    if (scriptName.empty()) {
+        DiscardCachedScript(script);
+        return;
+    }
+    if (!script) {
+        Invalidate(scriptName);
+        return;
+    }
+
     std::shared_ptr<CachedScript> previous;
     {
         std::lock_guard<std::mutex> lock(m_Mutex);
@@ -923,6 +999,10 @@ void ScriptCache::CacheScript(const std::string &scriptName, std::shared_ptr<Cac
 }
 
 void ScriptCache::Invalidate(const std::string &scriptName) {
+    if (scriptName.empty()) {
+        return;
+    }
+
     std::shared_ptr<CachedScript> removed;
     {
         std::lock_guard<std::mutex> lock(m_Mutex);
@@ -950,7 +1030,7 @@ void ScriptCache::Clear() {
 
 std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
     const std::string &scriptName, const std::string &filename) {
-    if (!engine) {
+    if (!engine || scriptName.empty() || filename.empty()) {
         return nullptr;
     }
 
@@ -979,7 +1059,7 @@ std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
 
 std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
     const std::string &scriptName, const std::vector<std::string> &filenames) {
-    if (!engine) {
+    if (!engine || scriptName.empty() || filenames.empty()) {
         return nullptr;
     }
 
@@ -1010,7 +1090,7 @@ std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
 
 std::shared_ptr<CachedScript> ScriptCache::CompileScript(asIScriptEngine *engine,
     const std::string &scriptName, const std::string &scriptCode) {
-    if (!engine) {
+    if (!engine || scriptName.empty()) {
         return nullptr;
     }
 
@@ -1038,6 +1118,10 @@ std::shared_ptr<CachedScript> ScriptCache::CompileScript(asIScriptEngine *engine
 }
 
 bool ScriptCache::UnloadScript(const std::string &scriptName) {
+    if (scriptName.empty()) {
+        return false;
+    }
+
     std::shared_ptr<CachedScript> cached;
 
     {

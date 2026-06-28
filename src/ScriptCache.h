@@ -150,7 +150,6 @@ struct CachedScript : ICachedScript {
 
     void ClearCodeCache() override;
 
-    bool AddSection(const std::string &name, const std::string &code = "");
     bool AddFileSection(const std::string &name);
     bool AddMemorySection(const std::string &name, const std::string &code);
     bool HasSectionCode(size_t index) const;

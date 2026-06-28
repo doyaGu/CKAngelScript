@@ -1572,6 +1572,77 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
     {
         ScriptCache cache;
+        constexpr const char *cacheNullReplaceModuleName = "__CKAS_CacheNullReplaceLifetimeSelfTest";
+        std::shared_ptr<CachedScript> retained =
+            cache.CompileScript(engine,
+                                cacheNullReplaceModuleName,
+                                "int __ckas_cache_null_replace_value() { return 1; }\n");
+        if (!retained || !retained->module ||
+            engine->GetModule(cacheNullReplaceModuleName, asGM_ONLY_IF_EXISTS) == nullptr) {
+            error = "CKAngelScript API self-test failed to set up ScriptCache null replacement lifetime test.";
+            return false;
+        }
+        cache.CacheScript(cacheNullReplaceModuleName, nullptr);
+        if (cache.GetCachedScript(cacheNullReplaceModuleName) ||
+            retained->module ||
+            engine->GetModule(cacheNullReplaceModuleName, asGM_ONLY_IF_EXISTS) != nullptr) {
+            retained->Discard();
+            error = "CKAngelScript API self-test expected ScriptCache::CacheScript(nullptr) to invalidate modules.";
+            return false;
+        }
+    }
+
+    {
+        ScriptCache cache;
+        std::vector<std::string> noFiles;
+        if (cache.NewCachedScript("") ||
+            cache.GetCachedScript("") ||
+            cache.CompileScript(engine, "", "int EmptyName() { return 0; }\n") ||
+            cache.LoadScript(engine, "", "missing.as") ||
+            cache.LoadScript(engine, "__CKAS_CacheNoFilesSelfTest", noFiles) ||
+            cache.UnloadScript("")) {
+            error = "CKAngelScript API self-test expected ScriptCache to reject empty module/source inputs.";
+            return false;
+        }
+    }
+
+    {
+        asIScriptEngine *foreignEngine = asCreateScriptEngine();
+        if (!foreignEngine) {
+            error = "CKAngelScript API self-test failed to allocate a foreign script engine.";
+            return false;
+        }
+
+        CachedScript foreignMemoryScript;
+        foreignMemoryScript.name = "__CKAS_CacheForeignMemorySelfTest";
+        foreignMemoryScript.AddMemorySection("foreign-memory.as",
+                                             "int __ckas_cache_foreign_memory_value() { return 5; }\n");
+        if (!foreignMemoryScript.Build(foreignEngine) || !foreignMemoryScript.module) {
+            foreignMemoryScript.Discard();
+            foreignEngine->ShutDownAndRelease();
+            error = "CKAngelScript API self-test expected memory-only cached scripts to build without a CKAS manager.";
+            return false;
+        }
+        if (foreignMemoryScript.AddMemorySection("foreign-late-memory.as", "int LateMemory() { return 6; }\n") ||
+            foreignMemoryScript.AddFileSection("foreign-late-file.as")) {
+            foreignMemoryScript.Discard();
+            foreignEngine->ShutDownAndRelease();
+            error = "CKAngelScript API self-test expected built cached scripts to reject source section mutation.";
+            return false;
+        }
+        foreignMemoryScript.Discard();
+        foreignEngine->ShutDownAndRelease();
+
+        CachedScript invalidSectionName;
+        if (invalidSectionName.AddFileSection("") ||
+            invalidSectionName.AddMemorySection("", "int InvalidSectionName() { return 0; }\n")) {
+            error = "CKAngelScript API self-test expected cached scripts to reject empty section names.";
+            return false;
+        }
+    }
+
+    {
+        ScriptCache cache;
         constexpr const char *cacheChunkModuleName = "__CKAS_CacheChunkSnapshotSelfTest";
         std::shared_ptr<CachedScript> snapshot = cache.NewCachedScript(cacheChunkModuleName);
         if (!snapshot) {
@@ -1595,6 +1666,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             DeleteCKStateChunk);
         if (!chunk || !snapshot->SaveToChunk(chunk.get())) {
             error = "CKAngelScript API self-test failed to save source snapshot cache entry.";
+            return false;
+        }
+        if (snapshot->SaveToChunk(nullptr)) {
+            error = "CKAngelScript API self-test expected ScriptCache chunk save to reject null chunks.";
             return false;
         }
         cache.Clear();
@@ -1753,6 +1828,84 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         if (hugeCodeSizeRestore.LoadFromChunk(hugeCodeSizeChunk.get())) {
             hugeCodeSizeRestore.Discard();
             error = "CKAngelScript API self-test expected huge code size cache chunks to be rejected.";
+            return false;
+        }
+
+        std::unique_ptr<CKStateChunk, void (*)(CKStateChunk *)> invalidSnapshotChunk(
+            CreateCKStateChunk(CKCID_OBJECT, nullptr),
+            DeleteCKStateChunk);
+        if (!invalidSnapshotChunk) {
+            error = "CKAngelScript API self-test failed to allocate invalid snapshot cache chunk.";
+            return false;
+        }
+        invalidSnapshotChunk->StartWrite();
+        invalidSnapshotChunk->WriteIdentifier(SCRIPTCACHE_IDENTIFIER);
+        invalidSnapshotChunk->WriteInt(SCRIPTCACHE_VERSION);
+        invalidSnapshotChunk->WriteString(const_cast<CKSTRING>(cacheChunkModuleName));
+        invalidSnapshotChunk->WriteInt(1);
+        invalidSnapshotChunk->WriteInt(1);
+        invalidSnapshotChunk->WriteString(const_cast<CKSTRING>("chunk/file-section.as"));
+        invalidSnapshotChunk->WriteInt(0);
+        invalidSnapshotChunk->WriteDword(0);
+        invalidSnapshotChunk->CloseChunk();
+        CachedScript invalidSnapshotRestore;
+        if (invalidSnapshotRestore.LoadFromChunk(invalidSnapshotChunk.get())) {
+            invalidSnapshotRestore.Discard();
+            error = "CKAngelScript API self-test expected source snapshot chunks to reject file-only sections.";
+            return false;
+        }
+
+        CachedScript invalidSnapshotSave;
+        invalidSnapshotSave.name = "__CKAS_CacheInvalidSnapshotSaveSelfTest";
+        invalidSnapshotSave.sourceSnapshotSections = true;
+        invalidSnapshotSave.AddFileSection("chunk/file-section.as");
+        if (invalidSnapshotSave.SaveToChunk(chunk.get())) {
+            error = "CKAngelScript API self-test expected source snapshot cache saves to reject file-only sections.";
+            return false;
+        }
+
+        std::unique_ptr<CKStateChunk, void (*)(CKStateChunk *)> duplicateSnapshotChunk(
+            CreateCKStateChunk(CKCID_OBJECT, nullptr),
+            DeleteCKStateChunk);
+        if (!duplicateSnapshotChunk) {
+            error = "CKAngelScript API self-test failed to allocate duplicate snapshot cache chunk.";
+            return false;
+        }
+        const char *duplicateSnapshotCodeA = "int __ckas_cache_duplicate_a() { return 1; }\n";
+        const char *duplicateSnapshotCodeB = "int __ckas_cache_duplicate_b() { return 2; }\n";
+        duplicateSnapshotChunk->StartWrite();
+        duplicateSnapshotChunk->WriteIdentifier(SCRIPTCACHE_IDENTIFIER);
+        duplicateSnapshotChunk->WriteInt(SCRIPTCACHE_VERSION);
+        duplicateSnapshotChunk->WriteString(const_cast<CKSTRING>(cacheChunkModuleName));
+        duplicateSnapshotChunk->WriteInt(1);
+        duplicateSnapshotChunk->WriteInt(2);
+        duplicateSnapshotChunk->WriteString(const_cast<CKSTRING>("chunk/main.as"));
+        duplicateSnapshotChunk->WriteInt(1);
+        duplicateSnapshotChunk->WriteDword(static_cast<CKDWORD>(std::strlen(duplicateSnapshotCodeA)));
+        duplicateSnapshotChunk->WriteBufferNoSize(static_cast<int>(std::strlen(duplicateSnapshotCodeA)),
+                                                  const_cast<char *>(duplicateSnapshotCodeA));
+        duplicateSnapshotChunk->WriteString(const_cast<CKSTRING>("chunk/./main.as"));
+        duplicateSnapshotChunk->WriteInt(1);
+        duplicateSnapshotChunk->WriteDword(static_cast<CKDWORD>(std::strlen(duplicateSnapshotCodeB)));
+        duplicateSnapshotChunk->WriteBufferNoSize(static_cast<int>(std::strlen(duplicateSnapshotCodeB)),
+                                                  const_cast<char *>(duplicateSnapshotCodeB));
+        duplicateSnapshotChunk->CloseChunk();
+        CachedScript duplicateSnapshotRestore;
+        if (duplicateSnapshotRestore.LoadFromChunk(duplicateSnapshotChunk.get())) {
+            duplicateSnapshotRestore.Discard();
+            error = "CKAngelScript API self-test expected source snapshot chunks to reject duplicate resolved sections.";
+            return false;
+        }
+
+        CachedScript duplicateSnapshotSave;
+        duplicateSnapshotSave.name = "__CKAS_CacheDuplicateSnapshotSaveSelfTest";
+        duplicateSnapshotSave.sourceSnapshotSections = true;
+        duplicateSnapshotSave.AddMemorySection("chunk/main.as",
+                                               "int __ckas_cache_duplicate_save_a() { return 1; }\n");
+        duplicateSnapshotSave.AddMemorySection("chunk/./main.as",
+                                               "int __ckas_cache_duplicate_save_b() { return 2; }\n");
+        if (duplicateSnapshotSave.SaveToChunk(chunk.get())) {
+            error = "CKAngelScript API self-test expected source snapshot cache saves to reject duplicate resolved sections.";
             return false;
         }
     }
