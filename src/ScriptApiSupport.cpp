@@ -58,6 +58,8 @@ CKAS_STATUS ToCKAS_STATUS(ScriptInvocationStatus status) {
     }
 }
 
+} // namespace
+
 asITypeInfo *TypeInfoById(asIScriptEngine *engine, int typeId) {
     if (!engine || typeId == asTYPEID_VOID) {
         return nullptr;
@@ -69,8 +71,6 @@ asITypeInfo *TypeInfoById(asIScriptEngine *engine, int typeId) {
     }
     return type;
 }
-
-} // namespace
 
 bool IsStringType(asIScriptEngine *engine, int typeId) {
     if (!engine) {
@@ -118,6 +118,11 @@ bool IsValidObjectHandleParam(int typeId, asDWORD flags) {
         return false;
     }
     return (flags & asTM_OUTREF) == 0;
+}
+
+bool IsScriptObjectHandleParam(asIScriptEngine *engine, int typeId) {
+    asITypeInfo *type = TypeInfoById(engine, typeId);
+    return type && (type->GetFlags() & asOBJ_SCRIPT_OBJECT) != 0;
 }
 
 bool IsCompatibleObjectHandle(asIScriptEngine *engine,

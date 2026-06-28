@@ -328,7 +328,9 @@ Use `CKAngelScriptArgSetBorrowedObject` only for borrowed object reference
 parameters such as `const T &in`. Use `CKAngelScriptArgSetObjectHandle` for
 handle parameters such as `T@`; it accepts null handles and relies on
 AngelScript's normal handle AddRef/Release behavior for the duration of the
-call.
+call. For script class or interface handle parameters, pass a
+`CKAngelScriptObject *` created by CKAngelScript. For application-registered
+reference types, pass the raw host object pointer registered with AngelScript.
 
 Typed helpers support `bool`, `int`, `float`, `string`, and explicitly borrowed host objects. Borrowed object arguments are for callback-local views already registered with the engine and must target read-only input references.
 

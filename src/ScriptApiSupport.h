@@ -72,6 +72,8 @@ bool IsIntOrEnumType(asIScriptEngine *engine, int typeId);
 bool IsValidStringParam(asIScriptEngine *engine, int typeId, asDWORD flags);
 bool IsValidBorrowedObjectParam(int typeId, asDWORD flags);
 bool IsValidObjectHandleParam(int typeId, asDWORD flags);
+asITypeInfo *TypeInfoById(asIScriptEngine *engine, int typeId);
+bool IsScriptObjectHandleParam(asIScriptEngine *engine, int typeId);
 bool IsCompatibleObjectHandle(asIScriptEngine *engine,
                               int expectedTypeId,
                               const CKAngelScriptObject *objectHandle);

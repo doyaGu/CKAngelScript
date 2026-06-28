@@ -218,6 +218,25 @@ struct ObjectExecutionData {
     void *ObjectInput = nullptr;
 };
 
+struct PublicNativeBox {
+    int RefCount = 1;
+    int Value = 0;
+
+    void AddRef() {
+        ++RefCount;
+    }
+
+    void Release() {
+        if (RefCount > 0) {
+            --RefCount;
+        }
+    }
+
+    int GetValue() const {
+        return Value;
+    }
+};
+
 struct HostCallFilterProbeData {
     int CallCount = 0;
     const char *LastApiName = nullptr;
@@ -591,6 +610,49 @@ CKAS_STATUS WriteObjectString(CKAngelScriptArgWriter *writer, void *userData) {
 CKAS_STATUS WriteObjectHandle(CKAngelScriptArgWriter *writer, void *userData) {
     auto *data = static_cast<ObjectExecutionData *>(userData);
     return CKAngelScriptArgSetObjectHandle(writer, 0, data ? data->ObjectInput : nullptr);
+}
+
+bool RegisterPublicNativeBox(asIScriptEngine *engine, std::string &error) {
+    if (!engine) {
+        error = "CKAngelScript API self-test could not register native handle test type without an engine.";
+        return false;
+    }
+    if (engine->GetTypeInfoByDecl("__CKAS_PublicNativeBox")) {
+        return true;
+    }
+
+    int r = engine->RegisterObjectType("__CKAS_PublicNativeBox", 0, asOBJ_REF);
+    if (r < 0) {
+        error = "CKAngelScript API self-test failed to register native handle test type.";
+        return false;
+    }
+    r = engine->RegisterObjectBehaviour("__CKAS_PublicNativeBox",
+                                        asBEHAVE_ADDREF,
+                                        "void f()",
+                                        asMETHOD(PublicNativeBox, AddRef),
+                                        asCALL_THISCALL);
+    if (r < 0) {
+        error = "CKAngelScript API self-test failed to register native handle addref.";
+        return false;
+    }
+    r = engine->RegisterObjectBehaviour("__CKAS_PublicNativeBox",
+                                        asBEHAVE_RELEASE,
+                                        "void f()",
+                                        asMETHOD(PublicNativeBox, Release),
+                                        asCALL_THISCALL);
+    if (r < 0) {
+        error = "CKAngelScript API self-test failed to register native handle release.";
+        return false;
+    }
+    r = engine->RegisterObjectMethod("__CKAS_PublicNativeBox",
+                                     "int GetValue() const",
+                                     asMETHOD(PublicNativeBox, GetValue),
+                                     asCALL_THISCALL);
+    if (r < 0) {
+        error = "CKAngelScript API self-test failed to register native handle method.";
+        return false;
+    }
+    return true;
 }
 
 CKAS_STATUS ReadObjectString(CKAngelScriptResultReader *reader, void *userData) {
@@ -4850,6 +4912,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     api->UnloadModule(bytecodeSourceModuleName, nullptr);
     api->UnloadModule(bytecodeReplacementSourceModuleName, nullptr);
 
+    if (!RegisterPublicNativeBox(engine, error)) {
+        return false;
+    }
+
     constexpr const char *objectModuleName = "__CKAS_ManagerApiObjectSelfTest";
     const char *objectSource =
         "class __CKAS_PublicObject {\n"
@@ -4863,6 +4929,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  string Echo(const string &in value) { return \"echo:\" + value; }\n"
         "  int UseHandle(__CKAS_PublicObject@ other) { return other is null ? -1 : other.Add(base); }\n"
         "  int UseConstHandle(const __CKAS_PublicObject@ other) { return other is null ? -1 : other.base + base; }\n"
+        "  int UseNative(__CKAS_PublicNativeBox@ box) { return box is null ? -3 : box.GetValue() + base; }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
         "}\n"
@@ -5290,6 +5357,44 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->ReleaseMethod(constHandleMethod);
+
+    methodOptions.MethodDecl = "int UseNative(__CKAS_PublicNativeBox@)";
+    CKAngelScriptMethod *nativeHandleMethod = nullptr;
+    PublicNativeBox nativeBox;
+    nativeBox.Value = 33;
+    objectData.ObjectInput = &nativeBox;
+    objectData.IntOutput = 0;
+    if (api->FindObjectMethod(methodOptions, &nativeHandleMethod, &result) != CKAS_OK || !nativeHandleMethod) {
+        error = "CKAngelScript API self-test failed to find native object-handle arg method.";
+        api->ReleaseMethod(handleMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = nativeHandleMethod;
+    objectCall.WriteArgs = WriteObjectHandle;
+    objectCall.ReadResult = ReadObjectInt;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_OK ||
+        objectData.IntOutput != 43 ||
+        nativeBox.RefCount != 1) {
+        error = "CKAngelScript API self-test expected native object handle arg round-trip.";
+        api->ReleaseMethod(nativeHandleMethod);
+        api->ReleaseMethod(handleMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectData.ObjectInput = nullptr;
+    objectData.IntOutput = 0;
+    if (api->CallObjectMethod(objectCall, &result) != CKAS_OK || objectData.IntOutput != -3) {
+        error = "CKAngelScript API self-test expected null native object handle args to round-trip.";
+        api->ReleaseMethod(nativeHandleMethod);
+        api->ReleaseMethod(handleMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    api->ReleaseMethod(nativeHandleMethod);
 
     objectCall.Method = handleMethod;
     CKAngelScriptObject foreignObject = *object;

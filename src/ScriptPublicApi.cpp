@@ -844,29 +844,34 @@ extern "C" CKAS_API CKAS_STATUS CKAngelScriptArgSetObjectHandle(CKAngelScriptArg
     if (!ScriptApiSupport::IsValidObjectHandleParam(writer->Method->ParamTypes[index], writer->Method->ParamFlags[index])) {
         return CKAS_TYPEMISMATCH;
     }
-    asIScriptObject *scriptObject = nullptr;
+    void *scriptObject = nullptr;
     if (object) {
-        auto *objectHandle = static_cast<CKAngelScriptObject *>(object);
-        ScriptManager *owner = ScriptManager::GetManager(writer->Context->GetEngine());
-        if (!owner || !objectHandle->Manager) {
-            return CKAS_INVALIDARGUMENT;
+        asIScriptEngine *engine = writer->Context->GetEngine();
+        if (ScriptApiSupport::IsScriptObjectHandleParam(engine, writer->Method->ParamTypes[index])) {
+            auto *objectHandle = static_cast<CKAngelScriptObject *>(object);
+            ScriptManager *owner = ScriptManager::GetManager(engine);
+            if (!owner || !objectHandle->Manager) {
+                return CKAS_INVALIDARGUMENT;
+            }
+            if (objectHandle->Manager != owner) {
+                return CKAS_FOREIGNHANDLE;
+            }
+            if (!owner->OwnsObjectHandle(objectHandle) || !objectHandle->Object) {
+                return CKAS_INVALIDARGUMENT;
+            }
+            if (!owner->HasModule(objectHandle->ModuleName.c_str()) ||
+                owner->GetModuleGeneration(objectHandle->ModuleName.c_str()) != objectHandle->ModuleGeneration) {
+                return CKAS_STALEHANDLE;
+            }
+            if (!ScriptApiSupport::IsCompatibleObjectHandle(engine,
+                                          writer->Method->ParamTypes[index],
+                                          objectHandle)) {
+                return CKAS_TYPEMISMATCH;
+            }
+            scriptObject = objectHandle->Object;
+        } else {
+            scriptObject = object;
         }
-        if (objectHandle->Manager != owner) {
-            return CKAS_FOREIGNHANDLE;
-        }
-        if (!owner->OwnsObjectHandle(objectHandle) || !objectHandle->Object) {
-            return CKAS_INVALIDARGUMENT;
-        }
-        if (!owner->HasModule(objectHandle->ModuleName.c_str()) ||
-            owner->GetModuleGeneration(objectHandle->ModuleName.c_str()) != objectHandle->ModuleGeneration) {
-            return CKAS_STALEHANDLE;
-        }
-        if (!ScriptApiSupport::IsCompatibleObjectHandle(writer->Context->GetEngine(),
-                                      writer->Method->ParamTypes[index],
-                                      objectHandle)) {
-            return CKAS_TYPEMISMATCH;
-        }
-        scriptObject = objectHandle->Object;
     }
     const int r = writer->Context->SetArgObject(static_cast<asUINT>(index), scriptObject);
     return r < 0 ? CKAS_TYPEMISMATCH : CKAS_OK;
