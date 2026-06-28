@@ -1084,6 +1084,9 @@ public:
     CKAS_STATUS Reset(CKAngelScript *angelScript = nullptr,
                       CKAngelScriptObject *object = nullptr,
                       CKAngelScriptResult *result = nullptr) {
+        if (m_AngelScript == angelScript && m_Object == object) {
+            return CKAS_OK;
+        }
         if (m_Object) {
             const CKAS_STATUS status = CKAngelScriptReleaseObject(m_AngelScript, m_Object, result);
             if (status != CKAS_OK) {
@@ -1144,6 +1147,9 @@ public:
     CKAS_STATUS Reset(CKAngelScript *angelScript = nullptr,
                       CKAngelScriptFunction *function = nullptr,
                       CKAngelScriptResult *result = nullptr) {
+        if (m_AngelScript == angelScript && m_Function == function) {
+            return CKAS_OK;
+        }
         if (m_Function) {
             const CKAS_STATUS status = CKAngelScriptReleaseFunction(m_AngelScript, m_Function, result);
             if (status != CKAS_OK) {
@@ -1204,6 +1210,9 @@ public:
     CKAS_STATUS Reset(CKAngelScript *angelScript = nullptr,
                       CKAngelScriptMethod *method = nullptr,
                       CKAngelScriptResult *result = nullptr) {
+        if (m_AngelScript == angelScript && m_Method == method) {
+            return CKAS_OK;
+        }
         if (m_Method) {
             const CKAS_STATUS status = CKAngelScriptReleaseMethod(m_AngelScript, m_Method, result);
             if (status != CKAS_OK) {
@@ -1264,6 +1273,9 @@ public:
     CKAS_STATUS Reset(CKAngelScript *angelScript = nullptr,
                       CKAngelScriptExecution *execution = nullptr,
                       CKAngelScriptResult *result = nullptr) {
+        if (m_AngelScript == angelScript && m_Execution == execution) {
+            return CKAS_OK;
+        }
         if (m_Execution) {
             const CKAS_STATUS status = CKAngelScriptReleaseExecution(m_AngelScript, m_Execution, result);
             if (status != CKAS_OK) {

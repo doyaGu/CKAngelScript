@@ -3644,6 +3644,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             api->ReleaseFunction(addFunction);
             return false;
         }
+        if (addFunctionHandle.Reset(addFunctionHandle.Owner(), addFunctionHandle.Get(), &result) != CKAS_OK ||
+            !addFunctionHandle ||
+            addFunctionHandle.Owner() != api.Handle()) {
+            error = "CKAngelScript API self-test expected RAII function self-reset to preserve ownership.";
+            api->ReleaseFunction(addFunction);
+            return false;
+        }
         if (api->FindFunctionByDecl(moduleName,
                                     "int __ckas_missing()",
                                     addFunctionHandle,
@@ -3678,6 +3685,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             !executionHandle ||
             executionHandle.Owner() != api.Handle()) {
             error = "CKAngelScript API self-test expected RAII execution creation to produce an owned handle.";
+            api->ReleaseFunction(addFunction);
+            return false;
+        }
+        if (executionHandle.Reset(executionHandle.Owner(), executionHandle.Get(), &result) != CKAS_OK ||
+            !executionHandle ||
+            executionHandle.Owner() != api.Handle()) {
+            error = "CKAngelScript API self-test expected RAII execution self-reset to preserve ownership.";
             api->ReleaseFunction(addFunction);
             return false;
         }
@@ -4713,6 +4727,12 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             error = "CKAngelScript API self-test expected RAII object creation to produce an owned handle.";
             return false;
         }
+        if (objectHandle.Reset(objectHandle.Owner(), objectHandle.Get(), &result) != CKAS_OK ||
+            !objectHandle ||
+            objectHandle.Owner() != api.Handle()) {
+            error = "CKAngelScript API self-test expected RAII object self-reset to preserve ownership.";
+            return false;
+        }
 
         CKAngelScriptMethodHandle methodHandle;
         if (api->FindObjectMethod(CKAngelScriptApi::MethodByDeclOptions(objectHandle.Get(), "int Add(int)"),
@@ -4721,6 +4741,12 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             !methodHandle ||
             methodHandle.Owner() != api.Handle()) {
             error = "CKAngelScript API self-test expected RAII method lookup to produce an owned handle.";
+            return false;
+        }
+        if (methodHandle.Reset(methodHandle.Owner(), methodHandle.Get(), &result) != CKAS_OK ||
+            !methodHandle ||
+            methodHandle.Owner() != api.Handle()) {
+            error = "CKAngelScript API self-test expected RAII method self-reset to preserve ownership.";
             return false;
         }
         if (api->FindObjectMethodByDecl(objectHandle.Get(),
