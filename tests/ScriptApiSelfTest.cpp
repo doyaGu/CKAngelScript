@@ -338,6 +338,19 @@ struct ReleaseExecutionDuringCallbackProbe {
     int Output = 0;
 };
 
+struct ResetExecutionHandleDuringCallbackProbe {
+    CKAngelScriptApi *Api = nullptr;
+    CKAngelScriptFunction *Function = nullptr;
+    CKAngelScriptExecutionHandle *ExecutionHandle = nullptr;
+    CKAS_STATUS ResetStatus = CKAS_OK;
+    CKAS_STATUS OutputResetStatus = CKAS_OK;
+    bool StillOwnedAfterReset = false;
+    bool StillOwnedAfterOutputReset = false;
+    CKDWORD CallbackCount = 0;
+    int Input = 0;
+    int Output = 0;
+};
+
 struct ReentrantObjectCallProbe {
     CKAngelScriptApi *Api = nullptr;
     CKAS_STATUS ReentryStatus = CKAS_OK;
@@ -437,6 +450,35 @@ CKAS_STATUS ConfigureIntArgumentAndReleaseExecution(asIScriptContext *ctx, void 
 
 CKAS_STATUS ReadIntReturnReleaseExecutionProbe(asIScriptContext *ctx, void *userData) {
     auto *probe = static_cast<ReleaseExecutionDuringCallbackProbe *>(userData);
+    if (!ctx || !probe) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    probe->Output = static_cast<int>(ctx->GetReturnDWord());
+    return CKAS_OK;
+}
+
+CKAS_STATUS ConfigureIntArgumentAndResetExecutionHandle(asIScriptContext *ctx, void *userData) {
+    auto *probe = static_cast<ResetExecutionHandleDuringCallbackProbe *>(userData);
+    if (!ctx || !probe || !probe->ExecutionHandle) {
+        return CKAS_INVALIDARGUMENT;
+    }
+    ++probe->CallbackCount;
+    probe->ResetStatus = probe->ExecutionHandle->Reset();
+    probe->StillOwnedAfterReset = static_cast<bool>(*probe->ExecutionHandle);
+    if (probe->Api && probe->Function) {
+        probe->OutputResetStatus =
+            probe->Api->CreateFunctionExecution(CKAngelScriptApi::FunctionExecutionOptions(probe->Function),
+                                                *probe->ExecutionHandle,
+                                                nullptr);
+        probe->StillOwnedAfterOutputReset = static_cast<bool>(*probe->ExecutionHandle);
+    }
+    return ctx->SetArgDWord(0, static_cast<asDWORD>(probe->Input)) >= 0
+               ? CKAS_OK
+               : CKAS_EXECUTIONFAILED;
+}
+
+CKAS_STATUS ReadIntReturnResetExecutionHandleProbe(asIScriptContext *ctx, void *userData) {
+    auto *probe = static_cast<ResetExecutionHandleDuringCallbackProbe *>(userData);
     if (!ctx || !probe) {
         return CKAS_INVALIDARGUMENT;
     }
@@ -3762,6 +3804,41 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->ReleaseExecution(pinnedExecution);
+
+    ResetExecutionHandleDuringCallbackProbe resetExecutionHandleProbe;
+    resetExecutionHandleProbe.Api = &api;
+    resetExecutionHandleProbe.Function = addFunction;
+    resetExecutionHandleProbe.Input = 21;
+    CKAngelScriptExecutionHandle pinnedExecutionHandle;
+    CKAngelScriptExecutionStepOptions resetExecutionHandleStepOptions =
+        CKAngelScriptApi::ExecutionStepOptions(ConfigureIntArgumentAndResetExecutionHandle,
+                                               ReadIntReturnResetExecutionHandleProbe,
+                                               &resetExecutionHandleProbe);
+    if (api->CreateFunctionExecution(executeOptions, pinnedExecutionHandle, &result) != CKAS_OK ||
+        !pinnedExecutionHandle) {
+        error = "CKAngelScript API self-test failed to create an RAII release-pinned execution.";
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    resetExecutionHandleProbe.ExecutionHandle = &pinnedExecutionHandle;
+    if (api->StartExecution(pinnedExecutionHandle.Get(), resetExecutionHandleStepOptions, &result) != CKAS_OK ||
+        resetExecutionHandleProbe.CallbackCount != 1 ||
+        resetExecutionHandleProbe.ResetStatus != CKAS_INVALIDSTATE ||
+        resetExecutionHandleProbe.OutputResetStatus != CKAS_INVALIDSTATE ||
+        !resetExecutionHandleProbe.StillOwnedAfterReset ||
+        !resetExecutionHandleProbe.StillOwnedAfterOutputReset ||
+        !pinnedExecutionHandle ||
+        resetExecutionHandleProbe.Output != 26) {
+        error = "CKAngelScript API self-test expected RAII execution Reset to preserve ownership on callback release failure.";
+        pinnedExecutionHandle.Reset();
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    if (pinnedExecutionHandle.Reset() != CKAS_OK || pinnedExecutionHandle) {
+        error = "CKAngelScript API self-test expected RAII execution Reset to release after the callback returns.";
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
 
     CKAngelScriptFunctionOptions ckuiFunctionOptions = CKAngelScriptApi::FunctionOptions();
     ckuiFunctionOptions.ModuleName = moduleName;

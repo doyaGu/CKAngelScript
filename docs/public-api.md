@@ -221,6 +221,8 @@ if (!function) {
 }
 ```
 
+Move-only handle wrappers expose `Reset()` for explicit release or replacement. `Reset()` returns a `CKAS_STATUS`; when release fails, for example because the handle is active in a callback, the wrapper keeps the old handle so ownership is not silently lost.
+
 ```cpp
 struct AddData {
     int Input = 0;

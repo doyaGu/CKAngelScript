@@ -1057,8 +1057,9 @@ public:
     }
     CKAngelScriptObjectHandle &operator=(CKAngelScriptObjectHandle &&other) noexcept {
         if (this != &other) {
-            Reset();
-            MoveFrom(other);
+            if (Reset() == CKAS_OK) {
+                MoveFrom(other);
+            }
         }
         return *this;
     }
@@ -1080,12 +1081,18 @@ public:
         m_AngelScript = nullptr;
         return object;
     }
-    void Reset(CKAngelScript *angelScript = nullptr, CKAngelScriptObject *object = nullptr) {
+    CKAS_STATUS Reset(CKAngelScript *angelScript = nullptr,
+                      CKAngelScriptObject *object = nullptr,
+                      CKAngelScriptResult *result = nullptr) {
         if (m_Object) {
-            (void)CKAngelScriptReleaseObject(m_AngelScript, m_Object, nullptr);
+            const CKAS_STATUS status = CKAngelScriptReleaseObject(m_AngelScript, m_Object, result);
+            if (status != CKAS_OK) {
+                return status;
+            }
         }
         m_AngelScript = angelScript;
         m_Object = object;
+        return CKAS_OK;
     }
 private:
     void MoveFrom(CKAngelScriptObjectHandle &other) {
@@ -1110,8 +1117,9 @@ public:
     }
     CKAngelScriptFunctionHandle &operator=(CKAngelScriptFunctionHandle &&other) noexcept {
         if (this != &other) {
-            Reset();
-            MoveFrom(other);
+            if (Reset() == CKAS_OK) {
+                MoveFrom(other);
+            }
         }
         return *this;
     }
@@ -1133,12 +1141,18 @@ public:
         m_AngelScript = nullptr;
         return function;
     }
-    void Reset(CKAngelScript *angelScript = nullptr, CKAngelScriptFunction *function = nullptr) {
+    CKAS_STATUS Reset(CKAngelScript *angelScript = nullptr,
+                      CKAngelScriptFunction *function = nullptr,
+                      CKAngelScriptResult *result = nullptr) {
         if (m_Function) {
-            (void)CKAngelScriptReleaseFunction(m_AngelScript, m_Function, nullptr);
+            const CKAS_STATUS status = CKAngelScriptReleaseFunction(m_AngelScript, m_Function, result);
+            if (status != CKAS_OK) {
+                return status;
+            }
         }
         m_AngelScript = angelScript;
         m_Function = function;
+        return CKAS_OK;
     }
 private:
     void MoveFrom(CKAngelScriptFunctionHandle &other) {
@@ -1163,8 +1177,9 @@ public:
     }
     CKAngelScriptMethodHandle &operator=(CKAngelScriptMethodHandle &&other) noexcept {
         if (this != &other) {
-            Reset();
-            MoveFrom(other);
+            if (Reset() == CKAS_OK) {
+                MoveFrom(other);
+            }
         }
         return *this;
     }
@@ -1186,12 +1201,18 @@ public:
         m_AngelScript = nullptr;
         return method;
     }
-    void Reset(CKAngelScript *angelScript = nullptr, CKAngelScriptMethod *method = nullptr) {
+    CKAS_STATUS Reset(CKAngelScript *angelScript = nullptr,
+                      CKAngelScriptMethod *method = nullptr,
+                      CKAngelScriptResult *result = nullptr) {
         if (m_Method) {
-            (void)CKAngelScriptReleaseMethod(m_AngelScript, m_Method, nullptr);
+            const CKAS_STATUS status = CKAngelScriptReleaseMethod(m_AngelScript, m_Method, result);
+            if (status != CKAS_OK) {
+                return status;
+            }
         }
         m_AngelScript = angelScript;
         m_Method = method;
+        return CKAS_OK;
     }
 private:
     void MoveFrom(CKAngelScriptMethodHandle &other) {
@@ -1216,8 +1237,9 @@ public:
     }
     CKAngelScriptExecutionHandle &operator=(CKAngelScriptExecutionHandle &&other) noexcept {
         if (this != &other) {
-            Reset();
-            MoveFrom(other);
+            if (Reset() == CKAS_OK) {
+                MoveFrom(other);
+            }
         }
         return *this;
     }
@@ -1239,12 +1261,18 @@ public:
         m_AngelScript = nullptr;
         return execution;
     }
-    void Reset(CKAngelScript *angelScript = nullptr, CKAngelScriptExecution *execution = nullptr) {
+    CKAS_STATUS Reset(CKAngelScript *angelScript = nullptr,
+                      CKAngelScriptExecution *execution = nullptr,
+                      CKAngelScriptResult *result = nullptr) {
         if (m_Execution) {
-            (void)CKAngelScriptReleaseExecution(m_AngelScript, m_Execution, nullptr);
+            const CKAS_STATUS status = CKAngelScriptReleaseExecution(m_AngelScript, m_Execution, result);
+            if (status != CKAS_OK) {
+                return status;
+            }
         }
         m_AngelScript = angelScript;
         m_Execution = execution;
+        return CKAS_OK;
     }
 private:
     void MoveFrom(CKAngelScriptExecutionHandle &other) {
@@ -1844,11 +1872,14 @@ public:
     CKAS_STATUS FindFunction(const CKAngelScriptFunctionOptions &options,
                              CKAngelScriptFunctionHandle &outFunction,
                              CKAngelScriptResult *result = nullptr) const {
-        outFunction.Reset();
+        const CKAS_STATUS resetStatus = outFunction.Reset(nullptr, nullptr, result);
+        if (resetStatus != CKAS_OK) {
+            return resetStatus;
+        }
         CKAngelScriptFunction *function = nullptr;
         const CKAS_STATUS status = CKAngelScriptFindFunction(m_AngelScript, &options, &function, result);
         if (status == CKAS_OK && function) {
-            outFunction.Reset(m_AngelScript, function);
+            return outFunction.Reset(m_AngelScript, function, result);
         }
         return status;
     }
@@ -1881,11 +1912,14 @@ public:
     CKAS_STATUS CreateObject(const CKAngelScriptObjectOptions &options,
                              CKAngelScriptObjectHandle &outObject,
                              CKAngelScriptResult *result = nullptr) const {
-        outObject.Reset();
+        const CKAS_STATUS resetStatus = outObject.Reset(nullptr, nullptr, result);
+        if (resetStatus != CKAS_OK) {
+            return resetStatus;
+        }
         CKAngelScriptObject *object = nullptr;
         const CKAS_STATUS status = CKAngelScriptCreateObject(m_AngelScript, &options, &object, result);
         if (status == CKAS_OK && object) {
-            outObject.Reset(m_AngelScript, object);
+            return outObject.Reset(m_AngelScript, object, result);
         }
         return status;
     }
@@ -1926,11 +1960,14 @@ public:
     CKAS_STATUS FindObjectMethod(const CKAngelScriptMethodOptions &options,
                                  CKAngelScriptMethodHandle &outMethod,
                                  CKAngelScriptResult *result = nullptr) const {
-        outMethod.Reset();
+        const CKAS_STATUS resetStatus = outMethod.Reset(nullptr, nullptr, result);
+        if (resetStatus != CKAS_OK) {
+            return resetStatus;
+        }
         CKAngelScriptMethod *method = nullptr;
         const CKAS_STATUS status = CKAngelScriptFindObjectMethod(m_AngelScript, &options, &method, result);
         if (status == CKAS_OK && method) {
-            outMethod.Reset(m_AngelScript, method);
+            return outMethod.Reset(m_AngelScript, method, result);
         }
         return status;
     }
@@ -1968,12 +2005,15 @@ public:
     CKAS_STATUS CreateFunctionExecution(const CKAngelScriptFunctionExecutionOptions &options,
                                         CKAngelScriptExecutionHandle &outExecution,
                                         CKAngelScriptResult *result = nullptr) const {
-        outExecution.Reset();
+        const CKAS_STATUS resetStatus = outExecution.Reset(nullptr, nullptr, result);
+        if (resetStatus != CKAS_OK) {
+            return resetStatus;
+        }
         CKAngelScriptExecution *execution = nullptr;
         const CKAS_STATUS status =
             CKAngelScriptCreateFunctionExecution(m_AngelScript, &options, &execution, result);
         if (status == CKAS_OK && execution) {
-            outExecution.Reset(m_AngelScript, execution);
+            return outExecution.Reset(m_AngelScript, execution, result);
         }
         return status;
     }
