@@ -3742,6 +3742,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         state != CKAS_EXECUTION_FINISHED ||
         api->BorrowExecutionResult(execution, &executionResult, &result) != CKAS_OK ||
         !executionResult ||
+        executionResult->Status != CKAS_OK ||
         executionResult->AngelScriptCode != asEXECUTION_FINISHED ||
         executionResult->CompilerMessages ||
         executionResult->CompilerMessageCount != 0 ||
@@ -3766,8 +3767,9 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         state != CKAS_EXECUTION_FINISHED ||
         api->BorrowExecutionResult(execution, &executionResult, &result) != CKAS_OK ||
         !executionResult ||
+        executionResult->Status != CKAS_OK ||
         executionResult->AngelScriptCode != asEXECUTION_FINISHED) {
-        error = "CKAngelScript API self-test expected cancelling a finished execution to preserve its result.";
+        error = "CKAngelScript API self-test expected invalid terminal execution transitions to preserve the result.";
         api->ReleaseExecution(execution);
         api->ReleaseFunction(addFunction);
         return false;

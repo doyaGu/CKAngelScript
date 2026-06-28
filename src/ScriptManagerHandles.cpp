@@ -398,7 +398,6 @@ CKAS_STATUS ScriptManager::StartExecution(CKAngelScriptExecution *execution,
         return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
     if (execution->State != CKAS_EXECUTION_READY) {
-        ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
         return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution is not ready to start.");
     }
     ScopedExecutionPin pin(m_HandleRegistry, execution);
@@ -427,7 +426,6 @@ CKAS_STATUS ScriptManager::ResumeExecution(CKAngelScriptExecution *execution,
         return StoreResult(result, handleStatus, 0, handleError ? handleError : "");
     }
     if (execution->State != CKAS_EXECUTION_SUSPENDED) {
-        ScriptApiSupport::MakeExecutionResult(execution, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
         return StoreResult(result, CKAS_INVALIDSTATE, 0, "Execution is not suspended.");
     }
     ScopedExecutionPin pin(m_HandleRegistry, execution);
