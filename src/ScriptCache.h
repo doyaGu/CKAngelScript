@@ -13,7 +13,7 @@
 
 #include "CKStateChunk.h"
 
-class CScriptBuilder;
+class ScriptBuilder;
 
 #define SCRIPTCACHE_IDENTIFIER 0x41535343 // 'ASSC'
 #define SCRIPTCACHE_VERSION 3
@@ -113,7 +113,7 @@ struct ScriptMetadata {
         classMetadataMap.clear();
     }
 
-    static void Extract(CScriptBuilder &builder, ScriptMetadata &outMetadata);
+    static void Extract(ScriptBuilder &builder, ScriptMetadata &outMetadata);
     static bool RemapForModule(asIScriptModule *fromModule,
                                asIScriptModule *toModule,
                                const ScriptMetadata &fromMetadata,

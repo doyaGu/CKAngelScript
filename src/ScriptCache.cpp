@@ -9,9 +9,9 @@
 
 #include "ScriptAngelScriptGc.h"
 #include "ScriptApiSupport.h"
+#include "ScriptBuilder.h"
 #include "ScriptManager.h"
 #include "ScriptSourcePaths.h"
-#include "add_on/scriptbuilder/scriptbuilder.h"
 
 static std::vector<std::string> g_EmptyMetadata;
 
@@ -92,7 +92,7 @@ bool HasSnapshotSectionNameConflict(const std::vector<std::tuple<std::string, st
 
 } // namespace
 
-static int PragmaCallback(const std::string &pragmaText, CScriptBuilder &builder, void * /*userParam*/) {
+static int PragmaCallback(const std::string &pragmaText, ScriptBuilder &builder, void * /*userParam*/) {
     asIScriptEngine *engine = builder.GetEngine();
 
     // Filter the pragmaText so only what is of interest remains
@@ -144,7 +144,7 @@ void RecordIncludeEdge(std::vector<ScriptIncludeEdge> *includeEdges,
 
 int RecordingIncludeCallback(const char *include,
                              const char *from,
-                             CScriptBuilder *builder,
+                             ScriptBuilder *builder,
                              void *userParam) {
     auto *context = static_cast<BuildIncludeContext *>(userParam);
     if (!context || !builder)
@@ -232,7 +232,7 @@ std::vector<std::string> &ScriptMetadata::GetMetadataForTypeMethod(int typeId, a
     return g_EmptyMetadata;
 }
 
-void ScriptMetadata::Extract(CScriptBuilder &builder, ScriptMetadata &outMetadata) {
+void ScriptMetadata::Extract(ScriptBuilder &builder, ScriptMetadata &outMetadata) {
 #if AS_PROCESS_METADATA == 1
     // For each global type
     {
@@ -300,17 +300,26 @@ void ScriptMetadata::Extract(CScriptBuilder &builder, ScriptMetadata &outMetadat
             // And each method
             int methCount = typeInfo->GetMethodCount();
             for (int m = 0; m < methCount; ++m) {
-                asIScriptFunction *method = typeInfo->GetMethodByIndex(m);
-                if (!method) continue;
+                asIScriptFunction *method = typeInfo->GetMethodByIndex(m, false);
+                asIScriptFunction *virtualMethod = typeInfo->GetMethodByIndex(m, true);
+                if (!method && !virtualMethod) continue;
 
                 std::vector<std::string> methodMeta = builder.GetMetadataForTypeMethod(typeId, method);
+                if (methodMeta.empty() && virtualMethod && virtualMethod != method) {
+                    methodMeta = builder.GetMetadataForTypeMethod(typeId, virtualMethod);
+                }
                 if (!methodMeta.empty()) {
                     auto itClass = outMetadata.classMetadataMap.find(typeId);
                     if (itClass == outMetadata.classMetadataMap.end()) {
                         ScriptMetadata::ClassMetadata cm(typeInfo->GetName());
                         outMetadata.classMetadataMap[typeId] = cm;
                     }
-                    outMetadata.classMetadataMap[typeId].funcMetadataMap[method->GetId()] = methodMeta;
+                    if (method) {
+                        outMetadata.classMetadataMap[typeId].funcMetadataMap[method->GetId()] = methodMeta;
+                    }
+                    if (virtualMethod && virtualMethod != method) {
+                        outMetadata.classMetadataMap[typeId].funcMetadataMap[virtualMethod->GetId()] = methodMeta;
+                    }
                 }
             }
         }
@@ -538,7 +547,7 @@ bool CachedScript::Build(asIScriptEngine *engine) {
     }
 
     // Prepare the script builder
-    CScriptBuilder builder;
+    ScriptBuilder builder;
     includeEdges.clear();
     BuildIncludeContext includeContext;
     includeContext.IncludeEdges = &includeEdges;

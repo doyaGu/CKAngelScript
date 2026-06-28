@@ -9,6 +9,7 @@ set(CKAS_HEADERS
         ScriptApiHandles.h
         ScriptHandleRegistry.h
         ScriptCache.h
+        ScriptBuilder.h
         ScriptEngineHost.h
         ScriptImportBinder.h
         ScriptInvoker.h
@@ -86,6 +87,7 @@ set(CKAS_SOURCES
         ScriptHandleRegistry.cpp
         ScriptModuleRegistry.cpp
         ScriptCache.cpp
+        ScriptBuilder.cpp
         ScriptInvoker.cpp
         AngelScriptEventHook.cpp
         AngelScriptComponent.cpp

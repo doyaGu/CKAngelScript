@@ -246,7 +246,12 @@ struct HostCallFilterProbeData {
 struct MetadataProbe {
     bool Type = false;
     bool Method = false;
+    bool MethodRefIn = false;
+    bool MethodDefaultArg = false;
+    bool MethodArrayAlias = false;
     bool Function = false;
+    bool FunctionDefaultArg = false;
+    bool FunctionArrayAlias = false;
     bool Global = false;
     bool TypeProperty = false;
     bool Declaration = false;
@@ -697,12 +702,38 @@ CKAS_STATUS ProbeMetadata(const CKAngelScriptMetadataEntry *entry,
         probe->Declaration = probe->Declaration ||
                              (CkasStringContains(entry->Declaration, "int") &&
                               CkasStringContains(entry->Declaration, "Add"));
+    } else if (CkasStringEquals(metadata, "ckas_selftest_method_ref_in") &&
+               entry->Target == CKAS_METADATA_TYPE_METHOD &&
+               CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
+               CkasStringEquals(entry->Name, "RefIn")) {
+        probe->MethodRefIn = CkasStringContains(entry->Declaration, "RefIn") &&
+                             CkasStringContains(entry->Declaration, "string");
+    } else if (CkasStringEquals(metadata, "ckas_selftest_method_default_arg") &&
+               entry->Target == CKAS_METADATA_TYPE_METHOD &&
+               CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
+               CkasStringEquals(entry->Name, "Defaulted")) {
+        probe->MethodDefaultArg = CkasStringContains(entry->Declaration, "Defaulted");
+    } else if (CkasStringEquals(metadata, "ckas_selftest_method_array_alias") &&
+               entry->Target == CKAS_METADATA_TYPE_METHOD &&
+               CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
+               CkasStringEquals(entry->Name, "ArrayAlias")) {
+        probe->MethodArrayAlias = CkasStringContains(entry->Declaration, "ArrayAlias") &&
+                                  CkasStringContains(entry->Declaration, "[]");
     } else if (CkasStringEquals(metadata, "ckas_selftest_function") &&
                entry->Target == CKAS_METADATA_GLOBAL_FUNCTION &&
                CkasStringEquals(entry->Name, "__ckas_public_metadata_global")) {
         probe->Function = true;
         probe->Declaration = probe->Declaration ||
                              CkasStringContains(entry->Declaration, "__ckas_public_metadata_global");
+    } else if (CkasStringEquals(metadata, "ckas_selftest_function_default_arg") &&
+               entry->Target == CKAS_METADATA_GLOBAL_FUNCTION &&
+               CkasStringEquals(entry->Name, "__ckas_public_metadata_default_arg")) {
+        probe->FunctionDefaultArg = CkasStringContains(entry->Declaration, "__ckas_public_metadata_default_arg");
+    } else if (CkasStringEquals(metadata, "ckas_selftest_function_array_alias") &&
+               entry->Target == CKAS_METADATA_GLOBAL_FUNCTION &&
+               CkasStringEquals(entry->Name, "__ckas_public_metadata_array_alias")) {
+        probe->FunctionArrayAlias = CkasStringContains(entry->Declaration, "__ckas_public_metadata_array_alias") &&
+                                    CkasStringContains(entry->Declaration, "[]");
     } else if (CkasStringEquals(metadata, "ckas_selftest_global") &&
                entry->Target == CKAS_METADATA_GLOBAL_VARIABLE &&
                CkasStringEquals(entry->Name, "__ckas_public_metadata_value")) {
@@ -2503,9 +2534,19 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "    int Value;\n"
         "    [ckas_selftest_method]\n"
         "    int Add(int value) { return value + 1; }\n"
+        "    [ckas_selftest_method_ref_in]\n"
+        "    int RefIn(const string & in value) { return value.length(); }\n"
+        "    [ckas_selftest_method_default_arg]\n"
+        "    int Defaulted(int value = 7, const string & in label = \"ok\") { return value + int(label.length()); }\n"
+        "    [ckas_selftest_method_array_alias]\n"
+        "    array<int>@ ArrayAlias(const array<int> &in values) { return null; }\n"
         "}\n"
         "[ckas_selftest_function]\n"
         "int __ckas_public_metadata_global() { return 1; }\n"
+        "[ckas_selftest_function_default_arg]\n"
+        "int __ckas_public_metadata_default_arg(int value = 42, const string & in label = \"ok\") { return value + int(label.length()); }\n"
+        "[ckas_selftest_function_array_alias]\n"
+        "array<int>@ __ckas_public_metadata_array_alias(const array<int> &in values) { return null; }\n"
         "[ckas_selftest_global]\n"
         "int __ckas_public_metadata_value = 2;\n"
         "namespace CKASMetadataA { [ckas_selftest_type_namespace] class Duplicate { [ckas_selftest_method_namespace] void Mark() {} } }\n"
@@ -2790,7 +2831,12 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         metadataProbe.CallbackCount < 5 ||
         !metadataProbe.Type ||
         !metadataProbe.Method ||
+        !metadataProbe.MethodRefIn ||
+        !metadataProbe.MethodDefaultArg ||
+        !metadataProbe.MethodArrayAlias ||
         !metadataProbe.Function ||
+        !metadataProbe.FunctionDefaultArg ||
+        !metadataProbe.FunctionArrayAlias ||
         !metadataProbe.Global ||
         !metadataProbe.TypeProperty ||
         !metadataProbe.Declaration ||
