@@ -208,7 +208,7 @@ void ScriptModuleRegistry::ApplyCachedIncludeEdges(ScriptModuleStateStore &state
         return;
     }
     const std::shared_ptr<CachedScript> cached = GetCachedScript(moduleName);
-    stateStore.SetIncludeEdges(moduleName, cached ? cached->includeEdges : std::vector<ScriptIncludeEdge>());
+    stateStore.SetIncludeEdges(moduleName, cached ? cached->GetIncludeEdges() : std::vector<ScriptIncludeEdge>());
 }
 
 CKAS_STATUS ScriptModuleRegistry::CompleteSourceLoad(
@@ -226,10 +226,11 @@ unsigned long long ScriptModuleRegistry::BuildSourceHash(const char *moduleName)
     unsigned long long sourceHash = ScriptApiSupport::kFnvOffsetBasis;
     const std::shared_ptr<CachedScript> cached = GetCachedScript(moduleName ? moduleName : "");
     if (cached) {
-        ScriptApiSupport::HashBool(sourceHash, cached->sourceSnapshotSections);
-        ScriptApiSupport::HashValue(sourceHash, static_cast<unsigned long long>(cached->sections.size()));
-        for (size_t i = 0; i < cached->sections.size(); ++i) {
-            const auto &section = cached->sections[i];
+        const auto &sections = cached->GetSections();
+        ScriptApiSupport::HashBool(sourceHash, cached->IsSourceSnapshotSections());
+        ScriptApiSupport::HashValue(sourceHash, static_cast<unsigned long long>(sections.size()));
+        for (size_t i = 0; i < sections.size(); ++i) {
+            const auto &section = sections[i];
             const bool hasCode = cached->HasSectionCode(i);
             ScriptApiSupport::HashString(sourceHash, std::get<0>(section));
             ScriptApiSupport::HashBool(sourceHash, hasCode);

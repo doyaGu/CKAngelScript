@@ -1711,7 +1711,10 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             error = "CKAngelScript API self-test failed to allocate source snapshot cache entry.";
             return false;
         }
-        snapshot->sourceSnapshotSections = true;
+        if (!snapshot->SetSourceSnapshotSections(true)) {
+            error = "CKAngelScript API self-test failed to enable source snapshot cache mode.";
+            return false;
+        }
         snapshot->AddMemorySection("chunk/main.as",
                                    "#include \"lib/helper.as\"\n"
                                    "int __ckas_cache_chunk_value() { return __ckas_cache_chunk_helper() + 1; }\n");
@@ -1740,7 +1743,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         std::shared_ptr<CachedScript> restored = restoredCache.NewCachedScript(cacheChunkModuleName);
         if (!restored ||
             !restored->LoadFromChunk(chunk.get()) ||
-            !restored->sourceSnapshotSections ||
+            !restored->IsSourceSnapshotSections() ||
             !restored->Build(engine)) {
             restoredCache.Clear();
             error = "CKAngelScript API self-test expected cached source snapshot chunks to restore include semantics.";
@@ -1919,10 +1922,17 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
         CachedScript invalidSnapshotSave;
         invalidSnapshotSave.name = "__CKAS_CacheInvalidSnapshotSaveSelfTest";
-        invalidSnapshotSave.sourceSnapshotSections = true;
-        invalidSnapshotSave.AddFileSection("chunk/file-section.as");
-        if (invalidSnapshotSave.SaveToChunk(chunk.get())) {
-            error = "CKAngelScript API self-test expected source snapshot cache saves to reject file-only sections.";
+        if (!invalidSnapshotSave.SetSourceSnapshotSections(true) ||
+            invalidSnapshotSave.AddFileSection("chunk/file-section.as")) {
+            error = "CKAngelScript API self-test expected source snapshot caches to reject file-only sections.";
+            return false;
+        }
+        CachedScriptSourceState invalidSnapshotState;
+        invalidSnapshotState.SourceSnapshotSections = true;
+        invalidSnapshotState.Sections.emplace_back("chunk/file-section.as", std::string());
+        invalidSnapshotState.SectionHasCode.push_back(0);
+        if (invalidSnapshotSave.RestoreSourceState(invalidSnapshotState)) {
+            error = "CKAngelScript API self-test expected source snapshot state restore to reject file-only sections.";
             return false;
         }
 
@@ -1961,13 +1971,24 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
 
         CachedScript duplicateSnapshotSave;
         duplicateSnapshotSave.name = "__CKAS_CacheDuplicateSnapshotSaveSelfTest";
-        duplicateSnapshotSave.sourceSnapshotSections = true;
-        duplicateSnapshotSave.AddMemorySection("chunk/main.as",
-                                               "int __ckas_cache_duplicate_save_a() { return 1; }\n");
-        duplicateSnapshotSave.AddMemorySection("chunk/./main.as",
-                                               "int __ckas_cache_duplicate_save_b() { return 2; }\n");
-        if (duplicateSnapshotSave.SaveToChunk(chunk.get())) {
-            error = "CKAngelScript API self-test expected source snapshot cache saves to reject duplicate resolved sections.";
+        if (!duplicateSnapshotSave.SetSourceSnapshotSections(true) ||
+            !duplicateSnapshotSave.AddMemorySection("chunk/main.as",
+                                                    "int __ckas_cache_duplicate_save_a() { return 1; }\n") ||
+            duplicateSnapshotSave.AddMemorySection("chunk/./main.as",
+                                                   "int __ckas_cache_duplicate_save_b() { return 2; }\n")) {
+            error = "CKAngelScript API self-test expected source snapshot caches to reject duplicate resolved sections.";
+            return false;
+        }
+        CachedScriptSourceState duplicateSnapshotState;
+        duplicateSnapshotState.SourceSnapshotSections = true;
+        duplicateSnapshotState.Sections.emplace_back("chunk/main.as",
+                                                     "int __ckas_cache_duplicate_save_a() { return 1; }\n");
+        duplicateSnapshotState.SectionHasCode.push_back(1);
+        duplicateSnapshotState.Sections.emplace_back("chunk/./main.as",
+                                                     "int __ckas_cache_duplicate_save_b() { return 2; }\n");
+        duplicateSnapshotState.SectionHasCode.push_back(1);
+        if (duplicateSnapshotSave.RestoreSourceState(duplicateSnapshotState)) {
+            error = "CKAngelScript API self-test expected source snapshot state restore to reject duplicate resolved sections.";
             return false;
         }
     }

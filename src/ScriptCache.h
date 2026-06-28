@@ -126,6 +126,14 @@ struct ScriptIncludeEdge {
     bool ResolvedFromSnapshot = false;
 };
 
+struct CachedScriptSourceState {
+    std::vector<std::tuple<std::string, std::string>> Sections;
+    std::vector<unsigned char> SectionHasCode;
+    std::vector<ScriptIncludeEdge> IncludeEdges;
+    ScriptMetadata Metadata;
+    bool SourceSnapshotSections = false;
+};
+
 struct CachedScript : ICachedScript {
     asIScriptModule *module = nullptr;
     std::string name;
@@ -150,6 +158,12 @@ struct CachedScript : ICachedScript {
 
     void ClearCodeCache() override;
 
+    CachedScriptSourceState CaptureSourceState() const;
+    bool RestoreSourceState(const CachedScriptSourceState &state);
+    bool SetSourceSnapshotSections(bool enabled);
+    bool IsSourceSnapshotSections() const;
+    const std::vector<std::tuple<std::string, std::string>> &GetSections() const;
+    const std::vector<ScriptIncludeEdge> &GetIncludeEdges() const;
     bool AddFileSection(const std::string &name);
     bool AddMemorySection(const std::string &name, const std::string &code);
     bool HasSectionCode(size_t index) const;

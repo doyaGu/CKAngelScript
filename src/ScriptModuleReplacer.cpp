@@ -25,12 +25,9 @@ void MarkIncompleteRollback(ScriptModuleStateStore &stateStore, const char *modu
 
 struct ScriptModuleReplacer::Snapshot {
     std::shared_ptr<CachedScript> Cache;
-    std::vector<std::tuple<std::string, std::string>> Sections;
-    std::vector<unsigned char> SectionHasCode;
-    ScriptMetadata Metadata;
+    CachedScriptSourceState SourceState;
     std::vector<ScriptImportBindingEdge> ImportBindings;
     std::vector<unsigned char> ByteCode;
-    bool SourceSnapshotSections = false;
     bool HasModule = false;
 };
 
@@ -53,12 +50,21 @@ std::shared_ptr<CachedScript> ScriptModuleReplacer::BuildTransientModule(
 
     auto script = std::make_shared<CachedScript>();
     script->name = moduleName;
-    script->sourceSnapshotSections = sourceSnapshotSections;
+    if (!script->SetSourceSnapshotSections(sourceSnapshotSections)) {
+        angelScriptCode = -1;
+        return nullptr;
+    }
     for (const auto &section : sections) {
         if (sourceSnapshotSections || memorySections) {
-            script->AddMemorySection(std::get<0>(section), std::get<1>(section));
+            if (!script->AddMemorySection(std::get<0>(section), std::get<1>(section))) {
+                angelScriptCode = -1;
+                return nullptr;
+            }
         } else {
-            script->AddFileSection(std::get<0>(section));
+            if (!script->AddFileSection(std::get<0>(section))) {
+                angelScriptCode = -1;
+                return nullptr;
+            }
         }
     }
 
@@ -94,10 +100,7 @@ bool ScriptModuleReplacer::CaptureSnapshot(ScriptManager &manager,
     snapshot.Cache = registry.GetCachedScript(moduleName);
     snapshot.ImportBindings = stateStore.GetImportBindingsForModule(moduleName);
     if (snapshot.Cache) {
-        snapshot.Sections = snapshot.Cache->sections;
-        snapshot.SectionHasCode = snapshot.Cache->sectionHasCode;
-        snapshot.Metadata = snapshot.Cache->metadata;
-        snapshot.SourceSnapshotSections = snapshot.Cache->sourceSnapshotSections;
+        snapshot.SourceState = snapshot.Cache->CaptureSourceState();
     }
 
     asIScriptModule *module = manager.GetModule(moduleName);
@@ -163,10 +166,12 @@ bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
     std::shared_ptr<CachedScript> restoredCache =
         snapshot.Cache ? snapshot.Cache : std::make_shared<CachedScript>();
     restoredCache->name = moduleName ? moduleName : "";
-    restoredCache->sections = snapshot.Sections;
-    restoredCache->sectionHasCode = snapshot.SectionHasCode;
-    restoredCache->sourceSnapshotSections = snapshot.SourceSnapshotSections;
-    restoredCache->metadata = snapshot.Metadata;
+    if (!restoredCache->RestoreSourceState(snapshot.SourceState)) {
+        errorMessage = "Failed to restore previous script module source cache.";
+        MarkIncompleteRollback(stateStore, moduleName);
+        ScriptDiscardModuleWithGarbageCollection(restoredModule);
+        return false;
+    }
     restoredCache->module = restoredModule;
     registry.CacheScript(moduleName, restoredCache);
     if (!importBinder.Rebind(manager,
@@ -300,18 +305,25 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
 
     auto committedCache = std::make_shared<CachedScript>();
     committedCache->name = moduleName ? moduleName : "";
-    committedCache->sections = candidate->sections;
-    committedCache->sectionHasCode = candidate->sectionHasCode;
-    committedCache->includeEdges = candidate->includeEdges;
-    committedCache->sourceSnapshotSections = candidate->sourceSnapshotSections;
+    CachedScriptSourceState committedSourceState = candidate->CaptureSourceState();
+    ScriptMetadata remappedMetadata;
     ScriptMetadata::RemapForModule(candidate->module,
                                    committedModule,
-                                   candidate->metadata,
-                                   committedCache->metadata);
+                                   committedSourceState.Metadata,
+                                   remappedMetadata);
+    committedSourceState.Metadata = std::move(remappedMetadata);
+    if (!committedCache->RestoreSourceState(committedSourceState)) {
+        ScriptDiscardModuleWithGarbageCollection(committedModule);
+        candidate->Discard();
+        return diagnosticsStore.StoreResult(result,
+                                            CKAS_EXECUTIONFAILED,
+                                            angelScriptCode,
+                                            "Failed to commit replacement source cache.");
+    }
     committedCache->module = committedModule;
     registry.CacheScript(moduleName, committedCache);
     candidate->Discard();
-    stateStore.SetIncludeEdges(moduleName, committedCache->includeEdges);
+    stateStore.SetIncludeEdges(moduleName, committedCache->GetIncludeEdges());
     stateStore.SetKind(moduleName, ScriptModuleKind::Source);
     stateStore.BumpGeneration(moduleName);
     return diagnosticsStore.StoreResult(result, CKAS_OK, 0, std::string(), std::string(), &diagnosticMessages);

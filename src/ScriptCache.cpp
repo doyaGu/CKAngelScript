@@ -36,20 +36,24 @@ void DiscardCachedScripts(const std::vector<std::shared_ptr<CachedScript>> &scri
     }
 }
 
-bool HasValidSectionLayout(const CachedScript &script) {
-    if (script.sectionHasCode.size() != script.sections.size()) {
+bool SourceStateHasCode(const CachedScriptSourceState &state, size_t index) {
+    return index < state.SectionHasCode.size() && state.SectionHasCode[index] != 0;
+}
+
+bool HasValidSourceState(const CachedScriptSourceState &state) {
+    if (state.SectionHasCode.size() != state.Sections.size()) {
         return false;
     }
 
     std::unordered_set<std::string> sectionNames;
     std::unordered_set<std::string> snapshotNames;
-    for (size_t i = 0; i < script.sections.size(); ++i) {
-        const std::string &sectionName = std::get<0>(script.sections[i]);
+    for (size_t i = 0; i < state.Sections.size(); ++i) {
+        const std::string &sectionName = std::get<0>(state.Sections[i]);
         if (sectionName.empty() || !sectionNames.insert(sectionName).second) {
             return false;
         }
 
-        if (script.sourceSnapshotSections) {
+        if (state.SourceSnapshotSections) {
             const std::string normalized = ScriptSourcePaths::NormalizeSectionName(sectionName);
             if (normalized.empty() || !snapshotNames.insert(normalized).second) {
                 return false;
@@ -57,15 +61,32 @@ bool HasValidSectionLayout(const CachedScript &script) {
         }
     }
 
-    if (script.sourceSnapshotSections) {
-        for (size_t i = 0; i < script.sections.size(); ++i) {
-            if (!script.HasSectionCode(i)) {
+    if (state.SourceSnapshotSections) {
+        for (size_t i = 0; i < state.Sections.size(); ++i) {
+            if (!SourceStateHasCode(state, i)) {
                 return false;
             }
         }
     }
 
     return true;
+}
+
+bool HasValidSectionLayout(const CachedScript &script) {
+    return HasValidSourceState(script.CaptureSourceState());
+}
+
+bool HasSnapshotSectionNameConflict(const std::vector<std::tuple<std::string, std::string>> &sections,
+                                    const std::string &name) {
+    const std::string normalizedName = ScriptSourcePaths::NormalizeSectionName(name);
+    for (const auto &section : sections) {
+        const std::string &existingName = std::get<0>(section);
+        if (existingName != name &&
+            ScriptSourcePaths::NormalizeSectionName(existingName) == normalizedName) {
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace
@@ -653,8 +674,60 @@ void CachedScript::ClearCodeCache() {
     }
 }
 
+CachedScriptSourceState CachedScript::CaptureSourceState() const {
+    CachedScriptSourceState state;
+    state.Sections = sections;
+    state.SectionHasCode = sectionHasCode;
+    state.IncludeEdges = includeEdges;
+    state.Metadata = metadata;
+    state.SourceSnapshotSections = sourceSnapshotSections;
+    return state;
+}
+
+bool CachedScript::RestoreSourceState(const CachedScriptSourceState &state) {
+    if (module || !HasValidSourceState(state)) {
+        return false;
+    }
+
+    sections = state.Sections;
+    sectionHasCode = state.SectionHasCode;
+    includeEdges = state.IncludeEdges;
+    metadata = state.Metadata;
+    sourceSnapshotSections = state.SourceSnapshotSections;
+    return true;
+}
+
+bool CachedScript::SetSourceSnapshotSections(bool enabled) {
+    if (module || sectionHasCode.size() != sections.size()) {
+        return false;
+    }
+
+    if (enabled) {
+        for (size_t i = 0; i < sections.size(); ++i) {
+            if (!HasSectionCode(i)) {
+                return false;
+            }
+        }
+    }
+
+    sourceSnapshotSections = enabled;
+    return true;
+}
+
+bool CachedScript::IsSourceSnapshotSections() const {
+    return sourceSnapshotSections;
+}
+
+const std::vector<std::tuple<std::string, std::string>> &CachedScript::GetSections() const {
+    return sections;
+}
+
+const std::vector<ScriptIncludeEdge> &CachedScript::GetIncludeEdges() const {
+    return includeEdges;
+}
+
 bool CachedScript::AddFileSection(const std::string &name) {
-    if (module || name.empty() || sectionHasCode.size() != sections.size()) {
+    if (module || sourceSnapshotSections || name.empty() || sectionHasCode.size() != sections.size()) {
         return false;
     }
 
@@ -673,6 +746,10 @@ bool CachedScript::AddFileSection(const std::string &name) {
 
 bool CachedScript::AddMemorySection(const std::string &name, const std::string &code) {
     if (module || name.empty() || sectionHasCode.size() != sections.size()) {
+        return false;
+    }
+
+    if (sourceSnapshotSections && HasSnapshotSectionNameConflict(sections, name)) {
         return false;
     }
 
@@ -774,11 +851,11 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         loadedSectionHasCode.push_back(hasCode ? 1 : 0);
     }
 
-    CachedScript loadedScript;
-    loadedScript.sections = loadedSections;
-    loadedScript.sectionHasCode = loadedSectionHasCode;
-    loadedScript.sourceSnapshotSections = loadedSourceSnapshotSections;
-    if (!HasValidSectionLayout(loadedScript)) {
+    CachedScriptSourceState loadedState;
+    loadedState.Sections = loadedSections;
+    loadedState.SectionHasCode = loadedSectionHasCode;
+    loadedState.SourceSnapshotSections = loadedSourceSnapshotSections;
+    if (!HasValidSourceState(loadedState)) {
         return fail();
     }
 
