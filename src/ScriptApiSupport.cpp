@@ -58,6 +58,18 @@ CKAS_STATUS ToCKAS_STATUS(ScriptInvocationStatus status) {
     }
 }
 
+template <typename Candidate, typename CountFn, typename GetFn, typename MatchFn>
+Candidate *FindIndexedEntity(CountFn count, GetFn get, MatchFn matches) {
+    const asUINT itemCount = count();
+    for (asUINT i = 0; i < itemCount; ++i) {
+        Candidate *candidate = get(i);
+        if (candidate && matches(candidate)) {
+            return candidate;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
 
 asITypeInfo *TypeInfoById(asIScriptEngine *engine, int typeId) {
@@ -656,6 +668,39 @@ asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
         }
     }
     return nullptr;
+}
+
+asITypeInfo *FindModuleObjectTypeById(asIScriptModule *module, int typeId) {
+    if (!module) {
+        return nullptr;
+    }
+
+    return FindIndexedEntity<asITypeInfo>(
+        [&]() { return module->GetObjectTypeCount(); },
+        [&](asUINT index) { return module->GetObjectTypeByIndex(index); },
+        [&](asITypeInfo *type) { return type->GetTypeId() == typeId; });
+}
+
+asIScriptFunction *FindModuleFunctionById(asIScriptModule *module, int functionId) {
+    if (!module) {
+        return nullptr;
+    }
+
+    return FindIndexedEntity<asIScriptFunction>(
+        [&]() { return module->GetFunctionCount(); },
+        [&](asUINT index) { return module->GetFunctionByIndex(index); },
+        [&](asIScriptFunction *function) { return function->GetId() == functionId; });
+}
+
+asIScriptFunction *FindTypeMethodById(asITypeInfo *type, int functionId, bool getVirtual) {
+    if (!type) {
+        return nullptr;
+    }
+
+    return FindIndexedEntity<asIScriptFunction>(
+        [&]() { return type->GetMethodCount(); },
+        [&](asUINT index) { return type->GetMethodByIndex(index, getVirtual); },
+        [&](asIScriptFunction *method) { return method->GetId() == functionId; });
 }
 
 asIScriptFunction *FindFunctionByDecl(asIScriptModule *module, const char *declaration) {

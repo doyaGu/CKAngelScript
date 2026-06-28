@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "ScriptAngelScriptGc.h"
+#include "ScriptApiSupport.h"
 #include "ScriptManager.h"
 #include "ScriptSourcePaths.h"
 #include "add_on/scriptbuilder/scriptbuilder.h"
@@ -433,7 +434,9 @@ bool ScriptMetadata::RemapForModule(asIScriptModule *fromModule,
 
     bool complete = true;
     for (const auto &entry : fromMetadata.typeMetadataMap) {
-        asITypeInfo *sourceType = engine->GetTypeInfoById(entry.first);
+        asITypeInfo *sourceType = ScriptApiSupport::FindModuleObjectTypeById(fromModule, entry.first);
+        if (!sourceType)
+            sourceType = engine->GetTypeInfoById(entry.first);
         asITypeInfo *targetType = FindMatchingType(toModule, sourceType);
         if (targetType) {
             outMetadata.typeMetadataMap[targetType->GetTypeId()] = entry.second;
@@ -443,7 +446,9 @@ bool ScriptMetadata::RemapForModule(asIScriptModule *fromModule,
     }
 
     for (const auto &entry : fromMetadata.funcMetadataMap) {
-        asIScriptFunction *sourceFunction = engine->GetFunctionById(entry.first);
+        asIScriptFunction *sourceFunction = ScriptApiSupport::FindModuleFunctionById(fromModule, entry.first);
+        if (!sourceFunction)
+            sourceFunction = engine->GetFunctionById(entry.first);
         asIScriptFunction *targetFunction = FindMatchingGlobalFunction(toModule, sourceFunction);
         if (targetFunction) {
             outMetadata.funcMetadataMap[targetFunction->GetId()] = entry.second;
@@ -464,7 +469,9 @@ bool ScriptMetadata::RemapForModule(asIScriptModule *fromModule,
     }
 
     for (const auto &entry : fromMetadata.classMetadataMap) {
-        asITypeInfo *sourceType = engine->GetTypeInfoById(entry.first);
+        asITypeInfo *sourceType = ScriptApiSupport::FindModuleObjectTypeById(fromModule, entry.first);
+        if (!sourceType)
+            sourceType = engine->GetTypeInfoById(entry.first);
         asITypeInfo *targetType = FindMatchingType(toModule, sourceType);
         if (!sourceType || !targetType) {
             complete = false;
@@ -473,7 +480,9 @@ bool ScriptMetadata::RemapForModule(asIScriptModule *fromModule,
 
         ScriptMetadata::ClassMetadata classMetadata(targetType->GetName() ? targetType->GetName() : "");
         for (const auto &methodEntry : entry.second.funcMetadataMap) {
-            asIScriptFunction *sourceMethod = engine->GetFunctionById(methodEntry.first);
+            asIScriptFunction *sourceMethod = ScriptApiSupport::FindTypeMethodById(sourceType, methodEntry.first, false);
+            if (!sourceMethod)
+                sourceMethod = engine->GetFunctionById(methodEntry.first);
             const char *declarationView = sourceMethod ? sourceMethod->GetDeclaration(false, true, false) : nullptr;
             const std::string declaration = declarationView ? declarationView : "";
             asIScriptFunction *targetMethod = FindMatchingMethod(targetType, declaration.c_str());

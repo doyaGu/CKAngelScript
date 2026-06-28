@@ -671,7 +671,7 @@ CKAS_STATUS ScriptModuleRegistry::EnumerateMetadata(MetadataContext &context,
 
         const asUINT methodCount = type->GetMethodCount();
         for (asUINT methodIndex = 0; methodIndex < methodCount; ++methodIndex) {
-            asIScriptFunction *method = type->GetMethodByIndex(methodIndex);
+            asIScriptFunction *method = type->GetMethodByIndex(methodIndex, false);
             const int rawMetadataCount = cached->GetClassMethodMetadataCount(typeId, method);
             const CKDWORD metadataCount =
                 static_cast<CKDWORD>(XMax(0, rawMetadataCount));

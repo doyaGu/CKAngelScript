@@ -124,6 +124,9 @@ CKAS_STATUS RunExecution(CKAngelScriptExecution *execution,
 asITypeInfo *FindTypeByNameAndNamespace(asIScriptModule *module,
                                         const char *className,
                                         const char *classNamespace);
+asITypeInfo *FindModuleObjectTypeById(asIScriptModule *module, int typeId);
+asIScriptFunction *FindModuleFunctionById(asIScriptModule *module, int functionId);
+asIScriptFunction *FindTypeMethodById(asITypeInfo *type, int functionId, bool getVirtual = false);
 asIScriptFunction *FindFunctionByDecl(asIScriptModule *module, const char *declaration);
 asIScriptFunction *FindMethodByDecl(asITypeInfo *type,
                                     const char *declaration,
