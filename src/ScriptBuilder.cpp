@@ -56,6 +56,34 @@ static string RemoveWhitespace(const string &value)
 	return result;
 }
 
+static bool IsReferenceDirectionToken(const string &value)
+{
+	return value == "in" || value == "out" || value == "inout";
+}
+
+static bool UpdateStringLiteralState(char ch, char &quote, bool &escape)
+{
+	if( quote != 0 )
+	{
+		if( escape )
+			escape = false;
+		else if( ch == '\\' )
+			escape = true;
+		else if( ch == quote )
+			quote = 0;
+		return true;
+	}
+
+	if( ch == '"' || ch == '\'' )
+	{
+		quote = ch;
+		escape = false;
+		return true;
+	}
+
+	return false;
+}
+
 static bool StartsArrayTemplate(const string &value, size_t pos, size_t &openPos)
 {
 	static const char keyword[] = "array";
@@ -131,6 +159,10 @@ static string StripParameterName(const string &parameter)
 	if( begin == result.size() )
 		return result;
 
+	const string trailingIdentifier = result.substr(begin);
+	if( IsReferenceDirectionToken(trailingIdentifier) )
+		return result;
+
 	size_t beforeName = begin;
 	bool hasSeparator = false;
 	while( beforeName > 0 && isspace(static_cast<unsigned char>(result[beforeName - 1])) != 0 )
@@ -149,9 +181,14 @@ static string StripParameterDefaultValue(const string &parameter)
 	int angleDepth = 0;
 	int parenDepth = 0;
 	int bracketDepth = 0;
+	int braceDepth = 0;
+	char quote = 0;
+	bool escape = false;
 	for( size_t i = 0; i < parameter.size(); ++i )
 	{
 		char ch = parameter[i];
+		if( UpdateStringLiteralState(ch, quote, escape) )
+			continue;
 		if( ch == '<' )
 			angleDepth++;
 		else if( ch == '>' && angleDepth > 0 )
@@ -164,7 +201,11 @@ static string StripParameterDefaultValue(const string &parameter)
 			bracketDepth++;
 		else if( ch == ']' && bracketDepth > 0 )
 			bracketDepth--;
-		else if( ch == '=' && angleDepth == 0 && parenDepth == 0 && bracketDepth == 0 )
+		else if( ch == '{' )
+			braceDepth++;
+		else if( ch == '}' && braceDepth > 0 )
+			braceDepth--;
+		else if( ch == '=' && angleDepth == 0 && parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 )
 			return TrimString(parameter.substr(0, i));
 	}
 	return parameter;
@@ -176,9 +217,14 @@ static vector<string> SplitParameterList(const string &parameters)
 	size_t begin = 0;
 	int angleDepth = 0;
 	int parenDepth = 0;
+	int braceDepth = 0;
+	char quote = 0;
+	bool escape = false;
 	for( size_t i = 0; i < parameters.size(); ++i )
 	{
 		char ch = parameters[i];
+		if( UpdateStringLiteralState(ch, quote, escape) )
+			continue;
 		if( ch == '<' )
 			angleDepth++;
 		else if( ch == '>' && angleDepth > 0 )
@@ -187,7 +233,11 @@ static vector<string> SplitParameterList(const string &parameters)
 			parenDepth++;
 		else if( ch == ')' && parenDepth > 0 )
 			parenDepth--;
-		else if( ch == ',' && angleDepth == 0 && parenDepth == 0 )
+		else if( ch == '{' )
+			braceDepth++;
+		else if( ch == '}' && braceDepth > 0 )
+			braceDepth--;
+		else if( ch == ',' && angleDepth == 0 && parenDepth == 0 && braceDepth == 0 )
 		{
 			result.push_back(parameters.substr(begin, i - begin));
 			begin = i + 1;
@@ -205,8 +255,12 @@ static string NormalizeDeclarationForMetadataLookup(const string &declaration)
 
 	size_t close = string::npos;
 	int depth = 0;
+	char quote = 0;
+	bool escape = false;
 	for( size_t i = open; i < declaration.size(); ++i )
 	{
+		if( UpdateStringLiteralState(declaration[i], quote, escape) )
+			continue;
 		if( declaration[i] == '(' )
 			depth++;
 		else if( declaration[i] == ')' )

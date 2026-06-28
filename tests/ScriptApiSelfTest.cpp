@@ -247,10 +247,13 @@ struct MetadataProbe {
     bool Type = false;
     bool Method = false;
     bool MethodRefIn = false;
+    bool MethodRefInUnnamed = false;
     bool MethodDefaultArg = false;
+    bool MethodDefaultComma = false;
     bool MethodArrayAlias = false;
     bool Function = false;
     bool FunctionDefaultArg = false;
+    bool FunctionDefaultComma = false;
     bool FunctionArrayAlias = false;
     bool Global = false;
     bool TypeProperty = false;
@@ -708,11 +711,22 @@ CKAS_STATUS ProbeMetadata(const CKAngelScriptMetadataEntry *entry,
                CkasStringEquals(entry->Name, "RefIn")) {
         probe->MethodRefIn = CkasStringContains(entry->Declaration, "RefIn") &&
                              CkasStringContains(entry->Declaration, "string");
+    } else if (CkasStringEquals(metadata, "ckas_selftest_method_ref_in_unnamed") &&
+               entry->Target == CKAS_METADATA_TYPE_METHOD &&
+               CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
+               CkasStringEquals(entry->Name, "RefInUnnamed")) {
+        probe->MethodRefInUnnamed = CkasStringContains(entry->Declaration, "RefInUnnamed") &&
+                                    CkasStringContains(entry->Declaration, "string");
     } else if (CkasStringEquals(metadata, "ckas_selftest_method_default_arg") &&
                entry->Target == CKAS_METADATA_TYPE_METHOD &&
                CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
                CkasStringEquals(entry->Name, "Defaulted")) {
         probe->MethodDefaultArg = CkasStringContains(entry->Declaration, "Defaulted");
+    } else if (CkasStringEquals(metadata, "ckas_selftest_method_default_comma") &&
+               entry->Target == CKAS_METADATA_TYPE_METHOD &&
+               CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
+               CkasStringEquals(entry->Name, "DefaultComma")) {
+        probe->MethodDefaultComma = CkasStringContains(entry->Declaration, "DefaultComma");
     } else if (CkasStringEquals(metadata, "ckas_selftest_method_array_alias") &&
                entry->Target == CKAS_METADATA_TYPE_METHOD &&
                CkasStringEquals(entry->ParentTypeName, "__CKAS_PublicMetadataType") &&
@@ -729,6 +743,10 @@ CKAS_STATUS ProbeMetadata(const CKAngelScriptMetadataEntry *entry,
                entry->Target == CKAS_METADATA_GLOBAL_FUNCTION &&
                CkasStringEquals(entry->Name, "__ckas_public_metadata_default_arg")) {
         probe->FunctionDefaultArg = CkasStringContains(entry->Declaration, "__ckas_public_metadata_default_arg");
+    } else if (CkasStringEquals(metadata, "ckas_selftest_function_default_comma") &&
+               entry->Target == CKAS_METADATA_GLOBAL_FUNCTION &&
+               CkasStringEquals(entry->Name, "__ckas_public_metadata_default_comma")) {
+        probe->FunctionDefaultComma = CkasStringContains(entry->Declaration, "__ckas_public_metadata_default_comma");
     } else if (CkasStringEquals(metadata, "ckas_selftest_function_array_alias") &&
                entry->Target == CKAS_METADATA_GLOBAL_FUNCTION &&
                CkasStringEquals(entry->Name, "__ckas_public_metadata_array_alias")) {
@@ -2536,8 +2554,12 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "    int Add(int value) { return value + 1; }\n"
         "    [ckas_selftest_method_ref_in]\n"
         "    int RefIn(const string & in value) { return value.length(); }\n"
+        "    [ckas_selftest_method_ref_in_unnamed]\n"
+        "    int RefInUnnamed(const string & in) { return 11; }\n"
         "    [ckas_selftest_method_default_arg]\n"
         "    int Defaulted(int value = 7, const string & in label = \"ok\") { return value + int(label.length()); }\n"
+        "    [ckas_selftest_method_default_comma]\n"
+        "    int DefaultComma(const string & in label = \"a,b\") { return int(label.length()); }\n"
         "    [ckas_selftest_method_array_alias]\n"
         "    array<int>@ ArrayAlias(const array<int> &in values) { return null; }\n"
         "}\n"
@@ -2545,6 +2567,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "int __ckas_public_metadata_global() { return 1; }\n"
         "[ckas_selftest_function_default_arg]\n"
         "int __ckas_public_metadata_default_arg(int value = 42, const string & in label = \"ok\") { return value + int(label.length()); }\n"
+        "[ckas_selftest_function_default_comma]\n"
+        "int __ckas_public_metadata_default_comma(const string & in label = \"a,b\") { return int(label.length()); }\n"
         "[ckas_selftest_function_array_alias]\n"
         "array<int>@ __ckas_public_metadata_array_alias(const array<int> &in values) { return null; }\n"
         "[ckas_selftest_global]\n"
@@ -2832,10 +2856,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !metadataProbe.Type ||
         !metadataProbe.Method ||
         !metadataProbe.MethodRefIn ||
+        !metadataProbe.MethodRefInUnnamed ||
         !metadataProbe.MethodDefaultArg ||
+        !metadataProbe.MethodDefaultComma ||
         !metadataProbe.MethodArrayAlias ||
         !metadataProbe.Function ||
         !metadataProbe.FunctionDefaultArg ||
+        !metadataProbe.FunctionDefaultComma ||
         !metadataProbe.FunctionArrayAlias ||
         !metadataProbe.Global ||
         !metadataProbe.TypeProperty ||
