@@ -1579,11 +1579,11 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
             return false;
         }
         snapshot->sourceSnapshotSections = true;
-        snapshot->AddSection("chunk/main.as",
-                             "#include \"lib/helper.as\"\n"
-                             "int __ckas_cache_chunk_value() { return __ckas_cache_chunk_helper() + 1; }\n");
-        snapshot->AddSection("chunk/lib/helper.as",
-                             "int __ckas_cache_chunk_helper() { return 41; }\n");
+        snapshot->AddMemorySection("chunk/main.as",
+                                   "#include \"lib/helper.as\"\n"
+                                   "int __ckas_cache_chunk_value() { return __ckas_cache_chunk_helper() + 1; }\n");
+        snapshot->AddMemorySection("chunk/lib/helper.as",
+                                   "int __ckas_cache_chunk_helper() { return 41; }\n");
         if (!snapshot->Build(engine) ||
             engine->GetModule(cacheChunkModuleName, asGM_ONLY_IF_EXISTS) == nullptr) {
             error = "CKAngelScript API self-test failed to build source snapshot cache entry.";
@@ -1746,6 +1746,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         hugeCodeSizeChunk->WriteInt(1);
         hugeCodeSizeChunk->WriteInt(1);
         hugeCodeSizeChunk->WriteString(const_cast<CKSTRING>("chunk/huge.as"));
+        hugeCodeSizeChunk->WriteInt(1);
         hugeCodeSizeChunk->WriteDword(static_cast<CKDWORD>(INT_MAX));
         hugeCodeSizeChunk->CloseChunk();
         CachedScript hugeCodeSizeRestore;
@@ -2292,6 +2293,31 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     truncatedLoadOptions.Flags = CKAS_LOAD_REPLACEEXISTING;
     if (api->LoadModule(truncatedLoadOptions, &result) != CKAS_INVALIDARGUMENT) {
         error = "CKAngelScript API self-test expected truncated LoadModule options to fail.";
+        return false;
+    }
+
+    constexpr const char *emptyCompileModuleName = "__CKAS_EmptyCompileSelfTest";
+    CKAS_STATUS emptyStatus = api->CompileModule(emptyCompileModuleName,
+                                                 "",
+                                                 CKAS_COMPILE_REPLACEEXISTING,
+                                                 &result);
+    if (emptyStatus != CKAS_COMPILEERROR ||
+        api->HasModule(emptyCompileModuleName) ||
+        !CkasStringContains(result.ErrorMessage, "Nothing was built")) {
+        error = "CKAngelScript API self-test expected empty CompileModule source to use the memory path and fail as an empty module.";
+        api->UnloadModule(emptyCompileModuleName, nullptr);
+        return false;
+    }
+
+    constexpr const char *emptyLoadModuleName = "__CKAS_EmptyLoadCodeSelfTest";
+    CKAngelScriptLoadOptions emptyLoadOptions =
+        CKAngelScriptApi::LoadCodeOptions(emptyLoadModuleName, "", CKAS_LOAD_REPLACEEXISTING);
+    emptyStatus = api->LoadModule(emptyLoadOptions, &result);
+    if (emptyStatus != CKAS_COMPILEERROR ||
+        api->HasModule(emptyLoadModuleName) ||
+        !CkasStringContains(result.ErrorMessage, "Nothing was built")) {
+        error = "CKAngelScript API self-test expected empty LoadModule Code source to use the memory path and fail as an empty module.";
+        api->UnloadModule(emptyLoadModuleName, nullptr);
         return false;
     }
 

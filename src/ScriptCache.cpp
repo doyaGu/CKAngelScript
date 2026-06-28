@@ -517,14 +517,22 @@ bool CachedScript::Build(asIScriptEngine *engine) {
         auto &section = sections[i];
         std::string &filename = std::get<0>(section);
         std::string &code = std::get<1>(section);
+        const bool hasCode = HasSectionCode(i);
 
         XString resolvedFilename = filename.c_str();
         man->ResolveScriptFileName(resolvedFilename);
 
-        if (sourceSnapshotSections || code.size() != 0) {
+        if (hasCode) {
+            if (code.size() > static_cast<size_t>(UINT_MAX)) {
+                discardBuilderModule();
+                engine->WriteMessage(name.c_str(), 0, 0, asMSGTYPE_ERROR, "[CachedScript] Memory section is too large");
+                return false;
+            }
+            const char *sectionCode = code.empty() ? "\n" : code.c_str();
+            const unsigned int sectionSize = code.empty() ? 1u : static_cast<unsigned int>(code.size());
             r = builder.AddSectionFromMemory(filename.c_str(),
-                                             code.c_str(),
-                                             static_cast<unsigned int>(code.size()),
+                                             sectionCode,
+                                             sectionSize,
                                              0);
             if (r < 0) {
                 discardBuilderModule();
@@ -596,27 +604,54 @@ const char *CachedScript::GetSectionCode(int index) const {
 }
 
 void CachedScript::ClearCodeCache() {
-    for (auto &section: sections) {
-        std::get<1>(section).clear();
+    for (size_t i = 0; i < sections.size(); ++i) {
+        if (!HasSectionCode(i)) {
+            std::get<1>(sections[i]).clear();
+        }
     }
 }
 
-bool CachedScript::AddSection(const std::string &name, const std::string &code) {
+bool CachedScript::AddFileSection(const std::string &name) {
     auto it = std::find_if(sections.begin(), sections.end(),
                            [&name](const std::tuple<std::string, std::string> &section) {
                                return std::get<0>(section) == name;
                            });
     if (it != sections.end()) {
-        if (!code.empty()) {
-            std::get<1>(*it) = code;
-            return true;
-        } else {
-            return false;
+        return false;
+    }
+
+    sections.emplace_back(name, std::string());
+    sectionHasCode.push_back(0);
+    return true;
+}
+
+bool CachedScript::AddMemorySection(const std::string &name, const std::string &code) {
+    auto it = std::find_if(sections.begin(), sections.end(),
+                           [&name](const std::tuple<std::string, std::string> &section) {
+                               return std::get<0>(section) == name;
+                           });
+    if (it != sections.end()) {
+        const size_t index = static_cast<size_t>(it - sections.begin());
+        std::get<1>(*it) = code;
+        if (index >= sectionHasCode.size()) {
+            sectionHasCode.resize(sections.size(), 0);
         }
+        sectionHasCode[index] = 1;
+        return true;
     }
 
     sections.emplace_back(name, code);
+    sectionHasCode.push_back(1);
     return true;
+}
+
+bool CachedScript::AddSection(const std::string &name, const std::string &code) {
+    return code.empty() ? AddFileSection(name) : AddMemorySection(name, code);
+}
+
+bool CachedScript::HasSectionCode(size_t index) const {
+    return sourceSnapshotSections ||
+           (index < sectionHasCode.size() && sectionHasCode[index] != 0);
 }
 
 bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
@@ -658,7 +693,9 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
     }
 
     std::vector<std::tuple<std::string, std::string>> loadedSections;
+    std::vector<unsigned char> loadedSectionHasCode;
     loadedSections.reserve(static_cast<size_t>(numSections));
+    loadedSectionHasCode.reserve(static_cast<size_t>(numSections));
     size_t declaredCodeBytes = 0;
     const size_t maxDeclaredCodeBytes = static_cast<size_t>(chunkDataSize);
     for (int i = 0; i < numSections; ++i) {
@@ -670,9 +707,13 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         CKDeletePointer(str);
         str = nullptr;
 
+        const bool hasCode = chunk->ReadInt() != 0;
         std::string buffer;
         CKDWORD size = chunk->ReadDword();
         const size_t codeSize = static_cast<size_t>(size);
+        if (!hasCode && size != 0) {
+            return fail();
+        }
         if (size > static_cast<CKDWORD>(INT_MAX) ||
             codeSize > maxDeclaredCodeBytes ||
             declaredCodeBytes > maxDeclaredCodeBytes - codeSize) {
@@ -685,11 +726,13 @@ bool CachedScript::LoadFromChunk(CKStateChunk *chunk) {
         }
 
         loadedSections.emplace_back(std::move(filename), std::move(buffer));
+        loadedSectionHasCode.push_back(hasCode ? 1 : 0);
     }
 
     Discard();
     name = std::move(loadedName);
     sections = std::move(loadedSections);
+    sectionHasCode = std::move(loadedSectionHasCode);
     sourceSnapshotSections = loadedSourceSnapshotSections;
     includeEdges.clear();
     ClearMetadata();
@@ -712,19 +755,22 @@ bool CachedScript::SaveToChunk(CKStateChunk *chunk) {
     // Write the number of sections
     chunk->WriteInt((int) sections.size());
 
-    for (const auto &section: sections) {
+    for (size_t index = 0; index < sections.size(); ++index) {
+        const auto &section = sections[index];
         const std::string &filename = std::get<0>(section);
         chunk->WriteString(const_cast<char *>(filename.c_str()));
 
         const std::string &code = std::get<1>(section);
+        const bool hasCode = HasSectionCode(index);
 
-        if (code.size() > static_cast<size_t>(INT_MAX)) {
+        if (hasCode && code.size() > static_cast<size_t>(INT_MAX)) {
             chunk->CloseChunk();
             return false;
         }
 
-        chunk->WriteDword(static_cast<CKDWORD>(code.size()));
-        if (code.size() != 0) {
+        chunk->WriteInt(hasCode ? 1 : 0);
+        chunk->WriteDword(hasCode ? static_cast<CKDWORD>(code.size()) : 0);
+        if (hasCode && code.size() != 0) {
             chunk->WriteBufferNoSize(static_cast<int>(code.size()),
                                      const_cast<char *>(code.data()));
         }
@@ -919,7 +965,7 @@ std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
 
     auto newScript = std::make_shared<CachedScript>();
     newScript->name = scriptName;
-    newScript->AddSection(filename);
+    newScript->AddFileSection(filename);
 
     if (!newScript->Build(engine)) {
         return nullptr;
@@ -949,7 +995,7 @@ std::shared_ptr<CachedScript> ScriptCache::LoadScript(asIScriptEngine *engine,
     auto newScript = std::make_shared<CachedScript>();
     newScript->name = scriptName;
     for (auto &filename: filenames) {
-        newScript->AddSection(filename);
+        newScript->AddFileSection(filename);
     }
 
     if (!newScript->Build(engine)) {
@@ -979,7 +1025,7 @@ std::shared_ptr<CachedScript> ScriptCache::CompileScript(asIScriptEngine *engine
 
     auto newScript = std::make_shared<CachedScript>();
     newScript->name = scriptName;
-    newScript->AddSection(scriptName, scriptCode);
+    newScript->AddMemorySection(scriptName, scriptCode);
 
     if (!newScript->Build(engine)) {
         return nullptr;

@@ -228,9 +228,14 @@ unsigned long long ScriptModuleRegistry::BuildSourceHash(const char *moduleName)
     if (cached) {
         ScriptApiSupport::HashBool(sourceHash, cached->sourceSnapshotSections);
         ScriptApiSupport::HashValue(sourceHash, static_cast<unsigned long long>(cached->sections.size()));
-        for (const auto &section : cached->sections) {
+        for (size_t i = 0; i < cached->sections.size(); ++i) {
+            const auto &section = cached->sections[i];
+            const bool hasCode = cached->HasSectionCode(i);
             ScriptApiSupport::HashString(sourceHash, std::get<0>(section));
-            ScriptApiSupport::HashString(sourceHash, std::get<1>(section));
+            ScriptApiSupport::HashBool(sourceHash, hasCode);
+            if (hasCode) {
+                ScriptApiSupport::HashString(sourceHash, std::get<1>(section));
+            }
         }
     }
     return sourceHash;
@@ -241,6 +246,7 @@ CKAS_STATUS ScriptModuleRegistry::ReplaceFromSections(
     const char *moduleName,
     const std::vector<std::tuple<std::string, std::string>> &sections,
     bool sourceSnapshotSections,
+    bool memorySections,
     CKAngelScriptResult *result) {
     return m_Replacer.ReplaceFromSections(context.Manager,
                                           *this,
@@ -250,6 +256,7 @@ CKAS_STATUS ScriptModuleRegistry::ReplaceFromSections(
                                           moduleName,
                                           sections,
                                           sourceSnapshotSections,
+                                          memorySections,
                                           result);
 }
 
@@ -310,7 +317,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(MutationContext &context,
         return Compile(context, request.ModuleName, request.Code, CKAS_COMPILE_REPLACEEXISTING, result);
     }
     if (request.SourceKind == ScriptPublicOptions::LoadSourceKind::Sections) {
-        return ReplaceFromSections(context, request.ModuleName, request.Sections, true, result);
+        return ReplaceFromSections(context, request.ModuleName, request.Sections, true, true, result);
     }
     if (request.SourceKind == ScriptPublicOptions::LoadSourceKind::Files) {
         if (replacingExisting) {
@@ -324,7 +331,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(MutationContext &context,
                 context.Manager.ResolveScriptFileName(scriptFilename);
                 sections.emplace_back(scriptFilename.CStr(), std::string());
             }
-            return ReplaceFromSections(context, request.ModuleName, sections, false, result);
+            return ReplaceFromSections(context, request.ModuleName, sections, false, false, result);
         }
         std::vector<CapturedScriptMessage> diagnosticMessages;
         context.Diagnostics.BeginScriptMessageCapture();
@@ -353,7 +360,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(MutationContext &context,
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(std::move(scriptFilename), std::string());
-        return ReplaceFromSections(context, request.ModuleName, sections, false, result);
+        return ReplaceFromSections(context, request.ModuleName, sections, false, false, result);
     }
 
     std::vector<CapturedScriptMessage> diagnosticMessages;
@@ -420,7 +427,7 @@ CKAS_STATUS ScriptModuleRegistry::Compile(MutationContext &context,
         }
         std::vector<std::tuple<std::string, std::string>> sections;
         sections.emplace_back(moduleName, scriptCode);
-        return ReplaceFromSections(context, moduleName, sections, false, result);
+        return ReplaceFromSections(context, moduleName, sections, false, true, result);
     }
 
     std::vector<CapturedScriptMessage> diagnosticMessages;

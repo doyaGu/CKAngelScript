@@ -26,6 +26,7 @@ void MarkIncompleteRollback(ScriptModuleStateStore &stateStore, const char *modu
 struct ScriptModuleReplacer::Snapshot {
     std::shared_ptr<CachedScript> Cache;
     std::vector<std::tuple<std::string, std::string>> Sections;
+    std::vector<unsigned char> SectionHasCode;
     ScriptMetadata Metadata;
     std::vector<ScriptImportBindingEdge> ImportBindings;
     std::vector<unsigned char> ByteCode;
@@ -38,6 +39,7 @@ std::shared_ptr<CachedScript> ScriptModuleReplacer::BuildTransientModule(
     const char *moduleName,
     const std::vector<std::tuple<std::string, std::string>> &sections,
     bool sourceSnapshotSections,
+    bool memorySections,
     ScriptApiDiagnostics &diagnosticsStore,
     int &angelScriptCode,
     std::string &diagnostics,
@@ -53,7 +55,11 @@ std::shared_ptr<CachedScript> ScriptModuleReplacer::BuildTransientModule(
     script->name = moduleName;
     script->sourceSnapshotSections = sourceSnapshotSections;
     for (const auto &section : sections) {
-        script->AddSection(std::get<0>(section), std::get<1>(section));
+        if (sourceSnapshotSections || memorySections) {
+            script->AddMemorySection(std::get<0>(section), std::get<1>(section));
+        } else {
+            script->AddFileSection(std::get<0>(section));
+        }
     }
 
     diagnosticsStore.BeginScriptMessageCapture();
@@ -89,6 +95,7 @@ bool ScriptModuleReplacer::CaptureSnapshot(ScriptManager &manager,
     snapshot.ImportBindings = stateStore.GetImportBindingsForModule(moduleName);
     if (snapshot.Cache) {
         snapshot.Sections = snapshot.Cache->sections;
+        snapshot.SectionHasCode = snapshot.Cache->sectionHasCode;
         snapshot.Metadata = snapshot.Cache->metadata;
         snapshot.SourceSnapshotSections = snapshot.Cache->sourceSnapshotSections;
     }
@@ -157,6 +164,7 @@ bool ScriptModuleReplacer::RestoreSnapshot(ScriptManager &manager,
         snapshot.Cache ? snapshot.Cache : std::make_shared<CachedScript>();
     restoredCache->name = moduleName ? moduleName : "";
     restoredCache->sections = snapshot.Sections;
+    restoredCache->sectionHasCode = snapshot.SectionHasCode;
     restoredCache->sourceSnapshotSections = snapshot.SourceSnapshotSections;
     restoredCache->metadata = snapshot.Metadata;
     restoredCache->module = restoredModule;
@@ -235,6 +243,7 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
     const char *moduleName,
     const std::vector<std::tuple<std::string, std::string>> &sections,
     bool sourceSnapshotSections,
+    bool memorySections,
     CKAngelScriptResult *result) {
     int angelScriptCode = 0;
     std::string diagnostics;
@@ -246,6 +255,7 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
                              transientName.c_str(),
                              sections,
                              sourceSnapshotSections,
+                             memorySections,
                              diagnosticsStore,
                              angelScriptCode,
                              diagnostics,
@@ -291,6 +301,7 @@ CKAS_STATUS ScriptModuleReplacer::ReplaceFromSections(
     auto committedCache = std::make_shared<CachedScript>();
     committedCache->name = moduleName ? moduleName : "";
     committedCache->sections = candidate->sections;
+    committedCache->sectionHasCode = candidate->sectionHasCode;
     committedCache->includeEdges = candidate->includeEdges;
     committedCache->sourceSnapshotSections = candidate->sourceSnapshotSections;
     ScriptMetadata::RemapForModule(candidate->module,

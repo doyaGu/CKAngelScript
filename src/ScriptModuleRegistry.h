@@ -116,6 +116,7 @@ private:
                                     const char *moduleName,
                                     const std::vector<std::tuple<std::string, std::string>> &sections,
                                     bool sourceSnapshotSections,
+                                    bool memorySections,
                                     CKAngelScriptResult *result);
     CKAS_STATUS CompleteSourceLoad(MutationContext &context,
                                    const char *moduleName,

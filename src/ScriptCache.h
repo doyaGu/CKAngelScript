@@ -16,7 +16,7 @@
 class CScriptBuilder;
 
 #define SCRIPTCACHE_IDENTIFIER 0x41535343 // 'ASSC'
-#define SCRIPTCACHE_VERSION 2
+#define SCRIPTCACHE_VERSION 3
 
 class ICachedScript {
 public:
@@ -130,6 +130,7 @@ struct CachedScript : ICachedScript {
     asIScriptModule *module = nullptr;
     std::string name;
     std::vector<std::tuple<std::string, std::string>> sections;
+    std::vector<unsigned char> sectionHasCode;
     std::vector<ScriptIncludeEdge> includeEdges;
     bool sourceSnapshotSections = false;
     ScriptMetadata metadata;
@@ -150,6 +151,9 @@ struct CachedScript : ICachedScript {
     void ClearCodeCache() override;
 
     bool AddSection(const std::string &name, const std::string &code = "");
+    bool AddFileSection(const std::string &name);
+    bool AddMemorySection(const std::string &name, const std::string &code);
+    bool HasSectionCode(size_t index) const;
 
     bool LoadFromChunk(CKStateChunk *chunk) override;
     bool SaveToChunk(CKStateChunk *chunk) override;

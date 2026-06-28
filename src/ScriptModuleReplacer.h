@@ -26,6 +26,7 @@ public:
                                     const char *moduleName,
                                     const std::vector<std::tuple<std::string, std::string>> &sections,
                                     bool sourceSnapshotSections,
+                                    bool memorySections,
                                     CKAngelScriptResult *result);
 
     CKAS_STATUS ReplaceFromBytecode(ScriptManager &manager,
@@ -77,6 +78,7 @@ private:
         const char *moduleName,
         const std::vector<std::tuple<std::string, std::string>> &sections,
         bool sourceSnapshotSections,
+        bool memorySections,
         ScriptApiDiagnostics &diagnosticsStore,
         int &angelScriptCode,
         std::string &diagnostics,

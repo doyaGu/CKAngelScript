@@ -150,7 +150,7 @@ CKAS_STATUS status =
                               &result);
 ```
 
-`CKAngelScriptLoadOptions` accepts exactly one source: `Filename`, `Filenames` plus `FileCount`, `Code`, or `Sections` plus `SectionCount`. `Sections[0]` is the entry section; the remaining sections are an in-memory include snapshot used by `#include` resolution and are not automatically compiled unless included. Snapshot section names must be unique after the same path normalization used for include resolution. Unknown flags return `CKAS_INVALIDARGUMENT`. Replacing an existing module requires `CKAS_LOAD_REPLACEEXISTING` or `CKAS_COMPILE_REPLACEEXISTING`; without replace, duplicates return `CKAS_ALREADYEXISTS`.
+`CKAngelScriptLoadOptions` accepts exactly one source: `Filename`, `Filenames` plus `FileCount`, `Code`, or `Sections` plus `SectionCount`. `Code` is an explicit in-memory source even when it is an empty string. `Sections[0]` is the entry section; the remaining sections are an in-memory include snapshot used by `#include` resolution and are not automatically compiled unless included. Snapshot section names must be unique after the same path normalization used for include resolution. Unknown flags return `CKAS_INVALIDARGUMENT`. Replacing an existing module requires `CKAS_LOAD_REPLACEEXISTING` or `CKAS_COMPILE_REPLACEEXISTING`; without replace, duplicates return `CKAS_ALREADYEXISTS`.
 
 Module replacement is atomic at the public API boundary: if the replacement source fails to compile or load, the old module remains available and its generation is unchanged. Successful replacement bumps the generation once.
 
