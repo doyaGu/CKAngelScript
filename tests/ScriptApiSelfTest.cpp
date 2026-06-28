@@ -1616,6 +1616,31 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         }
         restoreOverExistingCache.Clear();
 
+        if (!manager->RestoreCachedScriptFromChunk(cacheChunkModuleName, chunk.get()) ||
+            api->CompileModule(cacheChunkModuleName,
+                               "int __ckas_cache_chunk_value() { return 99; }\n",
+                               CKAS_COMPILE_REPLACEEXISTING,
+                               &result) != CKAS_OK) {
+            error = "CKAngelScript API self-test expected explicit CompileModule code to replace unloaded cache entries.";
+            api->UnloadModule(cacheChunkModuleName, nullptr);
+            return false;
+        }
+        chunkValue = 0;
+        if (!ExecuteIntFunction(api,
+                                cacheChunkModuleName,
+                                "int __ckas_cache_chunk_value()",
+                                chunkValue,
+                                result,
+                                error) ||
+            chunkValue != 99) {
+            if (error.empty()) {
+                error = "CKAngelScript API self-test expected explicit CompileModule code to ignore unloaded cache snapshots.";
+            }
+            api->UnloadModule(cacheChunkModuleName, nullptr);
+            return false;
+        }
+        api->UnloadModule(cacheChunkModuleName, nullptr);
+
         constexpr const char *cacheChunkMismatchModuleName = "__CKAS_CacheChunkMismatchSelfTest";
         if (manager->RestoreCachedScriptFromChunk(cacheChunkMismatchModuleName, chunk.get()) ||
             manager->GetCachedScript(cacheChunkMismatchModuleName)) {

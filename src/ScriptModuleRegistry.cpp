@@ -26,6 +26,15 @@ std::string MakeQualifiedTypeDeclaration(const char *typeNamespace, const char *
     return declaration;
 }
 
+void InvalidateUnloadedCache(ScriptModuleRegistry &registry, ScriptManager &manager, const char *moduleName) {
+    if (!ScriptApiSupport::IsNonEmpty(moduleName) || manager.GetModule(moduleName)) {
+        return;
+    }
+    if (registry.GetCachedScript(moduleName)) {
+        registry.Invalidate(moduleName);
+    }
+}
+
 } // namespace
 
 void ScriptModuleRegistry::Clear() {
@@ -75,6 +84,7 @@ int ScriptModuleRegistry::LoadFromDefaultOrFile(ScriptManager &manager,
     XString scriptFilename;
     if (filename) {
         scriptFilename = filename;
+        InvalidateUnloadedCache(*this, manager, moduleName);
     } else {
         scriptFilename = moduleName;
         scriptFilename += ".as";
@@ -99,6 +109,7 @@ int ScriptModuleRegistry::LoadFromFiles(ScriptManager &manager,
     if (!engine) {
         return -2;
     }
+    InvalidateUnloadedCache(*this, manager, moduleName);
 
     std::vector<std::string> files;
     for (size_t i = 0; i < count; i++) {
@@ -128,6 +139,7 @@ int ScriptModuleRegistry::CompileFromMemory(ScriptManager &manager,
     if (!engine) {
         return -2;
     }
+    InvalidateUnloadedCache(*this, manager, moduleName);
 
     auto cache = m_Cache.CompileScript(engine, moduleName, scriptCode);
     if (!cache) {
