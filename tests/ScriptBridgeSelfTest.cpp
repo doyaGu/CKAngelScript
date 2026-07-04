@@ -59,6 +59,14 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     }
 
     std::string source;
+    source += "class ComponentFrameProbe {\n";
+    source += "    BBConfig@ cfg;\n";
+    source += "    BBInstance@ instance;\n";
+    source += "    BBSlot@ pin;\n";
+    source += "    void Update(BehaviorFrame@ frame) { if (frame !is null) frame.Trace(\"component-frame-probe\"); }\n";
+    source += "    void Start(BehaviorFrame@ frame) { if (frame is null) return; if (cfg !is null) { cfg.Validate(frame); @instance = cfg.EnsureStarted(frame); cfg.Stop(frame); cfg.Raise(frame); } if (instance !is null) { instance.Start(frame); instance.Step(frame); instance.Stop(frame); instance.Raise(frame); if (pin !is null) instance.StepSet(frame, pin, \"x\"); } }\n";
+    source += "    void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) { if (frame !is null) frame.Context(); }\n";
+    source += "}\n";
     source += "void ProbeParamHandleApi(ParamRef@ param, ParamValue@ value, ParamStructValue@ structValue) {\n";
     source += "    if (param is null) return;\n";
     source += "    param.IsValid(); bool valid = param.valid; CK_ID id = param.id; int index = param.index; ParamKind kind = param.kind; string name = param.name;\n";
@@ -352,6 +360,17 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBResult@ slotResult = slotCall.Run(input);\n";
     source += "    if (slotResult is null || !slotResult.Ok() || !slotResult.OutputActive(0)) return 918;\n";
     source += "    slotResult.ReturnCode();\n";
+    source += "    BBCallBuilder@ namedCall = BB::Call(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    if (namedCall is null) return 919;\n";
+    source += "    namedCall.Set(\"pIn 0\", intValue);\n";
+    source += "    namedCall.Set(\"pIn 0\", 9);\n";
+    source += "    namedCall.Set(\"pIn 0\", 9.0f);\n";
+    source += "    namedCall.Set(\"pIn 0\", true);\n";
+    source += "    namedCall.Set(\"pIn 0\", \"9\");\n";
+    source += "    namedCall.Set(\"pIn 0\", objectValue);\n";
+    source += "    if (namedCall.Set(\"pIn 0\", intValue) is null) return 920;\n";
+    source += "    BBResult@ namedResult = namedCall.Run(\"In\");\n";
+    source += "    if (namedResult is null || !namedResult.Ok() || !namedResult.OutputActive(\"Out\")) return 921;\n";
     source += "    return 0;\n";
     source += "}\n";
     source += "int ProbeBBConfigApi(const CKBehaviorContext &in ctx) {\n";
@@ -397,9 +416,10 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (call is null || call.Set(pin, intValue) is null) return 953;\n";
     source += "    BBResult@ result = call.Run(input);\n";
     source += "    if (result is null || !result.Ok() || !result.OutputActive(output)) return 954;\n";
+    source += "    if (!result.OutputActive(\"Out\")) return 956;\n";
     source += "    result.ReturnCode(); result.Error();\n";
     source += "    BBSlot@ pout = decl.Pout(\"pOut 0\");\n";
-    source += "    if (pout !is null && pout.IsValid()) { ParamRef@ poutRef = result.Pout(pout); if (poutRef is null || !poutRef.IsValid()) return 955; }\n";
+    source += "    if (pout !is null && pout.IsValid()) { ParamRef@ poutRef = result.Pout(pout); if (poutRef is null || !poutRef.IsValid()) return 955; ParamRef@ poutByName = result.Pout(\"pOut 0\"); if (poutByName is null || !poutByName.IsValid()) return 957; }\n";
     source += "    result.Raise(ctx);\n";
     source += "    return 0;\n";
     source += "}\n";
@@ -510,6 +530,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    behavior.OutputActive(output);\n";
     source += "    ParamRef@ pinByIndex = behavior.Pin(0);\n";
     source += "    if (pinByIndex is null || !pinByIndex.IsValid()) return 9861;\n";
+    source += "    ParamRef@ pinByName = behavior.Pin(\"pIn 0\");\n";
+    source += "    if (pinByName is null || !pinByName.IsValid() || pinByName.Id() != pinByIndex.Id()) return 9862;\n";
     source += "    ParamRef@ pinRef = behavior.Pin(pinSlot);\n";
     source += "    if (pinRef is null || !pinRef.IsValid()) return 987;\n";
     source += "    ParamRef@ poutByIndex = behavior.Pout(0); if (poutByIndex !is null) { poutByIndex.IsValid(); }\n";
@@ -2896,61 +2918,19 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
         return false;
     }
 
-    behavior->CreateInput(const_cast<CKSTRING>("In"));
-    bridge->InvalidateBehaviorLayout(behavior->GetID());
-    WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-duplicate", std::string());
-    const ScriptBridgeLayoutRecord *duplicateInputLayout = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
     CKBehaviorContext emptyBehaviorContext = {};
     ScriptBridgeBBInvocationSpec emptyRequest = MakeDefaultRequest(emptyBehaviorContext);
-    BBSlot *duplicateInput = duplicateInputLayout
-        ? new BBSlot(bridge,
-                     emptyBehaviorContext,
-                     emptyRequest,
-                     ScriptBridgeSlotKind::Input,
-                     1,
-                     "In",
-                     CKGUID(),
-                     std::string(),
-                     0,
-                     0,
-                     duplicateInputLayout->LayoutGeneration,
-                     duplicateInputLayout->Signature,
-                     std::string(),
-                     behavior->GetID(),
-                     stamp)
-        : nullptr;
-    const bool duplicateInputValid = duplicateInput && duplicateInput->IsValid();
-    if (!duplicateInputValid) {
-        if (duplicateInput) {
-            duplicateInput->Release();
-        }
-        DestroySelfTestObject(context, behavior);
-        error = "Layout cache duplicate input slot setup self-test failed.";
-        return false;
-    }
-
-    CKDWORD defaultInputFlags = 0;
-    SetScriptBridgeSlotMetadataFlag(defaultInputFlags, ScriptBridgeSlotMetadataFlags::Start, true);
-    SetScriptBridgeSlotMetadataFlag(defaultInputFlags, ScriptBridgeSlotMetadataFlags::Stop, true);
-    duplicateInput->SetMetadata(defaultInputFlags, std::string(), std::string());
-
     BBConfig defaultInputConfig(bridge, emptyBehaviorContext, emptyRequest);
-    WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-register", std::string());
-    if (!defaultInputConfig.RegisterSlot(duplicateInput)) {
-        error = "BBConfig duplicate input metadata self-test failed to register slot: " + defaultInputConfig.Error();
-        duplicateInput->Release();
-        DestroySelfTestObject(context, behavior);
-        return false;
-    }
+    WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-occurrence", std::string());
+    defaultInputConfig.SetDefaultStart("In[1]");
+    defaultInputConfig.SetDefaultStop("In#1");
     const std::string defaultInputText = defaultInputConfig.Explain();
     if (defaultInputText.find("Default start input: 'In[1]'") == std::string::npos ||
         defaultInputText.find("Default stop input: 'In[1]'") == std::string::npos) {
-        error = "BBConfig duplicate input metadata self-test lost start/stop occurrence.";
-        duplicateInput->Release();
+        error = "BBConfig input occurrence metadata self-test lost start/stop occurrence.";
         DestroySelfTestObject(context, behavior);
         return false;
     }
-    duplicateInput->Release();
 
     WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-destroy", std::string());
     DestroySelfTestObject(context, behavior);
@@ -3279,6 +3259,75 @@ static bool RunBehaviorBridgeNativeShapeSelfTest(asIScriptEngine *engine, std::s
     }
 
     return true;
+}
+
+static bool RunScriptParameterConversionNativeSelfTest(CKContext *context, std::string &error) {
+    if (!context) {
+        error = "Parameter conversion native self-test requires CKContext.";
+        return false;
+    }
+
+    CKParameterLocal *intLocal = context->CreateCKParameterLocal(
+        const_cast<CKSTRING>("__CKAS_ReadIntConversion"), CKPGUID_INT, TRUE);
+    CKParameterLocal *boolLocal = context->CreateCKParameterLocal(
+        const_cast<CKSTRING>("__CKAS_ReadBoolConversion"), CKPGUID_BOOL, TRUE);
+    CKParameterLocal *intWriteLocal = context->CreateCKParameterLocal(
+        const_cast<CKSTRING>("__CKAS_WriteIntConversion"), CKPGUID_INT, TRUE);
+    if (!intLocal || !boolLocal || !intWriteLocal) {
+        if (intLocal) context->DestroyObject(intLocal);
+        if (boolLocal) context->DestroyObject(boolLocal);
+        if (intWriteLocal) context->DestroyObject(intWriteLocal);
+        error = "Parameter conversion native self-test could not create parameters.";
+        return false;
+    }
+
+    bool ok = true;
+    int intValue = 2468;
+    CKBOOL boolValue = TRUE;
+    if (intLocal->SetValue(&intValue, sizeof(intValue)) != CK_OK ||
+        boolLocal->SetValue(&boolValue, sizeof(boolValue)) != CK_OK) {
+        ok = false;
+        error = "Parameter conversion native self-test could not initialize parameters.";
+    }
+
+    if (ok) {
+        std::string readError;
+        ScriptParamValue readInt = ReadParameterValue(intLocal, &readError);
+        if (readInt.Kind != ScriptParamValueKind::Int || readInt.Data.IntValue != intValue) {
+            ok = false;
+            error = "Parameter conversion native self-test read CKPGUID_INT as " +
+                    ScriptParamValueKindName(readInt.Kind) + " instead of int.";
+        }
+    }
+
+    if (ok) {
+        std::string readError;
+        ScriptParamValue readBool = ReadParameterValue(boolLocal, &readError);
+        if (readBool.Kind != ScriptParamValueKind::Bool || !readBool.Data.BoolValue) {
+            ok = false;
+            error = "Parameter conversion native self-test failed to read CKPGUID_BOOL as bool.";
+        }
+    }
+
+    if (ok) {
+        std::string writeError;
+        const int writeValue = 42;
+        if (WriteParameterValue(intWriteLocal, MakeScriptParamInt(writeValue), writeError) != CK_OK) {
+            ok = false;
+            error = "Parameter conversion native self-test could not write CKPGUID_INT: " + writeError;
+        } else {
+            int actual = 0;
+            if (intWriteLocal->GetValue(&actual, TRUE) != CK_OK || actual != writeValue) {
+                ok = false;
+                error = "Parameter conversion native self-test wrote int as bool-like storage.";
+            }
+        }
+    }
+
+    context->DestroyObject(intWriteLocal);
+    context->DestroyObject(boolLocal);
+    context->DestroyObject(intLocal);
+    return ok;
 }
 
 static bool RunBehaviorBridgeNativeBBInvocationSelfTest(CKContext *context,
@@ -3670,6 +3719,12 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
         return false;
     }
     context->DestroyObject(stampParam);
+
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-parameter-conversion", std::string());
+    if (!RunScriptParameterConversionNativeSelfTest(context, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-parameter-conversion", error);
+        return false;
+    }
 
     WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-mutation", std::string());
     if (!RunBehaviorBridgeNativeMutationSelfTest(context, parameterManager, error)) {

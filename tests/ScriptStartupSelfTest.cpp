@@ -177,6 +177,17 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
         return CKERR_INVALIDOPERATION;
     }
 
+    WriteStartupSelfTestMarker("running", "executor", std::string());
+    if (!RunScriptExecutorSelfTest(manager ? manager->GetCKContext() : nullptr,
+                                   manager ? manager->GetScriptEngine() : nullptr,
+                                   error)) {
+        ReportSelfTestFailure(manager,
+                              "executor",
+                              "AngelScript Executor",
+                              error);
+        return CKERR_INVALIDOPERATION;
+    }
+
     WriteStartupSelfTestMarker("running", "scene", std::string());
     if (!RunScriptSceneSelfTest(manager ? manager->GetCKContext() : nullptr,
                                 manager ? manager->GetScriptEngine() : nullptr,

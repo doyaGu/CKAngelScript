@@ -29,6 +29,7 @@ bool RunScriptInfoExportSelfTest(asIScriptEngine *engine, std::string &error);
 bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
+bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptNativeMemorySelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error);

@@ -1,9 +1,279 @@
 #include "ScriptSelfTests.h"
 
+#include <cstring>
 #include <string>
 #include <vector>
 
+#include "CKAll.h"
+#include "ScriptBridgeCommon.h"
 #include "ScriptComponentMetadata.h"
+#include "ScriptComponentState.h"
+#include "ScriptManager.h"
+#include "ScriptMessage.h"
+
+namespace {
+
+constexpr int COMPONENT_PARAM_SCRIPT = 0;
+constexpr int COMPONENT_PARAM_CLASS = 1;
+constexpr int COMPONENT_PARAM_SOURCE = 2;
+constexpr int COMPONENT_PARAM_FILE = 3;
+constexpr int COMPONENT_PARAM_MANIFEST = 4;
+
+CKBehaviorContext MakeComponentSelfTestContext(CKContext *context, CKBehavior *behavior) {
+    CKBehaviorContext behaviorContext = {};
+    behaviorContext.Behavior = behavior;
+    behaviorContext.DeltaTime = 0.0f;
+    behaviorContext.Context = context;
+    behaviorContext.ParameterManager = context ? context->GetParameterManager() : nullptr;
+    behaviorContext.MessageManager = context ? context->GetMessageManager() : nullptr;
+    behaviorContext.AttributeManager = context ? context->GetAttributeManager() : nullptr;
+    behaviorContext.TimeManager = context ? context->GetTimeManager() : nullptr;
+    return behaviorContext;
+}
+
+void DestroyComponentSelfTestObject(CKContext *context, CKObject *object) {
+    if (context && object && !object->IsToBeDeleted()) {
+        context->DestroyObject(object);
+    }
+}
+
+bool SetComponentStringInput(CKBehavior *behavior, int index, const char *value, std::string &error) {
+    if (!behavior || index < 0 || index >= behavior->GetInputParameterCount()) {
+        error = "Component runtime self-test could not resolve string input parameter.";
+        return false;
+    }
+
+    CKParameterIn *input = behavior->GetInputParameter(index);
+    const std::string localName = "__CKAS_ComponentFrameSelfTest_" + std::to_string(index);
+    CKParameterLocal *local = behavior->CreateLocalParameter(const_cast<CKSTRING>(localName.c_str()), CKPGUID_STRING);
+    if (!input || !local) {
+        error = "Component runtime self-test failed to create input source.";
+        return false;
+    }
+
+    if (local->SetStringValue(const_cast<CKSTRING>(value ? value : "")) != CK_OK) {
+        error = "Component runtime self-test failed to write input source.";
+        return false;
+    }
+    behavior->SetInputParameterDefaultValue(input, local);
+    if (input->SetDirectSource(local) != CK_OK) {
+        error = "Component runtime self-test failed to write input source.";
+        return false;
+    }
+    return true;
+}
+
+int ExecuteComponentSelfTestBehavior(CKContext *context, CKBehavior *behavior, const CKBehaviorContext &behaviorContext) {
+    if (!behavior) {
+        return CKBR_BEHAVIORERROR;
+    }
+
+#if CKVERSION == 0x13022002
+    CKBehaviorContext savedContext = context->m_BehaviorContext;
+    CKBehaviorManager *behaviorManager = context ? context->GetBehaviorManager() : nullptr;
+    CKBehavior *savedCurrent = behaviorManager ? behaviorManager->m_CurrentBehavior : nullptr;
+
+    context->m_BehaviorContext = behaviorContext;
+    const int rc = behavior->Execute(behaviorContext.DeltaTime);
+
+    context->m_BehaviorContext = savedContext;
+    if (behaviorManager) {
+        behaviorManager->m_CurrentBehavior = savedCurrent;
+    }
+    return rc;
+#else
+    return behavior->Execute(behaviorContext.DeltaTime);
+#endif
+}
+
+bool ReadIntProperty(asIScriptObject *object, const char *name, int &value, std::string &error) {
+    if (!object || !name || name[0] == '\0') {
+        error = "Component runtime self-test script object is not available.";
+        return false;
+    }
+
+    asITypeInfo *type = object->GetObjectType();
+    if (!type) {
+        error = "Component runtime self-test script object has no type.";
+        return false;
+    }
+
+    for (asUINT i = 0; i < type->GetPropertyCount(); ++i) {
+        const char *propertyName = nullptr;
+        int typeId = 0;
+        if (type->GetProperty(i, &propertyName, &typeId) < 0 || !propertyName) {
+            continue;
+        }
+        if (std::strcmp(propertyName, name) != 0) {
+            continue;
+        }
+        if (typeId != asTYPEID_INT32) {
+            error = std::string("Component runtime self-test property has unexpected type: ") + name;
+            return false;
+        }
+        void *address = object->GetAddressOfProperty(i);
+        if (!address) {
+            error = std::string("Component runtime self-test property address is null: ") + name;
+            return false;
+        }
+        value = *static_cast<int *>(address);
+        return true;
+    }
+
+    error = std::string("Component runtime self-test property not found: ") + name;
+    return false;
+}
+
+bool ExpectIntProperty(asIScriptObject *object,
+                       const char *name,
+                       int expected,
+                       std::string &error) {
+    int actual = 0;
+    if (!ReadIntProperty(object, name, actual, error)) {
+        return false;
+    }
+    if (actual != expected) {
+        error = std::string("Component runtime self-test property '") + name +
+                "' expected " + std::to_string(expected) +
+                " but got " + std::to_string(actual) + ".";
+        return false;
+    }
+    return true;
+}
+
+bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "Component runtime self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    if (!manager) {
+        error = "Component runtime self-test could not retrieve ScriptManager.";
+        return false;
+    }
+
+    const char *source =
+        "class ComponentFrameRuntimeProbe {\n"
+        "  int startCount = 0;\n"
+        "  int updateCount = 0;\n"
+        "  int messageCount = 0;\n"
+        "  int legacyUpdateCount = 0;\n"
+        "  int legacyMessageCount = 0;\n"
+        "  int frameError = 0;\n"
+        "  void Validate(BehaviorFrame@ frame, int code) {\n"
+        "    if (frame is null) { frameError = code; return; }\n"
+        "    if (frame.Behavior() is null) { frameError = code + 1; return; }\n"
+        "    if (frame.Context() is null) { frameError = code + 2; return; }\n"
+        "  }\n"
+        "  void Start(BehaviorFrame@ frame) { Validate(frame, 100); startCount++; }\n"
+        "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
+        "  void Update(const CKBehaviorContext &in ctx) { legacyUpdateCount++; }\n"
+        "  void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) { Validate(frame, 300); if (msg.Topic() == \"component.frame.runtime\") messageCount++; else frameError = 399; }\n"
+        "  void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) { legacyMessageCount++; }\n"
+        "}\n";
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ComponentFrameSelfTestBehavior"),
+        CK_OBJECTCREATION_DYNAMIC));
+    bool deleteCallbackSent = false;
+    CKBehaviorContext behaviorContext = {};
+    auto cleanup = [&]() {
+        if (behavior && deleteCallbackSent) {
+            CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &behaviorContext);
+        }
+        DestroyComponentSelfTestObject(context, behavior);
+    };
+
+    if (!behavior) {
+        cleanup();
+        error = "Component runtime self-test failed to create behavior.";
+        return false;
+    }
+
+    behavior->UseFunction();
+    const CKERROR initError = behavior->InitFromGuid(CKGUID(0x5f5d4a84, 0x3dfd4d19));
+    if (initError != CK_OK) {
+        cleanup();
+        error = "Component runtime self-test failed to initialize AngelScript Component behavior.";
+        return false;
+    }
+
+    if (!SetComponentStringInput(behavior, COMPONENT_PARAM_SCRIPT, "__ckas_component_frame_runtime_selftest", error) ||
+        !SetComponentStringInput(behavior, COMPONENT_PARAM_CLASS, "ComponentFrameRuntimeProbe", error) ||
+        !SetComponentStringInput(behavior, COMPONENT_PARAM_SOURCE, source, error) ||
+        !SetComponentStringInput(behavior, COMPONENT_PARAM_FILE, "", error) ||
+        !SetComponentStringInput(behavior, COMPONENT_PARAM_MANIFEST, "", error)) {
+        cleanup();
+        return false;
+    }
+
+    behaviorContext = MakeComponentSelfTestContext(context, behavior);
+    const CKERROR createError = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &behaviorContext);
+    if (createError != CK_OK) {
+        cleanup();
+        error = "Component runtime self-test CREATE callback failed.";
+        return false;
+    }
+    deleteCallbackSent = true;
+
+    behavior->ActivateInput(0, TRUE);
+    const int returnCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (returnCode != CKBR_ACTIVATENEXTFRAME) {
+        cleanup();
+        error = "Component runtime self-test returned unexpected code " + std::to_string(returnCode) + ".";
+        return false;
+    }
+
+    ScriptComponentState *state = manager->GetComponentState(behavior->GetID());
+    if (!state || !state->Loaded || !state->InstanceEnabled || !state->Object) {
+        cleanup();
+        error = "Component runtime self-test did not create an enabled component instance.";
+        return false;
+    }
+    if (state->StartArgument != ScriptBehaviorArgumentKind::BehaviorFrame ||
+        state->UpdateArgument != ScriptBehaviorArgumentKind::BehaviorFrame ||
+        state->OnMessageArgument != ScriptBehaviorArgumentKind::BehaviorFrame) {
+        cleanup();
+        error = "Component runtime self-test did not cache BehaviorFrame lifecycle/message methods.";
+        return false;
+    }
+
+    ScriptMessage message(1,
+                          ScriptMessageKind::Direct,
+                          "component.frame.runtime",
+                          "component-runtime-self-test",
+                          ScriptMessageTarget(),
+                          0,
+                          false,
+                          nullptr);
+    std::string messageError;
+    if (!manager->DeliverComponentMessage(behavior->GetID(), message, true, messageError)) {
+        cleanup();
+        error = messageError.empty()
+            ? "Component runtime self-test message delivery failed."
+            : "Component runtime self-test message delivery failed: " + messageError;
+        return false;
+    }
+
+    asIScriptObject *object = state->Object;
+    if (!ExpectIntProperty(object, "startCount", 1, error) ||
+        !ExpectIntProperty(object, "updateCount", 1, error) ||
+        !ExpectIntProperty(object, "messageCount", 1, error) ||
+        !ExpectIntProperty(object, "legacyUpdateCount", 0, error) ||
+        !ExpectIntProperty(object, "legacyMessageCount", 0, error) ||
+        !ExpectIntProperty(object, "frameError", 0, error)) {
+        cleanup();
+        return false;
+    }
+
+    cleanup();
+    error.clear();
+    return true;
+}
+
+} // namespace
 
 bool RunScriptComponentMetadataSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
@@ -227,6 +497,10 @@ bool RunScriptComponentMetadataSelfTest(CKContext *context, asIScriptEngine *eng
     if (occurrenceCacheText.find("pin:Value[3]=") == std::string::npos ||
         occurrenceCacheText.find("source:pIn 0[1]<-SourceConfig.pout:Value[2]") == std::string::npos) {
         error = "Component metadata self-test did not include slot occurrences in BBConfig cache text.";
+        return false;
+    }
+
+    if (!RunComponentBehaviorFrameRuntimeSelfTest(context, engine, error)) {
         return false;
     }
 
