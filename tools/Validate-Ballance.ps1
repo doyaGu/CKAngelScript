@@ -9,6 +9,7 @@ param(
     [switch]$IncludeLogTail,
     [switch]$SkipInstall,
     [switch]$SkipPlayer,
+    [switch]$NoStartupSelfTests,
     [switch]$NoModIsolation,
     [string]$ExportScriptApi = ""
 )
@@ -313,6 +314,43 @@ function Wait-StartupSelfTestMarker {
         -PlayerLogStartLine $PlayerLogStartLine
 }
 
+function Wait-BallancePlayerSettle {
+    param(
+        [string]$StartupSelfTestMarker,
+        [System.Diagnostics.Process]$Process,
+        [int]$TimeoutSeconds,
+        [string]$AngelScriptLog,
+        [string]$PlayerLog,
+        [int]$LogTailLines = 40,
+        [int]$AngelScriptLogStartLine = 0,
+        [int]$PlayerLogStartLine = 0
+    )
+
+    $timeoutMilliseconds = [Math]::Max(1, $TimeoutSeconds) * 1000
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+    while ($stopwatch.ElapsedMilliseconds -lt $timeoutMilliseconds) {
+        $Process.Refresh()
+        if ($Process.HasExited) {
+            Throw-BallanceValidationError `
+                -Message "Player exited during $TimeoutSeconds second startup settle wait. ExitCode=$($Process.ExitCode)." `
+                -StartupSelfTestMarker $StartupSelfTestMarker `
+                -AngelScriptLog $AngelScriptLog `
+                -PlayerLog $PlayerLog `
+                -LogTailLines $LogTailLines `
+                -AngelScriptLogStartLine $AngelScriptLogStartLine `
+                -PlayerLogStartLine $PlayerLogStartLine
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+
+    $stopwatch.Stop()
+    return [pscustomobject]@{
+        ElapsedSeconds = [Math]::Round($stopwatch.Elapsed.TotalSeconds, 3)
+    }
+}
+
 function Resolve-BallanceRoot {
     param(
         [string]$RequestedRoot
@@ -429,7 +467,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $bbs = Get-Content -LiteralPath $bbsJson -Raw | ConvertFrom-Json
-$expected = @("AngelScript Component")
+$expected = @("AngelScript Component", "AngelScript Executor")
 $missing = @()
 foreach ($name in $expected) {
     if (-not ($bbs | Where-Object { $_.name -eq $name })) {
@@ -457,8 +495,13 @@ if (-not $SkipPlayer) {
     $oldSelfTestMarker = $env:CKAS_SELFTEST_MARKER
     $oldRunSelfTests = $env:CKAS_RUN_SELFTESTS
     $oldExportScriptApi = $env:CKAS_EXPORT_SCRIPT_API
-    $env:CKAS_SELFTEST_MARKER = $startupSelfTestMarker
-    $env:CKAS_RUN_SELFTESTS = "1"
+    if ($NoStartupSelfTests) {
+        Remove-Item Env:\CKAS_SELFTEST_MARKER -ErrorAction SilentlyContinue
+        Remove-Item Env:\CKAS_RUN_SELFTESTS -ErrorAction SilentlyContinue
+    } else {
+        $env:CKAS_SELFTEST_MARKER = $startupSelfTestMarker
+        $env:CKAS_RUN_SELFTESTS = "1"
+    }
     if (-not [string]::IsNullOrWhiteSpace($scriptApiJson)) {
         $scriptApiParent = Split-Path -Parent $scriptApiJson
         if (-not [string]::IsNullOrWhiteSpace($scriptApiParent)) {
@@ -474,15 +517,27 @@ if (-not $SkipPlayer) {
     }
     try {
         $process = Start-Process -FilePath $player -WorkingDirectory $bin -WindowStyle $PlayerWindowStyle -PassThru
-        $waitResult = Wait-StartupSelfTestMarker `
-            -StartupSelfTestMarker $startupSelfTestMarker `
-            -Process $process `
-            -TimeoutSeconds $PlayerSeconds `
-            -AngelScriptLog $angelScriptLog `
-            -PlayerLog $playerLog `
-            -LogTailLines $LogTailLines `
-            -AngelScriptLogStartLine $angelScriptLogStartLine `
-            -PlayerLogStartLine $playerLogStartLine
+        if ($NoStartupSelfTests) {
+            $waitResult = Wait-BallancePlayerSettle `
+                -StartupSelfTestMarker $startupSelfTestMarker `
+                -Process $process `
+                -TimeoutSeconds $PlayerSeconds `
+                -AngelScriptLog $angelScriptLog `
+                -PlayerLog $playerLog `
+                -LogTailLines $LogTailLines `
+                -AngelScriptLogStartLine $angelScriptLogStartLine `
+                -PlayerLogStartLine $playerLogStartLine
+        } else {
+            $waitResult = Wait-StartupSelfTestMarker `
+                -StartupSelfTestMarker $startupSelfTestMarker `
+                -Process $process `
+                -TimeoutSeconds $PlayerSeconds `
+                -AngelScriptLog $angelScriptLog `
+                -PlayerLog $playerLog `
+                -LogTailLines $LogTailLines `
+                -AngelScriptLogStartLine $angelScriptLogStartLine `
+                -PlayerLogStartLine $playerLogStartLine
+        }
     } finally {
         if ($null -eq $oldSelfTestMarker) {
             Remove-Item Env:\CKAS_SELFTEST_MARKER -ErrorAction SilentlyContinue
@@ -506,13 +561,15 @@ if (-not $SkipPlayer) {
     $playerResult = [pscustomobject]@{
         ProcessId = $process.Id
         WaitTimeoutSeconds = $PlayerSeconds
-        SelfTestElapsedSeconds = $waitResult.ElapsedSeconds
+        WaitMode = if ($NoStartupSelfTests) { "startup-settle" } else { "startup-self-test" }
+        WaitElapsedSeconds = $waitResult.ElapsedSeconds
+        SelfTestElapsedSeconds = if ($NoStartupSelfTests) { $null } else { $waitResult.ElapsedSeconds }
         HasExitedBeforeClose = $closeResult.HasExitedBeforeClose
         ExitCode = $closeResult.ExitCode
         ClosedByTest = $closeResult.ClosedByTest
         KilledByTest = $closeResult.KilledByTest
         CloseElapsedSeconds = $closeResult.CloseElapsedSeconds
-        StartupSelfTest = ($waitResult.MarkerText.Trim() -replace "`r?`n", "; ")
+        StartupSelfTest = if ($NoStartupSelfTests) { "skipped" } else { ($waitResult.MarkerText.Trim() -replace "`r?`n", "; ") }
     }
 }
 
