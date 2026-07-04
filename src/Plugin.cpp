@@ -1,6 +1,7 @@
 ﻿#include "CKAll.h"
 
 #include "Logger.h"
+#include "AngelScriptExecutor.h"
 #include "AngelScriptEventHook.h"
 #include "ScriptManager.h"
 #include "Version.h"
@@ -74,5 +75,6 @@ PLUGIN_EXPORT void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg);
 void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg) {
     InitAngelScriptLogger();
     RegisterBehavior(reg, FillBehaviorAngelScriptComponentDecl);
+    RegisterBehavior(reg, FillBehaviorAngelScriptExecutorDecl);
     RegisterBehavior(reg, FillBehaviorAngelScriptEventHookDecl);
 }

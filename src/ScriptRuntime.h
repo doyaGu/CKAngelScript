@@ -159,6 +159,7 @@ public:
     std::vector<std::string> List() const;
     std::vector<RuntimeScriptInfo> ListInfo() const;
     RuntimeScriptInfo Info(const std::string &id) const;
+    std::string ModuleName(const std::string &id);
     std::string Version(const std::string &id) const;
     std::string Metadata(const std::string &id, const std::string &key, const std::string &fallback = std::string()) const;
     std::vector<std::string> Dependencies(const std::string &id) const;

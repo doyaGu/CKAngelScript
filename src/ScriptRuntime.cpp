@@ -1000,6 +1000,15 @@ RuntimeScriptInfo ScriptRuntime::Info(const std::string &id) const {
     return module ? BuildInfo(*module) : RuntimeScriptInfo();
 }
 
+std::string ScriptRuntime::ModuleName(const std::string &id) {
+    EnsureScanned();
+    Module *module = FindModule(id);
+    if (!module || !module->Loaded || module->Failed || module->ModuleName.empty()) {
+        return std::string();
+    }
+    return module->ModuleName;
+}
+
 std::string ScriptRuntime::Version(const std::string &id) const {
     Module *module = FindModule(id);
     return module ? module->Meta.VersionText : std::string();

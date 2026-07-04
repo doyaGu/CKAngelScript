@@ -313,7 +313,7 @@ ScriptComponentState *GetState(const CKBehaviorContext &behcontext) {
     return state;
 }
 
-bool IsContextLifecycleMethod(asIScriptFunction *func) {
+bool IsContextLifecycleMethod(asIScriptFunction *func, ScriptBehaviorArgumentKind &argumentKind) {
     if (!func || func->GetReturnTypeId() != asTYPEID_VOID || func->GetParamCount() != 1) {
         return false;
     }
@@ -325,11 +325,20 @@ bool IsContextLifecycleMethod(asIScriptFunction *func) {
     }
 
     int contextTypeId = func->GetEngine()->GetTypeIdByDecl("CKBehaviorContext");
+    int frameTypeId = func->GetEngine()->GetTypeIdByDecl("BehaviorFrame@");
     asDWORD refFlags = flags & asTM_INOUTREF;
-    return typeId == contextTypeId && refFlags == asTM_INREF && (flags & asTM_CONST) != 0;
+    if (typeId == frameTypeId && refFlags == 0) {
+        argumentKind = ScriptBehaviorArgumentKind::BehaviorFrame;
+        return true;
+    }
+    if (typeId == contextTypeId && refFlags == asTM_INREF && (flags & asTM_CONST) != 0) {
+        argumentKind = ScriptBehaviorArgumentKind::BehaviorContext;
+        return true;
+    }
+    return false;
 }
 
-bool IsComponentMessageMethod(asIScriptFunction *func) {
+bool IsComponentMessageMethod(asIScriptFunction *func, ScriptBehaviorArgumentKind &argumentKind) {
     if (!func || func->GetReturnTypeId() != asTYPEID_VOID || func->GetParamCount() != 2) {
         return false;
     }
@@ -344,18 +353,37 @@ bool IsComponentMessageMethod(asIScriptFunction *func) {
     asIScriptEngine *engine = func->GetEngine();
     const int expectedMessage = engine ? engine->GetTypeIdByDecl("ScriptMessage") : 0;
     const int expectedContext = engine ? engine->GetTypeIdByDecl("CKBehaviorContext") : 0;
-    return messageTypeId == expectedMessage &&
-           contextTypeId == expectedContext &&
-           (messageFlags & asTM_INOUTREF) == asTM_INREF &&
-           (contextFlags & asTM_INOUTREF) == asTM_INREF &&
-           (messageFlags & asTM_CONST) != 0 &&
-           (contextFlags & asTM_CONST) != 0;
+    const int expectedFrame = engine ? engine->GetTypeIdByDecl("BehaviorFrame@") : 0;
+    if (messageTypeId != expectedMessage ||
+        (messageFlags & asTM_INOUTREF) != asTM_INREF ||
+        (messageFlags & asTM_CONST) == 0) {
+        return false;
+    }
+    if (contextTypeId == expectedFrame && (contextFlags & asTM_INOUTREF) == 0) {
+        argumentKind = ScriptBehaviorArgumentKind::BehaviorFrame;
+        return true;
+    }
+    if (contextTypeId == expectedContext &&
+        (contextFlags & asTM_INOUTREF) == asTM_INREF &&
+        (contextFlags & asTM_CONST) != 0) {
+        argumentKind = ScriptBehaviorArgumentKind::BehaviorContext;
+        return true;
+    }
+    return false;
 }
 
-bool CacheLifecycleMethod(asITypeInfo *type, const char *name, bool required, asIScriptFunction *&out, ScriptInvoker *invoker) {
+bool CacheLifecycleMethod(asITypeInfo *type,
+                          const char *name,
+                          bool required,
+                          asIScriptFunction *&out,
+                          ScriptBehaviorArgumentKind &argumentKind,
+                          ScriptInvoker *invoker) {
     out = nullptr;
+    argumentKind = ScriptBehaviorArgumentKind::BehaviorContext;
     bool sawName = false;
-    std::string invalidDecl;
+    std::string candidateDecls;
+    asIScriptFunction *frameMethod = nullptr;
+    asIScriptFunction *contextMethod = nullptr;
 
     for (asUINT i = 0; i < type->GetMethodCount(); ++i) {
         asIScriptFunction *method = type->GetMethodByIndex(i);
@@ -364,24 +392,37 @@ bool CacheLifecycleMethod(asITypeInfo *type, const char *name, bool required, as
         }
 
         sawName = true;
-        if (invalidDecl.empty()) {
-            invalidDecl = method->GetDeclaration(false, false, true);
+        if (!candidateDecls.empty()) {
+            candidateDecls += "; ";
         }
+        candidateDecls += method->GetDeclaration(false, false, true);
 
-        if (IsContextLifecycleMethod(method)) {
-            method->AddRef();
-            out = method;
-            return true;
+        ScriptBehaviorArgumentKind matchedKind = ScriptBehaviorArgumentKind::BehaviorContext;
+        if (IsContextLifecycleMethod(method, matchedKind)) {
+            if (matchedKind == ScriptBehaviorArgumentKind::BehaviorFrame && !frameMethod) {
+                frameMethod = method;
+            } else if (matchedKind == ScriptBehaviorArgumentKind::BehaviorContext && !contextMethod) {
+                contextMethod = method;
+            }
         }
+    }
+
+    if (frameMethod || contextMethod) {
+        out = frameMethod ? frameMethod : contextMethod;
+        argumentKind = frameMethod ? ScriptBehaviorArgumentKind::BehaviorFrame : ScriptBehaviorArgumentKind::BehaviorContext;
+        out->AddRef();
+        return true;
     }
 
     if (sawName || required) {
         std::string message = "Invalid or missing lifecycle method: void ";
         message += name;
+        message += "(BehaviorFrame@ frame) or void ";
+        message += name;
         message += "(const CKBehaviorContext &in ctx)";
-        if (!invalidDecl.empty()) {
+        if (!candidateDecls.empty()) {
             message += " (found ";
-            message += invalidDecl;
+            message += candidateDecls;
             message += ")";
         }
         if (invoker) {
@@ -400,25 +441,39 @@ bool CacheMessageMethod(asITypeInfo *type, ScriptComponentState *state) {
     if (state->OnMessage) {
         ScriptComponentState::ReleaseFunction(state->OnMessage);
     }
+    state->OnMessageArgument = ScriptBehaviorArgumentKind::BehaviorContext;
     bool sawName = false;
-    std::string invalidDecl;
+    std::string candidateDecls;
+    asIScriptFunction *frameMethod = nullptr;
+    asIScriptFunction *contextMethod = nullptr;
     for (asUINT i = 0; i < type->GetMethodCount(); ++i) {
         asIScriptFunction *method = type->GetMethodByIndex(i);
         if (!method || std::strcmp(method->GetName(), "OnMessage") != 0) {
             continue;
         }
         sawName = true;
-        if (invalidDecl.empty()) {
-            invalidDecl = method->GetDeclaration(false, false, true);
+        if (!candidateDecls.empty()) {
+            candidateDecls += "; ";
         }
-        if (IsComponentMessageMethod(method)) {
-            method->AddRef();
-            state->OnMessage = method;
+        candidateDecls += method->GetDeclaration(false, false, true);
+        ScriptBehaviorArgumentKind matchedKind = ScriptBehaviorArgumentKind::BehaviorContext;
+        if (IsComponentMessageMethod(method, matchedKind)) {
+            if (matchedKind == ScriptBehaviorArgumentKind::BehaviorFrame && !frameMethod) {
+                frameMethod = method;
+            } else if (matchedKind == ScriptBehaviorArgumentKind::BehaviorContext && !contextMethod) {
+                contextMethod = method;
+            }
         }
+    }
+    if (frameMethod || contextMethod) {
+        state->OnMessage = frameMethod ? frameMethod : contextMethod;
+        state->OnMessageArgument = frameMethod ? ScriptBehaviorArgumentKind::BehaviorFrame : ScriptBehaviorArgumentKind::BehaviorContext;
+        state->OnMessage->AddRef();
+        return true;
     }
     if (sawName && !state->OnMessage) {
         if (state->Invoker) {
-            state->Invoker->SetErrorMessage("Invalid message method: void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) (found " + invalidDecl + ")");
+            state->Invoker->SetErrorMessage("Invalid message method: void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) or void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) (found " + candidateDecls + ")");
         }
         return false;
     }
@@ -489,14 +544,14 @@ bool CacheComponentMethods(ScriptComponentState *state, asITypeInfo *type) {
         return false;
     }
 
-    return CacheLifecycleMethod(type, "OnLoad", false, state->OnLoad, state->Invoker) &&
-           CacheLifecycleMethod(type, "Awake", false, state->Awake, state->Invoker) &&
-           CacheLifecycleMethod(type, "OnEnable", false, state->OnEnable, state->Invoker) &&
-           CacheLifecycleMethod(type, "Start", false, state->Start, state->Invoker) &&
-           CacheLifecycleMethod(type, "Update", true, state->Update, state->Invoker) &&
-           CacheLifecycleMethod(type, "OnDisable", false, state->OnDisable, state->Invoker) &&
-           CacheLifecycleMethod(type, "OnDestroy", false, state->OnDestroy, state->Invoker) &&
-           CacheLifecycleMethod(type, "OnReset", false, state->OnReset, state->Invoker) &&
+    return CacheLifecycleMethod(type, "OnLoad", false, state->OnLoad, state->OnLoadArgument, state->Invoker) &&
+           CacheLifecycleMethod(type, "Awake", false, state->Awake, state->AwakeArgument, state->Invoker) &&
+           CacheLifecycleMethod(type, "OnEnable", false, state->OnEnable, state->OnEnableArgument, state->Invoker) &&
+           CacheLifecycleMethod(type, "Start", false, state->Start, state->StartArgument, state->Invoker) &&
+           CacheLifecycleMethod(type, "Update", true, state->Update, state->UpdateArgument, state->Invoker) &&
+           CacheLifecycleMethod(type, "OnDisable", false, state->OnDisable, state->OnDisableArgument, state->Invoker) &&
+           CacheLifecycleMethod(type, "OnDestroy", false, state->OnDestroy, state->OnDestroyArgument, state->Invoker) &&
+           CacheLifecycleMethod(type, "OnReset", false, state->OnReset, state->OnResetArgument, state->Invoker) &&
            CacheMessageMethod(type, state);
 }
 
@@ -505,6 +560,21 @@ enum class LifecycleInvokeStatus {
     Suspended,
     Failed
 };
+
+ScriptBehaviorArgumentKind LifecycleArgumentKind(ScriptComponentState *state, asIScriptFunction *method) {
+    if (!state || !method) {
+        return ScriptBehaviorArgumentKind::BehaviorContext;
+    }
+    if (method == state->OnLoad) return state->OnLoadArgument;
+    if (method == state->Awake) return state->AwakeArgument;
+    if (method == state->OnEnable) return state->OnEnableArgument;
+    if (method == state->Start) return state->StartArgument;
+    if (method == state->Update) return state->UpdateArgument;
+    if (method == state->OnDisable) return state->OnDisableArgument;
+    if (method == state->OnDestroy) return state->OnDestroyArgument;
+    if (method == state->OnReset) return state->OnResetArgument;
+    return ScriptBehaviorArgumentKind::BehaviorContext;
+}
 
 LifecycleInvokeStatus InvokeLifecycle(CKBehavior *beh, ScriptComponentState *state, asIScriptFunction *method, const CKBehaviorContext &behcontext, const char *name) {
     if (!method) {
@@ -521,7 +591,11 @@ LifecycleInvokeStatus InvokeLifecycle(CKBehavior *beh, ScriptComponentState *sta
         state->ActiveLifecycleName = name ? name : "";
     }
 
-    const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(state->Object, method, behcontext);
+    const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(
+        state->Object,
+        method,
+        behcontext,
+        LifecycleArgumentKind(state, method));
     if (status == ScriptInvocationStatus::Suspended) {
         return LifecycleInvokeStatus::Suspended;
     }

@@ -354,6 +354,15 @@ bool CanRawAccess(const ScriptParamTypeTraits &traits) {
            traits.DefaultSize > 0;
 }
 
+bool UsesBoolStorage(const ScriptParamTypeTraits &traits) {
+    return traits.Has(ScriptParamTypeCaps::BoolLike) &&
+           (traits.Guid == CKPGUID_BOOL ||
+            (!traits.Has(ScriptParamTypeCaps::IntLike) &&
+             !traits.Has(ScriptParamTypeCaps::EnumLike) &&
+             !traits.Has(ScriptParamTypeCaps::FlagsLike) &&
+             !traits.Has(ScriptParamTypeCaps::FloatLike)));
+}
+
 std::string ParameterName(CKParameter *param) {
     return param && param->GetName() ? std::string(param->GetName()) : std::string("<unnamed>");
 }
@@ -1012,6 +1021,14 @@ CKGUID ScriptResolveParameterGuid(CKContext *context, const std::string &typeNam
             return parsed;
         }
 
+        const CKParameterType byTypeName = pm->ParameterNameToType(const_cast<CKSTRING>(text.c_str()));
+        if (byTypeName >= 0) {
+            const CKGUID byTypeGuid = pm->ParameterTypeToGuid(byTypeName);
+            if (IsRegisteredGuid(pm, byTypeGuid)) {
+                return byTypeGuid;
+            }
+        }
+
         const CKGUID byName = pm->ParameterNameToGuid(const_cast<CKSTRING>(text.c_str()));
         if (IsRegisteredGuid(pm, byName)) {
             return byName;
@@ -1023,6 +1040,14 @@ CKGUID ScriptResolveParameterGuid(CKContext *context, const std::string &typeNam
             CKParameterTypeDesc *desc = pm->GetParameterTypeDescription(i);
             if (!desc) {
                 continue;
+            }
+            CKSTRING guidName = pm->ParameterGuidToName(desc->Guid);
+            if (guidName && ToLower(guidName) == lower) {
+                return desc->Guid;
+            }
+            CKSTRING typeName = pm->ParameterTypeToName(i);
+            if (typeName && ToLower(typeName) == lower) {
+                return desc->Guid;
             }
             const char *name = desc->TypeName.CStr();
             if (name && ToLower(name) == lower) {
@@ -1388,7 +1413,7 @@ CKERROR WriteParameterValue(CKParameter *target, const ScriptParamValue &value, 
         case ScriptParamValueKind::ObjectArray:
             return WriteObjectArrayParameterValue(target, value, error);
         case ScriptParamValueKind::Int: {
-            if (traits.Has(ScriptParamTypeCaps::BoolLike)) {
+            if (UsesBoolStorage(traits)) {
                 const CKBOOL boolValue = value.Data.IntValue != 0 ? TRUE : FALSE;
                 return WriteFixedValue(target, boolValue);
             }
@@ -1418,7 +1443,7 @@ CKERROR WriteParameterValue(CKParameter *target, const ScriptParamValue &value, 
             return CKERR_INVALIDPARAMETERTYPE;
         }
         case ScriptParamValueKind::Bool: {
-            if (traits.Has(ScriptParamTypeCaps::BoolLike) ||
+            if (UsesBoolStorage(traits) ||
                 (traits.Has(ScriptParamTypeCaps::IntLike) && target->GetDataSize() == static_cast<int>(sizeof(CKBOOL)))) {
                 const CKBOOL boolValue = value.Data.BoolValue ? TRUE : FALSE;
                 return WriteFixedValue(target, boolValue);
@@ -1519,7 +1544,7 @@ ScriptParamValue ReadParameterValue(CKParameter *param, std::string *error) {
         return ScriptParamValue();
     }
 
-    if (traits.Has(ScriptParamTypeCaps::BoolLike)) {
+    if (UsesBoolStorage(traits)) {
         CKBOOL v = FALSE;
         if (ReadFixedValue(param, v)) {
             value.Kind = ScriptParamValueKind::Bool;

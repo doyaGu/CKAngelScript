@@ -1,5 +1,97 @@
 #include "ScriptBridgeHandles.h"
 
+#include <fmt/format.h>
+
+namespace {
+
+int ResolveResultOutputName(ScriptBehaviorBridge *bridge,
+                            CKBehavior *behavior,
+                            ScriptBridgeSlotKind kind,
+                            const std::string &name,
+                            int occurrence,
+                            std::string &error) {
+    if (!behavior) {
+        error = "BBResult behavior is not available.";
+        return -1;
+    }
+    if (occurrence < 0) {
+        error = "BBResult name occurrence must be non-negative.";
+        return -1;
+    }
+    const ScriptBridgeLayoutRecord *layout = bridge
+        ? bridge->GetBehaviorLayout(behavior->GetID(), CaptureBridgeObjectStamp(behavior))
+        : nullptr;
+    const int generation = layout ? layout->LayoutGeneration : -1;
+
+    auto nameMatches = [&](const std::string &candidate) {
+        return name.empty() ? true : NameEquals(const_cast<CKSTRING>(candidate.c_str()), name);
+    };
+
+    int seen = 0;
+    std::string candidates;
+    auto appendCandidate = [&](int index, const std::string &candidate, const std::string &typeName) {
+        if (!candidates.empty()) {
+            candidates += ", ";
+        }
+        candidates += fmt::format("#{} '{}'", index, candidate);
+        if (!typeName.empty()) {
+            candidates += fmt::format(": {}", typeName);
+        }
+    };
+
+    if (layout) {
+        if (kind == ScriptBridgeSlotKind::Output) {
+            for (int i = 0; i < static_cast<int>(layout->Outputs.size()); ++i) {
+                const std::string &candidate = layout->Outputs[i].Name;
+                appendCandidate(i, candidate, std::string());
+                if (nameMatches(candidate)) {
+                    if (seen == occurrence) return i;
+                    ++seen;
+                }
+            }
+        } else {
+            for (const ScriptBridgeLayoutParamSlot &slot : layout->Pouts) {
+                appendCandidate(slot.Index, slot.Name, slot.TypeName);
+                if (nameMatches(slot.Name)) {
+                    if (seen == occurrence) return slot.Index;
+                    ++seen;
+                }
+            }
+        }
+    } else if (kind == ScriptBridgeSlotKind::Output) {
+        for (int i = 0; i < behavior->GetOutputCount(); ++i) {
+            CKBehaviorIO *output = behavior->GetOutput(i);
+            const std::string candidate = SafeString(output ? output->GetName() : nullptr);
+            appendCandidate(i, candidate, std::string());
+            if (nameMatches(candidate)) {
+                if (seen == occurrence) return i;
+                ++seen;
+            }
+        }
+    } else {
+        for (int i = 0; i < behavior->GetOutputParameterCount(); ++i) {
+            CKParameterOut *pout = behavior->GetOutputParameter(i);
+            const std::string candidate = SafeString(pout ? pout->GetName() : nullptr);
+            appendCandidate(i, candidate, ParameterTypeLabel(behavior->GetCKContext(), pout));
+            if (nameMatches(candidate)) {
+                if (seen == occurrence) return i;
+                ++seen;
+            }
+        }
+    }
+
+    error = fmt::format("BBResult could not resolve {} '{}' occurrence {} for Building Block '{}' at layout generation {}. Candidates: {}.",
+        kind == ScriptBridgeSlotKind::Output ? "output" : "pout",
+        name,
+        occurrence,
+        SafeString(behavior->GetPrototypeName()),
+        generation,
+        candidates.empty() ? "<none>" : candidates);
+    return -1;
+}
+
+} // namespace
+
 BBResult::BBResult(ScriptBehaviorBridge *bridge, CK_ID resultId, int generation)
     : m_Bridge(bridge), m_ResultId(resultId), m_Generation(generation) {}
 
@@ -32,10 +124,32 @@ bool BBResult::OutputActiveSlot(BBSlot *output) const {
     return output && output->ResolveIndex(ScriptBridgeSlotKind::Output, outputIndex, error) && OutputActive(outputIndex);
 }
 
+bool BBResult::OutputActiveName(const std::string &name, int occurrence) const {
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetResultBehavior(m_ResultId, m_Generation) : nullptr;
+    std::string error;
+    const int index = ResolveResultOutputName(m_Bridge, behavior, ScriptBridgeSlotKind::Output, name, occurrence, error);
+    if (index < 0) {
+        SetScriptException(error);
+        return false;
+    }
+    return OutputActive(index);
+}
+
 ParamRef *BBResult::Pout(int index) const {
     CKBehavior *behavior = m_Bridge ? m_Bridge->GetResultBehavior(m_ResultId, m_Generation) : nullptr;
     CKParameterOut *pout = behavior && index >= 0 && index < behavior->GetOutputParameterCount() ? behavior->GetOutputParameter(index) : nullptr;
     return m_Bridge && pout ? new ParamRef(m_Bridge, pout->GetID(), ScriptBridgeSlotKind::Pout, index, behavior->GetID()) : nullptr;
+}
+
+ParamRef *BBResult::PoutName(const std::string &name, int occurrence) const {
+    CKBehavior *behavior = m_Bridge ? m_Bridge->GetResultBehavior(m_ResultId, m_Generation) : nullptr;
+    std::string error;
+    const int index = ResolveResultOutputName(m_Bridge, behavior, ScriptBridgeSlotKind::Pout, name, occurrence, error);
+    if (index < 0) {
+        SetScriptException(error);
+        return nullptr;
+    }
+    return Pout(index);
 }
 
 ParamRef *BBResult::PoutSlot(BBSlot *slot) const {

@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 
 #include "add_on/scriptarray/scriptarray.h"
+#include "ScriptBehaviorFrame.h"
 #include "ScriptParameterConversion.h"
 
 namespace {
@@ -23,6 +24,19 @@ bool PrototypeMatches(CKObjectDeclaration *decl, const std::string &query) {
         return false;
     }
     return SafeString(decl->GetName()) == query || PrototypeQualifiedName(decl) == query || GuidToString(decl->GetGuid()) == query;
+}
+
+bool MakeContextFromFrame(BehaviorFrame *frame, CKBehaviorContext &ctx, const char *method) {
+    if (!frame) {
+        SetScriptException(fmt::format("{} requires a valid BehaviorFrame.", method));
+        return false;
+    }
+    ctx = frame->MakeContext();
+    if (!ctx.Context || !ctx.Behavior) {
+        SetScriptException(fmt::format("{} requires a live BehaviorFrame behavior.", method));
+        return false;
+    }
+    return true;
 }
 
 std::vector<CKObjectDeclaration *> FindPrototypeDeclarations(const std::string &query) {
@@ -1021,6 +1035,11 @@ bool BBConfig::Raise(const CKBehaviorContext &ctx) const {
     return RaiseExecutionState(state, ctx);
 }
 
+bool BBConfig::Raise(BehaviorFrame *frame) const {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBConfig.Raise") && Raise(ctx);
+}
+
 BBSlot *BBConfig::In(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Input, name, occurrence); }
 BBSlot *BBConfig::Out(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Output, name, occurrence); }
 BBSlot *BBConfig::Pin(const std::string &name, int occurrence) { return Slot(ScriptBridgeSlotKind::Pin, name, occurrence); }
@@ -1303,6 +1322,11 @@ bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
     return true;
 }
 
+bool BBConfig::Validate(BehaviorFrame *frame) const {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBConfig.Validate") && Validate(ctx);
+}
+
 BBDecl *BBConfig::Decl() const {
     return new BBDecl(m_Bridge, m_Context, m_Request, m_Error);
 }
@@ -1323,6 +1347,11 @@ BBInstance *BBConfig::EnsureSpawned(const CKBehaviorContext &ctx) {
     return SpawnInstance(ctx);
 }
 
+BBInstance *BBConfig::EnsureSpawned(BehaviorFrame *frame) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBConfig.EnsureSpawned") ? EnsureSpawned(ctx) : nullptr;
+}
+
 BBInstance *BBConfig::EnsureStarted(const CKBehaviorContext &ctx) {
     BBInstance *instance = EnsureSpawned(ctx);
     if (!instance) {
@@ -1338,6 +1367,11 @@ BBInstance *BBConfig::EnsureStarted(const CKBehaviorContext &ctx) {
         }
     }
     return instance;
+}
+
+BBInstance *BBConfig::EnsureStarted(BehaviorFrame *frame) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBConfig.EnsureStarted") ? EnsureStarted(ctx) : nullptr;
 }
 
 BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
@@ -1376,6 +1410,11 @@ BBInstance *BBConfig::SpawnInstance(const CKBehaviorContext &ctx) {
     return instance;
 }
 
+BBInstance *BBConfig::SpawnInstance(BehaviorFrame *frame) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBConfig.Spawn") ? SpawnInstance(ctx) : nullptr;
+}
+
 BBInstance *BBConfig::SpawnStarted(const CKBehaviorContext &ctx) {
     BBInstance *instance = SpawnInstance(ctx);
     if (!instance) {
@@ -1395,6 +1434,11 @@ BBInstance *BBConfig::SpawnStarted(const CKBehaviorContext &ctx) {
     return instance;
 }
 
+BBInstance *BBConfig::SpawnStarted(BehaviorFrame *frame) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBConfig.SpawnStarted") ? SpawnStarted(ctx) : nullptr;
+}
+
 bool BBConfig::Stop(const CKBehaviorContext &ctx) {
     if (!m_Instance) {
         return true;
@@ -1405,6 +1449,11 @@ bool BBConfig::Stop(const CKBehaviorContext &ctx) {
         SetScriptException(m_Error);
     }
     return result;
+}
+
+bool BBConfig::Stop(BehaviorFrame *frame) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBConfig.Stop") && Stop(ctx);
 }
 
 bool BBConfig::Destroy() {
@@ -1954,6 +2003,16 @@ bool BBInstance::StartSlotWithContext(const CKBehaviorContext &ctx, BBSlot *inpu
     return Start(input);
 }
 
+bool BBInstance::StartWithFrame(BehaviorFrame *frame) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.Start") && StartWithContext(ctx);
+}
+
+bool BBInstance::StartSlotWithFrame(BehaviorFrame *frame, BBSlot *input) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.Start") && StartSlotWithContext(ctx, input);
+}
+
 bool BBInstance::Start(BBSlot *input) {
     if (!m_Bridge) {
         SetError("BBInstance.Start requires ScriptBehaviorBridge.");
@@ -1991,6 +2050,11 @@ bool BBInstance::Step(const CKBehaviorContext &ctx) {
     return true;
 }
 
+bool BBInstance::Step(BehaviorFrame *frame) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.Step") && Step(ctx);
+}
+
 bool BBInstance::Stop() {
     if (!m_Bridge || !m_InstanceId) {
         return true;
@@ -2023,6 +2087,11 @@ bool BBInstance::Stop() {
 bool BBInstance::StopWithContext(const CKBehaviorContext &ctx) {
     m_Context = ctx;
     return Stop();
+}
+
+bool BBInstance::StopWithFrame(BehaviorFrame *frame) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.Stop") && StopWithContext(ctx);
 }
 
 bool BBInstance::OutputActive(BBSlot *output) const {
@@ -2101,24 +2170,54 @@ bool BBInstance::StepSetSlot(const CKBehaviorContext &ctx, BBSlot *pin, ParamVal
     return SetSlot(pin, value) && Step(ctx);
 }
 
+bool BBInstance::StepSetSlot(BehaviorFrame *frame, BBSlot *pin, ParamValue *value) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.StepSet") && StepSetSlot(ctx, pin, value);
+}
+
 bool BBInstance::StepSetSlotInt(const CKBehaviorContext &ctx, BBSlot *pin, int value) {
     return SetSlotInt(pin, value) && Step(ctx);
+}
+
+bool BBInstance::StepSetSlotInt(BehaviorFrame *frame, BBSlot *pin, int value) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.StepSet") && StepSetSlotInt(ctx, pin, value);
 }
 
 bool BBInstance::StepSetSlotFloat(const CKBehaviorContext &ctx, BBSlot *pin, float value) {
     return SetSlotFloat(pin, value) && Step(ctx);
 }
 
+bool BBInstance::StepSetSlotFloat(BehaviorFrame *frame, BBSlot *pin, float value) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.StepSet") && StepSetSlotFloat(ctx, pin, value);
+}
+
 bool BBInstance::StepSetSlotBool(const CKBehaviorContext &ctx, BBSlot *pin, bool value) {
     return SetSlotBool(pin, value) && Step(ctx);
+}
+
+bool BBInstance::StepSetSlotBool(BehaviorFrame *frame, BBSlot *pin, bool value) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.StepSet") && StepSetSlotBool(ctx, pin, value);
 }
 
 bool BBInstance::StepSetSlotString(const CKBehaviorContext &ctx, BBSlot *pin, const std::string &value) {
     return SetSlotString(pin, value) && Step(ctx);
 }
 
+bool BBInstance::StepSetSlotString(BehaviorFrame *frame, BBSlot *pin, const std::string &value) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.StepSet") && StepSetSlotString(ctx, pin, value);
+}
+
 bool BBInstance::StepSetSlotObject(const CKBehaviorContext &ctx, BBSlot *pin, CKObject *value) {
     return SetSlotObject(pin, value) && Step(ctx);
+}
+
+bool BBInstance::StepSetSlotObject(BehaviorFrame *frame, BBSlot *pin, CKObject *value) {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.StepSet") && StepSetSlotObject(ctx, pin, value);
 }
 
 bool BBInstance::SetSettingValue(BBSlot *setting, ParamValue *value) {
@@ -2181,6 +2280,11 @@ bool BBInstance::Raise(const CKBehaviorContext &ctx) const {
     state.ReturnCode = CKBR_BEHAVIORERROR;
     state.Error = Error();
     return RaiseExecutionState(state, ctx);
+}
+
+bool BBInstance::Raise(BehaviorFrame *frame) const {
+    CKBehaviorContext ctx;
+    return MakeContextFromFrame(frame, ctx, "BBInstance.Raise") && Raise(ctx);
 }
 
 BBSlot *BBInstance::RuntimeSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const {
@@ -2446,6 +2550,62 @@ BBCallBuilder *BBCallBuilder::SetSlotObject(BBSlot *slot, CKObject *value) {
     return ResolvePinSlot(slot, pinIndex, "BBCallBuilder.Set") ? SetValueForPin(pinIndex, MakeScriptParamObject(value)) : nullptr;
 }
 
+BBCallBuilder *BBCallBuilder::SetNameValue(const std::string &name, ParamValue *value) {
+    if (!value) {
+        SetScriptException("BBCallBuilder.Set requires a valid ParamValue.");
+        return nullptr;
+    }
+    return SetNamedValue(m_Request.NamedParameters, name, value->Value());
+}
+
+BBCallBuilder *BBCallBuilder::SetNameInt(const std::string &name, int value) {
+    return SetNamedValue(m_Request.NamedParameters, name, MakeScriptParamInt(value));
+}
+
+BBCallBuilder *BBCallBuilder::SetNameFloat(const std::string &name, float value) {
+    return SetNamedValue(m_Request.NamedParameters, name, MakeScriptParamFloat(value));
+}
+
+BBCallBuilder *BBCallBuilder::SetNameBool(const std::string &name, bool value) {
+    return SetNamedValue(m_Request.NamedParameters, name, MakeScriptParamBool(value));
+}
+
+BBCallBuilder *BBCallBuilder::SetNameString(const std::string &name, const std::string &value) {
+    return SetNamedValue(m_Request.NamedParameters, name, MakeScriptParamString(value));
+}
+
+BBCallBuilder *BBCallBuilder::SetNameObject(const std::string &name, CKObject *value) {
+    return SetNamedValue(m_Request.NamedParameters, name, MakeScriptParamObject(value));
+}
+
+BBCallBuilder *BBCallBuilder::SettingValue(const std::string &name, ParamValue *value) {
+    if (!value) {
+        SetScriptException("BBCallBuilder.Setting requires a valid ParamValue.");
+        return nullptr;
+    }
+    return SetNamedValue(m_Request.NamedSettings, name, value->Value());
+}
+
+BBCallBuilder *BBCallBuilder::SettingInt(const std::string &name, int value) {
+    return SetNamedValue(m_Request.NamedSettings, name, MakeScriptParamInt(value));
+}
+
+BBCallBuilder *BBCallBuilder::SettingFloat(const std::string &name, float value) {
+    return SetNamedValue(m_Request.NamedSettings, name, MakeScriptParamFloat(value));
+}
+
+BBCallBuilder *BBCallBuilder::SettingBool(const std::string &name, bool value) {
+    return SetNamedValue(m_Request.NamedSettings, name, MakeScriptParamBool(value));
+}
+
+BBCallBuilder *BBCallBuilder::SettingString(const std::string &name, const std::string &value) {
+    return SetNamedValue(m_Request.NamedSettings, name, MakeScriptParamString(value));
+}
+
+BBCallBuilder *BBCallBuilder::SettingObject(const std::string &name, CKObject *value) {
+    return SetNamedValue(m_Request.NamedSettings, name, MakeScriptParamObject(value));
+}
+
 BBCallBuilder *BBCallBuilder::SetSource(int pinIndex, ParamRef *source) {
     if (!source || !source->IsValid()) {
         SetScriptException("BBCallBuilder.SetSource requires a valid ParamRef source.");
@@ -2480,6 +2640,10 @@ BBResult *BBCallBuilder::Run(int inputIndex) {
     return m_Bridge ? m_Bridge->RunCall(m_Request, m_Context, inputIndex) : nullptr;
 }
 
+BBResult *BBCallBuilder::RunName(const std::string &inputName) {
+    return m_Bridge ? m_Bridge->RunCall(m_Request, m_Context, inputName) : nullptr;
+}
+
 BBResult *BBCallBuilder::RunSlot(BBSlot *input) {
     int inputIndex = -1;
     std::string error;
@@ -2492,6 +2656,17 @@ BBResult *BBCallBuilder::RunSlot(BBSlot *input) {
 
 BBCallBuilder *BBCallBuilder::SetValueForPin(int pinIndex, const ScriptParamValue &value) {
     ScriptBridgeSetIndexedValue(m_Request.IndexedParameters, pinIndex, value);
+    AddRef();
+    return this;
+}
+
+BBCallBuilder *BBCallBuilder::SetNamedValue(std::vector<ScriptBridgeNamedValue> &values,
+                                            const std::string &name,
+                                            const ScriptParamValue &value) {
+    ScriptBridgeNamedValue entry;
+    entry.Name = name;
+    entry.Value = value;
+    values.push_back(entry);
     AddRef();
     return this;
 }

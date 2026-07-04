@@ -377,6 +377,26 @@ ParamRef *BehaviorRef::Pin(int index) const {
     return m_Bridge && pin ? new ParamRef(m_Bridge, pin->GetID(), ScriptBridgeSlotKind::Pin, index, Id(), pin->GetCKContext()) : nullptr;
 }
 
+ParamRef *BehaviorRef::PinName(const std::string &name, int occurrence) const {
+    CKBehavior *behavior = Get();
+    if (!behavior || occurrence < 0) {
+        return nullptr;
+    }
+
+    int seen = 0;
+    for (int i = 0; i < behavior->GetInputParameterCount(); ++i) {
+        CKParameterIn *pin = behavior->GetInputParameter(i);
+        if (!pin || !NameEquals(pin->GetName(), name)) {
+            continue;
+        }
+        if (seen == occurrence) {
+            return Pin(i);
+        }
+        ++seen;
+    }
+    return nullptr;
+}
+
 ParamRef *BehaviorRef::PinSlot(BBSlot *slot) const {
     int index = -1;
     std::string error;

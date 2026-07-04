@@ -3,6 +3,7 @@
 #include <fmt/format.h>
 
 #include "ScriptAsync.h"
+#include "ScriptBehaviorFrame.h"
 #include "ScriptManager.h"
 
 namespace {
@@ -86,6 +87,7 @@ ScriptInvoker::ScriptInvoker(ScriptManager *man) : m_ScriptManager(man) {}
 
 ScriptInvoker::~ScriptInvoker() {
     ReleaseContext();
+    ReleaseBehaviorFrame();
 
     // Release the cached script
     if (m_CachedScript) {
@@ -108,6 +110,7 @@ void ScriptInvoker::SetContext(asIScriptContext* ctx) {
 
 void ScriptInvoker::ReleaseContext() {
     if (!m_Context) {
+        ReleaseBehaviorFrame();
         return;
     }
 
@@ -122,6 +125,14 @@ void ScriptInvoker::ReleaseContext() {
         m_ScriptManager->GetScriptEngine()->ReturnContext(ctx);
     } else {
         ctx->Release();
+    }
+    ReleaseBehaviorFrame();
+}
+
+void ScriptInvoker::ReleaseBehaviorFrame() {
+    if (m_BehaviorFrameStorage) {
+        m_BehaviorFrameStorage->Release();
+        m_BehaviorFrameStorage = nullptr;
     }
 }
 
@@ -331,6 +342,28 @@ bool ScriptInvoker::ExecuteObjectMethod(asIScriptObject *object, asIScriptFuncti
 }
 
 ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext) {
+    return ExecuteObjectMethodStatus(object, func, behcontext, ScriptBehaviorArgumentKind::BehaviorContext, nullptr);
+}
+
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object,
+                                                                asIScriptFunction *func,
+                                                                const CKBehaviorContext &behcontext,
+                                                                ScriptBehaviorArgumentKind argumentKind) {
+    return ExecuteObjectMethodStatus(object, func, behcontext, argumentKind, nullptr);
+}
+
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object,
+                                                                asIScriptFunction *func,
+                                                                const CKBehaviorContext &behcontext,
+                                                                const ScriptFunctionArgumentHandler &retHandler) {
+    return ExecuteObjectMethodStatus(object, func, behcontext, ScriptBehaviorArgumentKind::BehaviorContext, retHandler);
+}
+
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object,
+                                                                asIScriptFunction *func,
+                                                                const CKBehaviorContext &behcontext,
+                                                                ScriptBehaviorArgumentKind argumentKind,
+                                                                const ScriptFunctionArgumentHandler &retHandler) {
     m_LastResultCode = 0;
     m_ErrorMessage.clear();
     m_StackTrace.clear();
@@ -366,9 +399,9 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
         SetContext(ctx);
     }
 
-    m_BehaviorContextStorage = behcontext;
     int r = 0;
     if (ctx->GetState() == asEXECUTION_SUSPENDED) {
+        m_BehaviorContextStorage = behcontext;
         std::string waitError;
         ScriptAsyncScheduler *scheduler = m_ScriptManager ? m_ScriptManager->GetAsyncScheduler() : nullptr;
         const ScriptAsyncScheduler::ResumeState resume = scheduler
@@ -382,14 +415,22 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
             m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
             ReleaseAbortedContextState(ctx);
+            ReleaseBehaviorFrame();
             return ScriptInvocationStatus::Failed;
         }
     } else {
+        m_BehaviorContextStorage = behcontext;
+        ReleaseBehaviorFrame();
+        if (argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame) {
+            m_BehaviorFrameStorage = new BehaviorFrame(behcontext);
+        }
+
         r = ctx->Prepare(func);
         if (r < 0) {
             m_LastResultCode = r;
             SetErrorMessage("Failed to prepare script method.");
             ReleaseAbortedContextState(ctx);
+            ReleaseBehaviorFrame();
             return ScriptInvocationStatus::Failed;
         }
 
@@ -398,15 +439,22 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
             m_LastResultCode = r;
             SetErrorMessage("Failed to bind script method object.");
             ReleaseAbortedContextState(ctx);
+            ReleaseBehaviorFrame();
             return ScriptInvocationStatus::Failed;
         }
 
         if (func->GetParamCount() > 0) {
-            r = ctx->SetArgObject(0, (void *) &m_BehaviorContextStorage);
+            void *argument = argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
+                ? static_cast<void *>(m_BehaviorFrameStorage)
+                : static_cast<void *>(&m_BehaviorContextStorage);
+            r = ctx->SetArgObject(0, argument);
             if (r < 0) {
                 m_LastResultCode = r;
-                SetErrorMessage("Failed to bind script method behavior context.");
+                SetErrorMessage(argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
+                    ? "Failed to bind script method behavior frame."
+                    : "Failed to bind script method behavior context.");
                 ReleaseAbortedContextState(ctx);
+                ReleaseBehaviorFrame();
                 return ScriptInvocationStatus::Failed;
             }
         }
@@ -421,13 +469,27 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
     if (status != ScriptInvocationStatus::Finished) {
         if (IsProfiling())
             EndTiming();
+        if (status == ScriptInvocationStatus::Failed) {
+            ReleaseBehaviorFrame();
+        }
         return status;
+    }
+
+    if (retHandler) {
+        if (!retHandler(ctx)) {
+            m_LastResultCode = asEXECUTION_ABORTED;
+            SetErrorMessage("Script method result handler rejected execution.");
+            ReleaseFinishedContextState(ctx);
+            ReleaseBehaviorFrame();
+            return ScriptInvocationStatus::Failed;
+        }
     }
 
     if (IsProfiling())
         EndTiming();
 
     ReleaseFinishedContextState(ctx);
+    ReleaseBehaviorFrame();
     return ScriptInvocationStatus::Finished;
 }
 
@@ -435,6 +497,14 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
                                                               asIScriptFunction *func,
                                                               const ScriptMessage &message,
                                                               const CKBehaviorContext &behcontext) {
+    return ExecuteObjectMethodStatus(object, func, message, behcontext, ScriptBehaviorArgumentKind::BehaviorContext);
+}
+
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object,
+                                                              asIScriptFunction *func,
+                                                              const ScriptMessage &message,
+                                                              const CKBehaviorContext &behcontext,
+                                                              ScriptBehaviorArgumentKind argumentKind) {
     m_LastResultCode = 0;
     m_ErrorMessage.clear();
     m_StackTrace.clear();
@@ -481,11 +551,16 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
             m_LastResultCode = asEXECUTION_ABORTED;
             SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
             ReleaseAbortedContextState(ctx);
+            ReleaseBehaviorFrame();
             return ScriptInvocationStatus::Failed;
         }
     } else {
         m_MessageStorage = message;
         m_BehaviorContextStorage = behcontext;
+        ReleaseBehaviorFrame();
+        if (argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame) {
+            m_BehaviorFrameStorage = new BehaviorFrame(behcontext);
+        }
         r = ctx->Prepare(func);
         if (r >= 0) {
             r = ctx->SetObject(object);
@@ -494,12 +569,16 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
             r = ctx->SetArgObject(0, &m_MessageStorage);
         }
         if (r >= 0) {
-            r = ctx->SetArgObject(1, &m_BehaviorContextStorage);
+            void *argument = argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
+                ? static_cast<void *>(m_BehaviorFrameStorage)
+                : static_cast<void *>(&m_BehaviorContextStorage);
+            r = ctx->SetArgObject(1, argument);
         }
         if (r < 0) {
             m_LastResultCode = r;
             SetErrorMessage("Failed to prepare script message method.");
             ReleaseAbortedContextState(ctx);
+            ReleaseBehaviorFrame();
             return ScriptInvocationStatus::Failed;
         }
     }
@@ -513,6 +592,9 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
     if (status != ScriptInvocationStatus::Finished) {
         if (IsProfiling())
             EndTiming();
+        if (status == ScriptInvocationStatus::Failed) {
+            ReleaseBehaviorFrame();
+        }
         return status;
     }
 
@@ -520,6 +602,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
         EndTiming();
 
     ReleaseFinishedContextState(ctx);
+    ReleaseBehaviorFrame();
     return ScriptInvocationStatus::Finished;
 }
 

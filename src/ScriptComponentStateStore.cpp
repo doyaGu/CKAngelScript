@@ -170,7 +170,12 @@ bool ScriptManager::DeliverComponentMessage(CK_ID id, const ScriptMessage &messa
     CKBehaviorContext ctx = {};
     ctx.Context = m_Context;
     ctx.Behavior = state->Behavior;
-    const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(state->Object, state->OnMessage, message, ctx);
+    const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(
+        state->Object,
+        state->OnMessage,
+        message,
+        ctx,
+        state->OnMessageArgument);
     if (status == ScriptInvocationStatus::Suspended) {
         return true;
     }

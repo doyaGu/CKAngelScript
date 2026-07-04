@@ -4,6 +4,7 @@ configure_file(Version.h.in "${CKAS_GENERATED_INCLUDE_DIR}/Version.h")
 set(CKAS_HEADERS
         Logger.h
         ScriptManager.h
+        AngelScriptExecutor.h
         AngelScriptEventHook.h
         ScriptApiDiagnostics.h
         ScriptApiHandles.h
@@ -42,6 +43,7 @@ set(CKAS_HEADERS
         ScriptAsync.h
         ScriptRefCounted.h
         ScriptBehaviorBridge.h
+        ScriptBehaviorFrame.h
         ScriptCKObjectRetainer.h
         ScriptComponentMetadata.h
         ScriptComponentState.h
@@ -89,6 +91,7 @@ set(CKAS_SOURCES
         ScriptCache.cpp
         ScriptBuilder.cpp
         ScriptInvoker.cpp
+        AngelScriptExecutor.cpp
         AngelScriptEventHook.cpp
         AngelScriptComponent.cpp
         ScriptComponentMetadata.cpp
@@ -120,6 +123,7 @@ set(CKAS_SOURCES
         ScriptScene.cpp
         ScriptAsync.cpp
         ScriptBehaviorBridge.cpp
+        ScriptBehaviorFrame.cpp
         ScriptCKObjectRetainer.cpp
         ScriptBridgeRuntime.cpp
         ScriptBridgeLayoutCache.cpp
@@ -164,6 +168,7 @@ if (CKAS_BUILD_SELF_TESTS)
             "${CKAS_TEST_DIR}/ScriptRuntimeSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptAsyncSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptBridgeSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptExecutorSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptVxBindingSelfTest.cpp"
     )
     if (CKAS_ENABLE_DYNCALL)

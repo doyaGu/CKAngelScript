@@ -12,6 +12,7 @@
 #include "ScriptMessage.h"
 
 class ScriptManager;
+class BehaviorFrame;
 struct CachedScript;
 
 using ScriptFunctionArgumentHandler = std::function<bool(asIScriptContext *)>;
@@ -20,6 +21,11 @@ enum class ScriptInvocationStatus {
     Finished,
     Suspended,
     Failed
+};
+
+enum class ScriptBehaviorArgumentKind {
+    BehaviorContext,
+    BehaviorFrame
 };
 
 class ScriptInvoker {
@@ -51,7 +57,25 @@ public:
                                                const ScriptFunctionArgumentHandler &resumeHandler = nullptr);
     bool ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
     ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
+    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object,
+                                                     asIScriptFunction *func,
+                                                     const CKBehaviorContext &behcontext,
+                                                     ScriptBehaviorArgumentKind argumentKind);
+    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object,
+                                                     asIScriptFunction *func,
+                                                     const CKBehaviorContext &behcontext,
+                                                     const ScriptFunctionArgumentHandler &retHandler);
+    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object,
+                                                     asIScriptFunction *func,
+                                                     const CKBehaviorContext &behcontext,
+                                                     ScriptBehaviorArgumentKind argumentKind,
+                                                     const ScriptFunctionArgumentHandler &retHandler);
     ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const ScriptMessage &message, const CKBehaviorContext &behcontext);
+    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object,
+                                                     asIScriptFunction *func,
+                                                     const ScriptMessage &message,
+                                                     const CKBehaviorContext &behcontext,
+                                                     ScriptBehaviorArgumentKind argumentKind);
     bool IsContextSuspended() const;
     void AbortActiveContext();
     void AbortContext();
@@ -75,6 +99,7 @@ public:
 
 private:
     void ReleaseContext();
+    void ReleaseBehaviorFrame();
 
     ScriptManager *m_ScriptManager = nullptr;
     asIScriptContext *m_Context = nullptr;
@@ -86,6 +111,7 @@ private:
     std::string m_ErrorMessage;
     std::string m_StackTrace;
     CKBehaviorContext m_BehaviorContextStorage;
+    BehaviorFrame *m_BehaviorFrameStorage = nullptr;
     ScriptMessage m_MessageStorage;
 };
 

@@ -66,6 +66,170 @@ bool NotifyIndexedSettingsEdited(CKBehavior *behavior,
     return true;
 }
 
+const char *RuntimeSlotKindName(ScriptBridgeSlotKind kind) {
+    switch (kind) {
+        case ScriptBridgeSlotKind::Input: return "input";
+        case ScriptBridgeSlotKind::Output: return "output";
+        case ScriptBridgeSlotKind::Pin: return "pin";
+        case ScriptBridgeSlotKind::Pout: return "pout";
+        case ScriptBridgeSlotKind::Setting: return "setting";
+        default: return "slot";
+    }
+}
+
+std::string DescribeRuntimeLayoutCandidates(const ScriptBridgeLayoutRecord *layout,
+                                            CKBehavior *behavior,
+                                            ScriptBridgeSlotKind kind) {
+    std::string result;
+    auto append = [&](int index, const std::string &name, const std::string &typeName) {
+        if (!result.empty()) {
+            result += ", ";
+        }
+        result += fmt::format("#{} '{}'", index, name);
+        if (!typeName.empty()) {
+            result += fmt::format(": {}", typeName);
+        }
+    };
+
+    if (layout) {
+        if (kind == ScriptBridgeSlotKind::Input || kind == ScriptBridgeSlotKind::Output) {
+            const auto &slots = kind == ScriptBridgeSlotKind::Input ? layout->Inputs : layout->Outputs;
+            for (int i = 0; i < static_cast<int>(slots.size()); ++i) {
+                append(i, slots[i].Name, std::string());
+            }
+        } else {
+            const std::vector<ScriptBridgeLayoutParamSlot> *slots = nullptr;
+            if (kind == ScriptBridgeSlotKind::Pin) slots = &layout->Pins;
+            if (kind == ScriptBridgeSlotKind::Pout) slots = &layout->Pouts;
+            if (kind == ScriptBridgeSlotKind::Setting) slots = &layout->Settings;
+            if (slots) {
+                for (const ScriptBridgeLayoutParamSlot &slot : *slots) {
+                    append(slot.Index, slot.Name, slot.TypeName);
+                }
+            }
+        }
+    }
+
+    if (!result.empty() || !behavior) {
+        return result.empty() ? "<none>" : result;
+    }
+
+    if (kind == ScriptBridgeSlotKind::Input || kind == ScriptBridgeSlotKind::Output) {
+        const int count = kind == ScriptBridgeSlotKind::Input ? behavior->GetInputCount() : behavior->GetOutputCount();
+        for (int i = 0; i < count; ++i) {
+            CKBehaviorIO *io = kind == ScriptBridgeSlotKind::Input ? behavior->GetInput(i) : behavior->GetOutput(i);
+            append(i, SafeString(io ? io->GetName() : nullptr), std::string());
+        }
+    } else if (kind == ScriptBridgeSlotKind::Pin) {
+        for (int i = 0; i < behavior->GetInputParameterCount(); ++i) {
+            CKParameterIn *param = behavior->GetInputParameter(i);
+            append(i, SafeString(param ? param->GetName() : nullptr), ParameterTypeLabel(behavior->GetCKContext(), param));
+        }
+    } else if (kind == ScriptBridgeSlotKind::Pout) {
+        for (int i = 0; i < behavior->GetOutputParameterCount(); ++i) {
+            CKParameterOut *param = behavior->GetOutputParameter(i);
+            append(i, SafeString(param ? param->GetName() : nullptr), ParameterTypeLabel(behavior->GetCKContext(), param));
+        }
+    } else if (kind == ScriptBridgeSlotKind::Setting) {
+        for (int i = 0; i < behavior->GetLocalParameterCount(); ++i) {
+            CKParameterLocal *param = behavior->GetLocalParameter(i);
+            append(i, SafeString(param ? param->GetName() : nullptr), ParameterTypeLabel(behavior->GetCKContext(), param));
+        }
+    }
+
+    return result.empty() ? "<none>" : result;
+}
+
+int ResolveRuntimeNamedSlot(ScriptBehaviorBridge *bridge,
+                            CKBehavior *behavior,
+                            ScriptBridgeSlotKind kind,
+                            const std::string &name,
+                            int occurrence,
+                            std::string &error) {
+    if (!behavior) {
+        error = "Runtime Building Block behavior is not available.";
+        return -1;
+    }
+    if (occurrence < 0) {
+        error = fmt::format("{} occurrence must be non-negative.", RuntimeSlotKindName(kind));
+        return -1;
+    }
+
+    const ScriptBridgeLayoutRecord *layout = bridge
+        ? bridge->GetBehaviorLayout(behavior->GetID(), CaptureBridgeObjectStamp(behavior))
+        : nullptr;
+
+    auto matchName = [&](const std::string &candidate) {
+        return name.empty() ? true : NameEquals(const_cast<CKSTRING>(candidate.c_str()), name);
+    };
+
+    int seen = 0;
+    auto accept = [&](int index, const std::string &candidateName) -> int {
+        if (!matchName(candidateName)) {
+            return -1;
+        }
+        if (seen == occurrence) {
+            return index;
+        }
+        ++seen;
+        return -1;
+    };
+
+    if (layout) {
+        if (kind == ScriptBridgeSlotKind::Input || kind == ScriptBridgeSlotKind::Output) {
+            const auto &slots = kind == ScriptBridgeSlotKind::Input ? layout->Inputs : layout->Outputs;
+            for (int i = 0; i < static_cast<int>(slots.size()); ++i) {
+                const int result = accept(i, slots[i].Name);
+                if (result >= 0) return result;
+            }
+        } else {
+            const std::vector<ScriptBridgeLayoutParamSlot> *slots = nullptr;
+            if (kind == ScriptBridgeSlotKind::Pin) slots = &layout->Pins;
+            if (kind == ScriptBridgeSlotKind::Pout) slots = &layout->Pouts;
+            if (kind == ScriptBridgeSlotKind::Setting) slots = &layout->Settings;
+            if (slots) {
+                for (const ScriptBridgeLayoutParamSlot &slot : *slots) {
+                    const int result = accept(slot.Index, slot.Name);
+                    if (result >= 0) return result;
+                }
+            }
+        }
+    }
+
+    const int generation = layout ? layout->LayoutGeneration : -1;
+    error = fmt::format("Building Block '{}' could not resolve {} '{}' occurrence {} after runtime layout generation {}. Candidate {}s: {}.",
+        SafeString(behavior->GetPrototypeName()),
+        RuntimeSlotKindName(kind),
+        name,
+        occurrence,
+        generation,
+        RuntimeSlotKindName(kind),
+        DescribeRuntimeLayoutCandidates(layout, behavior, kind));
+    return -1;
+}
+
+bool ResolveNamedValues(ScriptBehaviorBridge *bridge,
+                        CKBehavior *behavior,
+                        ScriptBridgeBBInvocationSpec &request,
+                        bool settings,
+                        std::string &error) {
+    std::vector<ScriptBridgeNamedValue> &namedValues = settings ? request.NamedSettings : request.NamedParameters;
+    if (namedValues.empty()) {
+        return true;
+    }
+    std::vector<ScriptBridgeIndexedValue> &indexedValues = settings ? request.IndexedSettings : request.IndexedParameters;
+    const ScriptBridgeSlotKind kind = settings ? ScriptBridgeSlotKind::Setting : ScriptBridgeSlotKind::Pin;
+    for (const ScriptBridgeNamedValue &entry : namedValues) {
+        const int index = ResolveRuntimeNamedSlot(bridge, behavior, kind, entry.Name, entry.Occurrence, error);
+        if (index < 0) {
+            return false;
+        }
+        ScriptBridgeSetIndexedValue(indexedValues, index, entry.Value);
+    }
+    namedValues.clear();
+    return true;
+}
+
 CKBeObject *ResolveRequestBeObject(CKContext *context,
                                    CK_ID id,
                                    const ScriptBridgeObjectStamp &stamp,
@@ -173,6 +337,47 @@ BBResult *ScriptBehaviorBridge::RunCall(const ScriptBridgeBBInvocationSpec &requ
 
     if (behavior) {
         state = ExecuteOnce(behavior, ctx, inputIndex, &inputSources, true);
+    }
+
+    if (behavior && (state.ReturnCode & CKBR_ACTIVATENEXTFRAME)) {
+        state.Ok = false;
+        state.Error = "Building Block requested next-frame execution; use BB::Spawn(...).Start() instead of BB::Call(...).Run().";
+        behavior->Activate(FALSE, TRUE);
+    }
+
+    ResultRecord record;
+    record.ResultId = m_NextResultId++;
+    record.Generation = m_NextGeneration++;
+    record.ComponentId = request.ComponentId;
+    record.BehaviorId = behavior ? behavior->GetID() : 0;
+    record.BehaviorStamp = CaptureBridgeObjectStamp(behavior);
+    record.State = state;
+    record.OperationIds = std::move(operationIds);
+
+    auto [it, inserted] = m_Results.emplace(record.ResultId, std::move(record));
+    (void) inserted;
+    return new BBResult(this, it->second.ResultId, it->second.Generation);
+}
+
+BBResult *ScriptBehaviorBridge::RunCall(const ScriptBridgeBBInvocationSpec &request,
+                                        const CKBehaviorContext &ctx,
+                                        const std::string &inputName,
+                                        int occurrence) {
+    ScriptBridgeExecutionState state;
+    ScriptBridgeInputSourceBindings inputSources;
+    std::vector<CK_ID> operationIds;
+    CKBehavior *behavior = CreateRuntimeBehavior(request, ctx, state, &inputSources, &operationIds);
+
+    if (behavior) {
+        std::string error;
+        const int inputIndex = ResolveRuntimeNamedSlot(this, behavior, ScriptBridgeSlotKind::Input, inputName, occurrence, error);
+        if (inputIndex >= 0) {
+            state = ExecuteOnce(behavior, ctx, inputIndex, &inputSources, true);
+        } else {
+            state.Ok = false;
+            state.ReturnCode = CKBR_BEHAVIORERROR;
+            state.Error = error;
+        }
     }
 
     if (behavior && (state.ReturnCode & CKBR_ACTIVATENEXTFRAME)) {
@@ -327,11 +532,16 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
                                 err));
     }
 
-    if (!ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
+    ScriptBridgeBBInvocationSpec resolvedRequest = request;
+    if (!ResolveNamedValues(this, behavior, resolvedRequest, true, error)) {
         return fail(error);
     }
 
-    if (!ConfigureBehaviorOwnerAndTarget(context, behavior, request, error)) {
+    if (!ApplyIndexedLocalParameters(behavior, resolvedRequest.IndexedSettings, error)) {
+        return fail(error);
+    }
+
+    if (!ConfigureBehaviorOwnerAndTarget(context, behavior, resolvedRequest, error)) {
         return fail(error);
     }
 
@@ -342,11 +552,11 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
     createCallbackSent = true;
 
     CKBeObject *owner = ResolveRequestBeObject(context,
-                                                                             request.OwnerId,
-                                                                             request.OwnerStamp,
+                                                                             resolvedRequest.OwnerId,
+                                                                             resolvedRequest.OwnerStamp,
                                                                              "Owner",
                                                                              error);
-    if (request.OwnerId && !owner) {
+    if (resolvedRequest.OwnerId && !owner) {
         return fail(error);
     }
     if (owner) {
@@ -356,15 +566,20 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
         }
     }
 
-    if (!NotifyIndexedSettingsEdited(behavior, request.IndexedSettings, ctx, error)) {
+    if (!NotifyIndexedSettingsEdited(behavior, resolvedRequest.IndexedSettings, ctx, error)) {
+        return fail(error);
+    }
+    InvalidateBehaviorLayout(behavior->GetID());
+
+    if (!ResolveNamedValues(this, behavior, resolvedRequest, false, error)) {
         return fail(error);
     }
 
-    if (!ApplyIndexedInputParameters(behavior, request.IndexedParameters, error, nullptr)) {
+    if (!ApplyIndexedInputParameters(behavior, resolvedRequest.IndexedParameters, error, nullptr)) {
         return fail(error);
     }
 
-    if (!ApplyInputGraphRequests(behavior, request, error, nullptr, operationIds)) {
+    if (!ApplyInputGraphRequests(behavior, resolvedRequest, error, nullptr, operationIds)) {
         return fail(error);
     }
 
@@ -908,11 +1123,16 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         return fail(fmt::format("Failed to initialize Building Block from GUID ({}, {}) with CKERROR {}.", guid.d[0], guid.d[1], err));
     }
 
-    if (!ApplyIndexedLocalParameters(behavior, request.IndexedSettings, error)) {
+    ScriptBridgeBBInvocationSpec resolvedRequest = request;
+    if (!ResolveNamedValues(this, behavior, resolvedRequest, true, error)) {
         return fail(error);
     }
 
-    if (!ConfigureBehaviorOwnerAndTarget(context, behavior, request, error)) {
+    if (!ApplyIndexedLocalParameters(behavior, resolvedRequest.IndexedSettings, error)) {
+        return fail(error);
+    }
+
+    if (!ConfigureBehaviorOwnerAndTarget(context, behavior, resolvedRequest, error)) {
         return fail(error);
     }
 
@@ -923,11 +1143,11 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
     createCallbackSent = true;
 
     CKBeObject *owner = ResolveRequestBeObject(context,
-                                                                             request.OwnerId,
-                                                                             request.OwnerStamp,
+                                                                             resolvedRequest.OwnerId,
+                                                                             resolvedRequest.OwnerStamp,
                                                                              "Owner",
                                                                              error);
-    if (request.OwnerId && !owner) {
+    if (resolvedRequest.OwnerId && !owner) {
         return fail(error);
     }
     if (owner) {
@@ -937,15 +1157,20 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
         }
     }
 
-    if (!NotifyIndexedSettingsEdited(behavior, request.IndexedSettings, ctx, state.Error)) {
+    if (!NotifyIndexedSettingsEdited(behavior, resolvedRequest.IndexedSettings, ctx, state.Error)) {
         return fail(state.Error);
     }
+    InvalidateBehaviorLayout(behavior->GetID());
 
-    if (!ApplyIndexedInputParameters(behavior, request.IndexedParameters, error, inputSources)) {
+    if (!ResolveNamedValues(this, behavior, resolvedRequest, false, error)) {
         return fail(error);
     }
 
-    if (!ApplyInputGraphRequests(behavior, request, error, inputSources, operationIds)) {
+    if (!ApplyIndexedInputParameters(behavior, resolvedRequest.IndexedParameters, error, inputSources)) {
+        return fail(error);
+    }
+
+    if (!ApplyInputGraphRequests(behavior, resolvedRequest, error, inputSources, operationIds)) {
         return fail(error);
     }
 

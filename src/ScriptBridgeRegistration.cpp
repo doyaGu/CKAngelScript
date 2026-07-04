@@ -4,6 +4,7 @@
 
 #include <fmt/format.h>
 #include "ScriptRegistration.h"
+#include "ScriptBehaviorFrame.h"
 
 namespace {
 
@@ -162,6 +163,16 @@ CScriptArray *BBFindAll(const CKBehaviorContext &ctx, const std::string &query) 
 
 BBCallBuilder *BBCallByName(const CKBehaviorContext &ctx, const std::string &name) {
     BBPrototype *prototype = BBPrototypeByName(ctx, name);
+    if (!prototype) {
+        return nullptr;
+    }
+    BBCallBuilder *builder = prototype->Call();
+    prototype->Release();
+    return builder;
+}
+
+BBCallBuilder *BBCallByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
+    BBPrototype *prototype = BBPrototypeByGuid(ctx, guid);
     if (!prototype) {
         return nullptr;
     }
@@ -465,6 +476,7 @@ void RegisterParamKindEnum(asIScriptEngine *engine, int &r) {
 }
 
 void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
+    RegisterObjectTypeAndRefCount<BehaviorFrame>(engine, "BehaviorFrame");
     RegisterObjectTypeAndRefCount<ParamInfo>(engine, "ParamInfo");
     RegisterObjectTypeAndRefCount<ParamValue>(engine, "ParamValue");
     RegisterObjectTypeAndRefCount<ParamStructValue>(engine, "ParamStructValue");
@@ -491,6 +503,31 @@ void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
     RegisterObjectTypeAndRefCount<BBResult>(engine, "BBResult");
     RegisterObjectTypeAndRefCount<BBTask>(engine, "BBTask");
     RegisterObjectTypeAndRefCount<GraphTask>(engine, "GraphTask");
+}
+
+void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehavior@ Behavior() const", asMETHOD(BehaviorFrame, Behavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKContext@ Context() const", asMETHOD(BehaviorFrame, Context), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBeObject@ Owner() const", asMETHOD(BehaviorFrame, Owner), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBeObject@ Target() const", asMETHOD(BehaviorFrame, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "bool InputActive(const string &in name = \"In\") const", asMETHOD(BehaviorFrame, InputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "bool Take(const string &in name = \"In\")", asMETHOD(BehaviorFrame, Take), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "void Emit(const string &in name = \"Out\")", asMETHOD(BehaviorFrame, Emit), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Pin(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, Pin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Pout(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "string PinString(const string &in name, const string &in defaultValue = \"\", int occurrence = 0) const", asMETHOD(BehaviorFrame, PinString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "int PinInt(const string &in name, int defaultValue = 0, int occurrence = 0) const", asMETHOD(BehaviorFrame, PinInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "bool PinBool(const string &in name, bool defaultValue = false, int occurrence = 0) const", asMETHOD(BehaviorFrame, PinBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "float PinFloat(const string &in name, float defaultValue = 0.0f, int occurrence = 0) const", asMETHOD(BehaviorFrame, PinFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ PinObject(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, PinObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetPout(const string &in name, int value, int occurrence = 0)", asMETHOD(BehaviorFrame, SetPoutInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetPout(const string &in name, float value, int occurrence = 0)", asMETHOD(BehaviorFrame, SetPoutFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetPout(const string &in name, bool value, int occurrence = 0)", asMETHOD(BehaviorFrame, SetPoutBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetPout(const string &in name, const string &in value, int occurrence = 0)", asMETHOD(BehaviorFrame, SetPoutString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetPout(const string &in name, CKObject@ value, int occurrence = 0)", asMETHOD(BehaviorFrame, SetPoutObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "BBCallBuilder@ Call(const string &in prototype) const", asMETHOD(BehaviorFrame, CallName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "BBCallBuilder@ Call(CKGUID guid) const", asMETHOD(BehaviorFrame, CallGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "void Trace(const string &in message) const", asMETHOD(BehaviorFrame, Trace), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
 void RegisterParamHandleMethods(asIScriptEngine *engine, int &r) {
@@ -651,6 +688,7 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorRef", "bool OutputActive(int outputIndex) const", asMETHOD(BehaviorRef, OutputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool OutputActive(BBSlot@+ output) const", asMETHOD(BehaviorRef, OutputActiveSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pin(int index) const", asMETHOD(BehaviorRef, Pin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pin(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorRef, PinName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pin(BBSlot@+ slot) const", asMETHOD(BehaviorRef, PinSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pout(int index) const", asMETHOD(BehaviorRef, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pout(BBSlot@+ slot) const", asMETHOD(BehaviorRef, PoutSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -825,7 +863,8 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBConfig", "string Describe() const", asMETHOD(BBConfig, Describe), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "string Explain() const", asMETHOD(BBConfig, Explain), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBDecl@ Decl() const", asMETHOD(BBConfig, Decl), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(BBConfig, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHODPR(BBConfig, Raise, (const CKBehaviorContext &) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "bool Raise(BehaviorFrame@+ frame) const", asMETHODPR(BBConfig, Raise, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBSlot@ Input(const string &in name, int occurrence = 0)", asMETHOD(BBConfig, In), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBSlot@ Output(const string &in name, int occurrence = 0)", asMETHOD(BBConfig, Out), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBSlot@ Pin(const string &in name, int occurrence = 0)", asMETHOD(BBConfig, Pin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -844,12 +883,19 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBConfig", "BBConfig@ SetSetting(BBSlot@+ setting, const string &in value)", asMETHOD(BBConfig, SetSettingString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBConfig@ Source(BBSlot@+ pin, ParamRef@+ source)", asMETHOD(BBConfig, SourceSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBConfig@ Operation(BBSlot@+ pin, ParamOp@+ operation)", asMETHOD(BBConfig, OperationSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "bool Validate(const CKBehaviorContext &in ctx) const", asMETHOD(BBConfig, Validate), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "bool Validate(const CKBehaviorContext &in ctx) const", asMETHODPR(BBConfig, Validate, (const CKBehaviorContext &) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "bool Validate(BehaviorFrame@+ frame) const", asMETHODPR(BBConfig, Validate, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ Instance() const", asMETHOD(BBConfig, Instance), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureSpawned(const CKBehaviorContext &in ctx)", asMETHOD(BBConfig, EnsureSpawned), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureStarted(const CKBehaviorContext &in ctx)", asMETHOD(BBConfig, EnsureStarted), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ Spawn(const CKBehaviorContext &in ctx)", asMETHOD(BBConfig, SpawnInstance), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ SpawnStarted(const CKBehaviorContext &in ctx)", asMETHOD(BBConfig, SpawnStarted), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureSpawned(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, EnsureSpawned, (const CKBehaviorContext &), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureSpawned(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, EnsureSpawned, (BehaviorFrame *), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureStarted(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, EnsureStarted, (const CKBehaviorContext &), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureStarted(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, EnsureStarted, (BehaviorFrame *), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ Spawn(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, SpawnInstance, (const CKBehaviorContext &), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ Spawn(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, SpawnInstance, (BehaviorFrame *), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ SpawnStarted(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, SpawnStarted, (const CKBehaviorContext &), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ SpawnStarted(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, SpawnStarted, (BehaviorFrame *), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "bool Stop(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, Stop, (const CKBehaviorContext &), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBConfig", "bool Stop(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, Stop, (BehaviorFrame *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "bool Destroy()", asMETHOD(BBConfig, Destroy), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "bool OutputActive(BBSlot@+ output)", asMETHOD(BBConfig, OutputActiveSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "ParamRef@ PinRef(BBSlot@+ pin)", asMETHOD(BBConfig, PinRefSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -872,10 +918,14 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBInstance", "bool Start()", asMETHODPR(BBInstance, Start, (), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Start(BBSlot@+ input)", asMETHODPR(BBInstance, Start, (BBSlot *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Start(const CKBehaviorContext &in ctx)", asMETHOD(BBInstance, StartWithContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool Start(BehaviorFrame@+ frame)", asMETHOD(BBInstance, StartWithFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Start(const CKBehaviorContext &in ctx, BBSlot@+ input)", asMETHOD(BBInstance, StartSlotWithContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool Step(const CKBehaviorContext &in ctx)", asMETHOD(BBInstance, Step), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool Start(BehaviorFrame@+ frame, BBSlot@+ input)", asMETHOD(BBInstance, StartSlotWithFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool Step(const CKBehaviorContext &in ctx)", asMETHODPR(BBInstance, Step, (const CKBehaviorContext &), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool Step(BehaviorFrame@+ frame)", asMETHODPR(BBInstance, Step, (BehaviorFrame *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Stop()", asMETHOD(BBInstance, Stop), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Stop(const CKBehaviorContext &in ctx)", asMETHOD(BBInstance, StopWithContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool Stop(BehaviorFrame@+ frame)", asMETHOD(BBInstance, StopWithFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool OutputActive(BBSlot@+ output) const", asMETHOD(BBInstance, OutputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "ParamRef@ Pin(BBSlot@+ pin) const", asMETHOD(BBInstance, Pin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "ParamRef@ Pout(BBSlot@+ pout) const", asMETHOD(BBInstance, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -887,16 +937,23 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBInstance", "bool Set(BBSlot@+ pin, CKObject@ value)", asMETHOD(BBInstance, SetSlotObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Source(BBSlot@+ pin, ParamRef@+ source)", asMETHOD(BBInstance, SourceSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Operation(BBSlot@+ pin, ParamOp@+ operation)", asMETHOD(BBInstance, OperationSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, ParamValue@+ value)", asMETHOD(BBInstance, StepSetSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, int value)", asMETHOD(BBInstance, StepSetSlotInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, float value)", asMETHOD(BBInstance, StepSetSlotFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, bool value)", asMETHOD(BBInstance, StepSetSlotBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, const string &in value)", asMETHOD(BBInstance, StepSetSlotString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, CKObject@ value)", asMETHOD(BBInstance, StepSetSlotObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, ParamValue@+ value)", asMETHODPR(BBInstance, StepSetSlot, (const CKBehaviorContext &, BBSlot *, ParamValue *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, ParamValue@+ value)", asMETHODPR(BBInstance, StepSetSlot, (BehaviorFrame *, BBSlot *, ParamValue *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, int value)", asMETHODPR(BBInstance, StepSetSlotInt, (const CKBehaviorContext &, BBSlot *, int), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, int value)", asMETHODPR(BBInstance, StepSetSlotInt, (BehaviorFrame *, BBSlot *, int), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, float value)", asMETHODPR(BBInstance, StepSetSlotFloat, (const CKBehaviorContext &, BBSlot *, float), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, float value)", asMETHODPR(BBInstance, StepSetSlotFloat, (BehaviorFrame *, BBSlot *, float), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, bool value)", asMETHODPR(BBInstance, StepSetSlotBool, (const CKBehaviorContext &, BBSlot *, bool), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, bool value)", asMETHODPR(BBInstance, StepSetSlotBool, (BehaviorFrame *, BBSlot *, bool), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, const string &in value)", asMETHODPR(BBInstance, StepSetSlotString, (const CKBehaviorContext &, BBSlot *, const std::string &), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, const string &in value)", asMETHODPR(BBInstance, StepSetSlotString, (BehaviorFrame *, BBSlot *, const std::string &), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, CKObject@ value)", asMETHODPR(BBInstance, StepSetSlotObject, (const CKBehaviorContext &, BBSlot *, CKObject *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, CKObject@ value)", asMETHODPR(BBInstance, StepSetSlotObject, (BehaviorFrame *, BBSlot *, CKObject *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool SetSetting(BBSlot@+ setting, ParamValue@+ value)", asMETHOD(BBInstance, SetSettingValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool SetSetting(BBSlot@+ setting, const string &in value)", asMETHOD(BBInstance, SetSetting), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Destroy()", asMETHOD(BBInstance, Destroy), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(BBInstance, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHODPR(BBInstance, Raise, (const CKBehaviorContext &) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBInstance", "bool Raise(BehaviorFrame@+ frame) const", asMETHODPR(BBInstance, Raise, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("BBPrototype", "bool IsValid() const", asMETHOD(BBPrototype, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBPrototype", "CKGUID GetGuid() const", asMETHOD(BBPrototype, GetGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -926,11 +983,24 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@+ pin, bool value)", asMETHOD(BBCallBuilder, SetSlotBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@+ pin, const string &in value)", asMETHOD(BBCallBuilder, SetSlotString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(BBSlot@+ pin, CKObject@ value)", asMETHOD(BBCallBuilder, SetSlotObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(const string &in pin, ParamValue@+ value)", asMETHOD(BBCallBuilder, SetNameValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(const string &in pin, int value)", asMETHOD(BBCallBuilder, SetNameInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(const string &in pin, float value)", asMETHOD(BBCallBuilder, SetNameFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(const string &in pin, bool value)", asMETHOD(BBCallBuilder, SetNameBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(const string &in pin, const string &in value)", asMETHOD(BBCallBuilder, SetNameString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Set(const string &in pin, CKObject@ value)", asMETHOD(BBCallBuilder, SetNameObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Setting(const string &in setting, ParamValue@+ value)", asMETHOD(BBCallBuilder, SettingValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Setting(const string &in setting, int value)", asMETHOD(BBCallBuilder, SettingInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Setting(const string &in setting, float value)", asMETHOD(BBCallBuilder, SettingFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Setting(const string &in setting, bool value)", asMETHOD(BBCallBuilder, SettingBool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Setting(const string &in setting, const string &in value)", asMETHOD(BBCallBuilder, SettingString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Setting(const string &in setting, CKObject@ value)", asMETHOD(BBCallBuilder, SettingObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ SetSource(int pinIndex, ParamRef@+ source)", asMETHOD(BBCallBuilder, SetSource), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Source(BBSlot@+ pin, ParamRef@+ source)", asMETHOD(BBCallBuilder, Source), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ SetOperation(int pinIndex, ParamOp@+ operation)", asMETHOD(BBCallBuilder, SetOperation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBCallBuilder@ Operation(BBSlot@+ pin, ParamOp@+ operation)", asMETHOD(BBCallBuilder, Operation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBResult@ Run(int inputIndex = 0)", asMETHOD(BBCallBuilder, Run), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBCallBuilder", "BBResult@ Run(const string &in input)", asMETHOD(BBCallBuilder, RunName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBCallBuilder", "BBResult@ Run(BBSlot@+ input)", asMETHOD(BBCallBuilder, RunSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("BBTaskBuilder", "BBTaskBuilder@ Owner(CKBeObject@ owner)", asMETHOD(BBTaskBuilder, Owner), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -957,8 +1027,10 @@ void RegisterTaskMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBResult", "string Error() const", asMETHOD(BBResult, Error), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBResult", "bool OutputActive(int outputIndex) const", asMETHOD(BBResult, OutputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBResult", "bool OutputActive(BBSlot@+ output) const", asMETHOD(BBResult, OutputActiveSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBResult", "bool OutputActive(const string &in output, int occurrence = 0) const", asMETHOD(BBResult, OutputActiveName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBResult", "ParamRef@ Pout(int index) const", asMETHOD(BBResult, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBResult", "ParamRef@ Pout(BBSlot@+ pout) const", asMETHOD(BBResult, PoutSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBResult", "ParamRef@ Pout(const string &in pout, int occurrence = 0) const", asMETHOD(BBResult, PoutName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBResult", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(BBResult, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("BBTask", "bool IsValid() const", asMETHOD(BBTask, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1023,6 +1095,7 @@ void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("BBDecl@ Require(const CKBehaviorContext &in ctx, const string &in query)", asFUNCTION(BBRequireByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("BBDecl@ Require(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBRequireByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBCallByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBCallByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBSpawnByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->SetDefaultNamespace("Param"); CKAS_CHECK_REGISTER(r);
@@ -1038,6 +1111,7 @@ void RegisterScriptBehaviorBridgeBindings(asIScriptEngine *engine) {
     RegisterParamKindEnum(engine, r);
     RegisterBridgeObjectTypes(engine);
     RegisterScriptObjectRefBridge(engine);
+    RegisterBehaviorFrameMethods(engine, r);
     RegisterParamHandleMethods(engine, r);
     RegisterLayoutMethods(engine, r);
     RegisterBehaviorMethods(engine, r);

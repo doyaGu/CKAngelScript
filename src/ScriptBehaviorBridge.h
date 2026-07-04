@@ -192,6 +192,12 @@ struct ScriptBridgeIndexedValue {
     ScriptParamValue Value;
 };
 
+struct ScriptBridgeNamedValue {
+    std::string Name;
+    int Occurrence = 0;
+    ScriptParamValue Value;
+};
+
 void ScriptBridgeSetIndexedValue(std::vector<ScriptBridgeIndexedValue> &values,
                                  int pinIndex,
                                  const ScriptParamValue &value);
@@ -300,6 +306,8 @@ struct ScriptBridgeBBInvocationSpec {
     ScriptBridgeObjectStamp TargetStamp;
     std::vector<ScriptBridgeIndexedValue> IndexedParameters;
     std::vector<ScriptBridgeIndexedValue> IndexedSettings;
+    std::vector<ScriptBridgeNamedValue> NamedParameters;
+    std::vector<ScriptBridgeNamedValue> NamedSettings;
     std::vector<ScriptBridgeInputSource> SourceParameters;
     std::vector<ScriptBridgeOperationSpec> OperationParameters;
 };
@@ -328,6 +336,7 @@ public:
     BBPrototype *CreatePrototype(const CKBehaviorContext &ctx, CKGUID guid);
     void ReleasePrototype(BBPrototype *prototype);
     BBResult *RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
+    BBResult *RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, const std::string &inputName, int occurrence = 0);
     BBTask *StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     bool SetTaskSetting(CK_ID taskId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
     CK_ID CreateInstance(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int &generation, std::string &error);

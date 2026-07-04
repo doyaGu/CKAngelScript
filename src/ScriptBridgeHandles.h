@@ -11,6 +11,7 @@ class CScriptArray;
 class BBCallBuilder;
 class BBTaskBuilder;
 class BBConfig;
+class BehaviorFrame;
 class BehaviorGraph;
 class BehaviorGraphEdit;
 class BehaviorLinkRef;
@@ -351,6 +352,7 @@ public:
     bool OutputActive(int outputIndex) const;
     bool OutputActiveSlot(BBSlot *output) const;
     ParamRef *Pin(int index) const;
+    ParamRef *PinName(const std::string &name, int occurrence = 0) const;
     ParamRef *PinSlot(BBSlot *slot) const;
     ParamRef *Pout(int index) const;
     ParamRef *PoutSlot(BBSlot *slot) const;
@@ -914,6 +916,7 @@ public:
     BBDecl *Spec() const;
     BehaviorRef *Behavior() const;
     bool Raise(const CKBehaviorContext &ctx) const;
+    bool Raise(BehaviorFrame *frame) const;
 
     BBSlot *In(const std::string &name, int occurrence = 0);
     BBSlot *Out(const std::string &name, int occurrence = 0);
@@ -936,14 +939,20 @@ public:
     BBConfig *SetSetting(BBSlot *setting, ParamValue *value);
     BBConfig *SetSettingString(BBSlot *setting, const std::string &value);
     bool Validate(const CKBehaviorContext &ctx) const;
+    bool Validate(BehaviorFrame *frame) const;
     BBDecl *Decl() const;
     BBInstance *Instance() const;
     BBInstance *EnsureSpawned(const CKBehaviorContext &ctx);
+    BBInstance *EnsureSpawned(BehaviorFrame *frame);
     BBInstance *EnsureStarted(const CKBehaviorContext &ctx);
+    BBInstance *EnsureStarted(BehaviorFrame *frame);
     BBInstance *SpawnInstance(const CKBehaviorContext &ctx);
+    BBInstance *SpawnInstance(BehaviorFrame *frame);
     BBInstance *SpawnStarted(const CKBehaviorContext &ctx);
+    BBInstance *SpawnStarted(BehaviorFrame *frame);
 
     bool Stop(const CKBehaviorContext &ctx);
+    bool Stop(BehaviorFrame *frame);
     bool Destroy();
     bool OutputActiveSlot(BBSlot *output);
     ParamRef *PinRefSlot(BBSlot *pin);
@@ -1027,9 +1036,13 @@ public:
     bool Start(BBSlot *input);
     bool StartWithContext(const CKBehaviorContext &ctx);
     bool StartSlotWithContext(const CKBehaviorContext &ctx, BBSlot *input);
+    bool StartWithFrame(BehaviorFrame *frame);
+    bool StartSlotWithFrame(BehaviorFrame *frame, BBSlot *input);
     bool Step(const CKBehaviorContext &ctx);
+    bool Step(BehaviorFrame *frame);
     bool Stop();
     bool StopWithContext(const CKBehaviorContext &ctx);
+    bool StopWithFrame(BehaviorFrame *frame);
     bool OutputActive(BBSlot *output) const;
     ParamRef *Pin(BBSlot *pin) const;
     ParamRef *Pout(BBSlot *pout) const;
@@ -1042,15 +1055,22 @@ public:
     bool SourceSlot(BBSlot *pin, ParamRef *source);
     bool OperationSlot(BBSlot *pin, ParamOp *operation);
     bool StepSetSlot(const CKBehaviorContext &ctx, BBSlot *pin, ParamValue *value);
+    bool StepSetSlot(BehaviorFrame *frame, BBSlot *pin, ParamValue *value);
     bool StepSetSlotInt(const CKBehaviorContext &ctx, BBSlot *pin, int value);
+    bool StepSetSlotInt(BehaviorFrame *frame, BBSlot *pin, int value);
     bool StepSetSlotFloat(const CKBehaviorContext &ctx, BBSlot *pin, float value);
+    bool StepSetSlotFloat(BehaviorFrame *frame, BBSlot *pin, float value);
     bool StepSetSlotBool(const CKBehaviorContext &ctx, BBSlot *pin, bool value);
+    bool StepSetSlotBool(BehaviorFrame *frame, BBSlot *pin, bool value);
     bool StepSetSlotString(const CKBehaviorContext &ctx, BBSlot *pin, const std::string &value);
+    bool StepSetSlotString(BehaviorFrame *frame, BBSlot *pin, const std::string &value);
     bool StepSetSlotObject(const CKBehaviorContext &ctx, BBSlot *pin, CKObject *value);
+    bool StepSetSlotObject(BehaviorFrame *frame, BBSlot *pin, CKObject *value);
     bool SetSettingValue(BBSlot *setting, ParamValue *value);
     bool SetSetting(BBSlot *setting, const std::string &value);
     bool Destroy();
     bool Raise(const CKBehaviorContext &ctx) const;
+    bool Raise(BehaviorFrame *frame) const;
     CK_ID BridgeInstanceId() const;
     int BridgeGeneration() const;
 
@@ -1086,15 +1106,31 @@ public:
     BBCallBuilder *SetSlotBool(BBSlot *slot, bool value);
     BBCallBuilder *SetSlotString(BBSlot *slot, const std::string &value);
     BBCallBuilder *SetSlotObject(BBSlot *slot, CKObject *value);
+    BBCallBuilder *SetNameValue(const std::string &name, ParamValue *value);
+    BBCallBuilder *SetNameInt(const std::string &name, int value);
+    BBCallBuilder *SetNameFloat(const std::string &name, float value);
+    BBCallBuilder *SetNameBool(const std::string &name, bool value);
+    BBCallBuilder *SetNameString(const std::string &name, const std::string &value);
+    BBCallBuilder *SetNameObject(const std::string &name, CKObject *value);
+    BBCallBuilder *SettingValue(const std::string &name, ParamValue *value);
+    BBCallBuilder *SettingInt(const std::string &name, int value);
+    BBCallBuilder *SettingFloat(const std::string &name, float value);
+    BBCallBuilder *SettingBool(const std::string &name, bool value);
+    BBCallBuilder *SettingString(const std::string &name, const std::string &value);
+    BBCallBuilder *SettingObject(const std::string &name, CKObject *value);
     BBCallBuilder *SetSource(int pinIndex, ParamRef *source);
     BBCallBuilder *Source(BBSlot *slot, ParamRef *source);
     BBCallBuilder *SetOperation(int pinIndex, ParamOp *operation);
     BBCallBuilder *Operation(BBSlot *slot, ParamOp *operation);
     BBResult *Run(int inputIndex);
+    BBResult *RunName(const std::string &inputName);
     BBResult *RunSlot(BBSlot *input);
 
 private:
     BBCallBuilder *SetValueForPin(int pinIndex, const ScriptParamValue &value);
+    BBCallBuilder *SetNamedValue(std::vector<ScriptBridgeNamedValue> &values,
+                                 const std::string &name,
+                                 const ScriptParamValue &value);
     bool ResolvePinSlot(BBSlot *slot, int &pinIndex, const char *method);
 
     ScriptBehaviorBridge *m_Bridge = nullptr;
@@ -1190,8 +1226,10 @@ public:
     std::string Error() const;
     bool OutputActive(int outputIndex) const;
     bool OutputActiveSlot(BBSlot *output) const;
+    bool OutputActiveName(const std::string &name, int occurrence = 0) const;
     ParamRef *Pout(int index) const;
     ParamRef *PoutSlot(BBSlot *slot) const;
+    ParamRef *PoutName(const std::string &name, int occurrence = 0) const;
     bool Raise(const CKBehaviorContext &ctx) const;
 
 private:
