@@ -203,6 +203,13 @@ static CKERROR CopyCKObject(T *self, CKObject *obj, CKDependenciesContext &conte
     return self->Copy(*obj, context);
 }
 
+static CKERROR CopyCKCurvePoint(CKCurvePoint *self, CKObject *obj, CKDependenciesContext &context) {
+    if (!self || !obj) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    return self->Copy(*obj, context);
+}
+
 template <typename T>
 static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
@@ -245,7 +252,11 @@ static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context, bool caller = true)", asFUNCTIONPR([](T *self, CKDependenciesContext &context, bool caller) -> CKERROR { return self->PrepareDependencies(context, caller); }, (T *, CKDependenciesContext &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod(name, "CKERROR RemapDependencies(CKDependenciesContext &in context)", asMETHODPR(T, RemapDependencies, (CKDependenciesContext &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asFUNCTION(CopyCKObject<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    if constexpr (std::is_same_v<T, CKCurvePoint>) {
+        r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asFUNCTION(CopyCKCurvePoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    } else {
+        r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asFUNCTION(CopyCKObject<T>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    }
 
     r = engine->RegisterObjectMethod(name, "bool IsUpToDate()", asFUNCTIONPR([](T *self) -> bool { return self->IsUpToDate(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsPrivate()", asFUNCTIONPR([](T *self) -> bool { return self->IsPrivate(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);

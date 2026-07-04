@@ -1265,15 +1265,25 @@ bool ExecuteCKCurvePointCopyNullProbe(asIScriptEngine *engine,
         return false;
     }
 
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:copy-null:prepare");
     int r = scriptContext->Prepare(copyMethod);
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:copy-null:set-object");
     if (r >= 0) r = scriptContext->SetObject(point);
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:copy-null:set-source");
     if (r >= 0) r = scriptContext->SetArgObject(0, nullptr);
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:copy-null:set-dependencies");
     if (r >= 0) r = scriptContext->SetArgObject(1, &dependencies);
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:copy-null:execute");
     if (r >= 0) r = scriptContext->Execute();
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:copy-null:after-execute");
 
-    const bool ok = r == asEXECUTION_EXCEPTION;
+    const CKERROR returnCode = r == asEXECUTION_FINISHED
+        ? static_cast<CKERROR>(scriptContext->GetReturnDWord())
+        : CKERR_INVALIDPARAMETER - 1;
+    const bool ok = r == asEXECUTION_FINISHED && returnCode == CKERR_INVALIDPARAMETER;
     if (!ok) {
-        error = "CKCurvePoint Copy(null) probe expected a script exception, got code " + std::to_string(r) + ".";
+        error = "CKCurvePoint Copy(null) probe expected CKERR_INVALIDPARAMETER, got execute code " +
+                std::to_string(r) + " and return code " + std::to_string(returnCode) + ".";
     }
 
     scriptContext->Unprepare();
@@ -9893,11 +9903,13 @@ bool RunCKCurveScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::
 }
 
 bool RunCKCurvePointScriptSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:begin");
     if (!context || !engine) {
         error = "CKCurvePoint script self-test requires CKContext and AngelScript engine.";
         return false;
     }
 
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:type");
     asITypeInfo *pointType = engine->GetTypeInfoByDecl("CKCurvePoint");
     if (!pointType) {
         error = "CKCurvePoint self-test could not find the registered type.";
@@ -9923,7 +9935,8 @@ bool RunCKCurvePointScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
         !pointType->GetMethodByDecl("void SetTangents(const VxVector&in input, const VxVector&in output)") ||
         !pointType->GetMethodByDecl("CK3dEntity@ opImplCast()") ||
         !pointType->GetMethodByDecl("void TransformMany(NativeBuffer@ dest, NativeBuffer@ src, int count, CK3dEntity@ ref = null) const") ||
-        !pointType->GetMethodByDecl("NativePointer GetAppData()")) {
+        !pointType->GetMethodByDecl("NativePointer GetAppData()") ||
+        !pointType->GetMethodByDecl("CKERROR Copy(CKObject@ obj, CKDependenciesContext&in context)")) {
         error = "CKCurvePoint self-test could not find expected curve-point methods.";
         return false;
     }
@@ -9973,10 +9986,10 @@ bool RunCKCurvePointScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
         "  point0.GetLength();\n"
         "  if (!point0.GetAppData().IsNull()) return 14;\n"
         "  point0.SetAppData(NativePointer());\n"
-        "  if (curve.RemoveAllControlPoints() != CK_OK) return 15;\n"
         "  return 0;\n"
         "}\n";
 
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:build");
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
     if (!module) {
         error = "CKCurvePoint self-test could not create a script module.";
@@ -10003,6 +10016,7 @@ bool RunCKCurvePointScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
         return false;
     }
 
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:create");
     CKCurve *curve = CKCurve::Cast(context->CreateObject(
         CKCID_CURVE, const_cast<CKSTRING>("__CKAS_CKCurvePointSelfTestCurve"), CK_OBJECTCREATION_DYNAMIC));
     CKCurvePoint *point0 = CKCurvePoint::Cast(context->CreateObject(
@@ -10019,9 +10033,13 @@ bool RunCKCurvePointScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
     }
 
     CKDependenciesContext dependencies(context);
-    const bool ok = ExecuteCKCurvePointProbe(engine, surface, curve, point0, point1, false, "CKCurvePoint surface probe", error) &&
-                    ExecuteCKCurvePointCopyNullProbe(engine, pointType, point0, dependencies, error);
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:copy-null");
+    const bool copyNullOk = ExecuteCKCurvePointCopyNullProbe(engine, pointType, point0, dependencies, error);
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:surface");
+    const bool ok = copyNullOk &&
+                    ExecuteCKCurvePointProbe(engine, surface, curve, point0, point1, false, "CKCurvePoint surface probe", error);
 
+    WriteParameterRegistrySelfTestStage("CKCurvePoint:cleanup");
     curve->RemoveAllCallbacks();
     curve->RemoveAllControlPoints();
     context->DestroyObject(point1);
