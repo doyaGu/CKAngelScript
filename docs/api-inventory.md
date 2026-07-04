@@ -7,10 +7,10 @@ This page inventories the public API surface currently exposed by CKAngelScript.
 | Surface | Scope | Primary sources |
 | --- | --- | --- |
 | Public API | C ABI functions plus the `CKAngelScriptApi` C++ wrapper, header-only soft-load helpers for optional extension plugins, public struct initializers/status text, load/compile/unload, module import binding, module bytecode save/load, raw borrow helpers, source metadata reflection, symbol/runtime handles, typed argument/result helpers, execution handles, engine extension callbacks | `include/CKAngelScript.h`, `docs/public-api.md` |
-| High-level script API | Runtime scripts, scene refs, behavior bridge, BB runtime helpers, parameter conversion/catalog, messaging, async tasks | `src/ScriptRuntime.cpp`, `src/ScriptScene.cpp`, `src/ScriptBridgeRegistration.cpp`, `src/ScriptParameterRegistry.cpp`, `src/ScriptMessage.cpp`, `src/ScriptAsync.cpp` |
+| High-level script API | Runtime scripts, scene refs, behavior frame, behavior bridge, BB runtime helpers, parameter conversion/catalog, messaging, async tasks | `src/ScriptRuntime.cpp`, `src/ScriptScene.cpp`, `src/ScriptBehaviorFrame.cpp`, `src/ScriptBridgeRegistration.cpp`, `src/ScriptParameterRegistry.cpp`, `src/ScriptMessage.cpp`, `src/ScriptAsync.cpp` |
 | Native memory and FFI | `NativePointer`, `NativeBuffer`, DynLoad/DynCall/DynCallback helpers | `src/ScriptNativePointer.cpp`, `src/ScriptNativeBuffer.cpp`, `src/ScriptDynCall.cpp` |
 | Raw CK/Vx SDK bindings | CK context/managers/objects, SDK enums/defines/structs, Vx math types, containers | `src/ScriptCK*.cpp`, `src/ScriptVxMath.cpp`, `src/ScriptX*.cpp` |
-| Component/editor integration | `AngelScript Component`, metadata manifest, injected fields, BB config/slot metadata | `src/ScriptComponent*.cpp`, `docs/component-metadata-manifest.md` |
+| Component/editor integration | `AngelScript Component`, `AngelScript Executor`, metadata manifest, injected fields, BB config/slot metadata, `BehaviorFrame@` lifecycle invocation | `src/ScriptComponent*.cpp`, `src/AngelScriptExecutor.cpp`, `src/ScriptInvoker.cpp`, `docs/component-metadata-manifest.md`, `docs/angelscript-executor.md` |
 
 ## Registration Counts
 
@@ -18,17 +18,17 @@ Current AngelScript registration scan:
 
 | Registration kind | Count |
 | --- | ---: |
-| Global functions | 525 |
+| Global functions | 541 |
 | Global properties | 302 |
-| Object types | 208 |
-| Object methods | 3788 |
-| Object behaviours | 361 |
-| Object properties | 440 |
-| Funcdefs | 28 |
-| Enums | 145 |
-| Enum values | 1431 |
-| Typedefs | 35 |
-| Total | 7263 |
+| Object types | 238 |
+| Object methods | 4015 |
+| Object behaviours | 380 |
+| Object properties | 473 |
+| Funcdefs | 30 |
+| Enums | 144 |
+| Enum values | 1449 |
+| Typedefs | 38 |
+| Total | 7610 |
 
 Large raw SDK binding files dominate the total. The high-level and integration files account for roughly 1400 registrations; raw CK/Vx bindings and SDK constants account for the rest.
 
@@ -53,8 +53,9 @@ The global bucket includes raw SDK-style helpers and constructors, so new high-l
 | --- | --- | --- |
 | Runtime scripts | `ScriptContext`, `RuntimeScriptInfo`, `RuntimeDependencyInfo`, `Runtime::*` | Long-lived scripts discovered from script roots. |
 | Scene interop | `Scene::*`, `ObjectRef`, `SceneObjectRef`, `Entity3DRef`, `Entity2DRef`, `MaterialRef`, `TextureRef`, `MeshRef`, `SceneRef`, `LevelRef` | Revalidating object handles are the durable identity layer; raw CK pointers should be reacquired near use. |
+| Script host frame | `BehaviorFrame` | Preferred Component/Executor lifecycle argument; wraps the current `CKBehaviorContext` for named input/output, pin/pout, trace, and one-shot BB calls while reacquiring the live `CKBehavior` by id/stamp. |
 | Behavior graph bridge | `Behavior::*`, `BehaviorRef`, `BehaviorGraph`, `BehaviorQuery`, `BehaviorNode`, `BehaviorLayout`, `BehaviorLinkRef`, `GraphTask` | Setup-time graph search, layout handles, graph traversal, graph task observation. |
-| Runtime BB bridge | `BB::*`, `BBPrototype`, `BBDecl`, `BBConfig`, `BBSlot`, `BBInstance`, `BBResult`, `BBTask`, `BBCallBuilder`, `BBTaskBuilder` | SDK-driven BB discovery, runtime BB spawning/stepping, live pin/settings updates. |
+| Runtime BB bridge | `BB::*`, `BBPrototype`, `BBDecl`, `BBConfig`, `BBSlot`, `BBInstance`, `BBResult`, `BBTask`, `BBCallBuilder`, `BBTaskBuilder` | SDK-driven BB discovery, runtime BB spawning/stepping, live pin/settings updates, name-based one-shot calls, and `BehaviorFrame@` overloads for common config/instance operations. |
 | Parameters | `Param::*`, `ParamRef`, `ParamValue`, `ParamStructValue`, `ParamTypeInfo`, `ParamEnumInfo`, `ParamFlagsInfo`, `ParamStructInfo`, `ParamOp`, `ParamSourceLinkRef` | Generic parameter conversion and metadata backed by `CKParameterManager`. |
 | Messaging | `Message::*`, `ScriptMessage` | Topic publish/subscribe, directed sends, request/reply over `AsyncTask<dictionary@>`. |
 | Async | `Async::*`, `AsyncTask<T>`, `Await`, `Async*Func` funcdefs | Scheduler-backed suspension, not OS threads. |

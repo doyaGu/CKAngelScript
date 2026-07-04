@@ -6,6 +6,7 @@ Most scripts use the bridge in one of four ways:
 
 | Goal | Preferred API |
 | --- | --- |
+| Work with the currently executing BB frame | `BehaviorFrame@` |
 | Find an existing behavior in the current graph | `Behavior::Graph(ctx)`, `BehaviorQuery`, `BehaviorNode` |
 | Read or write CK parameters | `ParamRef@`, `ParamValue@`, `Param::*` |
 | Spawn and step a runtime Building Block | `BB::Require`, `BBDecl@`, `BBConfig@`, `BBInstance@` |
@@ -13,6 +14,18 @@ Most scripts use the bridge in one of four ways:
 | Turn a graph execution point into a script message | `AngelScript/Event Hook` BB |
 
 Start with layout and slot handles during setup, then cache indices/slots:
+
+```angelscript
+void Execute(BehaviorFrame@ frame) {
+    if (!frame.Take("In")) {
+        return;
+    }
+
+    int amount = frame.PinInt("Amount", 0);
+    frame.SetPout("Handled", amount > 0);
+    frame.Emit("Out");
+}
+```
 
 ```angelscript
 void Start(const CKBehaviorContext &in ctx) {
@@ -59,6 +72,26 @@ Bridge v3 follows the CK2 behavior model directly. `CKBehavior` input/output IO 
 The bridge no longer creates a full output snapshot map. `BBResult`, `BBTask`, and `GraphTask` only keep lightweight execution state: return code, error text, current active output indices, and sticky seen output indices. Output parameter values are read lazily through `ParamRef`.
 
 `BehaviorRef@`, `ParamRef@`, `ParamStructRef@`, `ParamOperationRef@`, and `BehaviorLinkRef@` are CKObject identity handles and participate in the shared `ObjectRef@` hierarchy. They can be stored in `array<ObjectRef@>` and downcast with checked `cast<TRef>()`; wrong casts return `null`. Transaction handles, value carriers, tasks, builders, and graph cursors such as `ParamSourceLinkRef@`, `ParamValue@`, `BBTask@`, `GraphTask@`, and `BehaviorNode@` are intentionally outside this hierarchy, though graph cursors can return object refs.
+
+## BehaviorFrame
+
+`BehaviorFrame` is the recommended API for scripts invoked from a
+`CKBehaviorContext`, including `AngelScript Component` and `AngelScript
+Executor`. It is ref-counted, resolves the current `CKBehavior` by id/stamp on
+each access, and avoids long-lived cached raw behavior pointers.
+
+Use it for current-frame work:
+
+- `Behavior()`, `Context()`, `Owner()`, `Target()`
+- `InputActive(name)`, `Take(name)`, `Emit(name)`
+- `Pin(name)`, `Pout(name)`, `PinString/PinInt/PinBool/PinFloat/PinObject`
+- `SetPout(name, value)` typed overloads
+- `Call(prototype)` and `Call(guid)` for one-shot runtime BB calls
+- `Trace(message)` with behavior name/id prefix
+
+`CKBehaviorContext` remains the low-level compatible API. New Component and
+Executor lifecycle code should prefer `BehaviorFrame@ frame`; existing scripts
+using `const CKBehaviorContext &in ctx` continue to run.
 
 ## Layout First
 
@@ -203,6 +236,26 @@ Settings are separate from pins. `BBConfig` uses the SDK/prototype defaults for 
 
 Runtime creation follows the CK2 callback order that real Building Blocks expect: create the dynamic `CKBehavior`, `InitFromGuid`, write pending settings, send `CKM_BEHAVIORCREATE`, attach owner/target, then write pins, sources, and operations before the first execution. Live `SetSetting()` sends `CKM_BEHAVIORSETTINGSEDITED` and refreshes the runtime layout generation.
 
+For one-shot calls from a `BehaviorFrame`, use the name-based builder:
+
+```angelscript
+BBResult@ result = frame.Call("Logics/Calculator/Identity")
+    .Set("pIn 0", 42)
+    .Run("In");
+
+if (result !is null && result.OutputActive("Out")) {
+    ParamRef@ value = result.Pout("pOut 0");
+}
+```
+
+`BB::Call(ctx, "Category/Name")` and `BB::Call(ctx, CKGUID(...))` remain
+available for legacy `CKBehaviorContext` code. `BBCallBuilder.Set("Pin", value)`,
+`Setting("Setting", value)`, and `Run("Input")` resolve names after target and
+settings are applied to the runtime behavior, so dynamic layouts such as
+`Add Row` are inspected in their final runtime shape. Missing names report the
+prototype, requested slot kind/name/occurrence, layout generation, and candidate
+slots.
+
 Live pin replacement has transaction semantics:
 
 - `BBInstance.Set(slot, value)` writes a value and removes any bridge-owned live source or operation on that pin.
@@ -213,29 +266,48 @@ Live pin replacement has transaction semantics:
 Runtime-owned source and operation links are tracked per live BB instance. Value writes, source installs, and operation installs use the same internal pin mutation transaction: the new source/operation is installed first, ownership is recorded on the instance, and only then is the previous bridge-owned source/operation detached and destroyed. If ownership recording fails, the new mutation is rolled back and the previous owned entry is restored to the instance registry when possible. `ParamSourceLinkRef@` remains a scoped transaction handle, not an `ObjectRef@`: releasing an uncommitted link restores the previous source, `Commit()` keeps the installed source, and internal detached cleanup prevents restore during successful replacement. `ParamOperationRef.Destroy()` restores the target source before destroying the operation; internal detached cleanup destroys the operation and its literal locals without restoring over a newer source. Manual `BehaviorRef.ConnectOperation()` still mutates the graph directly and is not enrolled in runtime instance ownership.
 
 ```angelscript
-BBDecl@ textDecl = BB::Require(ctx, "Interface/Text/2D Text");
-BBSlot@ textPin = textDecl.Pin("Text");
-BBSlot@ textProperties = textDecl.Setting("Text Properties");
+class TextOverlay {
+    CK2dEntity@ target;
 
-BBConfig@ cfg = textDecl.Configure()
-    .Target(target)
-    .SetSetting(textProperties, "Screen Proportionnal,WordWrap")
-    .Set(textPin, "FPS: ...");
+    [bbconfig prototype="Interface/Text/2D Text" target="target" lifetime="component"]
+    [bbsetting "Text Properties"="Screen Proportionnal,WordWrap"]
+    [bbpin "Text"="FPS: ..."]
+    BBConfig@ cfg;
 
-BBInstance@ inst = cfg.SpawnStarted(ctx);
+    [bbslot from="cfg" pin="Text"]
+    BBSlot@ textPin;
+
+    BBInstance@ inst;
+
+    void Start(BehaviorFrame@ frame) {
+        @inst = cfg.EnsureStarted(frame);
+    }
+
+    void Update(BehaviorFrame@ frame) {
+        if (inst !is null) {
+            inst.StepSet(frame, textPin, "FPS: 120");
+        }
+    }
+}
 ```
 
 Live parameter updates are explicit and lazy:
 
 ```angelscript
-inst.Set(textPin, "FPS: 120");
-inst.Step(ctx);
+void Update(BehaviorFrame@ frame) {
+    if (inst is null) {
+        return;
+    }
 
-// High-frequency Set + Step path.
-inst.StepSet(ctx, textPin, "FPS: 121");
+    inst.Set(textPin, "FPS: 120");
+    inst.Step(frame);
+
+    // High-frequency Set + Step path.
+    inst.StepSet(frame, textPin, "FPS: 121");
+}
 ```
 
-`BBConfig.EnsureSpawned(ctx)` and `EnsureStarted(ctx)` reuse the current live `BBInstance@` when possible, so setup code can be idempotent. `BBConfig.Instance()` returns the current instance or `null` with a clear error. `BBConfig.Explain()` and `BBInstance.Explain()` return multi-line diagnostics for metadata, source wiring, target, and current runtime errors.
+`BBConfig.EnsureSpawned(frame)` and `EnsureStarted(frame)` reuse the current live `BBInstance@` when possible, so setup code can be idempotent. The same calls still accept `CKBehaviorContext` for legacy code. `BBConfig.Instance()` returns the current instance or `null` with a clear error. `BBConfig.Explain()` and `BBInstance.Explain()` return multi-line diagnostics for metadata, source wiring, target, and current runtime errors.
 
 `BBSlot` records the slot kind, index, name, parameter type, layout caps, and layout generation. Passing a `pout` slot to `Set()`, passing a pin slot to `SetSetting()`, or using a stale slot after a dynamic layout change fails with a targeted diagnostic. The lower-level `BBPrototype.Call()` / `Spawn()` and raw index API remain available for generated code and performance-sensitive scripts.
 
@@ -255,19 +327,19 @@ class FpsOverlay {
     [bbslot from="text" pin="Text"]
     BBSlot@ textPin;
 
-    void Start(const CKBehaviorContext &in ctx) {
-        @instance = text.EnsureStarted(ctx);
+    void Start(BehaviorFrame@ frame) {
+        @instance = text.EnsureStarted(frame);
     }
 
-    void Update(const CKBehaviorContext &in ctx) {
+    void Update(BehaviorFrame@ frame) {
         if (instance !is null) {
-            instance.StepSet(ctx, textPin, "FPS: 120");
+            instance.StepSet(frame, textPin, "FPS: 120");
         }
     }
 }
 ```
 
-`BBResult.Pout(index)`, `BBTask.Pout(index)`, `BBInstance.Pout(slot)`, and `GraphTask.Pout(index)` return live/lazy parameter handles. Runtime-owned handles become invalid after `Destroy()`.
+`BBResult.Pout(index/name)`, `BBTask.Pout(index)`, `BBInstance.Pout(slot)`, and `GraphTask.Pout(index)` return live/lazy parameter handles. `BBResult.OutputActive(index/name)` supports both index and runtime output name. Runtime-owned handles become invalid after `Destroy()`.
 
 ## Catalog Discovery
 
@@ -394,4 +466,4 @@ The bridge creates a real `CKParameterOperation`, binds `In1/In2` sources or lit
 
 - The internal layout cache is signature-backed, but scripts should still resolve names during setup and cache `BBSlot@` handles themselves.
 - Unknown variable-size plugin structs are not decoded. Use source/copy/text conversion or fixed-size raw buffers.
-- Name lookup is intentionally not available on hot-path setters/getters. Resolve names through `Layout()` first.
+- Name lookup is available on `BehaviorFrame` and one-shot `BBCallBuilder`/`BBResult` helpers. For hot live-instance paths, resolve names through `Layout()` and cache `BBSlot@` handles.

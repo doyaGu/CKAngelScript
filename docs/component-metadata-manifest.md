@@ -60,7 +60,7 @@ class DoorComponent {
     [param type="Render Options" default="Clear ZBuffer,Buffer Swapping"]
     uint RenderOptions;
 
-    void Update(const CKBehaviorContext &in ctx) {
+    void Update(BehaviorFrame@ frame) {
         if (OpenGraph !is null) {
             OpenGraph.Trigger("In");
         }
@@ -96,7 +96,7 @@ Recognized keys:
 - `required`: comma/semicolon/pipe separated required slots for `BBConfig@`, such as `in:On,pin:Text,pout:Font Created,setting:Text Properties`
 - `inputs`, `outputs`, `pins`, `pouts`, `locals`, `requiredSettings`: shorthand required slot lists for `BBConfig@`; `pins` and `settings` also accept semicolon-separated `Name='value'` entries
 - `sources`: semicolon-separated `Pin<-Field.Pout` or `Pin<-ParamRefField` source wiring for `BBConfig@`; the right side resolves during autostart/auto-step, so source configs declared earlier can create their instances first
-- `autostart`: when true, the Component calls `EnsureStarted(ctx)` before the first `Update`
+- `autostart`: when true, the Component starts the configured BB before the first `Update`
 - `step`: `manual` (default), `eachUpdate`, or `onChange`
 
 AngelScript metadata blocks can span multiple source lines, and multiple metadata blocks attached to the same field are merged. Prefer short stacked fragments for readable BB configs:
@@ -221,7 +221,33 @@ Object metadata can use editor type aliases such as `object`, `behavior`, `3dent
 
 `BBDecl@` uses the same string/GUID/behavior source rules as `BBPrototype@`, but exposes real prototype metadata and the v3 layout API. `BBSlot@` binds a setup-time slot from a `BBConfig@` through `from="ConfigField"` or from a standalone prototype query. Prefer `from` because the slot can register `start`, `stop`, `default`, and `value` metadata with the owning config automatically.
 
-`BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, receives declarative metadata, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(ctx)`, `SpawnStarted(ctx)`, `EnsureSpawned(ctx)`, or `EnsureStarted(ctx)`. Parameters not mentioned by metadata or `BBSlot@` keep the SDK/prototype defaults.
+`BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, receives declarative metadata, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(frame)`, `SpawnStarted(frame)`, `EnsureSpawned(frame)`, or `EnsureStarted(frame)`. The same methods still accept `CKBehaviorContext` for legacy code. Parameters not mentioned by metadata or `BBSlot@` keep the SDK/prototype defaults.
+
+## Lifecycle Signatures
+
+Component lifecycle methods should use `BehaviorFrame@`:
+
+```angelscript
+void OnLoad(BehaviorFrame@ frame) {}
+void Awake(BehaviorFrame@ frame) {}
+void OnEnable(BehaviorFrame@ frame) {}
+void Start(BehaviorFrame@ frame) {}
+void Update(BehaviorFrame@ frame) {}
+void OnDisable(BehaviorFrame@ frame) {}
+void OnDestroy(BehaviorFrame@ frame) {}
+void OnReset(BehaviorFrame@ frame) {}
+void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) {}
+```
+
+The legacy `const CKBehaviorContext &in ctx` form remains compatible for
+lifecycle methods and `OnMessage(const ScriptMessage &in msg, const
+CKBehaviorContext &in ctx)`. If both forms exist on the same class, the
+`BehaviorFrame@` form is selected.
+
+Use `BehaviorFrame` for current-BB work: named input consumption, named output
+activation, input/output parameter access, trace prefixes, and one-shot runtime
+BB calls. Keep `CKBehaviorContext` only for low-level migration code that needs
+the raw native context shape.
 
 ## Injection Timing
 
@@ -231,7 +257,7 @@ BB metadata is setup-oriented:
 
 - `BBConfig@` resolves the prototype and stores pending values/sources.
 - `BBSlot@` binds to a layout slot and can register defaults with its owning config.
-- `autostart=true` calls `EnsureStarted(ctx)` before the first `Update`.
+- `autostart=true` starts the configured BB before the first `Update`.
 - `lifetime="component"` lets the component stop/destroy owned runtime BB instances during disable/reset/delete/rebuild.
 - `lifetime="manual"` leaves cleanup to script code.
 
@@ -249,19 +275,19 @@ class HudText {
     [bbslot from="Text" pin="Text"]
     BBSlot@ TextText;
 
-    void Start(const CKBehaviorContext &in ctx) {
-        @TextInstance = Text.EnsureStarted(ctx);
+    void Start(BehaviorFrame@ frame) {
+        @TextInstance = Text.EnsureStarted(frame);
     }
 
-    void Update(const CKBehaviorContext &in ctx) {
-        TextInstance.StepSet(ctx, TextText, "Running");
+    void Update(BehaviorFrame@ frame) {
+        TextInstance.StepSet(frame, TextText, "Running");
     }
 }
 ```
 
 `BBConfig@` uses `lifetime="component"` by default. This does not autostart the BB unless `autostart=true` is declared. Component lifetime stops instances on disable/deactivate/pause and destroys them on reset/delete or script object rebuild. `Stop()` leaves the runtime behavior alive so it can be restarted; `Destroy()` releases the runtime behavior and owned source/operation links. Live `Set`/`Source`/`Operation` calls replace the previous bridge-owned link for the same pin transactionally: a failed replacement keeps the old direct source active, and a successful replacement cleans the old owned link without restoring over the new one. If a `BBSlot@` marks an input with `start`, `BBInstance.Start()` uses it automatically. If a `BBSlot@` marks an input with `stop`, `BBInstance.Stop()` pulses it before deactivating the behavior. If `prototype` is omitted, the config uses the generated Component input parameter value, with the same string/GUID/behavior source rules as `BBDecl@`.
 
-`autostart=true` calls `EnsureStarted(ctx)` before the first script `Update`. `step="eachUpdate"` steps the live instance after every script `Update`; `step="onChange"` steps only after the Component reinjects changed metadata or parameter-derived config. Manual script calls to `BBConfig.Set(...)` or `BBInstance.Set(...)` should still step explicitly.
+`autostart=true` starts the configured BB before the first script `Update`. `step="eachUpdate"` steps the live instance after every script `Update`; `step="onChange"` steps only after the Component reinjects changed metadata or parameter-derived config. Manual script calls to `BBConfig.Set(...)` or `BBInstance.Set(...)` should still step explicitly.
 
 `ParamTypeInfo@` injects the runtime CK parameter type metadata for the connected input source. It is useful when a component accepts plugin-defined or enum/flags parameters and wants to expose `Name()`, `Guid()`, `Describe()`, `Enum()`, `Flags()`, or `Struct()` without guessing the data layout.
 
@@ -274,7 +300,8 @@ class RenderComponent {
     [param type="Render Options" default="Clear ZBuffer,Buffer Swapping"]
     uint RenderOptions;
 
-    void Update(const CKBehaviorContext &in ctx) {
+    void Update(BehaviorFrame@ frame) {
+        CKContext@ ctx = frame.Context();
         ParamTypeInfo@ info = Param::Find(ctx, "Render Options");
         uint clearAndSwap = Param::FlagsMask(ctx, "Render Options", "Clear ZBuffer,Buffer Swapping");
         int modulate = Param::Value(ctx, "Texture Blend Mode", "Modulate");
@@ -305,7 +332,7 @@ class Label {
     [param type="string" default="Ready" update=true]
     string Text;
 
-    void Update(const CKBehaviorContext &in ctx) {
+    void Update(BehaviorFrame@ frame) {
         print(Text);
     }
 }
@@ -324,13 +351,13 @@ class Overlay {
 
     BBInstance@ Instance;
 
-    void Start(const CKBehaviorContext &in ctx) {
-        @Instance = TextConfig.EnsureStarted(ctx);
+    void Start(BehaviorFrame@ frame) {
+        @Instance = TextConfig.EnsureStarted(frame);
     }
 
-    void Update(const CKBehaviorContext &in ctx) {
+    void Update(BehaviorFrame@ frame) {
         if (Instance !is null) {
-            Instance.StepSet(ctx, TextPin, "Running");
+            Instance.StepSet(frame, TextPin, "Running");
         }
     }
 }
@@ -344,7 +371,7 @@ class Overlay {
 | `BBSlot@` omits `from` when it belongs to a config | Defaults and lifecycle metadata are not attached to the config | Prefer `from="ConfigField"`. |
 | Runtime BB uses `lifetime="manual"` without cleanup | Runtime behavior can remain after disable/reset | Use `lifetime="component"` or call `Destroy()`. |
 | Enum/flags text does not match the SDK parameter type | Conversion fails during injection or validation | Validate with `Validate-Ballance.ps1` and inspect `Explain()`. |
-| Parameterless lifecycle callbacks | Component conventions are not met | Use `const CKBehaviorContext &in ctx`. |
+| Parameterless lifecycle callbacks | Component conventions are not met | Use `BehaviorFrame@ frame` or the compatible `const CKBehaviorContext &in ctx` form. |
 
 ## Injection Rules
 

@@ -12,6 +12,10 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 6. [Behavior Bridge v3](behavior-bridge-design.md): behavior graph search, parameter handles, and runtime Building Blocks.
 7. [Messaging](messaging.md) and [Async](async.md): script-to-script communication and cooperative tasks.
 8. [Native FFI](native-ffi.md), [Public API](public-api.md), and [SDK Bindings](sdk-bindings.md): advanced integrations.
+9. [CKAngelScript Design Model](ckas-design-model.md): architecture model and Ballance replacement implications.
+10. [AngelScript Executor](angelscript-executor.md): graph execution BB for AngelScript-driven replacements.
+11. [Ballance Root Replacement Playbook](ballance-root-replacement-playbook.md): proven exact-replacement workflow and larger experiment ladder.
+12. [Ballance Script Graph Inventory](ballance-script-graph-inventory.md): scanned Ballance root scripts, nested graph CSVs, and replacement priority.
 
 ## Which Doc Do I Need?
 
@@ -30,6 +34,10 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 | Audit exposed API surface | [API Inventory](api-inventory.md) |
 | Understand raw CK/Vx bindings | [SDK Bindings](sdk-bindings.md) |
 | Use generated Ballance hints | [Ballance Catalog Snapshot](catalog-ballance.md) |
+| Plan exact Ballance behavior replacement | [CKAngelScript Design Model](ckas-design-model.md) |
+| Use a graph execution BB | [AngelScript Executor](angelscript-executor.md) |
+| Repeat the proven Ballance root replacement process | [Ballance Root Replacement Playbook](ballance-root-replacement-playbook.md) |
+| Inventory Ballance script roots and graph scale | [Ballance Script Graph Inventory](ballance-script-graph-inventory.md) |
 
 ## Feature Map
 

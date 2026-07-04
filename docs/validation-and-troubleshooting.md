@@ -18,10 +18,11 @@ Useful options:
 | `-ScriptRoot <path>` | Run static runtime script validation after the build. |
 | `-RunBallance` | Install the DLL and run Ballance/Player validation. |
 | `-BallanceRoot <path>` | Ballance root containing `BuildingBlocks` and `Bin`; optional when env vars or `%USERPROFILE%\Games\Ballance` are available. |
-| `-PlayerSeconds <n>` | Maximum seconds to wait for the Player startup self-test marker; defaults to 60 and returns early on success. |
+| `-PlayerSeconds <n>` | Maximum seconds to wait for the Player startup self-test marker, or the settle duration when `-NoStartupSelfTests` is used; defaults to 60. |
 | `-IncludeLogTail` | Include current-run `AngelScript.log` and `Player.log` tails in successful output. |
 | `-LogTailLines <n>` | Number of current-run log lines to include in diagnostics; defaults to 40. |
 | `-SkipPlayer` | Run exporter validation without launching Player. |
+| `-NoStartupSelfTests` | Launch Player without setting `CKAS_RUN_SELFTESTS`; validation passes if Player stays alive for `-PlayerSeconds`. |
 | `-ExportScriptApi <path>` | Start Player and export the initialized live AngelScript API JSON. Incompatible with `-SkipPlayer`. |
 
 ### Runtime Script Static Validation
@@ -39,9 +40,9 @@ tools\Validate-Ballance.ps1 `
   -BuildDll build\src\Release\AngelScript.dll
 ```
 
-The script backs up the installed DLL when needed, copies the new DLL, runs `VirtoolsDataExporter.exe`, verifies the `AngelScript Component` BB, starts Player, and actively waits for the startup self-test marker. It keeps the newly installed DLL in `BuildingBlocks`; backups are for manual rollback, not automatic restore.
+The script backs up the installed DLL when needed, copies the new DLL, runs `VirtoolsDataExporter.exe`, verifies the `AngelScript Component` and `AngelScript Executor` BBs, starts Player, and actively waits for the startup self-test marker. It keeps the newly installed DLL in `BuildingBlocks`; backups are for manual rollback, not automatic restore.
 
-`BallanceRoot` is resolved from the explicit parameter, `BALLANCE_ROOT`, `CKAS_BALLANCE_ROOT`, or `%USERPROFILE%\Games\Ballance`. Player validation sets `CKAS_SELFTEST_MARKER` and `CKAS_RUN_SELFTESTS=1` only for the launched process and then restores the caller environment. The result object includes the installed/source hashes, whether they match, backup path, export JSON path, marker path, and Player close/kill status. Successful output omits log tails unless `-IncludeLogTail` is set; failures always include marker content and current-run log tails. Normal installs fail immediately if the copied DLL hash does not match the built DLL; `-SkipInstall` still validates the already installed DLL and reports whether it matches the build.
+`BallanceRoot` is resolved from the explicit parameter, `BALLANCE_ROOT`, `CKAS_BALLANCE_ROOT`, or `%USERPROFILE%\Games\Ballance`. Player validation sets `CKAS_SELFTEST_MARKER` and `CKAS_RUN_SELFTESTS=1` only for the launched process and then restores the caller environment. With `-NoStartupSelfTests`, those variables are cleared for the launched Player and the script only verifies that Player remains alive for the requested settle window. The result object includes the installed/source hashes, whether they match, backup path, export JSON path, marker path, wait mode, and Player close/kill status. Successful output omits log tails unless `-IncludeLogTail` is set; failures always include marker content and current-run log tails. Normal installs fail immediately if the copied DLL hash does not match the built DLL; `-SkipInstall` still validates the already installed DLL and reports whether it matches the build.
 
 To export the script API surface from the live engine, build the DLL with `CKAS_ENABLE_API_EXPORT=ON` and then run:
 
@@ -116,9 +117,19 @@ Start with the first failure in the summary; later failures often cascade from i
 | Player starts but marker is missing | Self-tests not built or Player did not load the plugin | Configure with `-DCKAS_BUILD_SELF_TESTS=ON`, confirm plugin location. |
 | Marker says `failed` | A startup self-test failed | Read `stage` and `message`, then inspect `AngelScript.log`. |
 | Runtime script is not discovered | Wrong root or missing `Scripts` directory | Pass `-ScriptRoot`, set `CKAS_SCRIPT_ROOTS`, or place modules under `Data\Scripts`. |
+| A package implementation file such as `base_loading.as` is compiled as its own runtime script | `CKAS_SCRIPT_ROOTS` points at a package directory instead of a root containing `Scripts` | Point the root at the project package root, for example `examples\ballance-logic-port`, or at `examples\ballance-logic-port\Packages` for standalone manifests; do not point at `Scripts\ballance.logic`. |
 | Runtime script is discovered but not loaded | Compile error or missing required dependency | Use `Runtime::Info(ctx, id)` and `Runtime::RequiredDependencies(ctx, id)`. |
+| Executor reports `Failed to attach runtime script module` | The `Script` setting did not resolve to a loaded runtime script id | Check the full Executor diagnostic: it reports the runtime id value, runtime existence/load/failure state, resolved runtime module, cache state, and engine module state. |
 | Component fields are not injected | Metadata field name/type mismatch | Check [component-metadata-manifest.md](component-metadata-manifest.md). |
 | Scene ref becomes invalid | CK object was deleted, reset, or id was reused | Reacquire through `Scene::*` and avoid storing raw CK pointers long-term. |
+| Patched Ballance file loads to a black screen and the Executor trace never appears | Replacement `CKBehaviorIO.old_flags` do not match authored input/output IO metadata, or the replacement was made targetable without a real target slot | For `nmo`-generated Executor nodes, set input IO `old_flags=1`, output IO `old_flags=2`, and keep the Executor declaration non-targetable unless the original root target behavior is explicitly implemented. |
+| Executor trace appears but loading stops at `Get Row=>Error(Execution)` | Rewiring input parameters with a bidirectional `param connect` changed original source-output backrefs | Preserve the original source output object and set only the new `CKParameterIn.source_id`; do not add `destination_count` entries that the pristine graph did not have. |
+| `ParamValue.AsInt()` returns `1` or a bool-like value for an integer pin | Older conversion code treated `CKPGUID_INT` as bool storage before checking integer storage | Rebuild with the `ScriptParameterConversion` fix and run startup self-tests; `CKPGUID_INT` must read/write as integer storage, while `CKPGUID_BOOL` remains bool storage. |
+| Runtime BB call reports `Building Block 'Activate Script' is not targetable` | `BB::Call(ctx, ...)` inherited the current `CKBehaviorContext` target | Add `Target(null)` for non-targetable BBs, and pass script-name parameters with the original CK parameter GUID, for example `CKPGUID_SCRIPT`. |
+| Dynamic pins such as `Add Row` row values are missing or have no names | The BB declaration has no static input parameter list; pins are synthesized after a target is assigned | Set the BB call target first, then use live behavior pin order. For the verified `Register & Activate Init_Script` slice, the Executor uses fixed input parameter indices `0=load NMO Name`, `1=Load ID`, `2=Activate InitScript?`; delegated `Add Row` uses `pIn0=All_Group` and `pIn1=Load ID` after targeting `RegisterNMO`. |
+| Runtime BB call throws `BBSlot 'Out' layout changed; bind the slot again` | A target-dependent BB callback rebuilt dynamic outputs after a cached `BBSlot@` was captured | Reacquire the live slot from `BBInstance@` after setting changes, target assignment, or execution before calling `OutputActive`, `Set`, or `Source`. |
+| Patched loader reaches `MenuLevel.nmo` but active camera stays null or menu camera does not move | The replacement treated `Activate Script` as an immediate BB success output instead of scheduling the script through the current scene | Follow Ballanced `ActivateScript.cpp`: null scripts are successful no-ops, real scripts must call `CKScene::Activate(script, reset)` and wake the owner object. Verify with a camera probe that `MenuLevel_Init` is active and `Cam_MenuLevel` is attached and moving. |
+| Player closes with `__CKASRuntime_*` external-reference warnings after an Executor replacement ran | Executor state still holds script object or method references while runtime modules are unloading | Rebuild with the Executor state-release hook; `ScriptManager` must release Executor runtime states before `Runtime::Clear` / `Runtime::OnEnd`. |
 
 ## Build Hygiene
 
