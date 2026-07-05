@@ -177,6 +177,11 @@ bool ScriptManager::DeliverComponentMessage(CK_ID id, const ScriptMessage &messa
         ctx,
         state->OnMessageArgument);
     if (status == ScriptInvocationStatus::Suspended) {
+        state->ActiveLifecycle = state->OnMessage;
+        state->ActiveLifecycleName = "OnMessage";
+        if (state->Behavior) {
+            state->Behavior->Activate(TRUE);
+        }
         return true;
     }
     if (status == ScriptInvocationStatus::Failed) {

@@ -609,6 +609,32 @@ LifecycleInvokeStatus InvokeLifecycle(CKBehavior *beh, ScriptComponentState *sta
     return LifecycleInvokeStatus::Finished;
 }
 
+LifecycleInvokeStatus ResumeMessage(CKBehavior *beh, ScriptComponentState *state, const CKBehaviorContext &behcontext) {
+    if (!state || !state->Invoker || !state->Object || !state->OnMessage) {
+        SetErrorOutput(beh, state, "Cannot resume message handler.");
+        return LifecycleInvokeStatus::Failed;
+    }
+    if (!state->Invoker->IsContextSuspended()) {
+        state->ActiveLifecycle = nullptr;
+        state->ActiveLifecycleName.clear();
+        return LifecycleInvokeStatus::Finished;
+    }
+
+    const ScriptInvocationStatus status = state->Invoker->ResumeObjectMessageStatus(behcontext);
+    if (status == ScriptInvocationStatus::Suspended) {
+        return LifecycleInvokeStatus::Suspended;
+    }
+
+    state->ActiveLifecycle = nullptr;
+    state->ActiveLifecycleName.clear();
+    if (status == ScriptInvocationStatus::Failed) {
+        SetInvocationErrorOutput(beh, state, "OnMessage");
+        return LifecycleInvokeStatus::Failed;
+    }
+
+    return LifecycleInvokeStatus::Finished;
+}
+
 void ReleasePartialInstanceSetup(ScriptComponentState *state) {
     if (!state || state->Loaded) {
         return;
@@ -1008,6 +1034,19 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
             return CKBR_ACTIVATENEXTFRAME;
         }
         return CKBR_OK;
+    }
+
+    if (state->ActiveLifecycleName == "OnMessage") {
+        const ScriptComponentSupport::LifecycleInvokeStatus status =
+            ScriptComponentSupport::ResumeMessage(beh, state, behcontext);
+        if (status != ScriptComponentSupport::LifecycleInvokeStatus::Finished) {
+            return status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended
+                ? CKBR_ACTIVATENEXTFRAME
+                : CKBR_OK;
+        }
+        return state->DesiredEnabled && state->ScriptActive && !state->Paused
+            ? CKBR_ACTIVATENEXTFRAME
+            : CKBR_OK;
     }
 
     if (state->ActiveLifecycleName == "OnReset") {

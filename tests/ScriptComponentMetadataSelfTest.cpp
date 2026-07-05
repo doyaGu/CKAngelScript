@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "CKAll.h"
+#include "ScriptAsync.h"
 #include "ScriptBridgeCommon.h"
 #include "ScriptComponentMetadata.h"
 #include "ScriptComponentState.h"
@@ -165,11 +166,21 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "    if (frame is null) { frameError = code; return; }\n"
         "    if (frame.Behavior() is null) { frameError = code + 1; return; }\n"
         "    if (frame.Context() is null) { frameError = code + 2; return; }\n"
+        "    if (frame.PinInt(\"Missing\", code + 3) != code + 3) { frameError = code + 3; return; }\n"
         "  }\n"
         "  void Start(BehaviorFrame@ frame) { Validate(frame, 100); startCount++; }\n"
         "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
         "  void Update(const CKBehaviorContext &in ctx) { legacyUpdateCount++; }\n"
-        "  void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) { Validate(frame, 300); if (msg.Topic() == \"component.frame.runtime\") messageCount++; else frameError = 399; }\n"
+        "  void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) {\n"
+        "    Validate(frame, 300);\n"
+        "    if (frameError != 0) return;\n"
+        "    if (msg.Topic() != \"component.frame.runtime\") { frameError = 399; return; }\n"
+        "    AsyncTask<void>@ delay = Async::Delay(1);\n"
+        "    Await(delay);\n"
+        "    Validate(frame, 310);\n"
+        "    if (frameError != 0) return;\n"
+        "    if (msg.Topic() == \"component.frame.runtime\") messageCount++; else frameError = 398;\n"
+        "  }\n"
         "  void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) { legacyMessageCount++; }\n"
         "}\n";
 
@@ -254,6 +265,31 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         error = messageError.empty()
             ? "Component runtime self-test message delivery failed."
             : "Component runtime self-test message delivery failed: " + messageError;
+        return false;
+    }
+    if (!state->Invoker->IsContextSuspended() || state->ActiveLifecycleName != "OnMessage") {
+        cleanup();
+        error = "Component runtime self-test expected OnMessage to suspend explicitly.";
+        return false;
+    }
+
+    ScriptAsyncScheduler *scheduler = manager->GetAsyncScheduler();
+    if (!scheduler) {
+        cleanup();
+        error = "Component runtime self-test could not retrieve async scheduler.";
+        return false;
+    }
+    scheduler->Tick();
+
+    const int resumeCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (resumeCode != CKBR_ACTIVATENEXTFRAME) {
+        cleanup();
+        error = "Component runtime self-test returned unexpected message resume code " + std::to_string(resumeCode) + ".";
+        return false;
+    }
+    if (state->Invoker->IsContextSuspended() || state->ActiveLifecycleName == "OnMessage") {
+        cleanup();
+        error = "Component runtime self-test did not finish suspended OnMessage.";
         return false;
     }
 
