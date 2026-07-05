@@ -244,10 +244,20 @@ lifecycle methods and `OnMessage(const ScriptMessage &in msg, const
 CKBehaviorContext &in ctx)`. If both forms exist on the same class, the
 `BehaviorFrame@` form is selected.
 
-Use `BehaviorFrame` for current-BB work: named input consumption, named output
-activation, input/output parameter access, trace prefixes, and one-shot runtime
-BB calls. Keep `CKBehaviorContext` only for low-level migration code that needs
-the raw native context shape.
+Use `BehaviorFrame` for current-BB work. It fully covers the current
+`CKBehaviorContext` and the current `CKBehavior` as a high-level facade:
+context fields, owner/target, target parameter, current behavior identity,
+CKObject/scene inherited state, layout, graph entry points, input/output
+activation, pin/pout/local/setting parameters, metadata/state, editable
+CKBehavior graph structure, trace prefixes, one-shot runtime BB calls, and raw
+`CKBehavior@ Behavior()` access as an interop escape hatch. Keep
+`CKBehaviorContext` only for low-level migration code that needs the raw native
+context shape.
+
+`Frame.Graph()` returns the owner-script/container graph. `Frame.AsGraph()`
+treats the current behavior as a subgraph container. `Local(index)`,
+`Setting(index)`, and `FindSetting(name)` all use the real CKBehavior
+local-parameter index, matching `BehaviorLayout`.
 
 `Pin()`/`Pout()` remain strict reference APIs. The typed `PinInt`, `PinString`,
 `PinBool`, and `PinFloat` helpers are fallback readers and return their fallback

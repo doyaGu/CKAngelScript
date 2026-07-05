@@ -115,36 +115,188 @@ void OnDestroy(BehaviorFrame@ frame) {}
 The legacy `const CKBehaviorContext &in ctx` form is accepted for every
 lifecycle method. If both forms exist, the `BehaviorFrame@` form is selected.
 
-Frame helpers:
+`BehaviorFrame` is the preferred current-BB facade. It covers the full current
+`CKBehaviorContext` plus the current `CKBehavior` identity, layout, IO,
+parameters, metadata, graph entry points, and the editable CKBehavior surface.
+Use the high-level convenience methods for normal gameplay code and the direct
+frame wrappers for SDK-level graph edits. `Behavior()` remains available as an
+escape hatch and for interop with APIs that still expect a raw `CKBehavior@`.
 
 ```angelscript
-CKBehavior@ Behavior()
-CKContext@ Context()
-CKBeObject@ Owner()
-CKBeObject@ Target()
-bool InputActive(const string &in name)
-bool Take(const string &in name = "In")
-void Emit(const string &in name = "Out")
-ParamRef@ Pin(const string &in name)
-ParamRef@ Pout(const string &in name)
-string PinString(const string &in name, const string &in fallback = "")
-int PinInt(const string &in name, int fallback = 0)
-bool PinBool(const string &in name, bool fallback = false)
-float PinFloat(const string &in name, float fallback = 0.0f)
-CKObject@ PinObject(const string &in name)
-bool SetPout(const string &in name, bool value)
-bool SetPout(const string &in name, int value)
-bool SetPout(const string &in name, float value)
-bool SetPout(const string &in name, const string &in value)
-bool SetPout(const string &in name, CKObject@ value)
-BBCallBuilder@ Call(const string &in prototype)
-BBCallBuilder@ Call(CKGUID guid)
-void Trace(const string &in message)
+// Context and identity.
+CKBehavior@ Behavior() const
+CKContext@ Context() const
+CKBehaviorContext ToBehaviorContext() const
+bool get_valid() const
+CK_ID get_id() const
+string get_name() const
+float DeltaTime() const
+CKLevel@ CurrentLevel() const
+CKScene@ CurrentScene() const
+CKRenderContext@ CurrentRenderContext() const
+CKParameterManager@ ParameterManager() const
+CKMessageManager@ MessageManager() const
+CKAttributeManager@ AttributeManager() const
+CKTimeManager@ TimeManager() const
+
+// CKObject / CKSceneObject inherited behavior state.
+void SetName(const string &in name, bool shared = false)
+CK_CLASSID ClassId() const
+CKDWORD ObjectFlags() const
+void ModifyObjectFlags(CKDWORD add, CKDWORD remove)
+bool IsDynamic() const
+bool IsToBeDeleted() const
+bool IsNotToBeSaved() const
+bool IsPrivate() const
+bool IsInterfaceObj() const
+bool IsUpToDate() const
+int MemoryOccupation() const
+NativePointer AppData() const
+void SetAppData(NativePointer data)
+CKObject@ CKGetObject(CK_ID id) const
+CKERROR CKDestroyObject(CKObject@ object, CKDWORD flags = 0,
+                        CKDependencies &in depoptions = void)
+CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0,
+                        CKDependencies &in depoptions = void)
+CKERROR CKDestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0,
+                         CKDependencies &in depoptions = void)
+CKScene@ SceneIn(int index) const
+int SceneInCount() const
+bool IsInScene(CKScene@ scene) const
+bool IsActiveInCurrentScene() const
+bool IsActiveInScene(CKScene@ scene) const
+void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)
+bool IsVisible() const
+
+// Current behavior object and graph.
+CKBeObject@ Owner() const
+CKBeObject@ Target() const
+CKParameterIn@ TargetParameter() const
+BehaviorRef@ Self() const
+BehaviorRef@ Parent() const
+BehaviorRef@ OwnerScript() const
+CKBehavior@ GetParent() const
+CKBehavior@ GetOwnerScript() const
+BehaviorLayout@ Layout() const
+BehaviorGraph@ Graph() const       // owner-script/container graph
+BehaviorGraph@ AsGraph() const     // current behavior as subgraph
+
+// CKBehavior metadata/state.
+CK_BEHAVIOR_TYPE Type() const
+void SetType(CK_BEHAVIOR_TYPE type)
+CK_BEHAVIOR_FLAGS Flags() const
+void SetFlags(CK_BEHAVIOR_FLAGS flags)
+CK_BEHAVIOR_FLAGS ModifyFlags(CKDWORD add, CKDWORD remove)
+void UseGraph()
+void UseFunction()
+bool IsActive() const
+void Activate(bool active = true, bool reset = false)
+bool IsTargetable() const
+void SetAsTargetable(bool target = true)
+CKERROR UseTarget(bool use = true)
+bool IsUsingTarget() const
+CK_CLASSID CompatibleClassId() const
+void SetCompatibleClassId(CK_CLASSID cid)
+NativePointer Function() const
+void SetFunction(NativePointer fct)
+CKGUID PrototypeGuid() const
+CKBehaviorPrototype@ Prototype() const
+string PrototypeName() const
+CKDWORD Version() const
+void SetVersion(CKDWORD version)
+int Priority() const
+void SetPriority(int priority)
+float LastExecutionTime() const
+
+// IO and parameters, by name or index. Index overloads use CKBehavior slot
+// indexes directly.
+int InputCount() const
+int OutputCount() const
+int PinCount() const
+int PoutCount() const
+int LocalCount() const
+int SettingCount() const
+int FindInput(const string &in name, int occurrence = 0) const
+int FindPin(const string &in name, int occurrence = 0) const
+bool InputActive(const string &in name = "In", int occurrence = 0) const
+bool InputActive(int index) const
+bool Take(const string &in name = "In", int occurrence = 0)
+bool Take(int index)
+void Emit(const string &in name = "Out", int occurrence = 0)
+void Emit(int index)
+CKBehaviorIO@ Input(int index) const
+CKBehaviorIO@ Output(int index) const
+CKParameterIn@ InputParameter(int index) const
+CKParameterOut@ OutputParameter(int index) const
+CKParameterLocal@ LocalParameter(int index) const
+int InputPosition(CKBehaviorIO@ io) const
+int OutputPosition(CKBehaviorIO@ io) const
+ParamRef@ Pin(const string &in name, int occurrence = 0) const
+ParamRef@ Pin(int index) const
+ParamRef@ Pout(const string &in name, int occurrence = 0) const
+ParamRef@ Pout(int index) const
+ParamRef@ Local(const string &in name, int occurrence = 0) const
+ParamRef@ Local(int index) const
+ParamRef@ Setting(const string &in name, int occurrence = 0) const
+ParamRef@ Setting(int index) const
+int PinPosition(CKParameterIn@ pin) const
+int PoutPosition(CKParameterOut@ pout) const
+int LocalPosition(CKParameterLocal@ local) const
+NativePointer PinReadDataPtr(int index) const
+NativePointer PoutWriteDataPtr(int index) const
+NativePointer LocalReadDataPtr(int index) const
+NativePointer LocalWriteDataPtr(int index) const
+CKERROR GetInputParameterValue(int index, ?&out value)
+CKERROR GetOutputParameterValue(int index, ?&out value)
+CKERROR SetOutputParameterValue(int index, ?&in value)
+CKERROR GetLocalParameterValue(int index, ?&out value)
+CKERROR SetLocalParameterValue(int index, ?&in value)
+
+// Typed convenience.
+int PinInt(const string &in name, int fallback = 0, int occurrence = 0) const
+int PinInt(int index, int fallback = 0) const
+bool SetPout(const string &in name, bool value, int occurrence = 0)
+bool SetPout(int index, bool value)
+bool SetLocal(const string &in name, int value, int occurrence = 0)
+bool SetSetting(int index, const string &in value)
+
+// Structural CKBehavior wrappers for migration and graph-edit code.
+int AddInput(const string &in name)
+int AddOutput(const string &in name)
+CKBehaviorIO@ CreateInput(const string &in name)
+CKBehaviorIO@ CreateOutput(const string &in name)
+CKBehaviorIO@ RemoveInput(int index)
+CKBehaviorIO@ RemoveOutput(int index)
+CKERROR DeleteInput(int index)
+CKERROR DeleteOutput(int index)
+CKParameterIn@ CreatePin(const string &in name, CKParameterType type)
+CKParameterOut@ CreatePout(const string &in name, CKParameterType type)
+CKParameterLocal@ CreateLocal(const string &in name, CKParameterType type)
+CKParameterIn@ RemovePin(int index)
+CKParameterOut@ RemovePout(int index)
+CKParameterLocal@ RemoveLocal(int index)
+BehaviorRef@ SubBehavior(int index) const
+CKBehavior@ GetSubBehavior(int index) const
+CKERROR AddSubBehavior(CKBehavior@ behavior)
+BehaviorRef@ RemoveSubBehavior(int index)
+CKBehaviorLink@ SubBehaviorLink(int index) const
+CKERROR AddSubBehaviorLink(CKBehaviorLink@ link)
+CKParameterOperation@ ParameterOperation(int index) const
+void NotifyEdition()
+void NotifySettingsEdition()
+BBCallBuilder@ Call(const string &in prototype) const
+BBCallBuilder@ Call(CKGUID guid) const
+void Trace(const string &in message) const
 ```
 
 `Pin()`/`Pout()` are strict reference APIs. Use `PinInt`, `PinString`,
 `PinBool`, and `PinFloat` for fallback reads that should tolerate absent slots,
 absent sources, or incompatible value kinds.
+
+`Local(index)`, `Setting(index)`, and `FindSetting(name)` all use the real
+CKBehavior local-parameter index. `SetSetting()` writes through the bridge
+setting path, sends `CKM_BEHAVIORSETTINGSEDITED`, and refreshes runtime layout
+resolution.
 
 Lifecycle methods may suspend through CKAS async support. Initial lifecycle
 suspension keeps the Executor active until the lifecycle resumes. `OnReset`

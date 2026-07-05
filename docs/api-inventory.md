@@ -14,23 +14,23 @@ This page inventories the public API surface currently exposed by CKAngelScript.
 
 ## Registration Counts
 
-Current AngelScript registration scan:
+Current AngelScript API export scan:
 
 | Registration kind | Count |
 | --- | ---: |
-| Global functions | 541 |
-| Global properties | 302 |
-| Object types | 238 |
-| Object methods | 4015 |
-| Object behaviours | 380 |
-| Object properties | 473 |
-| Funcdefs | 30 |
-| Enums | 144 |
-| Enum values | 1449 |
-| Typedefs | 38 |
-| Total | 7610 |
+| Global functions | 584 |
+| Global properties | 301 |
+| Object types | 335 |
+| Object methods | 10952 |
+| Object behaviours | 774 |
+| Object properties | 465 |
+| Funcdefs | 29 |
+| Enums | 139 |
+| Enum values | 1427 |
+| Typedefs | 24 |
+| Total | 15030 |
 
-Large raw SDK binding files dominate the total. The high-level and integration files account for roughly 1400 registrations; raw CK/Vx bindings and SDK constants account for the rest.
+Large raw SDK binding files and exported cast/behaviour entries dominate the total. The high-level and integration files are still the workflow surface; raw CK/Vx bindings and SDK constants account for most exported symbols.
 
 ## Namespace Map
 
@@ -53,7 +53,7 @@ The global bucket includes raw SDK-style helpers and constructors, so new high-l
 | --- | --- | --- |
 | Runtime scripts | `ScriptContext`, `RuntimeScriptInfo`, `RuntimeDependencyInfo`, `Runtime::*` | Long-lived scripts discovered from script roots. |
 | Scene interop | `Scene::*`, `ObjectRef`, `SceneObjectRef`, `Entity3DRef`, `Entity2DRef`, `MaterialRef`, `TextureRef`, `MeshRef`, `SceneRef`, `LevelRef` | Revalidating object handles are the durable identity layer; raw CK pointers should be reacquired near use. |
-| Script host frame | `BehaviorFrame` | Preferred Component/Executor lifecycle argument; wraps the current `CKBehaviorContext` for named input/output, pin/pout, trace, and one-shot BB calls while reacquiring the live `CKBehavior` by id/stamp. |
+| Script host frame | `BehaviorFrame` | Preferred Component/Executor lifecycle argument; complete current-`CKBehavior` facade for context fields, CKObject/scene inherited state, identity, owner/target, graph/layout entry points, IO, pins/pouts/locals/settings, generic SDK parameter value reads/writes, metadata/state, structural graph edits, trace, one-shot BB calls, SDK-style `Get*` migration aliases, and raw `CKBehavior@` escape-hatch access while reacquiring the live behavior by id/stamp. |
 | Behavior graph bridge | `Behavior::*`, `BehaviorRef`, `BehaviorGraph`, `BehaviorQuery`, `BehaviorNode`, `BehaviorLayout`, `BehaviorLinkRef`, `GraphTask` | Setup-time graph search, layout handles, graph traversal, graph task observation. |
 | Runtime BB bridge | `BB::*`, `BBPrototype`, `BBDecl`, `BBConfig`, `BBSlot`, `BBInstance`, `BBResult`, `BBTask`, `BBCallBuilder`, `BBTaskBuilder` | SDK-driven BB discovery, runtime BB spawning/stepping, live pin/settings updates, name-based one-shot calls, and `BehaviorFrame@` overloads for common config/instance operations. |
 | Parameters | `Param::*`, `ParamRef`, `ParamValue`, `ParamStructValue`, `ParamTypeInfo`, `ParamEnumInfo`, `ParamFlagsInfo`, `ParamStructInfo`, `ParamOp`, `ParamSourceLinkRef` | Generic parameter conversion and metadata backed by `CKParameterManager`. |

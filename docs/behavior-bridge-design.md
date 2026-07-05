@@ -98,6 +98,56 @@ throwing.
 `BehaviorFrame` is an execution-frame facade, not persistent gameplay state. If
 a lifecycle or message method suspends and resumes, the host refreshes the
 frame's native `CKBehaviorContext` snapshot before continuing script execution.
+The frame stores the context pointer plus behavior id/stamp and reacquires the
+live `CKBehavior` for each access, so a resumed script does not depend on a
+cached native behavior pointer.
+
+`BehaviorFrame` is also the complete high-level facade for the current behavior
+node. It exposes:
+
+- context fields: `DeltaTime`, current/previous scene, render context, and CK
+  managers;
+- identity: `valid`, `id`, `name`, `Behavior()`, `Owner()`, `Target()`,
+  `TargetParameter()`;
+- CKObject/scene inherited state: class id, object flags, app data, scene
+  membership, active-in-scene queries, visibility, dependency/load/save
+  callbacks, object lifecycle hooks, `CKGetObject`, and
+  `CKDestroyObject(s)` context helpers;
+- graph entry points: `Self()`, `Parent()`, `OwnerScript()`, `Layout()`,
+  `Graph()`, and `AsGraph()`;
+- CKBehavior metadata/state: type, flags, active state, targetable state,
+  compatible class id, prototype guid/name, version, priority, execution time;
+- IO and parameters by name or index: input/output counts, names, `Find*`,
+  `InputActive`, `Take`, `Emit`, `OutputActive`, `Pin`, `Pout`, `Local`,
+  `Setting`, raw parameter-handle getters for migration, enable/disable for
+  pins and pouts, generic SDK `Get*ParameterValue`/`Set*ParameterValue`
+  methods, and typed `SetPout`, `SetLocal`, `SetSetting` helpers;
+- SDK-level CKBehavior graph edits: `Add/Create/Remove/Delete/Replace`
+  wrappers for inputs, outputs, pins, pouts, and locals, position lookup,
+  data-pointer accessors, target parameter replacement, owner updates, edition
+  notifications, and interface chunks;
+- subgraph inspection and edit wrappers: `BehaviorRef` and raw `CKBehavior@`
+  subbehavior/parent/owner-script accessors, subbehavior-link, and
+  parameter-operation counts, accessors, add/remove helpers.
+
+The intent is full current-`CKBehavior` coverage without forcing script authors
+back to raw SDK naming for ordinary replacement work. `Behavior()` remains
+available for legacy interop and APIs that intentionally operate on arbitrary
+behaviors rather than the current frame. `BehaviorFrame` intentionally does not
+define `opImplCast`; scripts should call `Behavior()` explicitly when a raw
+`CKBehavior@` is required.
+
+`BehaviorFrame.Graph()` returns the owner-script/container graph for the
+current component or executor. `BehaviorFrame.AsGraph()` treats the current
+behavior itself as a graph container. Keep those separate when replacing root
+script graphs: `Graph()` is the surrounding script, `AsGraph()` is the current
+node's internal subgraph.
+
+`Local(index)` and `Setting(index)` both use the real CKBehavior
+local-parameter index. `FindSetting(name)` returns that same raw local index,
+so indexes from `BehaviorFrame`, `BehaviorLayout`, and `BehaviorRef` compose
+without translation. `SetSetting()` writes through the bridge setting path,
+sends `CKM_BEHAVIORSETTINGSEDITED`, and invalidates the runtime layout cache.
 
 `CKBehaviorContext` remains the low-level compatible API. New Component and
 Executor lifecycle code should prefer `BehaviorFrame@ frame`; existing scripts
@@ -121,7 +171,7 @@ b.Trigger(in);
 
 ## Behavior Graph Search
 
-Large real game graphs should be searched through a container graph instead of global name lookup. `Behavior::Graph(ctx)` returns the owner script graph for the current component. `BehaviorRef.AsGraph()` treats a behavior as a subgraph container.
+Large real game graphs should be searched through a container graph instead of global name lookup. `Behavior::Graph(ctx)` and `BehaviorFrame.Graph()` return the owner script graph for the current component. `BehaviorRef.AsGraph()` and `BehaviorFrame.AsGraph()` treat a behavior as a subgraph container.
 
 Search is setup-time only. `BehaviorQuery` defaults to exact name matching when `Name()` is used; use `NameContains()` only for exploration or diagnostics. Recursive search is explicit, pre-order, and preserves CK subbehavior order. The root container is not returned unless `IncludeRoot(true)` is set.
 
