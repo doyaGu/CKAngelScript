@@ -7,6 +7,7 @@
 
 #include "CKAll.h"
 #include "CKAngelScript.h"
+#include "ScriptAsync.h"
 #include "ScriptBridgeCommon.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
@@ -153,6 +154,17 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (!frame.Take(\"In\")) return 103;\n"
         "    int value = frame.PinInt(\"Value\", -1);\n"
         "    if (value != 41) return 104;\n"
+        "    if (frame.PinInt(\"Missing\", 42) != 42) return 106;\n"
+        "    if (frame.PinString(\"MissingText\", \"fallback\") != \"fallback\") return 107;\n"
+        "    if (!frame.PinBool(\"MissingBool\", true)) return 108;\n"
+        "    if (frame.PinFloat(\"MissingFloat\", 3.5f) != 3.5f) return 109;\n"
+        "    if (frame.PinBool(\"Value\", false)) return 110;\n"
+        "    if (frame.PinString(\"Value\", \"int-fallback\") != \"int-fallback\") return 114;\n"
+        "    AsyncTask<void>@ delay = Async::Delay(1);\n"
+        "    Await(delay);\n"
+        "    if (frame.Context() is null) return 111;\n"
+        "    if (frame.Behavior() is null) return 112;\n"
+        "    if (frame.PinInt(\"MissingAfterResume\", 43) != 43) return 113;\n"
         "    if (!frame.SetPout(\"Handled\", true)) return 105;\n"
         "    frame.Emit(\"Out\");\n"
         "    return 0;\n"
@@ -281,15 +293,30 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
     }
 
     behavior->ActivateInput(0, TRUE);
-    const int returnCode = ExecuteExecutorSelfTestBehavior(context, behavior, behaviorContext);
-    if (returnCode != CKBR_OK) {
+    const int suspendedCode = ExecuteExecutorSelfTestBehavior(context, behavior, behaviorContext);
+    if (suspendedCode != CKBR_ACTIVATENEXTFRAME) {
         cleanup();
-        error = "Executor self-test returned unexpected code " + std::to_string(returnCode) + ".";
+        error = "Executor self-test expected Execute to suspend, got code " + std::to_string(suspendedCode) + ".";
         return false;
     }
     if (behavior->IsInputActive(0)) {
         cleanup();
         error = "Executor self-test did not clear its active input.";
+        return false;
+    }
+
+    ScriptAsyncScheduler *scheduler = manager->GetAsyncScheduler();
+    if (!scheduler) {
+        cleanup();
+        error = "Executor self-test could not retrieve async scheduler.";
+        return false;
+    }
+    scheduler->Tick();
+
+    const int returnCode = ExecuteExecutorSelfTestBehavior(context, behavior, behaviorContext);
+    if (returnCode != CKBR_OK) {
+        cleanup();
+        error = "Executor self-test returned unexpected code " + std::to_string(returnCode) + ".";
         return false;
     }
     if (!behavior->IsOutputActive(0)) {

@@ -15,6 +15,8 @@ public:
     explicit BehaviorFrame(const CKBehaviorContext &ctx);
     ~BehaviorFrame() override = default;
 
+    void Refresh(const CKBehaviorContext &ctx);
+
     CKBehavior *Behavior() const;
     CKContext *Context() const;
     CKBeObject *Owner() const;
@@ -51,6 +53,8 @@ private:
     int ResolveOutput(const std::string &name, const char *method) const;
     int ResolvePin(const std::string &name, int occurrence, const char *method) const;
     int ResolvePout(const std::string &name, int occurrence, const char *method) const;
+    CKParameterIn *FindPinParameter(const std::string &name, int occurrence) const;
+    ScriptParamValue ReadPinValueOrEmpty(const std::string &name, int occurrence) const;
 
     CKBehaviorContext m_ContextSnapshot;
     CKContext *m_Context = nullptr;

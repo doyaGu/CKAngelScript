@@ -76,6 +76,7 @@ public:
                                                      const ScriptMessage &message,
                                                      const CKBehaviorContext &behcontext,
                                                      ScriptBehaviorArgumentKind argumentKind);
+    ScriptInvocationStatus ResumeObjectMessageStatus(const CKBehaviorContext &behcontext);
     bool IsContextSuspended() const;
     void AbortActiveContext();
     void AbortContext();
@@ -100,6 +101,9 @@ public:
 private:
     void ReleaseContext();
     void ReleaseBehaviorFrame();
+    ScriptInvocationStatus ResumePreparedObjectContext(const CKBehaviorContext &behcontext,
+                                                       const char *label,
+                                                       const ScriptFunctionArgumentHandler &retHandler);
 
     ScriptManager *m_ScriptManager = nullptr;
     asIScriptContext *m_Context = nullptr;

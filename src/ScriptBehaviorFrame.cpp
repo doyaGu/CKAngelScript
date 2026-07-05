@@ -2,11 +2,10 @@
 
 #include <fmt/format.h>
 
-#include <utility>
-
 #include "CKAll.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
+#include "ScriptParameterConversion.h"
 
 namespace {
 
@@ -74,37 +73,17 @@ std::string DescribeParameterNames(CKBehavior *behavior, bool input) {
     return result.empty() ? "<none>" : result;
 }
 
-template <typename Reader>
-auto ReadPinValue(const BehaviorFrame *frame,
-                  const std::string &name,
-                  int occurrence,
-                  decltype(std::declval<Reader>()(static_cast<ParamValue *>(nullptr))) defaultValue,
-                  Reader reader)
-    -> decltype(std::declval<Reader>()(static_cast<ParamValue *>(nullptr))) {
-    ParamRef *ref = frame ? frame->Pin(name, occurrence) : nullptr;
-    if (!ref) {
-        return defaultValue;
-    }
-    ParamValue *value = ref->GetValue();
-    ref->Release();
-    if (!value || !value->IsValid()) {
-        if (value) {
-            value->Release();
-        }
-        return defaultValue;
-    }
-    auto result = reader(value);
-    value->Release();
-    return result;
-}
-
 } // namespace
 
-BehaviorFrame::BehaviorFrame(const CKBehaviorContext &ctx)
-    : m_ContextSnapshot(ctx),
-      m_Context(ctx.Context ? ctx.Context : (ctx.Behavior ? ctx.Behavior->GetCKContext() : nullptr)),
-      m_BehaviorId(ctx.Behavior ? ctx.Behavior->GetID() : 0),
-      m_BehaviorStamp(CaptureBridgeObjectStamp(ctx.Behavior)) {
+BehaviorFrame::BehaviorFrame(const CKBehaviorContext &ctx) {
+    Refresh(ctx);
+}
+
+void BehaviorFrame::Refresh(const CKBehaviorContext &ctx) {
+    m_ContextSnapshot = ctx;
+    m_Context = ctx.Context ? ctx.Context : (ctx.Behavior ? ctx.Behavior->GetCKContext() : nullptr);
+    m_BehaviorId = ctx.Behavior ? ctx.Behavior->GetID() : 0;
+    m_BehaviorStamp = CaptureBridgeObjectStamp(ctx.Behavior);
     m_ContextSnapshot.Behavior = nullptr;
     m_ContextSnapshot.Context = m_Context;
 }
@@ -188,19 +167,38 @@ ParamRef *BehaviorFrame::Pout(const std::string &name, int occurrence) const {
 }
 
 std::string BehaviorFrame::PinString(const std::string &name, const std::string &defaultValue, int occurrence) const {
-    return ReadPinValue(this, name, occurrence, defaultValue, [](ParamValue *value) { return value->AsString(); });
+    const ScriptParamValue value = ReadPinValueOrEmpty(name, occurrence);
+    if (value.Kind == ScriptParamValueKind::String || value.Kind == ScriptParamValueKind::Text) {
+        return value.Text();
+    }
+    return defaultValue;
 }
 
 int BehaviorFrame::PinInt(const std::string &name, int defaultValue, int occurrence) const {
-    return ReadPinValue(this, name, occurrence, defaultValue, [](ParamValue *value) { return value->AsInt(); });
+    const ScriptParamValue value = ReadPinValueOrEmpty(name, occurrence);
+    if (value.Kind == ScriptParamValueKind::Int) {
+        return value.Data.IntValue;
+    }
+    if (value.Kind == ScriptParamValueKind::Enum || value.Kind == ScriptParamValueKind::Flags) {
+        return static_cast<int>(value.Data.DwordValue);
+    }
+    return defaultValue;
 }
 
 bool BehaviorFrame::PinBool(const std::string &name, bool defaultValue, int occurrence) const {
-    return ReadPinValue(this, name, occurrence, defaultValue, [](ParamValue *value) { return value->AsBool(); });
+    const ScriptParamValue value = ReadPinValueOrEmpty(name, occurrence);
+    return value.Kind == ScriptParamValueKind::Bool ? value.Data.BoolValue : defaultValue;
 }
 
 float BehaviorFrame::PinFloat(const std::string &name, float defaultValue, int occurrence) const {
-    return ReadPinValue(this, name, occurrence, defaultValue, [](ParamValue *value) { return value->AsFloat(); });
+    const ScriptParamValue value = ReadPinValueOrEmpty(name, occurrence);
+    if (value.Kind == ScriptParamValueKind::Float) {
+        return value.Data.FloatValue;
+    }
+    if (value.Kind == ScriptParamValueKind::Int) {
+        return static_cast<float>(value.Data.IntValue);
+    }
+    return defaultValue;
 }
 
 CKObject *BehaviorFrame::PinObject(const std::string &name, int occurrence) const {
@@ -362,6 +360,37 @@ int BehaviorFrame::ResolvePin(const std::string &name, int occurrence, const cha
             DescribeParameterNames(behavior, true)));
     }
     return index;
+}
+
+CKParameterIn *BehaviorFrame::FindPinParameter(const std::string &name, int occurrence) const {
+    CKBehavior *behavior = Behavior();
+    if (!behavior) {
+        return nullptr;
+    }
+    const int index = ResolveNamedParameter(behavior,
+                                            name,
+                                            occurrence,
+                                            behavior->GetInputParameterCount(),
+                                            [behavior](int i) { return behavior->GetInputParameter(i); });
+    return index >= 0 && index < behavior->GetInputParameterCount()
+        ? behavior->GetInputParameter(index)
+        : nullptr;
+}
+
+ScriptParamValue BehaviorFrame::ReadPinValueOrEmpty(const std::string &name, int occurrence) const {
+    CKParameterIn *pin = FindPinParameter(name, occurrence);
+    CKParameter *source = pin ? ParameterSourceForConnection(pin) : nullptr;
+    if (!source) {
+        return ScriptParamValue();
+    }
+    std::string ignoredError;
+    ScriptParamValue value = ReadParameterValue(source, &ignoredError);
+    if (value.Kind == ScriptParamValueKind::Empty) {
+        return value;
+    }
+    value.TypeGuid = source->GetGUID();
+    value.Type = source->GetType();
+    return value;
 }
 
 int BehaviorFrame::ResolvePout(const std::string &name, int occurrence, const char *method) const {
