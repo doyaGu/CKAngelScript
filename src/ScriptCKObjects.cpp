@@ -12,6 +12,7 @@
 #include "ScriptUtils.h"
 #include "ScriptNativeBuffer.h"
 #include "ScriptNativePointer.h"
+#include "ScriptParameterConversion.h"
 #include "ScriptRegistration.h"
 
 #undef GetObject
@@ -1553,205 +1554,27 @@ void RegisterCKSceneObject(asIScriptEngine *engine) {
 
 template <int IO>
 static void CKBehaviorGetParameterValueGeneric(asIScriptGeneric *gen) {
-    asIScriptEngine *engine = gen->GetEngine();
-    asIScriptContext *ctx = asGetActiveContext();
-
     auto *self = static_cast<CKBehavior *>(gen->GetObject());
-    int pos = gen->GetArgDWord(0);
-    const int typeId = gen->GetArgTypeId(1);
-    void *buf = gen->GetArgAddress(1);
-
-    CKERROR err = CK_OK;
-
-    if (typeId & asTYPEID_SCRIPTOBJECT) {
-        if (ctx)
-            ctx->SetException("Cannot read script objects from buffer");
-        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-        return;
-    }
-
-    if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
-        if (!type) {
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-
-        if (typeId & asTYPEID_OBJHANDLE) {
-            if (ctx)
-                ctx->SetException("Cannot read object handle from buffer");
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-
-        if (strcmp(type->GetName(), "string") == 0) {
-            std::string &str = *static_cast<std::string *>(buf);
-            CKSTRING value = nullptr;
-            switch (IO) {
-                case 0:
-                    value = (CKSTRING) self->GetInputParameterReadDataPtr(pos);
-                    break;
-                case 1:
-                    value = (CKSTRING) self->GetOutputParameterWriteDataPtr(pos);
-                    break;
-                case 2:
-                    value = (CKSTRING) self->GetLocalParameterReadDataPtr(pos);
-                    break;
-                default:
-                    if (ctx)
-                        ctx->SetException("Invalid parameter type");
-                    gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                    return;
-            }
-            if (value)
-                str = value;
-            else
-                err = CKERR_INVALIDPARAMETER;
-        } else {
-            int size = engine->GetSizeOfPrimitiveType(typeId);
-            if (size == 0) {
-                if (type->GetFlags() & asOBJ_POD) {
-                    switch (IO) {
-                        case 0:
-                            err = self->GetInputParameterValue(pos, buf);
-                        break;
-                        case 1:
-                            err = self->GetOutputParameterValue(pos, buf);
-                        break;
-                        case 2:
-                            err = self->GetLocalParameterValue(pos, buf);
-                        break;
-                        default:
-                            if (ctx)
-                                ctx->SetException("Invalid parameter type");
-                            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                            return;
-                    }
-                } else {
-                    if (ctx)
-                        ctx->SetException("Cannot read non-POD objects from buffer");
-                    gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                    return;
-                }
-            }
-        }
-    } else {
-        int size = engine->GetSizeOfPrimitiveType(typeId);
-        if (size != 0) {
-            switch (IO) {
-                case 0:
-                    err = self->GetInputParameterValue(pos, buf);
-                break;
-                case 1:
-                    err = self->GetOutputParameterValue(pos, buf);
-                break;
-                case 2:
-                    err = self->GetLocalParameterValue(pos, buf);
-                break;
-                default:
-                    if (ctx)
-                        ctx->SetException("Invalid parameter type");
-                gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                return;
-            }
-        }
-    }
-
+    CKERROR err = ReadBehaviorParameterValue(self,
+                                             static_cast<ScriptBehaviorParameterSlot>(IO),
+                                             gen->GetArgDWord(0),
+                                             gen->GetArgTypeId(1),
+                                             gen->GetArgAddress(1),
+                                             gen->GetEngine(),
+                                             asGetActiveContext());
     gen->SetReturnDWord(err);
 }
 
 template <int IO>
 static void CKBehaviorSetParameterValueGeneric(asIScriptGeneric *gen) {
-    asIScriptEngine *engine = gen->GetEngine();
-    asIScriptContext *ctx = asGetActiveContext();
-
     auto *self = static_cast<CKBehavior *>(gen->GetObject());
-    int pos = gen->GetArgDWord(0);
-    const int typeId = gen->GetArgTypeId(1);
-    void *buf = gen->GetArgAddress(1);
-
-    CKERROR err = CK_OK;
-
-    if (typeId & asTYPEID_SCRIPTOBJECT) {
-        if (ctx)
-            ctx->SetException("Cannot write script objects to buffer");
-        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-        return;
-    }
-
-    if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
-        if (!type) {
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-
-        if (typeId & asTYPEID_OBJHANDLE) {
-            if (ctx)
-                ctx->SetException("Cannot write object handle from buffer");
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-        
-        if (strcmp(type->GetName(), "string") == 0) {
-            std::string &str = *static_cast<std::string *>(buf);
-            switch (IO) {
-                case 1:
-                    err = self->SetOutputParameterValue(pos, str.data());
-                break;
-                case 2:
-                    err = self->SetLocalParameterValue(pos, str.data());
-                break;
-                default:
-                    if (ctx)
-                        ctx->SetException("Invalid parameter type");
-                    gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                    return;
-            }
-        } else {
-            int size = engine->GetSizeOfPrimitiveType(typeId);
-            if (size == 0) {
-                if (type->GetFlags() & asOBJ_POD) {
-                    switch (IO) {
-                        case 1:
-                            err = self->SetOutputParameterValue(pos, buf);
-                        break;
-                        case 2:
-                            err = self->SetLocalParameterValue(pos, buf);
-                        break;
-                        default:
-                            if (ctx)
-                                ctx->SetException("Invalid parameter type");
-                        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                        return;
-                    }
-                } else {
-                    if (ctx)
-                        ctx->SetException("Cannot write non-POD objects to buffer");
-                    gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                    return;
-                }
-            }
-        }
-    } else {
-        int size = engine->GetSizeOfPrimitiveType(typeId);
-        if (size != 0) {
-            switch (IO) {
-                case 1:
-                    err = self->SetOutputParameterValue(pos, buf);
-                break;
-                case 2:
-                    err = self->SetLocalParameterValue(pos, buf);
-                break;
-                default:
-                    if (ctx)
-                        ctx->SetException("Invalid parameter type");
-                gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                return;
-            }
-        }
-    }
-
+    CKERROR err = WriteBehaviorParameterValue(self,
+                                              static_cast<ScriptBehaviorParameterSlot>(IO),
+                                              gen->GetArgDWord(0),
+                                              gen->GetArgTypeId(1),
+                                              gen->GetArgAddress(1),
+                                              gen->GetEngine(),
+                                              asGetActiveContext());
     gen->SetReturnDWord(err);
 }
 

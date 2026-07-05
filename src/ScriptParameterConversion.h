@@ -12,6 +12,7 @@
 #include "VxMath.h"
 
 class CKContext;
+class CKBehavior;
 class CKObject;
 class CKParameter;
 class CKParameterLocal;
@@ -36,6 +37,12 @@ enum class ScriptParamValueKind : CKBYTE {
     Flags,
     Struct,
     Raw
+};
+
+enum class ScriptBehaviorParameterSlot : int {
+    Input = 0,
+    Output = 1,
+    Local = 2
 };
 
 struct ScriptParamTypeTraits {
@@ -175,6 +182,20 @@ std::string DescribeScriptParamType(CKContext *context, CKGUID guid);
 std::string DescribeScriptParamValueKind(const ScriptParamValue &value);
 std::string ScriptParamValueToText(const ScriptParamValue &value);
 
+CKERROR ReadBehaviorParameterValue(CKBehavior *behavior,
+                                   ScriptBehaviorParameterSlot slot,
+                                   int index,
+                                   int typeId,
+                                   void *buffer,
+                                   asIScriptEngine *engine,
+                                   asIScriptContext *scriptContext);
+CKERROR WriteBehaviorParameterValue(CKBehavior *behavior,
+                                    ScriptBehaviorParameterSlot slot,
+                                    int index,
+                                    int typeId,
+                                    void *buffer,
+                                    asIScriptEngine *engine,
+                                    asIScriptContext *scriptContext);
 bool ReadParameterText(CKParameter *source, std::string &value, std::string *error = nullptr);
 CKERROR WriteParameterText(CKParameter *target, const std::string &value, std::string &error);
 CKERROR WriteParameterRaw(CKParameter *target, const void *data, int size, CKGUID sourceGuid, const std::string &sourceTypeName, std::string &error);

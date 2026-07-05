@@ -12,6 +12,170 @@
 #include "ScriptParameterRegistry.h"
 #include "XObjectArray.h"
 
+namespace {
+
+int GenericObjectBaseTypeId(int typeId) {
+    static constexpr int kHandleTypeFlags = asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST;
+    return (typeId & asTYPEID_OBJHANDLE) ? (typeId & ~kHandleTypeFlags) : typeId;
+}
+
+asITypeInfo *GenericObjectTypeInfo(asIScriptEngine *engine, int typeId) {
+    return engine ? engine->GetTypeInfoById(GenericObjectBaseTypeId(typeId)) : nullptr;
+}
+
+void SetBufferAccessException(asIScriptContext *scriptContext, const char *message) {
+    if (scriptContext) {
+        scriptContext->SetException(message);
+    }
+}
+
+} // namespace
+
+CKERROR ReadBehaviorParameterValue(CKBehavior *behavior,
+                                   ScriptBehaviorParameterSlot slot,
+                                   int index,
+                                   int typeId,
+                                   void *buffer,
+                                   asIScriptEngine *engine,
+                                   asIScriptContext *scriptContext) {
+    if (!behavior) {
+        return CKERR_INVALIDOBJECT;
+    }
+    if (!engine || !buffer) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (typeId & asTYPEID_SCRIPTOBJECT) {
+        SetBufferAccessException(scriptContext, "Cannot read script objects from buffer");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    if (typeId & asTYPEID_APPOBJECT) {
+        asITypeInfo *type = GenericObjectTypeInfo(engine, typeId);
+        if (!type) {
+            return CKERR_INVALIDPARAMETER;
+        }
+        if (typeId & asTYPEID_OBJHANDLE) {
+            SetBufferAccessException(scriptContext, "Cannot read object handle from buffer");
+            return CKERR_INVALIDPARAMETER;
+        }
+        if (std::strcmp(type->GetName(), "string") == 0) {
+            std::string &text = *static_cast<std::string *>(buffer);
+            CKSTRING value = nullptr;
+            switch (slot) {
+                case ScriptBehaviorParameterSlot::Input:
+                    value = static_cast<CKSTRING>(behavior->GetInputParameterReadDataPtr(index));
+                    break;
+                case ScriptBehaviorParameterSlot::Output:
+                    value = static_cast<CKSTRING>(behavior->GetOutputParameterWriteDataPtr(index));
+                    break;
+                case ScriptBehaviorParameterSlot::Local:
+                    value = static_cast<CKSTRING>(behavior->GetLocalParameterReadDataPtr(index));
+                    break;
+                default:
+                    SetBufferAccessException(scriptContext, "Invalid parameter type");
+                    return CKERR_INVALIDPARAMETER;
+            }
+            if (!value) {
+                return CKERR_INVALIDPARAMETER;
+            }
+            text = value;
+            return CK_OK;
+        }
+        if (engine->GetSizeOfPrimitiveType(typeId) == 0) {
+            if ((type->GetFlags() & asOBJ_POD) == 0) {
+                SetBufferAccessException(scriptContext, "Cannot read non-POD objects from buffer");
+                return CKERR_INVALIDPARAMETER;
+            }
+            switch (slot) {
+                case ScriptBehaviorParameterSlot::Input: return behavior->GetInputParameterValue(index, buffer);
+                case ScriptBehaviorParameterSlot::Output: return behavior->GetOutputParameterValue(index, buffer);
+                case ScriptBehaviorParameterSlot::Local: return behavior->GetLocalParameterValue(index, buffer);
+                default:
+                    SetBufferAccessException(scriptContext, "Invalid parameter type");
+                    return CKERR_INVALIDPARAMETER;
+            }
+        }
+        return CK_OK;
+    }
+
+    if (engine->GetSizeOfPrimitiveType(typeId) != 0) {
+        switch (slot) {
+            case ScriptBehaviorParameterSlot::Input: return behavior->GetInputParameterValue(index, buffer);
+            case ScriptBehaviorParameterSlot::Output: return behavior->GetOutputParameterValue(index, buffer);
+            case ScriptBehaviorParameterSlot::Local: return behavior->GetLocalParameterValue(index, buffer);
+            default:
+                SetBufferAccessException(scriptContext, "Invalid parameter type");
+                return CKERR_INVALIDPARAMETER;
+        }
+    }
+    return CK_OK;
+}
+
+CKERROR WriteBehaviorParameterValue(CKBehavior *behavior,
+                                    ScriptBehaviorParameterSlot slot,
+                                    int index,
+                                    int typeId,
+                                    void *buffer,
+                                    asIScriptEngine *engine,
+                                    asIScriptContext *scriptContext) {
+    if (!behavior) {
+        return CKERR_INVALIDOBJECT;
+    }
+    if (!engine || !buffer) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (typeId & asTYPEID_SCRIPTOBJECT) {
+        SetBufferAccessException(scriptContext, "Cannot write script objects to buffer");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    if (typeId & asTYPEID_APPOBJECT) {
+        asITypeInfo *type = GenericObjectTypeInfo(engine, typeId);
+        if (!type) {
+            return CKERR_INVALIDPARAMETER;
+        }
+        if (typeId & asTYPEID_OBJHANDLE) {
+            SetBufferAccessException(scriptContext, "Cannot write object handle from buffer");
+            return CKERR_INVALIDPARAMETER;
+        }
+        if (std::strcmp(type->GetName(), "string") == 0) {
+            std::string &text = *static_cast<std::string *>(buffer);
+            switch (slot) {
+                case ScriptBehaviorParameterSlot::Output: return behavior->SetOutputParameterValue(index, text.data());
+                case ScriptBehaviorParameterSlot::Local: return behavior->SetLocalParameterValue(index, text.data());
+                default:
+                    SetBufferAccessException(scriptContext, "Invalid parameter type");
+                    return CKERR_INVALIDPARAMETER;
+            }
+        }
+        if (engine->GetSizeOfPrimitiveType(typeId) == 0) {
+            if ((type->GetFlags() & asOBJ_POD) == 0) {
+                SetBufferAccessException(scriptContext, "Cannot write non-POD objects to buffer");
+                return CKERR_INVALIDPARAMETER;
+            }
+            switch (slot) {
+                case ScriptBehaviorParameterSlot::Output: return behavior->SetOutputParameterValue(index, buffer);
+                case ScriptBehaviorParameterSlot::Local: return behavior->SetLocalParameterValue(index, buffer);
+                default:
+                    SetBufferAccessException(scriptContext, "Invalid parameter type");
+                    return CKERR_INVALIDPARAMETER;
+            }
+        }
+        return CK_OK;
+    }
+
+    if (engine->GetSizeOfPrimitiveType(typeId) != 0) {
+        switch (slot) {
+            case ScriptBehaviorParameterSlot::Output: return behavior->SetOutputParameterValue(index, buffer);
+            case ScriptBehaviorParameterSlot::Local: return behavior->SetLocalParameterValue(index, buffer);
+            default:
+                SetBufferAccessException(scriptContext, "Invalid parameter type");
+                return CKERR_INVALIDPARAMETER;
+        }
+    }
+    return CK_OK;
+}
+
 ScriptParamStructMemberValue::ScriptParamStructMemberValue(const ScriptParamStructMemberValue &other)
     : Index(other.Index),
       Value(other.Value ? new ScriptParamValue(*other.Value) : nullptr) {}
