@@ -249,6 +249,14 @@ activation, input/output parameter access, trace prefixes, and one-shot runtime
 BB calls. Keep `CKBehaviorContext` only for low-level migration code that needs
 the raw native context shape.
 
+`Pin()`/`Pout()` remain strict reference APIs. The typed `PinInt`, `PinString`,
+`PinBool`, and `PinFloat` helpers are fallback readers and return their fallback
+for missing slots, missing sources, read failures, or incompatible value kinds.
+
+`OnMessage` may suspend through `Await`. A suspended message handler is resumed
+explicitly on a later Component activation before normal lifecycle/update work
+continues; new component messages are rejected while the handler is suspended.
+
 ## Injection Timing
 
 The component resolves metadata when the script is loaded or rebuilt. Scalar/object values are injected before lifecycle code runs. Fields marked with `update`/`sync` can be refreshed before later lifecycle/update calls; use this for editor-facing parameters that designers may change while the component is active.

@@ -142,6 +142,10 @@ BBCallBuilder@ Call(CKGUID guid)
 void Trace(const string &in message)
 ```
 
+`Pin()`/`Pout()` are strict reference APIs. Use `PinInt`, `PinString`,
+`PinBool`, and `PinFloat` for fallback reads that should tolerate absent slots,
+absent sources, or incompatible value kinds.
+
 Lifecycle methods may suspend through CKAS async support. Initial lifecycle
 suspension keeps the Executor active until the lifecycle resumes. `OnReset`
 suspension resumes on a later Executor activation and does not run `Execute` as

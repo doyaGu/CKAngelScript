@@ -89,6 +89,16 @@ Use it for current-frame work:
 - `Call(prototype)` and `Call(guid)` for one-shot runtime BB calls
 - `Trace(message)` with behavior name/id prefix
 
+`Pin(name)` and `Pout(name)` are strict reference APIs: a missing slot reports a
+script exception with slot candidates. The typed `PinString/PinInt/PinBool` and
+`PinFloat` helpers are fallback readers; missing slots, missing sources, read
+failures, and incompatible value kinds return the supplied fallback without
+throwing.
+
+`BehaviorFrame` is an execution-frame facade, not persistent gameplay state. If
+a lifecycle or message method suspends and resumes, the host refreshes the
+frame's native `CKBehaviorContext` snapshot before continuing script execution.
+
 `CKBehaviorContext` remains the low-level compatible API. New Component and
 Executor lifecycle code should prefer `BehaviorFrame@ frame`; existing scripts
 using `const CKBehaviorContext &in ctx` continue to run.

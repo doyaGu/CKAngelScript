@@ -20,8 +20,8 @@ For Ballance replacement work, the important split is:
 | Surface | Context | Best use | Not best use |
 | --- | --- | --- | --- |
 | Runtime script | `ScriptContext` | global services, diagnostics, coordination, preload/validation, message subscribers | exact graph-local root replacement by itself |
-| `AngelScript Component` BB | `CKBehaviorContext` | component-style behavior logic, owner/target-aware helpers, metadata field injection | drop-in replacement for arbitrary multi-input/multi-output roots |
-| `AngelScript Executor` BB | `CKBehaviorContext` | graph execution replacement with generated IO and parameter shape | component metadata injection |
+| `AngelScript Component` BB | `CKBehaviorContext` / `BehaviorFrame` | component-style behavior logic, owner/target-aware helpers, metadata field injection | drop-in replacement for arbitrary multi-input/multi-output roots |
+| `AngelScript Executor` BB | `CKBehaviorContext` / `BehaviorFrame` | graph execution replacement with generated IO and parameter shape | component metadata injection |
 | Behavior Bridge | `ScriptContext` or `CKBehaviorContext` | find existing graphs, read/write params, spawn/step native BBs, apply explicit graph edits | saving patched files; persistence remains `nmo`/host responsibility |
 | Public native API | C ABI / `CKAngelScriptApi` | optional integration from other native plugins | direct access to internal `ScriptManager` state |
 
@@ -62,6 +62,43 @@ Consequence: all CKAngelScript execution is coordinated through the manager
 lifecycle. A Ballance replacement plan must respect this ordering instead of
 assuming that a script call is isolated from queued messages, async resumes, or
 bridge cleanup.
+
+## CKBehavior Host Model
+
+A `CKBehavior` is the live Virtools behavior instance that owns runtime IO,
+parameter slots, local/settings data, owner/target relation, and graph position.
+It is not the same thing as an AngelScript object or a runtime script module.
+
+Keep these layers separate:
+
+- `CKObjectDeclaration` identifies a BB type to Virtools and points to the
+  prototype creation function.
+- `CKBehaviorPrototype` declares the initial IO, parameter, local/setting,
+  callback, flags, and native execution function.
+- `CKBehavior` is the instantiated graph node. Its live layout may differ from
+  the prototype after callbacks, settings edits, target assignment, or generated
+  Executor interface changes.
+- `CKBehaviorContext` is a borrowed per-execution frame. It gives the current
+  behavior, context, scene/level, managers, delta time, and callback message.
+  It should not be stored as durable gameplay state.
+
+Runtime semantics follow Virtools graph rules:
+
+- active inputs are scheduling signals and must be cleared only when consumed;
+- active outputs are graph continuation signals and should be activated after
+  output parameters are written;
+- input parameters are connection endpoints, not just values. A
+  `CKParameterIn` reads through its real source parameter;
+- output parameters are writable behavior-owned slots;
+- `CKBR_ACTIVATENEXTFRAME` schedules the same behavior again through Virtools;
+- owner and target are graph semantics, not cosmetic metadata. Target-dependent
+  BBs can rebuild dynamic pins from the assigned target.
+
+AngelScript suspension is layered on top of this model. When a Component or
+Executor method awaits, CKAngelScript must keep the prepared AngelScript
+context, return `CKBR_ACTIVATENEXTFRAME`, and refresh the `BehaviorFrame`
+against the current `CKBehaviorContext` before resuming. A resumed script is
+continuing the same AngelScript call, not starting a fresh BB execution.
 
 ## Engine And Module Layer
 
@@ -130,9 +167,10 @@ fixed shape:
 | Setting | `Output Error Message` |
 
 The component instantiates a script class and calls lifecycle methods with
-`const CKBehaviorContext &in ctx`. `Update` is required. Optional methods
-include `OnLoad`, `Awake`, `OnEnable`, `Start`, `OnDisable`, `OnDestroy`,
-`OnReset`, and `OnMessage`.
+`BehaviorFrame@ frame` by default. The older `const CKBehaviorContext &in ctx`
+form remains compatible. `Update` is required. Optional methods include
+`OnLoad`, `Awake`, `OnEnable`, `Start`, `OnDisable`, `OnDestroy`, `OnReset`,
+and `OnMessage`.
 
 Once enabled, the component is continuous: after `Start`, it calls `Update`,
 steps automated `BBConfig` instances, and returns `CKBR_ACTIVATENEXTFRAME`.
