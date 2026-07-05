@@ -778,6 +778,7 @@ const char *ParamRef::KindName() const {
         case ScriptBridgeSlotKind::Output: return "output";
         case ScriptBridgeSlotKind::Pin: return "pin";
         case ScriptBridgeSlotKind::Pout: return "pout";
+        case ScriptBridgeSlotKind::Setting: return "setting";
         case ScriptBridgeSlotKind::Local: return "local";
         case ScriptBridgeSlotKind::OperationIn: return "operation input";
         case ScriptBridgeSlotKind::OperationOut: return "operation output";

@@ -1350,6 +1350,17 @@ bool ScriptBehaviorBridge::SetBehaviorSetting(CKBehavior *behavior,
                                               int settingIndex,
                                               const ScriptParamValue &value,
                                               std::string &error) {
+    CKBehaviorContext ctx = {};
+    ctx.Context = behavior ? behavior->GetCKContext() : nullptr;
+    ctx.Behavior = behavior;
+    return SetBehaviorSetting(behavior, settingIndex, value, ctx, error);
+}
+
+bool ScriptBehaviorBridge::SetBehaviorSetting(CKBehavior *behavior,
+                                              int settingIndex,
+                                              const ScriptParamValue &value,
+                                              const CKBehaviorContext &ctx,
+                                              std::string &error) {
     if (!behavior) {
         error = "Building Block behavior is not available.";
         return false;
@@ -1357,7 +1368,12 @@ bool ScriptBehaviorBridge::SetBehaviorSetting(CKBehavior *behavior,
     if (!SetLocalParameterValueByIndex(behavior, settingIndex, value, error)) {
         return false;
     }
-    CKERROR err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED);
+    CKBehaviorContext callbackContext = ctx;
+    if (!callbackContext.Context) {
+        callbackContext.Context = behavior->GetCKContext();
+    }
+    callbackContext.Behavior = behavior;
+    CKERROR err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED, &callbackContext);
     if (err != CK_OK) {
         error = fmt::format("Building Block SETTINGSEDITED callback failed for '{}' (CKERROR {}).",
             SafeString(behavior->GetPrototypeName()),

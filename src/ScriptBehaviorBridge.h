@@ -357,6 +357,7 @@ public:
     bool DestroyInstance(CK_ID instanceId, int generation);
     bool SetInstanceSetting(CK_ID instanceId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
     bool SetBehaviorSetting(CKBehavior *behavior, int settingIndex, const ScriptParamValue &value, std::string &error);
+    bool SetBehaviorSetting(CKBehavior *behavior, int settingIndex, const ScriptParamValue &value, const CKBehaviorContext &ctx, std::string &error);
     bool IsInstanceValid(CK_ID instanceId, int generation) const;
     bool IsInstanceAlive(CK_ID instanceId, int generation) const;
     ScriptBridgeExecutionState GetInstanceState(CK_ID instanceId, int generation) const;
