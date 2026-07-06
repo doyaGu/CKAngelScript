@@ -1,13 +1,311 @@
 #include "ScriptSelfTests.h"
 
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "CKAngelScript.h"
+#include "ScriptAsync.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
 #include "ScriptRuntimeDependency.h"
 #include "ScriptRuntimeMetadata.h"
+
+namespace {
+
+class ScopedEnvVar {
+public:
+    ScopedEnvVar(const char *name, const std::string &value) : m_Name(name ? name : "") {
+        if (m_Name.empty()) {
+            return;
+        }
+        char *oldValue = nullptr;
+        size_t oldSize = 0;
+        if (_dupenv_s(&oldValue, &oldSize, m_Name.c_str()) == 0 && oldValue) {
+            m_HadValue = true;
+            m_OldValue = oldValue;
+            std::free(oldValue);
+        }
+        _putenv_s(m_Name.c_str(), value.c_str());
+    }
+
+    ~ScopedEnvVar() {
+        if (m_Name.empty()) {
+            return;
+        }
+        _putenv_s(m_Name.c_str(), m_HadValue ? m_OldValue.c_str() : "");
+    }
+
+    ScopedEnvVar(const ScopedEnvVar &) = delete;
+    ScopedEnvVar &operator=(const ScopedEnvVar &) = delete;
+
+private:
+    std::string m_Name;
+    std::string m_OldValue;
+    bool m_HadValue = false;
+};
+
+bool WriteRuntimeSelfTestFile(const std::filesystem::path &path, const std::string &text, std::string &error) {
+    std::ofstream output(path, std::ios::binary);
+    if (!output) {
+        error = "Runtime self-test failed to create script file: " + path.string();
+        return false;
+    }
+    output << text;
+    if (!output) {
+        error = "Runtime self-test failed to write script file: " + path.string();
+        return false;
+    }
+    return true;
+}
+
+bool PrepareRuntimeSelfTestPackage(const std::filesystem::path &root,
+                                   const std::string &id,
+                                   const std::string &source,
+                                   std::string &error) {
+    namespace fs = std::filesystem;
+    const fs::path package = root / "Scripts" / id;
+    std::error_code fsError;
+    fs::create_directories(package, fsError);
+    if (fsError) {
+        error = "Runtime self-test failed to create script package: " + package.string();
+        return false;
+    }
+
+    const std::string manifest = "[script id=\"" + id +
+                                 "\" name=\"Runtime Self Test\" version=\"1.0.0\" entry=\"runtime.as\"]\n";
+    return WriteRuntimeSelfTestFile(package / "script.as", manifest, error) &&
+           WriteRuntimeSelfTestFile(package / "runtime.as", source, error);
+}
+
+bool ReadRuntimeGlobalInt(ScriptManager *manager, const std::string &moduleName, const char *name, int &value) {
+    asIScriptModule *module = manager && !moduleName.empty() ? manager->GetModule(moduleName.c_str()) : nullptr;
+    const int index = module && name ? module->GetGlobalVarIndexByName(name) : -1;
+    void *address = index >= 0 ? module->GetAddressOfGlobalVar(static_cast<asUINT>(index)) : nullptr;
+    if (!address) {
+        return false;
+    }
+    value = *static_cast<int *>(address);
+    return true;
+}
+
+std::string RuntimeSelfTestModuleName(const std::string &id, int generation) {
+    return "__CKASRuntime_" + id + "_" + std::to_string(generation);
+}
+
+bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error) {
+    if (!manager || !manager->GetScriptEngine()) {
+        error = "Runtime pause lifecycle self-test requires an initialized ScriptManager.";
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    constexpr const char *scriptId = "ckas.runtime.pause.selftest";
+    const fs::path root = fs::temp_directory_path() / "ckas-runtime-pause-lifecycle-selftest";
+    std::error_code fsError;
+    fs::remove_all(root, fsError);
+    fsError.clear();
+
+    const ScopedEnvVar scriptRoots("CKAS_SCRIPT_ROOTS", root.string());
+    const ScopedEnvVar validateOnly("CKAS_RUNTIME_VALIDATE_ONLY", "0");
+    const std::string source =
+        "int pauseCount = 0;\n"
+        "int disableCount = 0;\n"
+        "int badPhaseCount = 0;\n"
+        "void OnPause(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"OnPause\") { badPhaseCount++; }\n"
+        "  pauseCount++;\n"
+        "}\n"
+        "void OnDisable(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"OnDisable\") { badPhaseCount++; }\n"
+        "  disableCount++;\n"
+        "  AsyncTask<void>@ delay = Async::Delay(1);\n"
+        "  Await(delay);\n"
+        "}\n";
+    if (!PrepareRuntimeSelfTestPackage(root, scriptId, source, error)) {
+        fs::remove_all(root, fsError);
+        return false;
+    }
+
+    ScriptRuntime runtime(manager);
+    auto cleanup = [&]() {
+        runtime.Clear();
+        if (manager->GetAsyncScheduler()) {
+            manager->GetAsyncScheduler()->Clear();
+        }
+        fs::remove_all(root, fsError);
+    };
+
+    std::string loadError;
+    if (!runtime.ReloadAll(&loadError)) {
+        cleanup();
+        error = loadError.empty() ? "Runtime pause lifecycle self-test failed to load script package." : loadError;
+        return false;
+    }
+    RuntimeScriptInfo info = runtime.Info(scriptId);
+    if (!info.Exists() || !info.Loaded() || info.Failed()) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test did not load the probe script.";
+        return false;
+    }
+
+    runtime.PreProcess();
+    runtime.OnPause();
+    info = runtime.Info(scriptId);
+    if (info.State() != "paused" || info.Phase() != "OnDisable") {
+        cleanup();
+        error = "Runtime pause lifecycle self-test did not retain suspended OnDisable state.";
+        return false;
+    }
+
+    ScriptAsyncScheduler *scheduler = manager->GetAsyncScheduler();
+    if (!scheduler) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test requires an async scheduler.";
+        return false;
+    }
+    scheduler->Tick();
+    runtime.PreProcess();
+
+    const std::string moduleName = runtime.ModuleName(scriptId);
+    int pauseCount = 0;
+    int disableCount = 0;
+    int badPhaseCount = 0;
+    if (!ReadRuntimeGlobalInt(manager, moduleName, "pauseCount", pauseCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "disableCount", disableCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "badPhaseCount", badPhaseCount)) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test could not read probe counters.";
+        return false;
+    }
+    if (pauseCount != 1 || disableCount != 1 || badPhaseCount != 0) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test observed pause=" + std::to_string(pauseCount) +
+                ", disable=" + std::to_string(disableCount) +
+                ", badPhase=" + std::to_string(badPhaseCount) + "; expected 1, 1, 0.";
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
+
+bool RunRuntimePendingReplacementSelfTest(ScriptManager *manager, std::string &error) {
+    if (!manager || !manager->GetScriptEngine()) {
+        error = "Runtime pending replacement self-test requires an initialized ScriptManager.";
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    constexpr const char *scriptId = "ckas.runtime.pending.selftest";
+    const fs::path root = fs::temp_directory_path() / "ckas-runtime-pending-replacement-selftest";
+    std::error_code fsError;
+    fs::remove_all(root, fsError);
+    fsError.clear();
+
+    const ScopedEnvVar scriptRoots("CKAS_SCRIPT_ROOTS", root.string());
+    const ScopedEnvVar validateOnly("CKAS_RUNTIME_VALIDATE_ONLY", "0");
+    const std::string oldSource =
+        "void OnDestroy(const ScriptContext &in ctx) {\n"
+        "  AsyncTask<void>@ delay = Async::Delay(1);\n"
+        "  Await(delay);\n"
+        "}\n";
+    const std::string replacementSource = "int replacementLoaded = 1;\n";
+    if (!PrepareRuntimeSelfTestPackage(root, scriptId, oldSource, error)) {
+        fs::remove_all(root, fsError);
+        return false;
+    }
+
+    ScriptRuntime runtime(manager);
+    auto cleanup = [&]() {
+        runtime.Clear();
+        if (manager->GetAsyncScheduler()) {
+            manager->GetAsyncScheduler()->Clear();
+        }
+        fs::remove_all(root, fsError);
+    };
+
+    std::string loadError;
+    if (!runtime.ReloadAll(&loadError)) {
+        cleanup();
+        error = loadError.empty() ? "Runtime pending replacement self-test failed to load old script." : loadError;
+        return false;
+    }
+    RuntimeScriptInfo oldInfo = runtime.Info(scriptId);
+    const std::string oldModuleName = runtime.ModuleName(scriptId);
+    if (!oldInfo.Exists() || !oldInfo.Loaded() || oldInfo.Failed() || oldModuleName.empty()) {
+        cleanup();
+        error = "Runtime pending replacement self-test did not load the old script.";
+        return false;
+    }
+
+    if (!PrepareRuntimeSelfTestPackage(root, scriptId, replacementSource, error)) {
+        cleanup();
+        return false;
+    }
+    std::string reloadError;
+    if (!runtime.Reload(scriptId, &reloadError)) {
+        cleanup();
+        error = reloadError.empty() ? "Runtime pending replacement self-test failed to reload replacement script." : reloadError;
+        return false;
+    }
+    const std::string replacementModuleName = RuntimeSelfTestModuleName(scriptId, oldInfo.Generation() + 1);
+    if (!manager->HasModule(replacementModuleName.c_str())) {
+        cleanup();
+        error = "Runtime pending replacement self-test did not retain a pending replacement module.";
+        return false;
+    }
+    RuntimeScriptInfo destroyingInfo = runtime.Info(scriptId);
+    if (destroyingInfo.State() != "destroying" || destroyingInfo.Phase() != "OnDestroy") {
+        cleanup();
+        error = "Runtime pending replacement self-test did not retain suspended OnDestroy state.";
+        return false;
+    }
+
+    fs::remove_all(root / "Scripts" / scriptId, fsError);
+    if (fsError) {
+        cleanup();
+        error = "Runtime pending replacement self-test failed to remove probe script package.";
+        return false;
+    }
+    std::string reconcileError;
+    if (!runtime.ReloadAll(&reconcileError)) {
+        cleanup();
+        error = reconcileError.empty() ? "Runtime pending replacement self-test failed to reconcile removed script." : reconcileError;
+        return false;
+    }
+    if (manager->HasModule(replacementModuleName.c_str())) {
+        cleanup();
+        error = "Runtime pending replacement self-test leaked a pending replacement module after erase.";
+        return false;
+    }
+
+    ScriptAsyncScheduler *scheduler = manager->GetAsyncScheduler();
+    if (!scheduler) {
+        cleanup();
+        error = "Runtime pending replacement self-test requires an async scheduler.";
+        return false;
+    }
+    scheduler->Tick();
+    runtime.PreProcess();
+    if (runtime.Info(scriptId).Exists()) {
+        cleanup();
+        error = "Runtime pending replacement self-test retained an erased script.";
+        return false;
+    }
+    if (manager->HasModule(oldModuleName.c_str())) {
+        cleanup();
+        error = "Runtime pending replacement self-test leaked the old module after erase.";
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
+
+} // namespace
 
 bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
     if (!context || !engine) {
@@ -269,11 +567,10 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     }
     api->UnloadModule(oldApiModuleName, nullptr);
 
-    ScriptRuntime runtime(manager);
-    if (!runtime.RunPauseLifecycleSelfTest(error)) {
+    if (!RunRuntimePauseLifecycleSelfTest(manager, error)) {
         return false;
     }
-    if (!runtime.RunPendingReplacementSelfTest(error)) {
+    if (!RunRuntimePendingReplacementSelfTest(manager, error)) {
         return false;
     }
     return true;

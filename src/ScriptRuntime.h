@@ -13,10 +13,6 @@
 #include "ScriptRuntimeDependency.h"
 #include "ScriptRuntimeMetadata.h"
 
-#ifndef CKAS_BUILD_SELF_TESTS
-#define CKAS_BUILD_SELF_TESTS 0
-#endif
-
 class CKContext;
 class ScriptMessage;
 class ScriptManager;
@@ -166,11 +162,6 @@ public:
     std::vector<RuntimeDependencyInfo> RequiredDependencies(const std::string &id) const;
     std::vector<RuntimeDependencyInfo> OptionalDependencies(const std::string &id) const;
     bool DeliverMessage(const std::string &id, const ScriptMessage &message, bool immediate, std::string &error);
-
-#if CKAS_BUILD_SELF_TESTS
-    bool RunPauseLifecycleSelfTest(std::string &error);
-    bool RunPendingReplacementSelfTest(std::string &error);
-#endif
 
 private:
     struct Module;
