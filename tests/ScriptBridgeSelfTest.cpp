@@ -225,6 +225,12 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    CKGUID guid = decl.Guid();\n";
     source += "    if (!guid.IsValid()) return 982;\n";
     source += "    if (decl.Name() == \"\" || decl.Category() == \"\" || decl.QualifiedName() == \"\") return 983;\n";
+    source += "    BBCallBuilder@ call = decl.Call();\n";
+    source += "    BBTaskBuilder@ spawn = decl.Spawn();\n";
+    source += "    if (call is null || spawn is null) return 1086;\n";
+    source += "    BBCallBuilder@ callByGuid = BB::Call(ctx, guid);\n";
+    source += "    BBTaskBuilder@ spawnByGuid = BB::Spawn(ctx, guid);\n";
+    source += "    if (callByGuid is null || spawnByGuid is null) return 1087;\n";
     source += "    decl.BehaviorFlags(); decl.PrototypeFlags(); decl.CompatibleClassId(); decl.Describe(); decl.Error();\n";
     source += "    int managerCount = decl.NeededManagerCount();\n";
     source += "    if (managerCount < 0) return 984;\n";

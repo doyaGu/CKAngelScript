@@ -191,6 +191,16 @@ BBTaskBuilder *BBSpawnByName(const CKBehaviorContext &ctx, const std::string &na
     return builder;
 }
 
+BBTaskBuilder *BBSpawnByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
+    BBPrototype *prototype = BBPrototypeByGuid(ctx, guid);
+    if (!prototype) {
+        return nullptr;
+    }
+    BBTaskBuilder *builder = prototype->Spawn();
+    prototype->Release();
+    return builder;
+}
+
 BBDecl *BBRequireByName(const CKBehaviorContext &ctx, const std::string &query) {
     BBBridge *bridge = BBFromContext(ctx);
     if (!bridge) {
@@ -1188,6 +1198,8 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBDecl", "BBSlot@ Pout(const string &in name, int occurrence = 0) const", asMETHOD(BBDecl, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBDecl", "BBSlot@ Setting(const string &in name, int occurrence = 0) const", asMETHOD(BBDecl, Setting), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBDecl", "BBSlot@ Local(const string &in name, int occurrence = 0) const", asMETHOD(BBDecl, Local), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBDecl", "BBCallBuilder@ Call()", asMETHOD(BBDecl, Call), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBDecl", "BBTaskBuilder@ Spawn()", asMETHOD(BBDecl, Spawn), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBDecl", "BBConfig@ Configure()", asMETHOD(BBDecl, Configure), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBDecl", "string Describe() const", asMETHOD(BBDecl, Describe), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -1431,6 +1443,7 @@ void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBCallByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBCallByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBSpawnByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBSpawnByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->SetDefaultNamespace("Param"); CKAS_CHECK_REGISTER(r);
     RegisterParamValueFactories(engine, r);
