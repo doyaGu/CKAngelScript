@@ -90,6 +90,21 @@ AsyncTask<void>@ Async::Wait(const CKBehaviorContext &in ctx, BBTask@ task, int 
 AsyncTask<void>@ Async::Wait(const CKBehaviorContext &in ctx, GraphTask@ task)
 ```
 
+When code already runs with `BehaviorFrame@ frame`, prefer the frame-aware
+wrappers so the script does not reconstruct `CKBehaviorContext` manually:
+
+```angelscript
+AsyncTask<void>@ frame.Wait(BBTask@ task, int inputIndex = -1)
+AsyncTask<void>@ frame.Wait(GraphTask@ task)
+AsyncTask<void>@ frame.WaitMessage(const string &in message, CKBeObject@ object = null)
+AsyncTask<void>@ frame.WaitMessage(CKMessageType messageType, CKBeObject@ object = null)
+AsyncTask<void>@ frame.LinkDelay(int frames)
+```
+
+Use `frame.LinkDelay(frames)` for a translated `CKBehaviorLink`
+activation-delay wait. Use `Async::Delay(frames)` for ordinary script-authored
+timing that is not standing in for a graph link.
+
 ## Cancellation
 
 `Cancel()` asks the task to stop. Code waiting on the task should check failure/cancel state and read `Error()` when needed.

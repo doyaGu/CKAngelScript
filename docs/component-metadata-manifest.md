@@ -249,7 +249,8 @@ Use `BehaviorFrame` for current-BB work. It fully covers the current
 context fields, owner/target, target parameter, current behavior identity,
 CKObject/scene inherited state, layout, graph entry points, input/output
 activation, pin/pout/local/setting parameters, metadata/state, editable
-CKBehavior graph structure, trace prefixes, one-shot runtime BB calls, and raw
+CKBehavior graph structure, graph-link activation-delay waits, frame-aware
+async waits/message waits, trace prefixes, one-shot runtime BB calls, and raw
 `CKBehavior@ Behavior()` access as an interop escape hatch. Keep
 `CKBehaviorContext` only for low-level migration code that needs the raw native
 context shape.

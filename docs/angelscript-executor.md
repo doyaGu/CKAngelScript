@@ -286,12 +286,26 @@ void NotifyEdition()
 void NotifySettingsEdition()
 BBCallBuilder@ Call(const string &in prototype) const
 BBCallBuilder@ Call(CKGUID guid) const
+AsyncTask<void>@ LinkDelay(int frames) const
+AsyncTask<void>@ Wait(BBTask@ task, int inputIndex = -1) const
+AsyncTask<void>@ Wait(GraphTask@ task) const
+AsyncTask<void>@ WaitMessage(const string &in message, CKBeObject@ object = null) const
+AsyncTask<void>@ WaitMessage(CKMessageType messageType, CKBeObject@ object = null) const
 void Trace(const string &in message) const
 ```
 
 `Pin()`/`Pout()` are strict reference APIs. Use `PinInt`, `PinString`,
 `PinBool`, and `PinFloat` for fallback reads that should tolerate absent slots,
 absent sources, or incompatible value kinds.
+
+Use `LinkDelay(frames)` when translating an original graph `CKBehaviorLink`
+activation delay into AS replacement code. It returns an `AsyncTask<void>@`
+driven by the CKAS scheduler and keeps that Virtools graph semantics distinct
+from ordinary `Async::Delay()` waits.
+
+Use `frame.Wait(...)` and `frame.WaitMessage(...)` instead of rebuilding a
+`CKBehaviorContext` only to call `Async::Wait(ctx, ...)` or
+`Async::WaitMessage(ctx, ...)`.
 
 `Local(index)`, `Setting(index)`, and `FindSetting(name)` all use the real
 CKBehavior local-parameter index. `SetSetting()` writes through the bridge

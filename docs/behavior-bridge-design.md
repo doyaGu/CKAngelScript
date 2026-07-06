@@ -87,6 +87,8 @@ Use it for current-frame work:
 - `Pin(name)`, `Pout(name)`, `PinString/PinInt/PinBool/PinFloat/PinObject`
 - `SetPout(name, value)` typed overloads
 - `Call(prototype)` and `Call(guid)` for one-shot runtime BB calls
+- `LinkDelay(frames)` for CKBehaviorLink activation-delay waits
+- `Wait(task)` and `WaitMessage(...)` frame-aware async wrappers
 - `Trace(message)` with behavior name/id prefix
 
 `Pin(name)` and `Pout(name)` are strict reference APIs: a missing slot reports a
@@ -129,6 +131,13 @@ node. It exposes:
 - subgraph inspection and edit wrappers: `BehaviorRef` and raw `CKBehavior@`
   subbehavior/parent/owner-script accessors, subbehavior-link, and
   parameter-operation counts, accessors, add/remove helpers.
+- graph scheduling helpers: `LinkDelay(frames)` returns an
+  `AsyncTask<void>@` for reproducing a `CKBehaviorLink` activation delay from
+  replacement code. Use this when translating graph link delays; use
+  `Async::Delay()` only for ordinary script-authored async timing.
+- frame-aware async wrappers: `Wait(BBTask@, inputIndex)`,
+  `Wait(GraphTask@)`, and `WaitMessage(...)` bind the current frame context so
+  scripts do not have to reconstruct `CKBehaviorContext` for ordinary waits.
 
 The intent is full current-`CKBehavior` coverage without forcing script authors
 back to raw SDK naming for ordinary replacement work. `Behavior()` remains
