@@ -8,6 +8,7 @@
 #include <fmt/format.h>
 
 #include "CKAll.h"
+#include "ScriptBehaviorFrame.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeCommon.h"
 #include "ScriptBridgeHandles.h"
@@ -526,6 +527,68 @@ ScriptAsyncTaskBase *AsyncWaitGraphTaskWithContext(const CKBehaviorContext &ctx,
     return scheduler->CreateGraphTask(task, &ctx);
 }
 
+ScriptAsyncTaskBase *AsyncWaitMessageByContext(const CKBehaviorContext &ctx,
+                                               const std::string &message,
+                                               CKBeObject *object) {
+    ScriptAsyncScheduler *scheduler = SchedulerFromActiveContext();
+    if (!scheduler) {
+        SetScriptException("Async scheduler is not available.");
+        return nullptr;
+    }
+    if (!ctx.Context) {
+        SetScriptException("Async::WaitMessage requires a CKContext.");
+        return nullptr;
+    }
+    CKBeObject *waitObject = object;
+    if (!waitObject && ctx.Behavior) {
+        waitObject = ctx.Behavior->GetTarget();
+        if (!waitObject) {
+            waitObject = ctx.Behavior->GetOwner();
+        }
+    }
+    if (!waitObject) {
+        SetScriptException("Async::WaitMessage requires a non-null object or behavior target/owner.");
+        return nullptr;
+    }
+    std::string error;
+    ScriptAsyncTaskBase *task = scheduler->CreateMessageWait(ctx.Context, message, waitObject, &error);
+    if (!task) {
+        SetScriptException(error.empty() ? "Async::WaitMessage failed to create a message wait task." : error);
+    }
+    return task;
+}
+
+ScriptAsyncTaskBase *AsyncWaitMessageTypeByContext(const CKBehaviorContext &ctx,
+                                                   CKMessageType messageType,
+                                                   CKBeObject *object) {
+    ScriptAsyncScheduler *scheduler = SchedulerFromActiveContext();
+    if (!scheduler) {
+        SetScriptException("Async scheduler is not available.");
+        return nullptr;
+    }
+    if (!ctx.Context) {
+        SetScriptException("Async::WaitMessage requires a CKContext.");
+        return nullptr;
+    }
+    CKBeObject *waitObject = object;
+    if (!waitObject && ctx.Behavior) {
+        waitObject = ctx.Behavior->GetTarget();
+        if (!waitObject) {
+            waitObject = ctx.Behavior->GetOwner();
+        }
+    }
+    if (!waitObject) {
+        SetScriptException("Async::WaitMessage requires a non-null object or behavior target/owner.");
+        return nullptr;
+    }
+    std::string error;
+    ScriptAsyncTaskBase *task = scheduler->CreateMessageWait(ctx.Context, messageType, waitObject, &error);
+    if (!task) {
+        SetScriptException(error.empty() ? "Async::WaitMessage failed to create a message wait task." : error);
+    }
+    return task;
+}
+
 void AsyncSpawnGeneric(asIScriptGeneric *gen) {
     std::string error;
     asIScriptFunction *function = FunctionFromGenericArg(gen, 0, error);
@@ -987,6 +1050,99 @@ void ScriptAsyncTaskBase::SetGraphTask(GraphTask *task, const CKBehaviorContext 
     m_BridgeTaskContext = context ? *context : CKBehaviorContext();
 }
 
+bool ScriptAsyncTaskBase::SetMessageWait(CKContext *context,
+                                         const std::string &message,
+                                         CKBeObject *object,
+                                         std::string *error) {
+    ReleaseMessageWait();
+
+    auto fail = [&](const std::string &messageText) {
+        if (error) {
+            *error = messageText;
+        }
+        ReleaseMessageWait();
+        return false;
+    };
+
+    if (!context) {
+        return fail("Async::WaitMessage requires a CKContext.");
+    }
+    if (message.empty()) {
+        return fail("Async::WaitMessage requires a non-empty message name.");
+    }
+    CKMessageManager *messages = context->GetMessageManager();
+    if (!messages) {
+        return fail("Async::WaitMessage requires a CKMessageManager.");
+    }
+    const CKMessageType messageType = messages->AddMessageType(const_cast<CKSTRING>(message.c_str()));
+    if (messageType < 0) {
+        return fail(fmt::format("Async::WaitMessage could not resolve message '{}'.", message));
+    }
+    return SetMessageWait(context, messageType, object, error);
+}
+
+bool ScriptAsyncTaskBase::SetMessageWait(CKContext *context,
+                                         CKMessageType messageType,
+                                         CKBeObject *object,
+                                         std::string *error) {
+    ReleaseMessageWait();
+
+    auto fail = [&](const std::string &messageText) {
+        if (error) {
+            *error = messageText;
+        }
+        ReleaseMessageWait();
+        return false;
+    };
+
+    if (!context) {
+        return fail("Async::WaitMessage requires a CKContext.");
+    }
+    if (messageType < 0) {
+        return fail("Async::WaitMessage requires a valid message type.");
+    }
+    if (!object) {
+        return fail("Async::WaitMessage requires a non-null object.");
+    }
+
+    CKMessageManager *messages = context->GetMessageManager();
+    if (!messages) {
+        return fail("Async::WaitMessage requires a CKMessageManager.");
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR,
+                                                                  const_cast<CKSTRING>("__CKAS_MessageWait"),
+                                                                  CK_OBJECTCREATION_DYNAMIC));
+    if (!behavior) {
+        return fail("Async::WaitMessage failed to create an internal behavior.");
+    }
+
+    m_MessageContext = context;
+    m_MessageBehaviorId = behavior->GetID();
+    m_MessageType = messageType;
+    const char *messageName = messages->GetMessageTypeName(messageType);
+    m_MessageName = messageName && messageName[0] != '\0'
+        ? messageName
+        : fmt::format("#{}", messageType);
+
+    behavior->UseFunction();
+    behavior->SetOwner(object, FALSE);
+    if (!behavior->CreateOutput(const_cast<CKSTRING>("Out"))) {
+        return fail("Async::WaitMessage failed to create an internal output.");
+    }
+
+    const CKERROR err = messages->RegisterWait(messageType, behavior, 0, object);
+    if (err != CK_OK) {
+        return fail(fmt::format("Async::WaitMessage RegisterWait failed with CKERROR {}.", err));
+    }
+
+    m_MessageRegistered = true;
+    if (error) {
+        error->clear();
+    }
+    return true;
+}
+
 void ScriptAsyncTaskBase::Advance() {
     if (IsDone()) {
         return;
@@ -1015,6 +1171,9 @@ void ScriptAsyncTaskBase::Advance() {
             break;
         case ScriptAsyncTaskKind::GraphTask:
             AdvanceGraphTask();
+            break;
+        case ScriptAsyncTaskKind::MessageWait:
+            AdvanceMessageWait();
             break;
     }
 }
@@ -1084,6 +1243,7 @@ void ScriptAsyncTaskBase::ReleaseExecutionReferences() {
     m_ModuleNames.clear();
     ReleaseChildren();
     ReleaseBridgeTasks();
+    ReleaseMessageWait();
 }
 
 void ScriptAsyncTaskBase::ReleaseResult() {
@@ -1125,6 +1285,36 @@ void ScriptAsyncTaskBase::ReleaseBridgeTasks() {
         m_GraphTask->Release();
         m_GraphTask = nullptr;
     }
+}
+
+void ScriptAsyncTaskBase::ReleaseMessageWait() {
+    if (!m_MessageContext || !m_MessageBehaviorId) {
+        m_MessageContext = nullptr;
+        m_MessageBehaviorId = 0;
+        m_MessageType = -1;
+        m_MessageName.clear();
+        m_MessageRegistered = false;
+        return;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(GetCKObjectById(m_MessageContext, m_MessageBehaviorId));
+    if (behavior) {
+        if (m_MessageRegistered) {
+            if (CKMessageManager *messages = m_MessageContext->GetMessageManager()) {
+                messages->UnRegisterWait(m_MessageType, behavior, 0);
+            }
+        }
+        behavior->Activate(FALSE, TRUE);
+        if (!behavior->IsToBeDeleted()) {
+            m_MessageContext->DestroyObject(behavior);
+        }
+    }
+
+    m_MessageContext = nullptr;
+    m_MessageBehaviorId = 0;
+    m_MessageType = -1;
+    m_MessageName.clear();
+    m_MessageRegistered = false;
 }
 
 void ScriptAsyncTaskBase::AdvanceDelay() {
@@ -1365,6 +1555,31 @@ void ScriptAsyncTaskBase::AdvanceGraphTask() {
     SetState(ScriptAsyncTaskState::Running);
 }
 
+void ScriptAsyncTaskBase::AdvanceMessageWait() {
+    if (!m_MessageContext || !m_MessageBehaviorId || m_MessageName.empty()) {
+        Fail("Async::WaitMessage task is not initialized.");
+        return;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(GetCKObjectById(m_MessageContext, m_MessageBehaviorId));
+    if (!behavior) {
+        Fail("Async::WaitMessage internal behavior no longer exists.");
+        return;
+    }
+
+    if (behavior->GetOutputCount() <= 0) {
+        Fail("Async::WaitMessage internal behavior has no output.");
+        return;
+    }
+
+    if (behavior->IsOutputActive(0)) {
+        CompleteVoid();
+        return;
+    }
+
+    SetState(ScriptAsyncTaskState::Running);
+}
+
 bool ScriptAsyncTaskBase::CompleteAllArray(std::string &error) {
     if (!m_Engine || m_SubTypeId == asTYPEID_VOID) {
         error = "Async::All array result type is not available.";
@@ -1465,6 +1680,34 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateGraphTask(GraphTask *taskHandle
     return task;
 }
 
+ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateMessageWait(CKContext *context,
+                                                             const std::string &message,
+                                                             CKBeObject *object,
+                                                             std::string *error) {
+    ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::MessageWait, asTYPEID_VOID);
+    task->NotifyGarbageCollector();
+    if (!task->SetMessageWait(context, message, object, error)) {
+        task->Release();
+        return nullptr;
+    }
+    Track(task);
+    return task;
+}
+
+ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateMessageWait(CKContext *context,
+                                                             CKMessageType messageType,
+                                                             CKBeObject *object,
+                                                             std::string *error) {
+    ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::MessageWait, asTYPEID_VOID);
+    task->NotifyGarbageCollector();
+    if (!task->SetMessageWait(context, messageType, object, error)) {
+        task->Release();
+        return nullptr;
+    }
+    Track(task);
+    return task;
+}
+
 void ScriptAsyncScheduler::Track(ScriptAsyncTaskBase *task) {
     if (!task) {
         return;
@@ -1523,7 +1766,6 @@ ScriptAsyncScheduler::ResumeState ScriptAsyncScheduler::PrepareContextResume(asI
         m_Waits.erase(it);
         return ResumeState::Failed;
     }
-    task->Advance();
     if (!task->IsDone()) {
         return ResumeState::Pending;
     }
@@ -1679,6 +1921,14 @@ void RegisterScriptAsync(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(GraphTask@+ task)", asFUNCTION(AsyncWaitGraphTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, BBTask@+ task, int inputIndex = -1)", asFUNCTION(AsyncWaitBBTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, GraphTask@+ task)", asFUNCTION(AsyncWaitGraphTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ WaitMessage(const CKBehaviorContext &in ctx, const string &in message, CKBeObject@ object = null)", asFUNCTION(AsyncWaitMessageByContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<void>@ WaitMessage(const CKBehaviorContext &in ctx, CKMessageType messageType, CKBeObject@ object = null)", asFUNCTION(AsyncWaitMessageTypeByContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->SetDefaultNamespace(previous.c_str()); CKAS_CHECK_REGISTER(r);
+
+    r = engine->RegisterObjectMethod("BehaviorFrame", "AsyncTask<void>@ LinkDelay(int frames) const", asMETHOD(BehaviorFrame, LinkDelay), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "AsyncTask<void>@ Wait(BBTask@+ task, int inputIndex = -1) const", asMETHOD(BehaviorFrame, WaitBBTask), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "AsyncTask<void>@ Wait(GraphTask@+ task) const", asMETHOD(BehaviorFrame, WaitGraphTask), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "AsyncTask<void>@ WaitMessage(const string &in message, CKBeObject@ object = null) const", asMETHOD(BehaviorFrame, WaitMessageName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "AsyncTask<void>@ WaitMessage(CKMessageType messageType, CKBeObject@ object = null) const", asMETHOD(BehaviorFrame, WaitMessageType), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }

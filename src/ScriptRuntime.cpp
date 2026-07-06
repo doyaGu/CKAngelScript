@@ -1606,6 +1606,13 @@ bool ScriptRuntime::RunPauseLifecycleSelfTest(std::string &error) {
         return false;
     }
 
+    ScriptAsyncScheduler *scheduler = m_Manager->GetAsyncScheduler();
+    if (!scheduler) {
+        cleanup();
+        error = "Runtime pause lifecycle self-test requires an async scheduler.";
+        return false;
+    }
+    scheduler->Tick();
     if (!PauseModule(module, ctx)) {
         cleanup();
         error = "Runtime pause lifecycle self-test failed to resume suspended OnDisable.";
@@ -1744,6 +1751,17 @@ bool ScriptRuntime::RunPendingReplacementSelfTest(std::string &error) {
         error = "Runtime pending replacement self-test could not remove the active module.";
         return false;
     }
+    ScriptAsyncScheduler *scheduler = m_Manager->GetAsyncScheduler();
+    if (!scheduler) {
+        cleanup();
+        error = "Runtime pending replacement self-test requires an async scheduler.";
+        return false;
+    }
+    scheduler->Tick();
+    if (Module *erasing = FindModule(scriptId)) {
+        UpdateModule(*erasing, 0.0f, 0.0f);
+    }
+    FinalizePendingModules();
     if (m_Manager->HasModule(replacementName)) {
         cleanup();
         error = "Runtime pending replacement self-test leaked a pending replacement module after erase.";

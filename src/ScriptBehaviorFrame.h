@@ -10,10 +10,13 @@
 
 class asIScriptGeneric;
 class BBCallBuilder;
+class BBTask;
 class BehaviorGraph;
 class BehaviorLayout;
 class BehaviorRef;
+class GraphTask;
 class ParamRef;
+class ScriptAsyncTaskBase;
 class XObjectArray;
 struct ScriptParamValue;
 
@@ -292,6 +295,11 @@ public:
 
     BBCallBuilder *CallName(const std::string &prototype) const;
     BBCallBuilder *CallGuid(CKGUID guid) const;
+    ScriptAsyncTaskBase *LinkDelay(int frames) const;
+    ScriptAsyncTaskBase *WaitBBTask(BBTask *task, int inputIndex = -1) const;
+    ScriptAsyncTaskBase *WaitGraphTask(GraphTask *task) const;
+    ScriptAsyncTaskBase *WaitMessageName(const std::string &message, CKBeObject *object = nullptr) const;
+    ScriptAsyncTaskBase *WaitMessageType(CKMessageType messageType, CKBeObject *object = nullptr) const;
 
     void Trace(const std::string &message) const;
 

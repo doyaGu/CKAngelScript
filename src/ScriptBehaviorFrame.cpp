@@ -5,6 +5,7 @@
 #include "ScriptBehaviorFrame.h"
 
 #include "CKAll.h"
+#include "ScriptAsync.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
 #include "ScriptParameterConversion.h"
@@ -31,6 +32,33 @@ bool ValidIndex(int index, int count, const char *method, const char *kind) {
         kind ? kind : "slot",
         count > 0 ? count - 1 : -1));
     return false;
+}
+
+ScriptAsyncScheduler *RequireAsyncScheduler(CKContext *context, const char *method) {
+    if (!context) {
+        SetScriptException(fmt::format("{} requires a CKContext.", method ? method : "BehaviorFrame async API"));
+        return nullptr;
+    }
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptAsyncScheduler *scheduler = manager ? manager->GetAsyncScheduler() : nullptr;
+    if (!scheduler) {
+        SetScriptException(fmt::format("{} requires an async scheduler.", method ? method : "BehaviorFrame async API"));
+        return nullptr;
+    }
+    return scheduler;
+}
+
+CKBeObject *ResolveMessageWaitObject(CKBehavior *behavior, CKBeObject *explicitObject) {
+    if (explicitObject) {
+        return explicitObject;
+    }
+    if (!behavior) {
+        return nullptr;
+    }
+    if (CKBeObject *target = behavior->GetTarget()) {
+        return target;
+    }
+    return behavior->GetOwner();
 }
 
 template <typename ParamGetter>
@@ -1992,6 +2020,69 @@ BBCallBuilder *BehaviorFrame::CallGuid(CKGUID guid) const {
     request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
     request.Guid = guid;
     return new BBCallBuilder(bridge, MakeContext(), request);
+}
+
+ScriptAsyncTaskBase *BehaviorFrame::LinkDelay(int frames) const {
+    if (frames < 0) {
+        SetScriptException(fmt::format("BehaviorFrame.LinkDelay requires a non-negative frame count, got {}.", frames));
+        return nullptr;
+    }
+    ScriptAsyncScheduler *scheduler = RequireAsyncScheduler(m_Context, "BehaviorFrame.LinkDelay");
+    return scheduler ? scheduler->CreateDelay(frames) : nullptr;
+}
+
+ScriptAsyncTaskBase *BehaviorFrame::WaitBBTask(BBTask *task, int inputIndex) const {
+    ScriptAsyncScheduler *scheduler = RequireAsyncScheduler(m_Context, "BehaviorFrame.Wait");
+    if (!scheduler) {
+        return nullptr;
+    }
+    CKBehaviorContext ctx = MakeContext();
+    return scheduler->CreateBBTask(task, &ctx, inputIndex);
+}
+
+ScriptAsyncTaskBase *BehaviorFrame::WaitGraphTask(GraphTask *task) const {
+    ScriptAsyncScheduler *scheduler = RequireAsyncScheduler(m_Context, "BehaviorFrame.Wait");
+    if (!scheduler) {
+        return nullptr;
+    }
+    CKBehaviorContext ctx = MakeContext();
+    return scheduler->CreateGraphTask(task, &ctx);
+}
+
+ScriptAsyncTaskBase *BehaviorFrame::WaitMessageName(const std::string &message, CKBeObject *object) const {
+    ScriptAsyncScheduler *scheduler = RequireAsyncScheduler(m_Context, "BehaviorFrame.WaitMessage");
+    if (!scheduler) {
+        return nullptr;
+    }
+    CKBeObject *waitObject = ResolveMessageWaitObject(Behavior(), object);
+    if (!waitObject) {
+        SetScriptException("BehaviorFrame.WaitMessage requires a non-null object or behavior target/owner.");
+        return nullptr;
+    }
+    std::string error;
+    ScriptAsyncTaskBase *task = scheduler->CreateMessageWait(m_Context, message, waitObject, &error);
+    if (!task) {
+        SetScriptException(error.empty() ? "BehaviorFrame.WaitMessage failed to create a message wait task." : error);
+    }
+    return task;
+}
+
+ScriptAsyncTaskBase *BehaviorFrame::WaitMessageType(CKMessageType messageType, CKBeObject *object) const {
+    ScriptAsyncScheduler *scheduler = RequireAsyncScheduler(m_Context, "BehaviorFrame.WaitMessage");
+    if (!scheduler) {
+        return nullptr;
+    }
+    CKBeObject *waitObject = ResolveMessageWaitObject(Behavior(), object);
+    if (!waitObject) {
+        SetScriptException("BehaviorFrame.WaitMessage requires a non-null object or behavior target/owner.");
+        return nullptr;
+    }
+    std::string error;
+    ScriptAsyncTaskBase *task = scheduler->CreateMessageWait(m_Context, messageType, waitObject, &error);
+    if (!task) {
+        SetScriptException(error.empty() ? "BehaviorFrame.WaitMessage failed to create a message wait task." : error);
+    }
+    return task;
 }
 
 void BehaviorFrame::Trace(const std::string &message) const {

@@ -31,7 +31,8 @@ enum class ScriptAsyncTaskKind {
     Race,
     Any,
     BBTask,
-    GraphTask
+    GraphTask,
+    MessageWait
 };
 
 class ScriptAsyncScheduler;
@@ -96,6 +97,8 @@ public:
     void SetChildren(const std::vector<ScriptAsyncTaskBase *> &children);
     void SetBBTask(BBTask *task, const CKBehaviorContext *context = nullptr, int inputIndex = -1);
     void SetGraphTask(GraphTask *task, const CKBehaviorContext *context = nullptr);
+    bool SetMessageWait(CKContext *context, const std::string &message, CKBeObject *object = nullptr, std::string *error = nullptr);
+    bool SetMessageWait(CKContext *context, CKMessageType messageType, CKBeObject *object = nullptr, std::string *error = nullptr);
 
     void Advance();
     bool CopyResultTo(void *address, int typeId, std::string &error) const;
@@ -115,6 +118,7 @@ private:
     void ReleaseContext();
     void ReleaseChildren();
     void ReleaseBridgeTasks();
+    void ReleaseMessageWait();
     void AdvanceDelay();
     void AdvanceScript();
     void AdvanceAll();
@@ -122,6 +126,7 @@ private:
     void AdvanceAny();
     void AdvanceBBTask();
     void AdvanceGraphTask();
+    void AdvanceMessageWait();
     bool CompleteAllArray(std::string &error);
     std::string TaskErrorForAwait() const;
 
@@ -144,6 +149,11 @@ private:
     bool m_DriveBridgeTask = false;
     CKBehaviorContext m_BridgeTaskContext;
     int m_BBTaskInputIndex = -1;
+    CKContext *m_MessageContext = nullptr;
+    CK_ID m_MessageBehaviorId = 0;
+    CKMessageType m_MessageType = -1;
+    std::string m_MessageName;
+    bool m_MessageRegistered = false;
 };
 
 class ScriptAsyncScheduler final {
@@ -171,6 +181,8 @@ public:
                                          const std::vector<ScriptAsyncTaskBase *> &children);
     ScriptAsyncTaskBase *CreateBBTask(BBTask *task, const CKBehaviorContext *context = nullptr, int inputIndex = -1);
     ScriptAsyncTaskBase *CreateGraphTask(GraphTask *task, const CKBehaviorContext *context = nullptr);
+    ScriptAsyncTaskBase *CreateMessageWait(CKContext *context, const std::string &message, CKBeObject *object = nullptr, std::string *error = nullptr);
+    ScriptAsyncTaskBase *CreateMessageWait(CKContext *context, CKMessageType messageType, CKBeObject *object = nullptr, std::string *error = nullptr);
 
     void Track(ScriptAsyncTaskBase *task);
     void Tick();

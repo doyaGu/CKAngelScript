@@ -189,6 +189,20 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
 
+    if (!CompileAsyncProbe(context,
+                           engine,
+                           "__CKAS_AsyncCompileMessageWaitSelfTest",
+                           "void __ckas_async_compile_message_wait(const CKBehaviorContext &in ctx, CKBeObject@ object) {\n"
+                           "  AsyncTask<void>@ task = Async::WaitMessage(ctx, \"__CKAS_AsyncCompileMessageWaitSelfTest\", object);\n"
+                           "  if (task !is null) { task.Cancel(); }\n"
+                           "  CKMessageType type = ctx.MessageManager is null ? -1 : ctx.MessageManager.AddMessageType(\"__CKAS_AsyncCompileMessageWaitSelfTest\");\n"
+                           "  @task = Async::WaitMessage(ctx, type, object);\n"
+                           "  if (task !is null) { task.Cancel(); }\n"
+                           "}\n",
+                           error)) {
+        return false;
+    }
+
     WriteAsyncSelfTestStage("gc-flags");
     asITypeInfo *voidTaskType = engine->GetTypeInfoByDecl("AsyncTask<void>");
     asITypeInfo *intTaskType = engine->GetTypeInfoByDecl("AsyncTask<int>");
@@ -216,6 +230,47 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         error = "Async completed result self-test could not retrieve the manager scheduler.";
         return false;
     }
+
+    WriteAsyncSelfTestStage("await-delay-resume-check");
+    asIScriptContext *delayWaitContext = engine->RequestContext();
+    if (!delayWaitContext) {
+        error = "Async delay resume self-test could not request a script context.";
+        return false;
+    }
+    ScriptAsyncTaskBase *delayTask = scheduler.CreateDelay(2);
+    std::string waitError;
+    auto cleanupDelayWait = [&]() {
+        scheduler.ForgetContext(delayWaitContext);
+        if (delayTask) {
+            delayTask->Release();
+            delayTask = nullptr;
+        }
+        engine->ReturnContext(delayWaitContext);
+    };
+    if (!delayTask ||
+        !scheduler.WaitForTask(delayWaitContext, delayTask, nullptr, asTYPEID_VOID, waitError)) {
+        cleanupDelayWait();
+        error = waitError.empty() ? "Async delay resume self-test could not register await." : waitError;
+        return false;
+    }
+    if (scheduler.PrepareContextResume(delayWaitContext, waitError) != ScriptAsyncScheduler::ResumeState::Pending) {
+        cleanupDelayWait();
+        error = "Async delay resume self-test expected initial resume check to stay pending.";
+        return false;
+    }
+    scheduler.Tick();
+    if (scheduler.PrepareContextResume(delayWaitContext, waitError) != ScriptAsyncScheduler::ResumeState::Pending) {
+        cleanupDelayWait();
+        error = "Async delay resume self-test expected Delay(2) to stay pending after one tick.";
+        return false;
+    }
+    scheduler.Tick();
+    if (scheduler.PrepareContextResume(delayWaitContext, waitError) != ScriptAsyncScheduler::ResumeState::Ready) {
+        cleanupDelayWait();
+        error = waitError.empty() ? "Async delay resume self-test expected Delay(2) to become ready after two ticks." : waitError;
+        return false;
+    }
+    cleanupDelayWait();
 
     WriteAsyncSelfTestStage("completed-result-dependencies");
     constexpr const char *primitiveResultModuleName = "__CKAS_AsyncCompletedPrimitiveSelfTest";
@@ -482,6 +537,45 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
     delay->Release();
+
+    WriteAsyncSelfTestStage("message-wait");
+    CKMessageManager *messages = context->GetMessageManager();
+    CKBeObject *messageTarget = CKBeObject::Cast(context->CreateObject(CKCID_BEOBJECT,
+                                                                       const_cast<CKSTRING>("__CKAS_AsyncMessageWaitTarget"),
+                                                                       CK_OBJECTCREATION_DYNAMIC));
+    if (!messages || !messageTarget) {
+        if (messageTarget) {
+            context->DestroyObject(messageTarget);
+        }
+        error = "Async message wait self-test could not create a wait target.";
+        return false;
+    }
+    const char *messageName = "__CKAS_AsyncMessageWaitSelfTest";
+    std::string messageWaitError;
+    ScriptAsyncTaskBase *messageTask = scheduler.CreateMessageWait(context, messageName, messageTarget, &messageWaitError);
+    if (!messageTask) {
+        context->DestroyObject(messageTarget);
+        error = messageWaitError.empty()
+            ? "Async message wait self-test could not create the wait task."
+            : messageWaitError;
+        return false;
+    }
+    const CKMessageType messageType = messages->AddMessageType(const_cast<CKSTRING>(messageName));
+    messages->SendMessageBroadcast(messageType, CKCID_BEOBJECT, nullptr);
+    messages->PostProcess();
+    scheduler.Tick();
+    if (!messageTask->IsCompleted()) {
+        error = messageTask->Error().empty()
+            ? "Async message wait self-test did not complete after broadcast."
+            : messageTask->Error();
+        messageTask->Release();
+        scheduler.Clear();
+        context->DestroyObject(messageTarget);
+        return false;
+    }
+    messageTask->Release();
+    scheduler.Clear();
+    context->DestroyObject(messageTarget);
 
     WriteAsyncSelfTestStage("empty-race");
     const int intType = engine->GetTypeIdByDecl("int");
