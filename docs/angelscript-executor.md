@@ -255,6 +255,8 @@ CKERROR SetLocalParameterValue(int index, ?&in value)
 // Typed convenience.
 int PinInt(const string &in name, int fallback = 0, int occurrence = 0) const
 int PinInt(int index, int fallback = 0) const
+int LocalInt(const string &in name, int fallback = 0, int occurrence = 0) const
+int LocalInt(int index, int fallback = 0) const
 bool SetPout(const string &in name, bool value, int occurrence = 0)
 bool SetPout(int index, bool value)
 bool SetLocal(const string &in name, int value, int occurrence = 0)
@@ -294,9 +296,11 @@ AsyncTask<void>@ WaitMessage(CKMessageType messageType, CKBeObject@ object = nul
 void Trace(const string &in message) const
 ```
 
-`Pin()`/`Pout()` are strict reference APIs. Use `PinInt`, `PinString`,
-`PinBool`, and `PinFloat` for fallback reads that should tolerate absent slots,
-absent sources, or incompatible value kinds.
+`Pin()`/`Pout()`/`Local()` are strict reference APIs. Use `PinInt`,
+`PinString`, `PinBool`, `PinFloat`, and the matching `LocalInt`,
+`LocalString`, `LocalBool`, `LocalFloat`, `LocalObject` helpers for fallback
+reads that should tolerate absent slots, absent sources, or incompatible value
+kinds.
 
 Use `LinkDelay(frames)` when translating an original graph `CKBehaviorLink`
 activation delay into AS replacement code. It returns an `AsyncTask<void>@`

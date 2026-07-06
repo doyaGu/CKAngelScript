@@ -260,9 +260,11 @@ treats the current behavior as a subgraph container. `Local(index)`,
 `Setting(index)`, and `FindSetting(name)` all use the real CKBehavior
 local-parameter index, matching `BehaviorLayout`.
 
-`Pin()`/`Pout()` remain strict reference APIs. The typed `PinInt`, `PinString`,
-`PinBool`, and `PinFloat` helpers are fallback readers and return their fallback
-for missing slots, missing sources, read failures, or incompatible value kinds.
+`Pin()`/`Pout()`/`Local()` remain strict reference APIs. The typed `PinInt`,
+`PinString`, `PinBool`, `PinFloat`, and matching `LocalInt`, `LocalString`,
+`LocalBool`, `LocalFloat`, `LocalObject` helpers are fallback readers and return
+their fallback for missing slots, missing sources, read failures, or
+incompatible value kinds.
 
 `OnMessage` may suspend through `Await`. A suspended message handler is resumed
 explicitly on a later Component activation before normal lifecycle/update work

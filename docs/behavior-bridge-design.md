@@ -85,17 +85,19 @@ Use it for current-frame work:
 - `Behavior()`, `Context()`, `Owner()`, `Target()`
 - `InputActive(name)`, `Take(name)`, `Emit(name)`
 - `Pin(name)`, `Pout(name)`, `PinString/PinInt/PinBool/PinFloat/PinObject`
+- `Local(name)`, `LocalString/LocalInt/LocalBool/LocalFloat/LocalObject`
 - `SetPout(name, value)` typed overloads
 - `Call(prototype)` and `Call(guid)` for one-shot runtime BB calls
 - `LinkDelay(frames)` for CKBehaviorLink activation-delay waits
 - `Wait(task)` and `WaitMessage(...)` frame-aware async wrappers
 - `Trace(message)` with behavior name/id prefix
 
-`Pin(name)` and `Pout(name)` are strict reference APIs: a missing slot reports a
-script exception with slot candidates. The typed `PinString/PinInt/PinBool` and
-`PinFloat` helpers are fallback readers; missing slots, missing sources, read
-failures, and incompatible value kinds return the supplied fallback without
-throwing.
+`Pin(name)`, `Pout(name)`, and `Local(name)` are strict reference APIs: a
+missing slot reports a script exception with slot candidates. The typed
+`PinString/PinInt/PinBool/PinFloat` and
+`LocalString/LocalInt/LocalBool/LocalFloat/LocalObject` helpers are fallback
+readers; missing slots, missing sources, read failures, and incompatible value
+kinds return the supplied fallback without throwing.
 
 `BehaviorFrame` is an execution-frame facade, not persistent gameplay state. If
 a lifecycle or message method suspends and resumes, the host refreshes the
@@ -123,7 +125,8 @@ node. It exposes:
   `InputActive`, `Take`, `Emit`, `OutputActive`, `Pin`, `Pout`, `Local`,
   `Setting`, raw parameter-handle getters for migration, enable/disable for
   pins and pouts, generic SDK `Get*ParameterValue`/`Set*ParameterValue`
-  methods, and typed `SetPout`, `SetLocal`, `SetSetting` helpers;
+  methods, typed local fallback readers, and typed `SetPout`, `SetLocal`,
+  `SetSetting` helpers;
 - SDK-level CKBehavior graph edits: `Add/Create/Remove/Delete/Replace`
   wrappers for inputs, outputs, pins, pouts, and locals, position lookup,
   data-pointer accessors, target parameter replacement, owner updates, edition
