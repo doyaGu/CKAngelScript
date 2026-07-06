@@ -13999,6 +13999,21 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
         "  if (value != rewritten) return 14;\n"
         "  return 0;\n"
         "}\n"
+        "int ProbeCKParameterGenericBoolValue(CKParameterLocal@ local) {\n"
+        "  if (local is null) return 2;\n"
+        "  bool source = true;\n"
+        "  if (local.SetValue(source) != CK_OK) return 3;\n"
+        "  bool value = false;\n"
+        "  if (local.GetValue(value) != CK_OK) return 4;\n"
+        "  if (!value) return 5;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeCKParameterGenericStringToIntRejected(CKParameterLocal@ local) {\n"
+        "  if (local is null) return 2;\n"
+        "  int value = 0;\n"
+        "  if (local.GetValue(value) != CKERR_INVALIDPARAMETERTYPE) return 3;\n"
+        "  return 0;\n"
+        "}\n"
         "int ProbeCKParameterGenericVectorValue(CKParameterLocal@ local) {\n"
         "  if (local is null) return 2;\n"
         "  VxVector source(1.0f, 2.0f, 3.0f);\n"
@@ -14290,6 +14305,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *setString = module->GetFunctionByDecl("int ProbeCKParameterSetStringValue(CKParameterLocal@)");
     asIScriptFunction *genericSetString = module->GetFunctionByDecl("int ProbeCKParameterGenericSetStringValue(CKParameterLocal@)");
     asIScriptFunction *genericInt = module->GetFunctionByDecl("int ProbeCKParameterGenericIntValue(CKParameterLocal@)");
+    asIScriptFunction *genericBool = module->GetFunctionByDecl("int ProbeCKParameterGenericBoolValue(CKParameterLocal@)");
+    asIScriptFunction *genericStringToIntRejected = module->GetFunctionByDecl("int ProbeCKParameterGenericStringToIntRejected(CKParameterLocal@)");
     asIScriptFunction *genericVector = module->GetFunctionByDecl("int ProbeCKParameterGenericVectorValue(CKParameterLocal@)");
     asIScriptFunction *localMyselfState = module->GetFunctionByDecl("int ProbeCKParameterLocalMyselfState(CKParameterLocal@)");
     asIScriptFunction *localOwnerGraph = module->GetFunctionByDecl("int ProbeCKParameterLocalOwnerGraph(CKBehavior@, CKParameterLocal@)");
@@ -14325,7 +14342,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
     asIScriptFunction *outOwnerGraph = module->GetFunctionByDecl("int ProbeCKParameterOutOwnerGraph(CKBehavior@, CKParameterOut@, CKParameterOut@)");
     asIScriptFunction *copyValueNull = module->GetFunctionByDecl("void ProbeCKParameterCopyValueNull(CKParameterLocal@)");
     asIScriptFunction *compatibleNull = module->GetFunctionByDecl("void ProbeCKParameterCompatibleNull(CKParameterLocal@)");
-    if (!probe || !parameterTypeProbe || !genericString || !setString || !genericSetString || !genericInt || !genericVector ||
+    if (!probe || !parameterTypeProbe || !genericString || !setString || !genericSetString ||
+        !genericInt || !genericBool || !genericStringToIntRejected || !genericVector ||
         !localMyselfState || !localOwnerGraph ||
         !genericSetScriptObject || !genericGetScriptObject || !genericSetObjectHandle || !genericGetObjectHandle ||
         !genericSetConstObjectHandle || !genericGetConstObjectHandle ||
@@ -14355,10 +14373,14 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
             ok = false;
             error = "CKParameter generic int probe could not create a local int parameter.";
         } else {
+            CKParameterLocal *boolLocal = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterGenericBool"), CKPGUID_BOOL, TRUE);
             CKParameterLocal *vectorLocal = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterGenericVector"), CKPGUID_VECTOR, TRUE);
             if (!vectorLocal) {
                 ok = false;
                 error = "CKParameter generic vector probe could not create a local vector parameter.";
+            } else if (!boolLocal) {
+                ok = false;
+                error = "CKParameter generic bool probe could not create a local bool parameter.";
             } else {
                 CKParameterLocal *myselfLocal = context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_CKParameterLocalMyself"), CKPGUID_INT, TRUE);
                 if (!myselfLocal) {
@@ -14370,6 +14392,8 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                      ExecuteCKParameterLocalProbe(engine, setString, local, false, "CKParameter SetStringValue probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericSetString, local, false, "CKParameter generic SetValue string probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericInt, intLocal, false, "CKParameter generic int probe", error) &&
+                     ExecuteCKParameterLocalProbe(engine, genericBool, boolLocal, false, "CKParameter generic bool probe", error) &&
+                     ExecuteCKParameterLocalProbe(engine, genericStringToIntRejected, local, false, "CKParameter generic string-to-int rejection probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericVector, vectorLocal, false, "CKParameter generic vector probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, localMyselfState, myselfLocal, false, "CKParameterLocal myself-state probe", error) &&
                      ExecuteCKParameterLocalProbe(engine, genericSetScriptObject, local, true, "CKParameter generic SetValue script-object probe", error) &&
@@ -14384,7 +14408,12 @@ bool RunCKParameterScriptSelfTest(CKContext *context, asIScriptEngine *engine, s
                      ExecuteCKParameterLocalProbe(engine, compatibleNull, local, true, "CKParameter IsCompatibleWith null probe", error);
                     context->DestroyObject(myselfLocal);
                 }
+            }
+            if (vectorLocal) {
                 context->DestroyObject(vectorLocal);
+            }
+            if (boolLocal) {
+                context->DestroyObject(boolLocal);
             }
             context->DestroyObject(intLocal);
         }

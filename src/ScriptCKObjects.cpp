@@ -355,6 +355,161 @@ void RegisterCKInterfaceObjectManager(asIScriptEngine *engine) {
 
 static int ReadCKParameterStringValue(CKParameter *self, std::string &value, bool update);
 
+static CKERROR RejectCKParameterGenericValue(CKParameter *param, asIScriptEngine *engine, int typeId) {
+    (void)param;
+    (void)engine;
+    (void)typeId;
+    return CKERR_INVALIDPARAMETERTYPE;
+}
+
+static CKERROR ValidateCKParameterGenericSize(CKParameter *param,
+                                              asIScriptEngine *engine,
+                                              int typeId,
+                                              int scriptSize) {
+    if (!param) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (scriptSize <= 0) {
+        return RejectCKParameterGenericValue(param, engine, typeId);
+    }
+    const int parameterSize = param->GetDataSize();
+    if (parameterSize == 0) {
+        return CKERR_NOTINITIALIZED;
+    }
+    if (parameterSize != scriptSize) {
+        return RejectCKParameterGenericValue(param, engine, typeId);
+    }
+    return CK_OK;
+}
+
+static CKERROR ReadCKParameterGenericValue(CKParameter *param,
+                                           int typeId,
+                                           void *buf,
+                                           bool update,
+                                           asIScriptEngine *engine) {
+    asIScriptContext *ctx = asGetActiveContext();
+    if (!param || !buf) {
+        if (ctx)
+            ctx->SetException("CKParameter.GetValue requires a valid parameter and output reference");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    if (typeId & asTYPEID_SCRIPTOBJECT) {
+        if (ctx)
+            ctx->SetException("Cannot read script objects from buffer");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    if (typeId & asTYPEID_APPOBJECT) {
+        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
+        if (!type) {
+            return CKERR_INVALIDPARAMETER;
+        }
+
+        if (typeId & asTYPEID_OBJHANDLE) {
+            if (ctx)
+                ctx->SetException("Cannot read object handle from buffer");
+            return CKERR_INVALIDPARAMETER;
+        }
+
+        if (strcmp(type->GetName(), "string") == 0) {
+            std::string &str = *static_cast<std::string *>(buf);
+            const int read = ReadCKParameterStringValue(param, str, update);
+            return read < 0 ? static_cast<CKERROR>(read) : CK_OK;
+        }
+
+        const int primitiveSize = engine ? engine->GetSizeOfPrimitiveType(typeId) : 0;
+        if (primitiveSize == 0 && (type->GetFlags() & asOBJ_POD)) {
+            const int size = type->GetSize();
+            const CKERROR sizeErr = ValidateCKParameterGenericSize(param, engine, typeId, size);
+            return sizeErr == CK_OK ? param->GetValue(buf, update) : sizeErr;
+        }
+
+        if (ctx)
+            ctx->SetException("Cannot read non-POD objects from buffer");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    if (typeId == asTYPEID_BOOL) {
+        const CKERROR sizeErr = ValidateCKParameterGenericSize(param, engine, typeId, sizeof(CKBOOL));
+        if (sizeErr != CK_OK) {
+            return sizeErr;
+        }
+        CKBOOL value = FALSE;
+        const CKERROR err = param->GetValue(&value, update);
+        if (err == CK_OK) {
+            *static_cast<bool *>(buf) = value != FALSE;
+        }
+        return err;
+    }
+
+    const int size = engine ? engine->GetSizeOfPrimitiveType(typeId) : 0;
+    const CKERROR sizeErr = ValidateCKParameterGenericSize(param, engine, typeId, size);
+    return sizeErr == CK_OK ? param->GetValue(buf, update) : sizeErr;
+}
+
+static CKERROR WriteCKParameterGenericValue(CKParameter *param,
+                                            int typeId,
+                                            void *buf,
+                                            asIScriptEngine *engine) {
+    asIScriptContext *ctx = asGetActiveContext();
+    if (!param || !buf) {
+        if (ctx)
+            ctx->SetException("CKParameter.SetValue requires a valid parameter and input reference");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    if (typeId & asTYPEID_SCRIPTOBJECT) {
+        if (ctx)
+            ctx->SetException("Cannot write script objects to buffer");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    if (typeId & asTYPEID_APPOBJECT) {
+        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
+        if (!type) {
+            return CKERR_INVALIDPARAMETER;
+        }
+
+        if (typeId & asTYPEID_OBJHANDLE) {
+            if (ctx)
+                ctx->SetException("Cannot write object handle to buffer");
+            return CKERR_INVALIDPARAMETER;
+        }
+
+        if (strcmp(type->GetName(), "string") == 0) {
+            std::string &str = *static_cast<std::string *>(buf);
+            std::vector<char> buffer(str.begin(), str.end());
+            buffer.push_back('\0');
+            return param->SetStringValue(buffer.data());
+        }
+
+        const int primitiveSize = engine ? engine->GetSizeOfPrimitiveType(typeId) : 0;
+        if (primitiveSize == 0 && (type->GetFlags() & asOBJ_POD)) {
+            const int size = type->GetSize();
+            const CKERROR sizeErr = ValidateCKParameterGenericSize(param, engine, typeId, size);
+            return sizeErr == CK_OK ? param->SetValue(buf, size) : sizeErr;
+        }
+
+        if (ctx)
+            ctx->SetException("Cannot write non-POD objects to buffer");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    if (typeId == asTYPEID_BOOL) {
+        const CKERROR sizeErr = ValidateCKParameterGenericSize(param, engine, typeId, sizeof(CKBOOL));
+        if (sizeErr != CK_OK) {
+            return sizeErr;
+        }
+        const CKBOOL value = *static_cast<bool *>(buf) ? TRUE : FALSE;
+        return param->SetValue(&value, sizeof(value));
+    }
+
+    const int size = engine ? engine->GetSizeOfPrimitiveType(typeId) : 0;
+    const CKERROR sizeErr = ValidateCKParameterGenericSize(param, engine, typeId, size);
+    return sizeErr == CK_OK ? param->SetValue(buf, size) : sizeErr;
+}
+
 static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     asIScriptContext *ctx = asGetActiveContext();
@@ -376,54 +531,7 @@ static void CKParameterInGetValueGeneric(asIScriptGeneric *gen) {
         return;
     }
 
-    CKERROR err = CK_OK;
-
-    if (typeId & asTYPEID_SCRIPTOBJECT) {
-        if (ctx)
-            ctx->SetException("Cannot read script objects from buffer");
-        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-        return;
-    }
-
-    if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
-        if (!type) {
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-
-        if (typeId & asTYPEID_OBJHANDLE) {
-            if (ctx)
-                ctx->SetException("Cannot read object handle from buffer");
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-
-        if (strcmp(type->GetName(), "string") == 0) {
-            std::string &str = *static_cast<std::string *>(buf);
-            const int read = ReadCKParameterStringValue(p, str, true);
-            err = read < 0 ? static_cast<CKERROR>(read) : CK_OK;
-        } else {
-            int size = engine->GetSizeOfPrimitiveType(typeId);
-            if (size == 0) {
-                if (type->GetFlags() & asOBJ_POD) {
-                    err = p->GetValue(buf);
-                } else {
-                    if (ctx)
-                        ctx->SetException("Cannot read non-POD objects from buffer");
-                    gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                    return;
-                }
-            }
-        }
-    } else {
-        int size = engine->GetSizeOfPrimitiveType(typeId);
-        if (size != 0) {
-            err = p->GetValue(buf);
-        }
-    }
-
-    gen->SetReturnDWord(err);
+    gen->SetReturnDWord(ReadCKParameterGenericValue(p, typeId, buf, true, engine));
 }
 
 template <typename T>
@@ -589,52 +697,7 @@ static void CKParameterGetValueGeneric(asIScriptGeneric *gen) {
         return;
     }
 
-    if (typeId & asTYPEID_SCRIPTOBJECT) {
-        if (ctx)
-            ctx->SetException("Cannot read script objects from buffer");
-        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-        return;
-    }
-
-    if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
-        if (!type) {
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-
-        if (typeId & asTYPEID_OBJHANDLE) {
-            if (ctx)
-                ctx->SetException("Cannot read object handle from buffer");
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-
-        if (strcmp(type->GetName(), "string") == 0) {
-            std::string &str = *static_cast<std::string *>(buf);
-            const int read = ReadCKParameterStringValue(self, str, update);
-            err = read < 0 ? static_cast<CKERROR>(read) : CK_OK;
-        } else {
-            int size = engine->GetSizeOfPrimitiveType(typeId);
-            if (size == 0) {
-                if (type->GetFlags() & asOBJ_POD) {
-                    err = self->GetValue(buf, update);
-                } else {
-                    if (ctx)
-                        ctx->SetException("Cannot read non-POD objects from buffer");
-                    gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                    return;
-                }
-            }
-        }
-    } else {
-        int size = engine->GetSizeOfPrimitiveType(typeId);
-        if (size != 0) {
-            err = self->GetValue(buf, update);
-        }
-    }
-
-    gen->SetReturnDWord(err);
+    gen->SetReturnDWord(ReadCKParameterGenericValue(self, typeId, buf, update, engine));
 }
 
 static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
@@ -645,8 +708,6 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
     const int typeId = gen->GetArgTypeId(0);
     void *buf = gen->GetArgAddress(0);
 
-    CKERROR err = CK_OK;
-
     if (!buf) {
         if (ctx)
             ctx->SetException("CKParameter.SetValue requires a valid input reference");
@@ -654,53 +715,7 @@ static void CKParameterSetValueGeneric(asIScriptGeneric *gen) {
         return;
     }
 
-    if (typeId & asTYPEID_SCRIPTOBJECT) {
-        if (ctx)
-            ctx->SetException("Cannot write script objects to buffer");
-        gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-        return;
-    }
-
-    if (typeId & asTYPEID_APPOBJECT) {
-        asITypeInfo *type = GetObjectTypeInfoFromGenericArgument(engine, typeId);
-        if (!type) {
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-
-        if (typeId & asTYPEID_OBJHANDLE) {
-            if (ctx)
-                ctx->SetException("Cannot write object handle to buffer");
-            gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-            return;
-        }
-
-        if (strcmp(type->GetName(), "string") == 0) {
-            std::string &str = *static_cast<std::string *>(buf);
-            std::vector<char> buffer(str.begin(), str.end());
-            buffer.push_back('\0');
-            err = self->SetStringValue(buffer.data());
-        } else {
-            int size = engine->GetSizeOfPrimitiveType(typeId);
-            if (size == 0) {
-                if (type->GetFlags() & asOBJ_POD) {
-                    err = self->SetValue(buf, type->GetSize());
-                } else {
-                    if (ctx)
-                        ctx->SetException("Cannot write non-POD objects to buffer");
-                    gen->SetReturnDWord(CKERR_INVALIDPARAMETER);
-                    return;
-                }
-            }
-        }
-    } else {
-        int size = engine->GetSizeOfPrimitiveType(typeId);
-        if (size != 0) {
-            err = self->SetValue(buf, size);
-        }
-    }
-
-    gen->SetReturnDWord(err);
+    gen->SetReturnDWord(WriteCKParameterGenericValue(self, typeId, buf, engine));
 }
 
 template <typename T>
