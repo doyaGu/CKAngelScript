@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "CKAll.h"
 #include "CKAngelScript.h"
 #include "ScriptMessage.h"
 #include "ScriptManager.h"
@@ -190,6 +191,114 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
     scriptContext->Unprepare();
     engine->ReturnContext(scriptContext);
     manager->UnloadModule(moduleName, nullptr);
+    if (!executeOk) {
+        return false;
+    }
+
+    CKBeObject *waitTarget = CKBeObject::Cast(context->CreateObject(
+        CKCID_BEOBJECT,
+        const_cast<CKSTRING>("__CKAS_MessageWaitSelfTestTarget"),
+        CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *waitBehavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_MessageWaitSelfTestBehavior"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!waitTarget || !waitBehavior || !waitBehavior->CreateOutput(const_cast<CKSTRING>("Out")) ||
+        waitBehavior->SetOwner(waitTarget, FALSE) != CK_OK) {
+        if (waitBehavior && !waitBehavior->IsToBeDeleted()) {
+            context->DestroyObject(waitBehavior);
+        }
+        if (waitTarget && !waitTarget->IsToBeDeleted()) {
+            context->DestroyObject(waitTarget);
+        }
+        error = "Message self-test could not create wait behavior output.";
+        return false;
+    }
+
+    const char *waitModuleName = "__CKAS_MessageWaitSelfTest";
+    const char *waitSource =
+        "int __ckas_message_wait_probe(const CKBehaviorContext &in ctx) {\n"
+        "  if (ctx.MessageManager is null || ctx.Behavior is null) return 21;\n"
+        "  CKMessageType type = ctx.MessageManager.AddMessageType(\"__CKAS_MessageWaitSelfTest\");\n"
+        "  if (type < 0) return 22;\n"
+        "  CKBeObject@ target = ctx.Behavior.GetTarget();\n"
+        "  if (target is null) return 23;\n"
+        "  CKERROR rc = ctx.MessageManager.RegisterWait(type, ctx.Behavior, 0, target);\n"
+        "  if (rc != CK_OK) return 24;\n"
+        "  rc = ctx.MessageManager.UnRegisterWait(type, ctx.Behavior, 0);\n"
+        "  if (rc != CK_OK) return 25;\n"
+        "  rc = ctx.MessageManager.RegisterWait(\"__CKAS_MessageWaitSelfTest\", ctx.Behavior, 0, target);\n"
+        "  if (rc != CK_OK) return 26;\n"
+        "  rc = ctx.MessageManager.UnRegisterWait(\"__CKAS_MessageWaitSelfTest\", ctx.Behavior, 0);\n"
+        "  if (rc != CK_OK) return 27;\n"
+        "  return 0;\n"
+        "}\n";
+
+    CKAngelScriptResult waitCompileResult = {};
+    if (manager->CompileModule(waitModuleName, waitSource, CKAS_COMPILE_REPLACEEXISTING, &waitCompileResult) != CKAS_OK) {
+        error = waitCompileResult.ErrorMessage && waitCompileResult.ErrorMessage[0] != '\0'
+            ? waitCompileResult.ErrorMessage
+            : "Message wait self-test script compile failed.";
+        context->DestroyObject(waitBehavior);
+        context->DestroyObject(waitTarget);
+        return false;
+    }
+    asIScriptModule *waitModule = manager->GetModule(waitModuleName);
+    asIScriptFunction *waitFunction = waitModule
+        ? waitModule->GetFunctionByDecl("int __ckas_message_wait_probe(const CKBehaviorContext &in ctx)")
+        : nullptr;
+    if (!waitFunction) {
+        manager->UnloadModule(waitModuleName, nullptr);
+        context->DestroyObject(waitBehavior);
+        context->DestroyObject(waitTarget);
+        error = "Message wait self-test script function was not found.";
+        return false;
+    }
+
+    CKBehaviorContext behaviorContext = {};
+    behaviorContext.Behavior = waitBehavior;
+    behaviorContext.DeltaTime = 0.0f;
+    behaviorContext.Context = context;
+    behaviorContext.ParameterManager = context->GetParameterManager();
+    behaviorContext.MessageManager = context->GetMessageManager();
+    behaviorContext.AttributeManager = context->GetAttributeManager();
+    behaviorContext.TimeManager = context->GetTimeManager();
+
+    asIScriptContext *waitScriptContext = engine->RequestContext();
+    if (!waitScriptContext) {
+        manager->UnloadModule(waitModuleName, nullptr);
+        context->DestroyObject(waitBehavior);
+        context->DestroyObject(waitTarget);
+        error = "Message wait self-test could not create an execution context.";
+        return false;
+    }
+    r = waitScriptContext->Prepare(waitFunction);
+    if (r >= 0) {
+        r = waitScriptContext->SetArgObject(0, &behaviorContext);
+    }
+    if (r >= 0) {
+        r = waitScriptContext->Execute();
+    }
+    executeOk = false;
+    if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(waitScriptContext->GetReturnDWord());
+        if (returnCode == 0) {
+            executeOk = true;
+        } else {
+            error = "Message wait self-test script returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = waitScriptContext->GetExceptionString();
+        error = std::string("Message wait self-test script exception: ") +
+                (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = "Message wait self-test script execution failed with code " + std::to_string(r) + ".";
+    }
+    waitScriptContext->Unprepare();
+    engine->ReturnContext(waitScriptContext);
+    manager->UnloadModule(waitModuleName, nullptr);
+    context->DestroyObject(waitBehavior);
+    context->DestroyObject(waitTarget);
     if (!executeOk) {
         return false;
     }

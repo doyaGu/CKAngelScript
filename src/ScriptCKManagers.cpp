@@ -358,8 +358,12 @@ static CKERROR RegisterCKMessageWait(CKMessageManager *self,
         SetActiveScriptException("CKMessageManager.RegisterWait requires a valid manager.");
         return CKERR_INVALIDPARAMETER;
     }
-    if (!behavior || !object) {
-        SetActiveScriptException("CKMessageManager.RegisterWait requires non-null behavior and object handles.");
+    if (!behavior) {
+        SetActiveScriptException("CKMessageManager.RegisterWait requires a non-null behavior handle.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (!object) {
+        SetActiveScriptException("CKMessageManager.RegisterWait requires a non-null object handle.");
         return CKERR_INVALIDPARAMETER;
     }
     return self->RegisterWait(msgType, behavior, outputToActivate, object);
@@ -374,8 +378,12 @@ static CKERROR RegisterCKMessageWaitByName(CKMessageManager *self,
         SetActiveScriptException("CKMessageManager.RegisterWait requires a valid manager.");
         return CKERR_INVALIDPARAMETER;
     }
-    if (!behavior || !object) {
-        SetActiveScriptException("CKMessageManager.RegisterWait requires non-null behavior and object handles.");
+    if (!behavior) {
+        SetActiveScriptException("CKMessageManager.RegisterWait requires a non-null behavior handle.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (!object) {
+        SetActiveScriptException("CKMessageManager.RegisterWait requires a non-null object handle.");
         return CKERR_INVALIDPARAMETER;
     }
     return self->RegisterWait(const_cast<CKSTRING>(msgName.c_str()), behavior, outputToActivate, object);
