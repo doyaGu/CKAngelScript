@@ -215,6 +215,15 @@ public:
     float PinFloatIndex(int index, float defaultValue = 0.0f) const;
     CKObject *PinObject(const std::string &name, int occurrence = 0) const;
     CKObject *PinObjectIndex(int index) const;
+    std::string LocalString(const std::string &name, const std::string &defaultValue = "", int occurrence = 0) const;
+    std::string LocalStringIndex(int index, const std::string &defaultValue = "") const;
+    int LocalInt(const std::string &name, int defaultValue = 0, int occurrence = 0) const;
+    int LocalIntIndex(int index, int defaultValue = 0) const;
+    bool LocalBool(const std::string &name, bool defaultValue = false, int occurrence = 0) const;
+    bool LocalBoolIndex(int index, bool defaultValue = false) const;
+    float LocalFloat(const std::string &name, float defaultValue = 0.0f, int occurrence = 0) const;
+    float LocalFloatIndex(int index, float defaultValue = 0.0f) const;
+    CKObject *LocalObject(const std::string &name, int occurrence = 0) const;
     bool PinEnabled(const std::string &name, int occurrence = 0) const;
     bool PinEnabledIndex(int index) const;
     void EnablePin(const std::string &name, bool enable, int occurrence = 0);
@@ -320,8 +329,12 @@ private:
     int ResolveSettingIndex(int index, const char *method) const;
     CKParameterIn *FindPinParameter(const std::string &name, int occurrence) const;
     CKParameterIn *FindPinParameterIndex(int index) const;
+    CKParameterLocal *FindLocalParameter(const std::string &name, int occurrence) const;
+    CKParameterLocal *FindLocalParameterIndex(int index) const;
     ScriptParamValue ReadPinValueOrEmpty(const std::string &name, int occurrence) const;
     ScriptParamValue ReadPinValueOrEmpty(int index) const;
+    ScriptParamValue ReadLocalValueOrEmpty(const std::string &name, int occurrence) const;
+    ScriptParamValue ReadLocalValueOrEmpty(int index) const;
 
     CKBehaviorContext m_ContextSnapshot;
     CKContext *m_Context = nullptr;

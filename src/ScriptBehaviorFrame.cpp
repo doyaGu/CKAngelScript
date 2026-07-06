@@ -1515,6 +1515,81 @@ CKObject *BehaviorFrame::PinObjectIndex(int index) const {
     return object;
 }
 
+std::string BehaviorFrame::LocalString(const std::string &name, const std::string &defaultValue, int occurrence) const {
+    const ScriptParamValue value = ReadLocalValueOrEmpty(name, occurrence);
+    if (value.Kind == ScriptParamValueKind::String || value.Kind == ScriptParamValueKind::Text) {
+        return value.Text();
+    }
+    return defaultValue;
+}
+
+std::string BehaviorFrame::LocalStringIndex(int index, const std::string &defaultValue) const {
+    const ScriptParamValue value = ReadLocalValueOrEmpty(index);
+    if (value.Kind == ScriptParamValueKind::String || value.Kind == ScriptParamValueKind::Text) {
+        return value.Text();
+    }
+    return defaultValue;
+}
+
+int BehaviorFrame::LocalInt(const std::string &name, int defaultValue, int occurrence) const {
+    const ScriptParamValue value = ReadLocalValueOrEmpty(name, occurrence);
+    if (value.Kind == ScriptParamValueKind::Int) {
+        return value.Data.IntValue;
+    }
+    if (value.Kind == ScriptParamValueKind::Enum || value.Kind == ScriptParamValueKind::Flags) {
+        return static_cast<int>(value.Data.DwordValue);
+    }
+    return defaultValue;
+}
+
+int BehaviorFrame::LocalIntIndex(int index, int defaultValue) const {
+    const ScriptParamValue value = ReadLocalValueOrEmpty(index);
+    if (value.Kind == ScriptParamValueKind::Int) {
+        return value.Data.IntValue;
+    }
+    if (value.Kind == ScriptParamValueKind::Enum || value.Kind == ScriptParamValueKind::Flags) {
+        return static_cast<int>(value.Data.DwordValue);
+    }
+    return defaultValue;
+}
+
+bool BehaviorFrame::LocalBool(const std::string &name, bool defaultValue, int occurrence) const {
+    const ScriptParamValue value = ReadLocalValueOrEmpty(name, occurrence);
+    return value.Kind == ScriptParamValueKind::Bool ? value.Data.BoolValue : defaultValue;
+}
+
+bool BehaviorFrame::LocalBoolIndex(int index, bool defaultValue) const {
+    const ScriptParamValue value = ReadLocalValueOrEmpty(index);
+    return value.Kind == ScriptParamValueKind::Bool ? value.Data.BoolValue : defaultValue;
+}
+
+float BehaviorFrame::LocalFloat(const std::string &name, float defaultValue, int occurrence) const {
+    const ScriptParamValue value = ReadLocalValueOrEmpty(name, occurrence);
+    if (value.Kind == ScriptParamValueKind::Float) {
+        return value.Data.FloatValue;
+    }
+    if (value.Kind == ScriptParamValueKind::Int) {
+        return static_cast<float>(value.Data.IntValue);
+    }
+    return defaultValue;
+}
+
+float BehaviorFrame::LocalFloatIndex(int index, float defaultValue) const {
+    const ScriptParamValue value = ReadLocalValueOrEmpty(index);
+    if (value.Kind == ScriptParamValueKind::Float) {
+        return value.Data.FloatValue;
+    }
+    if (value.Kind == ScriptParamValueKind::Int) {
+        return static_cast<float>(value.Data.IntValue);
+    }
+    return defaultValue;
+}
+
+CKObject *BehaviorFrame::LocalObject(const std::string &name, int occurrence) const {
+    CKParameterLocal *local = FindLocalParameter(name, occurrence);
+    return local ? local->GetValueObject(TRUE) : nullptr;
+}
+
 bool BehaviorFrame::PinEnabled(const std::string &name, int occurrence) const {
     const int index = ResolvePin(name, occurrence, "BehaviorFrame.PinEnabled");
     return PinEnabledIndex(index);
@@ -2336,6 +2411,26 @@ CKParameterIn *BehaviorFrame::FindPinParameterIndex(int index) const {
         : nullptr;
 }
 
+CKParameterLocal *BehaviorFrame::FindLocalParameter(const std::string &name, int occurrence) const {
+    CKBehavior *behavior = Behavior();
+    const int count = behavior ? behavior->GetLocalParameterCount() : 0;
+    const int index = ResolveNamedParameter(behavior,
+                                            name,
+                                            occurrence,
+                                            count,
+                                            [behavior](int i) { return behavior->GetLocalParameter(i); });
+    return index >= 0 && index < count
+        ? behavior->GetLocalParameter(index)
+        : nullptr;
+}
+
+CKParameterLocal *BehaviorFrame::FindLocalParameterIndex(int index) const {
+    CKBehavior *behavior = Behavior();
+    return behavior && index >= 0 && index < behavior->GetLocalParameterCount()
+        ? behavior->GetLocalParameter(index)
+        : nullptr;
+}
+
 ScriptParamValue BehaviorFrame::ReadPinValueOrEmpty(const std::string &name, int occurrence) const {
     CKParameterIn *pin = FindPinParameter(name, occurrence);
     CKParameter *source = pin ? ParameterSourceForConnection(pin) : nullptr;
@@ -2349,6 +2444,36 @@ ScriptParamValue BehaviorFrame::ReadPinValueOrEmpty(const std::string &name, int
     }
     value.TypeGuid = source->GetGUID();
     value.Type = source->GetType();
+    return value;
+}
+
+ScriptParamValue BehaviorFrame::ReadLocalValueOrEmpty(const std::string &name, int occurrence) const {
+    CKParameterLocal *local = FindLocalParameter(name, occurrence);
+    if (!local) {
+        return ScriptParamValue();
+    }
+    std::string ignoredError;
+    ScriptParamValue value = ReadParameterValue(local, &ignoredError);
+    if (value.Kind == ScriptParamValueKind::Empty) {
+        return value;
+    }
+    value.TypeGuid = local->GetGUID();
+    value.Type = local->GetType();
+    return value;
+}
+
+ScriptParamValue BehaviorFrame::ReadLocalValueOrEmpty(int index) const {
+    CKParameterLocal *local = FindLocalParameterIndex(index);
+    if (!local) {
+        return ScriptParamValue();
+    }
+    std::string ignoredError;
+    ScriptParamValue value = ReadParameterValue(local, &ignoredError);
+    if (value.Kind == ScriptParamValueKind::Empty) {
+        return value;
+    }
+    value.TypeGuid = local->GetGUID();
+    value.Type = local->GetType();
     return value;
 }
 
