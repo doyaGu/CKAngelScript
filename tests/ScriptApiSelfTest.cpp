@@ -3686,14 +3686,29 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     const std::filesystem::path singleIncludeFile = tempDir / "__ckas_public_api_single_include.as";
     const std::filesystem::path multiFileA = tempDir / "__ckas_public_api_multi_a.as";
     const std::filesystem::path multiFileB = tempDir / "__ckas_public_api_multi_b.as";
+    const std::filesystem::path packageIncludeRoot = tempDir / "__ckas_public_api_package_include";
+    const std::filesystem::path packageIncludeMain = packageIncludeRoot / "Scripts" / "base" / "main.as";
+    const std::filesystem::path packageIncludeHelper = packageIncludeRoot / "Libs" / "helper.as";
     const std::filesystem::path defaultFile = std::filesystem::current_path() / "__CKAS_ManagerApiDefaultFileLoadSelfTest.as";
     auto cleanupLoadFiles = [&]() {
+        std::error_code ec;
         RemoveTextFile(singleFile);
         RemoveTextFile(singleIncludeFile);
         RemoveTextFile(multiFileA);
         RemoveTextFile(multiFileB);
+        std::filesystem::remove_all(packageIncludeRoot, ec);
         RemoveTextFile(defaultFile);
     };
+    std::error_code createPackageIncludeError;
+    std::filesystem::create_directories(packageIncludeMain.parent_path(), createPackageIncludeError);
+    if (!createPackageIncludeError) {
+        std::filesystem::create_directories(packageIncludeHelper.parent_path(), createPackageIncludeError);
+    }
+    if (createPackageIncludeError) {
+        error = "CKAngelScript API self-test failed to create package include directories.";
+        cleanupLoadFiles();
+        return false;
+    }
     if (!WriteTextFile(singleIncludeFile, "int __ckas_public_file_include_value() { return 10; }\n", error) ||
         !WriteTextFile(singleFile,
                        "#include \"__ckas_public_api_single_include.as\"\n"
@@ -3701,6 +3716,11 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
                        error) ||
         !WriteTextFile(multiFileA, "int __ckas_public_multi_a() { return 12; }\n", error) ||
         !WriteTextFile(multiFileB, "int __ckas_public_multi_b() { return __ckas_public_multi_a() + 1; }\n", error) ||
+        !WriteTextFile(packageIncludeHelper, "int __ckas_public_package_helper() { return 40; }\n", error) ||
+        !WriteTextFile(packageIncludeMain,
+                       "#include \"Libs/helper.as\"\n"
+                       "int __ckas_public_package_include_loaded() { return __ckas_public_package_helper() + 1; }\n",
+                       error) ||
         !WriteTextFile(defaultFile, "int __ckas_public_default_file_loaded() { return 14; }\n", error)) {
         cleanupLoadFiles();
         return false;
@@ -3750,6 +3770,46 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         return false;
     }
     api->UnloadModule(singleFileModuleName, nullptr);
+
+    constexpr const char *packageIncludeModuleName = "__CKAS_ManagerApiPackageIncludeSelfTest";
+    const std::string packageIncludeMainPath = packageIncludeMain.string();
+    CKAngelScriptLoadOptions packageIncludeOptions =
+        CKAngelScriptApi::LoadFileOptions(packageIncludeModuleName,
+                                          packageIncludeMainPath.c_str(),
+                                          CKAS_LOAD_REPLACEEXISTING);
+    int packageIncludeValue = 0;
+    if (api->LoadModule(packageIncludeOptions, &result) != CKAS_OK ||
+        !ExecuteIntFunction(api,
+                            packageIncludeModuleName,
+                            "int __ckas_public_package_include_loaded()",
+                            packageIncludeValue,
+                            result,
+                            error) ||
+        packageIncludeValue != 41) {
+        if (error.empty()) {
+            error = "CKAngelScript API self-test expected package-root file includes to resolve.";
+        }
+        cleanupLoadFiles();
+        return false;
+    }
+    IncludeEdgeProbe packageIncludeEdgeProbe;
+    const std::string packageIncludeMainSection = packageIncludeMain.generic_string();
+    const std::string packageIncludeHelperSection = packageIncludeHelper.generic_string();
+    packageIncludeEdgeProbe.ExpectedModuleName = packageIncludeModuleName;
+    packageIncludeEdgeProbe.ExpectedFromSection = packageIncludeMainSection.c_str();
+    packageIncludeEdgeProbe.ExpectedToSection = packageIncludeHelperSection.c_str();
+    packageIncludeEdgeProbe.ExpectedResolvedFromSnapshot = FALSE;
+    if (api->EnumerateModuleIncludeEdges(packageIncludeModuleName,
+                                         ProbeIncludeEdge,
+                                         &packageIncludeEdgeProbe,
+                                         &result) != CKAS_OK ||
+        packageIncludeEdgeProbe.CallbackCount == 0 ||
+        !packageIncludeEdgeProbe.SawHelperInclude) {
+        error = "CKAngelScript API self-test expected package-root include edges.";
+        cleanupLoadFiles();
+        return false;
+    }
+    api->UnloadModule(packageIncludeModuleName, nullptr);
 
     constexpr const char *multiFileModuleName = "__CKAS_ManagerApiMultiFileLoadSelfTest";
     const std::string multiFilePathA = multiFileA.string();

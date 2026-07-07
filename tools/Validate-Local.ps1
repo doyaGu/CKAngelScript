@@ -52,7 +52,7 @@ if ($LASTEXITCODE -ne 0) {
 $buildDll = Join-Path $BuildDir "src\$Configuration\AngelScript.dll"
 
 if ($ScriptRoot.Count -gt 0) {
-    & (Join-Path $PSScriptRoot "Validate-RuntimeScripts.ps1") -ScriptRoot $ScriptRoot
+    & (Join-Path $PSScriptRoot "Validate-ScriptEntries.ps1") -ScriptRoot $ScriptRoot
 }
 
 if ($RunBallance) {
@@ -78,7 +78,7 @@ if ($RunBallance) {
     Configuration = $Configuration
     SelfTestsBuilt = -not $NoSelfTests
     Dll = $buildDll
-    RuntimeScriptRoots = ($ScriptRoot -join ";")
+    ScriptEntryRoots = ($ScriptRoot -join ";")
     BallanceValidation = [bool]$RunBallance
     Status = "ok"
 }
