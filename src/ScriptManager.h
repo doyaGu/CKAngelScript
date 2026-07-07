@@ -234,7 +234,7 @@ public:
 
     ScriptComponentState *GetOrCreateComponentState(CKBehavior *behavior);
     ScriptComponentState *GetComponentState(CK_ID id) const;
-    void ResetComponentStateRuntime(ScriptComponentState *state, bool unloadPrivateModule = true);
+    void ResetComponentStateRuntime(ScriptComponentState *state, bool unloadOwnedModule = true);
     void ReleaseComponentState(CKBehavior *behavior);
     void ReleaseComponentState(CK_ID id);
     void ClearComponentStates();

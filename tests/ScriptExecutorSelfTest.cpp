@@ -70,12 +70,12 @@ private:
 bool WriteExecutorSelfTestFile(const std::filesystem::path &path, const char *text, std::string &error) {
     std::ofstream output(path, std::ios::binary);
     if (!output) {
-        error = "Executor self-test failed to create runtime script file: " + path.string();
+        error = "Executor self-test failed to create script entry file: " + path.string();
         return false;
     }
     output << (text ? text : "");
     if (!output) {
-        error = "Executor self-test failed to write runtime script file: " + path.string();
+        error = "Executor self-test failed to write script entry file: " + path.string();
         return false;
     }
     return true;
@@ -144,7 +144,7 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         return false;
     }
 
-    constexpr const char *runtimeId = "ckas.executor.selftest";
+    constexpr const char *scriptId = "ckas.executor.selftest";
     constexpr const char *className = "ExecutorProbe";
     const char *source =
         "class ExecutorProbe {\n"
@@ -247,16 +247,16 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
 
     const std::filesystem::path scriptRoot =
         std::filesystem::temp_directory_path() / "__ckas_executor_runtime_selftest";
-    const std::filesystem::path packageDir = scriptRoot / "Scripts" / runtimeId;
+    const std::filesystem::path packageDir = scriptRoot / "Scripts" / scriptId;
     std::error_code fsError;
     std::filesystem::remove_all(scriptRoot, fsError);
     fsError.clear();
     if (!std::filesystem::create_directories(packageDir, fsError)) {
-        error = "Executor self-test failed to create runtime script directory: " + packageDir.string();
+        error = "Executor self-test failed to create script entry directory: " + packageDir.string();
         return false;
     }
     if (!WriteExecutorSelfTestFile(packageDir / "script.as",
-                                   "[script id=\"ckas.executor.selftest\" name=\"Executor Self Test\" version=\"1.0.0\" entry=\"runtime.as\"]\n",
+                                   "[executor id=\"ckas.executor.selftest\" name=\"Executor Self Test\" version=\"1.0.0\" entry=\"runtime.as\"]\n",
                                    error) ||
         !WriteExecutorSelfTestFile(packageDir / "runtime.as", source, error)) {
         std::filesystem::remove_all(scriptRoot, fsError);
@@ -273,7 +273,7 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
     if (!manager->GetRuntime()->ReloadAll(&reloadError)) {
         manager->GetRuntime()->Clear();
         std::filesystem::remove_all(scriptRoot, fsError);
-        error = reloadError.empty() ? "Executor self-test runtime package failed to load." : reloadError;
+        error = reloadError.empty() ? "Executor self-test script entry package failed to load." : reloadError;
         return false;
     }
 
@@ -315,7 +315,7 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "output 0 name=\"Out\"\n"
         "pin 0 name=\"Value\" type=\"Integer\"\n"
         "pout 0 name=\"Handled\" type=\"Boolean\"\n";
-    if (!SetExecutorStringSetting(behavior, EXECUTOR_SETTING_SCRIPT, runtimeId, error) ||
+    if (!SetExecutorStringSetting(behavior, EXECUTOR_SETTING_SCRIPT, scriptId, error) ||
         !SetExecutorStringSetting(behavior, EXECUTOR_SETTING_CLASS, className, error) ||
         !SetExecutorStringSetting(behavior, EXECUTOR_SETTING_INTERFACE, interfaceText, error) ||
         !SetExecutorBoolSetting(behavior, EXECUTOR_SETTING_STRICT_INTERFACE, true, error) ||

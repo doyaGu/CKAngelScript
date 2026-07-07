@@ -78,7 +78,7 @@ struct ScriptExecutorState {
     ScriptBehaviorArgumentKind OnDestroyArgument = ScriptBehaviorArgumentKind::BehaviorContext;
     ScriptBehaviorArgumentKind OnResetArgument = ScriptBehaviorArgumentKind::BehaviorContext;
 
-    std::string RuntimeId;
+    std::string ScriptId;
     std::string ClassName;
     std::string InterfaceText;
     bool Loaded = false;
@@ -697,19 +697,19 @@ bool FailSetup(const CKBehaviorContext &ctx, ScriptExecutorState *state, const s
 }
 
 bool IdentityChanged(ScriptExecutorState *state,
-                     const std::string &runtimeId,
+                     const std::string &scriptId,
                      const std::string &className,
                      const std::string &interfaceText) {
     return !state ||
-           state->RuntimeId != runtimeId ||
+           state->ScriptId != scriptId ||
            state->ClassName != className ||
            state->InterfaceText != interfaceText;
 }
 
-bool AttachRuntimeScriptModule(ScriptManager *manager,
-                               ScriptInvoker *invoker,
-                               const std::string &runtimeId,
-                               std::string &error) {
+bool AttachScriptEntryModule(ScriptManager *manager,
+                             ScriptInvoker *invoker,
+                             const std::string &scriptId,
+                             std::string &error) {
     if (!manager || !invoker) {
         error = "AngelScript manager is not available.";
         return false;
@@ -717,10 +717,10 @@ bool AttachRuntimeScriptModule(ScriptManager *manager,
 
     ScriptRuntime *runtime = manager->GetRuntime();
     if (!runtime) {
-        error = "Runtime script manager is not available.";
+        error = "Script module registry is not available.";
         return false;
     }
-    const std::string runtimeModule = runtime->ModuleName(runtimeId);
+    const std::string scriptModule = runtime->ModuleName(scriptId);
 
     auto describeModule = [&](const std::string &moduleName) {
         std::ostringstream out;
@@ -733,29 +733,30 @@ bool AttachRuntimeScriptModule(ScriptManager *manager,
     };
 
     std::ostringstream details;
-    details << "runtimeId='" << runtimeId << "'";
-    const RuntimeScriptInfo info = runtime->Info(runtimeId);
-    details << "; runtime.exists=" << (info.Exists() ? "yes" : "no")
+    details << "scriptId='" << scriptId << "'";
+    const RuntimeScriptInfo info = runtime->Info(scriptId);
+    details << "; module.exists=" << (info.Exists() ? "yes" : "no")
+            << " host='" << info.Host() << "'"
             << " loaded=" << (info.Loaded() ? "yes" : "no")
             << " failed=" << (info.Failed() ? "yes" : "no")
             << " state='" << info.State() << "'"
             << " error='" << info.Error() << "'";
 
-    if (runtimeModule.empty()) {
-        details << "; runtimeModule=<none>";
+    if (scriptModule.empty()) {
+        details << "; module=<none>";
         error = details.str();
         return false;
     }
 
-    if (invoker->SetScript(runtimeModule.c_str())) {
+    if (invoker->SetScript(scriptModule.c_str())) {
         return true;
     }
-    const std::string runtimeError = invoker->GetErrorMessage();
+    const std::string scriptError = invoker->GetErrorMessage();
 
-    if (!runtimeModule.empty()) {
-        details << "; runtimeModule " << describeModule(runtimeModule);
-        if (!runtimeError.empty()) {
-            details << " runtimeAttachError='" << runtimeError << "'";
+    if (!scriptModule.empty()) {
+        details << "; module " << describeModule(scriptModule);
+        if (!scriptError.empty()) {
+            details << " scriptAttachError='" << scriptError << "'";
         }
     }
     error = details.str();
@@ -774,18 +775,18 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
     }
     state->Manager = manager;
 
-    const std::string runtimeId = Trim(ReadLocalString(behavior, SETTING_SCRIPT));
+    const std::string scriptId = Trim(ReadLocalString(behavior, SETTING_SCRIPT));
     const std::string className = Trim(ReadLocalString(behavior, SETTING_CLASS));
     const std::string interfaceText = ReadLocalString(behavior, SETTING_INTERFACE);
-    if (runtimeId.empty() || className.empty()) {
-        ConsoleError(ctx, "Runtime script id and Class settings are required.");
+    if (scriptId.empty() || className.empty()) {
+        ConsoleError(ctx, "Script module id and Class settings are required.");
         return ExecutorReadyStatus::Failed;
     }
 
-    if (IdentityChanged(state, runtimeId, className, interfaceText)) {
+    if (IdentityChanged(state, scriptId, className, interfaceText)) {
         ReleaseRuntimeState(state);
         state->Failed = false;
-        state->RuntimeId = runtimeId;
+        state->ScriptId = scriptId;
         state->ClassName = className;
         state->InterfaceText = interfaceText;
     }
@@ -819,8 +820,8 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
     if (!state->Loaded) {
         state->Invoker = new ScriptInvoker(manager);
         std::string attachError;
-        if (!AttachRuntimeScriptModule(manager, state->Invoker, runtimeId, attachError)) {
-            FailSetup(ctx, state, "Failed to attach runtime script module: " + attachError);
+        if (!AttachScriptEntryModule(manager, state->Invoker, scriptId, attachError)) {
+            FailSetup(ctx, state, "Failed to attach script module: " + attachError);
             return ExecutorReadyStatus::Failed;
         }
 

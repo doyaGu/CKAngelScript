@@ -1,6 +1,9 @@
 #include "ScriptSelfTests.h"
 
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -11,6 +14,7 @@
 #include "ScriptComponentState.h"
 #include "ScriptManager.h"
 #include "ScriptMessage.h"
+#include "ScriptRuntime.h"
 
 namespace {
 
@@ -36,6 +40,53 @@ void DestroyComponentSelfTestObject(CKContext *context, CKObject *object) {
     if (context && object && !object->IsToBeDeleted()) {
         context->DestroyObject(object);
     }
+}
+
+class ScopedEnvVar {
+public:
+    ScopedEnvVar(const char *name, const std::string &value) : m_Name(name ? name : "") {
+        if (m_Name.empty()) {
+            return;
+        }
+        char *oldValue = nullptr;
+        size_t oldSize = 0;
+        if (_dupenv_s(&oldValue, &oldSize, m_Name.c_str()) == 0 && oldValue) {
+            m_HadValue = true;
+            m_OldValue = oldValue;
+            std::free(oldValue);
+        }
+        _putenv_s(m_Name.c_str(), value.c_str());
+    }
+
+    ~ScopedEnvVar() {
+        if (!m_Name.empty()) {
+            _putenv_s(m_Name.c_str(), m_HadValue ? m_OldValue.c_str() : "");
+        }
+    }
+
+    ScopedEnvVar(const ScopedEnvVar &) = delete;
+    ScopedEnvVar &operator=(const ScopedEnvVar &) = delete;
+
+private:
+    std::string m_Name;
+    std::string m_OldValue;
+    bool m_HadValue = false;
+};
+
+bool WriteComponentSelfTestFile(const std::filesystem::path &path,
+                                const std::string &text,
+                                std::string &error) {
+    std::ofstream output(path, std::ios::binary);
+    if (!output) {
+        error = "Component runtime self-test failed to create script entry file: " + path.string();
+        return false;
+    }
+    output << text;
+    if (!output) {
+        error = "Component runtime self-test failed to write script entry file: " + path.string();
+        return false;
+    }
+    return true;
 }
 
 bool SetComponentStringInput(CKBehavior *behavior, int index, const char *value, std::string &error) {
@@ -314,6 +365,143 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
     return true;
 }
 
+bool RunComponentScriptEntryModuleSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+    if (!context || !engine) {
+        error = "Component script-entry self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    ScriptManager *manager = ScriptManager::GetManager(context);
+    ScriptRuntime *runtime = manager ? manager->GetRuntime() : nullptr;
+    if (!manager || !runtime) {
+        error = "Component script-entry self-test could not retrieve ScriptRuntime.";
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    constexpr const char *scriptId = "ckas.component.entry.selftest";
+    const fs::path root = fs::temp_directory_path() / "__ckas_component_script_entry_selftest";
+    const fs::path packageDir = root / "Scripts" / "component_entry";
+    std::error_code fsError;
+    fs::remove_all(root, fsError);
+    fsError.clear();
+    if (!fs::create_directories(packageDir, fsError)) {
+        error = "Component script-entry self-test failed to create script entry directory: " + packageDir.string();
+        return false;
+    }
+
+    const std::string manifest =
+        "[runtime id=\"ckas.component.entry.selftest\" name=\"Component Entry Self Test\" version=\"1.0.0\" entry=\"component.as\"]\n";
+    const std::string source =
+        "class ComponentEntryProbe {\n"
+        "  int startCount = 0;\n"
+        "  int updateCount = 0;\n"
+        "  int frameError = 0;\n"
+        "  void Validate(BehaviorFrame@ frame, int code) {\n"
+        "    if (frame is null || frame.Behavior() is null || frame.Context() is null) { frameError = code; }\n"
+        "  }\n"
+        "  void Start(BehaviorFrame@ frame) { Validate(frame, 100); startCount++; }\n"
+        "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
+        "}\n";
+
+    if (!WriteComponentSelfTestFile(packageDir / "script.as", manifest, error) ||
+        !WriteComponentSelfTestFile(packageDir / "component.as", source, error)) {
+        fs::remove_all(root, fsError);
+        return false;
+    }
+
+    const ScopedEnvVar scriptRoots("CKAS_SCRIPT_ROOTS", root.string());
+    std::string reloadError;
+    if (!runtime->ReloadAll(&reloadError)) {
+        runtime->Clear();
+        fs::remove_all(root, fsError);
+        error = reloadError.empty()
+                    ? "Component script-entry self-test script entry failed to load."
+                    : reloadError;
+        return false;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ComponentScriptEntrySelfTestBehavior"),
+        CK_OBJECTCREATION_DYNAMIC));
+    bool deleteCallbackSent = false;
+    CKBehaviorContext behaviorContext = {};
+    auto cleanup = [&]() {
+        if (behavior && deleteCallbackSent) {
+            CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &behaviorContext);
+        }
+        DestroyComponentSelfTestObject(context, behavior);
+        runtime->Clear();
+        fs::remove_all(root, fsError);
+    };
+
+    if (!behavior) {
+        cleanup();
+        error = "Component script-entry self-test failed to create behavior.";
+        return false;
+    }
+
+    behavior->UseFunction();
+    const CKERROR initError = behavior->InitFromGuid(CKGUID(0x5f5d4a84, 0x3dfd4d19));
+    if (initError != CK_OK) {
+        cleanup();
+        error = "Component script-entry self-test failed to initialize AngelScript Component behavior.";
+        return false;
+    }
+
+    if (!SetComponentStringInput(behavior, COMPONENT_PARAM_SCRIPT, scriptId, error) ||
+        !SetComponentStringInput(behavior, COMPONENT_PARAM_CLASS, "ComponentEntryProbe", error) ||
+        !SetComponentStringInput(behavior, COMPONENT_PARAM_SOURCE, "", error) ||
+        !SetComponentStringInput(behavior, COMPONENT_PARAM_FILE, "", error) ||
+        !SetComponentStringInput(behavior, COMPONENT_PARAM_MANIFEST, "", error)) {
+        cleanup();
+        return false;
+    }
+
+    behaviorContext = MakeComponentSelfTestContext(context, behavior);
+    const CKERROR createError = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &behaviorContext);
+    if (createError != CK_OK) {
+        cleanup();
+        error = "Component script-entry self-test CREATE callback failed.";
+        return false;
+    }
+    deleteCallbackSent = true;
+
+    behavior->ActivateInput(0, TRUE);
+    const int returnCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (returnCode != CKBR_ACTIVATENEXTFRAME) {
+        cleanup();
+        error = "Component script-entry self-test returned unexpected code " + std::to_string(returnCode) + ".";
+        return false;
+    }
+
+    ScriptComponentState *state = manager->GetComponentState(behavior->GetID());
+    if (!state || !state->Loaded || !state->Object ||
+        state->ModuleKind != ScriptComponentModuleKind::ScriptEntry) {
+        cleanup();
+        error = "Component script-entry self-test did not create a shared component instance.";
+        return false;
+    }
+    if (state->ScriptEntryId != scriptId ||
+        state->ModuleName == scriptId ||
+        state->ModuleName.find("__CKASRuntime_") == std::string::npos) {
+        cleanup();
+        error = "Component script-entry self-test did not resolve Script through the script entry manager.";
+        return false;
+    }
+    if (!ExpectIntProperty(state->Object, "startCount", 1, error) ||
+        !ExpectIntProperty(state->Object, "updateCount", 1, error) ||
+        !ExpectIntProperty(state->Object, "frameError", 0, error)) {
+        cleanup();
+        return false;
+    }
+
+    cleanup();
+    error.clear();
+    return true;
+}
+
 } // namespace
 
 bool RunScriptComponentMetadataSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -542,6 +730,9 @@ bool RunScriptComponentMetadataSelfTest(CKContext *context, asIScriptEngine *eng
     }
 
     if (!RunComponentBehaviorFrameRuntimeSelfTest(context, engine, error)) {
+        return false;
+    }
+    if (!RunComponentScriptEntryModuleSelfTest(context, engine, error)) {
         return false;
     }
 

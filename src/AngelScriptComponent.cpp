@@ -26,6 +26,7 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptMessage.h"
 #include "ScriptParameterConversion.h"
+#include "ScriptRuntime.h"
 #include "ScriptRuntimeMetadata.h"
 #include "ScriptInvoker.h"
 
@@ -232,8 +233,78 @@ bool SyncDeclaredInputParameters(CKBehavior *beh, ScriptComponentState *state, s
     return true;
 }
 
-std::string BuildRuntimeModuleName(CKBehavior *beh, const std::string &scriptName) {
+struct ScriptComponentModuleBinding {
+    std::string RequestedScript;
+    std::string ModuleName;
+    std::string ScriptEntryId;
+    ScriptComponentModuleKind Kind = ScriptComponentModuleKind::LoadedModule;
+
+    bool IsPrivate() const {
+        return Kind == ScriptComponentModuleKind::Private;
+    }
+};
+
+std::string BuildPrivateComponentModuleName(CKBehavior *beh, const std::string &scriptName) {
     return "__CKASComponent_" + std::to_string(beh ? beh->GetID() : 0) + "_" + scriptName;
+}
+
+ScriptComponentModuleBinding ResolveComponentModule(ScriptManager *manager,
+                                                    const std::string &scriptName,
+                                                    bool privateModule,
+                                                    CKBehavior *behavior) {
+    ScriptComponentModuleBinding binding;
+    binding.RequestedScript = scriptName;
+    if (privateModule) {
+        binding.ModuleName = BuildPrivateComponentModuleName(behavior, scriptName);
+        binding.Kind = ScriptComponentModuleKind::Private;
+        return binding;
+    }
+    binding.ModuleName = scriptName;
+    binding.Kind = ScriptComponentModuleKind::LoadedModule;
+    if (!manager || scriptName.empty()) {
+        return binding;
+    }
+    if (std::shared_ptr<CachedScript> cached = manager->GetCachedScript(scriptName.c_str());
+        cached && cached->module) {
+        return binding;
+    }
+    ScriptRuntime *runtime = manager->GetRuntime();
+    if (!runtime) {
+        return binding;
+    }
+    const std::string entryModuleName = runtime->ModuleName(scriptName);
+    if (!entryModuleName.empty()) {
+        binding.ModuleName = entryModuleName;
+        binding.ScriptEntryId = scriptName;
+        binding.Kind = ScriptComponentModuleKind::ScriptEntry;
+    }
+    return binding;
+}
+
+std::string ComponentAttachErrorPrefix(ScriptManager *manager,
+                                       const ScriptComponentModuleBinding &module) {
+    std::ostringstream out;
+    out << "Failed to attach component script";
+    if (module.Kind == ScriptComponentModuleKind::Private) {
+        return out.str();
+    }
+    if (module.Kind == ScriptComponentModuleKind::ScriptEntry) {
+        out << ": script entry '" << module.ScriptEntryId << "' resolved to module '" << module.ModuleName << "'";
+        return out.str();
+    }
+    ScriptRuntime *runtime = manager ? manager->GetRuntime() : nullptr;
+    const RuntimeScriptInfo info = runtime ? runtime->Info(module.RequestedScript) : RuntimeScriptInfo();
+    if (info.Exists()) {
+        out << ": script entry '" << module.RequestedScript << "' is not attachable"
+            << " host='" << info.Host() << "'"
+            << " loaded=" << (info.Loaded() ? "yes" : "no")
+            << " failed=" << (info.Failed() ? "yes" : "no")
+            << " state='" << info.State() << "'"
+            << " error='" << info.Error() << "'";
+    } else {
+        out << ": no loaded module or script entry named '" << module.RequestedScript << "'";
+    }
+    return out.str();
 }
 
 bool IsOutputErrorEnabled(CKBehavior *beh) {
@@ -695,16 +766,16 @@ bool ComponentIdentityChanged(ScriptComponentState *state,
                               const std::string &source,
                               const std::string &file,
                               const std::string &manifest,
-                              const std::string &runtimeModuleName,
-                              bool privateModule) {
+                              const ScriptComponentModuleBinding &module) {
     return !state->Loaded ||
            state->ScriptName != scriptName ||
            state->ClassName != className ||
            state->Source != source ||
            state->File != file ||
            state->Manifest != manifest ||
-           state->RuntimeModuleName != runtimeModuleName ||
-           state->PrivateModule != privateModule;
+           state->ModuleName != module.ModuleName ||
+           state->ScriptEntryId != module.ScriptEntryId ||
+           state->ModuleKind != module.Kind;
 }
 
 bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
@@ -738,9 +809,10 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
     }
 
     const bool privateModule = !source.empty() || !file.empty();
-    const std::string runtimeModuleName = privateModule ? BuildRuntimeModuleName(beh, scriptName) : scriptName;
+    const ScriptComponentModuleBinding moduleBinding =
+        ResolveComponentModule(man, scriptName, privateModule, beh);
 
-    if (ComponentIdentityChanged(state, scriptName, className, source, file, manifest, runtimeModuleName, privateModule)) {
+    if (ComponentIdentityChanged(state, scriptName, className, source, file, manifest, moduleBinding)) {
         if (state->Loaded && state->Object) {
             state->PendingResetRuntime = true;
             if (!DestroyInstance(behcontext, state)) {
@@ -757,8 +829,9 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
         state->Source = source;
         state->File = file;
         state->Manifest = manifest;
-        state->RuntimeModuleName = runtimeModuleName;
-        state->PrivateModule = privateModule;
+        state->ModuleName = moduleBinding.ModuleName;
+        state->ScriptEntryId = moduleBinding.ScriptEntryId;
+        state->ModuleKind = moduleBinding.Kind;
         state->Failed = false;
     }
 
@@ -780,19 +853,19 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
         return true;
     }
 
-    if (privateModule) {
-        man->UnloadModule(runtimeModuleName.c_str(), nullptr);
+    if (moduleBinding.IsPrivate()) {
+        man->UnloadModule(moduleBinding.ModuleName.c_str(), nullptr);
         CKAngelScriptResult result = {};
         CKAS_STATUS status = CKAS_OK;
         if (source.empty()) {
             CKAngelScriptLoadOptions options = {};
             options.Size = sizeof(options);
-            options.ModuleName = runtimeModuleName.c_str();
+            options.ModuleName = moduleBinding.ModuleName.c_str();
             options.Filename = file.c_str();
             options.Flags = CKAS_LOAD_REPLACEEXISTING;
             status = man->LoadModule(options, &result);
         } else {
-            status = man->CompileModule(runtimeModuleName.c_str(), source.c_str(), CKAS_COMPILE_REPLACEEXISTING, &result);
+            status = man->CompileModule(moduleBinding.ModuleName.c_str(), source.c_str(), CKAS_COMPILE_REPLACEEXISTING, &result);
         }
         if (status != CKAS_OK) {
             SetErrorOutput(beh,
@@ -808,8 +881,9 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
         state->Invoker = new ScriptInvoker(man);
     }
 
-    if (!state->Invoker->SetScript(runtimeModuleName.c_str())) {
-        SetInvocationErrorOutput(beh, state, "Failed to attach component script");
+    if (!state->Invoker->SetScript(moduleBinding.ModuleName.c_str())) {
+        const std::string attachContext = ComponentAttachErrorPrefix(man, moduleBinding);
+        SetInvocationErrorOutput(beh, state, attachContext.c_str());
         return false;
     }
 

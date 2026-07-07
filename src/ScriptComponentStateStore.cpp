@@ -84,7 +84,7 @@ ScriptComponentState *ScriptManager::GetComponentState(CK_ID id) const {
     return m_ComponentStates.Get(id);
 }
 
-void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool unloadPrivateModule) {
+void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool unloadOwnedModule) {
     if (!state) {
         return;
     }
@@ -102,18 +102,19 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->ReleaseCachedMethods();
     state->ReleaseObject();
 
-    if (unloadPrivateModule && state->PrivateModule && !state->RuntimeModuleName.empty()) {
-        UnloadModule(state->RuntimeModuleName.c_str(), nullptr);
+    if (unloadOwnedModule && state->OwnsModule() && !state->ModuleName.empty()) {
+        UnloadModule(state->ModuleName.c_str(), nullptr);
     }
 
-    state->RuntimeModuleName.clear();
+    state->ModuleName.clear();
+    state->ScriptEntryId.clear();
     state->Bindings.clear();
     if (m_MessageBus) {
         m_MessageBus->ClearTarget(state->MessageTarget, "Component runtime was reset.");
     }
     state->MessageTopics.clear();
     state->StaticMessageSubscriptionsRegistered = false;
-    state->PrivateModule = false;
+    state->ModuleKind = ScriptComponentModuleKind::None;
     state->Loaded = false;
     state->OnLoadCalled = false;
     state->AwakeCalled = false;

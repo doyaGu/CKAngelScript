@@ -67,6 +67,13 @@ enum class ScriptComponentBBConfigLifetime {
     Manual
 };
 
+enum class ScriptComponentModuleKind {
+    None,
+    Private,
+    LoadedModule,
+    ScriptEntry
+};
+
 struct ScriptComponentBinding {
     std::string FieldName;
     std::string ParameterName;
@@ -140,13 +147,14 @@ struct ScriptComponentState {
     std::string Source;
     std::string File;
     std::string Manifest;
-    std::string RuntimeModuleName;
+    std::string ModuleName;
+    std::string ScriptEntryId;
     std::string MessageTarget;
     std::vector<ScriptComponentBinding> Bindings;
     std::vector<std::string> MessageTopics;
     std::vector<std::string> ManagedInputParameterNames;
 
-    bool PrivateModule = false;
+    ScriptComponentModuleKind ModuleKind = ScriptComponentModuleKind::None;
     bool Loaded = false;
     bool StaticMessageSubscriptionsRegistered = false;
     bool OnLoadCalled = false;
@@ -160,6 +168,10 @@ struct ScriptComponentState {
     bool PendingDestroy = false;
     bool PendingDisableOutput = false;
     bool PendingResetRuntime = false;
+
+    bool OwnsModule() const {
+        return ModuleKind == ScriptComponentModuleKind::Private;
+    }
 
     static void ReleaseFunction(asIScriptFunction *&function) {
         if (!function) {
