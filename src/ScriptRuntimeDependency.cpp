@@ -93,7 +93,7 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
         for (const ScriptRuntimeDependency &dependency : script.RequiredDependencies) {
             const auto depIt = indexById.find(dependency.Id);
             if (depIt == indexById.end()) {
-                const std::string message = fmt::format("Skipping runtime script '{}': required dependency '{}' is missing.",
+                const std::string message = fmt::format("Skipping script entry '{}': required dependency '{}' is missing.",
                                                         script.Id,
                                                         ScriptRuntimeMetadata::VersionRequirementText(dependency));
                 diagnostics += message + "\n";
@@ -103,7 +103,7 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
             }
             const ScriptRuntimeManifest &actual = enabled[depIt->second];
             if (!ScriptRuntimeMetadata::SatisfiesVersion(actual.Version, dependency)) {
-                const std::string message = fmt::format("Skipping runtime script '{}': dependency '{}' has version '{}', expected '{}'.",
+                const std::string message = fmt::format("Skipping script entry '{}': dependency '{}' has version '{}', expected '{}'.",
                                                         script.Id,
                                                         dependency.Id,
                                                         actual.VersionText,
@@ -116,14 +116,14 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
         for (const ScriptRuntimeDependency &dependency : script.OptionalDependencies) {
             const auto depIt = indexById.find(dependency.Id);
             if (depIt == indexById.end()) {
-                diagnostics += fmt::format("Runtime script '{}': optional dependency '{}' is not present.\n",
+                diagnostics += fmt::format("Script entry '{}': optional dependency '{}' is not present.\n",
                                            script.Id,
                                            ScriptRuntimeMetadata::VersionRequirementText(dependency));
                 continue;
             }
             const ScriptRuntimeManifest &actual = enabled[depIt->second];
             if (!ScriptRuntimeMetadata::SatisfiesVersion(actual.Version, dependency)) {
-                diagnostics += fmt::format("Runtime script '{}': optional dependency '{}' has version '{}', expected '{}'.\n",
+                diagnostics += fmt::format("Script entry '{}': optional dependency '{}' has version '{}', expected '{}'.\n",
                                            script.Id,
                                            dependency.Id,
                                            actual.VersionText,
@@ -132,12 +132,12 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
         }
         for (const std::string &id : script.Before) {
             if (!id.empty() && indexById.find(id) == indexById.end()) {
-                diagnostics += fmt::format("Runtime script '{}': before target '{}' is not present.\n", script.Id, id);
+                diagnostics += fmt::format("Script entry '{}': before target '{}' is not present.\n", script.Id, id);
             }
         }
         for (const std::string &id : script.After) {
             if (!id.empty() && indexById.find(id) == indexById.end()) {
-                diagnostics += fmt::format("Runtime script '{}': after target '{}' is not present.\n", script.Id, id);
+                diagnostics += fmt::format("Script entry '{}': after target '{}' is not present.\n", script.Id, id);
             }
         }
     }
@@ -233,7 +233,7 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
             }
         }
         std::sort(cycleIds.begin(), cycleIds.end());
-        diagnostics += fmt::format("Skipping runtime scripts with dependency cycle: {}.\n",
+        diagnostics += fmt::format("Skipping script entries with dependency cycle: {}.\n",
                                    JoinIds(cycleIds));
         std::set<int> cycleActive;
         for (int i = 0; i < static_cast<int>(activeToOriginal.size()); ++i) {
@@ -243,7 +243,7 @@ ScriptRuntimeLoadPlan Resolve(const std::vector<ScriptRuntimeManifest> &scripts)
                 AddSkipped(
                     plan,
                     script,
-                    fmt::format("Skipping runtime script '{}' because it is part of a dependency cycle: {}.",
+                    fmt::format("Skipping script entry '{}' because it is part of a dependency cycle: {}.",
                                 script.Id,
                                 JoinIds(cycleIds)));
             }
@@ -268,7 +268,7 @@ bool HasDependencyFailure(const ScriptRuntimeManifest &script,
                           std::string &error) {
     for (const ScriptRuntimeDependency &dependency : script.RequiredDependencies) {
         if (HasId(failedIds, dependency.Id)) {
-            error = fmt::format("Runtime script '{}' skipped because required dependency '{}' failed to load.",
+            error = fmt::format("Script entry '{}' skipped because required dependency '{}' failed to load.",
                                 script.Id,
                                 dependency.Id);
             return true;

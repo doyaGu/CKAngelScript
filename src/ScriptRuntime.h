@@ -51,6 +51,7 @@ public:
     std::string Id() const;
     std::string Name() const;
     std::string Version() const;
+    std::string Host() const;
     std::string Description() const;
     std::string Author() const;
     std::string Category() const;
@@ -74,6 +75,7 @@ private:
     std::string m_Id;
     std::string m_Name;
     std::string m_Version;
+    std::string m_Host;
     std::string m_Description;
     std::string m_Author;
     std::string m_Category;

@@ -27,7 +27,7 @@ struct MetadataBlock {
 bool IsScalarKey(const std::string &key) {
     return key == "id" || key == "name" || key == "version" || key == "class" ||
            key == "entry" || key == "enabled" || key == "order" || key == "reload" ||
-           key == "description" || key == "author" || key == "category";
+           key == "description" || key == "author" || key == "category" || key == "host";
 }
 
 bool IsListKey(const std::string &key) {
@@ -156,6 +156,45 @@ bool StartsWithWord(const std::string &text, std::size_t pos, const char *word) 
     return end >= text.size() || !std::isalnum(static_cast<unsigned char>(text[end]));
 }
 
+std::string MetadataBaseKind(const std::string &kind) {
+    const std::size_t dot = kind.find('.');
+    return dot == std::string::npos ? kind : kind.substr(0, dot);
+}
+
+std::string MetadataSuffixKind(const std::string &kind) {
+    const std::size_t dot = kind.find('.');
+    return dot == std::string::npos ? std::string() : kind.substr(dot + 1);
+}
+
+bool IsMetadataBaseKind(const std::string &base) {
+    return base == "script" || base == "runtime" || base == "executor";
+}
+
+bool IsMainMetadataKind(const std::string &kind) {
+    return IsMetadataBaseKind(MetadataBaseKind(kind)) && MetadataSuffixKind(kind).empty();
+}
+
+bool IsMetadataKind(const std::string &kind) {
+    if (IsMainMetadataKind(kind)) {
+        return true;
+    }
+    const std::string base = MetadataBaseKind(kind);
+    const std::string suffix = MetadataSuffixKind(kind);
+    return IsMetadataBaseKind(base) &&
+           (suffix == "meta" || suffix == "depends" || suffix == "messages");
+}
+
+std::string HostFromMetadataKind(const std::string &kind) {
+    const std::string base = MetadataBaseKind(kind);
+    if (base == "runtime") {
+        return "runtime";
+    }
+    if (base == "executor") {
+        return "executor";
+    }
+    return std::string();
+}
+
 std::string ParseClassAfterMetadata(const std::string &source, std::size_t pos) {
     while (pos < source.size()) {
         while (pos < source.size() && std::isspace(static_cast<unsigned char>(source[pos]))) {
@@ -198,7 +237,7 @@ std::string ParseClassAfterMetadata(const std::string &source, std::size_t pos) 
 
 bool ScanMetadataBlocks(const std::string &source, std::vector<MetadataBlock> &blocks, std::string &error) {
     std::size_t pos = 0;
-    while ((pos = source.find("[script", pos)) != std::string::npos) {
+    while ((pos = source.find('[', pos)) != std::string::npos) {
         std::size_t tagEnd = pos + 1;
         while (tagEnd < source.size()) {
             const char c = source[tagEnd];
@@ -208,7 +247,7 @@ bool ScanMetadataBlocks(const std::string &source, std::vector<MetadataBlock> &b
             ++tagEnd;
         }
         std::string kind = ScriptRuntimeMetadata::ToLower(source.substr(pos + 1, tagEnd - (pos + 1)));
-        if (kind != "script" && kind != "script.meta" && kind != "script.depends" && kind != "script.messages") {
+        if (!IsMetadataKind(kind)) {
             pos = tagEnd;
             continue;
         }
@@ -356,6 +395,80 @@ std::string SanitizeId(const std::string &id) {
     return result.empty() ? "script" : result;
 }
 
+bool ParseHost(const std::string &text, ScriptEntryHost &host) {
+    const std::string value = ToLower(Trim(StripQuotes(text)));
+    if (value.empty() || value == "runtime") {
+        host = ScriptEntryHost::Runtime;
+        return true;
+    }
+    if (value == "executor") {
+        host = ScriptEntryHost::Executor;
+        return true;
+    }
+    return false;
+}
+
+std::string HostText(ScriptEntryHost host) {
+    switch (host) {
+    case ScriptEntryHost::Runtime:
+        return "runtime";
+    case ScriptEntryHost::Executor:
+        return "executor";
+    }
+    return "runtime";
+}
+
+std::string DeriveIdFromPath(const std::filesystem::path &scriptsRoot,
+                             const std::filesystem::path &manifestPath) {
+    namespace fs = std::filesystem;
+
+    const bool isDirectoryManifest = ToLower(manifestPath.filename().string()) == "script.as";
+    const fs::path subject = isDirectoryManifest ? manifestPath.parent_path() : manifestPath;
+    fs::path relative = subject.lexically_relative(scriptsRoot);
+
+    bool useFallback = relative.empty() || relative == ".";
+    if (!useFallback) {
+        for (const fs::path &part : relative) {
+            if (part == "..") {
+                useFallback = true;
+                break;
+            }
+        }
+    }
+
+    if (useFallback) {
+        relative = isDirectoryManifest ? subject.filename() : manifestPath.stem();
+    }
+
+    std::vector<fs::path> parts;
+    for (const fs::path &part : relative) {
+        if (part.empty() || part == "." || part == "..") {
+            continue;
+        }
+        parts.push_back(part);
+    }
+
+    std::string id;
+    for (std::size_t i = 0; i < parts.size(); ++i) {
+        std::string part = (!isDirectoryManifest && i + 1 == parts.size())
+                               ? parts[i].stem().string()
+                               : parts[i].string();
+        part = Trim(part);
+        if (part.empty()) {
+            continue;
+        }
+        if (!id.empty()) {
+            id += ".";
+        }
+        id += part;
+    }
+
+    if (id.empty()) {
+        id = isDirectoryManifest ? subject.filename().string() : manifestPath.stem().string();
+    }
+    return SanitizeId(id);
+}
+
 std::string PathString(const std::filesystem::path &path) {
     return path.string();
 }
@@ -455,7 +568,7 @@ std::string VersionRequirementText(const ScriptRuntimeDependency &dependency) {
 bool ParseDependencySpec(const std::string &text, ScriptRuntimeDependency &dependency, std::string &error) {
     std::string value = Trim(StripQuotes(text));
     if (value.empty()) {
-        error = "empty runtime script dependency";
+        error = "empty script entry dependency";
         return false;
     }
     dependency.Raw = value;
@@ -483,7 +596,7 @@ bool ParseDependencySpec(const std::string &text, ScriptRuntimeDependency &depen
         dependency.Version = ParseVersion("0.0.0");
     }
     if (dependency.Id.empty()) {
-        error = fmt::format("invalid runtime script dependency '{}'", value);
+        error = fmt::format("invalid script entry dependency '{}'", value);
         return false;
     }
     return true;
@@ -509,12 +622,28 @@ bool ParseManifestSource(const std::string &source,
     std::vector<ScriptRuntimeMetadataEntry> custom;
     std::string attachedClass;
     std::string dependencyErrors;
+    bool hasScriptManifest = false;
+    std::string declaredHost;
 
     for (const MetadataBlock &block : blocks) {
+        const std::string suffix = MetadataSuffixKind(block.Kind);
+        if (IsMainMetadataKind(block.Kind)) {
+            hasScriptManifest = true;
+            const std::string blockHost = HostFromMetadataKind(block.Kind);
+            if (!blockHost.empty()) {
+                if (!declaredHost.empty() && declaredHost != blockHost) {
+                    error = fmt::format("conflicting script host declarations '{}' and '{}'",
+                                        declaredHost,
+                                        blockHost);
+                    return false;
+                }
+                declaredHost = blockHost;
+            }
+        }
         if (!block.AttachedClass.empty()) {
             attachedClass = block.AttachedClass;
         }
-        if (block.Kind == "script.meta") {
+        if (suffix == "meta") {
             std::string explicitKey;
             std::string explicitValue;
             for (const KeyValue &pair : block.Values) {
@@ -533,7 +662,7 @@ bool ParseManifestSource(const std::string &source,
         }
 
         for (const KeyValue &pair : block.Values) {
-            if (block.Kind == "script.depends") {
+            if (suffix == "depends") {
                 if (pair.Key == "depends" || pair.Key == "required") {
                     AppendDependencies(required, pair.Value, dependencyErrors);
                 } else if (pair.Key == "optional") {
@@ -547,7 +676,7 @@ bool ParseManifestSource(const std::string &source,
                 }
                 continue;
             }
-            if (block.Kind == "script.messages") {
+            if (suffix == "messages") {
                 if (pair.Key == "topics") {
                     AppendList(messageTopics, pair.Value);
                 } else {
@@ -582,8 +711,34 @@ bool ParseManifestSource(const std::string &source,
     }
 
     manifest.HasManifest = !blocks.empty();
+    manifest.HasScriptManifest = hasScriptManifest;
     if (const auto it = scalars.find("id"); it != scalars.end()) {
         manifest.Id = it->second;
+    }
+    if (const auto it = scalars.find("host"); it != scalars.end()) {
+        ScriptEntryHost parsedHost = ScriptEntryHost::Runtime;
+        if (!ParseHost(it->second, parsedHost)) {
+            error = fmt::format("unsupported script host '{}'",
+                                Trim(StripQuotes(it->second)));
+            return false;
+        }
+        const std::string explicitHost = HostText(parsedHost);
+        if (!declaredHost.empty() && explicitHost != declaredHost) {
+            error = fmt::format("conflicting script host declarations '{}' and '{}'",
+                                declaredHost,
+                                explicitHost);
+            return false;
+        }
+        manifest.Host = parsedHost;
+    } else if (!declaredHost.empty()) {
+        ScriptEntryHost parsedHost = ScriptEntryHost::Runtime;
+        if (!ParseHost(declaredHost, parsedHost)) {
+            error = fmt::format("unsupported script host '{}'", declaredHost);
+            return false;
+        }
+        manifest.Host = parsedHost;
+    } else {
+        manifest.Host = ScriptEntryHost::Runtime;
     }
     if (const auto it = scalars.find("name"); it != scalars.end()) {
         manifest.Name = it->second;

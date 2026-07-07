@@ -109,7 +109,7 @@ bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error
     fsError.clear();
 
     const ScopedEnvVar scriptRoots("CKAS_SCRIPT_ROOTS", root.string());
-    const ScopedEnvVar validateOnly("CKAS_RUNTIME_VALIDATE_ONLY", "0");
+    const ScopedEnvVar validateOnly("CKAS_SCRIPT_VALIDATE_ONLY", "0");
     const std::string source =
         "int pauseCount = 0;\n"
         "int disableCount = 0;\n"
@@ -206,7 +206,7 @@ bool RunRuntimePendingReplacementSelfTest(ScriptManager *manager, std::string &e
     fsError.clear();
 
     const ScopedEnvVar scriptRoots("CKAS_SCRIPT_ROOTS", root.string());
-    const ScopedEnvVar validateOnly("CKAS_RUNTIME_VALIDATE_ONLY", "0");
+    const ScopedEnvVar validateOnly("CKAS_SCRIPT_VALIDATE_ONLY", "0");
     const std::string oldSource =
         "void OnDestroy(const ScriptContext &in ctx) {\n"
         "  AsyncTask<void>@ delay = Async::Delay(1);\n"
@@ -445,6 +445,7 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  string entry = info.Entry();\n"
         "  bool exists = info.Exists();\n"
         "  string infoId = info.Id();\n"
+        "  string infoHost = info.Host();\n"
         "  string infoState = info.State();\n"
         "  int tagCount = info.TagCount();\n"
         "  string firstTag = info.Tag(0);\n"

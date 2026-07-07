@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <set>
-#include <unordered_set>
+#include <unordered_map>
 #include <utility>
 
 #include <fmt/format.h>
@@ -29,6 +29,11 @@
 namespace {
 
 constexpr const char *kModulePrefix = "__CKASRuntime_";
+
+struct ScriptEntryDiscoveryRoot {
+    std::filesystem::path Path;
+    bool Recursive = false;
+};
 
 enum RuntimeLifecycleIndex {
     LifecycleOnLoad = 0,
@@ -76,8 +81,11 @@ constexpr const char *kStateDisabled = "disabled";
 constexpr const char *kStateEnabled = "enabled";
 constexpr const char *kStateLoaded = "loaded";
 
-bool RuntimeValidateOnly() {
-    const char *value = std::getenv("CKAS_RUNTIME_VALIDATE_ONLY");
+bool ScriptEntryValidateOnly() {
+    const char *value = std::getenv("CKAS_SCRIPT_VALIDATE_ONLY");
+    if (!value || value[0] == '\0') {
+        value = std::getenv("CKAS_RUNTIME_VALIDATE_ONLY");
+    }
     if (!value || value[0] == '\0') {
         return false;
     }
@@ -169,6 +177,10 @@ ScriptManager *ManagerFromRuntimeContext(const ScriptContext &ctx) {
 ScriptBehaviorBridge *BridgeFromRuntimeContext(const ScriptContext &ctx) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     return manager ? manager->GetBehaviorBridge() : nullptr;
+}
+
+bool UsesRuntimeLifecycle(const ScriptRuntimeManifest &metadata) {
+    return metadata.Host == ScriptEntryHost::Runtime;
 }
 
 BehaviorBridge *RuntimeBehaviorFrom(const ScriptContext &ctx) {
@@ -534,6 +546,10 @@ std::string RuntimeScriptInfo::Version() const {
     return m_Version;
 }
 
+std::string RuntimeScriptInfo::Host() const {
+    return m_Host;
+}
+
 std::string RuntimeScriptInfo::Description() const {
     return m_Description;
 }
@@ -719,7 +735,7 @@ ScriptRuntime::~ScriptRuntime() {
 
 void ScriptRuntime::PreProcess() {
     EnsureScanned();
-    if (RuntimeValidateOnly()) {
+    if (ScriptEntryValidateOnly()) {
         FinalizePendingModules();
         return;
     }
@@ -730,7 +746,7 @@ void ScriptRuntime::PreProcess() {
     const float deltaTime = time ? time->GetLastDeltaTime() : 0.0f;
     const float timeSeconds = time ? (time->GetTime() * 0.001f) : 0.0f;
     for (std::unique_ptr<Module> &module : m_Modules) {
-        if (module) {
+        if (module && UsesRuntimeLifecycle(module->Meta)) {
             if (m_Paused &&
                 !module->PendingDisable &&
                 !module->PendingDestroy &&
@@ -746,7 +762,7 @@ void ScriptRuntime::PreProcess() {
 
 void ScriptRuntime::PostProcess() {
     EnsureScanned();
-    if (RuntimeValidateOnly()) {
+    if (ScriptEntryValidateOnly()) {
         FinalizePendingModules();
         return;
     }
@@ -756,7 +772,8 @@ void ScriptRuntime::PostProcess() {
     const float deltaTime = time ? time->GetLastDeltaTime() : 0.0f;
     const float timeSeconds = time ? (time->GetTime() * 0.001f) : 0.0f;
     for (std::unique_ptr<Module> &module : m_Modules) {
-        if (!module || !module->Loaded || module->Failed || !module->Enabled || !module->EnableCalled) {
+        if (!module || !UsesRuntimeLifecycle(module->Meta) ||
+            !module->Loaded || module->Failed || !module->Enabled || !module->EnableCalled) {
             continue;
         }
         ScriptContext ctx = MakeRuntimeContext(context,
@@ -774,13 +791,13 @@ void ScriptRuntime::PostProcess() {
 
 void ScriptRuntime::PostLoad() {
     EnsureScanned();
-    if (RuntimeValidateOnly()) {
+    if (ScriptEntryValidateOnly()) {
         FinalizePendingModules();
         return;
     }
     CKContext *context = m_Manager ? m_Manager->GetCKContext() : nullptr;
     for (std::unique_ptr<Module> &module : m_Modules) {
-        if (!module || !module->Loaded || module->Failed) {
+        if (!module || !UsesRuntimeLifecycle(module->Meta) || !module->Loaded || module->Failed) {
             continue;
         }
         ScriptContext ctx = MakeRuntimeContext(context,
@@ -798,7 +815,7 @@ void ScriptRuntime::PostLoad() {
 
 void ScriptRuntime::OnReset() {
     for (std::unique_ptr<Module> &module : m_Modules) {
-        if (!module || !module->Loaded || module->Failed) {
+        if (!module || !UsesRuntimeLifecycle(module->Meta) || !module->Loaded || module->Failed) {
             continue;
         }
         ScriptContext ctx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
@@ -819,7 +836,7 @@ void ScriptRuntime::OnPause() {
     }
     m_Paused = true;
     for (std::unique_ptr<Module> &module : m_Modules) {
-        if (!module || !module->Loaded || module->Failed) {
+        if (!module || !UsesRuntimeLifecycle(module->Meta) || !module->Loaded || module->Failed) {
             continue;
         }
         ScriptContext ctx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
@@ -840,7 +857,8 @@ void ScriptRuntime::OnResume() {
     }
     m_Paused = false;
     for (std::unique_ptr<Module> &module : m_Modules) {
-        if (!module || !module->Loaded || module->Failed || !module->Enabled) {
+        if (!module || !UsesRuntimeLifecycle(module->Meta) ||
+            !module->Loaded || module->Failed || !module->Enabled) {
             continue;
         }
         ScriptContext ctx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
@@ -932,7 +950,7 @@ bool ScriptRuntime::Reload(const std::string &id, std::string *error) {
     });
     if (it == plan.Scripts.end()) {
         if (error) {
-            *error = fmt::format("Runtime script '{}' was not found during DATA_PATH Scripts scan.", id);
+            *error = fmt::format("Script entry '{}' was not found during DATA_PATH Scripts scan.", id);
         }
         return false;
     }
@@ -969,7 +987,7 @@ bool ScriptRuntime::Enable(const std::string &id, bool enabled, std::string *err
         return true;
     }
     if (error) {
-        *error = fmt::format("Runtime script '{}' is not loaded.", id);
+        *error = fmt::format("Script entry '{}' is not loaded.", id);
     }
     return false;
 }
@@ -1048,6 +1066,10 @@ bool ScriptRuntime::DeliverMessage(const std::string &id, const ScriptMessage &m
         error = "Runtime message target was not found.";
         return false;
     }
+    if (!UsesRuntimeLifecycle(module->Meta)) {
+        error = "Message target is not a runtime entry.";
+        return false;
+    }
     if (!module->Loaded || module->Failed || !module->Enabled || !module->EnableCalled) {
         error = "Runtime message target is not ready.";
         return false;
@@ -1090,7 +1112,7 @@ void ScriptRuntime::EnsureScanned() {
 
 ScriptRuntimeLoadPlan ScriptRuntime::Discover(std::string &error) const {
     namespace fs = std::filesystem;
-    std::vector<fs::path> roots;
+    std::vector<ScriptEntryDiscoveryRoot> roots;
     CKContext *context = m_Manager ? m_Manager->GetCKContext() : nullptr;
     CKPathManager *paths = context ? context->GetPathManager() : nullptr;
     if (paths) {
@@ -1098,7 +1120,7 @@ ScriptRuntimeLoadPlan ScriptRuntime::Discover(std::string &error) const {
         for (int i = 0; i < count; ++i) {
             XString pathName;
             if (paths->GetPathName(DATA_PATH_IDX, i, pathName) == CK_OK && pathName.Length() > 0) {
-                roots.emplace_back(fs::path(pathName.CStr()) / "Scripts");
+                roots.push_back({fs::path(pathName.CStr()) / "Scripts", false});
             }
         }
     }
@@ -1106,23 +1128,23 @@ ScriptRuntimeLoadPlan ScriptRuntime::Discover(std::string &error) const {
         for (const std::string &root : ScriptRuntimeMetadata::SplitList(envRoots)) {
             fs::path path(root);
             if (ScriptRuntimeMetadata::ToLower(path.filename().string()) == "scripts") {
-                roots.push_back(std::move(path));
+                roots.push_back({std::move(path), true});
                 continue;
             }
             std::error_code ec;
             fs::path scripts = path / "Scripts";
             if (fs::is_directory(scripts, ec)) {
-                roots.push_back(std::move(scripts));
+                roots.push_back({std::move(scripts), true});
             } else {
-                roots.push_back(std::move(path));
+                roots.push_back({std::move(path), true});
             }
         }
     }
 
-    std::vector<ScriptRuntimeManifest> candidatesOut;
-    std::unordered_set<std::string> seenRoots;
-    std::set<std::string> seenIds;
-    for (fs::path root : roots) {
+    std::vector<ScriptEntryDiscoveryRoot> uniqueRoots;
+    std::unordered_map<std::string, std::size_t> rootIndex;
+    for (ScriptEntryDiscoveryRoot rootSpec : roots) {
+        fs::path root = std::move(rootSpec.Path);
         root = fs::absolute(root);
         std::error_code ec;
         root = fs::weakly_canonical(root, ec);
@@ -1130,22 +1152,67 @@ ScriptRuntimeLoadPlan ScriptRuntime::Discover(std::string &error) const {
             root = fs::absolute(root);
         }
         const std::string rootKey = ScriptRuntimeMetadata::ToLower(ScriptRuntimeMetadata::PathString(root));
-        if (!seenRoots.insert(rootKey).second || !fs::is_directory(root)) {
+        if (!fs::is_directory(root)) {
             continue;
         }
+        const auto [it, inserted] = rootIndex.emplace(rootKey, uniqueRoots.size());
+        if (!inserted) {
+            uniqueRoots[it->second].Recursive = uniqueRoots[it->second].Recursive || rootSpec.Recursive;
+            continue;
+        }
+        uniqueRoots.push_back({std::move(root), rootSpec.Recursive});
+    }
+
+    std::vector<ScriptRuntimeManifest> candidatesOut;
+    std::set<std::string> seenIds;
+    for (ScriptEntryDiscoveryRoot rootSpec : uniqueRoots) {
+        fs::path root = std::move(rootSpec.Path);
 
         std::vector<fs::path> candidates;
-        for (const fs::directory_entry &entry : fs::directory_iterator(root, fs::directory_options::skip_permission_denied, ec)) {
-            if (ec) {
-                break;
+        const fs::path selfManifest = root / "script.as";
+        std::error_code selfManifestError;
+        if (fs::is_regular_file(selfManifest, selfManifestError) && !ScriptRuntimeMetadata::IsSkippedMainFile(selfManifest)) {
+            candidates.push_back(selfManifest);
+        } else if (rootSpec.Recursive) {
+            std::vector<fs::path> pending{root};
+            while (!pending.empty()) {
+                const fs::path current = pending.back();
+                pending.pop_back();
+
+                std::error_code walkError;
+                for (const fs::directory_entry &entry : fs::directory_iterator(current, fs::directory_options::skip_permission_denied, walkError)) {
+                    if (walkError) {
+                        break;
+                    }
+                    const fs::path path = entry.path();
+                    if (entry.is_regular_file() && path.extension() == ".as" && !ScriptRuntimeMetadata::IsSkippedMainFile(path)) {
+                        candidates.push_back(path);
+                    } else if (entry.is_directory() && !ScriptRuntimeMetadata::IsSkippedDirectory(path)) {
+                        fs::path manifest = path / "script.as";
+                        std::error_code manifestError;
+                        if (fs::is_regular_file(manifest, manifestError) && !ScriptRuntimeMetadata::IsSkippedMainFile(manifest)) {
+                            candidates.push_back(manifest);
+                        } else {
+                            pending.push_back(path);
+                        }
+                    }
+                }
             }
-            const fs::path path = entry.path();
-            if (entry.is_regular_file() && path.extension() == ".as" && !ScriptRuntimeMetadata::IsSkippedMainFile(path)) {
-                candidates.push_back(path);
-            } else if (entry.is_directory() && !ScriptRuntimeMetadata::IsSkippedDirectory(path)) {
-                fs::path manifest = path / "script.as";
-                if (fs::is_regular_file(manifest) && !ScriptRuntimeMetadata::IsSkippedMainFile(manifest)) {
-                    candidates.push_back(manifest);
+        } else {
+            std::error_code walkError;
+            for (const fs::directory_entry &entry : fs::directory_iterator(root, fs::directory_options::skip_permission_denied, walkError)) {
+                if (walkError) {
+                    break;
+                }
+                const fs::path path = entry.path();
+                if (entry.is_regular_file() && path.extension() == ".as" && !ScriptRuntimeMetadata::IsSkippedMainFile(path)) {
+                    candidates.push_back(path);
+                } else if (entry.is_directory() && !ScriptRuntimeMetadata::IsSkippedDirectory(path)) {
+                    fs::path manifest = path / "script.as";
+                    std::error_code manifestError;
+                    if (fs::is_regular_file(manifest, manifestError) && !ScriptRuntimeMetadata::IsSkippedMainFile(manifest)) {
+                        candidates.push_back(manifest);
+                    }
                 }
             }
         }
@@ -1156,14 +1223,19 @@ ScriptRuntimeLoadPlan ScriptRuntime::Discover(std::string &error) const {
             metadata.RootPath = candidate.parent_path();
             metadata.ManifestPath = candidate;
             metadata.EntryPath = candidate;
-            metadata.Id = ScriptRuntimeMetadata::ToLower(candidate.filename().string()) == "script.as"
-                              ? candidate.parent_path().filename().string()
-                              : candidate.stem().string();
+            metadata.Id = ScriptRuntimeMetadata::DeriveIdFromPath(root, candidate);
             metadata.Name = metadata.Id;
             std::string parseError;
             const std::string source = ScriptRuntimeMetadata::ReadTextFile(candidate);
             if (!ScriptRuntimeMetadata::ParseManifestSource(source, candidate, metadata, parseError)) {
                 error += fmt::format("Skipping '{}': {}.\n", ScriptRuntimeMetadata::PathString(candidate), parseError);
+                continue;
+            }
+            if (!metadata.HasScriptManifest) {
+                if (ScriptRuntimeMetadata::ToLower(candidate.filename().string()) == "script.as") {
+                    error += fmt::format("Skipping '{}': missing main [runtime], [executor], or legacy [script] metadata.\n",
+                                         ScriptRuntimeMetadata::PathString(candidate));
+                }
                 continue;
             }
 
@@ -1199,7 +1271,7 @@ ScriptRuntimeLoadPlan ScriptRuntime::Discover(std::string &error) const {
                 continue;
             }
             if (!seenIds.insert(metadata.Id).second) {
-                error += fmt::format("Duplicate runtime script id '{}' from '{}' ignored.\n",
+                error += fmt::format("Duplicate script entry id '{}' from '{}' ignored.\n",
                                      metadata.Id,
                                      ScriptRuntimeMetadata::PathString(candidate));
                 continue;
@@ -1344,12 +1416,12 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     if (m_Manager->LoadModule(options, &loadResult) != CKAS_OK) {
         error = loadResult.ErrorMessage && loadResult.ErrorMessage[0] != '\0'
             ? loadResult.ErrorMessage
-            : fmt::format("Runtime script '{}' failed to compile.", metadata.Id);
+            : fmt::format("Script entry '{}' failed to compile.", metadata.Id);
         return false;
     }
     std::shared_ptr<CachedScript> cached = m_Manager->GetCachedScript(moduleName.c_str());
     if (!cached || !cached->module) {
-        error = fmt::format("Runtime script '{}' failed to compile.", metadata.Id);
+        error = fmt::format("Script entry '{}' failed to compile.", metadata.Id);
         m_Manager->UnloadModule(moduleName.c_str(), nullptr);
         return false;
     }
@@ -1363,23 +1435,27 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     loaded->Enabled = metadata.Enabled;
     loaded->Loaded = true;
 
+    const bool runtimeLifecycle = UsesRuntimeLifecycle(metadata);
+
     if (!metadata.ClassName.empty()) {
         loaded->Type = cached->module->GetTypeInfoByName(metadata.ClassName.c_str());
         if (!loaded->Type) {
-            error = fmt::format("Runtime script '{}' class '{}' was not found.", metadata.Id, metadata.ClassName);
+            error = fmt::format("Script module '{}' class '{}' was not found.", metadata.Id, metadata.ClassName);
             m_Manager->UnloadModule(moduleName.c_str(), nullptr);
             return false;
         }
+    }
+    if (runtimeLifecycle && loaded->Type) {
         void *object = m_Manager->GetScriptEngine()->CreateScriptObject(loaded->Type);
         if (!object) {
-            error = fmt::format("Runtime script '{}' failed to create class '{}'.", metadata.Id, metadata.ClassName);
+            error = fmt::format("Runtime entry '{}' failed to create class '{}'.", metadata.Id, metadata.ClassName);
             m_Manager->UnloadModule(moduleName.c_str(), nullptr);
             return false;
         }
         loaded->Object = static_cast<asIScriptObject *>(object);
     }
 
-    if (!CacheLifecycleFunctions(*loaded, error)) {
+    if (runtimeLifecycle && !CacheLifecycleFunctions(*loaded, error)) {
         ReleaseCachedFunctions(*loaded);
         if (loaded->Object) {
             loaded->Object->Release();
@@ -1389,7 +1465,12 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
         return false;
     }
 
-    if (RuntimeValidateOnly()) {
+    if (ScriptEntryValidateOnly()) {
+        module = std::move(loaded);
+        return true;
+    }
+
+    if (!runtimeLifecycle) {
         module = std::move(loaded);
         return true;
     }
@@ -1404,7 +1485,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
                                                                          0.0f);
     InvokeStatus status = Invoke(*loaded, "OnLoad", ctx);
     if (status == InvokeStatus::Failed) {
-        error = fmt::format("Runtime script '{}' failed during load: {}", metadata.Id, loaded->Error);
+        error = fmt::format("Runtime entry '{}' failed during load: {}", metadata.Id, loaded->Error);
         DestroyModule(*loaded, true);
         return false;
     }
@@ -1420,7 +1501,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
                                                         0.0f);
         status = Invoke(*loaded, "Awake", ctx);
         if (status == InvokeStatus::Failed) {
-            error = fmt::format("Runtime script '{}' failed during load: {}", metadata.Id, loaded->Error);
+            error = fmt::format("Runtime entry '{}' failed during load: {}", metadata.Id, loaded->Error);
             DestroyModule(*loaded, true);
             return false;
         }
@@ -1453,7 +1534,7 @@ bool ScriptRuntime::CacheLifecycleFunctions(Module &module, std::string &error) 
             for (asUINT i = 0; i < count; ++i) {
                 asIScriptFunction *method = module.Type->GetMethodByIndex(i);
                 if (method && std::string(method->GetName()) == name && method != expectedFunc) {
-                    error = fmt::format("Runtime script '{}' lifecycle '{}' has invalid signature '{}'; expected '{}'.",
+                    error = fmt::format("Runtime entry '{}' lifecycle '{}' has invalid signature '{}'; expected '{}'.",
                                         module.Meta.Id,
                                         name,
                                         method->GetDeclaration(),
@@ -1466,7 +1547,7 @@ bool ScriptRuntime::CacheLifecycleFunctions(Module &module, std::string &error) 
             for (asUINT i = 0; i < count; ++i) {
                 asIScriptFunction *function = scriptModule->GetFunctionByIndex(i);
                 if (function && std::string(function->GetName()) == name && function != expectedFunc) {
-                    error = fmt::format("Runtime script '{}' lifecycle '{}' has invalid signature '{}'; expected '{}'.",
+                    error = fmt::format("Runtime entry '{}' lifecycle '{}' has invalid signature '{}'; expected '{}'.",
                                         module.Meta.Id,
                                         name,
                                         function->GetDeclaration(),
@@ -1489,7 +1570,7 @@ bool ScriptRuntime::CacheLifecycleFunctions(Module &module, std::string &error) 
         for (asUINT i = 0; i < count; ++i) {
             asIScriptFunction *method = module.Type->GetMethodByIndex(i);
             if (method && std::string(method->GetName()) == "OnMessage" && method != expectedMessageFunc) {
-                error = fmt::format("Runtime script '{}' message handler has invalid signature '{}'; expected '{}'.",
+                error = fmt::format("Runtime entry '{}' message handler has invalid signature '{}'; expected '{}'.",
                                     module.Meta.Id,
                                     method->GetDeclaration(),
                                     expectedMessage);
@@ -1501,7 +1582,7 @@ bool ScriptRuntime::CacheLifecycleFunctions(Module &module, std::string &error) 
         for (asUINT i = 0; i < count; ++i) {
             asIScriptFunction *function = scriptModule->GetFunctionByIndex(i);
             if (function && std::string(function->GetName()) == "OnMessage" && function != expectedMessageFunc) {
-                error = fmt::format("Runtime script '{}' message handler has invalid signature '{}'; expected '{}'.",
+                error = fmt::format("Runtime entry '{}' message handler has invalid signature '{}'; expected '{}'.",
                                     module.Meta.Id,
                                     function->GetDeclaration(),
                                     expectedMessage);
@@ -1520,7 +1601,8 @@ void ScriptRuntime::ReleaseCachedFunctions(Module &module) const {
 }
 
 void ScriptRuntime::SubscribeStaticTopics(Module &module) const {
-    if (!m_Manager || !m_Manager->GetMessageBus() || module.Failed || !module.Loaded) {
+    if (!UsesRuntimeLifecycle(module.Meta) ||
+        !m_Manager || !m_Manager->GetMessageBus() || module.Failed || !module.Loaded) {
         return;
     }
     std::string subscribeError;
@@ -1562,13 +1644,13 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
         DiscardPendingReplacement(module);
     }
     if (m_Manager && m_Manager->GetMessageBus()) {
-        m_Manager->GetMessageBus()->ClearTarget(module.MessageTarget, "Runtime script was destroyed.");
+        m_Manager->GetMessageBus()->ClearTarget(module.MessageTarget, "Script entry was destroyed.");
     }
     if (hard) {
         CancelActiveInvocation(module);
     }
     module.PendingDestroy = !hard;
-    if (module.Loaded && !module.Failed) {
+    if (UsesRuntimeLifecycle(module.Meta) && module.Loaded && !module.Failed) {
         ScriptContext ctx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                              module.Meta,
                                                                              "OnDisable",
@@ -1621,9 +1703,14 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
 }
 
 bool ScriptRuntime::DisableModule(Module &module) {
+    if (!UsesRuntimeLifecycle(module.Meta)) {
+        module.Enabled = false;
+        module.PendingDisable = false;
+        return true;
+    }
     if (m_Manager && m_Manager->GetMessageBus()) {
         m_Manager->GetMessageBus()->ClearDynamicSubscriptions(module.MessageTarget);
-        m_Manager->GetMessageBus()->FailPendingForTarget(module.MessageTarget, "Runtime script was disabled.");
+        m_Manager->GetMessageBus()->FailPendingForTarget(module.MessageTarget, "Runtime entry was disabled.");
     }
     if (!module.PendingDisable) {
         CancelActiveInvocation(module);
@@ -1651,6 +1738,10 @@ bool ScriptRuntime::DisableModule(Module &module) {
 }
 
 bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
+    if (!UsesRuntimeLifecycle(module.Meta)) {
+        module.PendingPause = false;
+        return true;
+    }
     if (!module.PendingPause) {
         CancelActiveInvocation(module);
     }
@@ -1703,6 +1794,10 @@ bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
 }
 
 bool ScriptRuntime::ResetModule(Module &module, const ScriptContext &context) {
+    if (!UsesRuntimeLifecycle(module.Meta)) {
+        module.PendingReset = false;
+        return true;
+    }
     if (!module.PendingReset) {
         CancelActiveInvocation(module);
     }
@@ -1762,6 +1857,7 @@ RuntimeScriptInfo ScriptRuntime::BuildInfo(const Module &module) const {
     info.m_Id = module.Meta.Id;
     info.m_Name = module.Meta.Name;
     info.m_Version = module.Meta.VersionText;
+    info.m_Host = ScriptRuntimeMetadata::HostText(module.Meta.Host);
     info.m_Description = module.Meta.Description;
     info.m_Author = module.Meta.Author;
     info.m_Category = module.Meta.Category;
@@ -1843,7 +1939,7 @@ void ScriptRuntime::FinalizePendingModules() {
 }
 
 void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeconds) {
-    if (!module.Loaded || module.Failed) {
+    if (!UsesRuntimeLifecycle(module.Meta) || !module.Loaded || module.Failed) {
         return;
     }
     auto makeContext = [&](const char *phase) {
@@ -2172,6 +2268,7 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Id() const", asMETHOD(RuntimeScriptInfo, Id), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Name() const", asMETHOD(RuntimeScriptInfo, Name), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Version() const", asMETHOD(RuntimeScriptInfo, Version), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Host() const", asMETHOD(RuntimeScriptInfo, Host), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Description() const", asMETHOD(RuntimeScriptInfo, Description), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Author() const", asMETHOD(RuntimeScriptInfo, Author), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("RuntimeScriptInfo", "string Category() const", asMETHOD(RuntimeScriptInfo, Category), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

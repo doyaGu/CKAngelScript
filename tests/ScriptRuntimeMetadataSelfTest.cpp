@@ -33,6 +33,10 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
         error = "Runtime metadata parser did not merge scalar fragments.";
         return false;
     }
+    if (!manifest.HasManifest || !manifest.HasScriptManifest) {
+        error = "Runtime metadata parser did not mark the main script manifest.";
+        return false;
+    }
     if (manifest.EntryPath.filename().string() != "runtime.as" ||
         manifest.Description != "Runtime smoke" ||
         manifest.Author != "CKAS" ||
@@ -65,6 +69,67 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
     }
     if (manifest.OptionalDependencies.size() != 1 || manifest.Before.size() != 1 || manifest.After.size() != 1) {
         error = "Runtime metadata parser did not parse optional or ordering dependencies.";
+        return false;
+    }
+
+    const std::string sidecarSource =
+        "[script.meta key=\"display\" value=\"Helper\"]\n"
+        "[script.depends required=\"core\"]\n";
+    ScriptRuntimeManifest sidecar;
+    sidecar.RootPath = std::filesystem::path("C:/Scripts");
+    sidecar.ManifestPath = sidecar.RootPath / "helper.as";
+    sidecar.EntryPath = sidecar.ManifestPath;
+    if (!ParseManifestSource(sidecarSource, sidecar.ManifestPath, sidecar, error)) {
+        return false;
+    }
+    if (!sidecar.HasManifest || sidecar.HasScriptManifest) {
+        error = "Runtime metadata parser treated sidecar metadata as a script entry manifest.";
+        return false;
+    }
+
+    ScriptRuntimeManifest runtimeHost;
+    runtimeHost.RootPath = std::filesystem::path("C:/Scripts/runtime");
+    runtimeHost.ManifestPath = runtimeHost.RootPath / "script.as";
+    runtimeHost.EntryPath = runtimeHost.ManifestPath;
+    if (!ParseManifestSource("[runtime name=\"Runtime Host\"]\nclass RuntimeHost {}\n",
+        runtimeHost.ManifestPath,
+        runtimeHost,
+        error) ||
+        runtimeHost.Host != ScriptEntryHost::Runtime ||
+        !runtimeHost.HasScriptManifest) {
+        error = error.empty() ? "Runtime metadata parser did not recognize [runtime]." : error;
+        return false;
+    }
+
+    ScriptRuntimeManifest executorHost;
+    executorHost.RootPath = std::filesystem::path("C:/Scripts/executor");
+    executorHost.ManifestPath = executorHost.RootPath / "script.as";
+    executorHost.EntryPath = executorHost.ManifestPath;
+    if (!ParseManifestSource("[executor name=\"Executor Host\" class=\"ExecutorHost\"]\nclass ExecutorHost {}\n",
+        executorHost.ManifestPath,
+        executorHost,
+        error) ||
+        executorHost.Host != ScriptEntryHost::Executor ||
+        executorHost.ClassName != "ExecutorHost" ||
+        !executorHost.HasScriptManifest) {
+        error = error.empty() ? "Runtime metadata parser did not recognize [executor]." : error;
+        return false;
+    }
+
+    const std::filesystem::path scriptsRoot = "C:/Game/Scripts";
+    if (DeriveIdFromPath(scriptsRoot, scriptsRoot / "base/event/load_menu_level.as") !=
+        "base.event.load_menu_level") {
+        error = "Runtime metadata path id derivation did not include file parent directories.";
+        return false;
+    }
+    if (DeriveIdFromPath(scriptsRoot, scriptsRoot / "base/loading/register_activate_init/script.as") !=
+        "base.loading.register_activate_init") {
+        error = "Runtime metadata path id derivation did not include directory manifest parents.";
+        return false;
+    }
+    if (DeriveIdFromPath(scriptsRoot / "isolated", scriptsRoot / "isolated/script.as") !=
+        "isolated") {
+        error = "Runtime metadata path id derivation did not keep the self manifest fallback.";
         return false;
     }
     return true;

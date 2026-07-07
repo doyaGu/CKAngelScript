@@ -33,12 +33,18 @@ struct ScriptRuntimeDependency {
     ScriptRuntimeVersion Version;
 };
 
+enum class ScriptEntryHost {
+    Runtime,
+    Executor,
+};
+
 struct ScriptRuntimeManifest {
     std::string Id;
     std::string Name;
     std::string VersionText = "0.0.0";
     ScriptRuntimeVersion Version;
     std::string ClassName;
+    ScriptEntryHost Host = ScriptEntryHost::Runtime;
     std::filesystem::path RootPath;
     std::filesystem::path ManifestPath;
     std::filesystem::path EntryPath;
@@ -58,6 +64,7 @@ struct ScriptRuntimeManifest {
     int Order = 1000;
     bool Reloadable = true;
     bool HasManifest = false;
+    bool HasScriptManifest = false;
     std::string Error;
 };
 
@@ -70,6 +77,10 @@ std::vector<std::string> SplitList(const std::string &value);
 bool ParseBool(const std::string &value, bool fallback);
 int ParseInt(const std::string &value, int fallback);
 std::string SanitizeId(const std::string &id);
+bool ParseHost(const std::string &text, ScriptEntryHost &host);
+std::string HostText(ScriptEntryHost host);
+std::string DeriveIdFromPath(const std::filesystem::path &scriptsRoot,
+                             const std::filesystem::path &manifestPath);
 std::string PathString(const std::filesystem::path &path);
 std::string ReadTextFile(const std::filesystem::path &path);
 bool IsSkippedMainFile(const std::filesystem::path &path);
