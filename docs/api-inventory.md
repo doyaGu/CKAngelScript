@@ -7,7 +7,7 @@ This page inventories the public API surface currently exposed by CKAngelScript.
 | Surface | Scope | Primary sources |
 | --- | --- | --- |
 | Public API | C ABI functions plus the `CKAngelScriptApi` C++ wrapper, header-only soft-load helpers for optional extension plugins, public struct initializers/status text, load/compile/unload, module import binding, module bytecode save/load, raw borrow helpers, source metadata reflection, symbol/runtime handles, typed argument/result helpers, execution handles, engine extension callbacks | `include/CKAngelScript.h`, `docs/public-api.md` |
-| High-level script API | Runtime scripts, scene refs, behavior frame, behavior bridge, BB runtime helpers, parameter conversion/catalog, messaging, async tasks | `src/ScriptRuntime.cpp`, `src/ScriptScene.cpp`, `src/ScriptBehaviorFrame.cpp`, `src/ScriptBridgeRegistration.cpp`, `src/ScriptParameterRegistry.cpp`, `src/ScriptMessage.cpp`, `src/ScriptAsync.cpp` |
+| High-level script API | Script entries, scene refs, behavior frame, behavior bridge, BB runtime helpers, parameter conversion/catalog, messaging, async tasks | `src/ScriptRuntime.cpp`, `src/ScriptScene.cpp`, `src/ScriptBehaviorFrame.cpp`, `src/ScriptBridgeRegistration.cpp`, `src/ScriptParameterRegistry.cpp`, `src/ScriptMessage.cpp`, `src/ScriptAsync.cpp` |
 | Native memory and FFI | `NativePointer`, `NativeBuffer`, DynLoad/DynCall/DynCallback helpers | `src/ScriptNativePointer.cpp`, `src/ScriptNativeBuffer.cpp`, `src/ScriptDynCall.cpp` |
 | Raw CK/Vx SDK bindings | CK context/managers/objects, SDK enums/defines/structs, Vx math types, containers | `src/ScriptCK*.cpp`, `src/ScriptVxMath.cpp`, `src/ScriptX*.cpp` |
 | Component/editor integration | `AngelScript Component`, `AngelScript Executor`, metadata manifest, injected fields, BB config/slot metadata, `BehaviorFrame@` lifecycle invocation | `src/ScriptComponent*.cpp`, `src/AngelScriptExecutor.cpp`, `src/ScriptInvoker.cpp`, `docs/component-metadata-manifest.md`, `docs/angelscript-executor.md` |
@@ -21,14 +21,14 @@ Current AngelScript API export scan:
 | Global functions | 584 |
 | Global properties | 301 |
 | Object types | 335 |
-| Object methods | 10952 |
+| Object methods | 10953 |
 | Object behaviours | 774 |
 | Object properties | 465 |
 | Funcdefs | 29 |
 | Enums | 139 |
 | Enum values | 1427 |
 | Typedefs | 24 |
-| Total | 15030 |
+| Total | 15031 |
 
 Large raw SDK binding files and exported cast/behaviour entries dominate the total. The high-level and integration files are still the workflow surface; raw CK/Vx bindings and SDK constants account for most exported symbols.
 
@@ -40,9 +40,9 @@ Large raw SDK binding files and exported cast/behaviour entries dominate the tot
 | `Param` | 55 | Parameter values, enum/flags/type metadata, text/raw conversion, operations |
 | `Async` | 23 | Frame-based cooperative tasks, aggregates, waits for BB/graph tasks |
 | `BB` | 18 | Building Block prototype discovery, declaration/config creation, runtime bridge entry points |
-| `Message` | 14 | Publish/send/request/reply messaging between runtime scripts and components |
+| `Message` | 14 | Publish/send/request/reply messaging between runtime entries and components |
 | `Behavior` | 13 | Behavior graph lookup, query construction, graph bridge entry points |
-| `Runtime` | 11 | Runtime script manager inspection and control |
+| `Runtime` | 11 | Script entry manager inspection and control |
 | Global | 267 | Raw CK/Vx helpers, constructors/operators, allocation helpers, format/info functions |
 
 The global bucket includes raw SDK-style helpers and constructors, so new high-level workflow APIs should normally prefer a named namespace.
@@ -51,10 +51,10 @@ The global bucket includes raw SDK-style helpers and constructors, so new high-l
 
 | Family | Key types and namespaces | Notes |
 | --- | --- | --- |
-| Runtime scripts | `ScriptContext`, `RuntimeScriptInfo`, `RuntimeDependencyInfo`, `Runtime::*` | Long-lived scripts discovered from script roots. |
+| Script entries | `ScriptContext`, `RuntimeScriptInfo`, `RuntimeDependencyInfo`, `Runtime::*` | Discovered modules. `[runtime]` entries receive `ScriptContext` lifecycle; `[executor]` entries provide Executor classes. |
 | Scene interop | `Scene::*`, `ObjectRef`, `SceneObjectRef`, `Entity3DRef`, `Entity2DRef`, `MaterialRef`, `TextureRef`, `MeshRef`, `SceneRef`, `LevelRef` | Revalidating object handles are the durable identity layer; raw CK pointers should be reacquired near use. |
 | Script host frame | `BehaviorFrame` | Preferred Component/Executor lifecycle argument; complete current-`CKBehavior` facade for context fields, CKObject/scene inherited state, identity, owner/target, graph/layout entry points, IO, pins/pouts/locals/settings, generic SDK parameter value reads/writes, metadata/state, structural graph edits, graph-link activation-delay waits, frame-aware async waits/message waits, trace, one-shot BB calls, SDK-style `Get*` migration aliases, and raw `CKBehavior@` escape-hatch access while reacquiring the live behavior by id/stamp. |
-| Behavior graph bridge | `Behavior::*`, `BehaviorRef`, `BehaviorGraph`, `BehaviorQuery`, `BehaviorNode`, `BehaviorLayout`, `BehaviorLinkRef`, `GraphTask` | Setup-time graph search, layout handles, graph traversal, graph task observation. |
+| Behavior graph bridge | `Behavior::*`, `BehaviorRef`, `BehaviorGraph`, `BehaviorQuery`, `BehaviorNode`, `BehaviorLayout`, `BehaviorLinkRef`, `GraphTask` | Setup-time graph search, layout handles, target-parameter source preservation, graph traversal, synchronous `BehaviorRef.Step(ctx/frame, input)` execution of existing native BB instances, and graph task observation. |
 | Runtime BB bridge | `BB::*`, `BBPrototype`, `BBDecl`, `BBConfig`, `BBSlot`, `BBInstance`, `BBResult`, `BBTask`, `BBCallBuilder`, `BBTaskBuilder` | SDK-driven BB discovery, runtime BB spawning/stepping, live pin/settings updates, name-based one-shot calls, and `BehaviorFrame@` overloads for common config/instance operations. |
 | Parameters | `Param::*`, `ParamRef`, `ParamValue`, `ParamStructValue`, `ParamTypeInfo`, `ParamEnumInfo`, `ParamFlagsInfo`, `ParamStructInfo`, `ParamOp`, `ParamSourceLinkRef` | Generic parameter conversion and metadata backed by `CKParameterManager`. |
 | Messaging | `Message::*`, `ScriptMessage` | Topic publish/subscribe, directed sends, request/reply over `AsyncTask<dictionary@>`. |

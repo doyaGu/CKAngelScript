@@ -53,7 +53,7 @@ BBConfig@ config = decl.Configure().Set(text, "Ready");
 BBInstance@ instance = config.SpawnStarted(ctx);
 ```
 
-`AngelScript/Event Hook` is the bridge point for persistent graph edits that need to notify runtime scripts. It has one input, `Out` and `Error` outputs, and three input parameters:
+`AngelScript/Event Hook` is the bridge point for persistent graph edits that need to notify runtime entries. It has one input, `Out` and `Error` outputs, and three input parameters:
 
 | Parameter | Meaning |
 | --- | --- |
@@ -176,10 +176,20 @@ int value = layout.FindPin("Value");
 int done = layout.FindOutput("Done");
 
 b.Pin(value).Set(Param::Int(10));
-b.Trigger(in);
+BBResult@ result = b.Step(ctx, in);
+if (result is null || !result.Ok() || !result.OutputActive(done)) {
+    return;
+}
 ```
 
 `BehaviorLayout` exposes `InputCount/OutputCount/PinCount/PoutCount/LocalCount`, name lookup with occurrence, and `ParamInfo` for parameter slots. Use `Find*()` once in `Start()` or setup code, then cache the indices.
+
+Use `BehaviorRef.Step(ctx/frame, input)` when an AS graph replacement must
+synchronously drive an existing native BB instance from the original graph. It
+returns a normal `BBResult@`, but the result does not own or destroy the
+watched `CKBehavior`. Use `Trigger()` only when you want normal graph
+activation without an immediate return-code/output snapshot, and use
+`Start()`/`GraphTask` for graph behavior that must run across frames.
 
 ## Behavior Graph Search
 
@@ -226,6 +236,14 @@ if (link !is null && link.valid) {
 `Next/Prev` accept an optional `BehaviorQuery@` filter. `Input(index)` and `Output(index)` are link traversal helpers for a specific target input or source output. `End(maxSteps)` follows the first next link until there is no next node or a cycle/step limit is reached.
 
 `Behavior::Find(ctx, name)` remains as a small convenience wrapper over `Behavior::Graph(ctx).Find(Behavior::Query().Name(name).Recursive(true))`; new scripts should prefer explicit graph/query/node code when the graph is large or duplicate names are possible.
+
+`BehaviorRef.TargetParameter()` returns the behavior target parameter as a
+`ParamRef@` when the node is targetable. This is mainly for graph adapters that
+need to preserve an original child BB target source while replacing a parent
+graph with a higher-level script. Use `TargetParameter().DirectSource()` or
+`RealSource()` and connect that source to the replacement pin with
+`ParamRef.SetSource(...)`; do not rediscover the object by name when the graph
+already carries the source link.
 
 ## Persistent Graph Editing
 
