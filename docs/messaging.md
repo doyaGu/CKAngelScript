@@ -1,6 +1,6 @@
 # Messaging
 
-The `Message` namespace connects runtime scripts and AngelScript Components through the shared `ScriptMessage` type.
+The `Message` namespace connects runtime entries and AngelScript Components through the shared `ScriptMessage` type.
 
 ## Targets and Topics
 
@@ -9,21 +9,21 @@ Use topics for event names, and targets for directed messages.
 | Target form | Meaning |
 | --- | --- |
 | `""` | Broadcast/publish according to topic subscriptions. |
-| `runtime:<script-id>` | A runtime script instance. |
+| `runtime:<script-id>` | A runtime entry instance. |
 | `component:<CK_ID>` | A component behavior instance. |
 
 Topic names should be stable strings such as `game.ready`, `ui.changed`, or `clock.now`.
 
 ## Registering Interest
 
-Runtime scripts can declare topics in metadata:
+Runtime entries can declare topics in metadata:
 
 ```angelscript
 [script id="hud.runtime" entry="runtime.as"]
 [script.messages topics="game.ready;ui.changed"]
 ```
 
-Runtime scripts and components can also subscribe dynamically:
+Runtime entries and components can also subscribe dynamically:
 
 ```angelscript
 Message::Subscribe(ctx, "game.ready");

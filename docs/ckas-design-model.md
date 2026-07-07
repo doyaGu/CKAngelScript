@@ -19,7 +19,7 @@ For Ballance replacement work, the important split is:
 
 | Surface | Context | Best use | Not best use |
 | --- | --- | --- | --- |
-| Runtime script | `ScriptContext` | global services, diagnostics, coordination, preload/validation, message subscribers | exact graph-local root replacement by itself |
+| Runtime entry | `ScriptContext` | global services, diagnostics, coordination, preload/validation, message subscribers | exact graph-local root replacement by itself |
 | `AngelScript Component` BB | `CKBehaviorContext` / `BehaviorFrame` | component-style behavior logic, owner/target-aware helpers, metadata field injection | drop-in replacement for arbitrary multi-input/multi-output roots |
 | `AngelScript Executor` BB | `CKBehaviorContext` / `BehaviorFrame` | graph execution replacement with generated IO and parameter shape | component metadata injection |
 | Behavior Bridge | `ScriptContext` or `CKBehaviorContext` | find existing graphs, read/write params, spawn/step native BBs, apply explicit graph edits | saving patched files; persistence remains `nmo`/host responsibility |
@@ -50,7 +50,7 @@ The manager receives CK lifecycle callbacks through
 
 1. async scheduler tick;
 2. message bus tick;
-3. runtime script `PreProcess`;
+3. runtime entry `PreProcess`;
 4. behavior bridge `PreProcess`.
 
 `PostProcess()` then runs runtime post-process callbacks before bridge
@@ -67,7 +67,7 @@ bridge cleanup.
 
 A `CKBehavior` is the live Virtools behavior instance that owns runtime IO,
 parameter slots, local/settings data, owner/target relation, and graph position.
-It is not the same thing as an AngelScript object or a runtime script module.
+It is not the same thing as an AngelScript object or a script entry module.
 
 Keep these layers separate:
 
@@ -108,7 +108,7 @@ vendors AngelScript 2.38.0 under `deps/angelscript`.
 
 Module identity is explicit:
 
-- runtime scripts are discovered modules with stable script ids;
+- script entries are discovered modules with stable script ids;
 - components may use shared modules by script name;
 - components with `Source` or `File` use private per-behavior modules;
 - public API handles track module generations so stale module references can be
@@ -119,11 +119,20 @@ for generated replacements. Private component modules are useful for isolated
 experiments, but shared modules are easier to validate and diff across many
 patched roots.
 
-## Runtime Scripts
+## Script Entries
 
-Runtime scripts are discovered from Virtools data path `Scripts` directories
-and `CKAS_SCRIPT_ROOTS`. Directory modules use `script.as` as the manifest and
-can define class-backed lifecycle callbacks:
+Script entries are discovered from Virtools data path `Scripts` directories
+and explicit `CKAS_SCRIPT_ROOTS`. Data path roots are scanned one level deep
+for compatibility with existing game folders; explicit roots are scanned
+recursively. Directory modules use `script.as` as the manifest and form module
+boundaries. Single-file modules must contain a main `[runtime]`, `[executor]`,
+or legacy `[script]` metadata block. Plain `.as` files without a main entry
+block are available to `#include` but are not loaded independently. When `id`
+is omitted, the entry id is
+derived from the path relative to the scanned `Scripts` directory, so
+`Scripts/base/event/load_menu_level.as` becomes `base.event.load_menu_level`.
+Only `[runtime]` entries define class-backed `ScriptContext` lifecycle
+callbacks:
 
 - `OnLoad`
 - `Awake`
@@ -141,7 +150,7 @@ can define class-backed lifecycle callbacks:
 
 The required context signature is `const ScriptContext &in ctx`.
 
-Runtime scripts are long-lived and global. They are good for:
+Runtime entries are long-lived and global. They are good for:
 
 - shared Ballance state tables and diagnostics;
 - topic subscriptions;
@@ -171,6 +180,14 @@ The component instantiates a script class and calls lifecycle methods with
 form remains compatible. `Update` is required. Optional methods include
 `OnLoad`, `Awake`, `OnEnable`, `Start`, `OnDisable`, `OnDestroy`, `OnReset`,
 and `OnMessage`.
+
+The Component is a BB host, not a script-entry host. Its module source is
+explicit: `Source`/`File` compile a private per-behavior module owned by the
+Component; otherwise `Script` first names an already loaded module, then falls
+back to a script entry id when no loaded module has that name. This lets
+Component reuse code managed by `[runtime]` or `[executor]` entries without
+adding a `[component]` entry type or giving the Component its own global
+lifecycle.
 
 Once enabled, the component is continuous: after `Start`, it calls `Update`,
 steps automated `BBConfig` instances, and returns `CKBR_ACTIVATENEXTFRAME`.
@@ -255,7 +272,7 @@ layout:
 
 ### Messaging
 
-The `Message` namespace connects runtime scripts and components with
+The `Message` namespace connects runtime entries and components with
 `ScriptMessage`. Targets are `runtime:<id>` and `component:<CK_ID>`. Topic
 publish and directed send are shared between `ScriptContext` and
 `CKBehaviorContext`.
@@ -333,7 +350,7 @@ generated from the original root interface.
 
 ## Practical Rules
 
-- Use runtime scripts for shared services and probes.
+- Use runtime entries for shared services and probes.
 - Use `AngelScript Executor` for graph-local root replacement classes.
 - Use `AngelScript Component` for component-style helpers and metadata-driven BB composition.
 - Use `Scene` refs for durable object identity.

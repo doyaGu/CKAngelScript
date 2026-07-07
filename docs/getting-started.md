@@ -110,7 +110,7 @@ void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx) {
 Validate before launching the host:
 
 ```powershell
-tools\Validate-RuntimeScripts.ps1 -ScriptRoot C:\Path\To\Game\Data
+tools\Validate-ScriptEntries.ps1 -ScriptRoot C:\Path\To\Game\Data
 ```
 
 ## First Component

@@ -35,12 +35,13 @@ Base prototype:
 | Settings | `Script`, `Class`, `Interface`, `Strict Interface`, `Trace` |
 | Local | state pointer |
 
-`Script` is a stable runtime script id, either a compatibility package such as
-`ballance.logic` or a standalone replacement package such as
-`ballance.base.loading.register_activate_init`. The Executor resolves that id
-through `ScriptRuntime` and attaches the loaded module behind it. It does not
+`Script` is a stable script module id. New Executor code should point it at an
+`[executor]` entry such as `base.loading.register_activate_init`; using a
+`[runtime]` entry is supported only for compatibility with older packages such
+as `ballance.logic`. The Executor resolves that id through the script entry
+manager and attaches the loaded module behind it. It does not
 accept generated internal module names such as `__CKASRuntime_*` or arbitrary
-module names outside the runtime script manager.
+module names outside the script entry manager.
 
 The Executor declaration is intentionally not targetable. A replacement root
 should expose target behavior only when the original graph interface has a real
@@ -342,9 +343,9 @@ those inputs after the call either finishes or suspends. During the initial
 `Execute` call, the script sees the real active input state. After an `await`
 resume, consumed inputs are no longer active.
 
-Executor instances can hold script objects and method references into runtime
-script modules. `ScriptManager` releases those Executor runtime states before
-clearing runtime modules on `PostClearAll`, `OnCKEnd`, and shutdown, so a loaded
+Executor instances can hold script objects and method references into script
+entry modules. `ScriptManager` releases those Executor states before clearing
+loaded modules on `PostClearAll`, `OnCKEnd`, and shutdown, so a loaded
 replacement root does not keep `__CKASRuntime_*` modules alive during Player
 close.
 
@@ -352,9 +353,10 @@ close.
 
 The first implementation intentionally keeps the surface small:
 
-- runtime script id plus class loading only;
+- script module id plus class loading only;
 - no inline `Source` or `File` private module path;
-- runtime scripts are the only accepted module source;
+- `[executor]` entries are the preferred module source; legacy `[runtime]`
+  entries remain attachable for compatibility;
 - no custom Executor-only call object; use the shared `BehaviorFrame`;
 - interface reshaping covers counts and created parameter types, with strict
   name/GUID validation;

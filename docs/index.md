@@ -6,7 +6,7 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 
 1. [Getting Started](getting-started.md): build, install, validate, and run your first scripts.
 2. [Examples](examples.md): copyable recipes for common runtime and component tasks.
-3. [Runtime Script Manager v2](runtime-script-manager-v2.md): long-lived scripts, manifests, lifecycle, dependencies, and runtime inspection.
+3. [Script Entry Manager v2](runtime-script-manager-v2.md): script entries, manifests, lifecycle, dependencies, and runtime inspection.
 4. [Component Metadata and Manifest](component-metadata-manifest.md): editor inputs and field injection for `AngelScript Component`.
 5. [Scene Interop API](scene-interop.md): safe object refs and high-level object lookup/editing.
 6. [Behavior Bridge v3](behavior-bridge-design.md): behavior graph search, parameter handles, and runtime Building Blocks.
@@ -23,7 +23,7 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 | --- | --- |
 | Build and install the DLL | [Getting Started](getting-started.md) |
 | Validate the DLL in Ballance/Player | [Validation and Troubleshooting](validation-and-troubleshooting.md) |
-| Create a long-lived script loaded from `Data/Scripts` | [Runtime Script Manager v2](runtime-script-manager-v2.md) |
+| Create a long-lived script loaded from `Data/Scripts` | [Script Entry Manager v2](runtime-script-manager-v2.md) |
 | Attach script logic to one behavior instance | [Component Metadata and Manifest](component-metadata-manifest.md) |
 | Find or create CK objects safely | [Scene Interop API](scene-interop.md) |
 | Drive existing Building Blocks or behavior graphs | [Behavior Bridge v3](behavior-bridge-design.md) |
@@ -43,11 +43,11 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 
 | Feature | Main namespace/type | Context |
 | --- | --- | --- |
-| Runtime scripts | `Runtime`, `ScriptContext` | Long-lived scripts discovered from script roots |
+| Script entries | `Runtime`, `ScriptContext` | Discovered modules; `[runtime]` entries run `ScriptContext` lifecycle, `[executor]` entries back Executor BBs |
 | Components | `AngelScript Component`, `CKBehaviorContext` | One script class instance per behavior |
-| Scene interop | `Scene`, `ObjectRef@` | Runtime scripts and components |
-| Behavior graph interop | `Behavior`, `BB`, `Param` | Runtime scripts and components |
-| Messaging | `Message`, `ScriptMessage` | Runtime scripts and components |
+| Scene interop | `Scene`, `ObjectRef@` | Runtime entries and components |
+| Behavior graph interop | `Behavior`, `BB`, `Param` | Runtime entries and components |
+| Messaging | `Message`, `ScriptMessage` | Runtime entries and components |
 | Async work | `Async`, `AsyncTask<T>` | Any script running through the CKAngelScript scheduler |
 | Native memory | `NativePointer`, `NativeBuffer` | Advanced SDK/FFI work |
 | Native calls | DynCall/DynLoad/DynCallback helpers | Advanced external library calls |
@@ -55,9 +55,9 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 
 ## Glossary
 
-- **Runtime script**: A long-lived AngelScript module managed directly by `ScriptManager`, usually discovered from `Scripts` roots.
+- **Runtime entry**: A long-lived AngelScript module managed directly by `ScriptManager`, usually discovered from `Scripts` roots with `[runtime]`.
 - **Component script**: A script class attached to an `AngelScript Component` Building Block instance.
-- **Context**: `ScriptContext` for runtime scripts, `CKBehaviorContext` for components, or `CKContext@` for low-level helpers.
+- **Context**: `ScriptContext` for runtime entries, `CKBehaviorContext` for components, or `CKContext@` for low-level helpers.
 - **Object ref**: A revalidating wrapper such as `ObjectRef@`, `Entity3DRef@`, or `BehaviorRef@` that stores CK object identity safely.
 - **BB**: Building Block. CKAngelScript exposes both prototype metadata (`BBDecl@`) and runtime instances (`BBInstance@`).
 - **Catalog**: Generated AngelScript hints for parameter types, operations, and Building Blocks exported from a host install.

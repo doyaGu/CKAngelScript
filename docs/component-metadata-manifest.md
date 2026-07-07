@@ -16,6 +16,20 @@ Fixed inputs remain first:
 
 Declared component fields create additional input parameters after these fixed inputs. Declared names must not conflict with fixed inputs.
 
+`Script` identifies the module that contains `Class`. The Component uses one of
+three module sources:
+
+| Source | Trigger | Ownership |
+| --- | --- | --- |
+| Private module | `Source` or `File` is set | The Component compiles and unloads a per-behavior module named from behavior id plus `Script`. |
+| Loaded module | `Source`/`File` are empty and a loaded module is already named `Script` | The Component only attaches to that shared module. |
+| Script entry module | `Source`/`File` are empty, no loaded module is named `Script`, and `Script` resolves as a script entry id such as `base.event.load_menu_level` | The script entry manager owns compilation/reload; the Component only attaches to the resolved module generation. |
+
+This does not make Component a script-entry host. `[runtime]` and `[executor]`
+entries are still discovered and compiled by the script entry manager; the
+Component BB only attaches to the resolved module and instantiates `Class` for
+that specific `CKBehavior`.
+
 ## Metadata Syntax
 
 Metadata is attached to public writable class fields:

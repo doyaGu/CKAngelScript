@@ -1,6 +1,6 @@
 # Scene Interop API
 
-`Scene` is the high-level Virtools scene interop namespace for runtime scripts and AngelScript Components. It sits above raw `CKContext` / `CKObject` bindings and returns checked `ObjectRef@` handles instead of encouraging scripts to cache SDK pointers directly.
+`Scene` is the high-level Virtools scene interop namespace for runtime entries and AngelScript Components. It sits above raw `CKContext` / `CKObject` bindings and returns checked `ObjectRef@` handles instead of encouraging scripts to cache SDK pointers directly.
 
 ## Object Refs
 
@@ -54,7 +54,7 @@ The same pattern applies to `Entity2DRef.Entity2D()`, `MaterialRef.Material()`, 
 
 ## Context Overloads
 
-Every `Scene::*` helper has overloads for `ScriptContext`, `CKBehaviorContext`, and `CKContext@`. Runtime scripts should pass `ScriptContext`; AngelScript Components should pass `CKBehaviorContext`; low-level utility code can pass `CKContext@` when it is not tied to either runtime. Use the natural context for the script you are writing:
+Every `Scene::*` helper has overloads for `ScriptContext`, `CKBehaviorContext`, and `CKContext@`. Runtime entries should pass `ScriptContext`; AngelScript Components should pass `CKBehaviorContext`; low-level utility code can pass `CKContext@` when it is not tied to either runtime. Use the natural context for the script you are writing:
 
 ```angelscript
 void Update(const ScriptContext &in ctx) {
@@ -149,4 +149,4 @@ Scene::FindEntity3D(const CKBehaviorContext &in ctx, const string &in name = "",
 Scene::FindEntity3D(CKContext@ ctx, const string &in name = "", int occurrence = 0, bool currentSceneOnly = false)
 ```
 
-Runtime scripts should pass `ScriptContext`; components should pass `CKBehaviorContext`; shared utility code can pass `CKContext@` only when it is deliberately detached from runtime/component ownership.
+Runtime entries should pass `ScriptContext`; components should pass `CKBehaviorContext`; shared utility code can pass `CKContext@` only when it is deliberately detached from runtime/component ownership.
