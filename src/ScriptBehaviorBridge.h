@@ -79,6 +79,7 @@ enum class ScriptBridgeTaskFlags : CKDWORD {
     Paused = 1u << 1,
     DeleteCallbackSent = 1u << 2,
     TimedOut = 1u << 3,
+    ExternalBehavior = 1u << 4,
 };
 
 enum class ScriptBridgePrototypeKind : CKBYTE {
@@ -337,6 +338,7 @@ public:
     void ReleasePrototype(BBPrototype *prototype);
     BBResult *RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     BBResult *RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, const std::string &inputName, int occurrence = 0);
+    BBResult *RunBehavior(CKBehavior *behavior, const CKBehaviorContext &ctx, int inputIndex);
     BBTask *StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
     bool SetTaskSetting(CK_ID taskId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
     CK_ID CreateInstance(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int &generation, std::string &error);
@@ -512,6 +514,12 @@ private:
     const ScriptBridgeGraphWatch *FindGraphWatch(CK_ID watchId, int generation) const;
     ScriptBridgeLayoutRecord BuildBehaviorLayout(CKBehavior *behavior) const;
     ScriptBridgeLayoutRecord BuildPrototypeLayout(CKBehaviorPrototype *prototype) const;
+    ScriptBridgeLayoutRecord BuildConfiguredPrototypeLayout(const CKBehaviorContext &ctx,
+                                                            CKBehaviorPrototype *prototype,
+                                                            const ScriptBridgeBBInvocationSpec &request,
+                                                            std::string &error) const;
+    std::string PrototypeLayoutKey(CKBehaviorPrototype *prototype,
+                                   const ScriptBridgeBBInvocationSpec &request) const;
     std::string LayoutSignature(const ScriptBridgeLayoutRecord &layout) const;
 
     ScriptManager *m_Manager = nullptr;

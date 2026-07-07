@@ -1032,10 +1032,16 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorRef", "bool get_valid() const", asMETHOD(BehaviorRef, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "CK_ID get_id() const", asMETHOD(BehaviorRef, GetID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "string get_name() const", asMETHOD(BehaviorRef, GetName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorRef", "CKBeObject@ Owner() const", asMETHOD(BehaviorRef, Owner), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorRef", "CKBeObject@ Target() const", asMETHOD(BehaviorRef, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "BehaviorLayout@ Layout() const", asMETHOD(BehaviorRef, Layout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "BehaviorGraph@ AsGraph() const", asMETHOD(BehaviorRef, AsGraph), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool Trigger(int inputIndex = 0, bool reset = false)", asMETHOD(BehaviorRef, Trigger), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool Trigger(BBSlot@+ input, bool reset = false)", asMETHOD(BehaviorRef, TriggerSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorRef", "BBResult@ Step(const CKBehaviorContext &in ctx, int inputIndex = 0)", asMETHOD(BehaviorRef, Step), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorRef", "BBResult@ Step(BehaviorFrame@+ frame, int inputIndex = 0)", asMETHOD(BehaviorRef, StepFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorRef", "BBResult@ Step(const CKBehaviorContext &in ctx, BBSlot@+ input)", asMETHOD(BehaviorRef, StepSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorRef", "BBResult@ Step(BehaviorFrame@+ frame, BBSlot@+ input)", asMETHOD(BehaviorRef, StepSlotFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool InputActive(int inputIndex) const", asMETHOD(BehaviorRef, InputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool InputActive(BBSlot@+ input) const", asMETHOD(BehaviorRef, InputActiveSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool OutputActive(int outputIndex) const", asMETHOD(BehaviorRef, OutputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1043,6 +1049,7 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pin(int index) const", asMETHOD(BehaviorRef, Pin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pin(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorRef, PinName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pin(BBSlot@+ slot) const", asMETHOD(BehaviorRef, PinSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ TargetParameter() const", asMETHOD(BehaviorRef, TargetParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pout(int index) const", asMETHOD(BehaviorRef, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pout(BBSlot@+ slot) const", asMETHOD(BehaviorRef, PoutSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Local(int index) const", asMETHOD(BehaviorRef, Local), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1076,6 +1083,7 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorGraph", "bool get_valid() const", asMETHOD(BehaviorGraph, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Root() const", asMETHOD(BehaviorGraph, Root), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorGraphEdit@ Edit() const", asMETHOD(BehaviorGraph, Edit), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ FindByID(CK_ID id) const", asMETHOD(BehaviorGraph, FindByID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Find(BehaviorQuery@+ query) const", asMETHOD(BehaviorGraph, Find), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraph", "BehaviorNode@ Require(BehaviorQuery@+ query) const", asMETHOD(BehaviorGraph, Require), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraph", "array<BehaviorNode@>@ FindAll(BehaviorQuery@+ query) const", asMETHOD(BehaviorGraph, FindAll), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1144,6 +1152,10 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorNode@ Prev(BehaviorQuery@+ query = null) const", asMETHOD(BehaviorNode, Prev), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorNode", "array<BehaviorNode@>@ NextAll(BehaviorQuery@+ query = null) const", asMETHOD(BehaviorNode, NextAll), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorNode", "array<BehaviorNode@>@ PrevAll(BehaviorQuery@+ query = null) const", asMETHOD(BehaviorNode, PrevAll), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorNode", "array<BehaviorLinkRef@>@ NextLinks(BehaviorQuery@+ query = null) const", asMETHOD(BehaviorNode, NextLinks), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorNode", "array<BehaviorLinkRef@>@ PrevLinks(BehaviorQuery@+ query = null) const", asMETHOD(BehaviorNode, PrevLinks), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorNode", "array<BehaviorLinkRef@>@ OutputLinks(int outputIndex, BehaviorQuery@+ query = null) const", asMETHOD(BehaviorNode, OutputLinks), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorNode", "array<BehaviorLinkRef@>@ InputLinks(int inputIndex, BehaviorQuery@+ query = null) const", asMETHOD(BehaviorNode, InputLinks), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorLinkRef@ NextLink(BehaviorQuery@+ query = null) const", asMETHOD(BehaviorNode, NextLink), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorLinkRef@ PrevLink(BehaviorQuery@+ query = null) const", asMETHOD(BehaviorNode, PrevLink), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorNode", "BehaviorNode@ End(int maxSteps = 256) const", asMETHOD(BehaviorNode, End), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

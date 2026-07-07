@@ -400,6 +400,36 @@ BBResult *ScriptBehaviorBridge::RunCall(const ScriptBridgeBBInvocationSpec &requ
     return new BBResult(this, it->second.ResultId, it->second.Generation);
 }
 
+BBResult *ScriptBehaviorBridge::RunBehavior(CKBehavior *behavior, const CKBehaviorContext &ctx, int inputIndex) {
+    ScriptBridgeExecutionState state;
+    if (behavior) {
+        state = ExecuteOnce(behavior, ctx, inputIndex, nullptr, true);
+    } else {
+        state.Ok = false;
+        state.ReturnCode = CKBR_BEHAVIORERROR;
+        state.Error = "Behavior is not valid.";
+    }
+
+    if (behavior && (state.ReturnCode & CKBR_ACTIVATENEXTFRAME)) {
+        state.Ok = false;
+        state.Error = "Behavior requested next-frame execution; use BehaviorRef.Start(...) instead of BehaviorRef.Step(...).";
+        behavior->Activate(FALSE, TRUE);
+    }
+
+    ResultRecord record;
+    record.ResultId = m_NextResultId++;
+    record.Generation = m_NextGeneration++;
+    record.ComponentId = ComponentIdFromContext(ctx);
+    record.BehaviorId = behavior ? behavior->GetID() : 0;
+    record.BehaviorStamp = CaptureBridgeObjectStamp(behavior);
+    record.State = state;
+    record.SetFlag(ScriptBridgeTaskFlags::ExternalBehavior, true);
+
+    auto [it, inserted] = m_Results.emplace(record.ResultId, std::move(record));
+    (void) inserted;
+    return new BBResult(this, it->second.ResultId, it->second.Generation);
+}
+
 BBTask *ScriptBehaviorBridge::StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex) {
     ScriptBridgeExecutionState state;
     ScriptBridgeInputSourceBindings sources;
@@ -524,12 +554,15 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
     };
 
     behavior->UseFunction();
-    CKERROR err = behavior->InitFromGuid(guid);
+    CKERROR err = behavior->InitFromPrototype(prototype);
     if (err != CK_OK) {
         return fail(fmt::format("Failed to initialize Building Block from GUID ({}, {}) with CKERROR {}.",
                                 guid.d[0],
                                 guid.d[1],
                                 err));
+    }
+    if (!EnsurePrototypeStaticLayout(behavior, prototype, error)) {
+        return fail(error);
     }
 
     ScriptBridgeBBInvocationSpec resolvedRequest = request;
@@ -817,7 +850,7 @@ bool ScriptBehaviorBridge::DestroyInstance(CK_ID instanceId, int generation) {
             }
         }
     }
-    if (behavior) {
+    if (behavior && !it->second.HasFlag(ScriptBridgeTaskFlags::ExternalBehavior)) {
         QueueDestroy(behavior, true, it->second.HasFlag(ScriptBridgeTaskFlags::DeleteCallbackSent));
     }
     m_Instances.erase(it);
@@ -910,7 +943,7 @@ bool ScriptBehaviorBridge::DestroyTask(CK_ID taskId, int generation) {
             }
         }
     }
-    if (behavior) {
+    if (behavior && !it->second.HasFlag(ScriptBridgeTaskFlags::ExternalBehavior)) {
         QueueDestroy(behavior, true, it->second.HasFlag(ScriptBridgeTaskFlags::DeleteCallbackSent));
     }
     m_Tasks.erase(it);
@@ -1007,7 +1040,7 @@ bool ScriptBehaviorBridge::DestroyResult(CK_ID resultId, int generation) {
             }
         }
     }
-    if (behavior) {
+    if (behavior && !it->second.HasFlag(ScriptBridgeTaskFlags::ExternalBehavior)) {
         QueueDestroy(behavior, true, it->second.HasFlag(ScriptBridgeTaskFlags::DeleteCallbackSent));
     }
     m_Results.erase(it);
@@ -1118,9 +1151,12 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
     };
 
     behavior->UseFunction();
-    CKERROR err = behavior->InitFromGuid(guid);
+    CKERROR err = behavior->InitFromPrototype(prototype);
     if (err != CK_OK) {
         return fail(fmt::format("Failed to initialize Building Block from GUID ({}, {}) with CKERROR {}.", guid.d[0], guid.d[1], err));
+    }
+    if (!EnsurePrototypeStaticLayout(behavior, prototype, error)) {
+        return fail(error);
     }
 
     ScriptBridgeBBInvocationSpec resolvedRequest = request;

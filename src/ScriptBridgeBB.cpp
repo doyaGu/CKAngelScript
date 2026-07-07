@@ -1062,6 +1062,7 @@ bool BBConfig::RequireSlot(ScriptBridgeSlotKind kind, const std::string &name, i
 BBConfig *BBConfig::Owner(CKBeObject *owner) {
     m_Request.OwnerId = owner ? owner->GetID() : 0;
     m_Request.OwnerStamp = owner ? CaptureBridgeObjectStamp(owner) : ScriptBridgeObjectStamp();
+    ClearCachedSlots();
     AddRef();
     return this;
 }
@@ -1069,6 +1070,7 @@ BBConfig *BBConfig::Owner(CKBeObject *owner) {
 BBConfig *BBConfig::Target(CKBeObject *target) {
     m_Request.TargetId = target ? target->GetID() : 0;
     m_Request.TargetStamp = target ? CaptureBridgeObjectStamp(target) : ScriptBridgeObjectStamp();
+    ClearCachedSlots();
     AddRef();
     return this;
 }
@@ -1572,6 +1574,16 @@ BBSlot *BBConfig::FindCachedSlot(ScriptBridgeSlotKind kind, const std::string &n
     return nullptr;
 }
 
+void BBConfig::ClearCachedSlots() {
+    for (CachedSlot &slot : m_Slots) {
+        if (slot.Slot) {
+            slot.Slot->Release();
+            slot.Slot = nullptr;
+        }
+    }
+    m_Slots.clear();
+}
+
 BBSlot *BBConfig::DefaultInputSlot() {
     if (!m_DefaultStartInput.empty()) {
         return In(m_DefaultStartInput, m_DefaultStartOccurrence);
@@ -1644,6 +1656,7 @@ bool BBConfig::SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, c
         }
     }
     ScriptBridgeSetIndexedValue(m_Request.IndexedSettings, settingIndex, value);
+    ClearCachedSlots();
     return true;
 }
 

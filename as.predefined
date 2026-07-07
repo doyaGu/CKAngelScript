@@ -2666,6 +2666,7 @@ class BehaviorRef {
     ParamRef@ Pin(BBSlot@ slot) const;
     ParamRef@ Pin(const string&in name, int occurrence = 0) const;
     ParamRef@ Pin(int index) const;
+    ParamRef@ TargetParameter() const;
     ParamRef@ Pout(BBSlot@ slot) const;
     ParamRef@ Pout(int index) const;
     GraphTask@ Start(BBSlot@ input, bool reset = false, float timeout = 0.0f);

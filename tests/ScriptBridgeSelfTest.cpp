@@ -407,6 +407,19 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (pout !is null && pout.IsValid()) { ParamRef@ poutRef = cfg.PoutRef(pout); if (poutRef is null || !poutRef.IsValid()) return 949; }\n";
     source += "    cfg.Explain();\n";
     source += "    cfg.Destroy();\n";
+    source += "    BBDecl@ execDecl = BB::Require(ctx, CKGUID(0x15a41762, 0x0c7c4a91));\n";
+    source += "    if (execDecl is null || !execDecl.IsValid()) return 958;\n";
+    source += "    BBConfig@ execCfg = execDecl.Configure();\n";
+    source += "    if (execCfg is null || !execCfg.IsValid()) return 959;\n";
+    source += "    BBSlot@ scriptSetting = execCfg.Setting(\"Script\");\n";
+    source += "    BBSlot@ classSetting = execCfg.Setting(\"Class\");\n";
+    source += "    BBSlot@ interfaceSetting = execCfg.Setting(\"Interface\");\n";
+    source += "    if (scriptSetting is null || classSetting is null || interfaceSetting is null || !interfaceSetting.IsValid()) return 960;\n";
+    source += "    string interfaceText = \"input 0 name=\\\"In\\\"\\noutput 0 name=\\\"Out\\\"\\npin 0 name=\\\"Message\\\" guid=\\\"guid:0x03881e12,0x5ba34e2b\\\"\";\n";
+    source += "    if (execCfg.SetSetting(scriptSetting, \"ckas.bridge.selftest\") is null || execCfg.SetSetting(classSetting, \"Probe\") is null || execCfg.SetSetting(interfaceSetting, interfaceText) is null) return 961;\n";
+    source += "    BBSlot@ messagePin = execCfg.Pin(\"Message\");\n";
+    source += "    if (messagePin is null || !messagePin.IsValid() || messagePin.TypeGuid() != CKPGUID_MESSAGE) return 962;\n";
+    source += "    if (!execCfg.Validate(ctx)) return 963;\n";
     source += "    return 0;\n";
     source += "}\n";
     source += "int ProbeBBResultApi(const CKBehaviorContext &in ctx) {\n";
@@ -525,6 +538,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (!behavior.valid || behavior.Error() != \"\") return 9841;\n";
     source += "    if (behavior.Describe() == \"\" || behavior.Name() == \"\" || behavior.ClassId() == 0) return 9842;\n";
     source += "    behavior.IsDynamic();\n";
+    source += "    CKBeObject@ behaviorOwner = behavior.Owner(); if (behaviorOwner !is null && cast<CKObject>(behaviorOwner) is null) return 9843;\n";
+    source += "    CKBeObject@ behaviorTarget = behavior.Target(); if (behaviorTarget !is null && cast<CKObject>(behaviorTarget) is null) return 9844;\n";
     source += "    ObjectRef@ object = behavior;\n";
     source += "    if (object is null || object.Id() != behavior.Id()) return 985;\n";
     source += "    BehaviorLayout@ layout = behavior.Layout();\n";
@@ -540,6 +555,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (pinByName is null || !pinByName.IsValid() || pinByName.Id() != pinByIndex.Id()) return 9862;\n";
     source += "    ParamRef@ pinRef = behavior.Pin(pinSlot);\n";
     source += "    if (pinRef is null || !pinRef.IsValid()) return 987;\n";
+    source += "    ParamRef@ targetParam = behavior.TargetParameter(); if (targetParam !is null) { targetParam.IsValid(); }\n";
     source += "    ParamRef@ poutByIndex = behavior.Pout(0); if (poutByIndex !is null) { poutByIndex.IsValid(); }\n";
     source += "    if (poutSlot !is null && poutSlot.IsValid()) { ParamRef@ poutRef = behavior.Pout(poutSlot); if (poutRef is null || !poutRef.IsValid()) return 988; }\n";
     source += "    ParamRef@ localByIndex = behavior.Local(0); if (localByIndex !is null) { localByIndex.IsValid(); }\n";
@@ -567,15 +583,22 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    graph.IsValid(); graph.Describe();\n";
     source += "    BehaviorNode@ root = graph.Root();\n";
     source += "    if (root is null) return 1032;\n";
+    source += "    BehaviorNode@ rootById = graph.FindByID(root.Behavior().Id());\n";
+    source += "    if (rootById is null || !rootById.IsValid()) return 10321;\n";
+    source += "    if (graph.FindByID(0) !is null) return 10322;\n";
     source += "    root.IsValid(); root.Error(); root.Describe();\n";
     source += "    BehaviorQuery@ nodeQuery = Behavior::Query().Recursive(false).MaxDepth(1);\n";
     source += "    BehaviorNode@ next = root.Next(nodeQuery);\n";
     source += "    BehaviorNode@ prev = root.Prev(nodeQuery);\n";
     source += "    array<BehaviorNode@>@ nextAll = root.NextAll(nodeQuery);\n";
     source += "    array<BehaviorNode@>@ prevAll = root.PrevAll(nodeQuery);\n";
+    source += "    array<BehaviorLinkRef@>@ nextLinks = root.NextLinks(nodeQuery);\n";
+    source += "    array<BehaviorLinkRef@>@ prevLinks = root.PrevLinks(nodeQuery);\n";
+    source += "    array<BehaviorLinkRef@>@ outputLinks = root.OutputLinks(0, nodeQuery);\n";
+    source += "    array<BehaviorLinkRef@>@ inputLinks = root.InputLinks(0, nodeQuery);\n";
     source += "    BehaviorLinkRef@ nextLink = root.NextLink(nodeQuery);\n";
     source += "    BehaviorLinkRef@ prevLink = root.PrevLink(nodeQuery);\n";
-    source += "    if (nextAll is null || prevAll is null) return 1034;\n";
+    source += "    if (nextAll is null || prevAll is null || nextLinks is null || prevLinks is null || outputLinks is null || inputLinks is null) return 1034;\n";
     source += "    BehaviorRef@ self = bridge.Self();\n";
     source += "    if (self !is null) { self.IsValid(); self.Id(); self.Name(); self.Describe(); }\n";
     source += "    ObjectRef@ selfObject = self;\n";
@@ -2293,6 +2316,7 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     }
 
     root->UseGraph();
+    root->CreateInput("Start");
     source->CreateOutput("Out");
     target->CreateInput("In");
     CKParameterIn *targetValue = target->CreateInputParameter(const_cast<CKSTRING>("Value"), CKPGUID_INT);
@@ -2510,6 +2534,46 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     }
     secondApply->Release();
 
+    BehaviorNode *rootNode = graph->Root();
+    BehaviorGraphEdit *rootEntryEdit = graph->Edit();
+    GraphEditNode *editRoot = rootEntryEdit ? rootEntryEdit->Import(rootNode) : nullptr;
+    GraphEditNode *rootEntryTarget = rootEntryEdit ? rootEntryEdit->Import(targetNode) : nullptr;
+    GraphEditLink *rootEntryPlan = rootEntryEdit ? rootEntryEdit->Link(editRoot, 0, rootEntryTarget, 0, 1) : nullptr;
+    GraphEditResult *rootEntryResult = rootEntryEdit ? rootEntryEdit->Apply(ctx) : nullptr;
+    CKBehaviorLink *rootEntryLink = root->GetSubBehaviorLinkCount() == 1 ? root->GetSubBehaviorLink(0) : nullptr;
+    CKBehaviorIO *rootEntrySourceIo = rootEntryLink ? rootEntryLink->GetInBehaviorIO() : nullptr;
+    CKBehaviorIO *rootEntryTargetIo = rootEntryLink ? rootEntryLink->GetOutBehaviorIO() : nullptr;
+    const bool rootEntryOk = rootNode && rootNode->IsValid() &&
+        rootEntryPlan && rootEntryPlan->IsValid() &&
+        rootEntryResult && rootEntryResult->Ok() &&
+        rootEntrySourceIo && rootEntrySourceIo->GetOwner() == root && root->GetInputPosition(rootEntrySourceIo) == 0 &&
+        rootEntryTargetIo && rootEntryTargetIo->GetOwner() == target && target->GetInputPosition(rootEntryTargetIo) == 0;
+    if (!rootEntryOk) {
+        error = fmt::format("Graph edit self-test failed root-entry link apply: apply={} linkCount={}.",
+                            rootEntryResult && rootEntryResult->Ok() ? "ok" : (rootEntryResult ? rootEntryResult->Error() : "<null>"),
+                            root->GetSubBehaviorLinkCount());
+        if (rootEntryResult) rootEntryResult->Release();
+        if (rootEntryPlan) rootEntryPlan->Release();
+        if (rootEntryTarget) rootEntryTarget->Release();
+        if (editRoot) editRoot->Release();
+        if (rootEntryEdit) rootEntryEdit->Release();
+        if (rootNode) rootNode->Release();
+        unlinkResult->Release();
+        unlinkEdit->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
     target->UseGraph();
     CKBehaviorContext targetGraphCtx = ctx;
     targetGraphCtx.Behavior = target;
@@ -2524,6 +2588,12 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
         if (selfMoveValidation) selfMoveValidation->Release();
         selfMoveEdit->Release();
         targetGraph->Release();
+        rootEntryResult->Release();
+        rootEntryPlan->Release();
+        rootEntryTarget->Release();
+        editRoot->Release();
+        rootEntryEdit->Release();
+        rootNode->Release();
         unlinkResult->Release();
         unlinkEdit->Release();
         createdLink->Release();
@@ -2558,6 +2628,12 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     }
     if (!scratchGraphEditTarget || exposedScratchLocal) {
         error = "Graph edit self-test exposed scratch graph edit target local.";
+        rootEntryResult->Release();
+        rootEntryPlan->Release();
+        rootEntryTarget->Release();
+        editRoot->Release();
+        rootEntryEdit->Release();
+        rootNode->Release();
         unlinkResult->Release();
         unlinkEdit->Release();
         createdLink->Release();
@@ -2617,6 +2693,12 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
         setTarget->Release();
         setEdit->Release();
         if (valueSlot) valueSlot->Release();
+        rootEntryResult->Release();
+        rootEntryPlan->Release();
+        rootEntryTarget->Release();
+        editRoot->Release();
+        rootEntryEdit->Release();
+        rootNode->Release();
         unlinkResult->Release();
         unlinkEdit->Release();
         createdLink->Release();
@@ -2686,6 +2768,12 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
         if (graphEditReplacementRef) graphEditReplacementRef->Release();
         DestroySelfTestObject(context, graphEditReplacementSource);
         if (valueSlot) valueSlot->Release();
+        rootEntryResult->Release();
+        rootEntryPlan->Release();
+        rootEntryTarget->Release();
+        editRoot->Release();
+        rootEntryEdit->Release();
+        rootNode->Release();
         unlinkResult->Release();
         unlinkEdit->Release();
         createdLink->Release();
@@ -2717,6 +2805,12 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
         error = "Graph edit self-test failed remove apply.";
         if (removeResult) removeResult->Release();
         removeEdit->Release();
+        rootEntryResult->Release();
+        rootEntryPlan->Release();
+        rootEntryTarget->Release();
+        editRoot->Release();
+        rootEntryEdit->Release();
+        rootNode->Release();
         unlinkResult->Release();
         unlinkEdit->Release();
         createdLink->Release();
@@ -2736,6 +2830,12 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
 
     removeResult->Release();
     removeEdit->Release();
+    rootEntryResult->Release();
+    rootEntryPlan->Release();
+    rootEntryTarget->Release();
+    editRoot->Release();
+    rootEntryEdit->Release();
+    rootNode->Release();
     unlinkResult->Release();
     unlinkEdit->Release();
     createdLink->Release();

@@ -11,6 +11,7 @@ class CScriptArray;
 class BBCallBuilder;
 class BBTaskBuilder;
 class BBConfig;
+class BBResult;
 class BehaviorFrame;
 class BehaviorGraph;
 class BehaviorGraphEdit;
@@ -340,10 +341,16 @@ public:
     bool IsActive() const;
     CKGUID GetPrototypeGuid() const;
     std::string GetPrototypeName() const;
+    CKBeObject *Owner() const;
+    CKBeObject *Target() const;
     BehaviorLayout *Layout() const;
     BehaviorGraph *AsGraph() const;
     bool Trigger(int inputIndex, bool reset);
     bool TriggerSlot(BBSlot *input, bool reset);
+    BBResult *Step(const CKBehaviorContext &ctx, int inputIndex);
+    BBResult *StepFrame(BehaviorFrame *frame, int inputIndex);
+    BBResult *StepSlot(const CKBehaviorContext &ctx, BBSlot *input);
+    BBResult *StepSlotFrame(BehaviorFrame *frame, BBSlot *input);
     GraphTask *Start(int inputIndex, bool reset, float timeoutSeconds);
     GraphTask *StartSlot(BBSlot *input, bool reset, float timeoutSeconds);
     GraphTask *Watch(float timeoutSeconds);
@@ -354,6 +361,7 @@ public:
     ParamRef *Pin(int index) const;
     ParamRef *PinName(const std::string &name, int occurrence = 0) const;
     ParamRef *PinSlot(BBSlot *slot) const;
+    ParamRef *TargetParameter() const;
     ParamRef *Pout(int index) const;
     ParamRef *PoutSlot(BBSlot *slot) const;
     ParamRef *Local(int index) const;
@@ -421,6 +429,7 @@ public:
     bool IsValid() const;
     BehaviorNode *Root() const;
     BehaviorGraphEdit *Edit() const;
+    BehaviorNode *FindByID(CK_ID id) const;
     BehaviorNode *Find(BehaviorQuery *query) const;
     BehaviorNode *Require(BehaviorQuery *query) const;
     CScriptArray *FindAll(BehaviorQuery *query) const;
@@ -571,6 +580,8 @@ private:
         ScriptBridgeObjectStamp BehaviorStamp;
         ScriptBridgeBBInvocationSpec Request;
         std::string Name;
+        int PlannedInputCount = 0;
+        int PlannedOutputCount = 0;
         CK_ID CreatedBehaviorId = 0;
         ScriptBridgeObjectStamp CreatedBehaviorStamp;
     };
@@ -709,6 +720,10 @@ public:
     BehaviorNode *Prev(BehaviorQuery *query = nullptr) const;
     CScriptArray *NextAll(BehaviorQuery *query = nullptr) const;
     CScriptArray *PrevAll(BehaviorQuery *query = nullptr) const;
+    CScriptArray *NextLinks(BehaviorQuery *query = nullptr) const;
+    CScriptArray *PrevLinks(BehaviorQuery *query = nullptr) const;
+    CScriptArray *OutputLinks(int outputIndex, BehaviorQuery *query = nullptr) const;
+    CScriptArray *InputLinks(int inputIndex, BehaviorQuery *query = nullptr) const;
     BehaviorLinkRef *NextLink(BehaviorQuery *query = nullptr) const;
     BehaviorLinkRef *PrevLink(BehaviorQuery *query = nullptr) const;
     BehaviorNode *End(int maxSteps = 256) const;
@@ -720,6 +735,7 @@ public:
 
 private:
     CScriptArray *AdjacentAll(bool next, int ioIndex, BehaviorQuery *query) const;
+    CScriptArray *AdjacentLinks(bool next, int ioIndex, BehaviorQuery *query) const;
     BehaviorNode *AdjacentFirst(bool next, int ioIndex, BehaviorQuery *query) const;
     BehaviorLinkRef *AdjacentLinkFirst(bool next, int ioIndex, BehaviorQuery *query) const;
 
@@ -975,6 +991,7 @@ private:
 
     BBSlot *Slot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence);
     BBSlot *FindCachedSlot(ScriptBridgeSlotKind kind, const std::string &name, int occurrence) const;
+    void ClearCachedSlots();
     BBSlot *DefaultInputSlot();
     BBSlot *DefaultStopSlot();
     bool ResolvePin(BBSlot *slot, int &pinIndex, const char *method);

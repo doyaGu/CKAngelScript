@@ -1,4 +1,5 @@
 #include "ScriptBridgeHandles.h"
+#include "ScriptBehaviorFrame.h"
 
 #include <algorithm>
 #include <set>
@@ -274,6 +275,8 @@ std::string BehaviorRef::GetName() const { CKBehavior *b = Get(); return b ? Saf
 bool BehaviorRef::IsActive() const { CKBehavior *b = Get(); return b && b->IsActive(); }
 CKGUID BehaviorRef::GetPrototypeGuid() const { CKBehavior *b = Get(); return b ? b->GetPrototypeGuid() : CKGUID(); }
 std::string BehaviorRef::GetPrototypeName() const { CKBehavior *b = Get(); return b ? SafeString(b->GetPrototypeName()) : std::string(); }
+CKBeObject *BehaviorRef::Owner() const { CKBehavior *b = Get(); return b ? b->GetOwner() : nullptr; }
+CKBeObject *BehaviorRef::Target() const { CKBehavior *b = Get(); return b ? b->GetTarget() : nullptr; }
 
 BehaviorLayout *BehaviorRef::Layout() const { return m_Bridge ? new BehaviorLayout(m_Bridge, Id()) : nullptr; }
 
@@ -319,6 +322,45 @@ bool BehaviorRef::TriggerSlot(BBSlot *input, bool reset) {
         return false;
     }
     return Trigger(inputIndex, reset);
+}
+
+BBResult *BehaviorRef::Step(const CKBehaviorContext &ctx, int inputIndex) {
+    CKBehavior *behavior = Get();
+    if (!behavior) {
+        SetScriptException("BehaviorRef is not valid.");
+        return nullptr;
+    }
+    if (!m_Bridge) {
+        SetScriptException("BehaviorRef.Step requires ScriptBehaviorBridge.");
+        return nullptr;
+    }
+    return m_Bridge->RunBehavior(behavior, ctx, inputIndex);
+}
+
+BBResult *BehaviorRef::StepFrame(BehaviorFrame *frame, int inputIndex) {
+    if (!frame) {
+        SetScriptException("BehaviorRef.Step requires a BehaviorFrame.");
+        return nullptr;
+    }
+    return Step(frame->ToBehaviorContext(), inputIndex);
+}
+
+BBResult *BehaviorRef::StepSlot(const CKBehaviorContext &ctx, BBSlot *input) {
+    int inputIndex = -1;
+    std::string error;
+    if (!input || !input->ResolveIndex(ScriptBridgeSlotKind::Input, inputIndex, error)) {
+        SetScriptException(error.empty() ? "BehaviorRef.Step requires an input BBSlot." : error);
+        return nullptr;
+    }
+    return Step(ctx, inputIndex);
+}
+
+BBResult *BehaviorRef::StepSlotFrame(BehaviorFrame *frame, BBSlot *input) {
+    if (!frame) {
+        SetScriptException("BehaviorRef.Step requires a BehaviorFrame.");
+        return nullptr;
+    }
+    return StepSlot(frame->ToBehaviorContext(), input);
 }
 
 GraphTask *BehaviorRef::Start(int inputIndex, bool reset, float timeoutSeconds) {
@@ -405,6 +447,18 @@ ParamRef *BehaviorRef::PinSlot(BBSlot *slot) const {
         return nullptr;
     }
     return Pin(index);
+}
+
+ParamRef *BehaviorRef::TargetParameter() const {
+    CKBehavior *behavior = Get();
+    CKParameterIn *target = behavior ? behavior->GetTargetParameter() : nullptr;
+    return m_Bridge && target ? new ParamRef(m_Bridge,
+                                             target->GetID(),
+                                             ScriptBridgeSlotKind::Standalone,
+                                             -1,
+                                             Id(),
+                                             target->GetCKContext())
+                              : nullptr;
 }
 
 ParamRef *BehaviorRef::Pout(int index) const {

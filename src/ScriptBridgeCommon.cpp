@@ -340,6 +340,114 @@ CKPARAMETER_DESC *GetPrototypeLocalParameter(CKBehaviorPrototype *prototype, int
 #endif
 }
 
+namespace {
+
+bool ApplyPrototypeInputDefault(CKBehavior *behavior,
+                                CKParameterIn *input,
+                                CKPARAMETER_DESC *desc,
+                                int index,
+                                std::string &error) {
+    if (!behavior || !input || !desc) {
+        return true;
+    }
+    if ((!desc->DefaultValue || desc->DefaultValueSize <= 0) &&
+        (!desc->DefaultValueString || desc->DefaultValueString[0] == '\0')) {
+        return true;
+    }
+
+    const std::string localName = fmt::format("__CKAS_BridgePrototypeDefault_{}", index);
+    CKParameterLocal *local = behavior->CreateLocalParameter(const_cast<CKSTRING>(localName.c_str()), input->GetGUID());
+    if (!local) {
+        error = fmt::format("Failed to create prototype default source for input parameter #{} '{}'.",
+                            index,
+                            SafeString(input->GetName()));
+        return false;
+    }
+
+    CKERROR err = CK_OK;
+    if (desc->DefaultValue && desc->DefaultValueSize > 0) {
+        err = local->SetValue(desc->DefaultValue, desc->DefaultValueSize);
+    } else {
+        err = local->SetStringValue(desc->DefaultValueString);
+    }
+    if (err != CK_OK) {
+        error = fmt::format("Failed to apply prototype default for input parameter #{} '{}' (CKERROR {}).",
+                            index,
+                            SafeString(input->GetName()),
+                            err);
+        return false;
+    }
+
+    behavior->SetInputParameterDefaultValue(input, local);
+    err = input->SetDirectSource(local);
+    if (err != CK_OK) {
+        error = fmt::format("Failed to bind prototype default source for input parameter #{} '{}' (CKERROR {}).",
+                            index,
+                            SafeString(input->GetName()),
+                            err);
+        return false;
+    }
+    return true;
+}
+
+} // namespace
+
+bool EnsurePrototypeStaticLayout(CKBehavior *behavior, CKBehaviorPrototype *prototype, std::string &error) {
+    error.clear();
+    if (!behavior || !prototype) {
+        error = "Behavior or prototype is not available.";
+        return false;
+    }
+
+    for (int i = behavior->GetInputCount(); i < prototype->GetInputCount(); ++i) {
+        CKBEHAVIORIO_DESC *desc = GetPrototypeInput(prototype, i);
+        if (!behavior->CreateInput(desc && desc->Name ? desc->Name : const_cast<CKSTRING>("In"))) {
+            error = fmt::format("Failed to create input #{} from prototype '{}'.",
+                                i,
+                                SafeString(prototype->GetName()));
+            return false;
+        }
+    }
+
+    for (int i = behavior->GetOutputCount(); i < prototype->GetOutputCount(); ++i) {
+        CKBEHAVIORIO_DESC *desc = GetPrototypeOutput(prototype, i);
+        if (!behavior->CreateOutput(desc && desc->Name ? desc->Name : const_cast<CKSTRING>("Out"))) {
+            error = fmt::format("Failed to create output #{} from prototype '{}'.",
+                                i,
+                                SafeString(prototype->GetName()));
+            return false;
+        }
+    }
+
+    for (int i = behavior->GetInputParameterCount(); i < prototype->GetInParameterCount(); ++i) {
+        CKPARAMETER_DESC *desc = GetPrototypeInputParameter(prototype, i);
+        CKParameterIn *input = behavior->CreateInputParameter(desc && desc->Name ? desc->Name : const_cast<CKSTRING>(""),
+                                                              desc ? desc->Guid : CKGUID());
+        if (!input) {
+            error = fmt::format("Failed to create input parameter #{} from prototype '{}'.",
+                                i,
+                                SafeString(prototype->GetName()));
+            return false;
+        }
+        if (!ApplyPrototypeInputDefault(behavior, input, desc, i, error)) {
+            return false;
+        }
+    }
+
+    for (int i = behavior->GetOutputParameterCount(); i < prototype->GetOutParameterCount(); ++i) {
+        CKPARAMETER_DESC *desc = GetPrototypeOutputParameter(prototype, i);
+        if (!behavior->CreateOutputParameter(desc && desc->Name ? desc->Name : const_cast<CKSTRING>(""),
+                                             desc ? desc->Guid : CKGUID())) {
+            error = fmt::format("Failed to create output parameter #{} from prototype '{}'.",
+                                i,
+                                SafeString(prototype->GetName()));
+            return false;
+        }
+    }
+
+    return true;
+}
+
 int FindInputIndex(CKBehavior *behavior, const std::string &name) {
     if (!behavior) {
         return -1;

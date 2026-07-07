@@ -541,6 +541,18 @@ BehaviorGraphEdit *BehaviorGraph::Edit() const {
     return new BehaviorGraphEdit(m_Bridge, m_Context, m_RootBehaviorId);
 }
 
+BehaviorNode *BehaviorGraph::FindByID(CK_ID id) const {
+    CKBehavior *root = RootBehavior();
+    CKBehavior *behavior = BehaviorById(m_Bridge, id);
+    if (!root || !behavior) {
+        return nullptr;
+    }
+    if (behavior != root && !ContainsSubBehaviorRecursive(root, behavior)) {
+        return nullptr;
+    }
+    return WrapNode(behavior);
+}
+
 BehaviorNode *BehaviorGraph::Find(BehaviorQuery *query) const {
     std::vector<CKBehavior *> matches = FindAllRaw(query);
     const int occurrence = query ? query->GetOccurrence() : 0;
@@ -932,6 +944,10 @@ GraphEditNode *BehaviorGraphEdit::AddDecl(BBDecl *decl, const std::string &name)
     spec.Type = NodeSpec::Kind::Create;
     spec.Request = decl->Request();
     spec.Name = name.empty() ? decl->Name() : name;
+    if (const ScriptBridgeLayoutRecord *layout = m_Bridge ? m_Bridge->GetPrototypeLayout(m_Context, spec.Request) : nullptr) {
+        spec.PlannedInputCount = static_cast<int>(layout->Inputs.size());
+        spec.PlannedOutputCount = static_cast<int>(layout->Outputs.size());
+    }
     const int index = static_cast<int>(m_Nodes.size());
     m_Nodes.push_back(spec);
     return new GraphEditNode(this, index, 0);
@@ -951,6 +967,10 @@ GraphEditNode *BehaviorGraphEdit::AddConfig(BBConfig *config, const std::string 
     spec.Name = name.empty() && decl ? decl->Name() : name;
     if (decl) {
         decl->Release();
+    }
+    if (const ScriptBridgeLayoutRecord *layout = m_Bridge ? m_Bridge->GetPrototypeLayout(m_Context, spec.Request) : nullptr) {
+        spec.PlannedInputCount = static_cast<int>(layout->Inputs.size());
+        spec.PlannedOutputCount = static_cast<int>(layout->Outputs.size());
     }
     const int index = static_cast<int>(m_Nodes.size());
     m_Nodes.push_back(spec);
@@ -1438,8 +1458,12 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         }
         CKBehavior *source = ResolveNodeBehavior(spec.SourceNodeIndex);
         CKBehavior *target = ResolveNodeBehavior(spec.TargetNodeIndex);
-        CKBehaviorIO *sourceIo = source ? source->GetOutput(spec.SourceOutputIndex) : nullptr;
-        CKBehaviorIO *targetIo = target ? target->GetInput(spec.TargetInputIndex) : nullptr;
+        CKBehaviorIO *sourceIo = source
+            ? (source == root ? source->GetInput(spec.SourceOutputIndex) : source->GetOutput(spec.SourceOutputIndex))
+            : nullptr;
+        CKBehaviorIO *targetIo = target
+            ? (target == root ? target->GetOutput(spec.TargetInputIndex) : target->GetInput(spec.TargetInputIndex))
+            : nullptr;
         CKBehaviorLink *link = CKBehaviorLink::Cast(context->CreateObject(CKCID_BEHAVIORLINK,
                                                                           const_cast<CKSTRING>("__CKAS_GraphEdit_Link"),
                                                                           CK_OBJECTCREATION_NONAMECHECK));
@@ -1740,10 +1764,23 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
         return false;
     }
 
+    auto nodeIsRoot = [&](int index) {
+        if (index < 0 || index >= static_cast<int>(m_Nodes.size())) {
+            return false;
+        }
+        const NodeSpec &spec = m_Nodes[index];
+        return spec.Type == NodeSpec::Kind::Existing &&
+               StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp) == root;
+    };
+
     std::set<int> removedNodes;
     for (const RemoveSpec &remove : m_Removes) {
         if (remove.NodeIndex < 0 || remove.NodeIndex >= static_cast<int>(m_Nodes.size())) {
             error = "BehaviorGraphEdit has an invalid remove node reference.";
+            return false;
+        }
+        if (nodeIsRoot(remove.NodeIndex)) {
+            error = "BehaviorGraphEdit.Remove cannot remove the root graph.";
             return false;
         }
         if (!removedNodes.insert(remove.NodeIndex).second) {
@@ -1761,8 +1798,7 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
                 return false;
             }
             if (behavior == root) {
-                error = "BehaviorGraphEdit cannot mutate the root graph as a child node.";
-                return false;
+                continue;
             }
             if (!IsDirectChildOf(root, behavior)) {
                 error = fmt::format("Behavior '{}' is not a direct child of graph '{}'.",
@@ -1804,6 +1840,10 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
             error = "BehaviorGraphEdit.Target references an invalid or removed node.";
             return false;
         }
+        if (nodeIsRoot(spec.NodeIndex)) {
+            error = "BehaviorGraphEdit.Target cannot mutate the root graph.";
+            return false;
+        }
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
         CKBeObject *target = CKBeObject::Cast(GetStampedCKObjectById(context, spec.TargetId, spec.TargetStamp));
         if (!behavior || !target) {
@@ -1828,22 +1868,26 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
             error = "BehaviorGraphEdit layout edit references an invalid or removed node.";
             return false;
         }
-        const NodeSpec &node = m_Nodes[spec.NodeIndex];
-        if (node.Type != NodeSpec::Kind::Existing) {
-            error = "BehaviorGraphEdit layout edit can only target existing behavior nodes.";
+        if (nodeIsRoot(spec.NodeIndex)) {
+            error = "BehaviorGraphEdit layout edit cannot mutate the root graph.";
             return false;
         }
+        const NodeSpec &node = m_Nodes[spec.NodeIndex];
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
-        if (!behavior) {
+        if (!behavior && node.Type != NodeSpec::Kind::Create) {
             error = "BehaviorGraphEdit layout edit target behavior is not valid.";
             return false;
         }
-        const int currentCount = spec.Type == LayoutSpec::Kind::EnsureInputCount
-            ? behavior->GetInputCount()
-            : behavior->GetOutputCount();
+        const int currentCount = behavior
+            ? (spec.Type == LayoutSpec::Kind::EnsureInputCount
+                ? behavior->GetInputCount()
+                : behavior->GetOutputCount())
+            : (spec.Type == LayoutSpec::Kind::EnsureInputCount
+                ? node.PlannedInputCount
+                : node.PlannedOutputCount);
         if (spec.Count < currentCount) {
             error = fmt::format("BehaviorGraphEdit layout edit cannot shrink {} from {} to {}.",
-                                BehaviorLabel(behavior),
+                                behavior ? BehaviorLabel(behavior) : fmt::format("pending node #{}", spec.NodeIndex),
                                 currentCount,
                                 spec.Count);
             return false;
@@ -1871,57 +1915,35 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
         }
 
         CKBehavior *source = ResolveNodeBehavior(spec.SourceNodeIndex);
-        CKBehavior *target = ResolveNodeBehavior(spec.TargetNodeIndex);
-        if (source) {
-            if (spec.SourceOutputIndex < 0 || spec.SourceOutputIndex >= PlannedOutputCount(spec.SourceNodeIndex)) {
-                error = fmt::format("Source output index #{} is out of range for {}.",
-                                    spec.SourceOutputIndex,
-                                    BehaviorLabel(source));
-                return false;
-            }
-        } else {
-            const NodeSpec &sourceSpec = m_Nodes[spec.SourceNodeIndex];
-            const int outputCount = sourceSpec.Type == NodeSpec::Kind::Clone
-                ? PlannedOutputCount(spec.SourceNodeIndex)
-                : [&]() {
-                    const ScriptBridgeLayoutRecord *layout = m_Bridge->GetPrototypeLayout(ctx, sourceSpec.Request);
-                    return layout ? static_cast<int>(layout->Outputs.size()) : -1;
-                }();
-            if (spec.SourceOutputIndex < 0 || spec.SourceOutputIndex >= outputCount) {
-                error = fmt::format("Source output index #{} is out of range for pending node #{}.",
-                                    spec.SourceOutputIndex,
-                                    spec.SourceNodeIndex);
-                return false;
-            }
+        const bool sourceIsRoot = nodeIsRoot(spec.SourceNodeIndex);
+        const int outputCount = sourceIsRoot ? PlannedInputCount(spec.SourceNodeIndex) : PlannedOutputCount(spec.SourceNodeIndex);
+        if (spec.SourceOutputIndex < 0 || spec.SourceOutputIndex >= outputCount) {
+            error = fmt::format("{} index #{} is out of range for {}.",
+                                sourceIsRoot ? "Source interface input" : "Source output",
+                                spec.SourceOutputIndex,
+                                source ? BehaviorLabel(source) : fmt::format("pending node #{}", spec.SourceNodeIndex));
+            return false;
         }
 
-        if (target) {
-            if (spec.TargetInputIndex < 0 || spec.TargetInputIndex >= PlannedInputCount(spec.TargetNodeIndex)) {
-                error = fmt::format("Target input index #{} is out of range for {}.",
-                                    spec.TargetInputIndex,
-                                    BehaviorLabel(target));
-                return false;
-            }
-        } else {
-            const NodeSpec &targetSpec = m_Nodes[spec.TargetNodeIndex];
-            const int inputCount = targetSpec.Type == NodeSpec::Kind::Clone
-                ? PlannedInputCount(spec.TargetNodeIndex)
-                : [&]() {
-                    const ScriptBridgeLayoutRecord *layout = m_Bridge->GetPrototypeLayout(ctx, targetSpec.Request);
-                    return layout ? static_cast<int>(layout->Inputs.size()) : -1;
-                }();
-            if (spec.TargetInputIndex < 0 || spec.TargetInputIndex >= inputCount) {
-                error = fmt::format("Target input index #{} is out of range for pending node #{}.",
-                                    spec.TargetInputIndex,
-                                    spec.TargetNodeIndex);
-                return false;
-            }
+        CKBehavior *target = ResolveNodeBehavior(spec.TargetNodeIndex);
+        const bool targetIsRoot = nodeIsRoot(spec.TargetNodeIndex);
+        const int inputCount = targetIsRoot ? PlannedOutputCount(spec.TargetNodeIndex) : PlannedInputCount(spec.TargetNodeIndex);
+        if (spec.TargetInputIndex < 0 || spec.TargetInputIndex >= inputCount) {
+            error = fmt::format("{} index #{} is out of range for {}.",
+                                targetIsRoot ? "Target interface output" : "Target input",
+                                spec.TargetInputIndex,
+                                target ? BehaviorLabel(target) : fmt::format("pending node #{}", spec.TargetNodeIndex));
+            return false;
         }
     }
 
     for (const ValueSpec &spec : m_Values) {
         if (spec.NodeIndex < 0 || spec.NodeIndex >= static_cast<int>(m_Nodes.size()) || nodeRemoved(spec.NodeIndex)) {
             error = "BehaviorGraphEdit.Set references an invalid or removed node.";
+            return false;
+        }
+        if (nodeIsRoot(spec.NodeIndex)) {
+            error = "BehaviorGraphEdit.Set cannot mutate the root graph.";
             return false;
         }
         if (m_Nodes[spec.NodeIndex].Type != NodeSpec::Kind::Existing) {
@@ -1937,6 +1959,10 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
     for (const SourceSpec &spec : m_Sources) {
         if (spec.NodeIndex < 0 || spec.NodeIndex >= static_cast<int>(m_Nodes.size()) || nodeRemoved(spec.NodeIndex)) {
             error = "BehaviorGraphEdit.Source references an invalid or removed node.";
+            return false;
+        }
+        if (nodeIsRoot(spec.NodeIndex)) {
+            error = "BehaviorGraphEdit.Source cannot mutate the root graph.";
             return false;
         }
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
@@ -1970,6 +1996,10 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
             error = "BehaviorGraphEdit.Operation references an invalid or removed node.";
             return false;
         }
+        if (nodeIsRoot(spec.NodeIndex)) {
+            error = "BehaviorGraphEdit.Operation cannot mutate the root graph.";
+            return false;
+        }
         CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
         CKParameterIn *pin = behavior && spec.Operation.TargetPinIndex >= 0 &&
                 spec.Operation.TargetPinIndex < behavior->GetInputParameterCount()
@@ -1993,6 +2023,10 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
     for (const MoveSpec &move : m_Moves) {
         if (move.NodeIndex < 0 || move.NodeIndex >= static_cast<int>(m_Nodes.size()) || nodeRemoved(move.NodeIndex)) {
             error = "BehaviorGraphEdit.Move has an invalid or removed node reference.";
+            return false;
+        }
+        if (nodeIsRoot(move.NodeIndex)) {
+            error = "BehaviorGraphEdit.Move cannot move the root graph.";
             return false;
         }
         CKBehavior *targetRoot = StampedBehaviorById(m_Bridge, move.TargetRootId, move.TargetRootStamp);
@@ -2084,6 +2118,9 @@ CKBehaviorLink *BehaviorGraphEdit::ResolveExistingLink(const LinkSpec &spec) con
 int BehaviorGraphEdit::PlannedInputCount(int nodeIndex) const {
     CKBehavior *behavior = ResolveNodeBehavior(nodeIndex);
     int count = behavior ? behavior->GetInputCount() : 0;
+    if (!behavior && nodeIndex >= 0 && nodeIndex < static_cast<int>(m_Nodes.size())) {
+        count = m_Nodes[nodeIndex].PlannedInputCount;
+    }
     for (const LayoutSpec &spec : m_LayoutEdits) {
         if (spec.NodeIndex == nodeIndex && spec.Type == LayoutSpec::Kind::EnsureInputCount) {
             count = XMax(count, spec.Count);
@@ -2095,6 +2132,9 @@ int BehaviorGraphEdit::PlannedInputCount(int nodeIndex) const {
 int BehaviorGraphEdit::PlannedOutputCount(int nodeIndex) const {
     CKBehavior *behavior = ResolveNodeBehavior(nodeIndex);
     int count = behavior ? behavior->GetOutputCount() : 0;
+    if (!behavior && nodeIndex >= 0 && nodeIndex < static_cast<int>(m_Nodes.size())) {
+        count = m_Nodes[nodeIndex].PlannedOutputCount;
+    }
     for (const LayoutSpec &spec : m_LayoutEdits) {
         if (spec.NodeIndex == nodeIndex && spec.Type == LayoutSpec::Kind::EnsureOutputCount) {
             count = XMax(count, spec.Count);
@@ -2510,6 +2550,10 @@ BehaviorNode *BehaviorNode::Next(BehaviorQuery *query) const { return AdjacentFi
 BehaviorNode *BehaviorNode::Prev(BehaviorQuery *query) const { return AdjacentFirst(false, -1, query); }
 CScriptArray *BehaviorNode::NextAll(BehaviorQuery *query) const { return AdjacentAll(true, -1, query); }
 CScriptArray *BehaviorNode::PrevAll(BehaviorQuery *query) const { return AdjacentAll(false, -1, query); }
+CScriptArray *BehaviorNode::NextLinks(BehaviorQuery *query) const { return AdjacentLinks(true, -1, query); }
+CScriptArray *BehaviorNode::PrevLinks(BehaviorQuery *query) const { return AdjacentLinks(false, -1, query); }
+CScriptArray *BehaviorNode::OutputLinks(int outputIndex, BehaviorQuery *query) const { return AdjacentLinks(true, outputIndex, query); }
+CScriptArray *BehaviorNode::InputLinks(int inputIndex, BehaviorQuery *query) const { return AdjacentLinks(false, inputIndex, query); }
 BehaviorLinkRef *BehaviorNode::NextLink(BehaviorQuery *query) const { return AdjacentLinkFirst(true, -1, query); }
 BehaviorLinkRef *BehaviorNode::PrevLink(BehaviorQuery *query) const { return AdjacentLinkFirst(false, -1, query); }
 
@@ -2576,6 +2620,34 @@ CScriptArray *BehaviorNode::AdjacentAll(bool next, int ioIndex, BehaviorQuery *q
             continue;
         }
         AppendNode(array, new BehaviorNode(m_Bridge, m_Context, m_RootBehaviorId, candidate->GetID(), m_ComponentId));
+    }
+    return array;
+}
+
+CScriptArray *BehaviorNode::AdjacentLinks(bool next, int ioIndex, BehaviorQuery *query) const {
+    CScriptArray *array = CreateLinkArray(m_Bridge);
+    if (!array) {
+        return nullptr;
+    }
+    CKBehavior *container = BehaviorById(m_Bridge, m_RootBehaviorId);
+    CKBehavior *self = Get();
+    if (!container || !self) {
+        return array;
+    }
+    for (int i = 0; i < container->GetSubBehaviorLinkCount(); ++i) {
+        CKBehaviorLink *link = container->GetSubBehaviorLink(i);
+        CKBehavior *source = LinkSourceBehavior(link);
+        CKBehavior *target = LinkTargetBehavior(link);
+        CKBehavior *candidate = next ? target : source;
+        CKBehavior *anchor = next ? source : target;
+        const int linkIndex = next ? LinkSourceOutputIndex(link) : LinkTargetInputIndex(link);
+        if (anchor != self || !candidate || (ioIndex >= 0 && linkIndex != ioIndex)) {
+            continue;
+        }
+        if (query && !query->Matches(candidate, 0)) {
+            continue;
+        }
+        AppendLink(array, new BehaviorLinkRef(m_Bridge, m_RootBehaviorId, link->GetID(), m_ComponentId));
     }
     return array;
 }

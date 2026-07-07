@@ -32,10 +32,264 @@ bool BehaviorFlagSet(CKDWORD flags, CKDWORD flag) {
 bool IsBridgeScratchLocalName(const std::string &name) {
     return name.find("__CKAS_BridgeInput_") == 0 ||
            name.find("__CKAS_BridgeOutput_") == 0 ||
+           name.find("__CKAS_BridgePrototypeDefault_") == 0 ||
            name.find("__CKAS_GraphEditInput_") == 0 ||
            name.find("__CKAS_Op") == 0 ||
            name == "__CKAS_GraphEdit_Target" ||
            name == "__CKAS_Target";
+}
+
+bool RequestNeedsConfiguredLayout(const ScriptBridgeBBInvocationSpec &request) {
+    return request.OwnerId != 0 ||
+           request.TargetId != 0 ||
+           !request.IndexedSettings.empty() ||
+           !request.NamedSettings.empty();
+}
+
+std::string LayoutStampKey(const ScriptBridgeObjectStamp &stamp) {
+    return fmt::format("{}:{}:{}:{}:{}:{}",
+                       stamp.Flags,
+                       stamp.ClassId,
+                       stamp.OwnerId,
+                       LayoutGuidKey(stamp.TypeGuid),
+                       LayoutGuidKey(stamp.PrototypeGuid),
+                       LayoutGuidKey(stamp.OperationGuid));
+}
+
+void AppendValueKey(std::string &key, const ScriptParamValue &value) {
+    key += ScriptParamValueKindName(value.Kind);
+    key += ':';
+    key += GuidToString(value.TypeGuid);
+    key += ':';
+    key += value.TypeNameText();
+    key += '=';
+    key += ScriptParamValueToText(value);
+}
+
+bool SetPreviewLocalParameter(CKBehavior *behavior,
+                              int index,
+                              const ScriptParamValue &value,
+                              std::string &error) {
+    if (!behavior) {
+        error = "Behavior is not valid.";
+        return false;
+    }
+    if (index < 0 || index >= behavior->GetLocalParameterCount()) {
+        error = fmt::format("Local parameter #{} is out of range for Building Block '{}' (local count: {}).",
+                            index,
+                            SafeString(behavior->GetPrototypeName()),
+                            behavior->GetLocalParameterCount());
+        return false;
+    }
+    CKParameterLocal *local = behavior->GetLocalParameter(index);
+    if (!local) {
+        error = fmt::format("Local parameter #{} is not available.", index);
+        return false;
+    }
+    const CKERROR err = SetBridgeParamValue(local, value, error);
+    if (err != CK_OK) {
+        error = fmt::format("Failed to set local parameter #{} '{}' for layout preview (expected {}, CKERROR {}): {}",
+                            index,
+                            SafeString(local->GetName()),
+                            ParameterTypeLabel(behavior->GetCKContext(), local),
+                            err,
+                            error.empty() ? "conversion failed" : error);
+        return false;
+    }
+    return true;
+}
+
+bool ApplyPreviewIndexedSettings(CKBehavior *behavior,
+                                 const std::vector<ScriptBridgeIndexedValue> &settings,
+                                 std::string &error) {
+    for (const ScriptBridgeIndexedValue &entry : settings) {
+        if (!SetPreviewLocalParameter(behavior, entry.PinIndex, entry.Value, error)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int FindPreviewSetting(CKBehavior *behavior,
+                       const std::string &name,
+                       int occurrence,
+                       std::string &error) {
+    if (!behavior) {
+        error = "Behavior is not valid.";
+        return -1;
+    }
+    if (occurrence < 0) {
+        error = "Setting occurrence must be non-negative.";
+        return -1;
+    }
+
+    int seen = 0;
+    std::string candidates;
+    for (int i = 0; i < behavior->GetLocalParameterCount(); ++i) {
+        CKParameterLocal *local = behavior->GetLocalParameter(i);
+        if (!behavior->IsLocalParameterSetting(i)) {
+            continue;
+        }
+        const std::string candidate = SafeString(local ? local->GetName() : nullptr);
+        if (!candidates.empty()) {
+            candidates += ", ";
+        }
+        candidates += fmt::format("#{} '{}'", i, candidate);
+        if (NameEquals(const_cast<CKSTRING>(candidate.c_str()), name)) {
+            if (seen == occurrence) {
+                return i;
+            }
+            ++seen;
+        }
+    }
+
+    error = fmt::format("Building Block '{}' could not resolve setting '{}' occurrence {} for layout preview. Candidate settings: {}.",
+                        SafeString(behavior->GetPrototypeName()),
+                        name,
+                        occurrence,
+                        candidates.empty() ? std::string("<none>") : candidates);
+    return -1;
+}
+
+bool ResolvePreviewNamedSettings(CKBehavior *behavior,
+                                 ScriptBridgeBBInvocationSpec &request,
+                                 std::string &error) {
+    if (request.NamedSettings.empty()) {
+        return true;
+    }
+    for (const ScriptBridgeNamedValue &entry : request.NamedSettings) {
+        const int index = FindPreviewSetting(behavior, entry.Name, entry.Occurrence, error);
+        if (index < 0) {
+            return false;
+        }
+        ScriptBridgeSetIndexedValue(request.IndexedSettings, index, entry.Value);
+    }
+    request.NamedSettings.clear();
+    return true;
+}
+
+CKBeObject *ResolvePreviewBeObject(CKContext *context,
+                                   CK_ID id,
+                                   const ScriptBridgeObjectStamp &stamp,
+                                   const char *role,
+                                   std::string &error) {
+    if (!id) {
+        return nullptr;
+    }
+    CKObject *object = stamp.Flags != 0
+        ? GetStampedCKObjectById(context, id, stamp)
+        : GetCKObjectById(context, id);
+    if (!object) {
+        error = fmt::format("{} object {} is no longer valid.", role ? role : "Building Block request", id);
+        return nullptr;
+    }
+    CKBeObject *beObject = CKBeObject::Cast(object);
+    if (!beObject) {
+        error = fmt::format("{} object {} is no longer a CKBeObject.", role ? role : "Building Block request", id);
+    }
+    return beObject;
+}
+
+bool ConfigurePreviewOwnerAndTarget(CKContext *context,
+                                    CKBehavior *behavior,
+                                    const ScriptBridgeBBInvocationSpec &request,
+                                    std::string &error) {
+    if (!behavior) {
+        error = "Behavior is not valid.";
+        return false;
+    }
+
+    CKBeObject *owner = ResolvePreviewBeObject(context, request.OwnerId, request.OwnerStamp, "Owner", error);
+    if (request.OwnerId && !owner) {
+        return false;
+    }
+    CKBeObject *target = ResolvePreviewBeObject(context, request.TargetId, request.TargetStamp, "Target", error);
+    if (request.TargetId && !target) {
+        return false;
+    }
+
+    const CK_CLASSID compatibleClassId = behavior->GetCompatibleClassID();
+    if (target) {
+        if (!behavior->IsTargetable()) {
+            error = fmt::format("Building Block '{}' is not targetable.", SafeString(behavior->GetPrototypeName()));
+            return false;
+        }
+        if (!CKIsChildClassOf(target, compatibleClassId)) {
+            error = fmt::format("Target '{}' is not compatible with Building Block '{}'.",
+                                SafeString(target->GetName()),
+                                SafeString(behavior->GetPrototypeName()));
+            return false;
+        }
+        const CKERROR useTarget = behavior->UseTarget(TRUE);
+        if (useTarget != CK_OK) {
+            error = fmt::format("Failed to enable target parameter for Building Block '{}' (CKERROR {}).",
+                                SafeString(behavior->GetPrototypeName()),
+                                useTarget);
+            return false;
+        }
+        CKParameterIn *targetParam = behavior->GetTargetParameter();
+        if (!targetParam) {
+            error = "Target parameter was not created.";
+            return false;
+        }
+        CKParameterLocal *targetSource = behavior->CreateLocalParameter(const_cast<CKSTRING>("__CKAS_Target"), targetParam->GetGUID());
+        if (!targetSource) {
+            error = "Failed to create target source parameter.";
+            return false;
+        }
+        CK_ID targetId = target->GetID();
+        if (targetSource->SetValue(&targetId, sizeof(targetId)) != CK_OK ||
+            targetParam->SetDirectSource(targetSource) != CK_OK) {
+            error = "Failed to set target parameter.";
+            return false;
+        }
+    } else if (owner && !CKIsChildClassOf(owner, compatibleClassId)) {
+        error = fmt::format("Owner '{}' is not compatible with Building Block '{}'.",
+                            SafeString(owner->GetName()),
+                            SafeString(behavior->GetPrototypeName()));
+        return false;
+    }
+
+    const CKERROR ownerResult = behavior->SetOwner(owner, FALSE);
+    if (ownerResult != CK_OK) {
+        error = fmt::format("Failed to set Building Block owner (CKERROR {}).", ownerResult);
+        return false;
+    }
+    return true;
+}
+
+void NormalizeConfiguredPrototypeLayout(ScriptBridgeLayoutRecord &layout,
+                                        CKBehaviorPrototype *prototype) {
+    layout.Prototype = true;
+    layout.BehaviorId = 0;
+    layout.BehaviorStamp = ScriptBridgeObjectStamp();
+    layout.PrototypeGuid = prototype ? prototype->GetGuid() : CKGUID();
+    if (prototype) {
+        CKObjectDeclaration *decl = ResolvePrototypeDeclaration(prototype, true);
+        layout.Name = SafeString(prototype->GetName());
+        layout.Category = decl ? SafeString(decl->GetCategory()) : std::string();
+        layout.QualifiedName = layout.Category.empty() ? layout.Name : layout.Category + "/" + layout.Name;
+        layout.BehaviorFlags = static_cast<CKDWORD>(prototype->GetBehaviorFlags());
+        layout.PrototypeFlags = static_cast<CKDWORD>(prototype->GetFlags());
+        layout.CompatibleClassId = decl ? decl->GetCompatibleClassId() : prototype->GetApplyToClassID();
+        layout.NeededManagers.clear();
+        if (decl) {
+            layout.NeededManagers.reserve(decl->GetManagerNeededCount());
+            for (int i = 0; i < decl->GetManagerNeededCount(); ++i) {
+                layout.NeededManagers.push_back(decl->GetManagerNeeded(i));
+            }
+        }
+    }
+
+    auto clearParameterIds = [](std::vector<ScriptBridgeLayoutParamSlot> &slots) {
+        for (ScriptBridgeLayoutParamSlot &slot : slots) {
+            slot.ParameterId = 0;
+        }
+    };
+    clearParameterIds(layout.Pins);
+    clearParameterIds(layout.Pouts);
+    clearParameterIds(layout.Settings);
+    clearParameterIds(layout.Locals);
 }
 
 } // namespace
@@ -76,15 +330,19 @@ const ScriptBridgeLayoutRecord *ScriptBehaviorBridge::GetBehaviorLayout(CK_ID be
 }
 
 const ScriptBridgeLayoutRecord *ScriptBehaviorBridge::GetPrototypeLayout(const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request) const {
-    (void) ctx;
     std::string error;
     CKBehaviorPrototype *prototype = ResolvePrototypeObject(request, error);
     if (!prototype) {
         return nullptr;
     }
 
-    const std::string key = LayoutGuidKey(prototype->GetGuid());
-    ScriptBridgeLayoutRecord fresh = BuildPrototypeLayout(prototype);
+    const std::string key = PrototypeLayoutKey(prototype, request);
+    ScriptBridgeLayoutRecord fresh = RequestNeedsConfiguredLayout(request)
+        ? BuildConfiguredPrototypeLayout(ctx, prototype, request, error)
+        : BuildPrototypeLayout(prototype);
+    if (!error.empty()) {
+        return nullptr;
+    }
     auto it = m_PrototypeLayouts.find(key);
     if (it != m_PrototypeLayouts.end() && it->second.Signature == fresh.Signature) {
         return &it->second;
@@ -296,6 +554,140 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildPrototypeLayout(CKBehaviorPr
     layout.Signature = LayoutSignature(layout);
     layout.LayoutGeneration = LayoutGenerationFromSignature(layout.Signature);
     return layout;
+}
+
+ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildConfiguredPrototypeLayout(const CKBehaviorContext &ctx,
+                                                                              CKBehaviorPrototype *prototype,
+                                                                              const ScriptBridgeBBInvocationSpec &request,
+                                                                              std::string &error) const {
+    ScriptBridgeLayoutRecord layout;
+    error.clear();
+    if (!m_Manager || !m_Manager->GetCKContext()) {
+        error = "Script manager or CKContext is not available.";
+        return layout;
+    }
+    if (!prototype) {
+        error = "Building Block prototype is not available.";
+        return layout;
+    }
+
+    CKContext *context = m_Manager->GetCKContext();
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR,
+                                                                  const_cast<CKSTRING>("__CKAS_LayoutPreview"),
+                                                                  CK_OBJECTCREATION_NONAMECHECK));
+    if (!behavior) {
+        error = "Failed to create layout preview Building Block behavior.";
+        return layout;
+    }
+
+    CKBehaviorContext callbackContext = ctx;
+    callbackContext.Context = callbackContext.Context ? callbackContext.Context : context;
+    callbackContext.Behavior = behavior;
+    callbackContext.ParameterManager = callbackContext.ParameterManager
+        ? callbackContext.ParameterManager
+        : context->GetParameterManager();
+    callbackContext.MessageManager = callbackContext.MessageManager
+        ? callbackContext.MessageManager
+        : context->GetMessageManager();
+    callbackContext.AttributeManager = callbackContext.AttributeManager
+        ? callbackContext.AttributeManager
+        : context->GetAttributeManager();
+    callbackContext.TimeManager = callbackContext.TimeManager
+        ? callbackContext.TimeManager
+        : context->GetTimeManager();
+
+    bool createCallbackSent = false;
+    auto fail = [&](const std::string &message) -> ScriptBridgeLayoutRecord {
+        error = message;
+        if (createCallbackSent) {
+            if (behavior->GetOwner()) {
+                CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDETACH, &callbackContext);
+            }
+            CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &callbackContext);
+        }
+        context->DestroyObject(behavior);
+        return ScriptBridgeLayoutRecord();
+    };
+
+    behavior->UseFunction();
+    const CKGUID guid = prototype->GetGuid();
+    CKERROR err = behavior->InitFromPrototype(prototype);
+    if (err != CK_OK) {
+        return fail(fmt::format("Failed to initialize layout preview Building Block from GUID ({}, {}) with CKERROR {}.",
+                                guid.d[0],
+                                guid.d[1],
+                                err));
+    }
+    if (!EnsurePrototypeStaticLayout(behavior, prototype, error)) {
+        return fail(error);
+    }
+
+    ScriptBridgeBBInvocationSpec resolvedRequest = request;
+    if (!ResolvePreviewNamedSettings(behavior, resolvedRequest, error)) {
+        return fail(error);
+    }
+    if (!ApplyPreviewIndexedSettings(behavior, resolvedRequest.IndexedSettings, error)) {
+        return fail(error);
+    }
+    if (!ConfigurePreviewOwnerAndTarget(context, behavior, resolvedRequest, error)) {
+        return fail(error);
+    }
+
+    err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORCREATE, &callbackContext);
+    if (err != CK_OK) {
+        return fail(fmt::format("Building Block CREATE callback failed during layout preview (CKERROR {}).", err));
+    }
+    createCallbackSent = true;
+
+    if (behavior->GetOwner()) {
+        err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORATTACH, &callbackContext);
+        if (err != CK_OK) {
+            return fail(fmt::format("Building Block ATTACH callback failed during layout preview (CKERROR {}).", err));
+        }
+    }
+
+    if (!resolvedRequest.IndexedSettings.empty()) {
+        err = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED, &callbackContext);
+        if (err != CK_OK) {
+            return fail(fmt::format("Building Block SETTINGSEDITED callback failed during layout preview (CKERROR {}).", err));
+        }
+    }
+
+    layout = BuildBehaviorLayout(behavior);
+    NormalizeConfiguredPrototypeLayout(layout, prototype);
+    layout.Signature = LayoutSignature(layout);
+    layout.LayoutGeneration = LayoutGenerationFromSignature(layout.Signature);
+
+    if (behavior->GetOwner()) {
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDETACH, &callbackContext);
+    }
+    CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &callbackContext);
+    context->DestroyObject(behavior);
+    return layout;
+}
+
+std::string ScriptBehaviorBridge::PrototypeLayoutKey(CKBehaviorPrototype *prototype,
+                                                     const ScriptBridgeBBInvocationSpec &request) const {
+    std::string key = prototype ? LayoutGuidKey(prototype->GetGuid()) : std::string("<null>");
+    if (!RequestNeedsConfiguredLayout(request)) {
+        return key;
+    }
+
+    key += "|configured";
+    key += fmt::format("|owner:{}:{}|target:{}:{}",
+                       request.OwnerId,
+                       LayoutStampKey(request.OwnerStamp),
+                       request.TargetId,
+                       LayoutStampKey(request.TargetStamp));
+    for (const ScriptBridgeIndexedValue &entry : request.IndexedSettings) {
+        key += fmt::format("|setting#{}:", entry.PinIndex);
+        AppendValueKey(key, entry.Value);
+    }
+    for (const ScriptBridgeNamedValue &entry : request.NamedSettings) {
+        key += fmt::format("|setting:{}#{}:", entry.Name, entry.Occurrence);
+        AppendValueKey(key, entry.Value);
+    }
+    return key;
 }
 
 std::string ScriptBehaviorBridge::LayoutSignature(const ScriptBridgeLayoutRecord &layout) const {
