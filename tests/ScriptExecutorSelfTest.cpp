@@ -4,11 +4,14 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "CKAll.h"
 #include "CKAngelScript.h"
 #include "ScriptAsync.h"
+#include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeCommon.h"
+#include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
 
@@ -19,6 +22,7 @@ constexpr int EXECUTOR_SETTING_CLASS = 2;
 constexpr int EXECUTOR_SETTING_INTERFACE = 3;
 constexpr int EXECUTOR_SETTING_STRICT_INTERFACE = 4;
 constexpr int EXECUTOR_SETTING_TRACE = 5;
+constexpr int EXECUTOR_USER_LOCAL_START = EXECUTOR_SETTING_TRACE + 1;
 
 CKBehaviorContext MakeExecutorSelfTestContext(CKContext *context, CKBehavior *behavior) {
     CKBehaviorContext behaviorContext = {};
@@ -107,6 +111,364 @@ bool SetExecutorBoolSetting(CKBehavior *behavior, int index, bool value, std::st
     return true;
 }
 
+bool TextContains(const std::string &text, const char *needle) {
+    return needle && text.find(needle) != std::string::npos;
+}
+
+ScriptBridgeFrameLocalDecl FrameLocalDecl(const char *name,
+                                          CKGUID guid,
+                                          const char *defaultText = nullptr) {
+    ScriptBridgeFrameLocalDecl decl;
+    decl.Name = name ? name : "";
+    decl.TypeGuid = guid;
+    if (defaultText) {
+        decl.HasDefault = true;
+        decl.DefaultText = defaultText;
+    }
+    return decl;
+}
+
+bool ExpectFrameLocalApplyFailure(ScriptBehaviorBridge *bridge,
+                                  CKBehavior *behavior,
+                                  const std::vector<ScriptBridgeFrameLocalDecl> &decls,
+                                  const char *expectedText,
+                                  std::string &error) {
+    std::string applyError;
+    if (!bridge || !behavior) {
+        error = "Executor frame-local negative self-test is missing a bridge or behavior.";
+        return false;
+    }
+    if (bridge->ApplyFrameLocalInterface(behavior, decls, 0, true, applyError)) {
+        error = "Executor frame-local negative self-test expected interface application to fail.";
+        return false;
+    }
+    if (expectedText && !TextContains(applyError, expectedText)) {
+        error = "Executor frame-local negative self-test returned the wrong error. Expected text '" +
+                std::string(expectedText) + "', got '" + applyError + "'.";
+        return false;
+    }
+    return true;
+}
+
+bool RunFrameLocalBindingNativeSelfTest(CKContext *context,
+                                        ScriptBehaviorBridge *bridge,
+                                        std::string &error) {
+    if (!context || !bridge) {
+        error = "Executor frame-local native self-test requires CKContext and ScriptBehaviorBridge.";
+        return false;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_FrameLocalBindingSelfTestBehavior"),
+        CK_OBJECTCREATION_DYNAMIC));
+    CKParameterLocal *intSource = nullptr;
+    CKParameterLocal *otherIntSource = nullptr;
+    CKParameterLocal *floatSource = nullptr;
+    CKParameterLocal *staleSource = nullptr;
+
+    auto cleanup = [&]() {
+        if (behavior) {
+            bridge->ClearFrameLocalInterface(behavior->GetID(), true);
+        }
+        DestroyExecutorSelfTestObject(context, staleSource);
+        DestroyExecutorSelfTestObject(context, floatSource);
+        DestroyExecutorSelfTestObject(context, otherIntSource);
+        DestroyExecutorSelfTestObject(context, intSource);
+        DestroyExecutorSelfTestObject(context, behavior);
+    };
+
+    if (!behavior) {
+        cleanup();
+        error = "Executor frame-local native self-test failed to create behavior.";
+        return false;
+    }
+
+    intSource = context->CreateCKParameterLocal(
+        const_cast<CKSTRING>("__CKAS_FrameLocalBindingInt"),
+        CKPGUID_INT,
+        TRUE);
+    otherIntSource = context->CreateCKParameterLocal(
+        const_cast<CKSTRING>("__CKAS_FrameLocalBindingOtherInt"),
+        CKPGUID_INT,
+        TRUE);
+    floatSource = context->CreateCKParameterLocal(
+        const_cast<CKSTRING>("__CKAS_FrameLocalBindingFloat"),
+        CKPGUID_FLOAT,
+        TRUE);
+    staleSource = context->CreateCKParameterLocal(
+        const_cast<CKSTRING>("__CKAS_FrameLocalBindingStale"),
+        CKPGUID_INT,
+        TRUE);
+    if (!intSource || !otherIntSource || !floatSource || !staleSource) {
+        cleanup();
+        error = "Executor frame-local native self-test failed to create source parameters.";
+        return false;
+    }
+
+    int intValue = 11;
+    int otherIntValue = 12;
+    float floatValue = 3.5f;
+    int staleValue = 13;
+    if (intSource->SetValue(&intValue, sizeof(intValue)) != CK_OK ||
+        otherIntSource->SetValue(&otherIntValue, sizeof(otherIntValue)) != CK_OK ||
+        floatSource->SetValue(&floatValue, sizeof(floatValue)) != CK_OK ||
+        staleSource->SetValue(&staleValue, sizeof(staleValue)) != CK_OK) {
+        cleanup();
+        error = "Executor frame-local native self-test failed to initialize source values.";
+        return false;
+    }
+
+    ParamRef *intRef = bridge->WrapParameter(intSource);
+    ParamRef *otherIntRef = bridge->WrapParameter(otherIntSource);
+    ParamRef *floatRef = bridge->WrapParameter(floatSource);
+    ParamRef *staleRef = bridge->WrapParameter(staleSource);
+    CKParameterIn *unconnectedPin = behavior->CreateInputParameter(
+        const_cast<CKSTRING>("__CKAS_FrameLocalBindingPin"),
+        CKPGUID_INT);
+    ParamRef *pinRef = bridge->WrapParameter(unconnectedPin);
+    auto releaseRefs = [&]() {
+        if (pinRef) pinRef->Release();
+        if (staleRef) staleRef->Release();
+        if (floatRef) floatRef->Release();
+        if (otherIntRef) otherIntRef->Release();
+        if (intRef) intRef->Release();
+    };
+    if (!intRef || !otherIntRef || !floatRef || !staleRef || !pinRef) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test failed to wrap source parameters.";
+        return false;
+    }
+
+    std::string bindError;
+    if (bridge->BindFrameLocal(behavior, "Missing", CKPGUID_INT, nullptr, "missing", bindError) ||
+        !TextContains(bindError, "writable real source")) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test did not reject a null source binding.";
+        return false;
+    }
+
+    bindError.clear();
+    if (bridge->BindFrameLocal(behavior, "MissingPinSource", CKPGUID_INT, pinRef, "unconnected pin", bindError) ||
+        !TextContains(bindError, "writable real source")) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test did not reject an unconnected CKParameterIn binding.";
+        return false;
+    }
+
+    bindError.clear();
+    if (bridge->BindFrameLocal(behavior, "Mapped", CKPGUID_INT, floatRef, "wrong type", bindError) ||
+        !TextContains(bindError, "type mismatch")) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test did not reject a source type mismatch.";
+        return false;
+    }
+
+    bindError.clear();
+    if (!bridge->BindFrameLocal(behavior, "Mapped", CKPGUID_INT, intRef, "int source", bindError)) {
+        releaseRefs();
+        cleanup();
+        error = bindError.empty()
+            ? "Executor frame-local native self-test failed to bind a valid mapped local."
+            : bindError;
+        return false;
+    }
+
+    bindError.clear();
+    if (!bridge->BindFrameLocal(behavior, "Mapped", CKPGUID_INT, intRef, "int source update", bindError)) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test rejected an idempotent binding update: " + bindError;
+        return false;
+    }
+
+    bindError.clear();
+    if (bridge->BindFrameLocal(behavior, "Mapped", CKPGUID_INT, otherIntRef, "conflicting int source", bindError) ||
+        !TextContains(bindError, "conflicts")) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test did not reject a conflicting duplicate binding.";
+        return false;
+    }
+
+    if (!bridge->ApplyFrameLocalInterface(
+            behavior,
+            {FrameLocalDecl("Owned", CKPGUID_INT, "4"), FrameLocalDecl("Mapped", CKPGUID_INT)},
+            0,
+            true,
+            error)) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test failed to apply a valid interface: " + error;
+        return false;
+    }
+    if (bridge->FrameLocalCount(behavior->GetID()) != 2 ||
+        bridge->FindFrameLocal(behavior->GetID(), "Owned", 0) != 0 ||
+        bridge->FindFrameLocal(behavior->GetID(), "Mapped", 0) != 1 ||
+        behavior->GetLocalParameterCount() != 1) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test installed the wrong logical/physical local shape.";
+        return false;
+    }
+    std::string resolveError;
+    CKParameter *mapped = bridge->ResolveFrameLocal(context, behavior->GetID(), 1, resolveError);
+    if (mapped != intSource) {
+        releaseRefs();
+        cleanup();
+        error = resolveError.empty()
+            ? "Executor frame-local native self-test mapped local did not resolve to the original parameter."
+            : resolveError;
+        return false;
+    }
+
+    bridge->ClearFrameLocalInterface(behavior->GetID(), true);
+    const std::vector<ScriptBridgeFrameLocalDecl> lateDecls = {
+        FrameLocalDecl("LateMapped", CKPGUID_INT, "9"),
+        FrameLocalDecl("LateOwned", CKPGUID_INT, "21"),
+    };
+    if (!bridge->ApplyFrameLocalInterface(
+            behavior,
+            lateDecls,
+            0,
+            true,
+            error)) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test failed to apply a late-binding interface: " + error;
+        return false;
+    }
+    if (behavior->GetLocalParameterCount() != 2) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test did not create owned locals before late binding.";
+        return false;
+    }
+    bindError.clear();
+    if (!bridge->BindFrameLocal(behavior, "LateMapped", CKPGUID_INT, intRef, "late mapped source", bindError)) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test rejected a late local binding: " + bindError;
+        return false;
+    }
+    if (behavior->GetLocalParameterCount() != 1) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test did not compact owned locals after late binding.";
+        return false;
+    }
+    resolveError.clear();
+    CKParameter *lateMapped = bridge->ResolveFrameLocal(context, behavior->GetID(), 0, resolveError);
+    if (lateMapped != intSource) {
+        releaseRefs();
+        cleanup();
+        error = resolveError.empty()
+            ? "Executor frame-local native self-test late binding did not resolve to the original parameter."
+            : resolveError;
+        return false;
+    }
+    resolveError.clear();
+    CKParameter *lateOwned = bridge->ResolveFrameLocal(context, behavior->GetID(), 1, resolveError);
+    int lateOwnedValue = 0;
+    if (!lateOwned ||
+        lateOwned->GetValue(&lateOwnedValue) != CK_OK ||
+        lateOwnedValue != 21 ||
+        behavior->GetLocalParameter(0) != lateOwned) {
+        releaseRefs();
+        cleanup();
+        error = resolveError.empty()
+            ? "Executor frame-local native self-test late-owned local kept the wrong physical/default state."
+            : resolveError;
+        return false;
+    }
+
+    bridge->ClearFrameLocalInterface(behavior->GetID(), false);
+    if (bridge->HasFrameLocalInterface(behavior->GetID())) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test reset-style clear kept stale interface layout.";
+        return false;
+    }
+    if (!bridge->ApplyFrameLocalInterface(behavior, lateDecls, 0, true, error)) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test failed to reapply locals after reset-style clear: " + error;
+        return false;
+    }
+    resolveError.clear();
+    lateMapped = bridge->ResolveFrameLocal(context, behavior->GetID(), 0, resolveError);
+    resolveError.clear();
+    lateOwned = bridge->ResolveFrameLocal(context, behavior->GetID(), 1, resolveError);
+    if (lateMapped != intSource || !lateOwned || behavior->GetLocalParameterCount() != 1 || behavior->GetLocalParameter(0) != lateOwned) {
+        releaseRefs();
+        cleanup();
+        error = resolveError.empty()
+            ? "Executor frame-local native self-test lost mapped locals across reset-style clear."
+            : resolveError;
+        return false;
+    }
+
+    bridge->ClearFrameLocalInterface(behavior->GetID(), true);
+    if (!ExpectFrameLocalApplyFailure(
+            bridge,
+            behavior,
+            {FrameLocalDecl("Dup", CKPGUID_INT), FrameLocalDecl("Dup", CKPGUID_INT)},
+            "duplicate local",
+            error)) {
+        releaseRefs();
+        cleanup();
+        return false;
+    }
+
+    bindError.clear();
+    if (!bridge->BindFrameLocal(behavior, "Undeclared", CKPGUID_INT, intRef, "undeclared", bindError)) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test failed to install undeclared binding: " + bindError;
+        return false;
+    }
+    if (!ExpectFrameLocalApplyFailure(
+            bridge,
+            behavior,
+            {FrameLocalDecl("Declared", CKPGUID_INT)},
+            "no matching interface local declaration",
+            error)) {
+        releaseRefs();
+        cleanup();
+        return false;
+    }
+
+    bridge->ClearFrameLocalInterface(behavior->GetID(), true);
+    bindError.clear();
+    if (!bridge->BindFrameLocal(behavior, "Gone", CKPGUID_INT, staleRef, "stale", bindError)) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test failed to install stale-source binding: " + bindError;
+        return false;
+    }
+    DestroyExecutorSelfTestObject(context, staleSource);
+    staleSource = nullptr;
+    if (!ExpectFrameLocalApplyFailure(
+            bridge,
+            behavior,
+            {FrameLocalDecl("Gone", CKPGUID_INT)},
+            "source is invalid",
+            error)) {
+        releaseRefs();
+        cleanup();
+        return false;
+    }
+
+    releaseRefs();
+    cleanup();
+    error.clear();
+    return true;
+}
+
 int ExecuteExecutorSelfTestBehavior(CKContext *context, CKBehavior *behavior, const CKBehaviorContext &behaviorContext) {
     if (!behavior) {
         return CKBR_BEHAVIORERROR;
@@ -143,6 +505,10 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         error = "Executor self-test could not retrieve ScriptManager.";
         return false;
     }
+    ScriptBehaviorBridge *bridge = manager->GetBehaviorBridge();
+    if (!RunFrameLocalBindingNativeSelfTest(context, bridge, error)) {
+        return false;
+    }
 
     constexpr const char *scriptId = "ckas.executor.selftest";
     constexpr const char *className = "ExecutorProbe";
@@ -173,7 +539,8 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    frame.ClassId(); frame.ObjectFlags(); frame.IsDynamic(); frame.IsToBeDeleted(); frame.IsNotToBeSaved(); frame.IsPrivate(); frame.IsInterfaceObj(); frame.IsUpToDate(); frame.MemoryOccupation(); frame.AppData();\n"
         "    frame.SceneInCount(); frame.SceneIn(0); frame.IsInScene(frame.CurrentScene()); frame.IsActiveInCurrentScene(); frame.IsActiveInScene(frame.CurrentScene()); frame.IsVisible(); frame.CanBeHide(); frame.IsHiddenByParent(); frame.IsHierarchicallyHide(); frame.IsObjectUsed(raw, raw.GetClassID());\n"
         "    if (frame.GetCKContext() is null || frame.GetID() != frame.id || frame.GetName() != frame.name || frame.GetClassID() != frame.ClassId()) return 154;\n"
-        "    if (frame.GetInputCount() != frame.InputCount() || frame.GetOutputCount() != frame.OutputCount() || frame.GetInputParameterCount() != frame.PinCount() || frame.GetOutputParameterCount() != frame.PoutCount() || frame.GetLocalParameterCount() != frame.LocalCount()) return 155;\n"
+        "    if (frame.GetInputCount() != frame.InputCount() || frame.GetOutputCount() != frame.OutputCount() || frame.GetInputParameterCount() != frame.PinCount() || frame.GetOutputParameterCount() != frame.PoutCount()) return 155;\n"
+        "    if (frame.GetLocalParameterCount() != frame.BehaviorLocalCount() || frame.LocalCount() != 2) return 175;\n"
         "    if (!frame.IsInputActive(0) || frame.IsOutputActive(0) || !frame.IsInputParameterEnabled(0) || !frame.IsOutputParameterEnabled(0)) return 156;\n"
         "    if (frame.GetInput(0) is null || frame.GetOutput(0) is null) return 157;\n"
         "    if (frame.InputPosition(raw.GetInput(0)) != 0 || frame.OutputPosition(raw.GetOutput(0)) != 0) return 144;\n"
@@ -191,9 +558,17 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (frame.OutputActive(0) || frame.OutputActive(\"Out\")) return 131;\n"
         "    int scratchLocal = frame.FindLocal(\"__CKAS_FrameScratch\");\n"
         "    if (scratchLocal < 0 || frame.Local(scratchLocal) is null || frame.Local(\"__CKAS_FrameScratch\") is null) return 132;\n"
+        "    int scratchPhysical = frame.FindBehaviorLocal(\"__CKAS_FrameScratch\");\n"
+        "    if (scratchLocal != 0 || scratchPhysical != 6 || frame.LocalInt(\"__CKAS_FrameScratch\", -1) != 7) return 174;\n"
+        "    int mappedLocal = frame.FindLocal(\"__CKAS_MappedLocal\");\n"
+        "    if (mappedLocal != 1 || frame.Local(mappedLocal) is null || frame.Local(\"__CKAS_MappedLocal\") is null) return 176;\n"
+        "    if (frame.FindBehaviorLocal(\"__CKAS_MappedLocal\") >= 0) return 177;\n"
+        "    if (frame.LocalInt(\"__CKAS_MappedLocal\", -1) != 301) return 178;\n"
+        "    if (!frame.SetLocal(\"__CKAS_MappedLocal\", 302) || !frame.SetLocal(mappedLocal, 303)) return 179;\n"
+        "    if (frame.LocalInt(\"__CKAS_MappedLocal\", -1) != 303 || frame.LocalInt(mappedLocal, -1) != 303) return 180;\n"
         "    int sdkLocalValue = 0;\n"
-        "    if (frame.SetLocalParameterValue(scratchLocal, 222) != CK_OK) return 162;\n"
-        "    if (frame.GetLocalParameterValue(scratchLocal, sdkLocalValue) != CK_OK || sdkLocalValue != 222) return 163;\n"
+        "    if (frame.SetLocalParameterValue(scratchPhysical, 222) != CK_OK) return 162;\n"
+        "    if (frame.GetLocalParameterValue(scratchPhysical, sdkLocalValue) != CK_OK || sdkLocalValue != 222) return 163;\n"
         "    if (!frame.SetLocal(scratchLocal, 123) || !frame.SetLocal(\"__CKAS_FrameScratch\", 124)) return 133;\n"
         "    if (frame.LocalInt(\"__CKAS_FrameScratch\", -1) != 124 || frame.LocalInt(scratchLocal, -1) != 124) return 168;\n"
         "    if (frame.LocalInt(\"__CKAS_MissingLocal\", 77) != 77) return 169;\n"
@@ -201,9 +576,10 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (!frame.LocalBool(\"__CKAS_FrameScratch\", true)) return 171;\n"
         "    if (frame.LocalFloat(\"__CKAS_FrameScratch\", -1.0f) != 124.0f || frame.LocalFloat(scratchLocal, -1.0f) != 124.0f) return 172;\n"
         "    if (frame.LocalObject(\"__CKAS_MissingLocal\") !is null) return 173;\n"
-        "    if (frame.LocalParameter(scratchLocal) is null || frame.GetLocalParameter(scratchLocal) is null) return 153;\n"
-        "    if (frame.LocalPosition(frame.LocalParameter(scratchLocal)) != scratchLocal || frame.GetLocalParameterPosition(frame.GetLocalParameter(scratchLocal)) != scratchLocal) return 147;\n"
+        "    if (frame.BehaviorLocalParameter(scratchPhysical) is null || frame.GetLocalParameter(scratchPhysical) is null) return 153;\n"
+        "    if (frame.LocalPosition(frame.BehaviorLocalParameter(scratchPhysical)) != scratchPhysical || frame.GetLocalParameterPosition(frame.GetLocalParameter(scratchPhysical)) != scratchPhysical) return 147;\n"
         "    if (frame.LocalReadDataPtr(scratchLocal).IsNull() || frame.LocalWriteDataPtr(scratchLocal).IsNull()) return 148;\n"
+        "    if (frame.BehaviorLocalReadDataPtr(scratchPhysical).IsNull() || frame.BehaviorLocalWriteDataPtr(scratchPhysical).IsNull()) return 181;\n"
         "    frame.LocalObject(scratchLocal);\n"
         "    frame.NotifyEdition(); frame.NotifySettingsEdition();\n"
         "    BehaviorLayout@ runtimeLayout = frame.Layout();\n"
@@ -240,8 +616,60 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (!frame.OutputActive(\"Out\")) return 139;\n"
         "    return 0;\n"
         "  }\n"
+        "  void OnDestroy(BehaviorFrame@ frame) {\n"
+        "    if (frame is null || frame.LocalCount() != 2) return;\n"
+        "    frame.SetLocal(\"__CKAS_FrameScratch\", 901);\n"
+        "    frame.SetLocal(\"__CKAS_MappedLocal\", 902);\n"
+        "  }\n"
         "  int Execute(const CKBehaviorContext &in ctx) {\n"
         "    return 1901;\n"
+        "  }\n"
+        "}\n"
+        "class ExecutorRetriggerProbe {\n"
+        "  int starts = 0;\n"
+        "  int Execute(BehaviorFrame@ frame) {\n"
+        "    ++starts;\n"
+        "    if (frame is null) return 201;\n"
+        "    if (!frame.InputActive(\"In\")) return 202;\n"
+        "    if (!frame.Take(\"In\")) return 203;\n"
+        "    if (starts == 1) {\n"
+        "      AsyncTask<void>@ delay = frame.LinkDelay(10);\n"
+        "      if (delay is null) return 204;\n"
+        "      Await(delay);\n"
+        "      if (!frame.SetPout(\"Handled\", false)) return 205;\n"
+        "      frame.Emit(\"Out\");\n"
+        "      return 206;\n"
+        "    }\n"
+        "    if (starts == 2) {\n"
+        "      if (!frame.SetPout(\"Handled\", true)) return 207;\n"
+        "      frame.Emit(\"Out\");\n"
+        "      return 0;\n"
+        "    }\n"
+        "    return 208;\n"
+        "  }\n"
+        "}\n"
+        "class ExecutorSuspendingSourceProbe {\n"
+        "  int Execute(BehaviorFrame@ frame) {\n"
+        "    if (frame is null) return 301;\n"
+        "    if (!frame.Take(\"In\")) return 302;\n"
+        "    AsyncTask<void>@ delay = frame.LinkDelay(1);\n"
+        "    if (delay is null) return 303;\n"
+        "    Await(delay);\n"
+        "    frame.Emit(\"Out\");\n"
+        "    return 0;\n"
+        "  }\n"
+        "}\n"
+        "class ExecutorSuspendingDownstreamProbe {\n"
+        "  int Execute(BehaviorFrame@ frame) {\n"
+        "    if (frame is null) return 401;\n"
+        "    if (!frame.Take(\"In\")) return 402;\n"
+        "    AsyncTask<void>@ delay = frame.LinkDelay(1);\n"
+        "    if (delay is null) return 403;\n"
+        "    Await(delay);\n"
+        "    int count = frame.LocalInt(\"__CKAS_FrameScratch\", 0);\n"
+        "    if (!frame.SetLocal(\"__CKAS_FrameScratch\", count + 1)) return 404;\n"
+        "    frame.Emit(\"Out\");\n"
+        "    return 0;\n"
         "  }\n"
         "}\n";
 
@@ -281,14 +709,42 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         CKCID_BEHAVIOR,
         const_cast<CKSTRING>("__CKAS_ExecutorSelfTestBehavior"),
         CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *retriggerBehavior = nullptr;
+    CKBehavior *chainRoot = nullptr;
+    CKBehavior *chainSource = nullptr;
+    CKBehavior *chainTarget = nullptr;
+    CKBehaviorLink *chainRootToSource = nullptr;
+    CKBehaviorLink *chainSourceToTarget = nullptr;
+    CKBehaviorLink *chainTargetToRoot = nullptr;
     CKParameterLocal *sourceParam = nullptr;
+    CKParameterLocal *mappedParam = nullptr;
     CKParameterLocal *scratchParam = nullptr;
     bool deleteCallbackSent = false;
+    bool retriggerDeleteCallbackSent = false;
+    bool chainSourceDeleteCallbackSent = false;
+    bool chainTargetDeleteCallbackSent = false;
     auto cleanup = [&]() {
+        if (chainTarget && chainTargetDeleteCallbackSent) {
+            CallBridgeBehaviorCallback(chainTarget, CKM_BEHAVIORDELETE);
+        }
+        if (chainSource && chainSourceDeleteCallbackSent) {
+            CallBridgeBehaviorCallback(chainSource, CKM_BEHAVIORDELETE);
+        }
+        if (retriggerBehavior && retriggerDeleteCallbackSent) {
+            CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORDELETE);
+        }
         if (behavior && deleteCallbackSent) {
             CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE);
         }
+        DestroyExecutorSelfTestObject(context, chainTargetToRoot);
+        DestroyExecutorSelfTestObject(context, chainSourceToTarget);
+        DestroyExecutorSelfTestObject(context, chainRootToSource);
+        DestroyExecutorSelfTestObject(context, chainTarget);
+        DestroyExecutorSelfTestObject(context, chainSource);
+        DestroyExecutorSelfTestObject(context, chainRoot);
+        DestroyExecutorSelfTestObject(context, mappedParam);
         DestroyExecutorSelfTestObject(context, sourceParam);
+        DestroyExecutorSelfTestObject(context, retriggerBehavior);
         DestroyExecutorSelfTestObject(context, behavior);
         if (manager->GetRuntime()) {
             manager->GetRuntime()->Clear();
@@ -314,13 +770,40 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "input 0 name=\"In\"\n"
         "output 0 name=\"Out\"\n"
         "pin 0 name=\"Value\" type=\"Integer\"\n"
-        "pout 0 name=\"Handled\" type=\"Boolean\"\n";
+        "pout 0 name=\"Handled\" type=\"Boolean\"\n"
+        "local 0 name=\"__CKAS_FrameScratch\" type=\"Integer\" default=\"7\"\n"
+        "local 1 name=\"__CKAS_MappedLocal\" type=\"Integer\"\n";
     if (!SetExecutorStringSetting(behavior, EXECUTOR_SETTING_SCRIPT, scriptId, error) ||
         !SetExecutorStringSetting(behavior, EXECUTOR_SETTING_CLASS, className, error) ||
         !SetExecutorStringSetting(behavior, EXECUTOR_SETTING_INTERFACE, interfaceText, error) ||
         !SetExecutorBoolSetting(behavior, EXECUTOR_SETTING_STRICT_INTERFACE, true, error) ||
         !SetExecutorBoolSetting(behavior, EXECUTOR_SETTING_TRACE, false, error)) {
         cleanup();
+        return false;
+    }
+
+    mappedParam = context->CreateCKParameterLocal(
+        const_cast<CKSTRING>("__CKAS_ExecutorSelfTestMapped"),
+        CKPGUID_INT,
+        TRUE);
+    int mappedValue = 301;
+    ParamRef *mappedRef = bridge && mappedParam ? bridge->WrapParameter(mappedParam) : nullptr;
+    std::string bindError;
+    const bool mappedBound = mappedParam &&
+                             mappedParam->SetValue(&mappedValue, sizeof(mappedValue)) == CK_OK &&
+                             mappedRef &&
+                             bridge->BindFrameLocal(behavior,
+                                                    "__CKAS_MappedLocal",
+                                                    CKPGUID_INT,
+                                                    mappedRef,
+                                                    "executor self-test mapped local",
+                                                    bindError);
+    if (mappedRef) {
+        mappedRef->Release();
+    }
+    if (!mappedBound) {
+        cleanup();
+        error = bindError.empty() ? "Executor self-test failed to bind mapped interface local." : bindError;
         return false;
     }
 
@@ -343,9 +826,17 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
     if (behavior->GetInputCount() != 1 ||
         behavior->GetOutputCount() != 1 ||
         behavior->GetInputParameterCount() != 1 ||
-        behavior->GetOutputParameterCount() != 1) {
+        behavior->GetOutputParameterCount() != 1 ||
+        behavior->GetLocalParameterCount() != EXECUTOR_USER_LOCAL_START + 1) {
         cleanup();
         error = "Executor self-test dynamic interface shape did not match.";
+        return false;
+    }
+    if (!bridge ||
+        !bridge->HasFrameLocalInterface(behavior->GetID()) ||
+        bridge->FrameLocalCount(behavior->GetID()) != 2) {
+        cleanup();
+        error = "Executor self-test did not install logical frame locals.";
         return false;
     }
 
@@ -363,14 +854,15 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         error = "Executor self-test failed to install input parameter source.";
         return false;
     }
-    scratchParam = behavior->CreateLocalParameter(const_cast<CKSTRING>("__CKAS_FrameScratch"), CKPGUID_INT);
-    int scratchValue = 7;
-    if (!scratchParam || scratchParam->SetValue(&scratchValue, sizeof(scratchValue)) != CK_OK) {
+    scratchParam = behavior->GetLocalParameter(EXECUTOR_USER_LOCAL_START);
+    int scratchValue = 0;
+    if (!scratchParam || scratchParam->GetValue(&scratchValue) != CK_OK || scratchValue != 7) {
         cleanup();
-        error = "Executor self-test failed to create scratch local parameter.";
+        error = "Executor self-test failed to initialize interface local parameter.";
         return false;
     }
 
+    behavior->ActivateOutput(0, TRUE);
     behavior->ActivateInput(0, TRUE);
     const int suspendedCode = ExecuteExecutorSelfTestBehavior(context, behavior, behaviorContext);
     if (suspendedCode != CKBR_ACTIVATENEXTFRAME) {
@@ -381,6 +873,11 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
     if (behavior->IsInputActive(0)) {
         cleanup();
         error = "Executor self-test did not clear its active input.";
+        return false;
+    }
+    if (behavior->IsOutputActive(0)) {
+        cleanup();
+        error = "Executor self-test did not clear stale output before a suspending Execute.";
         return false;
     }
 
@@ -414,6 +911,318 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
     if (scratchParam->GetValue(&scratchValue) != CK_OK || scratchValue != 124) {
         cleanup();
         error = "Executor self-test did not write scratch local parameter through BehaviorFrame.";
+        return false;
+    }
+    mappedValue = 0;
+    if (mappedParam->GetValue(&mappedValue) != CK_OK || mappedValue != 303) {
+        cleanup();
+        error = "Executor self-test did not write mapped local source through BehaviorFrame.";
+        return false;
+    }
+    for (int i = EXECUTOR_USER_LOCAL_START; i < behavior->GetLocalParameterCount(); ++i) {
+        CKParameterLocal *local = behavior->GetLocalParameter(i);
+        if (local && std::string(local->GetName() ? local->GetName() : "").find("__CKAS_BridgeInput_") != std::string::npos) {
+            cleanup();
+            error = "Executor self-test generated a bridge input source while writing a mapped local.";
+            return false;
+        }
+    }
+
+    retriggerBehavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ExecutorSelfTestRetriggerBehavior"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!retriggerBehavior) {
+        cleanup();
+        error = "Executor self-test failed to create retrigger behavior.";
+        return false;
+    }
+    retriggerBehavior->UseFunction();
+    const CKERROR retriggerInitError = retriggerBehavior->InitFromGuid(CKGUID(0x15a41762, 0x0c7c4a91));
+    if (retriggerInitError != CK_OK) {
+        cleanup();
+        error = "Executor self-test failed to initialize retrigger Executor behavior.";
+        return false;
+    }
+    if (!SetExecutorStringSetting(retriggerBehavior, EXECUTOR_SETTING_SCRIPT, scriptId, error) ||
+        !SetExecutorStringSetting(retriggerBehavior, EXECUTOR_SETTING_CLASS, "ExecutorRetriggerProbe", error) ||
+        !SetExecutorStringSetting(retriggerBehavior, EXECUTOR_SETTING_INTERFACE, interfaceText, error) ||
+        !SetExecutorBoolSetting(retriggerBehavior, EXECUTOR_SETTING_STRICT_INTERFACE, true, error) ||
+        !SetExecutorBoolSetting(retriggerBehavior, EXECUTOR_SETTING_TRACE, false, error)) {
+        cleanup();
+        return false;
+    }
+
+    CKBehaviorContext retriggerContext = MakeExecutorSelfTestContext(context, retriggerBehavior);
+    const CKERROR retriggerCreateError = CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORCREATE, &retriggerContext);
+    if (retriggerCreateError != CK_OK) {
+        cleanup();
+        error = "Executor self-test retrigger CREATE callback failed.";
+        return false;
+    }
+    retriggerDeleteCallbackSent = true;
+
+    const CKERROR retriggerEditedError = CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORSETTINGSEDITED, &retriggerContext);
+    if (retriggerEditedError != CK_OK) {
+        cleanup();
+        error = "Executor self-test retrigger SETTINGSEDITED callback failed.";
+        return false;
+    }
+
+    retriggerBehavior->ActivateOutput(0, TRUE);
+    retriggerBehavior->ActivateInput(0, TRUE);
+    const int firstRetriggerCode = ExecuteExecutorSelfTestBehavior(context, retriggerBehavior, retriggerContext);
+    if (firstRetriggerCode != CKBR_ACTIVATENEXTFRAME) {
+        cleanup();
+        error = "Executor self-test expected retrigger probe to suspend, got code " +
+            std::to_string(firstRetriggerCode) + ".";
+        return false;
+    }
+    if (retriggerBehavior->IsInputActive(0) || retriggerBehavior->IsOutputActive(0)) {
+        cleanup();
+        error = "Executor self-test retrigger probe did not clear input and stale output on first activation.";
+        return false;
+    }
+
+    retriggerBehavior->ActivateOutput(0, TRUE);
+    retriggerBehavior->ActivateInput(0, TRUE);
+    const int secondRetriggerCode = ExecuteExecutorSelfTestBehavior(context, retriggerBehavior, retriggerContext);
+    if (secondRetriggerCode != CKBR_ACTIVATENEXTFRAME) {
+        cleanup();
+        error = "Executor self-test did not ignore a duplicate suspended input; got code " +
+            std::to_string(secondRetriggerCode) + ".";
+        return false;
+    }
+    if (retriggerBehavior->IsInputActive(0) || retriggerBehavior->IsOutputActive(0)) {
+        cleanup();
+        error = "Executor self-test retrigger probe did not consume duplicate suspended input.";
+        return false;
+    }
+    const char *chainInterfaceText =
+        "input 0 name=\"In\"\n"
+        "output 0 name=\"Out\"\n"
+        "local 0 name=\"__CKAS_FrameScratch\" type=\"Integer\" default=\"0\"\n";
+
+    auto initializeChainExecutor = [&](CKBehavior *executor,
+                                       const char *executorClassName,
+                                       bool &deleteCallbackFlag,
+                                       const char *label) -> bool {
+        if (!executor) {
+            error = std::string("Executor self-test failed to create ") + label + ".";
+            return false;
+        }
+        executor->UseFunction();
+        const CKERROR init = executor->InitFromGuid(CKGUID(0x15a41762, 0x0c7c4a91));
+        if (init != CK_OK) {
+            error = std::string("Executor self-test failed to initialize ") + label + ".";
+            return false;
+        }
+        if (!SetExecutorStringSetting(executor, EXECUTOR_SETTING_SCRIPT, scriptId, error) ||
+            !SetExecutorStringSetting(executor, EXECUTOR_SETTING_CLASS, executorClassName, error) ||
+            !SetExecutorStringSetting(executor, EXECUTOR_SETTING_INTERFACE, chainInterfaceText, error) ||
+            !SetExecutorBoolSetting(executor, EXECUTOR_SETTING_STRICT_INTERFACE, true, error) ||
+            !SetExecutorBoolSetting(executor, EXECUTOR_SETTING_TRACE, false, error)) {
+            return false;
+        }
+        CKBehaviorContext executorContext = MakeExecutorSelfTestContext(context, executor);
+        if (CallBridgeBehaviorCallback(executor, CKM_BEHAVIORCREATE, &executorContext) != CK_OK) {
+            error = std::string("Executor self-test ") + label + " CREATE callback failed.";
+            return false;
+        }
+        deleteCallbackFlag = true;
+        if (CallBridgeBehaviorCallback(executor, CKM_BEHAVIORSETTINGSEDITED, &executorContext) != CK_OK) {
+            error = std::string("Executor self-test ") + label + " SETTINGSEDITED callback failed.";
+            return false;
+        }
+        if (executor->GetInputCount() != 1 ||
+            executor->GetOutputCount() != 1 ||
+            executor->GetLocalParameterCount() != EXECUTOR_USER_LOCAL_START + 1) {
+            error = std::string("Executor self-test ") + label + " interface shape did not match.";
+            return false;
+        }
+        return true;
+    };
+
+    auto createChainLink = [&](const char *name,
+                               CKBehaviorIO *sourceIo,
+                               CKBehaviorIO *targetIo,
+                               CKBehaviorLink *&slot) -> bool {
+        slot = CKBehaviorLink::Cast(context->CreateObject(CKCID_BEHAVIORLINK,
+                                                          const_cast<CKSTRING>(name),
+                                                          CK_OBJECTCREATION_DYNAMIC));
+        if (!slot || !sourceIo || !targetIo) {
+            error = "Executor self-test failed to create a behavior graph link.";
+            return false;
+        }
+        CKERROR linkError = slot->SetInBehaviorIO(sourceIo);
+        if (linkError == CK_OK) {
+            linkError = slot->SetOutBehaviorIO(targetIo);
+        }
+        if (linkError == CK_OK) {
+            slot->SetInitialActivationDelay(0);
+            slot->SetActivationDelay(0);
+            linkError = chainRoot->AddSubBehaviorLink(slot);
+        }
+        if (linkError != CK_OK) {
+            error = "Executor self-test failed to attach a behavior graph link.";
+            return false;
+        }
+        return true;
+    };
+
+    chainRoot = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ExecutorLinkRoot"),
+        CK_OBJECTCREATION_DYNAMIC));
+    chainSource = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ExecutorLinkSource"),
+        CK_OBJECTCREATION_DYNAMIC));
+    chainTarget = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ExecutorLinkTarget"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!chainRoot || !chainSource || !chainTarget) {
+        cleanup();
+        error = "Executor self-test failed to create suspended link graph behaviors.";
+        return false;
+    }
+    chainRoot->UseGraph();
+    chainRoot->AddInput(const_cast<CKSTRING>("In"));
+    chainRoot->AddOutput(const_cast<CKSTRING>("Out"));
+    if (!initializeChainExecutor(chainSource,
+                                 "ExecutorSuspendingSourceProbe",
+                                 chainSourceDeleteCallbackSent,
+                                 "suspending source") ||
+        !initializeChainExecutor(chainTarget,
+                                 "ExecutorSuspendingDownstreamProbe",
+                                 chainTargetDeleteCallbackSent,
+                                 "downstream target")) {
+        cleanup();
+        return false;
+    }
+    CKERROR graphError = chainRoot->AddSubBehavior(chainSource);
+    if (graphError == CK_OK) {
+        graphError = chainRoot->AddSubBehavior(chainTarget);
+    }
+    if (graphError != CK_OK) {
+        cleanup();
+        error = "Executor self-test failed to attach suspended link graph sub-behaviors.";
+        return false;
+    }
+    if (!createChainLink("__CKAS_ExecutorLinkRootToSource",
+                         chainRoot->GetInput(0),
+                         chainSource->GetInput(0),
+                         chainRootToSource) ||
+        !createChainLink("__CKAS_ExecutorLinkSourceToTarget",
+                         chainSource->GetOutput(0),
+                         chainTarget->GetInput(0),
+                         chainSourceToTarget) ||
+        !createChainLink("__CKAS_ExecutorLinkTargetToRoot",
+                         chainTarget->GetOutput(0),
+                         chainRoot->GetOutput(0),
+                         chainTargetToRoot)) {
+        cleanup();
+        return false;
+    }
+
+    CKBehaviorContext chainContext = MakeExecutorSelfTestContext(context, chainRoot);
+    chainRoot->ActivateInput(0, TRUE);
+    chainRoot->Activate(TRUE, FALSE);
+    const int chainFirstCode = ExecuteExecutorSelfTestBehavior(context, chainRoot, chainContext);
+    if ((chainFirstCode & CKBR_ACTIVATENEXTFRAME) == 0 && !chainSource->IsActive()) {
+        cleanup();
+        error = "Executor self-test suspended source did not keep the graph active.";
+        return false;
+    }
+    scheduler->Tick();
+    const int chainSecondCode = ExecuteExecutorSelfTestBehavior(context, chainRoot, chainContext);
+    if (chainSecondCode >= CKBR_GENERICERROR) {
+        cleanup();
+        error = "Executor self-test suspended link graph returned error code " +
+            std::to_string(chainSecondCode) + ".";
+        return false;
+    }
+    CKParameterLocal *targetCount = chainTarget->GetLocalParameter(EXECUTOR_USER_LOCAL_START);
+    int downstreamCount = 0;
+    if (!targetCount || targetCount->GetValue(&downstreamCount) != CK_OK || downstreamCount != 0) {
+        cleanup();
+        error = "Executor self-test expected downstream behavior to be suspended before incrementing.";
+        return false;
+    }
+    if (!chainTarget->IsActive()) {
+        cleanup();
+        error = "Executor self-test did not keep the downstream behavior active while suspended.";
+        return false;
+    }
+    chainSource->ActivateOutput(0, TRUE);
+    chainTarget->ActivateInput(0, TRUE);
+    CKBehaviorContext chainTargetContext = MakeExecutorSelfTestContext(context, chainTarget);
+    const int duplicateTargetCode = ExecuteExecutorSelfTestBehavior(context, chainTarget, chainTargetContext);
+    if (duplicateTargetCode != CKBR_ACTIVATENEXTFRAME || chainTarget->IsInputActive(0)) {
+        cleanup();
+        error = "Executor self-test did not consume a duplicate suspended target input.";
+        return false;
+    }
+    if (!chainSource->IsOutputActive(0)) {
+        cleanup();
+        error = "Executor self-test cleared a shared upstream output while consuming a duplicate input.";
+        return false;
+    }
+    bool downstreamCompleted = false;
+    int chainFourthCode = CKBR_ACTIVATENEXTFRAME;
+    for (int attempt = 0; attempt < 5; ++attempt) {
+        scheduler->Tick();
+        chainFourthCode = ExecuteExecutorSelfTestBehavior(context, chainRoot, chainContext);
+        if (chainFourthCode >= CKBR_GENERICERROR) {
+            cleanup();
+            error = "Executor self-test suspended downstream follow-up returned error code " +
+                std::to_string(chainFourthCode) + ".";
+            return false;
+        }
+        downstreamCount = 0;
+        if (!targetCount || targetCount->GetValue(&downstreamCount) != CK_OK) {
+            cleanup();
+            error = "Executor self-test could not read downstream execution count.";
+            return false;
+        }
+        if (downstreamCount > 1) {
+            cleanup();
+            error = "Executor self-test propagated a stale output pulse to downstream behavior more than once.";
+            return false;
+        }
+        if (downstreamCount == 1) {
+            downstreamCompleted = true;
+        }
+    }
+    if (!downstreamCompleted) {
+        cleanup();
+        error = "Executor self-test did not resume suspended downstream behavior after clearing duplicate input.";
+        return false;
+    }
+    if (!chainRoot->IsOutputActive(0)) {
+        cleanup();
+        error = "Executor self-test did not propagate resumed downstream output to the root output.";
+        return false;
+    }
+
+    if (CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &behaviorContext) != CK_OK) {
+        cleanup();
+        error = "Executor self-test DELETE callback failed.";
+        return false;
+    }
+    deleteCallbackSent = false;
+    scratchValue = 0;
+    mappedValue = 0;
+    if (!scratchParam || scratchParam->GetValue(&scratchValue) != CK_OK || scratchValue != 901 ||
+        !mappedParam || mappedParam->GetValue(&mappedValue) != CK_OK || mappedValue != 902) {
+        cleanup();
+        error = "Executor self-test OnDestroy lost its logical local interface.";
+        return false;
+    }
+    if (bridge->HasFrameLocalInterface(behavior->GetID())) {
+        cleanup();
+        error = "Executor self-test did not clear its logical local interface after OnDestroy.";
         return false;
     }
 

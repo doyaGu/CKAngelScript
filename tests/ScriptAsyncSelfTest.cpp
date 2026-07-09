@@ -217,6 +217,14 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
 
     ScriptAsyncScheduler scheduler(ScriptManager::GetManager(context));
 
+    WriteAsyncSelfTestStage("bb-output-retry-completion");
+    if (!ScriptAsyncBBTaskWaitComplete(true, CKBR_ACTIVATENEXTFRAME) ||
+        ScriptAsyncBBTaskWaitComplete(false, CKBR_ACTIVATENEXTFRAME) ||
+        !ScriptAsyncBBTaskWaitComplete(false, CKBR_OK)) {
+        error = "Async BBTask output/retry completion decision is invalid.";
+        return false;
+    }
+
     WriteAsyncSelfTestStage("gc-cycle");
     CKAngelScriptApi api = CKAngelScriptApi::Get(context);
     if (!api.IsValid()) {

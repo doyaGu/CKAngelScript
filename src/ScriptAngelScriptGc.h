@@ -35,6 +35,12 @@ inline void ScriptRunBoundedGarbageCollection(asIScriptEngine *engine) {
     }
 }
 
+inline void ScriptRunFullGarbageCollection(asIScriptEngine *engine) {
+    if (engine) {
+        engine->GarbageCollect(asGC_FULL_CYCLE | asGC_DETECT_GARBAGE | asGC_DESTROY_GARBAGE);
+    }
+}
+
 inline void ScriptDiscardModuleWithGarbageCollection(asIScriptModule *module) {
     if (!module) {
         return;
@@ -42,9 +48,9 @@ inline void ScriptDiscardModuleWithGarbageCollection(asIScriptModule *module) {
 
     asIScriptEngine *engine = module->GetEngine();
     ScriptAutoGarbageCollectScope suppressAutoGc(engine, false);
-    ScriptRunBoundedGarbageCollection(engine);
+    ScriptRunFullGarbageCollection(engine);
     module->Discard();
-    ScriptRunBoundedGarbageCollection(engine);
+    ScriptRunFullGarbageCollection(engine);
 }
 
 #endif // CK_SCRIPT_ANGELSCRIPT_GC_H

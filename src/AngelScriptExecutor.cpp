@@ -11,6 +11,7 @@
 #include "CKAll.h"
 #include "Logger.h"
 #include "ScriptCache.h"
+#include "ScriptBridgeCommon.h"
 #include "ScriptInvoker.h"
 #include "ScriptManager.h"
 #include "ScriptParameterConversion.h"
@@ -24,12 +25,14 @@ constexpr int SETTING_CLASS = 2;
 constexpr int SETTING_INTERFACE = 3;
 constexpr int SETTING_STRICT_INTERFACE = 4;
 constexpr int SETTING_TRACE = 5;
+constexpr int USER_LOCAL_START = SETTING_TRACE + 1;
 
 enum class ExecutorSlotKind {
     Input,
     Output,
     Pin,
     Pout,
+    Local,
 };
 
 enum class ExecutorReadyStatus {
@@ -50,6 +53,8 @@ struct ExecutorSlotSpec {
     std::string Name;
     CKGUID Guid;
     std::string TypeName;
+    bool HasDefault = false;
+    std::string DefaultText;
 };
 
 struct ExecutorInterface {
@@ -57,6 +62,7 @@ struct ExecutorInterface {
     std::vector<ExecutorSlotSpec> Outputs;
     std::vector<ExecutorSlotSpec> Pins;
     std::vector<ExecutorSlotSpec> Pouts;
+    std::vector<ExecutorSlotSpec> Locals;
 };
 
 struct ScriptExecutorState {
@@ -86,6 +92,7 @@ struct ScriptExecutorState {
     bool OnLoadCalled = false;
     bool AwakeCalled = false;
     bool StartCalled = false;
+    std::vector<int> SuspendedInputs;
     std::string ActiveLifecycleName;
 
     static void ReleaseFunction(asIScriptFunction *&function) {
@@ -229,6 +236,16 @@ std::string TokenValue(const std::vector<std::string> &tokens, const char *key) 
     return {};
 }
 
+bool HasToken(const std::vector<std::string> &tokens, const char *key) {
+    const std::string prefix = std::string(key) + "=";
+    for (const std::string &token : tokens) {
+        if (token.rfind(prefix, 0) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool IsIntegerToken(const std::string &token) {
     if (token.empty()) {
         return false;
@@ -288,6 +305,9 @@ bool ParseInterface(CKContext *context, const std::string &text, ExecutorInterfa
         } else if (tokens[0] == "pout") {
             kind = ExecutorSlotKind::Pout;
             target = &interfaceShape.Pouts;
+        } else if (tokens[0] == "local") {
+            kind = ExecutorSlotKind::Local;
+            target = &interfaceShape.Locals;
         } else if (tokens[0] == "root") {
             continue;
         } else {
@@ -322,8 +342,13 @@ bool ParseInterface(CKContext *context, const std::string &text, ExecutorInterfa
         spec.Name = name;
         spec.TypeName = TokenValue(tokens, "type");
         spec.Guid = ResolveSlotGuid(context, TokenValue(tokens, "guid"), spec.TypeName);
+        spec.HasDefault = HasToken(tokens, "default") || HasToken(tokens, "value");
+        spec.DefaultText = HasToken(tokens, "default") ? TokenValue(tokens, "default") : TokenValue(tokens, "value");
 
-        if ((kind == ExecutorSlotKind::Pin || kind == ExecutorSlotKind::Pout) && spec.Guid == CKGUID()) {
+        if ((kind == ExecutorSlotKind::Pin ||
+             kind == ExecutorSlotKind::Pout ||
+             kind == ExecutorSlotKind::Local) &&
+            spec.Guid == CKGUID()) {
             error = "Interface parameter at line " + std::to_string(lineNumber) + " has no resolvable guid/type.";
             return false;
         }
@@ -499,12 +524,38 @@ bool ValidateInterface(const CKBehaviorContext &ctx,
            ValidateOutputParameterGuids(ctx, behavior, interfaceShape.Pouts, error);
 }
 
+std::vector<ScriptBridgeFrameLocalDecl> FrameLocalDecls(const std::vector<ExecutorSlotSpec> &locals) {
+    std::vector<ScriptBridgeFrameLocalDecl> decls;
+    decls.reserve(locals.size());
+    for (const ExecutorSlotSpec &spec : locals) {
+        ScriptBridgeFrameLocalDecl decl;
+        decl.Name = spec.Name;
+        decl.TypeGuid = spec.Guid;
+        decl.HasDefault = spec.HasDefault;
+        decl.DefaultText = spec.DefaultText;
+        decls.push_back(std::move(decl));
+    }
+    return decls;
+}
+
+ScriptBehaviorBridge *BehaviorBridgeFromContext(const CKBehaviorContext &ctx) {
+    ScriptManager *manager = ctx.Context ? ScriptManager::GetManager(ctx.Context) : nullptr;
+    return manager ? manager->GetBehaviorBridge() : nullptr;
+}
+
 bool ApplyInterface(const CKBehaviorContext &ctx,
                    CKBehavior *behavior,
                    const std::string &interfaceText,
                    bool strict,
                    std::string &error) {
-    if (!behavior || interfaceText.empty()) {
+    if (!behavior) {
+        return true;
+    }
+    ScriptBehaviorBridge *bridge = BehaviorBridgeFromContext(ctx);
+    if (interfaceText.empty()) {
+        if (bridge) {
+            bridge->ClearFrameLocalInterface(behavior->GetID(), false);
+        }
         return true;
     }
     ExecutorInterface interfaceShape;
@@ -515,6 +566,18 @@ bool ApplyInterface(const CKBehaviorContext &ctx,
     SyncOutputCount(behavior, interfaceShape.Outputs);
     SyncPinCount(behavior, interfaceShape.Pins);
     SyncPoutCount(behavior, interfaceShape.Pouts);
+
+    if (!bridge) {
+        error = "Executor interface locals require ScriptBehaviorBridge.";
+        return false;
+    }
+    if (!bridge->ApplyFrameLocalInterface(behavior,
+                                          FrameLocalDecls(interfaceShape.Locals),
+                                          USER_LOCAL_START,
+                                          strict,
+                                          error)) {
+        return false;
+    }
     if (strict && !ValidateInterface(ctx, behavior, interfaceShape, error)) {
         return false;
     }
@@ -662,6 +725,9 @@ void DestroyState(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
     if (state->Invoker) {
         state->Invoker->AbortContext();
     }
+    if (ScriptBehaviorBridge *bridge = BehaviorBridgeFromContext(ctx)) {
+        bridge->ClearFrameLocalInterface(state->BehaviorId, true);
+    }
     state->ReleaseCachedMethods();
     state->ReleaseObject();
     delete state->Invoker;
@@ -684,6 +750,7 @@ void ReleaseRuntimeState(ScriptExecutorState *state) {
     state->OnLoadCalled = false;
     state->AwakeCalled = false;
     state->StartCalled = false;
+    state->SuspendedInputs.clear();
     state->ActiveLifecycleName.clear();
 }
 
@@ -897,7 +964,7 @@ std::vector<int> ActiveInputs(CKBehavior *behavior) {
     return active;
 }
 
-void ClearInputs(CKBehavior *behavior, const std::vector<int> &inputs) {
+void ClearExecutorInputs(CKBehavior *behavior, const std::vector<int> &inputs) {
     if (!behavior) {
         return;
     }
@@ -906,6 +973,40 @@ void ClearInputs(CKBehavior *behavior, const std::vector<int> &inputs) {
             behavior->ActivateInput(input, FALSE);
         }
     }
+}
+
+void ClearExecutorOutputs(CKBehavior *behavior) {
+    if (!behavior) {
+        return;
+    }
+    for (int output = 0; output < behavior->GetOutputCount(); ++output) {
+        behavior->ActivateOutput(output, FALSE);
+    }
+}
+
+bool HasActiveOutputs(CKBehavior *behavior) {
+    if (!behavior) {
+        return false;
+    }
+    for (int output = 0; output < behavior->GetOutputCount(); ++output) {
+        if (behavior->IsOutputActive(output)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SameInputSet(const std::vector<int> &left, const std::vector<int> &right) {
+    return left == right;
+}
+
+void KeepExecutorScheduled(CKBehavior *behavior) {
+    if (!behavior) {
+        return;
+    }
+    behavior->Activate(TRUE, FALSE);
+    ActivateParentChain(behavior, false);
+    ActivateOwnerScriptInCurrentScene(behavior, false);
 }
 
 } // namespace
@@ -1004,12 +1105,42 @@ int AngelScriptExecutor(const CKBehaviorContext &behcontext) {
     const bool trace = ReadLocalBool(behavior, SETTING_TRACE, false);
     const std::vector<int> activeInputs = ActiveInputs(behavior);
     if (trace && behcontext.Context) {
-        behcontext.Context->OutputToConsoleEx(const_cast<char *>("[AngelScript Executor] %s active inputs=%d"),
+        const std::string className = ReadLocalString(behavior, SETTING_CLASS);
+        behcontext.Context->OutputToConsoleEx(const_cast<char *>("[AngelScript Executor] #%d %s class=%s active inputs=%d"),
+                                              behavior->GetID(),
                                               behavior->GetName(),
+                                              className.c_str(),
                                               static_cast<int>(activeInputs.size()));
     }
 
     int returnCode = CKBR_OK;
+    const bool hasActiveInputs = !activeInputs.empty();
+    if (hasActiveInputs &&
+        state->Invoker &&
+        state->Invoker->IsContextSuspended() &&
+        state->ActiveLifecycleName.empty()) {
+        if (SameInputSet(activeInputs, state->SuspendedInputs)) {
+            if (trace && behcontext.Context) {
+                behcontext.Context->OutputToConsoleEx(
+                    const_cast<char *>("[AngelScript Executor] #%d duplicate suspended input consumed while resuming"),
+                    behavior->GetID());
+            }
+            ClearExecutorOutputs(behavior);
+            ClearExecutorInputs(behavior, activeInputs);
+        } else {
+            if (trace && behcontext.Context) {
+                behcontext.Context->OutputToConsoleEx(
+                    const_cast<char *>("[AngelScript Executor] #%d aborting suspended Execute on new input"),
+                    behavior->GetID());
+            }
+            state->Invoker->AbortContext();
+            state->SuspendedInputs.clear();
+        }
+    }
+    const bool resumingSuspendedExecute = state->Invoker && state->Invoker->IsContextSuspended();
+    if (!resumingSuspendedExecute && hasActiveInputs) {
+        ClearExecutorOutputs(behavior);
+    }
     const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(
         state->Object,
         state->Execute,
@@ -1026,14 +1157,23 @@ int AngelScriptExecutor(const CKBehaviorContext &behcontext) {
         });
 
     if (status == ScriptInvocationStatus::Suspended) {
-        ClearInputs(behavior, activeInputs);
+        if (!activeInputs.empty()) {
+            state->SuspendedInputs = activeInputs;
+        }
+        KeepExecutorScheduled(behavior);
+        ClearExecutorInputs(behavior, activeInputs);
         return CKBR_ACTIVATENEXTFRAME;
     }
-    ClearInputs(behavior, activeInputs);
+    ClearExecutorInputs(behavior, activeInputs);
     if (status == ScriptInvocationStatus::Failed) {
         ConsoleError(behcontext, state->Invoker->GetErrorMessage());
         state->Failed = true;
+        state->SuspendedInputs.clear();
         return CKBR_OK;
+    }
+    state->SuspendedInputs.clear();
+    if (resumingSuspendedExecute && HasActiveOutputs(behavior)) {
+        KeepExecutorScheduled(behavior);
     }
     return returnCode;
 }

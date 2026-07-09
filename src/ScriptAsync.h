@@ -15,6 +15,8 @@ class BBTask;
 class GraphTask;
 class ScriptManager;
 
+bool ScriptAsyncBBTaskWaitComplete(bool outputActive, int returnCode);
+
 enum class ScriptAsyncTaskState {
     Pending,
     Running,

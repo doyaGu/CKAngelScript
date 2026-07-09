@@ -665,6 +665,10 @@ void AsyncAnyGeneric(asIScriptGeneric *gen) { AsyncAggregateGeneric(gen, ScriptA
 
 } // namespace
 
+bool ScriptAsyncBBTaskWaitComplete(bool outputActive, int returnCode) {
+    return outputActive || (returnCode & CKBR_ACTIVATENEXTFRAME) == 0;
+}
+
 ScriptAsyncStoredValue::~ScriptAsyncStoredValue() {
     Clear();
 }
@@ -1514,6 +1518,15 @@ void ScriptAsyncTaskBase::AdvanceBBTask() {
         Fail("BBTask is not valid.");
         return;
     }
+    const std::string initialError = m_BBTask->Error();
+    if (!initialError.empty()) {
+        Fail(initialError);
+        return;
+    }
+    if (m_BBTask->OutputActive(-1)) {
+        CompleteVoid();
+        return;
+    }
     if (m_DriveBridgeTask && m_BBTask->IsAlive() && !m_BBTask->Step(m_BridgeTaskContext, m_BBTaskInputIndex)) {
         Fail(m_BBTask->Error().empty() ? "BBTask.Step failed while awaiting task." : m_BBTask->Error());
         return;
@@ -1524,7 +1537,7 @@ void ScriptAsyncTaskBase::AdvanceBBTask() {
         Fail(taskError);
         return;
     }
-    if ((returnCode & CKBR_ACTIVATENEXTFRAME) != 0) {
+    if (!ScriptAsyncBBTaskWaitComplete(m_BBTask->OutputActive(-1), returnCode)) {
         SetState(ScriptAsyncTaskState::Running);
         return;
     }
