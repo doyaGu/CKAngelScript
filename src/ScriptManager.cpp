@@ -128,7 +128,7 @@ CKERROR ScriptManager::OnCKReset() {
         m_Runtime->OnReset();
     }
     if (m_BehaviorBridge) {
-        m_BehaviorBridge->Clear();
+        m_BehaviorBridge->Clear(false);
     }
     ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
     return CK_OK;
@@ -410,7 +410,19 @@ void ScriptManager::MessageCallback(const asSMessageInfo &msg) {
         captured.Message = msg.message ? msg.message : "";
         m_Diagnostics.CaptureScriptMessage(formatted, std::move(captured));
     }
-    m_Context->OutputToConsoleEx(const_cast<char *>("%s"), formatted.c_str());
+    if (m_MessageOutputSuppressionDepth == 0) {
+        m_Context->OutputToConsoleEx(const_cast<char *>("%s"), formatted.c_str());
+    }
+}
+
+void ScriptManager::PushMessageOutputSuppression() {
+    ++m_MessageOutputSuppressionDepth;
+}
+
+void ScriptManager::PopMessageOutputSuppression() {
+    if (m_MessageOutputSuppressionDepth > 0) {
+        --m_MessageOutputSuppressionDepth;
+    }
 }
 
 void ScriptManager::ExceptionCallback(asIScriptContext *context) {

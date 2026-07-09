@@ -41,7 +41,7 @@ bool Logger::Init(const char *filename, LogLevel level) {
         m_File = nullptr;
     }
 
-    FILE *fp = fopen(filename, "a");
+    FILE *fp = fopen(filename, "w");
     if (!fp)
         return false;
 

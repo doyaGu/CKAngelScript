@@ -165,11 +165,14 @@ CKAS_STATUS ScriptEngineHost::RegisterExtension(ScriptManager &manager,
                                                           request.Name,
                                                           code)
                                             : message;
-            CKContext *context = manager.GetCKContext();
-            if (context) {
-                context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+            if (!ScriptApiSupport::HasPublicFlag(request.Flags,
+                                                 CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT)) {
+                CKContext *context = manager.GetCKContext();
+                if (context) {
+                    context->OutputToConsoleEx(const_cast<char *>("[AngelScript] %s"), summary.c_str());
+                }
+                LOG_ERROR("%s", summary.c_str());
             }
-            LOG_ERROR("%s", summary.c_str());
             return manager.StoreApiResult(result, CKAS_EXECUTIONFAILED, code, summary.c_str());
         }
     }

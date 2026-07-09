@@ -11,6 +11,25 @@ namespace {
 
 bool StartupSelfTestsAttempted = false;
 
+class ScopedSelfTestMessageOutputSuppression {
+public:
+    explicit ScopedSelfTestMessageOutputSuppression(ScriptManager *manager)
+        : m_Manager(manager) {
+        if (m_Manager) {
+            m_Manager->PushMessageOutputSuppression();
+        }
+    }
+
+    ~ScopedSelfTestMessageOutputSuppression() {
+        if (m_Manager) {
+            m_Manager->PopMessageOutputSuppression();
+        }
+    }
+
+private:
+    ScriptManager *m_Manager = nullptr;
+};
+
 bool IsTruthyEnvironmentValue(const char *name) {
     const char *value = std::getenv(name);
     return value && value[0] != '\0' && !(value[0] == '0' && value[1] == '\0');
@@ -62,6 +81,7 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
         return CK_OK;
     }
     StartupSelfTestsAttempted = true;
+    ScopedSelfTestMessageOutputSuppression suppressExpectedDiagnostics(manager);
 
     WriteStartupSelfTestMarker("running", "start", std::string());
 

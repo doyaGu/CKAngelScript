@@ -112,7 +112,8 @@ typedef enum CKAS_COMPILEFLAGS {
 
 typedef enum CKAS_ENGINEEXTENSIONFLAGS {
     CKAS_ENGINEEXTENSION_DEFAULT = 0,
-    CKAS_ENGINEEXTENSION_DEFERRED = 0x00000001
+    CKAS_ENGINEEXTENSION_DEFERRED = 0x00000001,
+    CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT = 0x00000002
 } CKAS_ENGINEEXTENSIONFLAGS;
 
 typedef enum CKAS_CALLFLAGS {
@@ -410,6 +411,8 @@ typedef struct CKAngelScriptEngineExtension {
     // By default RegisterEngineExtension invokes the callback immediately when
     // the engine is already initialized. Set CKAS_ENGINEEXTENSION_DEFERRED
     // to skip immediate registration and retain the extension for rebuilds.
+    // CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT keeps an expected immediate
+    // failure in CKAngelScriptResult without writing it to the console or log.
     // CKAngelScript wraps successful extension registration in an AngelScript
     // config group; callbacks must not call BeginConfigGroup/EndConfigGroup.
     // UnregisterEngineExtension removes that group when it is not in use.

@@ -264,6 +264,8 @@ public:
     void MessageCallback(const asSMessageInfo &msg);
     void ExceptionCallback(asIScriptContext *context);
     std::string GetCallStack(asIScriptContext *context);
+    void PushMessageOutputSuppression();
+    void PopMessageOutputSuppression();
 
     asIScriptContext *RequestContextFromPool();
     void ReturnContextToPool(asIScriptContext *ctx);
@@ -311,6 +313,7 @@ protected:
     ScriptApiDiagnostics m_Diagnostics;
     int m_PublicCallbackDepth = 0;
     int m_BytecodeCallbackDepth = 0;
+    int m_MessageOutputSuppressionDepth = 0;
 };
 
 #endif // CK_SCRIPTMANAGER_H

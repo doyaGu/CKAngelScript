@@ -468,7 +468,8 @@ CKAS_STATUS DecodeEngineExtension(const CKAngelScriptEngineExtension &extension,
                                       &CKAngelScriptEngineExtension::Flags,
                                       static_cast<CKDWORD>(CKAS_ENGINEEXTENSION_DEFAULT));
     CKAS_STATUS status = ValidateNoUnknownFlags(request.Flags,
-                                               CKAS_ENGINEEXTENSION_DEFERRED,
+                                               CKAS_ENGINEEXTENSION_DEFERRED |
+                                                   CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT,
                                                "Unknown engine extension flags.",
                                                errorMessage);
     if (status != CKAS_OK) {

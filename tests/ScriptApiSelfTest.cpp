@@ -1384,6 +1384,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         CKAS_LOAD_REPLACEEXISTING != 0x00000001 ||
         CKAS_COMPILE_REPLACEEXISTING != 0x00000001 ||
         CKAS_ENGINEEXTENSION_DEFERRED != 0x00000001 ||
+        CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT != 0x00000002 ||
         CKAS_CALL_NO_SUSPEND != 0x00000001 ||
         CKAS_HOSTCALL_MUTATES_HOST_STATE != 0x00000001 ||
         CKAS_BYTECODE_DEFAULT != 0 ||
@@ -1616,6 +1617,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     CKAngelScriptEngineExtension failingExtension = CKAngelScriptApi::EngineExtension();
     failingExtension.Name = "__ckas_failing_extension";
     failingExtension.Register = RegisterCkasFailingSelfTestExtension;
+    failingExtension.Flags = CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT;
     if (api->RegisterEngineExtension(failingExtension, &result) != CKAS_EXECUTIONFAILED ||
         !result.ErrorMessage ||
         std::string(result.ErrorMessage).find("Expected self-test extension failure") == std::string::npos) {
@@ -2403,12 +2405,14 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     CKAngelScriptEngineExtension partialFailureExtension = CKAngelScriptApi::EngineExtension();
     partialFailureExtension.Name = "__ckas_partial_failure_extension";
     partialFailureExtension.Register = RegisterCkasPartialFailureSelfTestExtension;
+    partialFailureExtension.Flags = CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT;
     if (api->RegisterEngineExtension(partialFailureExtension, &result) != CKAS_EXECUTIONFAILED ||
         HasGlobalFunctionInNamespace(engine, "CKASPartialFailureExtensionSelfTest", "int Value()")) {
         error = "CKAngelScript API self-test expected partial extension failure to roll back registered symbols.";
         return false;
     }
     partialFailureExtension.Register = RegisterCkasDeferredSelfTestExtension;
+    partialFailureExtension.Flags = CKAS_ENGINEEXTENSION_DEFAULT;
     if (api->RegisterEngineExtension(partialFailureExtension, &result) != CKAS_OK ||
         !HasGlobalFunctionInNamespace(engine, "CKASDeferredExtensionSelfTest", "int Value()") ||
         api->UnregisterEngineExtension("__ckas_partial_failure_extension", &result) != CKAS_OK) {
