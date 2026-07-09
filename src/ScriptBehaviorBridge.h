@@ -222,6 +222,41 @@ struct ScriptBridgeInputSourceBindings {
     void Remove(int pinIndex);
 };
 
+struct ScriptBridgeFrameLocalDecl {
+    std::string Name;
+    CKGUID TypeGuid;
+    bool HasDefault = false;
+    std::string DefaultText;
+};
+
+struct ScriptBridgeFrameLocalBinding {
+    std::string Name;
+    CKGUID TypeGuid;
+    CK_ID SourceId = 0;
+    ScriptBridgeObjectStamp SourceStamp;
+    std::string Label;
+};
+
+struct ScriptBridgeFrameLocalSlot {
+    std::string Name;
+    CKGUID TypeGuid;
+    int OwnedLocalIndex = -1;
+    CK_ID SourceId = 0;
+    ScriptBridgeObjectStamp SourceStamp;
+    std::string Label;
+
+    bool Mapped() const { return SourceId != 0; }
+};
+
+struct ScriptBridgeFrameLocalInterface {
+    CK_ID BehaviorId = 0;
+    ScriptBridgeObjectStamp BehaviorStamp;
+    std::vector<ScriptBridgeFrameLocalDecl> Declarations;
+    int OwnedLocalStart = 0;
+    bool Strict = false;
+    std::vector<ScriptBridgeFrameLocalSlot> Locals;
+};
+
 struct ScriptBridgeOperationInput {
     ScriptBridgeInputBindingKind Kind = ScriptBridgeInputBindingKind::Empty;
     ScriptParamValue Value;
@@ -325,7 +360,7 @@ public:
     CKERROR PreProcess();
     CKERROR PostProcess();
 
-    void Clear();
+    void Clear(bool clearFrameLocalBindings = true);
     void DestroyComponentTasks(CK_ID componentId);
     void ResetComponentTasks(CK_ID componentId);
     void PauseComponentTasks(CK_ID componentId, bool paused);
@@ -368,6 +403,23 @@ public:
     const ScriptBridgeLayoutRecord *GetBehaviorLayout(CK_ID behaviorId, const ScriptBridgeObjectStamp &stamp) const;
     const ScriptBridgeLayoutRecord *GetPrototypeLayout(const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request) const;
     void InvalidateBehaviorLayout(CK_ID behaviorId) const;
+    bool BindFrameLocal(CKBehavior *behavior,
+                        const std::string &name,
+                        CKGUID guid,
+                        ParamRef *source,
+                        const std::string &label,
+                        std::string &error);
+    bool ApplyFrameLocalInterface(CKBehavior *behavior,
+                                  const std::vector<ScriptBridgeFrameLocalDecl> &locals,
+                                  int ownedLocalStart,
+                                  bool strict,
+                                  std::string &error);
+    void ClearFrameLocalInterface(CK_ID behaviorId, bool clearBindings);
+    bool HasFrameLocalInterface(CK_ID behaviorId) const;
+    int FrameLocalCount(CK_ID behaviorId) const;
+    int FindFrameLocal(CK_ID behaviorId, const std::string &name, int occurrence) const;
+    CKParameter *ResolveFrameLocal(CKContext *context, CK_ID behaviorId, int index, std::string &error) const;
+    std::string DescribeFrameLocals(CK_ID behaviorId) const;
     ParamRef *WrapParameter(CKObject *parameter, ScriptBridgeSlotKind kind = ScriptBridgeSlotKind::Standalone, int index = -1);
     ParamOperationRef *WrapParameterOperation(CKParameterOperation *operation,
                                               CKParameterIn *targetInput = nullptr,
@@ -533,6 +585,8 @@ private:
     std::unordered_map<CK_ID, TaskRecord> m_Tasks;
     std::unordered_map<CK_ID, InstanceRecord> m_Instances;
     std::unordered_map<CK_ID, ScriptBridgeGraphWatch> m_GraphWatches;
+    std::unordered_map<CK_ID, std::vector<ScriptBridgeFrameLocalBinding>> m_FrameLocalBindings;
+    std::unordered_map<CK_ID, ScriptBridgeFrameLocalInterface> m_FrameLocalInterfaces;
     mutable std::unordered_map<CK_ID, ScriptBridgeLayoutRecord> m_BehaviorLayouts;
     mutable std::unordered_map<std::string, ScriptBridgeLayoutRecord> m_PrototypeLayouts;
     std::vector<PendingDestroy> m_PendingDestroy;

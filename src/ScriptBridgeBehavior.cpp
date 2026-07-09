@@ -493,6 +493,20 @@ ParamRef *BehaviorRef::LocalSlot(BBSlot *slot) const {
     return Local(index);
 }
 
+bool BehaviorRef::BindLocal(const std::string &name, ParamRef *source, CKGUID guid, const std::string &label) {
+    CKBehavior *behavior = Get();
+    if (!behavior || !m_Bridge) {
+        SetScriptException("BehaviorRef.BindLocal requires a live behavior.");
+        return false;
+    }
+    std::string error;
+    if (!m_Bridge->BindFrameLocal(behavior, name, guid, source, label, error)) {
+        SetScriptException(error);
+        return false;
+    }
+    return true;
+}
+
 ParamOperationRef *BehaviorRef::ConnectOperation(int pinIndex, ParamOp *operation) {
     CKBehavior *behavior = Get();
     if (!behavior || !operation) {

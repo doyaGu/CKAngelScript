@@ -606,6 +606,43 @@ BehaviorRef *BehaviorFrame::OwnerScript() const {
     return WrapBehavior(behavior ? behavior->GetOwnerScript() : nullptr);
 }
 
+BehaviorFrame *BehaviorFrame::FrameFor(CKBehavior *target) const {
+    if (!target) {
+        SetScriptException("BehaviorFrame.FrameFor requires a live behavior.");
+        return nullptr;
+    }
+
+    CKContext *targetContext = target->GetCKContext();
+    if (m_Context && targetContext && targetContext != m_Context) {
+        SetScriptException("BehaviorFrame.FrameFor requires a behavior from the same CKContext.");
+        return nullptr;
+    }
+
+    CKBehaviorContext ctx = MakeContext();
+    ctx.Context = targetContext ? targetContext : m_Context;
+    ctx.Behavior = target;
+    return new BehaviorFrame(ctx);
+}
+
+BehaviorFrame *BehaviorFrame::FrameForRef(BehaviorRef *target) const {
+    return FrameFor(target ? target->Get() : nullptr);
+}
+
+BehaviorFrame *BehaviorFrame::SubFrame(int index) const {
+    CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.SubFrame");
+    if (!behavior) {
+        return nullptr;
+    }
+    if (index < 0 || index >= behavior->GetSubBehaviorCount()) {
+        SetScriptException(fmt::format(
+            "BehaviorFrame.SubFrame index {} is out of range 0..{}.",
+            index,
+            behavior->GetSubBehaviorCount() - 1));
+        return nullptr;
+    }
+    return FrameFor(behavior->GetSubBehavior(index));
+}
+
 CKBehavior *BehaviorFrame::ParentBehavior() const {
     CKBehavior *behavior = Behavior();
     if (!RequireBehavior(behavior, "BehaviorFrame.GetParent")) {
@@ -937,6 +974,14 @@ int BehaviorFrame::PoutCount() const {
 }
 
 int BehaviorFrame::LocalCount() const {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (bridge && m_BehaviorId != 0 && bridge->HasFrameLocalInterface(m_BehaviorId)) {
+        return bridge->FrameLocalCount(m_BehaviorId);
+    }
+    return BehaviorLocalCount();
+}
+
+int BehaviorFrame::BehaviorLocalCount() const {
     CKBehavior *behavior = Behavior();
     return behavior ? behavior->GetLocalParameterCount() : 0;
 }
@@ -999,6 +1044,14 @@ int BehaviorFrame::FindPout(const std::string &name, int occurrence) const {
 }
 
 int BehaviorFrame::FindLocal(const std::string &name, int occurrence) const {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (bridge && m_BehaviorId != 0 && bridge->HasFrameLocalInterface(m_BehaviorId)) {
+        return bridge->FindFrameLocal(m_BehaviorId, name, occurrence);
+    }
+    return FindBehaviorLocal(name, occurrence);
+}
+
+int BehaviorFrame::FindBehaviorLocal(const std::string &name, int occurrence) const {
     CKBehavior *behavior = Behavior();
     return ResolveNamedParameter(behavior,
                                  name,
@@ -1398,6 +1451,28 @@ ParamRef *BehaviorFrame::Local(const std::string &name, int occurrence) const {
 }
 
 ParamRef *BehaviorFrame::LocalIndex(int index) const {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (bridge && m_BehaviorId != 0 && bridge->HasFrameLocalInterface(m_BehaviorId)) {
+        std::string error;
+        CKParameter *local = bridge->ResolveFrameLocal(m_Context, m_BehaviorId, index, error);
+        if (!local) {
+            SetScriptException(error.empty()
+                ? fmt::format("BehaviorFrame.Local could not resolve logical local index {}.", index)
+                : error);
+            return nullptr;
+        }
+        return WrapParameter(local, ScriptBridgeSlotKind::Local, index);
+    }
+    return BehaviorLocalIndex(index);
+}
+
+ParamRef *BehaviorFrame::BehaviorLocal(const std::string &name, int occurrence) const {
+    CKBehavior *behavior = Behavior();
+    const int index = ResolveBehaviorLocal(name, occurrence, "BehaviorFrame.BehaviorLocal");
+    return behavior ? BehaviorLocalIndex(index) : nullptr;
+}
+
+ParamRef *BehaviorFrame::BehaviorLocalIndex(int index) const {
     CKBehavior *behavior = Behavior();
     CKParameterLocal *local = behavior && index >= 0 && index < behavior->GetLocalParameterCount()
         ? behavior->GetLocalParameter(index)
@@ -1586,8 +1661,20 @@ float BehaviorFrame::LocalFloatIndex(int index, float defaultValue) const {
 }
 
 CKObject *BehaviorFrame::LocalObject(const std::string &name, int occurrence) const {
+    CKParameter *local = FindLocalSource(name, occurrence);
+    return local ? local->GetValueObject(TRUE) : nullptr;
+}
+
+CKObject *BehaviorFrame::BehaviorLocalObject(const std::string &name, int occurrence) const {
     CKParameterLocal *local = FindLocalParameter(name, occurrence);
     return local ? local->GetValueObject(TRUE) : nullptr;
+}
+
+CKObject *BehaviorFrame::BehaviorLocalObjectIndex(int index) const {
+    CKBehavior *behavior = Behavior();
+    return behavior && index >= 0 && index < behavior->GetLocalParameterCount()
+        ? behavior->GetLocalParameterObject(index)
+        : nullptr;
 }
 
 bool BehaviorFrame::PinEnabled(const std::string &name, int occurrence) const {
@@ -1953,24 +2040,36 @@ int BehaviorFrame::LocalPosition(CKParameterLocal *local) const {
 }
 
 NativePointer BehaviorFrame::LocalWriteDataPtr(int index) const {
+    CKParameter *local = FindLocalSourceIndex(index);
+    return NativePointer(local ? local->GetWriteDataPtr() : nullptr);
+}
+
+NativePointer BehaviorFrame::LocalReadDataPtr(int index) const {
+    CKParameter *local = FindLocalSourceIndex(index);
+    return NativePointer(local ? local->GetReadDataPtr(TRUE) : nullptr);
+}
+
+CKObject *BehaviorFrame::LocalObject(int index) const {
+    CKParameter *local = FindLocalSourceIndex(index);
+    return local ? local->GetValueObject(TRUE) : nullptr;
+}
+
+NativePointer BehaviorFrame::BehaviorLocalWriteDataPtr(int index) const {
     CKBehavior *behavior = Behavior();
     return NativePointer(behavior && index >= 0 && index < behavior->GetLocalParameterCount()
         ? behavior->GetLocalParameterWriteDataPtr(index)
         : nullptr);
 }
 
-NativePointer BehaviorFrame::LocalReadDataPtr(int index) const {
+NativePointer BehaviorFrame::BehaviorLocalReadDataPtr(int index) const {
     CKBehavior *behavior = Behavior();
     return NativePointer(behavior && index >= 0 && index < behavior->GetLocalParameterCount()
         ? behavior->GetLocalParameterReadDataPtr(index)
         : nullptr);
 }
 
-CKObject *BehaviorFrame::LocalObject(int index) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && index >= 0 && index < behavior->GetLocalParameterCount()
-        ? behavior->GetLocalParameterObject(index)
-        : nullptr;
+CKParameterLocal *BehaviorFrame::BehaviorLocalParameter(int index) const {
+    return LocalParameter(index);
 }
 
 CKERROR BehaviorFrame::SetLocalObject(int index, CKObject *object) {
@@ -2095,6 +2194,15 @@ BBCallBuilder *BehaviorFrame::CallGuid(CKGUID guid) const {
     request.PrototypeKind = ScriptBridgePrototypeKind::Guid;
     request.Guid = guid;
     return new BBCallBuilder(bridge, MakeContext(), request);
+}
+
+BBBridge *BehaviorFrame::BB() const {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (!bridge) {
+        SetScriptException("BehaviorFrame.BB requires ScriptBehaviorBridge.");
+        return nullptr;
+    }
+    return new BBBridge(bridge, MakeContext());
 }
 
 ScriptAsyncTaskBase *BehaviorFrame::LinkDelay(int frames) const {
@@ -2334,6 +2442,24 @@ int BehaviorFrame::ResolvePout(const std::string &name, int occurrence, const ch
 }
 
 int BehaviorFrame::ResolveLocal(const std::string &name, int occurrence, const char *method) const {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (bridge && m_BehaviorId != 0 && bridge->HasFrameLocalInterface(m_BehaviorId)) {
+        const int index = bridge->FindFrameLocal(m_BehaviorId, name, occurrence);
+        if (index < 0) {
+            CKBehavior *behavior = Behavior();
+            SetScriptException(fmt::format("{} could not find logical local '{}' occurrence {} on behavior '{}' (candidates: {}).",
+                method,
+                name,
+                occurrence,
+                SafeString(behavior ? behavior->GetName() : nullptr),
+                bridge->DescribeFrameLocals(m_BehaviorId)));
+        }
+        return index;
+    }
+    return ResolveBehaviorLocal(name, occurrence, method);
+}
+
+int BehaviorFrame::ResolveBehaviorLocal(const std::string &name, int occurrence, const char *method) const {
     CKBehavior *behavior = Behavior();
     if (!RequireBehavior(behavior, method)) {
         return -1;
@@ -2431,6 +2557,20 @@ CKParameterLocal *BehaviorFrame::FindLocalParameterIndex(int index) const {
         : nullptr;
 }
 
+CKParameter *BehaviorFrame::FindLocalSource(const std::string &name, int occurrence) const {
+    const int index = FindLocal(name, occurrence);
+    return FindLocalSourceIndex(index);
+}
+
+CKParameter *BehaviorFrame::FindLocalSourceIndex(int index) const {
+    ScriptBehaviorBridge *bridge = Bridge();
+    if (bridge && m_BehaviorId != 0 && bridge->HasFrameLocalInterface(m_BehaviorId)) {
+        std::string error;
+        return bridge->ResolveFrameLocal(m_Context, m_BehaviorId, index, error);
+    }
+    return FindLocalParameterIndex(index);
+}
+
 ScriptParamValue BehaviorFrame::ReadPinValueOrEmpty(const std::string &name, int occurrence) const {
     CKParameterIn *pin = FindPinParameter(name, occurrence);
     CKParameter *source = pin ? ParameterSourceForConnection(pin) : nullptr;
@@ -2448,7 +2588,7 @@ ScriptParamValue BehaviorFrame::ReadPinValueOrEmpty(const std::string &name, int
 }
 
 ScriptParamValue BehaviorFrame::ReadLocalValueOrEmpty(const std::string &name, int occurrence) const {
-    CKParameterLocal *local = FindLocalParameter(name, occurrence);
+    CKParameter *local = FindLocalSource(name, occurrence);
     if (!local) {
         return ScriptParamValue();
     }
@@ -2463,7 +2603,7 @@ ScriptParamValue BehaviorFrame::ReadLocalValueOrEmpty(const std::string &name, i
 }
 
 ScriptParamValue BehaviorFrame::ReadLocalValueOrEmpty(int index) const {
-    CKParameterLocal *local = FindLocalParameterIndex(index);
+    CKParameter *local = FindLocalSourceIndex(index);
     if (!local) {
         return ScriptParamValue();
     }

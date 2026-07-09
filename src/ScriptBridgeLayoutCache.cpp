@@ -651,6 +651,9 @@ ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildConfiguredPrototypeLayout(co
         if (err != CK_OK) {
             return fail(fmt::format("Building Block SETTINGSEDITED callback failed during layout preview (CKERROR {}).", err));
         }
+        if (!EnsurePrototypeStaticLayout(behavior, prototype, error)) {
+            return fail(error);
+        }
     }
 
     layout = BuildBehaviorLayout(behavior);

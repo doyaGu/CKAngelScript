@@ -2197,10 +2197,22 @@ class BehaviorFrame {
     BehaviorGraph@ AsGraph() const;
     CKAttributeManager@ AttributeManager() const;
     CKBehavior@ Behavior() const;
+    BehaviorFrame@ FrameFor(CKBehavior@ behavior) const;
+    BehaviorFrame@ FrameFor(BehaviorRef@ behavior) const;
+    BehaviorFrame@ SubFrame(int index) const;
+    int BehaviorLocalCount() const;
+    ParamRef@ BehaviorLocal(const string&in name, int occurrence = 0) const;
+    ParamRef@ BehaviorLocal(int index) const;
+    CKObject@ BehaviorLocalObject(const string&in name, int occurrence = 0) const;
+    CKObject@ BehaviorLocalObject(int index) const;
+    CKParameterLocal@ BehaviorLocalParameter(int index) const;
+    NativePointer BehaviorLocalReadDataPtr(int index) const;
+    NativePointer BehaviorLocalWriteDataPtr(int index) const;
     CKERROR CKDestroyObject(CKObject@ object, uint flags = 0, CKDependencies&in depoptions = void);
     CKERROR CKDestroyObject(uint id, uint flags = 0, CKDependencies&in depoptions = void);
     CKERROR CKDestroyObjects(const XObjectArray&in ids, uint flags = 0, CKDependencies&in depoptions = void);
     CKObject@ CKGetObject(uint id) const;
+    BBBridge@ BB() const;
     BBCallBuilder@ Call(CKGUID guid) const;
     BBCallBuilder@ Call(const string&in prototype) const;
     int CallCallbackFunction(uint message);
@@ -2248,6 +2260,7 @@ class BehaviorFrame {
     CKERROR ExportPin(CKParameterIn@ pin);
     CKERROR ExportPout(CKParameterOut@ pout);
     int FindInput(const string&in name, int occurrence = 0) const;
+    int FindBehaviorLocal(const string&in name, int occurrence = 0) const;
     int FindLocal(const string&in name, int occurrence = 0) const;
     int FindOutput(const string&in name, int occurrence = 0) const;
     int FindPin(const string&in name, int occurrence = 0) const;
@@ -2360,6 +2373,7 @@ class BehaviorFrame {
     ParamRef@ Local(const string&in name, int occurrence = 0) const;
     ParamRef@ Local(int index) const;
     int LocalCount() const;
+    CKObject@ LocalObject(const string&in name, int occurrence = 0) const;
     CKObject@ LocalObject(int index) const;
     CKParameterLocal@ LocalParameter(int index) const;
     int LocalPosition(CKParameterLocal@ local) const;
@@ -2559,6 +2573,7 @@ class BehaviorGraphEdit {
     BehaviorGraphEdit@ SetSetting(GraphEditNode@ node, BBSlot@ setting, ParamValue@ value);
     BehaviorGraphEdit@ SetSetting(GraphEditNode@ node, BBSlot@ setting, const string&in value);
     BehaviorGraphEdit@ Source(GraphEditNode@ node, BBSlot@ pin, ParamRef@ source);
+    BehaviorGraphEdit@ BindLocal(GraphEditNode@ node, const string &in name, ParamRef@ source, CKGUID guid, const string &in label = "");
     BehaviorGraphEdit@ Target(GraphEditNode@ node, CKBeObject@ target);
     BehaviorGraphEdit@ Unlink(BehaviorLinkRef@ link);
     GraphEditResult@ Validate(const CKBehaviorContext&in ctx) const;
@@ -2658,6 +2673,7 @@ class BehaviorRef {
     bool IsDynamic() const;
     bool IsValid() const;
     BehaviorLayout@ Layout() const;
+    bool BindLocal(const string&in name, ParamRef@ source, CKGUID guid, const string&in label = "");
     ParamRef@ Local(BBSlot@ slot) const;
     ParamRef@ Local(int index) const;
     string Name() const;

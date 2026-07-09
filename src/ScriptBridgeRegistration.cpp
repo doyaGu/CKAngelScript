@@ -563,7 +563,7 @@ void RegisterBehaviorFrameSdkAliases(asIScriptEngine *engine, int &r) {
 
     r = engine->RegisterObjectMethod("BehaviorFrame", "int GetInputParameterCount() const", asMETHOD(BehaviorFrame, PinCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int GetOutputParameterCount() const", asMETHOD(BehaviorFrame, PoutCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetLocalParameterCount() const", asMETHOD(BehaviorFrame, LocalCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetLocalParameterCount() const", asMETHOD(BehaviorFrame, BehaviorLocalCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int GetInputParameterPosition(CKParameterIn@ pin) const", asMETHOD(BehaviorFrame, PinPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int GetOutputParameterPosition(CKParameterOut@ pout) const", asMETHOD(BehaviorFrame, PoutPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int GetLocalParameterPosition(CKParameterLocal@ local) const", asMETHOD(BehaviorFrame, LocalPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -574,11 +574,11 @@ void RegisterBehaviorFrameSdkAliases(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR SetLocalParameterValue(int index, ?&in value)", asFUNCTION(BehaviorFrameSetLocalParameterValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetInputParameterReadDataPtr(int index) const", asMETHOD(BehaviorFrame, PinReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetOutputParameterWriteDataPtr(int index) const", asMETHOD(BehaviorFrame, PoutWriteDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetLocalParameterReadDataPtr(int index) const", asMETHOD(BehaviorFrame, LocalReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetLocalParameterWriteDataPtr(int index) const", asMETHOD(BehaviorFrame, LocalWriteDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetLocalParameterReadDataPtr(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetLocalParameterWriteDataPtr(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalWriteDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ GetInputParameterObject(int index) const", asMETHOD(BehaviorFrame, PinObjectIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ GetOutputParameterObject(int index) const", asMETHOD(BehaviorFrame, PoutObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ GetLocalParameterObject(int index) const", asMETHODPR(BehaviorFrame, LocalObject, (int) const, CKObject *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ GetLocalParameterObject(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalObjectIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsInputParameterEnabled(int index) const", asMETHOD(BehaviorFrame, PinEnabledIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsOutputParameterEnabled(int index) const", asMETHOD(BehaviorFrame, PoutEnabledIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void EnableInputParameter(int index, bool enable)", asMETHOD(BehaviorFrame, EnablePinIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -673,6 +673,9 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorRef@ Self() const", asMETHOD(BehaviorFrame, Self), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorRef@ Parent() const", asMETHOD(BehaviorFrame, Parent), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorRef@ OwnerScript() const", asMETHOD(BehaviorFrame, OwnerScript), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorFrame@ FrameFor(CKBehavior@ behavior) const", asMETHOD(BehaviorFrame, FrameFor), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorFrame@ FrameFor(BehaviorRef@+ behavior) const", asMETHOD(BehaviorFrame, FrameForRef), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorFrame@ SubFrame(int index) const", asMETHOD(BehaviorFrame, SubFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorLayout@ Layout() const", asMETHOD(BehaviorFrame, Layout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorGraph@ Graph() const", asMETHOD(BehaviorFrame, Graph), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorGraph@ AsGraph() const", asMETHOD(BehaviorFrame, AsGraph), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -720,6 +723,7 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "int PinCount() const", asMETHOD(BehaviorFrame, PinCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int PoutCount() const", asMETHOD(BehaviorFrame, PoutCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int LocalCount() const", asMETHOD(BehaviorFrame, LocalCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "int BehaviorLocalCount() const", asMETHOD(BehaviorFrame, BehaviorLocalCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int SettingCount() const", asMETHOD(BehaviorFrame, SettingCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int SubBehaviorCount() const", asMETHOD(BehaviorFrame, SubBehaviorCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int SubBehaviorLinkCount() const", asMETHOD(BehaviorFrame, SubBehaviorLinkCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -731,6 +735,7 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "int FindPin(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, FindPin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int FindPout(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, FindPout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int FindLocal(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, FindLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "int FindBehaviorLocal(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, FindBehaviorLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int FindSetting(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, FindSetting), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool InputActive(const string &in name = \"In\", int occurrence = 0) const", asMETHOD(BehaviorFrame, InputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool InputActive(int index) const", asMETHOD(BehaviorFrame, InputActiveIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -782,6 +787,8 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Pout(int index) const", asMETHOD(BehaviorFrame, PoutIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Local(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, Local), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Local(int index) const", asMETHOD(BehaviorFrame, LocalIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ BehaviorLocal(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, BehaviorLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ BehaviorLocal(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Setting(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, Setting), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Setting(int index) const", asMETHOD(BehaviorFrame, SettingIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "string PinString(const string &in name, const string &in defaultValue = \"\", int occurrence = 0) const", asMETHOD(BehaviorFrame, PinString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -803,6 +810,8 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "float LocalFloat(const string &in name, float defaultValue = 0.0f, int occurrence = 0) const", asMETHOD(BehaviorFrame, LocalFloat), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "float LocalFloat(int index, float defaultValue = 0.0f) const", asMETHOD(BehaviorFrame, LocalFloatIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ LocalObject(const string &in name, int occurrence = 0) const", asMETHODPR(BehaviorFrame, LocalObject, (const std::string &, int) const, CKObject *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ BehaviorLocalObject(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, BehaviorLocalObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ BehaviorLocalObject(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalObjectIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool PinEnabled(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, PinEnabled), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool PinEnabled(int index) const", asMETHOD(BehaviorFrame, PinEnabledIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void EnablePin(const string &in name, bool enable, int occurrence = 0)", asMETHOD(BehaviorFrame, EnablePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -858,6 +867,9 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer LocalWriteDataPtr(int index) const", asMETHOD(BehaviorFrame, LocalWriteDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer LocalReadDataPtr(int index) const", asMETHOD(BehaviorFrame, LocalReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ LocalObject(int index) const", asMETHODPR(BehaviorFrame, LocalObject, (int) const, CKObject *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer BehaviorLocalWriteDataPtr(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalWriteDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer BehaviorLocalReadDataPtr(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ BehaviorLocalParameter(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR SetLocalObject(int index, CKObject@ object)", asMETHODPR(BehaviorFrame, SetLocalObject, (int, CKObject *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetSetting(const string &in name, int value, int occurrence = 0)", asMETHOD(BehaviorFrame, SetSettingInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetSetting(int index, int value)", asMETHOD(BehaviorFrame, SetSettingIntIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -878,6 +890,7 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "void SetInterfaceChunk(CKStateChunk@ state)", asMETHOD(BehaviorFrame, SetInterfaceChunk), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BBCallBuilder@ Call(const string &in prototype) const", asMETHOD(BehaviorFrame, CallName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BBCallBuilder@ Call(CKGUID guid) const", asMETHOD(BehaviorFrame, CallGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "BBBridge@ BB() const", asMETHOD(BehaviorFrame, BB), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void Trace(const string &in message) const", asMETHOD(BehaviorFrame, Trace), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     RegisterBehaviorFrameSdkAliases(engine, r);
@@ -1054,6 +1067,7 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Pout(BBSlot@+ slot) const", asMETHOD(BehaviorRef, PoutSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Local(int index) const", asMETHOD(BehaviorRef, Local), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "ParamRef@ Local(BBSlot@+ slot) const", asMETHOD(BehaviorRef, LocalSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorRef", "bool BindLocal(const string &in name, ParamRef@+ source, CKGUID guid, const string &in label = \"\")", asMETHOD(BehaviorRef, BindLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "GraphTask@ Start(int inputIndex = 0, bool reset = false, float timeout = 0.0f)", asMETHOD(BehaviorRef, Start), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "GraphTask@ Start(BBSlot@+ input, bool reset = false, float timeout = 0.0f)", asMETHOD(BehaviorRef, StartSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "GraphTask@ Watch(float timeout = 0.0f)", asMETHOD(BehaviorRef, Watch), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1137,6 +1151,7 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ SetSetting(GraphEditNode@+ node, BBSlot@+ setting, ParamValue@+ value)", asMETHOD(BehaviorGraphEdit, SetSetting), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ SetSetting(GraphEditNode@+ node, BBSlot@+ setting, const string &in value)", asMETHOD(BehaviorGraphEdit, SetSettingString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Source(GraphEditNode@+ node, BBSlot@+ pin, ParamRef@+ source)", asMETHOD(BehaviorGraphEdit, Source), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ BindLocal(GraphEditNode@+ node, const string &in name, ParamRef@+ source, CKGUID guid, const string &in label = \"\")", asMETHOD(BehaviorGraphEdit, BindLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Operation(GraphEditNode@+ node, BBSlot@+ pin, ParamOp@+ operation)", asMETHOD(BehaviorGraphEdit, Operation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Validate(const CKBehaviorContext &in ctx) const", asMETHOD(BehaviorGraphEdit, Validate), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Apply(const CKBehaviorContext &in ctx)", asMETHOD(BehaviorGraphEdit, Apply), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

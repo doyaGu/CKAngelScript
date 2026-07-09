@@ -9,6 +9,7 @@
 #include "ScriptRefCounted.h"
 
 class asIScriptGeneric;
+class BBBridge;
 class BBCallBuilder;
 class BBTask;
 class BehaviorGraph;
@@ -89,6 +90,9 @@ public:
     BehaviorRef *Self() const;
     BehaviorRef *Parent() const;
     BehaviorRef *OwnerScript() const;
+    BehaviorFrame *FrameFor(CKBehavior *behavior) const;
+    BehaviorFrame *FrameForRef(BehaviorRef *behavior) const;
+    BehaviorFrame *SubFrame(int index) const;
     CKBehavior *ParentBehavior() const;
     CKBehavior *OwnerScriptBehavior() const;
     BehaviorLayout *Layout() const;
@@ -140,6 +144,7 @@ public:
     int PinCount() const;
     int PoutCount() const;
     int LocalCount() const;
+    int BehaviorLocalCount() const;
     int SettingCount() const;
     int SubBehaviorCount() const;
     int SubBehaviorLinkCount() const;
@@ -151,6 +156,7 @@ public:
     int FindPin(const std::string &name, int occurrence = 0) const;
     int FindPout(const std::string &name, int occurrence = 0) const;
     int FindLocal(const std::string &name, int occurrence = 0) const;
+    int FindBehaviorLocal(const std::string &name, int occurrence = 0) const;
     int FindSetting(const std::string &name, int occurrence = 0) const;
 
     bool InputActive(const std::string &name = "In", int occurrence = 0) const;
@@ -203,6 +209,8 @@ public:
     ParamRef *PoutIndex(int index) const;
     ParamRef *Local(const std::string &name, int occurrence = 0) const;
     ParamRef *LocalIndex(int index) const;
+    ParamRef *BehaviorLocal(const std::string &name, int occurrence = 0) const;
+    ParamRef *BehaviorLocalIndex(int index) const;
     ParamRef *Setting(const std::string &name, int occurrence = 0) const;
     ParamRef *SettingIndex(int index) const;
     std::string PinString(const std::string &name, const std::string &defaultValue = "", int occurrence = 0) const;
@@ -224,6 +232,8 @@ public:
     float LocalFloat(const std::string &name, float defaultValue = 0.0f, int occurrence = 0) const;
     float LocalFloatIndex(int index, float defaultValue = 0.0f) const;
     CKObject *LocalObject(const std::string &name, int occurrence = 0) const;
+    CKObject *BehaviorLocalObject(const std::string &name, int occurrence = 0) const;
+    CKObject *BehaviorLocalObjectIndex(int index) const;
     bool PinEnabled(const std::string &name, int occurrence = 0) const;
     bool PinEnabledIndex(int index) const;
     void EnablePin(const std::string &name, bool enable, int occurrence = 0);
@@ -282,6 +292,9 @@ public:
     NativePointer LocalWriteDataPtr(int index) const;
     NativePointer LocalReadDataPtr(int index) const;
     CKObject *LocalObject(int index) const;
+    NativePointer BehaviorLocalWriteDataPtr(int index) const;
+    NativePointer BehaviorLocalReadDataPtr(int index) const;
+    CKParameterLocal *BehaviorLocalParameter(int index) const;
     CKERROR SetLocalObject(int index, CKObject *object);
 
     bool SetSettingInt(const std::string &name, int value, int occurrence = 0);
@@ -304,6 +317,7 @@ public:
 
     BBCallBuilder *CallName(const std::string &prototype) const;
     BBCallBuilder *CallGuid(CKGUID guid) const;
+    BBBridge *BB() const;
     ScriptAsyncTaskBase *LinkDelay(int frames) const;
     ScriptAsyncTaskBase *WaitBBTask(BBTask *task, int inputIndex = -1) const;
     ScriptAsyncTaskBase *WaitGraphTask(GraphTask *task) const;
@@ -325,10 +339,13 @@ private:
     int ResolvePin(const std::string &name, int occurrence, const char *method) const;
     int ResolvePout(const std::string &name, int occurrence, const char *method) const;
     int ResolveLocal(const std::string &name, int occurrence, const char *method) const;
+    int ResolveBehaviorLocal(const std::string &name, int occurrence, const char *method) const;
     int ResolveSetting(const std::string &name, int occurrence, const char *method) const;
     int ResolveSettingIndex(int index, const char *method) const;
     CKParameterIn *FindPinParameter(const std::string &name, int occurrence) const;
     CKParameterIn *FindPinParameterIndex(int index) const;
+    CKParameter *FindLocalSource(const std::string &name, int occurrence) const;
+    CKParameter *FindLocalSourceIndex(int index) const;
     CKParameterLocal *FindLocalParameter(const std::string &name, int occurrence) const;
     CKParameterLocal *FindLocalParameterIndex(int index) const;
     ScriptParamValue ReadPinValueOrEmpty(const std::string &name, int occurrence) const;

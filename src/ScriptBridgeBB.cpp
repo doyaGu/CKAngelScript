@@ -2044,7 +2044,6 @@ bool BBInstance::Start(BBSlot *input) {
     }
     if (!m_Bridge->StartInstance(m_InstanceId, m_Generation, m_Context, inputIndex)) {
         SetError(m_Bridge->GetInstanceState(m_InstanceId, m_Generation).Error);
-        SetScriptException(m_Error);
         return false;
     }
     return true;

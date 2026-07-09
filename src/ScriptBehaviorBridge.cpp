@@ -5,6 +5,106 @@
 
 #include <fmt/format.h>
 
+#include "ScriptParameterConversion.h"
+
+namespace {
+
+std::string BridgeObjectName(CKObject *object) {
+    return SafeString(object ? object->GetName() : nullptr);
+}
+
+const ScriptBridgeFrameLocalBinding *FindFrameLocalBinding(
+    const std::vector<ScriptBridgeFrameLocalBinding> &bindings,
+    const std::string &name,
+    std::size_t *index = nullptr) {
+    for (std::size_t i = 0; i < bindings.size(); ++i) {
+        if (bindings[i].Name == name) {
+            if (index) {
+                *index = i;
+            }
+            return &bindings[i];
+        }
+    }
+    return nullptr;
+}
+
+bool ApplyFrameLocalDefault(CKParameterLocal *local,
+                            const ScriptBridgeFrameLocalDecl &decl,
+                            std::string &error) {
+    if (!decl.HasDefault) {
+        return true;
+    }
+    if (!SetParameterDefaultText(local, decl.DefaultText, error)) {
+        error = "Failed to apply default value for frame local '" + decl.Name + "': " + error;
+        return false;
+    }
+    return true;
+}
+
+bool SyncOwnedFrameLocals(CKBehavior *behavior,
+                          const std::vector<ScriptBridgeFrameLocalDecl> &ownedDecls,
+                          int ownedLocalStart,
+                          std::string &error) {
+    if (!behavior) {
+        error = "Behavior is null.";
+        return false;
+    }
+    if (ownedLocalStart < 0 || behavior->GetLocalParameterCount() < ownedLocalStart) {
+        error = "Frame local interface cannot sync owned locals because the behavior is missing its internal local/settings block.";
+        return false;
+    }
+
+    const int targetCount = ownedLocalStart + static_cast<int>(ownedDecls.size());
+    while (behavior->GetLocalParameterCount() > targetCount) {
+        const int index = behavior->GetLocalParameterCount() - 1;
+        if (index < ownedLocalStart || behavior->IsLocalParameterSetting(index)) {
+            error = "Frame local interface would remove an internal setting.";
+            return false;
+        }
+        CKDestroyObject(behavior->RemoveLocalParameter(index));
+    }
+
+    while (behavior->GetLocalParameterCount() < targetCount) {
+        const ScriptBridgeFrameLocalDecl &decl = ownedDecls[behavior->GetLocalParameterCount() - ownedLocalStart];
+        CKParameterLocal *local = behavior->CreateLocalParameter(const_cast<CKSTRING>(decl.Name.c_str()), decl.TypeGuid);
+        if (!local) {
+            error = "Failed to create owned frame local '" + decl.Name + "'.";
+            return false;
+        }
+        if (!ApplyFrameLocalDefault(local, decl, error)) {
+            return false;
+        }
+    }
+
+    for (int i = 0; i < static_cast<int>(ownedDecls.size()); ++i) {
+        const int index = ownedLocalStart + i;
+        CKParameterLocal *local = behavior->GetLocalParameter(index);
+        const ScriptBridgeFrameLocalDecl &decl = ownedDecls[i];
+        if (!local || behavior->IsLocalParameterSetting(index)) {
+            error = "Owned frame local slot " + std::to_string(index) + " is unavailable.";
+            return false;
+        }
+
+        bool typeChanged = false;
+        bool nameChanged = false;
+        if (local->GetGUID() != decl.TypeGuid) {
+            local->SetGUID(decl.TypeGuid);
+            typeChanged = true;
+        }
+        if (BridgeObjectName(local) != decl.Name) {
+            local->SetName(const_cast<CKSTRING>(decl.Name.c_str()));
+            nameChanged = true;
+        }
+        if ((typeChanged || nameChanged) && !ApplyFrameLocalDefault(local, decl, error)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+} // namespace
+
 void ScriptBridgeSetIndexedValue(std::vector<ScriptBridgeIndexedValue> &values,
                                  int pinIndex,
                                  const ScriptParamValue &value) {
@@ -124,7 +224,7 @@ CKERROR ScriptBehaviorBridge::PostProcess() {
     return CK_OK;
 }
 
-void ScriptBehaviorBridge::Clear() {
+void ScriptBehaviorBridge::Clear(bool clearFrameLocalBindings) {
     std::vector<CK_ID> resultIds;
     resultIds.reserve(m_Results.size());
     for (const auto &entry : m_Results) {
@@ -165,6 +265,10 @@ void ScriptBehaviorBridge::Clear() {
     }
 
     m_GraphWatches.clear();
+    if (clearFrameLocalBindings) {
+        m_FrameLocalBindings.clear();
+    }
+    m_FrameLocalInterfaces.clear();
     m_BehaviorLayouts.clear();
     m_PrototypeLayouts.clear();
     ForceDestroyQueued();
@@ -321,4 +425,318 @@ void ScriptBehaviorBridge::ReleasePrototype(BBPrototype *prototype) {
     if (prototype) {
         prototype->Release();
     }
+}
+
+bool ScriptBehaviorBridge::BindFrameLocal(CKBehavior *behavior,
+                                          const std::string &name,
+                                          CKGUID guid,
+                                          ParamRef *sourceRef,
+                                          const std::string &label,
+                                          std::string &error) {
+    if (!behavior) {
+        error = "BindLocal requires a behavior.";
+        return false;
+    }
+    if (name.empty()) {
+        error = "BindLocal requires a non-empty logical local name.";
+        return false;
+    }
+    if (!CKGuidIsValid(guid)) {
+        error = "BindLocal '" + name + "' requires a valid declared parameter guid.";
+        return false;
+    }
+    CKParameter *source = sourceRef ? sourceRef->Source() : nullptr;
+    if (!source) {
+        error = "BindLocal '" + name + "' requires a parameter with a writable real source.";
+        return false;
+    }
+    if (source->GetGUID() != guid) {
+        CKContext *context = behavior->GetCKContext();
+        error = "BindLocal '" + name + "' type mismatch. Expected " +
+            DescribeScriptParamType(context, guid) + ", got " +
+            DescribeScriptParamType(context, source->GetGUID()) + ".";
+        return false;
+    }
+
+    const CK_ID behaviorId = behavior->GetID();
+    std::vector<ScriptBridgeFrameLocalBinding> &bindings = m_FrameLocalBindings[behaviorId];
+
+    std::size_t bindingIndex = 0;
+    ScriptBridgeFrameLocalBinding oldBinding;
+    bool hadExisting = false;
+    if (ScriptBridgeFrameLocalBinding *existing = const_cast<ScriptBridgeFrameLocalBinding *>(
+            FindFrameLocalBinding(bindings, name, &bindingIndex))) {
+        if (existing->TypeGuid != guid || existing->SourceId != source->GetID()) {
+            error = "BindLocal '" + name + "' conflicts with an existing binding.";
+            return false;
+        }
+        oldBinding = *existing;
+        hadExisting = true;
+        existing->SourceStamp = CaptureBridgeObjectStamp(source);
+        existing->Label = label;
+    } else {
+        ScriptBridgeFrameLocalBinding binding;
+        binding.Name = name;
+        binding.TypeGuid = guid;
+        binding.SourceId = source->GetID();
+        binding.SourceStamp = CaptureBridgeObjectStamp(source);
+        binding.Label = label;
+        bindings.push_back(std::move(binding));
+        bindingIndex = bindings.size() - 1;
+    }
+
+    const auto interfaceIt = m_FrameLocalInterfaces.find(behaviorId);
+    if (interfaceIt != m_FrameLocalInterfaces.end()) {
+        const std::vector<ScriptBridgeFrameLocalDecl> declarations = interfaceIt->second.Declarations;
+        const int ownedLocalStart = interfaceIt->second.OwnedLocalStart;
+        const bool strict = interfaceIt->second.Strict;
+
+        std::string applyError;
+        if (!ApplyFrameLocalInterface(behavior, declarations, ownedLocalStart, strict, applyError)) {
+            if (hadExisting) {
+                bindings[bindingIndex] = std::move(oldBinding);
+            } else if (bindingIndex < bindings.size()) {
+                bindings.erase(bindings.begin() + static_cast<std::ptrdiff_t>(bindingIndex));
+            }
+
+            std::string restoreError;
+            if (!ApplyFrameLocalInterface(behavior, declarations, ownedLocalStart, strict, restoreError)) {
+                error = "BindLocal '" + name + "' could not refresh the logical local interface: " +
+                    applyError + " Failed to restore previous interface: " + restoreError;
+            } else {
+                error = "BindLocal '" + name + "' could not refresh the logical local interface: " + applyError;
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ScriptBehaviorBridge::ApplyFrameLocalInterface(CKBehavior *behavior,
+                                                    const std::vector<ScriptBridgeFrameLocalDecl> &locals,
+                                                    int ownedLocalStart,
+                                                    bool strict,
+                                                    std::string &error) {
+    if (!behavior) {
+        error = "Frame local interface requires a behavior.";
+        return false;
+    }
+
+    const CK_ID behaviorId = behavior->GetID();
+    const auto bindingsIt = m_FrameLocalBindings.find(behaviorId);
+    const std::vector<ScriptBridgeFrameLocalBinding> *bindings =
+        bindingsIt == m_FrameLocalBindings.end() ? nullptr : &bindingsIt->second;
+    std::vector<bool> matched(bindings ? bindings->size() : 0, false);
+
+    std::vector<ScriptBridgeFrameLocalSlot> slots;
+    slots.reserve(locals.size());
+    std::vector<ScriptBridgeFrameLocalDecl> ownedDecls;
+    ownedDecls.reserve(locals.size());
+
+    for (const ScriptBridgeFrameLocalDecl &decl : locals) {
+        if (decl.Name.empty()) {
+            error = "Frame local interface contains an empty local name.";
+            return false;
+        }
+        if (!CKGuidIsValid(decl.TypeGuid)) {
+            error = "Frame local '" + decl.Name + "' has no valid declared guid.";
+            return false;
+        }
+        for (const ScriptBridgeFrameLocalSlot &slot : slots) {
+            if (slot.Name == decl.Name) {
+                error = "Frame local interface declares duplicate local '" + decl.Name + "'.";
+                return false;
+            }
+        }
+
+        ScriptBridgeFrameLocalSlot slot;
+        slot.Name = decl.Name;
+        slot.TypeGuid = decl.TypeGuid;
+
+        std::size_t bindingIndex = 0;
+        const ScriptBridgeFrameLocalBinding *binding =
+            bindings ? FindFrameLocalBinding(*bindings, decl.Name, &bindingIndex) : nullptr;
+        if (binding) {
+            matched[bindingIndex] = true;
+            if (binding->TypeGuid != decl.TypeGuid) {
+                CKContext *context = behavior->GetCKContext();
+                error = "Frame local binding '" + decl.Name + "' type mismatch. Interface declares " +
+                    DescribeScriptParamType(context, decl.TypeGuid) + ", binding declares " +
+                    DescribeScriptParamType(context, binding->TypeGuid) + ".";
+                return false;
+            }
+            std::string sourceError;
+            CKParameter *source = ResolveStampedParameterSource(behavior->GetCKContext(),
+                                                                binding->SourceId,
+                                                                binding->SourceStamp,
+                                                                sourceError);
+            if (!source) {
+                error = "Frame local binding '" + decl.Name + "' source is invalid: " + sourceError;
+                return false;
+            }
+            if (source->GetGUID() != decl.TypeGuid) {
+                CKContext *context = behavior->GetCKContext();
+                error = "Frame local binding '" + decl.Name + "' source type mismatch. Expected " +
+                    DescribeScriptParamType(context, decl.TypeGuid) + ", got " +
+                    DescribeScriptParamType(context, source->GetGUID()) + ".";
+                return false;
+            }
+            slot.SourceId = source->GetID();
+            slot.SourceStamp = CaptureBridgeObjectStamp(source);
+            slot.Label = binding->Label;
+        } else {
+            slot.OwnedLocalIndex = ownedLocalStart + static_cast<int>(ownedDecls.size());
+            ownedDecls.push_back(decl);
+        }
+
+        slots.push_back(std::move(slot));
+    }
+
+    if (strict && bindings) {
+        for (std::size_t i = 0; i < bindings->size(); ++i) {
+            if (!matched[i]) {
+                error = "Frame local binding '" + (*bindings)[i].Name + "' has no matching interface local declaration.";
+                return false;
+            }
+        }
+    }
+
+    if (!SyncOwnedFrameLocals(behavior, ownedDecls, ownedLocalStart, error)) {
+        return false;
+    }
+
+    if (slots.empty()) {
+        m_FrameLocalInterfaces.erase(behaviorId);
+    } else {
+        ScriptBridgeFrameLocalInterface interfaceLayout;
+        interfaceLayout.BehaviorId = behaviorId;
+        interfaceLayout.BehaviorStamp = CaptureBridgeObjectStamp(behavior);
+        interfaceLayout.Declarations = locals;
+        interfaceLayout.OwnedLocalStart = ownedLocalStart;
+        interfaceLayout.Strict = strict;
+        interfaceLayout.Locals = std::move(slots);
+        m_FrameLocalInterfaces.insert_or_assign(behaviorId, std::move(interfaceLayout));
+    }
+    InvalidateBehaviorLayout(behaviorId);
+    return true;
+}
+
+void ScriptBehaviorBridge::ClearFrameLocalInterface(CK_ID behaviorId, bool clearBindings) {
+    if (behaviorId == 0) {
+        return;
+    }
+    m_FrameLocalInterfaces.erase(behaviorId);
+    if (clearBindings) {
+        m_FrameLocalBindings.erase(behaviorId);
+    }
+    InvalidateBehaviorLayout(behaviorId);
+}
+
+bool ScriptBehaviorBridge::HasFrameLocalInterface(CK_ID behaviorId) const {
+    return m_FrameLocalInterfaces.find(behaviorId) != m_FrameLocalInterfaces.end();
+}
+
+int ScriptBehaviorBridge::FrameLocalCount(CK_ID behaviorId) const {
+    const auto it = m_FrameLocalInterfaces.find(behaviorId);
+    return it == m_FrameLocalInterfaces.end() ? 0 : static_cast<int>(it->second.Locals.size());
+}
+
+int ScriptBehaviorBridge::FindFrameLocal(CK_ID behaviorId, const std::string &name, int occurrence) const {
+    const auto it = m_FrameLocalInterfaces.find(behaviorId);
+    if (it == m_FrameLocalInterfaces.end() || occurrence < 0) {
+        return -1;
+    }
+    if (name.empty()) {
+        return occurrence == 0 && !it->second.Locals.empty() ? 0 : -1;
+    }
+
+    int seen = 0;
+    for (int i = 0; i < static_cast<int>(it->second.Locals.size()); ++i) {
+        if (it->second.Locals[i].Name != name) {
+            continue;
+        }
+        if (seen == occurrence) {
+            return i;
+        }
+        ++seen;
+    }
+    return -1;
+}
+
+CKParameter *ScriptBehaviorBridge::ResolveFrameLocal(CKContext *context,
+                                                     CK_ID behaviorId,
+                                                     int index,
+                                                     std::string &error) const {
+    const auto it = m_FrameLocalInterfaces.find(behaviorId);
+    if (it == m_FrameLocalInterfaces.end()) {
+        error = "Behavior has no logical frame local interface.";
+        return nullptr;
+    }
+    const ScriptBridgeFrameLocalInterface &interfaceLayout = it->second;
+    if (index < 0 || index >= static_cast<int>(interfaceLayout.Locals.size())) {
+        error = fmt::format("Logical frame local index {} is outside range 0..{}.",
+                            index,
+                            interfaceLayout.Locals.empty() ? -1 : static_cast<int>(interfaceLayout.Locals.size()) - 1);
+        return nullptr;
+    }
+
+    const ScriptBridgeFrameLocalSlot &slot = interfaceLayout.Locals[index];
+    CKContext *resolvedContext = context ? context : (m_Manager ? m_Manager->GetCKContext() : nullptr);
+    if (slot.Mapped()) {
+        std::string sourceError;
+        CKParameter *source = ResolveStampedParameterSource(resolvedContext,
+                                                            slot.SourceId,
+                                                            slot.SourceStamp,
+                                                            sourceError);
+        if (!source) {
+            error = "Logical frame local '" + slot.Name + "' source is invalid: " + sourceError;
+            return nullptr;
+        }
+        if (source->GetGUID() != slot.TypeGuid) {
+            error = "Logical frame local '" + slot.Name + "' source type changed. Expected " +
+                DescribeScriptParamType(resolvedContext, slot.TypeGuid) + ", got " +
+                DescribeScriptParamType(resolvedContext, source->GetGUID()) + ".";
+            return nullptr;
+        }
+        return source;
+    }
+
+    CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(resolvedContext,
+                                                                   behaviorId,
+                                                                   interfaceLayout.BehaviorStamp));
+    CKParameterLocal *local = behavior &&
+                              slot.OwnedLocalIndex >= 0 &&
+                              slot.OwnedLocalIndex < behavior->GetLocalParameterCount()
+        ? behavior->GetLocalParameter(slot.OwnedLocalIndex)
+        : nullptr;
+    if (!local) {
+        error = "Owned logical frame local '" + slot.Name + "' is missing from the behavior.";
+        return nullptr;
+    }
+    if (local->GetGUID() != slot.TypeGuid) {
+        error = "Owned logical frame local '" + slot.Name + "' type changed. Expected " +
+            DescribeScriptParamType(resolvedContext, slot.TypeGuid) + ", got " +
+            DescribeScriptParamType(resolvedContext, local->GetGUID()) + ".";
+        return nullptr;
+    }
+    return local;
+}
+
+std::string ScriptBehaviorBridge::DescribeFrameLocals(CK_ID behaviorId) const {
+    const auto it = m_FrameLocalInterfaces.find(behaviorId);
+    if (it == m_FrameLocalInterfaces.end()) {
+        return "<none>";
+    }
+    std::string result;
+    for (int i = 0; i < static_cast<int>(it->second.Locals.size()); ++i) {
+        const ScriptBridgeFrameLocalSlot &slot = it->second.Locals[i];
+        if (!result.empty()) {
+            result += ", ";
+        }
+        result += fmt::format("#{} '{}'{}",
+                              i,
+                              slot.Name,
+                              slot.Mapped() ? " (mapped)" : " (owned)");
+    }
+    return result.empty() ? "<none>" : result;
 }

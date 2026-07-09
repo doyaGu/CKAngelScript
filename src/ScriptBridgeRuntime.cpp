@@ -602,6 +602,9 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
     if (!NotifyIndexedSettingsEdited(behavior, resolvedRequest.IndexedSettings, ctx, error)) {
         return fail(error);
     }
+    if (!EnsurePrototypePostSettingsLayout(behavior, prototype, error)) {
+        return fail(error);
+    }
     InvalidateBehaviorLayout(behavior->GetID());
 
     if (!ResolveNamedValues(this, behavior, resolvedRequest, false, error)) {
@@ -923,7 +926,6 @@ bool ScriptBehaviorBridge::StepTask(CK_ID taskId, int generation, const CKBehavi
         record->LastState.ActiveOutputs.Clear();
         return record->LastState.Ok;
     }
-
     record->LastState = ExecuteOnce(behavior, ctx, inputIndex, &record->InputSources, false);
     return record->LastState.Ok;
 }
@@ -1196,6 +1198,9 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
     if (!NotifyIndexedSettingsEdited(behavior, resolvedRequest.IndexedSettings, ctx, state.Error)) {
         return fail(state.Error);
     }
+    if (!EnsurePrototypePostSettingsLayout(behavior, prototype, state.Error)) {
+        return fail(state.Error);
+    }
     InvalidateBehaviorLayout(behavior->GetID());
 
     if (!ResolveNamedValues(this, behavior, resolvedRequest, false, error)) {
@@ -1415,6 +1420,11 @@ bool ScriptBehaviorBridge::SetBehaviorSetting(CKBehavior *behavior,
             SafeString(behavior->GetPrototypeName()),
             err);
         return false;
+    }
+    if (CKBehaviorPrototype *prototype = behavior->GetPrototype()) {
+        if (!EnsurePrototypePostSettingsLayout(behavior, prototype, error)) {
+            return false;
+        }
     }
     m_BehaviorLayouts.erase(behavior->GetID());
     return true;

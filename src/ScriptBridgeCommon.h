@@ -44,6 +44,7 @@ CKPARAMETER_DESC *GetPrototypeInputParameter(CKBehaviorPrototype *prototype, int
 CKPARAMETER_DESC *GetPrototypeOutputParameter(CKBehaviorPrototype *prototype, int index);
 CKPARAMETER_DESC *GetPrototypeLocalParameter(CKBehaviorPrototype *prototype, int index);
 bool EnsurePrototypeStaticLayout(CKBehavior *behavior, CKBehaviorPrototype *prototype, std::string &error);
+bool EnsurePrototypePostSettingsLayout(CKBehavior *behavior, CKBehaviorPrototype *prototype, std::string &error);
 
 int FindInputIndex(CKBehavior *behavior, const std::string &name);
 int FindOutputIndex(CKBehavior *behavior, const std::string &name);

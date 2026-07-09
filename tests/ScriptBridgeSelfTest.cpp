@@ -4,6 +4,7 @@
 
 #include "add_on/scriptarray/scriptarray.h"
 
+#include <cstdint>
 #include <fstream>
 #include <functional>
 
@@ -64,7 +65,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBInstance@ instance;\n";
     source += "    BBSlot@ pin;\n";
     source += "    void Update(BehaviorFrame@ frame) { if (frame !is null) frame.Trace(\"component-frame-probe\"); }\n";
-    source += "    void Start(BehaviorFrame@ frame) { if (frame is null) return; if (cfg !is null) { cfg.Validate(frame); @instance = cfg.EnsureStarted(frame); cfg.Stop(frame); cfg.Raise(frame); } if (instance !is null) { instance.Start(frame); instance.Step(frame); instance.Stop(frame); instance.Raise(frame); if (pin !is null) instance.StepSet(frame, pin, \"x\"); } }\n";
+    source += "    void Start(BehaviorFrame@ frame) { if (frame is null) return; BehaviorRef@ self = frame.Self(); if (self !is null) { BehaviorFrame@ same = frame.FrameFor(self); if (same is null) return; } CKBehavior@ raw = frame.Behavior(); if (raw !is null) { BehaviorFrame@ rawFrame = frame.FrameFor(raw); if (rawFrame is null) return; } if (frame.SubBehaviorCount() > 0 && frame.SubFrame(0) is null) return; if (cfg !is null) { cfg.Validate(frame); @instance = cfg.EnsureStarted(frame); cfg.Stop(frame); cfg.Raise(frame); } if (instance !is null) { instance.Start(frame); instance.Step(frame); instance.Stop(frame); instance.Raise(frame); if (pin !is null) instance.StepSet(frame, pin, \"x\"); } }\n";
     source += "    void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) { if (frame !is null) frame.Context(); }\n";
     source += "}\n";
     source += "void ProbeParamHandleApi(ParamRef@ param, ParamValue@ value, ParamStructValue@ structValue) {\n";
@@ -489,6 +490,21 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    instance.Destroy();\n";
     source += "    return 0;\n";
     source += "}\n";
+    source += "int ProbeBBInstanceRuntimeError(const CKBehaviorContext &in ctx) {\n";
+    source += "    BBDecl@ decl = BB::Require(ctx, CKGUID(0x6050252F, 0x3AA82D40));\n";
+    source += "    if (decl is null) return 981;\n";
+    source += "    if (!decl.IsValid()) return 982;\n";
+    source += "    BBConfig@ cfg = decl.Configure();\n";
+    source += "    if (cfg is null || !cfg.IsValid()) return 983;\n";
+    source += "    BBInstance@ instance = cfg.Spawn(ctx);\n";
+    source += "    if (instance is null || !instance.IsValid()) return 984;\n";
+    source += "    BBSlot@ input = instance.Input(\"In\");\n";
+    source += "    if (input is null || !input.IsValid()) return 985;\n";
+    source += "    if (instance.Start(ctx, input)) return 986;\n";
+    source += "    if (instance.Error().findFirst(\"40968\") < 0 && instance.Error().findFirst(\"error code\") < 0) return 987;\n";
+    source += "    instance.Destroy();\n";
+    source += "    return 0;\n";
+    source += "}\n";
     source += "int ProbeBBTaskBuilderApi(const CKBehaviorContext &in ctx) {\n";
     source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 920;\n";
@@ -801,6 +817,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (bbTaskResult != 0) return bbTaskResult;\n";
     source += "    int bbInstanceResult = ProbeBBInstanceApi(ctx);\n";
     source += "    if (bbInstanceResult != 0) return bbInstanceResult;\n";
+    source += "    int bbInstanceRuntimeErrorResult = ProbeBBInstanceRuntimeError(ctx);\n";
+    source += "    if (bbInstanceRuntimeErrorResult != 0) return bbInstanceRuntimeErrorResult;\n";
     source += "    int bbTaskBuilderResult = ProbeBBTaskBuilderApi(ctx);\n";
     source += "    if (bbTaskBuilderResult != 0) return bbTaskBuilderResult;\n";
     source += "    int behaviorRefResult = ProbeBehaviorRefApi(ctx, operationName);\n";
@@ -2401,7 +2419,9 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     BBDecl *createdNodeDecl = new BBDecl(bridge, ctx, createdNodeRequest);
     BehaviorGraphEdit *createdNodeEdit = graph->Edit();
     GraphEditNode *createdNodePlan = createdNodeEdit ? createdNodeEdit->AddDecl(createdNodeDecl, "__CKAS_GraphEditResultNode") : nullptr;
-    GraphEditResult *createdNodeResult = createdNodeEdit ? createdNodeEdit->Apply(ctx) : nullptr;
+    CKBehaviorContext staleCallerCtx = ctx;
+    staleCallerCtx.Behavior = reinterpret_cast<CKBehavior *>(static_cast<uintptr_t>(0xFEEEFEEEu));
+    GraphEditResult *createdNodeResult = createdNodeEdit ? createdNodeEdit->Apply(staleCallerCtx) : nullptr;
     CScriptArray *createdNodes = createdNodeResult ? createdNodeResult->CreatedNodes() : nullptr;
     const bool createdNodeOk = createdNodeResult &&
         createdNodeResult->Ok() &&
@@ -2441,6 +2461,33 @@ static bool RunBehaviorBridgeNativeGraphEditSelfTest(CKContext *context,
     if (!createdBehaviorNode || !createdBehaviorNode->IsValid()) {
         error = "Graph edit self-test failed to resolve created node for cleanup.";
         if (createdBehaviorNode) createdBehaviorNode->Release();
+        createdNodeResult->Release();
+        createdNodePlan->Release();
+        createdNodeEdit->Release();
+        createdNodeDecl->Release();
+        createdLink->Release();
+        applied->Release();
+        validation->Release();
+        pendingLink->Release();
+        editTarget->Release();
+        editSource->Release();
+        edit->Release();
+        targetNode->Release();
+        sourceNode->Release();
+        graph->Release();
+        cleanup();
+        return false;
+    }
+
+    BehaviorRef *createdBehaviorRef = createdBehaviorNode->Behavior();
+    const std::string createdBehaviorName = createdBehaviorRef ? createdBehaviorRef->GetName() : std::string();
+    if (createdBehaviorRef) {
+        createdBehaviorRef->Release();
+    }
+    if (createdBehaviorName != "__CKAS_GraphEditResultNode") {
+        error = fmt::format("Graph edit self-test created node name was '{}' instead of '__CKAS_GraphEditResultNode'.",
+                            createdBehaviorName);
+        createdBehaviorNode->Release();
         createdNodeResult->Release();
         createdNodePlan->Release();
         createdNodeEdit->Release();
@@ -3040,6 +3087,104 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
 
     WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-destroy", std::string());
     DestroySelfTestObject(context, behavior);
+    return true;
+}
+
+static CKERROR StaticPrefixLayoutSelfTestCallback(const CKBehaviorContext &ctx) {
+    CKBehavior *behavior = ctx.Behavior;
+    if (!behavior) {
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (ctx.CallbackMessage != CKM_BEHAVIORSETTINGSEDITED) {
+        return CK_OK;
+    }
+
+    while (behavior->GetInputParameterCount() > 2) {
+        CKParameterIn *pin = behavior->RemoveInputParameter(behavior->GetInputParameterCount() - 1);
+        CKDestroyObject(pin);
+    }
+    behavior->CreateInputParameter(const_cast<CKSTRING>("dynamic 1"), CKPGUID_MESH);
+    return CK_OK;
+}
+
+static CKBehaviorPrototype *EnsureStaticPrefixLayoutSelfTestPrototype() {
+    const CKGUID guid(0x434B4153, 0x53545031);
+    if (CKBehaviorPrototype *existing = CKGetPrototypeFromGuid(guid)) {
+        return existing;
+    }
+
+    CKBehaviorPrototype *prototype = CreateCKBehaviorPrototype(const_cast<CKSTRING>("__CKAS_StaticPrefixLayoutSelfTest"));
+    if (!prototype) {
+        return nullptr;
+    }
+
+    prototype->SetGuid(guid);
+    prototype->SetFlags(CK_BEHAVIORPROTOTYPE_NORMAL);
+    prototype->DeclareInput(const_cast<CKSTRING>("In"));
+    prototype->DeclareOutput(const_cast<CKSTRING>("Out"));
+    prototype->DeclareInParameter(const_cast<CKSTRING>("Fixed ?"), CKPGUID_BOOL, const_cast<CKSTRING>("FALSE"));
+    prototype->DeclareInParameter(const_cast<CKSTRING>("Collision Surface"), CKPGUID_STRING);
+    prototype->DeclareInParameter(const_cast<CKSTRING>("Convex"), CKPGUID_MESH);
+    prototype->DeclareSetting(const_cast<CKSTRING>("Convex Count"), CKPGUID_INT, const_cast<CKSTRING>("1"));
+    prototype->SetBehaviorFlags(CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS);
+    prototype->SetBehaviorCallbackFct(StaticPrefixLayoutSelfTestCallback, CKCB_BEHAVIORSETTINGSEDITED);
+    return prototype;
+}
+
+static bool RunBehaviorBridgeNativeStaticPrefixLayoutSelfTest(CKContext *context,
+                                                              std::string &error) {
+    if (!context) {
+        error = "Static prefix layout self-test requires CKContext.";
+        return false;
+    }
+
+    CKBehaviorPrototype *prototype = EnsureStaticPrefixLayoutSelfTestPrototype();
+    if (!prototype) {
+        error = "Static prefix layout self-test failed to create prototype.";
+        return false;
+    }
+    CKBehaviorContext behaviorContext;
+    behaviorContext.Context = context;
+    behaviorContext.ParameterManager = context->GetParameterManager();
+
+    CKBehavior *directBehavior = CKBehavior::Cast(context->CreateObject(CKCID_BEHAVIOR,
+                                                                        "__CKAS_StaticPrefixLayoutDirect",
+                                                                        CK_OBJECTCREATION_DYNAMIC));
+    if (!directBehavior) {
+        error = "Static prefix layout self-test failed to create behavior.";
+        return false;
+    }
+    directBehavior->UseFunction();
+    CKERROR err = directBehavior->InitFromPrototype(prototype);
+    if (err != CK_OK) {
+        DestroySelfTestObject(context, directBehavior);
+        error = fmt::format("Static prefix layout InitFromPrototype failed with CKERROR {}.", err);
+        return false;
+    }
+    if (!EnsurePrototypeStaticLayout(directBehavior, prototype, error)) {
+        DestroySelfTestObject(context, directBehavior);
+        return false;
+    }
+    behaviorContext.Behavior = directBehavior;
+    err = CallBridgeBehaviorCallback(directBehavior, CKM_BEHAVIORSETTINGSEDITED, &behaviorContext);
+    if (err != CK_OK) {
+        DestroySelfTestObject(context, directBehavior);
+        error = fmt::format("Static prefix layout callback failed with CKERROR {}.", err);
+        return false;
+    }
+    if (!EnsurePrototypePostSettingsLayout(directBehavior, prototype, error)) {
+        DestroySelfTestObject(context, directBehavior);
+        return false;
+    }
+    if (FindInputParameterIndex(directBehavior, "Fixed ?") != 0 ||
+        FindInputParameterIndex(directBehavior, "Collision Surface") != 1 ||
+        FindInputParameterIndex(directBehavior, "Convex") != -1 ||
+        FindInputParameterIndex(directBehavior, "dynamic 1") != 2) {
+        error = "Static prefix layout direct behavior did not preserve the callback-created dynamic input tail.";
+        DestroySelfTestObject(context, directBehavior);
+        return false;
+    }
+    DestroySelfTestObject(context, directBehavior);
     return true;
 }
 
@@ -3865,6 +4010,12 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-layout-cache", std::string());
     if (!RunBehaviorBridgeNativeLayoutCacheSelfTest(context, error)) {
         WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-layout-cache", error);
+        return false;
+    }
+
+    WriteBehaviorBridgeSelfTestMarker("running", operationName, "native-static-prefix-layout", std::string());
+    if (!RunBehaviorBridgeNativeStaticPrefixLayoutSelfTest(context, error)) {
+        WriteBehaviorBridgeSelfTestMarker("failed", operationName, "native-static-prefix-layout", error);
         return false;
     }
 

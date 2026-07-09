@@ -541,6 +541,18 @@ BehaviorGraphEdit *BehaviorGraph::Edit() const {
     return new BehaviorGraphEdit(m_Bridge, m_Context, m_RootBehaviorId);
 }
 
+CKBehaviorContext GraphEditBehaviorContext(const CKBehaviorContext &ctx,
+                                           CKContext *context,
+                                           CKBehavior *root) {
+    CKBehaviorContext graphCtx = ctx;
+    graphCtx.Context = context;
+    graphCtx.Behavior = root;
+    if (!graphCtx.ParameterManager && context) {
+        graphCtx.ParameterManager = context->GetParameterManager();
+    }
+    return graphCtx;
+}
+
 BehaviorNode *BehaviorGraph::FindByID(CK_ID id) const {
     CKBehavior *root = RootBehavior();
     CKBehavior *behavior = BehaviorById(m_Bridge, id);
@@ -1187,6 +1199,50 @@ BehaviorGraphEdit *BehaviorGraphEdit::Source(GraphEditNode *node, BBSlot *pin, P
     return this;
 }
 
+BehaviorGraphEdit *BehaviorGraphEdit::BindLocal(GraphEditNode *node,
+                                                const std::string &name,
+                                                ParamRef *source,
+                                                CKGUID guid,
+                                                const std::string &label) {
+    int nodeIndex = -1;
+    std::string error;
+    if (!ResolveNodeIndex(node, nodeIndex, error)) {
+        SetError(error);
+    } else if (m_Nodes[nodeIndex].Type != NodeSpec::Kind::Create) {
+        SetError("BehaviorGraphEdit.BindLocal requires a node created by this edit transaction.");
+    } else if (name.empty()) {
+        SetError("BehaviorGraphEdit.BindLocal requires a non-empty logical local name.");
+    } else if (!CKGuidIsValid(guid)) {
+        SetError("BehaviorGraphEdit.BindLocal requires a valid declared parameter guid.");
+    } else if (!source || !source->IsValid() || !source->Source()) {
+        SetError("BehaviorGraphEdit.BindLocal requires a valid parameter source.");
+    } else if (source->Source()->GetGUID() != guid) {
+        CKContext *context = GraphContext(m_Bridge, m_Context);
+        SetError(fmt::format("BehaviorGraphEdit.BindLocal '{}' type mismatch. Expected {}, got {}.",
+                             name,
+                             ParameterTypeLabel(context, guid),
+                             ParameterTypeLabel(context, source->Source()->GetGUID())));
+    } else {
+        for (const LocalBindingSpec &existing : m_LocalBindings) {
+            if (existing.NodeIndex == nodeIndex && existing.Name == name) {
+                SetError(fmt::format("BehaviorGraphEdit.BindLocal '{}' is planned more than once.", name));
+                AddRef();
+                return this;
+            }
+        }
+        LocalBindingSpec spec;
+        spec.NodeIndex = nodeIndex;
+        spec.Name = name;
+        spec.SourceId = source->Source()->GetID();
+        spec.SourceStamp = CaptureBridgeObjectStamp(source->Source());
+        spec.TypeGuid = guid;
+        spec.Label = label;
+        m_LocalBindings.push_back(std::move(spec));
+    }
+    AddRef();
+    return this;
+}
+
 BehaviorGraphEdit *BehaviorGraphEdit::Operation(GraphEditNode *node, BBSlot *pin, ParamOp *operation) {
     int nodeIndex = -1;
     int pinIndex = -1;
@@ -1231,6 +1287,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
 
     CKContext *context = GraphContext(m_Bridge, ctx);
     CKBehavior *root = RootBehavior();
+    const CKBehaviorContext graphCtx = GraphEditBehaviorContext(ctx, context, root);
     std::vector<ScriptBridgeStampedObjectRef> createdNodes;
     std::vector<ScriptBridgeStampedObjectRef> createdLinks;
     std::vector<CK_ID> createdOperations;
@@ -1319,6 +1376,9 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
                 if (nodeRef.Address && ScriptBridgeObjectAddress(behavior) != nodeRef.Address) {
                     continue;
                 }
+                if (m_Bridge) {
+                    m_Bridge->ClearFrameLocalInterface(behavior->GetID(), true);
+                }
                 if (root) {
                     root->RemoveSubBehavior(behavior);
                 }
@@ -1346,7 +1406,11 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         std::vector<CK_ID> operationIds;
         CKBehavior *behavior = nullptr;
         if (spec.Type == NodeSpec::Kind::Create) {
-            behavior = m_Bridge->CreatePersistentBehavior(spec.Request, ctx, spec.Name, error, &operationIds);
+            behavior = m_Bridge->CreatePersistentBehavior(spec.Request,
+                                                          graphCtx,
+                                                          spec.Name,
+                                                          error,
+                                                          &operationIds);
         } else {
             CKBehavior *source = StampedBehaviorById(m_Bridge, spec.BehaviorId, spec.BehaviorStamp);
             if (!source) {
@@ -1356,9 +1420,9 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             if (!behavior) {
                 return failApply(fmt::format("Failed to clone behavior '{}'.", SafeString(source->GetName())));
             }
-            if (!spec.Name.empty()) {
-                behavior->SetName(const_cast<CKSTRING>(spec.Name.c_str()), TRUE);
-            }
+        }
+        if (behavior && !spec.Name.empty()) {
+            behavior->SetName(const_cast<CKSTRING>(spec.Name.c_str()), FALSE);
         }
         if (!behavior) {
             return failApply(error);
@@ -1366,6 +1430,9 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         createdOperations.insert(createdOperations.end(), operationIds.begin(), operationIds.end());
         CKERROR err = root->AddSubBehavior(behavior);
         if (err != CK_OK) {
+            if (m_Bridge) {
+                m_Bridge->ClearFrameLocalInterface(behavior->GetID(), true);
+            }
             context->DestroyObject(behavior);
             error = fmt::format("Failed to add behavior '{}' to graph '{}' (CKERROR {}).",
                                 SafeString(behavior->GetName()),
@@ -1378,6 +1445,25 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         createdNodes.push_back(ScriptBridgeStampedObjectRef{behavior->GetID(),
                                                             spec.CreatedBehaviorStamp,
                                                             ScriptBridgeObjectAddress(behavior)});
+    }
+
+    for (const LocalBindingSpec &spec : m_LocalBindings) {
+        CKBehavior *behavior = ResolveNodeBehavior(spec.NodeIndex);
+        CKParameter *source = ResolveStampedParameterSource(context, spec.SourceId, spec.SourceStamp, error);
+        if (!behavior || !source) {
+            return failApply(error.empty()
+                ? "BehaviorGraphEdit.BindLocal target or source is no longer valid."
+                : error);
+        }
+        ParamRef sourceRef(m_Bridge, source->GetID(), ScriptBridgeSlotKind::Standalone, -1, 0, context);
+        if (!m_Bridge->BindFrameLocal(behavior,
+                                      spec.Name,
+                                      spec.TypeGuid,
+                                      &sourceRef,
+                                      spec.Label,
+                                      error)) {
+            return failApply(error);
+        }
     }
 
     for (const LayoutSpec &spec : m_LayoutEdits) {
@@ -1763,6 +1849,7 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
         error = "BehaviorGraphEdit has already applied. Create a new edit transaction for additional graph mutations.";
         return false;
     }
+    const CKBehaviorContext graphCtx = GraphEditBehaviorContext(ctx, context, root);
 
     auto nodeIsRoot = [&](int index) {
         if (index < 0 || index >= static_cast<int>(m_Nodes.size())) {
@@ -1823,11 +1910,61 @@ bool BehaviorGraphEdit::ValidatePlan(const CKBehaviorContext &ctx, std::string &
                 return false;
             }
         } else {
-            BBConfig probe(m_Bridge, ctx, spec.Request);
-            if (!probe.Validate(ctx)) {
+            BBConfig probe(m_Bridge, graphCtx, spec.Request);
+            if (!probe.Validate(graphCtx)) {
                 error = probe.Error();
                 return false;
             }
+        }
+    }
+
+    for (const LocalBindingSpec &spec : m_LocalBindings) {
+        if (spec.NodeIndex < 0 || spec.NodeIndex >= static_cast<int>(m_Nodes.size()) ||
+            removedNodes.find(spec.NodeIndex) != removedNodes.end()) {
+            error = "BehaviorGraphEdit.BindLocal references an invalid or removed node.";
+            return false;
+        }
+        const NodeSpec &node = m_Nodes[spec.NodeIndex];
+        if (node.Type != NodeSpec::Kind::Create) {
+            error = "BehaviorGraphEdit.BindLocal requires a node created by this edit transaction.";
+            return false;
+        }
+        CKParameter *source = ResolveStampedParameterSource(context, spec.SourceId, spec.SourceStamp, error);
+        if (!source) {
+            if (error.empty()) {
+                error = fmt::format("BehaviorGraphEdit.BindLocal '{}' source is not valid.", spec.Name);
+            }
+            return false;
+        }
+        if (source->GetGUID() != spec.TypeGuid) {
+            error = fmt::format("BehaviorGraphEdit.BindLocal '{}' type mismatch. Expected {}, got {}.",
+                                spec.Name,
+                                ParameterTypeLabel(context, spec.TypeGuid),
+                                ParameterTypeLabel(context, source->GetGUID()));
+            return false;
+        }
+        const ScriptBridgeLayoutRecord *layout = m_Bridge->GetPrototypeLayout(graphCtx, node.Request);
+        const ScriptBridgeLayoutParamSlot *local = nullptr;
+        if (layout) {
+            for (const ScriptBridgeLayoutParamSlot &candidate : layout->Locals) {
+                if (candidate.Name == spec.Name) {
+                    local = &candidate;
+                    break;
+                }
+            }
+        }
+        if (!local) {
+            error = fmt::format("BehaviorGraphEdit.BindLocal '{}' has no matching local in pending node #{}.",
+                                spec.Name,
+                                spec.NodeIndex);
+            return false;
+        }
+        if (local->TypeGuid != spec.TypeGuid) {
+            error = fmt::format("BehaviorGraphEdit.BindLocal '{}' interface type mismatch. Expected {}, got {}.",
+                                spec.Name,
+                                ParameterTypeLabel(context, local->TypeGuid),
+                                ParameterTypeLabel(context, spec.TypeGuid));
+            return false;
         }
     }
 

@@ -366,6 +366,7 @@ public:
     ParamRef *PoutSlot(BBSlot *slot) const;
     ParamRef *Local(int index) const;
     ParamRef *LocalSlot(BBSlot *slot) const;
+    bool BindLocal(const std::string &name, ParamRef *source, CKGUID guid, const std::string &label = std::string());
     ParamOperationRef *ConnectOperation(int pinIndex, ParamOp *operation);
     ParamOperationRef *ConnectOperationSlot(BBSlot *slot, ParamOp *operation);
     std::string Describe() const;
@@ -559,6 +560,11 @@ public:
     BehaviorGraphEdit *SetSetting(GraphEditNode *node, BBSlot *setting, ParamValue *value);
     BehaviorGraphEdit *SetSettingString(GraphEditNode *node, BBSlot *setting, const std::string &value);
     BehaviorGraphEdit *Source(GraphEditNode *node, BBSlot *pin, ParamRef *source);
+    BehaviorGraphEdit *BindLocal(GraphEditNode *node,
+                                 const std::string &name,
+                                 ParamRef *source,
+                                 CKGUID guid,
+                                 const std::string &label = std::string());
     BehaviorGraphEdit *Operation(GraphEditNode *node, BBSlot *pin, ParamOp *operation);
     GraphEditResult *Validate(const CKBehaviorContext &ctx) const;
     GraphEditResult *Apply(const CKBehaviorContext &ctx);
@@ -640,6 +646,15 @@ private:
         ScriptBridgeObjectStamp SourceStamp;
     };
 
+    struct LocalBindingSpec {
+        int NodeIndex = -1;
+        std::string Name;
+        CK_ID SourceId = 0;
+        ScriptBridgeObjectStamp SourceStamp;
+        CKGUID TypeGuid;
+        std::string Label;
+    };
+
     struct OperationSpec {
         int NodeIndex = -1;
         ScriptBridgeOperationSpec Operation;
@@ -698,6 +713,7 @@ private:
     std::vector<TargetSpec> m_Targets;
     std::vector<ValueSpec> m_Values;
     std::vector<SourceSpec> m_Sources;
+    std::vector<LocalBindingSpec> m_LocalBindings;
     std::vector<OperationSpec> m_Operations;
 };
 

@@ -390,6 +390,63 @@ bool ApplyPrototypeInputDefault(CKBehavior *behavior,
     return true;
 }
 
+bool PrototypeInputParameterMatches(CKParameterIn *input, CKPARAMETER_DESC *desc) {
+    if (!input || !desc) {
+        return false;
+    }
+    return SafeString(input->GetName()) == SafeString(desc->Name) &&
+           input->GetGUID() == desc->Guid;
+}
+
+CKParameterIn *CreatePrototypeInputParameter(CKBehavior *behavior,
+                                             CKPARAMETER_DESC *desc,
+                                             int index,
+                                             bool insert,
+                                             std::string &error) {
+    if (!behavior || !desc) {
+        error = "Behavior or prototype input parameter is not available.";
+        return nullptr;
+    }
+
+    CKSTRING name = desc->Name ? desc->Name : const_cast<CKSTRING>("");
+    CKParameterIn *input = nullptr;
+    if (insert) {
+        CKParameterManager *parameterManager = behavior->GetCKContext()
+            ? behavior->GetCKContext()->GetParameterManager()
+            : nullptr;
+        const CKParameterType type = parameterManager
+            ? parameterManager->ParameterGuidToType(desc->Guid)
+            : -1;
+        if (type < 0) {
+            error = fmt::format("Failed to resolve parameter type for prototype input #{} '{}' ({}).",
+                                index,
+                                SafeString(name),
+                                GuidToString(desc->Guid));
+            return nullptr;
+        }
+        input = behavior->InsertInputParameter(index, name, type);
+        if (input && input->GetGUID() != desc->Guid) {
+            input->SetGUID(desc->Guid, TRUE, name);
+        }
+    } else {
+        input = behavior->CreateInputParameter(name, desc->Guid);
+    }
+
+    if (!input) {
+        error = fmt::format("Failed to {} input parameter #{} '{}' from prototype '{}'.",
+                            insert ? "insert" : "create",
+                            index,
+                            SafeString(name),
+                            SafeString(behavior->GetPrototypeName()));
+        return nullptr;
+    }
+
+    if (!ApplyPrototypeInputDefault(behavior, input, desc, index, error)) {
+        return nullptr;
+    }
+    return input;
+}
+
 } // namespace
 
 bool EnsurePrototypeStaticLayout(CKBehavior *behavior, CKBehaviorPrototype *prototype, std::string &error) {
@@ -419,17 +476,15 @@ bool EnsurePrototypeStaticLayout(CKBehavior *behavior, CKBehaviorPrototype *prot
         }
     }
 
-    for (int i = behavior->GetInputParameterCount(); i < prototype->GetInParameterCount(); ++i) {
+    for (int i = 0; i < prototype->GetInParameterCount(); ++i) {
         CKPARAMETER_DESC *desc = GetPrototypeInputParameter(prototype, i);
-        CKParameterIn *input = behavior->CreateInputParameter(desc && desc->Name ? desc->Name : const_cast<CKSTRING>(""),
-                                                              desc ? desc->Guid : CKGUID());
-        if (!input) {
-            error = fmt::format("Failed to create input parameter #{} from prototype '{}'.",
-                                i,
-                                SafeString(prototype->GetName()));
-            return false;
+        CKParameterIn *input = behavior->GetInputParameter(i);
+        if (PrototypeInputParameterMatches(input, desc)) {
+            continue;
         }
-        if (!ApplyPrototypeInputDefault(behavior, input, desc, i, error)) {
+
+        const bool insert = i < behavior->GetInputParameterCount();
+        if (!CreatePrototypeInputParameter(behavior, desc, i, insert, error)) {
             return false;
         }
     }
@@ -446,6 +501,25 @@ bool EnsurePrototypeStaticLayout(CKBehavior *behavior, CKBehaviorPrototype *prot
     }
 
     return true;
+}
+
+bool EnsurePrototypePostSettingsLayout(CKBehavior *behavior,
+                                       CKBehaviorPrototype *prototype,
+                                       std::string &error) {
+    error.clear();
+    if (!behavior || !prototype) {
+        error = "Behavior or prototype is not available.";
+        return false;
+    }
+
+    // A BB with internally-created inputs owns its final parameter layout after
+    // SETTINGSEDITED. Prototype tail parameters only describe the default
+    // layout; restoring them would shift the callback-created dynamic inputs.
+    if ((behavior->GetFlags() & CKBEHAVIOR_INTERNALLYCREATEDINPUTPARAMS) != 0) {
+        return true;
+    }
+
+    return EnsurePrototypeStaticLayout(behavior, prototype, error);
 }
 
 int FindInputIndex(CKBehavior *behavior, const std::string &name) {
