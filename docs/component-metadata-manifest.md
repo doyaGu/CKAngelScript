@@ -264,21 +264,30 @@ context fields, owner/target, target parameter, current behavior identity,
 CKObject/scene inherited state, layout, graph entry points, input/output
 activation, pin/pout/local/setting parameters, metadata/state, editable
 CKBehavior graph structure, graph-link activation-delay waits, frame-aware
-async waits/message waits, trace prefixes, one-shot runtime BB calls, and raw
-`CKBehavior@ Behavior()` access as an interop escape hatch. Keep
+async waits/message waits, trace prefixes, one-shot runtime BB calls,
+frame-aware `BBBridge` discovery/configuration for persistent BB instances, and
+raw `CKBehavior@ Behavior()` access as an interop escape hatch. Keep
 `CKBehaviorContext` only for low-level migration code that needs the raw native
 context shape.
 
 `Frame.Graph()` returns the owner-script/container graph. `Frame.AsGraph()`
-treats the current behavior as a subgraph container. `Local(index)`,
-`Setting(index)`, and `FindSetting(name)` all use the real CKBehavior
-local-parameter index, matching `BehaviorLayout`.
+treats the current behavior as a subgraph container. `LocalCount`, `FindLocal`,
+`Local(index/name)`, typed `Local*`, and `SetLocal` use the host logical-local
+interface. Components without an installed interface map logical locals to
+physical CKBehavior locals; Executors can install an interface where logical
+locals are declaration-ordered and may be mapped to original graph parameters.
+`GetLocalParameter*`, `LocalParameter`, and `BehaviorLocal*` keep physical
+CKBehavior local semantics. `Setting(index)` and `FindSetting(name)` also use
+physical CKBehavior local indexes because Virtools stores settings as locals.
 
 `Pin()`/`Pout()`/`Local()` remain strict reference APIs. The typed `PinInt`,
 `PinString`, `PinBool`, `PinFloat`, and matching `LocalInt`, `LocalString`,
-`LocalBool`, `LocalFloat`, `LocalObject` helpers are fallback readers and return
-their fallback for missing slots, missing sources, read failures, or
-incompatible value kinds.
+`LocalBool`, `LocalFloat`, `LocalObject` helpers are optional default readers.
+They return their supplied default for missing slots, missing sources, read
+failures, or incompatible value kinds. Use them only when that default is a
+valid behavior; required original graph pins, pouts, locals, and source links
+should use strict `Pin()`/`Local()` access and fail loudly when the binding is
+wrong.
 
 `OnMessage` may suspend through `Await`. A suspended message handler is resumed
 explicitly on a later Component activation before normal lifecycle/update work

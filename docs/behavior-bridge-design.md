@@ -87,6 +87,7 @@ Use it for current-frame work:
 - `Pin(name)`, `Pout(name)`, `PinString/PinInt/PinBool/PinFloat/PinObject`
 - `Local(name)`, `LocalString/LocalInt/LocalBool/LocalFloat/LocalObject`
 - `SetPout(name, value)` typed overloads
+- `SetLocal(name, value)` typed overloads for host logical locals
 - `Call(prototype)` and `Call(guid)` for one-shot runtime BB calls
 - `LinkDelay(frames)` for CKBehaviorLink activation-delay waits
 - `Wait(task)` and `WaitMessage(...)` frame-aware async wrappers
@@ -95,9 +96,12 @@ Use it for current-frame work:
 `Pin(name)`, `Pout(name)`, and `Local(name)` are strict reference APIs: a
 missing slot reports a script exception with slot candidates. The typed
 `PinString/PinInt/PinBool/PinFloat` and
-`LocalString/LocalInt/LocalBool/LocalFloat/LocalObject` helpers are fallback
-readers; missing slots, missing sources, read failures, and incompatible value
-kinds return the supplied fallback without throwing.
+`LocalString/LocalInt/LocalBool/LocalFloat/LocalObject` helpers are optional
+default readers. Missing slots, missing sources, read failures, and
+incompatible value kinds return the supplied default without throwing. Use them
+only when that default is semantically valid; required replacement inputs and
+locals should use strict `Pin()`/`Local()` access and fail loudly when the patch
+binding is wrong.
 
 `BehaviorFrame` is an execution-frame facade, not persistent gameplay state. If
 a lifecycle or message method suspends and resumes, the host refreshes the
@@ -142,6 +146,23 @@ node. It exposes:
   `Wait(GraphTask@)`, and `WaitMessage(...)` bind the current frame context so
   scripts do not have to reconstruct `CKBehaviorContext` for ordinary waits.
 
+Behavior locals are intentionally split into two APIs:
+
+- `LocalCount`, `FindLocal`, `Local(index/name)`, typed `Local*`, and
+  `SetLocal` operate on the host's logical locals. For normal Components and
+  hosts without an installed local interface, logical locals default to the
+  physical `CKBehavior` locals. For `AngelScript Executor` instances with
+  `interface local` declarations, logical order is the declaration order.
+- Executor logical locals can be owned by the Executor or mapped to original
+  graph parameters by the runtime patch facade. Mapped locals store source
+  `CK_ID` plus type metadata, reacquire the source every access, and read/write
+  the original parameter directly. They are not copied through temporary bridge
+  input sources.
+- `GetLocalParameter*`, `SetLocalParameterValue`, `CreateLocalParameter`,
+  `RemoveLocalParameter`, `LocalParameter`, and `BehaviorLocal*` use physical
+  CKBehavior local-parameter order. Use these only for SDK-style migration and
+  graph-edit code.
+
 The intent is full current-`CKBehavior` coverage without forcing script authors
 back to raw SDK naming for ordinary replacement work. `Behavior()` remains
 available for legacy interop and APIs that intentionally operate on arbitrary
@@ -155,11 +176,18 @@ behavior itself as a graph container. Keep those separate when replacing root
 script graphs: `Graph()` is the surrounding script, `AsGraph()` is the current
 node's internal subgraph.
 
-`Local(index)` and `Setting(index)` both use the real CKBehavior
-local-parameter index. `FindSetting(name)` returns that same raw local index,
-so indexes from `BehaviorFrame`, `BehaviorLayout`, and `BehaviorRef` compose
-without translation. `SetSetting()` writes through the bridge setting path,
-sends `CKM_BEHAVIORSETTINGSEDITED`, and invalidates the runtime layout cache.
+`BehaviorFrame.FrameFor(behavior)` derives a new frame for another
+`CKBehavior` or `BehaviorRef@` while preserving the current execution context
+(scene, managers, delta time, render context). Use it when a parent graph
+implementation directly calls AS implementations for child graphs: the child
+implementation sees its own pins, locals, owner, and target instead of the
+parent graph's interface. `SubFrame(index)` is the indexed shortcut for direct
+sub-behaviors.
+
+`Setting(index)` and `FindSetting(name)` use the physical CKBehavior
+local-parameter index because Virtools stores settings as local parameters.
+`SetSetting()` writes through the bridge setting path, sends
+`CKM_BEHAVIORSETTINGSEDITED`, and invalidates the runtime layout cache.
 
 `CKBehaviorContext` remains the low-level compatible API. New Component and
 Executor lifecycle code should prefer `BehaviorFrame@ frame`; existing scripts
@@ -337,6 +365,21 @@ if (result !is null && result.OutputActive("Out")) {
     ParamRef@ value = result.Pout("pOut 0");
 }
 ```
+
+For runtime BBs that must keep native state across multiple executions, start
+from the same frame and configure a persistent instance:
+
+```angelscript
+BBDecl@ iterator = frame.BB().Require(CKGUID(0x419602EC, 0x7822779E));
+BBConfig@ cfg = iterator.Configure()
+    .Source(iterator.Pin("Collection"), loadedObjects);
+BBInstance@ inst = cfg.Spawn(frame);
+```
+
+`BehaviorFrame.BB()` is the frame-aware equivalent of `BB::From(ctx)`. Use it
+for discovery, `BBDecl@`, `BBConfig@`, and `BBInstance@` workflows that need the
+current Component/Executor context but should not rebuild or expose a
+`CKBehaviorContext` in business code.
 
 `BB::Call(ctx, "Category/Name")` and `BB::Call(ctx, CKGUID(...))` remain
 available for legacy `CKBehaviorContext` code. `BBCallBuilder.Set("Pin", value)`,

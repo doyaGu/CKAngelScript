@@ -3,7 +3,7 @@
 `AngelScript Executor` is a native Building Block that executes an AngelScript
 class from a Virtools behavior graph. It is designed for exact replacement work:
 patched `.cmo` / `.nmo` files can shape an Executor instance to match an
-original root behavior's external graph interface, then route the original links
+original graph boundary's external interface, then route the original links
 and parameters into AngelScript.
 
 ## Purpose
@@ -66,6 +66,7 @@ output 0 name="Out"
 output 1 name="Fail"
 pin 0 name="Message" type="Message"
 pout 0 name="Handled" type="Boolean"
+local 0 name="Progress" type="Float" default="0"
 ```
 
 Rules:
@@ -73,6 +74,10 @@ Rules:
 - `input` and `output` entries define graph IO.
 - `pin` entries define input parameters.
 - `pout` entries define output parameters.
+- `local` entries define logical locals exposed through `BehaviorFrame.Local*`.
+  Unbound locals become Executor-owned `CKParameterLocal` objects; bound locals
+  map directly to an original graph/source parameter and reads/writes touch that
+  same Virtools parameter object.
 - Parameter entries need either `guid="guid:0x...,0x..."` or a resolvable
   `type="..."`.
 - If an index is present, it must match the next created slot index. Order in
@@ -230,6 +235,11 @@ CKBehaviorIO@ Output(int index) const
 CKParameterIn@ InputParameter(int index) const
 CKParameterOut@ OutputParameter(int index) const
 CKParameterLocal@ LocalParameter(int index) const
+int BehaviorLocalCount() const
+int FindBehaviorLocal(const string &in name, int occurrence = 0) const
+ParamRef@ BehaviorLocal(const string &in name, int occurrence = 0) const
+ParamRef@ BehaviorLocal(int index) const
+CKParameterLocal@ BehaviorLocalParameter(int index) const
 int InputPosition(CKBehaviorIO@ io) const
 int OutputPosition(CKBehaviorIO@ io) const
 ParamRef@ Pin(const string &in name, int occurrence = 0) const
@@ -289,6 +299,7 @@ void NotifyEdition()
 void NotifySettingsEdition()
 BBCallBuilder@ Call(const string &in prototype) const
 BBCallBuilder@ Call(CKGUID guid) const
+BBBridge@ BB() const
 AsyncTask<void>@ LinkDelay(int frames) const
 AsyncTask<void>@ Wait(BBTask@ task, int inputIndex = -1) const
 AsyncTask<void>@ Wait(GraphTask@ task) const
@@ -299,9 +310,11 @@ void Trace(const string &in message) const
 
 `Pin()`/`Pout()`/`Local()` are strict reference APIs. Use `PinInt`,
 `PinString`, `PinBool`, `PinFloat`, and the matching `LocalInt`,
-`LocalString`, `LocalBool`, `LocalFloat`, `LocalObject` helpers for fallback
-reads that should tolerate absent slots, absent sources, or incompatible value
-kinds.
+`LocalString`, `LocalBool`, `LocalFloat`, `LocalObject` helpers only for
+optional reads where a default value is part of the script's intended behavior.
+Do not use typed fallback readers to hide a missing required original pin,
+pout, local binding, or source link in a replacement script; make the patch or
+Executor interface fail instead.
 
 Use `LinkDelay(frames)` when translating an original graph `CKBehaviorLink`
 activation delay into AS replacement code. It returns an `AsyncTask<void>@`
@@ -312,10 +325,18 @@ Use `frame.Wait(...)` and `frame.WaitMessage(...)` instead of rebuilding a
 `CKBehaviorContext` only to call `Async::Wait(ctx, ...)` or
 `Async::WaitMessage(ctx, ...)`.
 
-`Local(index)`, `Setting(index)`, and `FindSetting(name)` all use the real
-CKBehavior local-parameter index. `SetSetting()` writes through the bridge
-setting path, sends `CKM_BEHAVIORSETTINGSEDITED`, and refreshes runtime layout
-resolution.
+`LocalCount`, `FindLocal`, `Local(index/name)`, typed `Local*`, and typed
+`SetLocal` use the host's logical local interface. For an Executor with
+`interface local` declarations, `Local(0)` means declaration slot 0, not the
+physical `CKBehavior` local index. If a logical local is mapped by the runtime
+patch facade, `Local*` reads and writes the original source parameter directly.
+
+`GetLocalParameter*`, `SetLocalParameterValue`, `CreateLocalParameter`,
+`RemoveLocalParameter`, `LocalParameter`, and the `BehaviorLocal*` aliases use
+the physical CKBehavior local-parameter order. `Setting(index)` and
+`FindSetting(name)` also use that physical local index. `SetSetting()` writes
+through the bridge setting path, sends `CKM_BEHAVIORSETTINGSEDITED`, and
+refreshes runtime layout resolution.
 
 Lifecycle methods may suspend through CKAS async support. Initial lifecycle
 suspension keeps the Executor active until the lifecycle resumes. `OnReset`
@@ -341,7 +362,10 @@ class EventHandlerExecutor {
 The native Executor snapshots active inputs before calling `Execute` and clears
 those inputs after the call either finishes or suspends. During the initial
 `Execute` call, the script sees the real active input state. After an `await`
-resume, consumed inputs are no longer active.
+resume, consumed inputs are no longer active. If the same graph input is
+delivered again while that call is suspended, the Executor consumes its local
+input activation and checks the existing suspended context without deactivating
+the upstream output, which may also feed other graph nodes.
 
 Executor instances can hold script objects and method references into script
 entry modules. `ScriptManager` releases those Executor states before clearing
@@ -370,14 +394,14 @@ committing to the final Ballance patch-manifest format.
 
 For an exact replacement slice:
 
-1. `nmo` inspects the original root behavior.
+1. `nmo` inspects the original script graph or child graph.
 2. `nmo` inserts `AngelScript Executor` in the same parent graph.
 3. `nmo` writes the Executor shape and settings.
-4. inbound links are rewired from the original root to the Executor;
+4. inbound links are rewired from the original graph branch to the Executor;
 5. outbound links are rewired from the Executor to the original downstream
    targets;
 6. parameter source links and output parameter consumers are rewired by index;
-7. the original root remains present but unreachable until verification passes.
+7. the original graph remains present but unreachable until verification passes.
 
 The Executor is the runtime host. The patch manifest remains the source of truth
 for persistent graph edits and rollback.
