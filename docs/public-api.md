@@ -61,6 +61,8 @@ CKAS_STATUS status =
 
 Call `CKAngelScriptUnregisterEngineExtensionWithApi(&ckas, context, "BML", &result)` before the owning plugin state is destroyed. The v6 helper table also resolves module import, bytecode, module graph, and fingerprint entry points for optional integrations that need script-library mechanics without taking a hard DLL link dependency.
 
+Extension registration failures are returned through `CKAngelScriptResult` and normally also written to the CKAngelScript console and log. Use `CKAS_ENGINEEXTENSION_NO_DIAGNOSTIC_OUTPUT` only when the caller deliberately probes a failure path and consumes the returned diagnostic itself; genuine unexpected failures should remain visible.
+
 ## Handle Model
 
 The public API deliberately separates borrowed AngelScript pointers from CKAngelScript handles:
