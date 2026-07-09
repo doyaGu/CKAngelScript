@@ -32,6 +32,7 @@ set(CKAS_HEADERS
         ScriptCKManagers.h
         ScriptCKObjects.h
         ScriptCK2.h
+        ScriptCKPrototypeHook.h
         ScriptParameterConversion.h
         ScriptParameterRegistry.h
         ScriptRuntime.h
@@ -113,6 +114,7 @@ set(CKAS_SOURCES
         ScriptCKManagers.cpp
         ScriptCKObjects.cpp
         ScriptCK2.cpp
+        ScriptCKPrototypeHook.cpp
         ScriptParameterConversion.cpp
         ScriptParameterRegistry.cpp
         ScriptRuntime.cpp

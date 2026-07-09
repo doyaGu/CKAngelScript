@@ -1,8 +1,13 @@
 ﻿#include "CKAll.h"
 
+#include <windows.h>
+
+#include <string>
+
 #include "Logger.h"
 #include "AngelScriptExecutor.h"
 #include "AngelScriptEventHook.h"
+#include "ScriptCKPrototypeHook.h"
 #include "ScriptManager.h"
 #include "Version.h"
 
@@ -25,8 +30,23 @@ static bool InitAngelScriptLogger() {
     return initialized;
 }
 
+static void EnsurePrototypeHook() {
+    std::string error;
+    if (!InstallCKBehaviorPrototypeRuntimeHook(&error) && !error.empty()) {
+        LOG_WARN("Failed to install CreateCKBehaviorPrototypeRunTime hook: %s", error.c_str());
+    }
+}
+
+BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
+    if (reason == DLL_PROCESS_ATTACH) {
+        DisableThreadLibraryCalls(instance);
+    }
+    return TRUE;
+}
+
 CKERROR InitInstance(CKContext *context) {
     InitAngelScriptLogger();
+    EnsurePrototypeHook();
     new ScriptManager(context);
 
     return CK_OK;
@@ -74,6 +94,7 @@ PLUGIN_EXPORT void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg);
 
 void RegisterBehaviorDeclarations(XObjectDeclarationArray *reg) {
     InitAngelScriptLogger();
+    EnsurePrototypeHook();
     RegisterBehavior(reg, FillBehaviorAngelScriptComponentDecl);
     RegisterBehavior(reg, FillBehaviorAngelScriptExecutorDecl);
     RegisterBehavior(reg, FillBehaviorAngelScriptEventHookDecl);
