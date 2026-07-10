@@ -554,8 +554,29 @@ bool ApplyInterface(const CKBehaviorContext &ctx,
     }
     ScriptBehaviorBridge *bridge = BehaviorBridgeFromContext(ctx);
     if (interfaceText.empty()) {
+        ExecutorSlotSpec defaultInput;
+        defaultInput.Kind = ExecutorSlotKind::Input;
+        defaultInput.Name = "In";
+        ExecutorSlotSpec defaultOutput;
+        defaultOutput.Kind = ExecutorSlotKind::Output;
+        defaultOutput.Name = "Out";
+        SyncInputCount(behavior, std::vector<ExecutorSlotSpec>{defaultInput});
+        SyncOutputCount(behavior, std::vector<ExecutorSlotSpec>{defaultOutput});
+        SyncPinCount(behavior, {});
+        SyncPoutCount(behavior, {});
         if (bridge) {
-            bridge->ClearFrameLocalInterface(behavior->GetID(), false);
+            if (!bridge->ApplyFrameLocalInterface(behavior, {}, USER_LOCAL_START, false, error)) {
+                return false;
+            }
+        } else {
+            while (behavior->GetLocalParameterCount() > USER_LOCAL_START) {
+                const int index = behavior->GetLocalParameterCount() - 1;
+                if (behavior->IsLocalParameterSetting(index)) {
+                    error = "Executor empty interface would remove an internal setting.";
+                    return false;
+                }
+                CKDestroyObject(behavior->RemoveLocalParameter(index));
+            }
         }
         return true;
     }

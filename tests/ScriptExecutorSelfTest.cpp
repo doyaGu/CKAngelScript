@@ -1122,6 +1122,24 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         error = "Executor self-test resumed suspended Execute instead of invoking OnReset.";
         return false;
     }
+    if (!SetExecutorStringSetting(retriggerBehavior, EXECUTOR_SETTING_INTERFACE, "", error) ||
+        CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORSETTINGSEDITED, &retriggerContext) != CK_OK) {
+        cleanup();
+        if (error.empty()) {
+            error = "Executor self-test failed to clear the dynamic interface.";
+        }
+        return false;
+    }
+    if (retriggerBehavior->GetInputCount() != 1 ||
+        retriggerBehavior->GetOutputCount() != 1 ||
+        retriggerBehavior->GetInputParameterCount() != 0 ||
+        retriggerBehavior->GetOutputParameterCount() != 0 ||
+        retriggerBehavior->GetLocalParameterCount() != EXECUTOR_USER_LOCAL_START ||
+        bridge->HasFrameLocalInterface(retriggerBehavior->GetID())) {
+        cleanup();
+        error = "Executor self-test retained stale generated slots after clearing Interface.";
+        return false;
+    }
     const char *chainInterfaceText =
         "input 0 name=\"In\"\n"
         "output 0 name=\"Out\"\n"
