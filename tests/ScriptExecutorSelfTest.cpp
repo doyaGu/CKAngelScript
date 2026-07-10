@@ -647,6 +647,9 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    }\n"
         "    return 208;\n"
         "  }\n"
+        "  void OnReset(BehaviorFrame@ frame) {\n"
+        "    if (frame !is null) frame.SetLocal(\"__CKAS_FrameScratch\", 777);\n"
+        "  }\n"
         "}\n"
         "class ExecutorSuspendingSourceProbe {\n"
         "  int Execute(BehaviorFrame@ frame) {\n"
@@ -1103,6 +1106,20 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
     if (retriggerBehavior->IsInputActive(0) || retriggerBehavior->IsOutputActive(0)) {
         cleanup();
         error = "Executor self-test retrigger probe did not consume duplicate suspended input.";
+        return false;
+    }
+    if (CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORRESET, &retriggerContext) != CK_OK) {
+        cleanup();
+        error = "Executor self-test RESET callback failed while Execute was suspended.";
+        return false;
+    }
+    CKParameterLocal *resetScratch = retriggerBehavior->GetLocalParameter(EXECUTOR_USER_LOCAL_START);
+    int resetScratchValue = 0;
+    if (!resetScratch ||
+        resetScratch->GetValue(&resetScratchValue) != CK_OK ||
+        resetScratchValue != 777) {
+        cleanup();
+        error = "Executor self-test resumed suspended Execute instead of invoking OnReset.";
         return false;
     }
     const char *chainInterfaceText =

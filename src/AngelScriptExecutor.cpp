@@ -1261,6 +1261,11 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
         }
         case CKM_BEHAVIORRESET: {
             ScriptExecutorState *state = GetState(behavior);
+            if (state && state->Invoker && state->Invoker->IsContextSuspended()) {
+                state->Invoker->AbortContext();
+                state->SuspendedInputs.clear();
+                state->ActiveLifecycleName.clear();
+            }
             if (state && state->Invoker && state->Object && state->OnReset) {
                 const LifecycleInvokeStatus status = InvokeLifecycle(behcontext, state, state->OnReset, state->OnResetArgument, "OnReset");
                 if (status == LifecycleInvokeStatus::Suspended) {
