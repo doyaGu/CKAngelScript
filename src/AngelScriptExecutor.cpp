@@ -85,6 +85,7 @@ struct ScriptExecutorState {
     ScriptBehaviorArgumentKind OnResetArgument = ScriptBehaviorArgumentKind::BehaviorContext;
 
     std::string ScriptId;
+    std::string ModuleName;
     std::string ClassName;
     std::string InterfaceText;
     bool Loaded = false;
@@ -712,7 +713,19 @@ LifecycleInvokeStatus InvokeLifecycle(const CKBehaviorContext &ctx,
 
 void InvokeOnDestroy(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
     if (state->Invoker && state->Object && state->OnDestroy) {
-        state->Invoker->ExecuteObjectMethodStatus(state->Object, state->OnDestroy, ctx, state->OnDestroyArgument);
+        if (state->Invoker->IsContextSuspended()) {
+            state->Invoker->AbortContext();
+            state->SuspendedInputs.clear();
+            state->ActiveLifecycleName.clear();
+        }
+        const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(
+            state->Object,
+            state->OnDestroy,
+            ctx,
+            state->OnDestroyArgument);
+        if (status == ScriptInvocationStatus::Suspended) {
+            state->Invoker->AbortContext();
+        }
     }
 }
 
@@ -765,10 +778,12 @@ bool FailSetup(const CKBehaviorContext &ctx, ScriptExecutorState *state, const s
 
 bool IdentityChanged(ScriptExecutorState *state,
                      const std::string &scriptId,
+                     const std::string &moduleName,
                      const std::string &className,
                      const std::string &interfaceText) {
     return !state ||
            state->ScriptId != scriptId ||
+           state->ModuleName != moduleName ||
            state->ClassName != className ||
            state->InterfaceText != interfaceText;
 }
@@ -776,6 +791,7 @@ bool IdentityChanged(ScriptExecutorState *state,
 bool AttachScriptEntryModule(ScriptManager *manager,
                              ScriptInvoker *invoker,
                              const std::string &scriptId,
+                             const std::string &scriptModule,
                              std::string &error) {
     if (!manager || !invoker) {
         error = "AngelScript manager is not available.";
@@ -787,8 +803,6 @@ bool AttachScriptEntryModule(ScriptManager *manager,
         error = "Script module registry is not available.";
         return false;
     }
-    const std::string scriptModule = runtime->ModuleName(scriptId);
-
     auto describeModule = [&](const std::string &moduleName) {
         std::ostringstream out;
         std::shared_ptr<CachedScript> cached = manager->GetCachedScript(moduleName.c_str());
@@ -850,10 +864,13 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         return ExecutorReadyStatus::Failed;
     }
 
-    if (IdentityChanged(state, scriptId, className, interfaceText)) {
+    ScriptRuntime *runtime = manager->GetRuntime();
+    const std::string moduleName = runtime ? runtime->ModuleName(scriptId) : std::string();
+    if (IdentityChanged(state, scriptId, moduleName, className, interfaceText)) {
         ReleaseRuntimeState(state);
         state->Failed = false;
         state->ScriptId = scriptId;
+        state->ModuleName = moduleName;
         state->ClassName = className;
         state->InterfaceText = interfaceText;
     }
@@ -887,7 +904,7 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
     if (!state->Loaded) {
         state->Invoker = new ScriptInvoker(manager);
         std::string attachError;
-        if (!AttachScriptEntryModule(manager, state->Invoker, scriptId, attachError)) {
+        if (!AttachScriptEntryModule(manager, state->Invoker, scriptId, moduleName, attachError)) {
             FailSetup(ctx, state, "Failed to attach script module: " + attachError);
             return ExecutorReadyStatus::Failed;
         }
@@ -1021,6 +1038,29 @@ void ReleaseAngelScriptExecutorStatesForManager(ScriptManager *manager) {
         CKBehaviorContext ctx = {};
         ctx.Behavior = state->Behavior;
         ctx.Context = manager ? manager->GetCKContext() : nullptr;
+        ctx.ParameterManager = ctx.Context ? ctx.Context->GetParameterManager() : nullptr;
+        ctx.MessageManager = ctx.Context ? ctx.Context->GetMessageManager() : nullptr;
+        ctx.AttributeManager = ctx.Context ? ctx.Context->GetAttributeManager() : nullptr;
+        ctx.TimeManager = ctx.Context ? ctx.Context->GetTimeManager() : nullptr;
+
+        InvokeOnDestroy(ctx, state);
+        ReleaseRuntimeState(state);
+    }
+}
+
+void ReleaseAngelScriptExecutorStatesForModule(ScriptManager *manager, const char *moduleName) {
+    if (!manager || !moduleName || moduleName[0] == '\0') {
+        return;
+    }
+    std::vector<ScriptExecutorState *> states = ExecutorStates();
+    for (ScriptExecutorState *state : states) {
+        if (!state || state->Manager != manager || state->ModuleName != moduleName) {
+            continue;
+        }
+
+        CKBehaviorContext ctx = {};
+        ctx.Behavior = state->Behavior;
+        ctx.Context = manager->GetCKContext();
         ctx.ParameterManager = ctx.Context ? ctx.Context->GetParameterManager() : nullptr;
         ctx.MessageManager = ctx.Context ? ctx.Context->GetMessageManager() : nullptr;
         ctx.AttributeManager = ctx.Context ? ctx.Context->GetAttributeManager() : nullptr;

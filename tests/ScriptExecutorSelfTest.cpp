@@ -676,10 +676,31 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
     const std::filesystem::path scriptRoot =
         std::filesystem::temp_directory_path() / "__ckas_executor_runtime_selftest";
     const std::filesystem::path packageDir = scriptRoot / "Scripts" / scriptId;
+    constexpr const char *reloadScriptId = "ckas.executor.reload.selftest";
+    const std::filesystem::path reloadPackageDir = scriptRoot / "Scripts" / reloadScriptId;
+    const char *reloadSourceV1 =
+        "class ExecutorReloadProbe {\n"
+        "  int Execute(BehaviorFrame@ frame) {\n"
+        "    if (frame is null || !frame.Take(\"In\")) return 501;\n"
+        "    if (!frame.SetLocal(\"Version\", 1)) return 502;\n"
+        "    frame.Emit(\"Out\");\n"
+        "    return 0;\n"
+        "  }\n"
+        "}\n";
+    const char *reloadSourceV2 =
+        "class ExecutorReloadProbe {\n"
+        "  int Execute(BehaviorFrame@ frame) {\n"
+        "    if (frame is null || !frame.Take(\"In\")) return 511;\n"
+        "    if (!frame.SetLocal(\"Version\", 2)) return 512;\n"
+        "    frame.Emit(\"Out\");\n"
+        "    return 0;\n"
+        "  }\n"
+        "}\n";
     std::error_code fsError;
     std::filesystem::remove_all(scriptRoot, fsError);
     fsError.clear();
-    if (!std::filesystem::create_directories(packageDir, fsError)) {
+    if (!std::filesystem::create_directories(packageDir, fsError) ||
+        !std::filesystem::create_directories(reloadPackageDir, fsError)) {
         error = "Executor self-test failed to create script entry directory: " + packageDir.string();
         return false;
     }
@@ -687,6 +708,14 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
                                    "[executor id=\"ckas.executor.selftest\" name=\"Executor Self Test\" version=\"1.0.0\" entry=\"runtime.as\"]\n",
                                    error) ||
         !WriteExecutorSelfTestFile(packageDir / "runtime.as", source, error)) {
+        std::filesystem::remove_all(scriptRoot, fsError);
+        return false;
+    }
+    if (!WriteExecutorSelfTestFile(
+            reloadPackageDir / "script.as",
+            "[executor id=\"ckas.executor.reload.selftest\" name=\"Executor Reload Self Test\" version=\"1.0.0\" entry=\"runtime.as\"]\n",
+            error) ||
+        !WriteExecutorSelfTestFile(reloadPackageDir / "runtime.as", reloadSourceV1, error)) {
         std::filesystem::remove_all(scriptRoot, fsError);
         return false;
     }
@@ -702,6 +731,84 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         manager->GetRuntime()->Clear();
         std::filesystem::remove_all(scriptRoot, fsError);
         error = reloadError.empty() ? "Executor self-test script entry package failed to load." : reloadError;
+        return false;
+    }
+
+    auto runReloadProbe = [&]() -> bool {
+        CKBehavior *reloadBehavior = CKBehavior::Cast(context->CreateObject(
+            CKCID_BEHAVIOR,
+            const_cast<CKSTRING>("__CKAS_ExecutorReloadSelfTestBehavior"),
+            CK_OBJECTCREATION_DYNAMIC));
+        bool deleteCallbackSent = false;
+        auto cleanupReloadBehavior = [&]() {
+            if (reloadBehavior && deleteCallbackSent) {
+                CallBridgeBehaviorCallback(reloadBehavior, CKM_BEHAVIORDELETE);
+            }
+            DestroyExecutorSelfTestObject(context, reloadBehavior);
+        };
+        if (!reloadBehavior) {
+            error = "Executor reload self-test failed to create behavior.";
+            return false;
+        }
+        reloadBehavior->UseFunction();
+        if (reloadBehavior->InitFromGuid(CKGUID(0x15a41762, 0x0c7c4a91)) != CK_OK) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test failed to initialize behavior.";
+            return false;
+        }
+        const char *reloadInterface =
+            "input 0 name=\"In\"\n"
+            "output 0 name=\"Out\"\n"
+            "local 0 name=\"Version\" type=\"Integer\" default=\"0\"\n";
+        if (!SetExecutorStringSetting(reloadBehavior, EXECUTOR_SETTING_SCRIPT, reloadScriptId, error) ||
+            !SetExecutorStringSetting(reloadBehavior, EXECUTOR_SETTING_CLASS, "ExecutorReloadProbe", error) ||
+            !SetExecutorStringSetting(reloadBehavior, EXECUTOR_SETTING_INTERFACE, reloadInterface, error)) {
+            cleanupReloadBehavior();
+            return false;
+        }
+        CKBehaviorContext reloadContext = MakeExecutorSelfTestContext(context, reloadBehavior);
+        if (CallBridgeBehaviorCallback(reloadBehavior, CKM_BEHAVIORCREATE, &reloadContext) != CK_OK) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test CREATE callback failed.";
+            return false;
+        }
+        deleteCallbackSent = true;
+        if (CallBridgeBehaviorCallback(reloadBehavior, CKM_BEHAVIORSETTINGSEDITED, &reloadContext) != CK_OK) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test SETTINGSEDITED callback failed.";
+            return false;
+        }
+        auto executeAndReadVersion = [&]() {
+            reloadBehavior->ActivateInput(0, TRUE);
+            const int rc = ExecuteExecutorSelfTestBehavior(context, reloadBehavior, reloadContext);
+            CKParameterLocal *version = reloadBehavior->GetLocalParameter(EXECUTOR_USER_LOCAL_START);
+            int value = 0;
+            return rc == CKBR_OK && version && version->GetValue(&value) == CK_OK ? value : -1;
+        };
+        if (executeAndReadVersion() != 1) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test did not execute generation 1.";
+            return false;
+        }
+        if (!WriteExecutorSelfTestFile(reloadPackageDir / "runtime.as", reloadSourceV2, error) ||
+            !manager->GetRuntime()->Reload(reloadScriptId, &reloadError)) {
+            cleanupReloadBehavior();
+            if (error.empty()) {
+                error = reloadError.empty() ? "Executor reload self-test could not reload generation 2." : reloadError;
+            }
+            return false;
+        }
+        if (executeAndReadVersion() != 2) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test kept executing the stale module generation.";
+            return false;
+        }
+        cleanupReloadBehavior();
+        return true;
+    };
+    if (!runReloadProbe()) {
+        manager->GetRuntime()->Clear();
+        std::filesystem::remove_all(scriptRoot, fsError);
         return false;
     }
 

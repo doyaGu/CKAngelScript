@@ -13,6 +13,7 @@
 #include "CKAll.h"
 #include "CKPathManager.h"
 #include "CKTimeManager.h"
+#include "AngelScriptExecutor.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptAsync.h"
@@ -1691,6 +1692,7 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
         module.Object = nullptr;
     }
     if (m_Manager && !module.ModuleName.empty()) {
+        ReleaseAngelScriptExecutorStatesForModule(m_Manager, module.ModuleName.c_str());
         m_Manager->UnloadModule(module.ModuleName.c_str(), nullptr);
     }
     module.Cached.reset();
