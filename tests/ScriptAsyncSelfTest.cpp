@@ -583,6 +583,66 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     }
     messageTask->Release();
     scheduler.Clear();
+
+    std::string staleWaitError;
+    ScriptAsyncTaskBase *staleWaitTask = scheduler.CreateMessageWait(context,
+                                                                     messageName,
+                                                                     messageTarget,
+                                                                     &staleWaitError);
+    CKBehavior *staleWaitBehavior = CKBehavior::Cast(
+        context->GetObjectByName(const_cast<CKSTRING>("__CKAS_MessageWait")));
+    if (!staleWaitTask || !staleWaitBehavior) {
+        if (staleWaitTask) {
+            staleWaitTask->Release();
+        }
+        scheduler.Clear();
+        context->DestroyObject(messageTarget);
+        error = staleWaitError.empty()
+            ? "Async stale message wait self-test could not create its internal behavior."
+            : staleWaitError;
+        return false;
+    }
+    const CK_ID staleWaitId = staleWaitBehavior->GetID();
+    context->DestroyObject(staleWaitBehavior);
+    CKBehavior *replacementWaitBehavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_MessageWaitReplacement"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!replacementWaitBehavior) {
+        staleWaitTask->Release();
+        scheduler.Clear();
+        context->DestroyObject(messageTarget);
+        error = "Async stale message wait self-test could not create a replacement behavior.";
+        return false;
+    }
+    replacementWaitBehavior->UseFunction();
+    replacementWaitBehavior->CreateOutput(const_cast<CKSTRING>("Out"));
+    replacementWaitBehavior->ActivateOutput(0, TRUE);
+    const bool replacementReusedId = staleWaitId == replacementWaitBehavior->GetID();
+    scheduler.Tick();
+    const bool replacementStillAlive =
+        context->GetObjectByName(const_cast<CKSTRING>("__CKAS_MessageWaitReplacement")) == replacementWaitBehavior;
+    if (!staleWaitTask->IsFailed()) {
+        staleWaitTask->Release();
+        scheduler.Clear();
+        if (replacementStillAlive) {
+            context->DestroyObject(replacementWaitBehavior);
+        }
+        context->DestroyObject(messageTarget);
+        error = replacementReusedId
+            ? "Async message wait accepted an ID-reused replacement behavior."
+            : "Async message wait did not fail after its internal behavior was destroyed.";
+        return false;
+    }
+    staleWaitTask->Release();
+    scheduler.Clear();
+    if (!replacementStillAlive ||
+        context->GetObjectByName(const_cast<CKSTRING>("__CKAS_MessageWaitReplacement")) != replacementWaitBehavior) {
+        context->DestroyObject(messageTarget);
+        error = "Async message wait cleanup destroyed an unrelated replacement behavior.";
+        return false;
+    }
+    context->DestroyObject(replacementWaitBehavior);
     context->DestroyObject(messageTarget);
 
     WriteAsyncSelfTestStage("empty-race");

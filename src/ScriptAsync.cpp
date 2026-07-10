@@ -18,6 +18,14 @@
 
 namespace {
 
+CKBehavior *ResolveMessageWaitBehavior(CKContext *context,
+                                       CK_ID behaviorId,
+                                       const ScriptBridgeObjectStamp &stamp,
+                                       std::uintptr_t address) {
+    CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(context, behaviorId, stamp));
+    return behavior && ScriptBridgeObjectAddress(behavior) == address ? behavior : nullptr;
+}
+
 std::vector<ScriptAsyncTaskBase *> ReadTaskArray(CScriptArray *tasks);
 
 ScriptAsyncScheduler *SchedulerFromEngine(asIScriptEngine *engine) {
@@ -1123,6 +1131,7 @@ bool ScriptAsyncTaskBase::SetMessageWait(CKContext *context,
 
     m_MessageContext = context;
     m_MessageBehaviorId = behavior->GetID();
+    m_MessageBehaviorAddress = ScriptBridgeObjectAddress(behavior);
     m_MessageType = messageType;
     const char *messageName = messages->GetMessageTypeName(messageType);
     m_MessageName = messageName && messageName[0] != '\0'
@@ -1131,6 +1140,7 @@ bool ScriptAsyncTaskBase::SetMessageWait(CKContext *context,
 
     behavior->UseFunction();
     behavior->SetOwner(object, FALSE);
+    m_MessageBehaviorStamp = CaptureBridgeObjectStamp(behavior);
     if (!behavior->CreateOutput(const_cast<CKSTRING>("Out"))) {
         return fail("Async::WaitMessage failed to create an internal output.");
     }
@@ -1295,13 +1305,18 @@ void ScriptAsyncTaskBase::ReleaseMessageWait() {
     if (!m_MessageContext || !m_MessageBehaviorId) {
         m_MessageContext = nullptr;
         m_MessageBehaviorId = 0;
+        m_MessageBehaviorStamp = ScriptBridgeObjectStamp();
+        m_MessageBehaviorAddress = 0;
         m_MessageType = -1;
         m_MessageName.clear();
         m_MessageRegistered = false;
         return;
     }
 
-    CKBehavior *behavior = CKBehavior::Cast(GetCKObjectById(m_MessageContext, m_MessageBehaviorId));
+    CKBehavior *behavior = ResolveMessageWaitBehavior(m_MessageContext,
+                                                      m_MessageBehaviorId,
+                                                      m_MessageBehaviorStamp,
+                                                      m_MessageBehaviorAddress);
     if (behavior) {
         if (m_MessageRegistered) {
             if (CKMessageManager *messages = m_MessageContext->GetMessageManager()) {
@@ -1316,6 +1331,8 @@ void ScriptAsyncTaskBase::ReleaseMessageWait() {
 
     m_MessageContext = nullptr;
     m_MessageBehaviorId = 0;
+    m_MessageBehaviorStamp = ScriptBridgeObjectStamp();
+    m_MessageBehaviorAddress = 0;
     m_MessageType = -1;
     m_MessageName.clear();
     m_MessageRegistered = false;
@@ -1574,7 +1591,10 @@ void ScriptAsyncTaskBase::AdvanceMessageWait() {
         return;
     }
 
-    CKBehavior *behavior = CKBehavior::Cast(GetCKObjectById(m_MessageContext, m_MessageBehaviorId));
+    CKBehavior *behavior = ResolveMessageWaitBehavior(m_MessageContext,
+                                                      m_MessageBehaviorId,
+                                                      m_MessageBehaviorStamp,
+                                                      m_MessageBehaviorAddress);
     if (!behavior) {
         Fail("Async::WaitMessage internal behavior no longer exists.");
         return;

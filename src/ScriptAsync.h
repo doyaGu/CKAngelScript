@@ -1,6 +1,7 @@
 #ifndef CK_SCRIPTASYNC_H
 #define CK_SCRIPTASYNC_H
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -9,6 +10,7 @@
 #include <angelscript.h>
 
 #include "CKAll.h"
+#include "ScriptBehaviorBridge.h"
 #include "ScriptRefCounted.h"
 
 class BBTask;
@@ -153,6 +155,8 @@ private:
     int m_BBTaskInputIndex = -1;
     CKContext *m_MessageContext = nullptr;
     CK_ID m_MessageBehaviorId = 0;
+    ScriptBridgeObjectStamp m_MessageBehaviorStamp;
+    std::uintptr_t m_MessageBehaviorAddress = 0;
     CKMessageType m_MessageType = -1;
     std::string m_MessageName;
     bool m_MessageRegistered = false;
