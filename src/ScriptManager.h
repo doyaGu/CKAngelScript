@@ -247,6 +247,7 @@ public:
     void ReleaseExecutorState(CKBehavior *behavior);
     void ReleaseExecutorStatesForModule(const char *moduleName);
     void ClearExecutorStates();
+    void PrepareModuleMutation(const char *moduleName);
 
     ScriptBehaviorBridge *GetBehaviorBridge();
     ScriptRuntime *GetRuntime() const {

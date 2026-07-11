@@ -11,7 +11,6 @@
 #endif
 
 #include "ScriptApiSupport.h"
-#include "AngelScriptExecutor.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptParameterRegistry.h"
 #include "ScriptRuntime.h"
@@ -67,7 +66,7 @@ CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
 
 
 CKERROR ScriptManager::PostClearAll() {
-    ReleaseAngelScriptExecutorStatesForManager(this);
+    ClearExecutorStates();
     if (m_Runtime) {
         m_Runtime->Clear();
     }
@@ -111,7 +110,7 @@ CKERROR ScriptManager::OnCKInit() {
 }
 
 CKERROR ScriptManager::OnCKEnd() {
-    ReleaseAngelScriptExecutorStatesForManager(this);
+    ClearExecutorStates();
     if (m_Runtime) {
         m_Runtime->OnEnd();
     }
@@ -192,7 +191,7 @@ int ScriptManager::Shutdown() {
 
     m_HandleRegistry.Clear();
 
-    ReleaseAngelScriptExecutorStatesForManager(this);
+    ClearExecutorStates();
     if (m_Runtime) {
         m_Runtime->Clear();
     }

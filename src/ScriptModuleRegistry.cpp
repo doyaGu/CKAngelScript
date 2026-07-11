@@ -471,6 +471,10 @@ CKAS_STATUS ScriptModuleRegistry::Unload(MutationContext &context,
     if (mutationStatus != CKAS_OK) {
         return mutationStatus;
     }
+    if (!Has(context.Manager, moduleName)) {
+        return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
+    }
+    context.Manager.PrepareModuleMutation(moduleName);
     if (!Discard(context.Manager, moduleName)) {
         return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }

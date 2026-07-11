@@ -1093,16 +1093,8 @@ void ScriptManager::ClearExecutorStates() {
     });
 }
 
-void ReleaseAngelScriptExecutorStatesForManager(ScriptManager *manager) {
-    if (manager) {
-        manager->ClearExecutorStates();
-    }
-}
-
-void ReleaseAngelScriptExecutorStatesForModule(ScriptManager *manager, const char *moduleName) {
-    if (manager) {
-        manager->ReleaseExecutorStatesForModule(moduleName);
-    }
+void ScriptManager::PrepareModuleMutation(const char *moduleName) {
+    ReleaseExecutorStatesForModule(moduleName);
 }
 
 CKObjectDeclaration *FillBehaviorAngelScriptExecutorDecl() {
