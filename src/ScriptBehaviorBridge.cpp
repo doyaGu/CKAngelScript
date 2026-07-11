@@ -7,7 +7,15 @@
 
 #include "ScriptParameterConversion.h"
 
+#ifndef CKAS_BUILD_SELF_TESTS
+#define CKAS_BUILD_SELF_TESTS 0
+#endif
+
 namespace {
+
+#if CKAS_BUILD_SELF_TESTS
+bool g_FailNextOwnedLocalSyncForSelfTest = false;
+#endif
 
 std::string BridgeObjectName(CKObject *object) {
     return SafeString(object ? object->GetName() : nullptr);
@@ -41,10 +49,88 @@ bool ApplyFrameLocalDefault(CKParameterLocal *local,
     return true;
 }
 
-bool SyncOwnedFrameLocals(CKBehavior *behavior,
-                          const std::vector<ScriptBridgeFrameLocalDecl> &ownedDecls,
-                          int ownedLocalStart,
-                          std::string &error) {
+struct OwnedFrameLocalSnapshot {
+    std::string Name;
+    CKGUID TypeGuid;
+    ScriptParamValue Value;
+};
+
+bool CaptureOwnedFrameLocals(CKBehavior *behavior,
+                             int ownedLocalStart,
+                             std::vector<OwnedFrameLocalSnapshot> &snapshot,
+                             std::string &error) {
+    if (!behavior || ownedLocalStart < 0 || behavior->GetLocalParameterCount() < ownedLocalStart) {
+        error = "Frame local interface cannot snapshot an invalid owned-local range.";
+        return false;
+    }
+    for (int index = ownedLocalStart; index < behavior->GetLocalParameterCount(); ++index) {
+        CKParameterLocal *local = behavior->GetLocalParameter(index);
+        if (!local || behavior->IsLocalParameterSetting(index)) {
+            error = "Frame local interface cannot snapshot an internal setting.";
+            return false;
+        }
+        std::string readError;
+        OwnedFrameLocalSnapshot entry;
+        entry.Name = BridgeObjectName(local);
+        entry.TypeGuid = local->GetGUID();
+        entry.Value = ReadParameterValue(local, &readError);
+        if (!readError.empty()) {
+            error = "Failed to snapshot frame local '" + entry.Name + "': " + readError;
+            return false;
+        }
+        snapshot.push_back(std::move(entry));
+    }
+    return true;
+}
+
+bool RestoreOwnedFrameLocals(CKBehavior *behavior,
+                             int ownedLocalStart,
+                             const std::vector<OwnedFrameLocalSnapshot> &snapshot,
+                             std::string &error) {
+    const int targetCount = ownedLocalStart + static_cast<int>(snapshot.size());
+    while (behavior->GetLocalParameterCount() > targetCount) {
+        const int index = behavior->GetLocalParameterCount() - 1;
+        if (behavior->IsLocalParameterSetting(index)) {
+            error = "Frame local rollback would remove an internal setting.";
+            return false;
+        }
+        CKParameterLocal *removed = behavior->RemoveLocalParameter(index);
+        if (!removed) {
+            error = "Frame local rollback could not remove a generated local.";
+            return false;
+        }
+        CKDestroyObject(removed);
+    }
+    for (int i = 0; i < static_cast<int>(snapshot.size()); ++i) {
+        const OwnedFrameLocalSnapshot &entry = snapshot[i];
+        const int index = ownedLocalStart + i;
+        CKParameterLocal *local = index < behavior->GetLocalParameterCount()
+            ? behavior->GetLocalParameter(index)
+            : behavior->CreateLocalParameter(const_cast<CKSTRING>(entry.Name.c_str()), entry.TypeGuid);
+        if (!local || behavior->IsLocalParameterSetting(index)) {
+            error = "Frame local rollback could not restore slot '" + entry.Name + "'.";
+            return false;
+        }
+        if (local->GetGUID() != entry.TypeGuid) {
+            local->SetGUID(entry.TypeGuid);
+        }
+        if (BridgeObjectName(local) != entry.Name) {
+            local->SetName(const_cast<CKSTRING>(entry.Name.c_str()));
+        }
+        std::string writeError;
+        if (WriteParameterValue(local, entry.Value, writeError) != CK_OK) {
+            error = "Frame local rollback could not restore '" + entry.Name + "': " + writeError;
+            return false;
+        }
+    }
+    return true;
+}
+
+bool SyncOwnedFrameLocalsUnsafe(CKBehavior *behavior,
+                                const std::vector<ScriptBridgeFrameLocalDecl> &ownedDecls,
+                                int ownedLocalStart,
+                                bool injectFailure,
+                                std::string &error) {
     if (!behavior) {
         error = "Behavior is null.";
         return false;
@@ -55,15 +141,6 @@ bool SyncOwnedFrameLocals(CKBehavior *behavior,
     }
 
     const int targetCount = ownedLocalStart + static_cast<int>(ownedDecls.size());
-    while (behavior->GetLocalParameterCount() > targetCount) {
-        const int index = behavior->GetLocalParameterCount() - 1;
-        if (index < ownedLocalStart || behavior->IsLocalParameterSetting(index)) {
-            error = "Frame local interface would remove an internal setting.";
-            return false;
-        }
-        CKDestroyObject(behavior->RemoveLocalParameter(index));
-    }
-
     while (behavior->GetLocalParameterCount() < targetCount) {
         const ScriptBridgeFrameLocalDecl &decl = ownedDecls[behavior->GetLocalParameterCount() - ownedLocalStart];
         CKParameterLocal *local = behavior->CreateLocalParameter(const_cast<CKSTRING>(decl.Name.c_str()), decl.TypeGuid);
@@ -100,10 +177,64 @@ bool SyncOwnedFrameLocals(CKBehavior *behavior,
         }
     }
 
+#if CKAS_BUILD_SELF_TESTS
+    if (injectFailure) {
+        error = "Injected owned frame-local synchronization failure.";
+        return false;
+    }
+#else
+    (void) injectFailure;
+#endif
+    while (behavior->GetLocalParameterCount() > targetCount) {
+        const int index = behavior->GetLocalParameterCount() - 1;
+        if (index < ownedLocalStart || behavior->IsLocalParameterSetting(index)) {
+            error = "Frame local interface would remove an internal setting.";
+            return false;
+        }
+        CKParameterLocal *removed = behavior->RemoveLocalParameter(index);
+        if (!removed) {
+            error = "Failed to remove an obsolete owned frame local.";
+            return false;
+        }
+        CKDestroyObject(removed);
+    }
     return true;
 }
 
+bool SyncOwnedFrameLocals(CKBehavior *behavior,
+                          const std::vector<ScriptBridgeFrameLocalDecl> &ownedDecls,
+                          int ownedLocalStart,
+                          std::string &error) {
+    std::vector<OwnedFrameLocalSnapshot> snapshot;
+#if CKAS_BUILD_SELF_TESTS
+    const bool injectFailure = g_FailNextOwnedLocalSyncForSelfTest;
+    g_FailNextOwnedLocalSyncForSelfTest = false;
+#else
+    const bool injectFailure = false;
+#endif
+    if (!CaptureOwnedFrameLocals(behavior, ownedLocalStart, snapshot, error)) {
+        return false;
+    }
+    std::string syncError;
+    if (SyncOwnedFrameLocalsUnsafe(behavior, ownedDecls, ownedLocalStart, injectFailure, syncError)) {
+        return true;
+    }
+    std::string restoreError;
+    if (!RestoreOwnedFrameLocals(behavior, ownedLocalStart, snapshot, restoreError)) {
+        error = syncError + " Failed to restore previous frame locals: " + restoreError;
+    } else {
+        error = syncError;
+    }
+    return false;
+}
+
 } // namespace
+
+#if CKAS_BUILD_SELF_TESTS
+void ScriptBehaviorBridgeFailNextOwnedLocalSyncForSelfTest() {
+    g_FailNextOwnedLocalSyncForSelfTest = true;
+}
+#endif
 
 void ScriptBridgeSetIndexedValue(std::vector<ScriptBridgeIndexedValue> &values,
                                  int pinIndex,

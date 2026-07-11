@@ -592,5 +592,9 @@ private:
     std::vector<PendingDestroy> m_PendingDestroy;
 };
 
+#if CKAS_BUILD_SELF_TESTS
+void ScriptBehaviorBridgeFailNextOwnedLocalSyncForSelfTest();
+#endif
+
 void RegisterScriptBehaviorBridge(asIScriptEngine *engine);
 #endif // CK_SCRIPTBEHAVIORBRIDGE_H

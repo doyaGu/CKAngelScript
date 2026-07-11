@@ -412,6 +412,43 @@ bool RunFrameLocalBindingNativeSelfTest(CKContext *context,
         return false;
     }
 
+    std::string rollbackError;
+    ScriptBehaviorBridgeFailNextOwnedLocalSyncForSelfTest();
+    if (bridge->ApplyFrameLocalInterface(behavior, lateDecls, -1, true, rollbackError) ||
+        !bridge->ApplyFrameLocalInterface(behavior, lateDecls, 0, true, rollbackError)) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local self-test leaked an injected failure past an invalid snapshot: " + rollbackError;
+        return false;
+    }
+    CKParameterLocal *rollbackLocal = behavior->GetLocalParameter(0);
+    ScriptBehaviorBridgeFailNextOwnedLocalSyncForSelfTest();
+    if (bridge->ApplyFrameLocalInterface(
+            behavior,
+            {FrameLocalDecl("Changed", CKPGUID_INT, "31")},
+            0,
+            false,
+            rollbackError)) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test expected invalid default application to fail.";
+        return false;
+    }
+    lateOwned = behavior->GetLocalParameter(0);
+    lateOwnedValue = 0;
+    if (behavior->GetLocalParameterCount() != 1 ||
+        !lateOwned ||
+        lateOwned != rollbackLocal ||
+        std::string(lateOwned->GetName() ? lateOwned->GetName() : "") != "LateOwned" ||
+        lateOwned->GetGUID() != CKPGUID_INT ||
+        lateOwned->GetValue(&lateOwnedValue) != CK_OK ||
+        lateOwnedValue != 21) {
+        releaseRefs();
+        cleanup();
+        error = "Executor frame-local native self-test did not roll back a failed local mutation: " + rollbackError;
+        return false;
+    }
+
     bridge->ClearFrameLocalInterface(behavior->GetID(), true);
     if (!ExpectFrameLocalApplyFailure(
             bridge,
