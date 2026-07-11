@@ -760,9 +760,7 @@ void ReleaseRuntimeState(ScriptExecutorState *state) {
     delete state->Invoker;
     state->Invoker = nullptr;
     state->Loaded = false;
-    state->OnLoadCalled = false;
-    state->AwakeCalled = false;
-    state->StartCalled = false;
+    state->InitialLifecycle.Clear();
     state->SuspendedInputs.clear();
     state->ActiveLifecycleName.clear();
 }
@@ -900,7 +898,7 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         if (status == LifecycleInvokeStatus::Failed) {
             return ExecutorReadyStatus::Failed;
         }
-        state->StartCalled = false;
+        state->InitialLifecycle.ResetStart();
         return ExecutorReadyStatus::LifecycleOnly;
     }
 
@@ -945,7 +943,7 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         state->Loaded = true;
     }
 
-    if (!state->OnLoadCalled) {
+    if (state->InitialLifecycle.Next() == ScriptInitialPhase::OnLoad) {
         const LifecycleInvokeStatus status = InvokeLifecycle(ctx, state, state->OnLoad, state->OnLoadArgument, "OnLoad");
         if (status == LifecycleInvokeStatus::Suspended) {
             return ExecutorReadyStatus::Suspended;
@@ -953,9 +951,9 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         if (status == LifecycleInvokeStatus::Failed) {
             return ExecutorReadyStatus::Failed;
         }
-        state->OnLoadCalled = true;
+        state->InitialLifecycle.Complete(ScriptInitialPhase::OnLoad);
     }
-    if (!state->AwakeCalled) {
+    if (state->InitialLifecycle.Next() == ScriptInitialPhase::Awake) {
         const LifecycleInvokeStatus status = InvokeLifecycle(ctx, state, state->Awake, state->AwakeArgument, "Awake");
         if (status == LifecycleInvokeStatus::Suspended) {
             return ExecutorReadyStatus::Suspended;
@@ -963,9 +961,9 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         if (status == LifecycleInvokeStatus::Failed) {
             return ExecutorReadyStatus::Failed;
         }
-        state->AwakeCalled = true;
+        state->InitialLifecycle.Complete(ScriptInitialPhase::Awake);
     }
-    if (!state->StartCalled) {
+    if (state->InitialLifecycle.Next() == ScriptInitialPhase::Start) {
         const LifecycleInvokeStatus status = InvokeLifecycle(ctx, state, state->Start, state->StartArgument, "Start");
         if (status == LifecycleInvokeStatus::Suspended) {
             return ExecutorReadyStatus::Suspended;
@@ -973,7 +971,7 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         if (status == LifecycleInvokeStatus::Failed) {
             return ExecutorReadyStatus::Failed;
         }
-        state->StartCalled = true;
+        state->InitialLifecycle.Complete(ScriptInitialPhase::Start);
     }
 
     return ExecutorReadyStatus::Ready;
@@ -1299,7 +1297,7 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
         case CKM_BEHAVIORRESET: {
             ScriptExecutorState *state = GetState(behavior);
             if (state) {
-                state->StartCalled = false;
+                state->InitialLifecycle.ResetStart();
             }
             if (state && state->Invoker && state->Invoker->IsContextSuspended()) {
                 state->Invoker->AbortContext();

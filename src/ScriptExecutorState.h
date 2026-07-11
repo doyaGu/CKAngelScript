@@ -8,6 +8,7 @@
 
 #include "CKAll.h"
 #include "ScriptInvoker.h"
+#include "ScriptInitialLifecycle.h"
 
 class ScriptManager;
 
@@ -36,9 +37,7 @@ struct ScriptExecutorState {
     std::string InterfaceText;
     bool Loaded = false;
     bool Failed = false;
-    bool OnLoadCalled = false;
-    bool AwakeCalled = false;
-    bool StartCalled = false;
+    ScriptInitialLifecycle InitialLifecycle;
     std::vector<int> SuspendedInputs;
     std::string ActiveLifecycleName;
 
