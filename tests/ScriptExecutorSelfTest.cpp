@@ -664,6 +664,10 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "}\n"
         "class ExecutorRetriggerProbe {\n"
         "  int starts = 0;\n"
+        "  int resets = 0;\n"
+        "  void Start(BehaviorFrame@ frame) {\n"
+        "    if (frame !is null) frame.SetLocal(\"__CKAS_FrameScratch\", 779);\n"
+        "  }\n"
         "  int Execute(BehaviorFrame@ frame) {\n"
         "    ++starts;\n"
         "    if (frame is null) return 201;\n"
@@ -685,7 +689,12 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    return 208;\n"
         "  }\n"
         "  void OnReset(BehaviorFrame@ frame) {\n"
-        "    if (frame !is null) frame.SetLocal(\"__CKAS_FrameScratch\", 777);\n"
+        "    ++resets;\n"
+        "    if (resets == 1) { if (frame !is null) frame.SetLocal(\"__CKAS_FrameScratch\", 777); return; }\n"
+        "    array<int> values; values[1] = 1;\n"
+        "  }\n"
+        "  void OnDestroy(BehaviorFrame@ frame) {\n"
+        "    if (frame !is null) frame.SetLocal(\"__CKAS_FrameScratch\", 778);\n"
         "  }\n"
         "}\n"
         "class ExecutorSuspendingSourceProbe {\n"
@@ -1157,6 +1166,45 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         resetScratchValue != 777) {
         cleanup();
         error = "Executor self-test resumed suspended Execute instead of invoking OnReset.";
+        return false;
+    }
+    if (CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORRESET, &retriggerContext) != CK_OK ||
+        !SetExecutorBoolSetting(retriggerBehavior, EXECUTOR_SETTING_TRACE, true, error) ||
+        CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORSETTINGSEDITED, &retriggerContext) != CK_OK) {
+        cleanup();
+        if (error.empty()) {
+            error = "Executor self-test could not recover after a failed OnReset.";
+        }
+        return false;
+    }
+    retriggerBehavior->ActivateInput(0, TRUE);
+    if (ExecuteExecutorSelfTestBehavior(context, retriggerBehavior, retriggerContext) != CKBR_OK) {
+        cleanup();
+        error = "Executor self-test failed to execute after recovering from OnReset failure.";
+        return false;
+    }
+    resetScratchValue = 0;
+    if (resetScratch->GetValue(&resetScratchValue) != CK_OK || resetScratchValue != 779) {
+        cleanup();
+        error = "Executor self-test did not rerun Start after OnReset failure recovery.";
+        return false;
+    }
+    const std::string editedRetriggerInterface = std::string(interfaceText) + "\n";
+    if (!SetExecutorStringSetting(retriggerBehavior,
+                                  EXECUTOR_SETTING_INTERFACE,
+                                  editedRetriggerInterface.c_str(),
+                                  error) ||
+        CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORSETTINGSEDITED, &retriggerContext) != CK_OK) {
+        cleanup();
+        if (error.empty()) {
+            error = "Executor self-test failed to edit an active executor interface.";
+        }
+        return false;
+    }
+    resetScratchValue = 0;
+    if (resetScratch->GetValue(&resetScratchValue) != CK_OK || resetScratchValue != 778) {
+        cleanup();
+        error = "Executor self-test skipped OnDestroy while changing executor identity.";
         return false;
     }
     if (!SetExecutorStringSetting(retriggerBehavior, EXECUTOR_SETTING_INTERFACE, "", error) ||

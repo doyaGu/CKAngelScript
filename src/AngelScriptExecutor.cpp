@@ -870,6 +870,24 @@ bool IdentityChanged(ScriptExecutorState *state,
            state->InterfaceText != interfaceText;
 }
 
+void TransitionIdentity(const CKBehaviorContext &ctx,
+                        ScriptExecutorState *state,
+                        const std::string &scriptId,
+                        const std::string &moduleName,
+                        const std::string &className,
+                        const std::string &interfaceText) {
+    if (!IdentityChanged(state, scriptId, moduleName, className, interfaceText)) {
+        return;
+    }
+    InvokeOnDestroy(ctx, state);
+    ReleaseRuntimeState(state);
+    state->Failed = false;
+    state->ScriptId = scriptId;
+    state->ModuleName = moduleName;
+    state->ClassName = className;
+    state->InterfaceText = interfaceText;
+}
+
 bool AttachScriptEntryModule(ScriptManager *manager,
                              ScriptInvoker *invoker,
                              const std::string &scriptId,
@@ -948,14 +966,7 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
 
     ScriptRuntime *runtime = manager->GetRuntime();
     const std::string moduleName = runtime ? runtime->ModuleName(scriptId) : std::string();
-    if (IdentityChanged(state, scriptId, moduleName, className, interfaceText)) {
-        ReleaseRuntimeState(state);
-        state->Failed = false;
-        state->ScriptId = scriptId;
-        state->ModuleName = moduleName;
-        state->ClassName = className;
-        state->InterfaceText = interfaceText;
-    }
+    TransitionIdentity(ctx, state, scriptId, moduleName, className, interfaceText);
 
     if (state->Failed) {
         return ExecutorReadyStatus::Failed;
@@ -1329,6 +1340,17 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
         case CKM_BEHAVIORSETTINGSEDITED: {
             ScriptExecutorState *state = GetState(behavior);
             if (state) {
+                const std::string scriptId = Trim(ReadLocalString(behavior, SETTING_SCRIPT));
+                const std::string className = Trim(ReadLocalString(behavior, SETTING_CLASS));
+                ScriptManager *manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
+                ScriptRuntime *runtime = manager ? manager->GetRuntime() : nullptr;
+                const std::string moduleName = runtime ? runtime->ModuleName(scriptId) : std::string();
+                TransitionIdentity(behcontext,
+                                   state,
+                                   scriptId,
+                                   moduleName,
+                                   className,
+                                   ReadLocalString(behavior, SETTING_INTERFACE));
                 state->Failed = false;
             }
             std::string error;
@@ -1343,6 +1365,9 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
         }
         case CKM_BEHAVIORRESET: {
             ScriptExecutorState *state = GetState(behavior);
+            if (state) {
+                state->StartCalled = false;
+            }
             if (state && state->Invoker && state->Invoker->IsContextSuspended()) {
                 state->Invoker->AbortContext();
                 state->SuspendedInputs.clear();
@@ -1357,9 +1382,6 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
                 if (status == LifecycleInvokeStatus::Failed) {
                     return CKBR_OK;
                 }
-            }
-            if (state) {
-                state->StartCalled = false;
             }
             break;
         }
