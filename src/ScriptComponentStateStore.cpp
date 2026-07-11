@@ -12,6 +12,7 @@
 
 struct ScriptComponentStateStore::Impl {
     std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > States;
+    std::uint64_t NextMessageGeneration = 1;
 };
 
 ScriptComponentStateStore::ScriptComponentStateStore()
@@ -34,6 +35,10 @@ ScriptComponentState *ScriptComponentStateStore::GetOrCreate(CKBehavior *behavio
 
     auto state = std::make_unique<ScriptComponentState>();
     state->BehaviorId = id;
+    state->MessageGeneration = m_Impl->NextMessageGeneration++;
+    if (m_Impl->NextMessageGeneration == 0) {
+        m_Impl->NextMessageGeneration = 1;
+    }
     state->Behavior = behavior;
     state->MessageTarget = messageTarget;
 

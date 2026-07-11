@@ -2,6 +2,7 @@
 #define CK_SCRIPT_COMPONENT_STATE_H
 
 #include <string>
+#include <cstdint>
 #include <vector>
 
 #include <angelscript.h>
@@ -118,6 +119,7 @@ struct ScriptComponentBinding {
 
 struct ScriptComponentState {
     CK_ID BehaviorId = 0;
+    std::uint64_t MessageGeneration = 0;
     CKBehavior *Behavior = nullptr;
     ScriptInvoker *Invoker = nullptr;
     asIScriptObject *Object = nullptr;
