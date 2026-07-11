@@ -17,6 +17,7 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptAsync.h"
 #include "ScriptManager.h"
+#include "ScriptInitialLifecycle.h"
 #include "ScriptMessage.h"
 #include "ScriptScene.h"
 #include "ScriptParameterRegistry.h"
@@ -451,10 +452,8 @@ struct ScriptRuntime::Module {
     asIScriptFunction *OnMessage = nullptr;
     bool Enabled = true;
     bool Loaded = false;
-    bool LoadCalled = false;
-    bool AwakeCalled = false;
+    ScriptInitialLifecycle InitialLifecycle;
     bool EnableCalled = false;
-    bool StartCalled = false;
     bool Failed = false;
     std::string Error;
     asIScriptContext *ActiveContext = nullptr;
@@ -1490,7 +1489,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
         return false;
     }
     if (status == InvokeStatus::Finished) {
-        loaded->LoadCalled = true;
+        loaded->InitialLifecycle.Complete(ScriptInitialPhase::OnLoad);
         ctx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                         loaded->Meta,
                                                         "Awake",
@@ -1506,7 +1505,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
             return false;
         }
         if (status == InvokeStatus::Finished) {
-            loaded->AwakeCalled = true;
+            loaded->InitialLifecycle.Complete(ScriptInitialPhase::Awake);
         }
     }
     module = std::move(loaded);
@@ -1806,7 +1805,7 @@ bool ScriptRuntime::ResetModule(Module &module, const ScriptContext &context) {
     if (status == InvokeStatus::Suspended) {
         return false;
     }
-    module.StartCalled = false;
+    module.InitialLifecycle.ResetStart();
     module.PendingReset = false;
     return true;
 }
@@ -1970,21 +1969,21 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         ResetModule(module, ctx);
         return;
     }
-    if (!module.LoadCalled) {
+    if (module.InitialLifecycle.Next() == ScriptInitialPhase::OnLoad) {
         ScriptContext ctx = makeContext("OnLoad");
         const InvokeStatus status = Invoke(module, "OnLoad", ctx);
         if (status != InvokeStatus::Finished) {
             return;
         }
-        module.LoadCalled = true;
+        module.InitialLifecycle.Complete(ScriptInitialPhase::OnLoad);
     }
-    if (!module.AwakeCalled) {
+    if (module.InitialLifecycle.Next() == ScriptInitialPhase::Awake) {
         ScriptContext ctx = makeContext("Awake");
         const InvokeStatus status = Invoke(module, "Awake", ctx);
         if (status != InvokeStatus::Finished) {
             return;
         }
-        module.AwakeCalled = true;
+        module.InitialLifecycle.Complete(ScriptInitialPhase::Awake);
     }
     if (!module.Enabled) {
         return;
@@ -1997,13 +1996,13 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         }
         module.EnableCalled = true;
     }
-    if (!module.StartCalled) {
+    if (module.InitialLifecycle.Next() == ScriptInitialPhase::Start) {
         ScriptContext ctx = makeContext("Start");
         const InvokeStatus status = Invoke(module, "Start", ctx);
         if (status != InvokeStatus::Finished) {
             return;
         }
-        module.StartCalled = true;
+        module.InitialLifecycle.Complete(ScriptInitialPhase::Start);
     }
     ScriptContext ctx = makeContext("Update");
     Invoke(module, "Update", ctx);
