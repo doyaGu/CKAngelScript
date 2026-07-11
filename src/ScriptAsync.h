@@ -1,7 +1,7 @@
 #ifndef CK_SCRIPTASYNC_H
 #define CK_SCRIPTASYNC_H
 
-#include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -156,7 +156,7 @@ private:
     CKContext *m_MessageContext = nullptr;
     CK_ID m_MessageBehaviorId = 0;
     ScriptBridgeObjectStamp m_MessageBehaviorStamp;
-    std::uintptr_t m_MessageBehaviorAddress = 0;
+    std::unique_ptr<unsigned char> m_MessageIdentity;
     CKMessageType m_MessageType = -1;
     std::string m_MessageName;
     bool m_MessageRegistered = false;

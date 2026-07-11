@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <new>
 #include <sstream>
 
 #include <fmt/format.h>
@@ -21,9 +22,9 @@ namespace {
 CKBehavior *ResolveMessageWaitBehavior(CKContext *context,
                                        CK_ID behaviorId,
                                        const ScriptBridgeObjectStamp &stamp,
-                                       std::uintptr_t address) {
+                                       const void *identity) {
     CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(context, behaviorId, stamp));
-    return behavior && ScriptBridgeObjectAddress(behavior) == address ? behavior : nullptr;
+    return behavior && behavior->GetAppData() == identity ? behavior : nullptr;
 }
 
 std::vector<ScriptAsyncTaskBase *> ReadTaskArray(CScriptArray *tasks);
@@ -1128,10 +1129,19 @@ bool ScriptAsyncTaskBase::SetMessageWait(CKContext *context,
     if (!behavior) {
         return fail("Async::WaitMessage failed to create an internal behavior.");
     }
+    if (behavior->GetAppData()) {
+        context->DestroyObject(behavior);
+        return fail("Async::WaitMessage internal behavior already has application data.");
+    }
 
+    std::unique_ptr<unsigned char> identity(new (std::nothrow) unsigned char(0));
+    if (!identity) {
+        context->DestroyObject(behavior);
+        return fail("Async::WaitMessage failed to allocate an identity token.");
+    }
     m_MessageContext = context;
     m_MessageBehaviorId = behavior->GetID();
-    m_MessageBehaviorAddress = ScriptBridgeObjectAddress(behavior);
+    m_MessageIdentity = std::move(identity);
     m_MessageType = messageType;
     const char *messageName = messages->GetMessageTypeName(messageType);
     m_MessageName = messageName && messageName[0] != '\0'
@@ -1140,6 +1150,7 @@ bool ScriptAsyncTaskBase::SetMessageWait(CKContext *context,
 
     behavior->UseFunction();
     behavior->SetOwner(object, FALSE);
+    behavior->SetAppData(m_MessageIdentity.get());
     m_MessageBehaviorStamp = CaptureBridgeObjectStamp(behavior);
     if (!behavior->CreateOutput(const_cast<CKSTRING>("Out"))) {
         return fail("Async::WaitMessage failed to create an internal output.");
@@ -1306,7 +1317,7 @@ void ScriptAsyncTaskBase::ReleaseMessageWait() {
         m_MessageContext = nullptr;
         m_MessageBehaviorId = 0;
         m_MessageBehaviorStamp = ScriptBridgeObjectStamp();
-        m_MessageBehaviorAddress = 0;
+        m_MessageIdentity.reset();
         m_MessageType = -1;
         m_MessageName.clear();
         m_MessageRegistered = false;
@@ -1316,7 +1327,7 @@ void ScriptAsyncTaskBase::ReleaseMessageWait() {
     CKBehavior *behavior = ResolveMessageWaitBehavior(m_MessageContext,
                                                       m_MessageBehaviorId,
                                                       m_MessageBehaviorStamp,
-                                                      m_MessageBehaviorAddress);
+                                                      m_MessageIdentity.get());
     if (behavior) {
         if (m_MessageRegistered) {
             if (CKMessageManager *messages = m_MessageContext->GetMessageManager()) {
@@ -1324,6 +1335,7 @@ void ScriptAsyncTaskBase::ReleaseMessageWait() {
             }
         }
         behavior->Activate(FALSE, TRUE);
+        behavior->SetAppData(nullptr);
         if (!behavior->IsToBeDeleted()) {
             m_MessageContext->DestroyObject(behavior);
         }
@@ -1332,7 +1344,7 @@ void ScriptAsyncTaskBase::ReleaseMessageWait() {
     m_MessageContext = nullptr;
     m_MessageBehaviorId = 0;
     m_MessageBehaviorStamp = ScriptBridgeObjectStamp();
-    m_MessageBehaviorAddress = 0;
+    m_MessageIdentity.reset();
     m_MessageType = -1;
     m_MessageName.clear();
     m_MessageRegistered = false;
@@ -1594,7 +1606,7 @@ void ScriptAsyncTaskBase::AdvanceMessageWait() {
     CKBehavior *behavior = ResolveMessageWaitBehavior(m_MessageContext,
                                                       m_MessageBehaviorId,
                                                       m_MessageBehaviorStamp,
-                                                      m_MessageBehaviorAddress);
+                                                      m_MessageIdentity.get());
     if (!behavior) {
         Fail("Async::WaitMessage internal behavior no longer exists.");
         return;
