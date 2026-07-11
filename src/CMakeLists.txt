@@ -67,6 +67,7 @@ set(CKAS_HEADERS
         ScriptModuleMutationPolicy.h
         ScriptModuleRegistry.h
         ScriptModuleStateStore.h
+        ScriptInitialLifecycle.h
         ScriptPathResolver.h
 )
 
@@ -84,6 +85,7 @@ set(CKAS_SOURCES
         ScriptModuleBytecodeStore.cpp
         ScriptModuleMutationPolicy.cpp
         ScriptModuleStateStore.cpp
+        ScriptInitialLifecycle.cpp
         ScriptPathResolver.cpp
         ScriptImportBinder.cpp
         ScriptModuleReplacer.cpp
@@ -160,6 +162,7 @@ if (CKAS_BUILD_SELF_TESTS)
     set(CKAS_TEST_DIR "${PROJECT_SOURCE_DIR}/tests")
     list(APPEND CKAS_SOURCES
             "${CKAS_TEST_DIR}/ScriptStartupSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptInitialLifecycleSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptComponentMetadataSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptApiSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptInfoExportSelfTest.cpp"

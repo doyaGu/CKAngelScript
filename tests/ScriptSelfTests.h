@@ -18,6 +18,7 @@ class ScriptManager;
 class asIScriptEngine;
 
 CKERROR RunScriptStartupSelfTests(ScriptManager *manager);
+bool RunScriptInitialLifecycleSelfTest(std::string &error);
 
 bool RunScriptComponentMetadataSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptParameterConversionSelfTest(std::string &error);

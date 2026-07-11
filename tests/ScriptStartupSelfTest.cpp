@@ -86,6 +86,12 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     WriteStartupSelfTestMarker("running", "start", std::string());
 
     std::string error;
+    WriteStartupSelfTestMarker("running", "initial-lifecycle", std::string());
+    if (!RunScriptInitialLifecycleSelfTest(error)) {
+        ReportSelfTestFailure(manager, "initial-lifecycle", "Initial lifecycle", error);
+        return CKERR_INVALIDOPERATION;
+    }
+
     WriteStartupSelfTestMarker("running", "parameter-conversion", std::string());
     if (!RunScriptParameterConversionSelfTest(error)) {
         ReportSelfTestFailure(manager,
