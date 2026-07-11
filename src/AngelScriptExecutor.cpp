@@ -16,6 +16,7 @@
 #include "ScriptManager.h"
 #include "ScriptParameterConversion.h"
 #include "ScriptRuntime.h"
+#include "ScriptExecutorState.h"
 
 namespace {
 
@@ -64,87 +65,6 @@ struct ExecutorInterface {
     std::vector<ExecutorSlotSpec> Pouts;
     std::vector<ExecutorSlotSpec> Locals;
 };
-
-struct ScriptExecutorState {
-    CK_ID BehaviorId = 0;
-    CKBehavior *Behavior = nullptr;
-    ScriptManager *Manager = nullptr;
-    ScriptInvoker *Invoker = nullptr;
-    asIScriptObject *Object = nullptr;
-    asIScriptFunction *Execute = nullptr;
-    asIScriptFunction *OnLoad = nullptr;
-    asIScriptFunction *Awake = nullptr;
-    asIScriptFunction *Start = nullptr;
-    asIScriptFunction *OnDestroy = nullptr;
-    asIScriptFunction *OnReset = nullptr;
-    ScriptBehaviorArgumentKind ExecuteArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnLoadArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind AwakeArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind StartArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnDestroyArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnResetArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-
-    std::string ScriptId;
-    std::string ModuleName;
-    std::string ClassName;
-    std::string InterfaceText;
-    bool Loaded = false;
-    bool Failed = false;
-    bool OnLoadCalled = false;
-    bool AwakeCalled = false;
-    bool StartCalled = false;
-    std::vector<int> SuspendedInputs;
-    std::string ActiveLifecycleName;
-
-    static void ReleaseFunction(asIScriptFunction *&function) {
-        if (function) {
-            function->Release();
-            function = nullptr;
-        }
-    }
-
-    void ReleaseCachedMethods() {
-        ReleaseFunction(Execute);
-        ReleaseFunction(OnLoad);
-        ReleaseFunction(Awake);
-        ReleaseFunction(Start);
-        ReleaseFunction(OnDestroy);
-        ReleaseFunction(OnReset);
-        ExecuteArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnLoadArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        AwakeArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        StartArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnDestroyArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnResetArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    }
-
-    void ReleaseObject() {
-        if (Object) {
-            Object->Release();
-            Object = nullptr;
-        }
-    }
-};
-
-std::vector<ScriptExecutorState *> &ExecutorStates() {
-    static std::vector<ScriptExecutorState *> states;
-    return states;
-}
-
-void RegisterExecutorState(ScriptExecutorState *state) {
-    if (!state) {
-        return;
-    }
-    std::vector<ScriptExecutorState *> &states = ExecutorStates();
-    if (std::find(states.begin(), states.end(), state) == states.end()) {
-        states.push_back(state);
-    }
-}
-
-void UnregisterExecutorState(ScriptExecutorState *state) {
-    std::vector<ScriptExecutorState *> &states = ExecutorStates();
-    states.erase(std::remove(states.begin(), states.end(), state), states.end());
-}
 
 std::string Trim(const std::string &value) {
     std::size_t first = 0;
@@ -680,7 +600,6 @@ void SetState(CKBehavior *behavior, ScriptExecutorState *state) {
     if (behavior && behavior->GetLocalParameterCount() > LOCAL_STATE) {
         behavior->SetLocalParameterValue(LOCAL_STATE, &state);
     }
-    RegisterExecutorState(state);
 }
 
 bool IsExecutorMethod(asIScriptFunction *method, bool execute, ScriptBehaviorArgumentKind &argumentKind) {
@@ -811,11 +730,11 @@ void InvokeOnDestroy(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
     }
 }
 
-void DestroyState(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
+void ReleaseStateContents(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
     if (!state) {
         return;
     }
-    UnregisterExecutorState(state);
+    SetState(state->Behavior, nullptr);
     InvokeOnDestroy(ctx, state);
     if (state->Invoker) {
         state->Invoker->AbortContext();
@@ -827,7 +746,6 @@ void DestroyState(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
     state->ReleaseObject();
     delete state->Invoker;
     state->Invoker = nullptr;
-    delete state;
 }
 
 void ReleaseRuntimeState(ScriptExecutorState *state) {
@@ -1119,48 +1037,71 @@ void KeepExecutorScheduled(CKBehavior *behavior) {
     ActivateOwnerScriptInCurrentScene(behavior, false);
 }
 
+CKBehaviorContext ExecutorContext(ScriptManager *manager, ScriptExecutorState *state) {
+    CKBehaviorContext ctx = {};
+    ctx.Behavior = state ? state->Behavior : nullptr;
+    ctx.Context = manager ? manager->GetCKContext() : nullptr;
+    ctx.ParameterManager = ctx.Context ? ctx.Context->GetParameterManager() : nullptr;
+    ctx.MessageManager = ctx.Context ? ctx.Context->GetMessageManager() : nullptr;
+    ctx.AttributeManager = ctx.Context ? ctx.Context->GetAttributeManager() : nullptr;
+    ctx.TimeManager = ctx.Context ? ctx.Context->GetTimeManager() : nullptr;
+    return ctx;
+}
+
 } // namespace
 
+ScriptExecutorState *ScriptManager::GetOrCreateExecutorState(CKBehavior *behavior) {
+    ScriptExecutorState *state = m_ExecutorStates.GetOrCreate(
+        behavior,
+        this,
+        [this](CK_ID, ScriptExecutorState *replaced) {
+            ReleaseStateContents(ExecutorContext(this, replaced), replaced);
+        });
+    SetState(behavior, state);
+    return state;
+}
+
+ScriptExecutorState *ScriptManager::GetExecutorState(CK_ID id, CKBehavior *expectedBehavior) const {
+    return m_ExecutorStates.Get(id, expectedBehavior);
+}
+
+void ScriptManager::ReleaseExecutorState(CKBehavior *behavior) {
+    if (!behavior) {
+        return;
+    }
+    m_ExecutorStates.Remove(
+        behavior->GetID(),
+        [this](CK_ID, ScriptExecutorState *state) {
+            ReleaseStateContents(ExecutorContext(this, state), state);
+        });
+}
+
+void ScriptManager::ReleaseExecutorStatesForModule(const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return;
+    }
+    m_ExecutorStates.ReleaseModule(
+        moduleName,
+        [this](CK_ID, ScriptExecutorState *state) {
+            ReleaseStateContents(ExecutorContext(this, state), state);
+        });
+}
+
+void ScriptManager::ClearExecutorStates() {
+    m_ExecutorStates.Clear([this](CK_ID, ScriptExecutorState *state) {
+        ReleaseStateContents(ExecutorContext(this, state), state);
+    });
+}
+
 void ReleaseAngelScriptExecutorStatesForManager(ScriptManager *manager) {
-    std::vector<ScriptExecutorState *> states = ExecutorStates();
-    for (ScriptExecutorState *state : states) {
-        if (!state || (manager && state->Manager != manager)) {
-            continue;
-        }
-
-        CKBehaviorContext ctx = {};
-        ctx.Behavior = state->Behavior;
-        ctx.Context = manager ? manager->GetCKContext() : nullptr;
-        ctx.ParameterManager = ctx.Context ? ctx.Context->GetParameterManager() : nullptr;
-        ctx.MessageManager = ctx.Context ? ctx.Context->GetMessageManager() : nullptr;
-        ctx.AttributeManager = ctx.Context ? ctx.Context->GetAttributeManager() : nullptr;
-        ctx.TimeManager = ctx.Context ? ctx.Context->GetTimeManager() : nullptr;
-
-        InvokeOnDestroy(ctx, state);
-        ReleaseRuntimeState(state);
+    if (manager) {
+        manager->ClearExecutorStates();
     }
 }
 
 void ReleaseAngelScriptExecutorStatesForModule(ScriptManager *manager, const char *moduleName) {
-    if (!manager || !moduleName || moduleName[0] == '\0') {
-        return;
-    }
-    std::vector<ScriptExecutorState *> states = ExecutorStates();
-    for (ScriptExecutorState *state : states) {
-        if (!state || state->Manager != manager || state->ModuleName != moduleName) {
-            continue;
-        }
-
-        CKBehaviorContext ctx = {};
-        ctx.Behavior = state->Behavior;
-        ctx.Context = manager->GetCKContext();
-        ctx.ParameterManager = ctx.Context ? ctx.Context->GetParameterManager() : nullptr;
-        ctx.MessageManager = ctx.Context ? ctx.Context->GetMessageManager() : nullptr;
-        ctx.AttributeManager = ctx.Context ? ctx.Context->GetAttributeManager() : nullptr;
-        ctx.TimeManager = ctx.Context ? ctx.Context->GetTimeManager() : nullptr;
-
-        InvokeOnDestroy(ctx, state);
-        ReleaseRuntimeState(state);
+    if (manager) {
+        manager->ReleaseExecutorStatesForModule(moduleName);
     }
 }
 
@@ -1217,11 +1158,12 @@ int AngelScriptExecutor(const CKBehaviorContext &behcontext) {
 
     ScriptExecutorState *state = GetState(behavior);
     if (!state) {
-        state = new ScriptExecutorState();
-        state->BehaviorId = behavior->GetID();
-        state->Behavior = behavior;
-        state->Manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
-        SetState(behavior, state);
+        ScriptManager *manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
+        state = manager ? manager->GetOrCreateExecutorState(behavior) : nullptr;
+        if (!state) {
+            ConsoleError(behcontext, "AngelScript manager is not available.");
+            return CKBR_OK;
+        }
     }
 
     const ExecutorReadyStatus ready = EnsureReady(behcontext, state);
@@ -1321,11 +1263,10 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
         case CKM_BEHAVIORCREATE:
         case CKM_BEHAVIORLOAD: {
             if (!GetState(behavior)) {
-                ScriptExecutorState *state = new ScriptExecutorState();
-                state->BehaviorId = behavior->GetID();
-                state->Behavior = behavior;
-                state->Manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
-                SetState(behavior, state);
+                ScriptManager *manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
+                if (manager) {
+                    manager->GetOrCreateExecutorState(behavior);
+                }
             }
             std::string error;
             if (!ApplyInterface(behcontext,
@@ -1388,8 +1329,12 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
         case CKM_BEHAVIORDELETE: {
             ScriptExecutorState *state = GetState(behavior);
             if (state) {
-                DestroyState(behcontext, state);
-                SetState(behavior, nullptr);
+                ScriptManager *manager = state->Manager
+                    ? state->Manager
+                    : (behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr);
+                if (manager) {
+                    manager->ReleaseExecutorState(behavior);
+                }
             }
             break;
         }

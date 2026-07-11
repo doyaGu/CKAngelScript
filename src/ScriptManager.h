@@ -15,6 +15,7 @@
 #include "ScriptHandleRegistry.h"
 #include "ScriptCKObjectRetainer.h"
 #include "ScriptComponentStateStore.h"
+#include "ScriptExecutorStateStore.h"
 #include "ScriptEngineHost.h"
 #include "ScriptImportBinder.h"
 #include "ScriptModuleBytecodeStore.h"
@@ -30,6 +31,7 @@ class CKBehavior;
 class ScriptAsyncScheduler;
 class ScriptBehaviorBridge;
 struct ScriptComponentState;
+struct ScriptExecutorState;
 class ScriptMessage;
 class ScriptMessageBus;
 class ScriptParameterRegistry;
@@ -240,6 +242,12 @@ public:
     void ClearComponentStates();
     bool DeliverComponentMessage(CK_ID id, const ScriptMessage &message, bool immediate, std::string &error);
 
+    ScriptExecutorState *GetOrCreateExecutorState(CKBehavior *behavior);
+    ScriptExecutorState *GetExecutorState(CK_ID id, CKBehavior *expectedBehavior = nullptr) const;
+    void ReleaseExecutorState(CKBehavior *behavior);
+    void ReleaseExecutorStatesForModule(const char *moduleName);
+    void ClearExecutorStates();
+
     ScriptBehaviorBridge *GetBehaviorBridge();
     ScriptRuntime *GetRuntime() const {
         return m_Runtime.get();
@@ -301,6 +309,7 @@ protected:
     ScriptModuleRegistry m_ModuleRegistry;
     ScriptCKObjectRetainer m_CKObjectRetainer;
     ScriptComponentStateStore m_ComponentStates;
+    ScriptExecutorStateStore m_ExecutorStates;
     std::unique_ptr<ScriptBehaviorBridge> m_BehaviorBridge;
     std::unique_ptr<ScriptParameterRegistry> m_ParameterRegistry;
     std::unique_ptr<ScriptRuntime> m_Runtime;
