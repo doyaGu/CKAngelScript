@@ -364,13 +364,19 @@ std::string ObjectName(CKObject *object) {
     return name ? std::string(name) : std::string();
 }
 
-void SyncInputCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &inputs) {
+bool SyncInputCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &inputs, std::string &error) {
     while (behavior->GetInputCount() > static_cast<int>(inputs.size())) {
-        behavior->DeleteInput(behavior->GetInputCount() - 1);
+        if (behavior->DeleteInput(behavior->GetInputCount() - 1) != CK_OK) {
+            error = "Failed to remove an executor input.";
+            return false;
+        }
     }
     while (behavior->GetInputCount() < static_cast<int>(inputs.size())) {
         const ExecutorSlotSpec &spec = inputs[behavior->GetInputCount()];
-        behavior->AddInput(const_cast<CKSTRING>(spec.Name.c_str()));
+        if (behavior->AddInput(const_cast<CKSTRING>(spec.Name.c_str())) < 0) {
+            error = "Failed to create executor input '" + spec.Name + "'.";
+            return false;
+        }
     }
     for (int i = 0; i < static_cast<int>(inputs.size()); ++i) {
         CKBehaviorIO *io = behavior->GetInput(i);
@@ -378,15 +384,22 @@ void SyncInputCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &i
             io->SetName(const_cast<CKSTRING>(inputs[i].Name.c_str()));
         }
     }
+    return true;
 }
 
-void SyncOutputCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &outputs) {
+bool SyncOutputCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &outputs, std::string &error) {
     while (behavior->GetOutputCount() > static_cast<int>(outputs.size())) {
-        behavior->DeleteOutput(behavior->GetOutputCount() - 1);
+        if (behavior->DeleteOutput(behavior->GetOutputCount() - 1) != CK_OK) {
+            error = "Failed to remove an executor output.";
+            return false;
+        }
     }
     while (behavior->GetOutputCount() < static_cast<int>(outputs.size())) {
         const ExecutorSlotSpec &spec = outputs[behavior->GetOutputCount()];
-        behavior->AddOutput(const_cast<CKSTRING>(spec.Name.c_str()));
+        if (behavior->AddOutput(const_cast<CKSTRING>(spec.Name.c_str())) < 0) {
+            error = "Failed to create executor output '" + spec.Name + "'.";
+            return false;
+        }
     }
     for (int i = 0; i < static_cast<int>(outputs.size()); ++i) {
         CKBehaviorIO *io = behavior->GetOutput(i);
@@ -394,15 +407,24 @@ void SyncOutputCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &
             io->SetName(const_cast<CKSTRING>(outputs[i].Name.c_str()));
         }
     }
+    return true;
 }
 
-void SyncPinCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &pins) {
+bool SyncPinCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &pins, std::string &error) {
     while (behavior->GetInputParameterCount() > static_cast<int>(pins.size())) {
-        CKDestroyObject(behavior->RemoveInputParameter(behavior->GetInputParameterCount() - 1));
+        CKParameterIn *removed = behavior->RemoveInputParameter(behavior->GetInputParameterCount() - 1);
+        if (!removed) {
+            error = "Failed to remove an executor input parameter.";
+            return false;
+        }
+        CKDestroyObject(removed);
     }
     while (behavior->GetInputParameterCount() < static_cast<int>(pins.size())) {
         const ExecutorSlotSpec &spec = pins[behavior->GetInputParameterCount()];
-        behavior->CreateInputParameter(const_cast<CKSTRING>(spec.Name.c_str()), spec.Guid);
+        if (!behavior->CreateInputParameter(const_cast<CKSTRING>(spec.Name.c_str()), spec.Guid)) {
+            error = "Failed to create executor input parameter '" + spec.Name + "'.";
+            return false;
+        }
     }
     for (int i = 0; i < static_cast<int>(pins.size()); ++i) {
         CKParameterIn *param = behavior->GetInputParameter(i);
@@ -415,15 +437,24 @@ void SyncPinCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &pin
             param->SetName(const_cast<CKSTRING>(pins[i].Name.c_str()));
         }
     }
+    return true;
 }
 
-void SyncPoutCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &pouts) {
+bool SyncPoutCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &pouts, std::string &error) {
     while (behavior->GetOutputParameterCount() > static_cast<int>(pouts.size())) {
-        CKDestroyObject(behavior->RemoveOutputParameter(behavior->GetOutputParameterCount() - 1));
+        CKParameterOut *removed = behavior->RemoveOutputParameter(behavior->GetOutputParameterCount() - 1);
+        if (!removed) {
+            error = "Failed to remove an executor output parameter.";
+            return false;
+        }
+        CKDestroyObject(removed);
     }
     while (behavior->GetOutputParameterCount() < static_cast<int>(pouts.size())) {
         const ExecutorSlotSpec &spec = pouts[behavior->GetOutputParameterCount()];
-        behavior->CreateOutputParameter(const_cast<CKSTRING>(spec.Name.c_str()), spec.Guid);
+        if (!behavior->CreateOutputParameter(const_cast<CKSTRING>(spec.Name.c_str()), spec.Guid)) {
+            error = "Failed to create executor output parameter '" + spec.Name + "'.";
+            return false;
+        }
     }
     for (int i = 0; i < static_cast<int>(pouts.size()); ++i) {
         CKParameterOut *param = behavior->GetOutputParameter(i);
@@ -437,6 +468,32 @@ void SyncPoutCount(CKBehavior *behavior, const std::vector<ExecutorSlotSpec> &po
             param->SetName(const_cast<CKSTRING>(pouts[i].Name.c_str()));
         }
     }
+    return true;
+}
+
+bool SyncPhysicalInterface(CKBehavior *behavior,
+                           const std::vector<ExecutorSlotSpec> &inputs,
+                           const std::vector<ExecutorSlotSpec> &outputs,
+                           const std::vector<ExecutorSlotSpec> &pins,
+                           const std::vector<ExecutorSlotSpec> &pouts,
+                           std::string &error) {
+    if (behavior->GetInputCount() <= static_cast<int>(inputs.size()) &&
+        !SyncInputCount(behavior, inputs, error)) return false;
+    if (behavior->GetOutputCount() <= static_cast<int>(outputs.size()) &&
+        !SyncOutputCount(behavior, outputs, error)) return false;
+    if (behavior->GetInputParameterCount() <= static_cast<int>(pins.size()) &&
+        !SyncPinCount(behavior, pins, error)) return false;
+    if (behavior->GetOutputParameterCount() <= static_cast<int>(pouts.size()) &&
+        !SyncPoutCount(behavior, pouts, error)) return false;
+    if (behavior->GetInputCount() > static_cast<int>(inputs.size()) &&
+        !SyncInputCount(behavior, inputs, error)) return false;
+    if (behavior->GetOutputCount() > static_cast<int>(outputs.size()) &&
+        !SyncOutputCount(behavior, outputs, error)) return false;
+    if (behavior->GetInputParameterCount() > static_cast<int>(pins.size()) &&
+        !SyncPinCount(behavior, pins, error)) return false;
+    if (behavior->GetOutputParameterCount() > static_cast<int>(pouts.size()) &&
+        !SyncPoutCount(behavior, pouts, error)) return false;
+    return true;
 }
 
 bool ValidateIoNames(CKBehavior *behavior,
@@ -560,10 +617,6 @@ bool ApplyInterface(const CKBehaviorContext &ctx,
         ExecutorSlotSpec defaultOutput;
         defaultOutput.Kind = ExecutorSlotKind::Output;
         defaultOutput.Name = "Out";
-        SyncInputCount(behavior, std::vector<ExecutorSlotSpec>{defaultInput});
-        SyncOutputCount(behavior, std::vector<ExecutorSlotSpec>{defaultOutput});
-        SyncPinCount(behavior, {});
-        SyncPoutCount(behavior, {});
         if (bridge) {
             if (!bridge->ApplyFrameLocalInterface(behavior, {}, USER_LOCAL_START, false, error)) {
                 return false;
@@ -578,17 +631,17 @@ bool ApplyInterface(const CKBehaviorContext &ctx,
                 CKDestroyObject(behavior->RemoveLocalParameter(index));
             }
         }
-        return true;
+        return SyncPhysicalInterface(behavior,
+                                     std::vector<ExecutorSlotSpec>{defaultInput},
+                                     std::vector<ExecutorSlotSpec>{defaultOutput},
+                                     {},
+                                     {},
+                                     error);
     }
     ExecutorInterface interfaceShape;
     if (!ParseInterface(ctx.Context, interfaceText, interfaceShape, error)) {
         return false;
     }
-    SyncInputCount(behavior, interfaceShape.Inputs);
-    SyncOutputCount(behavior, interfaceShape.Outputs);
-    SyncPinCount(behavior, interfaceShape.Pins);
-    SyncPoutCount(behavior, interfaceShape.Pouts);
-
     if (!bridge) {
         error = "Executor interface locals require ScriptBehaviorBridge.";
         return false;
@@ -598,6 +651,14 @@ bool ApplyInterface(const CKBehaviorContext &ctx,
                                           USER_LOCAL_START,
                                           strict,
                                           error)) {
+        return false;
+    }
+    if (!SyncPhysicalInterface(behavior,
+                               interfaceShape.Inputs,
+                               interfaceShape.Outputs,
+                               interfaceShape.Pins,
+                               interfaceShape.Pouts,
+                               error)) {
         return false;
     }
     if (strict && !ValidateInterface(ctx, behavior, interfaceShape, error)) {
