@@ -8,6 +8,7 @@
 
 #include "CKAll.h"
 #include "ScriptInvoker.h"
+#include "ScriptInitialLifecycle.h"
 
 class CKBehavior;
 
@@ -157,9 +158,7 @@ struct ScriptComponentState {
     ScriptComponentModuleKind ModuleKind = ScriptComponentModuleKind::None;
     bool Loaded = false;
     bool StaticMessageSubscriptionsRegistered = false;
-    bool OnLoadCalled = false;
-    bool AwakeCalled = false;
-    bool StartCalled = false;
+    ScriptInitialLifecycle InitialLifecycle;
     bool DesiredEnabled = false;
     bool InstanceEnabled = false;
     bool ScriptActive = false;

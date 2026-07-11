@@ -741,20 +741,20 @@ void CancelSuspendedLifecycle(ScriptComponentState *state, const char *unlessNam
 }
 
 bool CompleteInitialLifecycles(CKBehavior *beh, ScriptComponentState *state, const CKBehaviorContext &behcontext) {
-    if (!state->OnLoadCalled) {
+    if (state->InitialLifecycle.Next() == ScriptInitialPhase::OnLoad) {
         const LifecycleInvokeStatus status = InvokeLifecycle(beh, state, state->OnLoad, behcontext, "OnLoad");
         if (!LifecycleFinished(status)) {
             return false;
         }
-        state->OnLoadCalled = true;
+        state->InitialLifecycle.Complete(ScriptInitialPhase::OnLoad);
     }
 
-    if (!state->AwakeCalled) {
+    if (state->InitialLifecycle.Next() == ScriptInitialPhase::Awake) {
         const LifecycleInvokeStatus status = InvokeLifecycle(beh, state, state->Awake, behcontext, "Awake");
         if (!LifecycleFinished(status)) {
             return false;
         }
-        state->AwakeCalled = true;
+        state->InitialLifecycle.Complete(ScriptInitialPhase::Awake);
     }
 
     return true;
@@ -1182,7 +1182,7 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         return state->Invoker && state->Invoker->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
     }
 
-    if (!state->StartCalled) {
+    if (state->InitialLifecycle.Next() == ScriptInitialPhase::Start) {
         const ScriptComponentSupport::LifecycleInvokeStatus status =
             ScriptComponentSupport::InvokeLifecycle(beh, state, state->Start, behcontext, "Start");
         if (status != ScriptComponentSupport::LifecycleInvokeStatus::Finished) {
@@ -1190,7 +1190,7 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
                 ? CKBR_ACTIVATENEXTFRAME
                 : CKBR_OK;
         }
-        state->StartCalled = true;
+        state->InitialLifecycle.Complete(ScriptInitialPhase::Start);
     }
 
     {
@@ -1304,7 +1304,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                     man->GetBehaviorBridge()->ResetComponentTasks(beh->GetID());
                 }
                 state->Failed = false;
-                state->StartCalled = false;
+                state->InitialLifecycle.ResetStart();
                 if (state->Object) {
                     ScriptComponentSupport::CancelSuspendedLifecycle(state, "OnReset");
                     const ScriptComponentSupport::LifecycleInvokeStatus status =

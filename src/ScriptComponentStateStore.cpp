@@ -116,9 +116,7 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->StaticMessageSubscriptionsRegistered = false;
     state->ModuleKind = ScriptComponentModuleKind::None;
     state->Loaded = false;
-    state->OnLoadCalled = false;
-    state->AwakeCalled = false;
-    state->StartCalled = false;
+    state->InitialLifecycle.Clear();
     state->InstanceEnabled = false;
     state->Failed = false;
     state->PendingDestroy = false;
