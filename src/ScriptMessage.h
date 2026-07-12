@@ -38,6 +38,12 @@ struct ScriptMessageTarget {
     std::string Text;
     std::string RuntimeId;
     CK_ID ComponentId = 0;
+    std::uint64_t ComponentGeneration = 0;
+
+    bool IsValid() const;
+    std::string KindName() const;
+    std::string ToString() const;
+    bool operator==(const ScriptMessageTarget &other) const;
 };
 
 struct ScriptMessageBusPerfStats {
@@ -69,7 +75,8 @@ public:
     ScriptMessageKind KindValue() const;
     std::string Topic() const;
     std::string Source() const;
-    std::string Target() const;
+    ScriptMessageTarget Target() const;
+    std::string TargetText() const;
     std::uint64_t FrameIndex() const;
     bool RequiresReply() const;
     CScriptDictionary *Payload() const;
@@ -99,13 +106,29 @@ public:
                  CScriptDictionary *payload,
                  const std::string &target,
                  std::string &error);
+    bool Publish(const std::string &source,
+                 const std::string &topic,
+                 CScriptDictionary *payload,
+                 const ScriptMessageTarget &target,
+                 std::string &error);
     bool Send(const std::string &source,
               const std::string &target,
               const std::string &topic,
               CScriptDictionary *payload,
               std::string &error);
+    bool Send(const std::string &source,
+              const ScriptMessageTarget &target,
+              const std::string &topic,
+              CScriptDictionary *payload,
+              std::string &error);
     ScriptAsyncTaskBase *Request(const std::string &source,
                                  const std::string &target,
+                                 const std::string &topic,
+                                 CScriptDictionary *payload,
+                                 int timeoutFrames,
+                                 std::string &error);
+    ScriptAsyncTaskBase *Request(const std::string &source,
+                                 const ScriptMessageTarget &target,
                                  const std::string &topic,
                                  CScriptDictionary *payload,
                                  int timeoutFrames,

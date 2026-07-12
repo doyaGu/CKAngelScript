@@ -54,7 +54,74 @@ void RaiseBehaviorError(const CKBehaviorContext &ctx, const std::string &error) 
     }
 }
 
-bool PublishRuntime(const ScriptContext &ctx, const std::string &topic, CScriptDictionary *payload, const std::string &target) {
+void RaiseTargetError(const std::string &error) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(error.c_str());
+    }
+}
+
+ScriptMessageTarget RuntimeMessageTarget(const std::string &id) {
+    ScriptMessageTarget target;
+    target.RuntimeId = TrimTopic(id);
+    if (target.RuntimeId.empty()) {
+        target.Kind = ScriptMessageTargetKind::Invalid;
+        RaiseTargetError("Message::Runtime requires a script id.");
+        return target;
+    }
+    target.Kind = ScriptMessageTargetKind::Runtime;
+    target.Text = ScriptMessageBus::RuntimeTarget(target.RuntimeId);
+    return target;
+}
+
+ScriptMessageTarget ComponentMessageTarget(ScriptManager *manager, CK_ID id) {
+    ScriptMessageTarget target;
+    ScriptComponentState *state = manager ? manager->GetComponentState(id) : nullptr;
+    if (!state) {
+        target.Kind = ScriptMessageTargetKind::Invalid;
+        RaiseTargetError("Message::Component requires an existing AngelScript Component state.");
+        return target;
+    }
+    target.Kind = ScriptMessageTargetKind::Component;
+    target.Text = ScriptMessageBus::ComponentTarget(id);
+    target.ComponentId = id;
+    target.ComponentGeneration = state->MessageGeneration;
+    return target;
+}
+
+ScriptMessageTarget ComponentRuntimeMessageTarget(const ScriptContext &ctx, CK_ID id) {
+    return ComponentMessageTarget(ManagerFromRuntimeContext(ctx), id);
+}
+
+ScriptMessageTarget ComponentBehaviorMessageTarget(const CKBehaviorContext &ctx, CK_ID id) {
+    return ComponentMessageTarget(ManagerFromBehaviorContext(ctx), id);
+}
+
+bool PublishRuntime(const ScriptContext &ctx, const std::string &topic, CScriptDictionary *payload) {
+    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
+    std::string error;
+    const bool ok = manager && manager->GetMessageBus() &&
+        manager->GetMessageBus()->Publish(SourceFromRuntimeContext(ctx), topic, payload, ScriptMessageTarget(), error);
+    if (!ok) {
+        RaiseRuntimeError(ctx, error.empty() ? "Message::Publish failed." : error);
+    }
+    return ok;
+}
+
+bool PublishBehavior(const CKBehaviorContext &ctx, const std::string &topic, CScriptDictionary *payload) {
+    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
+    std::string error;
+    const bool ok = manager && manager->GetMessageBus() &&
+        manager->GetMessageBus()->Publish(SourceFromBehaviorContext(ctx), topic, payload, ScriptMessageTarget(), error);
+    if (!ok) {
+        RaiseBehaviorError(ctx, error.empty() ? "Message::Publish failed." : error);
+    }
+    return ok;
+}
+
+bool PublishTargetRuntime(const ScriptContext &ctx,
+                          const ScriptMessageTarget &target,
+                          const std::string &topic,
+                          CScriptDictionary *payload) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -65,7 +132,10 @@ bool PublishRuntime(const ScriptContext &ctx, const std::string &topic, CScriptD
     return ok;
 }
 
-bool PublishBehavior(const CKBehaviorContext &ctx, const std::string &topic, CScriptDictionary *payload, const std::string &target) {
+bool PublishTargetBehavior(const CKBehaviorContext &ctx,
+                           const ScriptMessageTarget &target,
+                           const std::string &topic,
+                           CScriptDictionary *payload) {
     ScriptManager *manager = ManagerFromBehaviorContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -76,7 +146,7 @@ bool PublishBehavior(const CKBehaviorContext &ctx, const std::string &topic, CSc
     return ok;
 }
 
-bool SendRuntime(const ScriptContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
+bool SendRuntime(const ScriptContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -87,7 +157,7 @@ bool SendRuntime(const ScriptContext &ctx, const std::string &target, const std:
     return ok;
 }
 
-bool SendBehavior(const CKBehaviorContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
+bool SendBehavior(const CKBehaviorContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
     ScriptManager *manager = ManagerFromBehaviorContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -99,7 +169,7 @@ bool SendBehavior(const CKBehaviorContext &ctx, const std::string &target, const
 }
 
 ScriptAsyncTaskBase *RequestRuntime(const ScriptContext &ctx,
-                                    const std::string &target,
+                                    const ScriptMessageTarget &target,
                                     const std::string &topic,
                                     CScriptDictionary *payload,
                                     int timeoutFrames) {
@@ -115,7 +185,7 @@ ScriptAsyncTaskBase *RequestRuntime(const ScriptContext &ctx,
 }
 
 ScriptAsyncTaskBase *RequestBehavior(const CKBehaviorContext &ctx,
-                                     const std::string &target,
+                                     const ScriptMessageTarget &target,
                                      const std::string &topic,
                                      CScriptDictionary *payload,
                                      int timeoutFrames) {
@@ -209,6 +279,42 @@ bool UnsubscribeBehavior(const CKBehaviorContext &ctx, const std::string &topic)
 }
 
 } // namespace
+
+bool ScriptMessageTarget::IsValid() const {
+    if (Kind == ScriptMessageTargetKind::Runtime) {
+        return !RuntimeId.empty();
+    }
+    if (Kind == ScriptMessageTargetKind::Component) {
+        return ComponentId != 0 && ComponentGeneration != 0;
+    }
+    return false;
+}
+
+std::string ScriptMessageTarget::KindName() const {
+    switch (Kind) {
+    case ScriptMessageTargetKind::Runtime:
+        return "runtime";
+    case ScriptMessageTargetKind::Component:
+        return "component";
+    case ScriptMessageTargetKind::None:
+        return "none";
+    case ScriptMessageTargetKind::Invalid:
+    default:
+        return "invalid";
+    }
+}
+
+std::string ScriptMessageTarget::ToString() const {
+    return Text;
+}
+
+bool ScriptMessageTarget::operator==(const ScriptMessageTarget &other) const {
+    return Kind == other.Kind &&
+           Text == other.Text &&
+           RuntimeId == other.RuntimeId &&
+           ComponentId == other.ComponentId &&
+           ComponentGeneration == other.ComponentGeneration;
+}
 
 ScriptMessage::ScriptMessage() = default;
 
@@ -310,7 +416,8 @@ std::string ScriptMessage::Kind() const {
 ScriptMessageKind ScriptMessage::KindValue() const { return m_Kind; }
 std::string ScriptMessage::Topic() const { return m_Topic; }
 std::string ScriptMessage::Source() const { return m_Source; }
-std::string ScriptMessage::Target() const { return m_Target.Text; }
+ScriptMessageTarget ScriptMessage::Target() const { return m_Target; }
+std::string ScriptMessage::TargetText() const { return m_Target.Text; }
 std::uint64_t ScriptMessage::FrameIndex() const { return m_FrameIndex; }
 bool ScriptMessage::RequiresReply() const { return m_RequiresReply; }
 
@@ -342,16 +449,28 @@ bool ScriptMessageBus::Publish(const std::string &source,
                                CScriptDictionary *payload,
                                const std::string &target,
                                std::string &error) {
+    ScriptMessageTarget parsedTarget = ParseTarget(target, true, error);
+    if (parsedTarget.Kind == ScriptMessageTargetKind::Invalid) {
+        return false;
+    }
+    return Publish(source, topic, payload, parsedTarget, error);
+}
+
+bool ScriptMessageBus::Publish(const std::string &source,
+                               const std::string &topic,
+                               CScriptDictionary *payload,
+                               const ScriptMessageTarget &target,
+                               std::string &error) {
     const std::string cleanTopic = TrimTopic(topic);
     if (cleanTopic.empty()) {
         error = "Message topic is empty.";
         return false;
     }
-    ScriptMessageTarget parsedTarget = ParseTarget(target, true, error);
-    if (parsedTarget.Kind == ScriptMessageTargetKind::Invalid) {
+    if (target.Kind == ScriptMessageTargetKind::Invalid) {
+        error = "Message target is invalid.";
         return false;
     }
-    m_Queue.push_back(MakeMessage(ScriptMessageKind::Event, cleanTopic, source, std::move(parsedTarget), false, payload));
+    m_Queue.push_back(MakeMessage(ScriptMessageKind::Event, cleanTopic, source, target, false, payload));
     return true;
 }
 
@@ -360,20 +479,32 @@ bool ScriptMessageBus::Send(const std::string &source,
                             const std::string &topic,
                             CScriptDictionary *payload,
                             std::string &error) {
-    const std::string cleanTopic = TrimTopic(topic);
     if (target.empty()) {
         error = "Message::Send requires a target.";
-        return false;
-    }
-    if (cleanTopic.empty()) {
-        error = "Message topic is empty.";
         return false;
     }
     ScriptMessageTarget parsedTarget = ParseTarget(target, false, error);
     if (parsedTarget.Kind == ScriptMessageTargetKind::Invalid) {
         return false;
     }
-    ScriptMessage message = MakeMessage(ScriptMessageKind::Direct, cleanTopic, source, std::move(parsedTarget), false, payload);
+    return Send(source, parsedTarget, topic, payload, error);
+}
+
+bool ScriptMessageBus::Send(const std::string &source,
+                            const ScriptMessageTarget &target,
+                            const std::string &topic,
+                            CScriptDictionary *payload,
+                            std::string &error) {
+    const std::string cleanTopic = TrimTopic(topic);
+    if (!target.IsValid()) {
+        error = "Message::Send requires a valid target.";
+        return false;
+    }
+    if (cleanTopic.empty()) {
+        error = "Message topic is empty.";
+        return false;
+    }
+    ScriptMessage message = MakeMessage(ScriptMessageKind::Direct, cleanTopic, source, target, false, payload);
     return Deliver(message, true, error);
 }
 
@@ -383,21 +514,34 @@ ScriptAsyncTaskBase *ScriptMessageBus::Request(const std::string &source,
                                                CScriptDictionary *payload,
                                                int timeoutFrames,
                                                std::string &error) {
+    if (target.empty()) {
+        error = "Message::Request requires a target.";
+        return nullptr;
+    }
+    ScriptMessageTarget parsedTarget = ParseTarget(target, false, error);
+    if (parsedTarget.Kind == ScriptMessageTargetKind::Invalid) {
+        return nullptr;
+    }
+    return Request(source, parsedTarget, topic, payload, timeoutFrames, error);
+}
+
+ScriptAsyncTaskBase *ScriptMessageBus::Request(const std::string &source,
+                                               const ScriptMessageTarget &target,
+                                               const std::string &topic,
+                                               CScriptDictionary *payload,
+                                               int timeoutFrames,
+                                               std::string &error) {
     if (!m_Manager || !m_Manager->GetAsyncScheduler() || !m_Manager->GetScriptEngine()) {
         error = "Message bus requires an initialized script manager and async scheduler.";
         return nullptr;
     }
     const std::string cleanTopic = TrimTopic(topic);
-    if (target.empty()) {
-        error = "Message::Request requires a target.";
+    if (!target.IsValid()) {
+        error = "Message::Request requires a valid target.";
         return nullptr;
     }
     if (cleanTopic.empty()) {
         error = "Message topic is empty.";
-        return nullptr;
-    }
-    ScriptMessageTarget parsedTarget = ParseTarget(target, false, error);
-    if (parsedTarget.Kind == ScriptMessageTargetKind::Invalid) {
         return nullptr;
     }
     const int dictionaryType = DictionaryHandleTypeId();
@@ -406,12 +550,12 @@ ScriptAsyncTaskBase *ScriptMessageBus::Request(const std::string &source,
         return nullptr;
     }
     ScriptAsyncTaskBase *task = m_Manager->GetAsyncScheduler()->CreateManualTask(dictionaryType);
-    ScriptMessage message = MakeMessage(ScriptMessageKind::Request, cleanTopic, source, std::move(parsedTarget), true, payload);
+    ScriptMessage message = MakeMessage(ScriptMessageKind::Request, cleanTopic, source, target, true, payload);
     PendingRequest pending;
     pending.Task = task;
     pending.Task->AddRef();
     pending.Source = source;
-    pending.Target = message.Target();
+    pending.Target = message.TargetText();
     pending.StartedFrame = m_FrameIndex;
     pending.TimeoutFrames = timeoutFrames;
     pending.DueFrame = timeoutFrames > 0
@@ -440,7 +584,7 @@ bool ScriptMessageBus::Reply(const std::string &source, const ScriptMessage &req
         error = "Message request is no longer pending.";
         return false;
     }
-    if (request.Target() != source) {
+    if (request.TargetText() != source) {
         error = "Only the request target can reply.";
         return false;
     }
@@ -462,7 +606,7 @@ bool ScriptMessageBus::Reject(const std::string &source, const ScriptMessage &re
         error = "Message request is no longer pending.";
         return false;
     }
-    if (request.Target() != source) {
+    if (request.TargetText() != source) {
         error = "Only the request target can reject.";
         return false;
     }
@@ -627,6 +771,8 @@ ScriptMessageTarget ScriptMessageBus::ParseTarget(const std::string &target, boo
             return parsed;
         }
         parsed.ComponentId = static_cast<CK_ID>(id);
+        ScriptComponentState *state = m_Manager ? m_Manager->GetComponentState(parsed.ComponentId) : nullptr;
+        parsed.ComponentGeneration = state ? state->MessageGeneration : 0;
         parsed.Kind = ScriptMessageTargetKind::Component;
         return parsed;
     }
@@ -657,14 +803,14 @@ ScriptMessage ScriptMessageBus::MakeMessage(ScriptMessageKind kind,
 }
 
 bool ScriptMessageBus::Deliver(const ScriptMessage &message, bool immediate, std::string &error) {
-    if (!message.Target().empty()) {
+    if (!message.TargetText().empty()) {
         return DeliverTarget(message.m_Target, message, immediate, error);
     }
     auto it = m_TopicSubscriptions.find(message.Topic());
     if (it == m_TopicSubscriptions.end() || it->second.Targets.empty()) {
-        error = message.Target().empty()
+        error = message.TargetText().empty()
             ? fmt::format("No subscribers for message topic '{}'.", message.Topic())
-            : fmt::format("Message target '{}' is not available.", message.Target());
+            : fmt::format("Message target '{}' is not available.", message.TargetText());
         return message.KindValue() == ScriptMessageKind::Event;
     }
     TopicTargets &topicTargets = it->second;
@@ -791,6 +937,27 @@ void ScriptMessageBus::ReleasePending(PendingRequest &pending) {
 void RegisterScriptMessage(asIScriptEngine *engine) {
     assert(engine != nullptr);
     int r = 0;
+    r = engine->RegisterObjectType("ScriptMessageTarget", sizeof(ScriptMessageTarget), asOBJ_VALUE | asGetTypeTraits<ScriptMessageTarget>()); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("ScriptMessageTarget", asBEHAVE_CONSTRUCT, "void f()",
+                                        asFUNCTIONPR([](ScriptMessageTarget *self) { new(self) ScriptMessageTarget(); }, (ScriptMessageTarget *), void),
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("ScriptMessageTarget", asBEHAVE_CONSTRUCT, "void f(const ScriptMessageTarget &in other)",
+                                        asFUNCTIONPR([](const ScriptMessageTarget &other, ScriptMessageTarget *self) { new(self) ScriptMessageTarget(other); },
+                                                     (const ScriptMessageTarget &, ScriptMessageTarget *), void),
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectBehaviour("ScriptMessageTarget", asBEHAVE_DESTRUCT, "void f()",
+                                        asFUNCTIONPR([](ScriptMessageTarget *self) { self->~ScriptMessageTarget(); }, (ScriptMessageTarget *), void),
+                                        asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessageTarget", "ScriptMessageTarget &opAssign(const ScriptMessageTarget &in other)",
+                                     asMETHODPR(ScriptMessageTarget, operator=, (const ScriptMessageTarget &), ScriptMessageTarget &),
+                                     asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessageTarget", "bool IsValid() const", asMETHOD(ScriptMessageTarget, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessageTarget", "string Kind() const", asMETHOD(ScriptMessageTarget, KindName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessageTarget", "string ToString() const", asMETHOD(ScriptMessageTarget, ToString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessageTarget", "bool opEquals(const ScriptMessageTarget &in other) const",
+                                     asMETHODPR(ScriptMessageTarget, operator==, (const ScriptMessageTarget &) const, bool),
+                                     asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+
     r = engine->RegisterObjectType("ScriptMessage", sizeof(ScriptMessage), asOBJ_VALUE | asOBJ_APP_CLASS_CDAK); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectBehaviour("ScriptMessage", asBEHAVE_CONSTRUCT, "void f()",
                                         asFUNCTIONPR([](ScriptMessage *self) { new(self) ScriptMessage(); }, (ScriptMessage *), void),
@@ -809,7 +976,7 @@ void RegisterScriptMessage(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ScriptMessage", "string Kind() const", asMETHOD(ScriptMessage, Kind), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "string Topic() const", asMETHOD(ScriptMessage, Topic), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "string Source() const", asMETHOD(ScriptMessage, Source), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ScriptMessage", "string Target() const", asMETHOD(ScriptMessage, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "ScriptMessageTarget Target() const", asMETHOD(ScriptMessage, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "uint64 FrameIndex() const", asMETHOD(ScriptMessage, FrameIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "bool RequiresReply() const", asMETHOD(ScriptMessage, RequiresReply), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "dictionary@ Payload() const", asMETHOD(ScriptMessage, Payload), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -817,12 +984,17 @@ void RegisterScriptMessage(asIScriptEngine *engine) {
     const char *previousNamespace = engine->GetDefaultNamespace();
     const std::string previous = previousNamespace ? previousNamespace : "";
     r = engine->SetDefaultNamespace("Message"); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = \"\")", asFUNCTION(PublishRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = \"\")", asFUNCTION(PublishBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Send(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Send(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ScriptMessageTarget Runtime(const string &in id)", asFUNCTION(RuntimeMessageTarget), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ScriptMessageTarget Component(const ScriptContext &in ctx, CK_ID id)", asFUNCTION(ComponentRuntimeMessageTarget), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ScriptMessageTarget Component(const CKBehaviorContext &in ctx, CK_ID id)", asFUNCTION(ComponentBehaviorMessageTarget), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishTargetRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishTargetBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Send(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Send(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Reply(const ScriptContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Reply(const CKBehaviorContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Reject(const ScriptContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
