@@ -210,7 +210,6 @@ bool ScriptModuleReplacer::CommitBytecodeCandidate(
         return false;
     }
 
-    manager.PrepareModuleMutation(moduleName);
     RemoveForReplacement(manager, registry, stateStore, moduleName, snapshot);
 
     std::vector<unsigned char> loadByteCode = candidateByteCode;
@@ -233,6 +232,8 @@ bool ScriptModuleReplacer::CommitBytecodeCandidate(
         }
         return false;
     }
+
+    manager.PrepareModuleMutation(moduleName);
 
     if (outCommittedModule) {
         *outCommittedModule = committedModule;

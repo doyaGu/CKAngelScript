@@ -474,10 +474,10 @@ CKAS_STATUS ScriptModuleRegistry::Unload(MutationContext &context,
     if (!Has(context.Manager, moduleName)) {
         return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }
-    context.Manager.PrepareModuleMutation(moduleName);
     if (!Discard(context.Manager, moduleName)) {
         return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
     }
+    context.Manager.PrepareModuleMutation(moduleName);
     context.StateStore.RemoveImportBindingsForModule(moduleName);
     context.StateStore.ClearIncludeEdges(moduleName);
     context.StateStore.SetKind(moduleName, ScriptModuleKind::RawUnknown);
