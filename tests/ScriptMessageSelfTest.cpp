@@ -7,6 +7,7 @@
 #include "ScriptMessage.h"
 #include "ScriptComponentState.h"
 #include "ScriptManager.h"
+#include "ScriptRuntime.h"
 #include "add_on/scriptdictionary/scriptdictionary.h"
 
 namespace ScriptMessageSelfTest {
@@ -133,15 +134,17 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  if (!assignedPayload.get(\"text\", assignedText) || assignedText != \"hello\") return 9;\n"
         "  return 0;\n"
         "}\n"
-        "void __ckas_message_string_runtime(const ScriptContext &in ctx) {\n"
-        "  Message::Publish(ctx, \"compat.topic\", null, \"runtime:compat\");\n"
-        "  Message::Send(ctx, \"runtime:compat\", \"compat.topic\", null);\n"
-        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, \"runtime:compat\", \"compat.topic\", null, 1);\n"
+        "int __ckas_message_string_runtime(const ScriptContext &in ctx) {\n"
+        "  if (Message::Send(ctx, \"invalid\", \"compat.topic\", null)) return 31;\n"
+        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, \"invalid\", \"compat.topic\", null, 1);\n"
+        "  if (task !is null) return 32;\n"
+        "  return 0;\n"
         "}\n"
-        "void __ckas_message_string_behavior(const CKBehaviorContext &in ctx) {\n"
-        "  Message::Publish(ctx, \"compat.topic\", null, \"component:1\");\n"
-        "  Message::Send(ctx, \"component:1\", \"compat.topic\", null);\n"
-        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, \"component:1\", \"compat.topic\", null, 1);\n"
+        "int __ckas_message_string_behavior(const CKBehaviorContext &in ctx) {\n"
+        "  if (Message::Send(ctx, \"invalid\", \"compat.topic\", null)) return 33;\n"
+        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, \"invalid\", \"compat.topic\", null, 1);\n"
+        "  if (task !is null) return 34;\n"
+        "  return 0;\n"
         "}\n";
 
     CKAngelScriptResult compileResult = {};
@@ -213,10 +216,62 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
     }
     scriptContext->Unprepare();
     engine->ReturnContext(scriptContext);
-    manager->UnloadModule(moduleName, nullptr);
     if (!executeOk) {
+        manager->UnloadModule(moduleName, nullptr);
         return false;
     }
+
+    auto executeCompatibilityProbe = [&](const char *declaration, void *argument, const char *label) {
+        asIScriptFunction *compatibilityFunction = module ? module->GetFunctionByDecl(declaration) : nullptr;
+        if (!compatibilityFunction) {
+            error = std::string("Message self-test script function was not found: ") + declaration;
+            return false;
+        }
+        asIScriptContext *compatibilityContext = engine->RequestContext();
+        if (!compatibilityContext) {
+            error = std::string("Message self-test could not create the ") + label + " execution context.";
+            return false;
+        }
+        int compatibilityResult = compatibilityContext->Prepare(compatibilityFunction);
+        if (compatibilityResult >= 0) {
+            compatibilityResult = compatibilityContext->SetArgObject(0, argument);
+        }
+        if (compatibilityResult >= 0) {
+            compatibilityResult = compatibilityContext->Execute();
+        }
+        bool compatibilityOk = false;
+        if (compatibilityResult == asEXECUTION_FINISHED) {
+            const int returnCode = static_cast<int>(compatibilityContext->GetReturnDWord());
+            compatibilityOk = returnCode == 0;
+            if (!compatibilityOk) {
+                error = std::string("Message ") + label + " compatibility probe returned " + std::to_string(returnCode) + ".";
+            }
+        } else if (compatibilityResult == asEXECUTION_EXCEPTION) {
+            const char *exception = compatibilityContext->GetExceptionString();
+            error = std::string("Message ") + label + " compatibility probe exception: " +
+                    (exception && exception[0] ? exception : "<empty>") + ".";
+        } else {
+            error = std::string("Message ") + label + " compatibility probe failed with code " +
+                    std::to_string(compatibilityResult) + ".";
+        }
+        compatibilityContext->Unprepare();
+        engine->ReturnContext(compatibilityContext);
+        return compatibilityOk;
+    };
+
+    ScriptContext runtimeContext(context, nullptr, "SelfTest", "Running", 1, 0, 0.0f, 0.0f);
+    CKBehaviorContext compatibilityBehaviorContext = {};
+    compatibilityBehaviorContext.Context = context;
+    if (!executeCompatibilityProbe("int __ckas_message_string_runtime(const ScriptContext &in ctx)",
+                                   &runtimeContext,
+                                   "runtime string target") ||
+        !executeCompatibilityProbe("int __ckas_message_string_behavior(const CKBehaviorContext &in ctx)",
+                                   &compatibilityBehaviorContext,
+                                   "behavior string target")) {
+        manager->UnloadModule(moduleName, nullptr);
+        return false;
+    }
+    manager->UnloadModule(moduleName, nullptr);
 
     CKBeObject *waitTarget = CKBeObject::Cast(context->CreateObject(
         CKCID_BEOBJECT,
