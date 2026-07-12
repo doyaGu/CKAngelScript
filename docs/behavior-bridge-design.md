@@ -58,7 +58,7 @@ BBInstance@ instance = config.SpawnStarted(ctx);
 | Parameter | Meaning |
 | --- | --- |
 | `Topic` | Message topic to publish. Required. |
-| `Target` | Optional message target such as `runtime:bml.sr_timer`; empty means topic subscribers. |
+| `Target` | Optional native text target such as `runtime:bml.sr_timer`; empty means topic subscribers. This BB parameter is the text adapter for persistent graphs, while AngelScript calls use `ScriptMessageTarget`. |
 | `Payload` | Optional string stored in the message payload under `text`. |
 
 When triggered, the BB publishes through the `Message` bus with source text `behavior:event_hook:<CK_ID>`, then activates `Out`. If publishing fails, it writes `Error Message` and activates `Error`. The BB is host-neutral; Ballance/BML integrations should insert it from scripts and register BML-specific services through the public extension API.

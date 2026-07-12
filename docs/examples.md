@@ -89,7 +89,8 @@ void Start(const ScriptContext &in ctx) {
     dictionary request;
     request["source"] = ctx.Id();
 
-    AsyncTask<dictionary@>@ task = Message::Request(ctx, "runtime:service.clock", "clock.now", request, 120);
+    ScriptMessageTarget clock = Message::Runtime("service.clock");
+    AsyncTask<dictionary@>@ task = Message::Request(ctx, clock, "clock.now", request, 120);
     dictionary@ response;
     Await(task, @response);
     if (response !is null) {

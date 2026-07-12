@@ -1,16 +1,18 @@
 # Messaging
 
-The `Message` namespace connects runtime entries and AngelScript Components through the shared `ScriptMessage` type.
+The `Message` namespace connects runtime entries and AngelScript Components through `ScriptMessage` and the typed `ScriptMessageTarget` value.
 
 ## Targets and Topics
 
 Use topics for event names, and targets for directed messages.
 
-| Target form | Meaning |
+| Target value | Meaning |
 | --- | --- |
-| `""` | Broadcast/publish according to topic subscriptions. |
-| `runtime:<script-id>` | A runtime entry instance. |
-| `component:<CK_ID>` | A component behavior instance. |
+| No target argument | Broadcast/publish according to topic subscriptions. |
+| `Message::Runtime("script-id")` | A runtime entry instance. |
+| `Message::Component(ctx, behaviorId)` | The current generation of an AngelScript Component behavior. |
+
+`ScriptMessageTarget` is a copied value. `IsValid()`, `Kind()`, and `ToString()` are available for validation and diagnostics. Component targets capture the component state's generation; deleting and recreating a component with the same `CK_ID` makes the old target stale.
 
 Topic names should be stable strings such as `game.ready`, `ui.changed`, or `clock.now`.
 
@@ -39,16 +41,22 @@ dictionary payload;
 payload["scene"] = "Menu";
 
 Message::Publish(ctx, "game.ready", payload);
-Message::Send(ctx, "runtime:hud.runtime", "ui.changed", payload);
+ScriptMessageTarget hud = Message::Runtime("hud.runtime");
+Message::Send(ctx, hud, "ui.changed", payload);
 ```
 
 Both `ScriptContext` and `CKBehaviorContext` overloads are registered:
 
 ```angelscript
-bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = "")
-bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null, const string &in target = "")
-bool Send(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)
-bool Send(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)
+ScriptMessageTarget Runtime(const string &in id)
+ScriptMessageTarget Component(const ScriptContext &in ctx, CK_ID id)
+ScriptMessageTarget Component(const CKBehaviorContext &in ctx, CK_ID id)
+bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload = null)
+bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null)
+bool Publish(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
+bool Publish(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
+bool Send(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
+bool Send(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
 ```
 
 ## Request and Reply
@@ -56,7 +64,8 @@ bool Send(const CKBehaviorContext &in ctx, const string &in target, const string
 `Request` returns `AsyncTask<dictionary@>@`. The responder calls `Reply` or `Reject`.
 
 ```angelscript
-AsyncTask<dictionary@>@ task = Message::Request(ctx, "runtime:service.clock", "clock.now", null, 300);
+ScriptMessageTarget clock = Message::Runtime("service.clock");
+AsyncTask<dictionary@>@ task = Message::Request(ctx, clock, "clock.now", null, 300);
 dictionary@ response;
 Await(task, @response);
 ```
@@ -91,5 +100,6 @@ Messages are processed by the manager during runtime ticks. Do not assume a publ
 
 - `Publish`/`Send` return `false` when the manager cannot accept the message.
 - Directed sends fail when the target cannot be resolved.
+- Component sends fail when the captured target generation is stale.
 - Requests can fail or time out; inspect the task state and `Error()`.
 - A receiver can reject a request explicitly with `Message::Reject`.

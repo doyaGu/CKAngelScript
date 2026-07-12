@@ -64,7 +64,7 @@ deep `../../../` paths.
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Stable runtime id. Other scripts address it as `runtime:<id>`. |
+| `id` | Stable runtime id. Other scripts construct its target with `Message::Runtime(id)`. |
 | `name` | Display name for diagnostics and `RuntimeScriptInfo`. |
 | `version` | Version text used for inspection and dependency checks. |
 | `host` | `runtime` or `executor`. Usually implied by `[runtime]` or `[executor]`. |
@@ -148,7 +148,7 @@ array<RuntimeDependencyInfo>@ Runtime::RequiredDependencies(const ScriptContext 
 array<RuntimeDependencyInfo>@ Runtime::OptionalDependencies(const ScriptContext &in ctx, const string &in id)
 ```
 
-Use the generic `Message` namespace for script communication. Runtime entries can subscribe with `[runtime.messages]` or `Message::Subscribe(ctx, topic)`, publish with `Message::Publish(ctx, topic, payload)`, send directly with `Message::Send(ctx, "runtime:other", topic, payload)`, and reply to requests with `Message::Reply(ctx, msg, payload)`. AngelScript Components use the same `ScriptMessage` type with `CKBehaviorContext`.
+Use the generic `Message` namespace for script communication. Runtime entries can subscribe with `[runtime.messages]` or `Message::Subscribe(ctx, topic)`, publish with `Message::Publish(ctx, topic, payload)`, send directly with `Message::Send(ctx, Message::Runtime("other"), topic, payload)`, and reply to requests with `Message::Reply(ctx, msg, payload)`. AngelScript Components use the same `ScriptMessage` and `ScriptMessageTarget` values with `CKBehaviorContext`.
 
 Use the `Scene` namespace for high-level Virtools object interop. `ObjectRef@` and precise typed refs revalidate object ids before each access, and `Scene::*` overloads accept `ScriptContext`, `CKBehaviorContext`, or `CKContext@`. See [scene-interop.md](scene-interop.md) for lookup, creation, scene membership, selection, and guarded destruction helpers.
 
@@ -180,7 +180,7 @@ If a script is not discovered, confirm that the root points to a `Scripts` direc
 
 ## Best Practices
 
-- Use stable ids; other scripts address you as `runtime:<id>`.
+- Use stable ids; other scripts construct your target with `Message::Runtime(id)`.
 - Keep `script.as` small and put implementation code in included source files
   or in `entry`/`files` when a manifest-driven module layout is required.
 - Prefer package-root relative includes such as `Libs/foo.as` for shared source
