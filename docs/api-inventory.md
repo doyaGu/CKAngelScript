@@ -57,7 +57,7 @@ The global bucket includes raw SDK-style helpers and constructors, so new high-l
 | Behavior graph bridge | `Behavior::*`, `BehaviorRef`, `BehaviorGraph`, `BehaviorQuery`, `BehaviorNode`, `BehaviorLayout`, `BehaviorLinkRef`, `GraphTask` | Setup-time graph search, layout handles, target-parameter source preservation, graph traversal, synchronous `BehaviorRef.Step(ctx/frame, input)` execution of existing native BB instances, and graph task observation. |
 | Runtime BB bridge | `BB::*`, `BBPrototype`, `BBDecl`, `BBConfig`, `BBSlot`, `BBInstance`, `BBResult`, `BBTask`, `BBCallBuilder`, `BBTaskBuilder` | SDK-driven BB discovery, runtime BB spawning/stepping, live pin/settings updates, name-based one-shot calls, and `BehaviorFrame@` overloads for common config/instance operations. |
 | Parameters | `Param::*`, `ParamRef`, `ParamValue`, `ParamStructValue`, `ParamTypeInfo`, `ParamEnumInfo`, `ParamFlagsInfo`, `ParamStructInfo`, `ParamOp`, `ParamSourceLinkRef` | Generic parameter conversion and metadata backed by `CKParameterManager`. |
-| Messaging | `Message::*`, `ScriptMessage`, `ScriptMessageTarget` | Topic publish/subscribe, typed directed sends, generation-checked component targets, and request/reply over `AsyncTask<dictionary@>`. |
+| Messaging | `Message::*`, `ScriptMessage`, `ScriptMessageTarget` | Topic publish/subscribe, typed directed sends, compatible string-target adapters, generation-checked component targets, and request/reply over `AsyncTask<dictionary@>`. |
 | Async | `Async::*`, `AsyncTask<T>`, `Await`, `Async*Func` funcdefs | Scheduler-backed suspension, not OS threads. |
 | Native/FFI | `NativePointer`, `NativeBuffer`, DynLoad/DynCall/DynCallback types | Advanced interop; signatures and ownership must be treated as unsafe native code. |
 

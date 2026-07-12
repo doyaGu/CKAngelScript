@@ -14,7 +14,7 @@ Use topics for event names, and targets for directed messages.
 
 `ScriptMessageTarget` is a copied value. `IsValid()`, `Kind()`, and `ToString()` are available for validation and diagnostics. Component targets capture the component state's generation; deleting and recreating a component with the same `CK_ID` makes the old target stale.
 
-The former string-target `Publish`, `Send`, and `Request` overloads are removed. Construct a target once and pass the value to directed calls. `ScriptMessage.Target()` now returns `ScriptMessageTarget`; use `msg.Target().ToString()` when text is needed for logging.
+String-target `Publish`, `Send`, and `Request` overloads remain available for existing scripts and native text adapters. New code should construct a typed target when it needs generation-safe Component identity. `ScriptMessage.Target()` returns `ScriptMessageTarget`; use `msg.Target().ToString()` when text is needed for logging.
 
 Topic names should be stable strings such as `game.ready`, `ui.changed`, or `clock.now`.
 
@@ -57,8 +57,18 @@ bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ pa
 bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null)
 bool Publish(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
 bool Publish(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
+bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload, const string &in target)
+bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload, const string &in target)
 bool Send(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
 bool Send(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
+bool Send(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)
+bool Send(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)
+```
+
+Compatibility form:
+
+```angelscript
+Message::Send(ctx, "runtime:hud.runtime", "ui.changed", payload);
 ```
 
 ## Request and Reply
@@ -70,6 +80,12 @@ ScriptMessageTarget clock = Message::Runtime("service.clock");
 AsyncTask<dictionary@>@ task = Message::Request(ctx, clock, "clock.now", null, 300);
 dictionary@ response;
 Await(task, @response);
+```
+
+The equivalent string-target request remains valid:
+
+```angelscript
+AsyncTask<dictionary@>@ task = Message::Request(ctx, "runtime:service.clock", "clock.now", null, 300);
 ```
 
 Responder:

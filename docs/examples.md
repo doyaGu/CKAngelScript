@@ -99,6 +99,13 @@ void Start(const ScriptContext &in ctx) {
 }
 ```
 
+Existing scripts may keep the string-target form:
+
+```angelscript
+AsyncTask<dictionary@>@ task = Message::Request(
+    ctx, "runtime:service.clock", "clock.now", request, 120);
+```
+
 ## Async: Delay and Spawn
 
 ```angelscript
