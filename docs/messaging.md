@@ -14,6 +14,8 @@ Use topics for event names, and targets for directed messages.
 
 `ScriptMessageTarget` is a copied value. `IsValid()`, `Kind()`, and `ToString()` are available for validation and diagnostics. Component targets capture the component state's generation; deleting and recreating a component with the same `CK_ID` makes the old target stale.
 
+The former string-target `Publish`, `Send`, and `Request` overloads are removed. Construct a target once and pass the value to directed calls. `ScriptMessage.Target()` now returns `ScriptMessageTarget`; use `msg.Target().ToString()` when text is needed for logging.
+
 Topic names should be stable strings such as `game.ready`, `ui.changed`, or `clock.now`.
 
 ## Registering Interest
@@ -101,5 +103,6 @@ Messages are processed by the manager during runtime ticks. Do not assume a publ
 - `Publish`/`Send` return `false` when the manager cannot accept the message.
 - Directed sends fail when the target cannot be resolved.
 - Component sends fail when the captured target generation is stale.
+- `Message::Component(ctx, id)` raises a script exception when no Component state currently owns that id.
 - Requests can fail or time out; inspect the task state and `Error()`.
 - A receiver can reject a request explicitly with `Message::Reject`.
