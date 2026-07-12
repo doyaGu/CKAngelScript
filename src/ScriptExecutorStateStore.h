@@ -25,7 +25,7 @@ public:
                                      ScriptManager *manager,
                                      const StateCallback &beforeReplace);
     ScriptExecutorState *Get(CK_ID id, CKBehavior *expectedBehavior = nullptr) const;
-    void Remove(CK_ID id, const StateCallback &beforeRemove);
+    bool Remove(CK_ID id, CKBehavior *expectedBehavior, const StateCallback &beforeRemove);
     void ReleaseModule(const std::string &moduleName, const StateCallback &beforeRemove);
     void Clear(const StateCallback &beforeRemove);
 

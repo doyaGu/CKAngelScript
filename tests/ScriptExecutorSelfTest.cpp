@@ -1,5 +1,6 @@
 #include "ScriptSelfTests.h"
 
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -550,7 +551,12 @@ bool RunExecutorStateStoreIsolationSelfTest(CKContext *context,
               first.Get(behavior->GetID(), behavior) == firstState &&
               second.Get(behavior->GetID(), behavior) == secondState;
     int removals = 0;
-    first.Remove(behavior->GetID(), [&removals](CK_ID, ScriptExecutorState *) {
+    CKBehavior *foreignBehavior = reinterpret_cast<CKBehavior *>(static_cast<std::uintptr_t>(1));
+    ok = ok && !first.Remove(behavior->GetID(), foreignBehavior, [&removals](CK_ID, ScriptExecutorState *) {
+        ++removals;
+    });
+    ok = ok && first.Get(behavior->GetID(), behavior) == firstState && removals == 0;
+    ok = ok && first.Remove(behavior->GetID(), behavior, [&removals](CK_ID, ScriptExecutorState *) {
         ++removals;
     });
     ok = ok && removals == 1 && first.Get(behavior->GetID()) == nullptr &&

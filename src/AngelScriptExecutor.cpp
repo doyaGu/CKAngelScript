@@ -1069,6 +1069,7 @@ void ScriptManager::ReleaseExecutorState(CKBehavior *behavior) {
     }
     m_ExecutorStates.Remove(
         behavior->GetID(),
+        behavior,
         [this](CK_ID, ScriptExecutorState *state) {
             ReleaseStateContents(ExecutorContext(this, state), state);
         });

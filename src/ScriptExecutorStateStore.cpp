@@ -54,15 +54,19 @@ ScriptExecutorState *ScriptExecutorStateStore::Get(CK_ID id, CKBehavior *expecte
     return it->second.get();
 }
 
-void ScriptExecutorStateStore::Remove(CK_ID id, const StateCallback &beforeRemove) {
+bool ScriptExecutorStateStore::Remove(CK_ID id,
+                                      CKBehavior *expectedBehavior,
+                                      const StateCallback &beforeRemove) {
     auto it = m_Impl->States.find(id);
-    if (it == m_Impl->States.end()) {
-        return;
+    if (it == m_Impl->States.end() ||
+        (expectedBehavior && it->second->Behavior != expectedBehavior)) {
+        return false;
     }
     if (beforeRemove) {
         beforeRemove(id, it->second.get());
     }
     m_Impl->States.erase(it);
+    return true;
 }
 
 void ScriptExecutorStateStore::ReleaseModule(const std::string &moduleName,
