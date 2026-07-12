@@ -79,10 +79,16 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "bool Publish(const CKBehaviorContext&in, const string&in, dictionary@)",
         "bool Publish(const ScriptContext&in, const ScriptMessageTarget&in, const string&in, dictionary@)",
         "bool Publish(const CKBehaviorContext&in, const ScriptMessageTarget&in, const string&in, dictionary@)",
+        "bool Publish(const ScriptContext&in, const string&in, dictionary@, const string&in)",
+        "bool Publish(const CKBehaviorContext&in, const string&in, dictionary@, const string&in)",
         "bool Send(const ScriptContext&in, const ScriptMessageTarget&in, const string&in, dictionary@)",
         "bool Send(const CKBehaviorContext&in, const ScriptMessageTarget&in, const string&in, dictionary@)",
+        "bool Send(const ScriptContext&in, const string&in, const string&in, dictionary@)",
+        "bool Send(const CKBehaviorContext&in, const string&in, const string&in, dictionary@)",
         "AsyncTask<dictionary@>@ Request(const ScriptContext&in, const ScriptMessageTarget&in, const string&in, dictionary@, int)",
         "AsyncTask<dictionary@>@ Request(const CKBehaviorContext&in, const ScriptMessageTarget&in, const string&in, dictionary@, int)",
+        "AsyncTask<dictionary@>@ Request(const ScriptContext&in, const string&in, const string&in, dictionary@, int)",
+        "AsyncTask<dictionary@>@ Request(const CKBehaviorContext&in, const string&in, const string&in, dictionary@, int)",
         "bool Subscribe(const ScriptContext&in, const string&in)",
         "bool Subscribe(const CKBehaviorContext&in, const string&in)",
         "bool Unsubscribe(const ScriptContext&in, const string&in)",
@@ -94,14 +100,6 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
             error = std::string("Message self-test could not resolve declaration: ") + decl;
             return false;
         }
-    }
-    if (engine->GetGlobalFunctionByDecl(
-            "bool Send(const ScriptContext&in, const string&in, const string&in, dictionary@)") ||
-        engine->GetGlobalFunctionByDecl(
-            "AsyncTask<dictionary@>@ Request(const CKBehaviorContext&in, const string&in, const string&in, dictionary@, int)")) {
-        engine->SetDefaultNamespace(restoreNamespace.c_str());
-        error = "Message self-test found removed string target declarations.";
-        return false;
     }
     engine->SetDefaultNamespace(restoreNamespace.c_str());
 
@@ -134,6 +132,16 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  if (!copiedPayload.get(\"text\", copiedText) || copiedText != \"hello\") return 8;\n"
         "  if (!assignedPayload.get(\"text\", assignedText) || assignedText != \"hello\") return 9;\n"
         "  return 0;\n"
+        "}\n"
+        "void __ckas_message_string_runtime(const ScriptContext &in ctx) {\n"
+        "  Message::Publish(ctx, \"compat.topic\", null, \"runtime:compat\");\n"
+        "  Message::Send(ctx, \"runtime:compat\", \"compat.topic\", null);\n"
+        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, \"runtime:compat\", \"compat.topic\", null, 1);\n"
+        "}\n"
+        "void __ckas_message_string_behavior(const CKBehaviorContext &in ctx) {\n"
+        "  Message::Publish(ctx, \"compat.topic\", null, \"component:1\");\n"
+        "  Message::Send(ctx, \"component:1\", \"compat.topic\", null);\n"
+        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, \"component:1\", \"compat.topic\", null, 1);\n"
         "}\n";
 
     CKAngelScriptResult compileResult = {};

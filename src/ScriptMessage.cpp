@@ -146,6 +146,34 @@ bool PublishTargetBehavior(const CKBehaviorContext &ctx,
     return ok;
 }
 
+bool PublishStringRuntime(const ScriptContext &ctx,
+                          const std::string &topic,
+                          CScriptDictionary *payload,
+                          const std::string &target) {
+    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
+    std::string error;
+    const bool ok = manager && manager->GetMessageBus() &&
+        manager->GetMessageBus()->Publish(SourceFromRuntimeContext(ctx), topic, payload, target, error);
+    if (!ok) {
+        RaiseRuntimeError(ctx, error.empty() ? "Message::Publish failed." : error);
+    }
+    return ok;
+}
+
+bool PublishStringBehavior(const CKBehaviorContext &ctx,
+                           const std::string &topic,
+                           CScriptDictionary *payload,
+                           const std::string &target) {
+    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
+    std::string error;
+    const bool ok = manager && manager->GetMessageBus() &&
+        manager->GetMessageBus()->Publish(SourceFromBehaviorContext(ctx), topic, payload, target, error);
+    if (!ok) {
+        RaiseBehaviorError(ctx, error.empty() ? "Message::Publish failed." : error);
+    }
+    return ok;
+}
+
 bool SendRuntime(const ScriptContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
     ScriptManager *manager = ManagerFromRuntimeContext(ctx);
     std::string error;
@@ -158,6 +186,28 @@ bool SendRuntime(const ScriptContext &ctx, const ScriptMessageTarget &target, co
 }
 
 bool SendBehavior(const CKBehaviorContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
+    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
+    std::string error;
+    const bool ok = manager && manager->GetMessageBus() &&
+        manager->GetMessageBus()->Send(SourceFromBehaviorContext(ctx), target, topic, payload, error);
+    if (!ok) {
+        RaiseBehaviorError(ctx, error.empty() ? "Message::Send failed." : error);
+    }
+    return ok;
+}
+
+bool SendStringRuntime(const ScriptContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
+    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
+    std::string error;
+    const bool ok = manager && manager->GetMessageBus() &&
+        manager->GetMessageBus()->Send(SourceFromRuntimeContext(ctx), target, topic, payload, error);
+    if (!ok) {
+        RaiseRuntimeError(ctx, error.empty() ? "Message::Send failed." : error);
+    }
+    return ok;
+}
+
+bool SendStringBehavior(const CKBehaviorContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
     ScriptManager *manager = ManagerFromBehaviorContext(ctx);
     std::string error;
     const bool ok = manager && manager->GetMessageBus() &&
@@ -189,6 +239,38 @@ ScriptAsyncTaskBase *RequestBehavior(const CKBehaviorContext &ctx,
                                      const std::string &topic,
                                      CScriptDictionary *payload,
                                      int timeoutFrames) {
+    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
+    std::string error;
+    ScriptAsyncTaskBase *task = manager && manager->GetMessageBus()
+        ? manager->GetMessageBus()->Request(SourceFromBehaviorContext(ctx), target, topic, payload, timeoutFrames, error)
+        : nullptr;
+    if (!task) {
+        RaiseBehaviorError(ctx, error.empty() ? "Message::Request failed." : error);
+    }
+    return task;
+}
+
+ScriptAsyncTaskBase *RequestStringRuntime(const ScriptContext &ctx,
+                                          const std::string &target,
+                                          const std::string &topic,
+                                          CScriptDictionary *payload,
+                                          int timeoutFrames) {
+    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
+    std::string error;
+    ScriptAsyncTaskBase *task = manager && manager->GetMessageBus()
+        ? manager->GetMessageBus()->Request(SourceFromRuntimeContext(ctx), target, topic, payload, timeoutFrames, error)
+        : nullptr;
+    if (!task) {
+        RaiseRuntimeError(ctx, error.empty() ? "Message::Request failed." : error);
+    }
+    return task;
+}
+
+ScriptAsyncTaskBase *RequestStringBehavior(const CKBehaviorContext &ctx,
+                                           const std::string &target,
+                                           const std::string &topic,
+                                           CScriptDictionary *payload,
+                                           int timeoutFrames) {
     ScriptManager *manager = ManagerFromBehaviorContext(ctx);
     std::string error;
     ScriptAsyncTaskBase *task = manager && manager->GetMessageBus()
@@ -996,10 +1078,16 @@ void RegisterScriptMessage(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishTargetRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishTargetBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload, const string &in target)", asFUNCTION(PublishStringRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload, const string &in target)", asFUNCTION(PublishStringBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Send(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Send(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Send(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendStringRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Send(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendStringBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestStringRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestStringBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Reply(const ScriptContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Reply(const CKBehaviorContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Reject(const ScriptContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
