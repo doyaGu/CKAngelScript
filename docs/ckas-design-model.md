@@ -273,8 +273,10 @@ layout:
 ### Messaging
 
 The `Message` namespace connects runtime entries and components with
-`ScriptMessage`. Targets are `runtime:<id>` and `component:<CK_ID>`. Topic
-publish and directed send are shared between `ScriptContext` and
+`ScriptMessage`. Directed calls use `ScriptMessageTarget` values built by
+`Message::Runtime(id)` or `Message::Component(ctx, behaviorId)`; component
+targets capture a generation so CK ID reuse cannot redirect an old target.
+Topic publish and directed send are shared between `ScriptContext` and
 `CKBehaviorContext`.
 
 Messages are queued/ticked by the manager. Use messages for service-level

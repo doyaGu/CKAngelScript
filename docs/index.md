@@ -47,7 +47,7 @@ This manual is written for AngelScript authors using CKAngelScript inside Virtoo
 | Components | `AngelScript Component`, `CKBehaviorContext` | One script class instance per behavior |
 | Scene interop | `Scene`, `ObjectRef@` | Runtime entries and components |
 | Behavior graph interop | `Behavior`, `BB`, `Param` | Runtime entries and components |
-| Messaging | `Message`, `ScriptMessage` | Runtime entries and components |
+| Messaging | `Message`, `ScriptMessage`, `ScriptMessageTarget` | Runtime entries and components |
 | Async work | `Async`, `AsyncTask<T>` | Any script running through the CKAngelScript scheduler |
 | Native memory | `NativePointer`, `NativeBuffer` | Advanced SDK/FFI work |
 | Native calls | DynCall/DynLoad/DynCallback helpers | Advanced external library calls |
