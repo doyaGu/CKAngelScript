@@ -161,8 +161,16 @@ void ScriptManager::ClearComponentStates() {
     });
 }
 
-bool ScriptManager::DeliverComponentMessage(CK_ID id, const ScriptMessage &message, bool immediate, std::string &error) {
+bool ScriptManager::DeliverComponentMessage(CK_ID id,
+                                            std::uint64_t generation,
+                                            const ScriptMessage &message,
+                                            bool immediate,
+                                            std::string &error) {
     ScriptComponentState *state = GetComponentState(id);
+    if (state && generation != state->MessageGeneration) {
+        error = "Component message target is stale.";
+        return false;
+    }
     if (!state || !state->Loaded || state->Failed || !state->InstanceEnabled || !state->Object || !state->Invoker || !state->OnMessage) {
         error = "Component message target is not ready.";
         return false;

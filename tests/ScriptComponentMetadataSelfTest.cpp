@@ -321,7 +321,11 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
                           false,
                           nullptr);
     std::string messageError;
-    if (!manager->DeliverComponentMessage(behavior->GetID(), message, true, messageError)) {
+    if (!manager->DeliverComponentMessage(behavior->GetID(),
+                                          state->MessageGeneration,
+                                          message,
+                                          true,
+                                          messageError)) {
         cleanup();
         error = messageError.empty()
             ? "Component runtime self-test message delivery failed."

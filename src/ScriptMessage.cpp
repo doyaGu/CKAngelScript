@@ -839,7 +839,12 @@ bool ScriptMessageBus::DeliverTarget(const ScriptMessageTarget &target, const Sc
             m_Manager->GetRuntime()->DeliverMessage(target.RuntimeId, message, immediate, error);
     }
     if (target.Kind == ScriptMessageTargetKind::Component) {
-        return m_Manager && m_Manager->DeliverComponentMessage(target.ComponentId, message, immediate, error);
+        return m_Manager && m_Manager->DeliverComponentMessage(
+            target.ComponentId,
+            target.ComponentGeneration,
+            message,
+            immediate,
+            error);
     }
     error = "Unsupported message target: " + target.Text;
     return false;

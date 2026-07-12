@@ -2,6 +2,7 @@
 #define CK_SCRIPTMANAGER_H
 
 #include <memory>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -240,7 +241,11 @@ public:
     void ReleaseComponentState(CKBehavior *behavior);
     void ReleaseComponentState(CK_ID id);
     void ClearComponentStates();
-    bool DeliverComponentMessage(CK_ID id, const ScriptMessage &message, bool immediate, std::string &error);
+    bool DeliverComponentMessage(CK_ID id,
+                                 std::uint64_t generation,
+                                 const ScriptMessage &message,
+                                 bool immediate,
+                                 std::string &error);
 
     ScriptExecutorState *GetOrCreateExecutorState(CKBehavior *behavior);
     ScriptExecutorState *GetExecutorState(CK_ID id, CKBehavior *expectedBehavior = nullptr) const;

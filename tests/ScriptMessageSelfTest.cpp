@@ -5,6 +5,7 @@
 #include "CKAll.h"
 #include "CKAngelScript.h"
 #include "ScriptMessage.h"
+#include "ScriptComponentState.h"
 #include "ScriptManager.h"
 #include "add_on/scriptdictionary/scriptdictionary.h"
 
@@ -228,6 +229,39 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         error = "Message self-test could not create wait behavior output.";
         return false;
     }
+
+    ScriptComponentState *firstComponentState = manager->GetOrCreateComponentState(waitBehavior);
+    if (!firstComponentState || firstComponentState->MessageGeneration == 0) {
+        context->DestroyObject(waitBehavior);
+        context->DestroyObject(waitTarget);
+        error = "Message self-test could not create a generated Component target.";
+        return false;
+    }
+    const std::uint64_t staleGeneration = firstComponentState->MessageGeneration;
+    manager->ReleaseComponentState(waitBehavior);
+    ScriptComponentState *replacementComponentState = manager->GetOrCreateComponentState(waitBehavior);
+    if (!replacementComponentState || replacementComponentState->MessageGeneration == staleGeneration) {
+        manager->ReleaseComponentState(waitBehavior);
+        context->DestroyObject(waitBehavior);
+        context->DestroyObject(waitTarget);
+        error = "Message self-test reused a Component message generation.";
+        return false;
+    }
+    ScriptMessage staleComponentMessage;
+    std::string staleTargetError;
+    if (manager->DeliverComponentMessage(waitBehavior->GetID(),
+                                         staleGeneration,
+                                         staleComponentMessage,
+                                         true,
+                                         staleTargetError) ||
+        staleTargetError != "Component message target is stale.") {
+        manager->ReleaseComponentState(waitBehavior);
+        context->DestroyObject(waitBehavior);
+        context->DestroyObject(waitTarget);
+        error = "Message self-test did not reject a stale Component target.";
+        return false;
+    }
+    manager->ReleaseComponentState(waitBehavior);
 
     const char *waitModuleName = "__CKAS_MessageWaitSelfTest";
     const char *waitSource =
