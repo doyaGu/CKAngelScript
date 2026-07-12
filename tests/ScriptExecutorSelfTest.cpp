@@ -14,6 +14,7 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
+#include "ScriptExecutorStateStore.h"
 
 namespace {
 
@@ -529,6 +530,39 @@ int ExecuteExecutorSelfTestBehavior(CKContext *context, CKBehavior *behavior, co
 #endif
 }
 
+bool RunExecutorStateStoreIsolationSelfTest(CKContext *context,
+                                            ScriptManager *manager,
+                                            std::string &error) {
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ExecutorStateStoreIsolation"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!behavior) {
+        error = "Executor state store self-test could not create a behavior.";
+        return false;
+    }
+
+    ScriptExecutorStateStore first;
+    ScriptExecutorStateStore second;
+    ScriptExecutorState *firstState = first.GetOrCreate(behavior, manager, {});
+    ScriptExecutorState *secondState = second.GetOrCreate(behavior, manager, {});
+    bool ok = firstState && secondState && firstState != secondState &&
+              first.Get(behavior->GetID(), behavior) == firstState &&
+              second.Get(behavior->GetID(), behavior) == secondState;
+    int removals = 0;
+    first.Remove(behavior->GetID(), [&removals](CK_ID, ScriptExecutorState *) {
+        ++removals;
+    });
+    ok = ok && removals == 1 && first.Get(behavior->GetID()) == nullptr &&
+         second.Get(behavior->GetID(), behavior) == secondState;
+    second.Clear({});
+    DestroyExecutorSelfTestObject(context, behavior);
+    if (!ok) {
+        error = "Executor state stores did not isolate ownership.";
+    }
+    return ok;
+}
+
 } // namespace
 
 bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -540,6 +574,9 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
     ScriptManager *manager = ScriptManager::GetManager(context);
     if (!manager) {
         error = "Executor self-test could not retrieve ScriptManager.";
+        return false;
+    }
+    if (!RunExecutorStateStoreIsolationSelfTest(context, manager, error)) {
         return false;
     }
     ScriptBehaviorBridge *bridge = manager->GetBehaviorBridge();
