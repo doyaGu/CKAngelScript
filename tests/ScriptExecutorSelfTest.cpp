@@ -15,6 +15,7 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
+#include "ScriptExecutorState.h"
 #include "ScriptExecutorStateStore.h"
 
 namespace {
@@ -561,7 +562,22 @@ bool RunExecutorStateStoreIsolationSelfTest(CKContext *context,
     });
     ok = ok && removals == 1 && first.Get(behavior->GetID()) == nullptr &&
          second.Get(behavior->GetID(), behavior) == secondState;
-    second.Clear({});
+    secondState->ModuleName = "__CKAS_ExecutorStateStoreIsolation";
+    int moduleReleases = 0;
+    second.ReleaseModule("__CKAS_OtherModule", [&moduleReleases](CK_ID, ScriptExecutorState *) {
+        ++moduleReleases;
+    });
+    ok = ok && moduleReleases == 0 && second.Get(behavior->GetID(), behavior) == secondState;
+    second.ReleaseModule("__CKAS_ExecutorStateStoreIsolation", [&moduleReleases](CK_ID, ScriptExecutorState *) {
+        ++moduleReleases;
+    });
+    ok = ok && moduleReleases == 1 && second.Get(behavior->GetID()) == nullptr;
+    secondState = second.GetOrCreate(behavior, manager, {});
+    int clearReleases = 0;
+    second.Clear([&clearReleases](CK_ID, ScriptExecutorState *) {
+        ++clearReleases;
+    });
+    ok = ok && secondState && clearReleases == 1 && second.Get(behavior->GetID()) == nullptr;
     DestroyExecutorSelfTestObject(context, behavior);
     if (!ok) {
         error = "Executor state stores did not isolate ownership.";
@@ -880,6 +896,24 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         if (executeAndReadVersion() != 1) {
             cleanupReloadBehavior();
             error = "Executor reload self-test did not execute generation 1.";
+            return false;
+        }
+        if (!WriteExecutorSelfTestFile(reloadPackageDir / "runtime.as",
+                                       "class ExecutorReloadProbe { this is not valid AngelScript; }\n",
+                                       error)) {
+            cleanupReloadBehavior();
+            return false;
+        }
+        reloadError.clear();
+        if (manager->GetRuntime()->Reload(reloadScriptId, &reloadError) || reloadError.empty()) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test expected invalid generation 2 to fail.";
+            return false;
+        }
+        if (manager->GetExecutorState(reloadBehavior->GetID(), reloadBehavior) == nullptr ||
+            executeAndReadVersion() != 1) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test discarded generation 1 after a failed replacement.";
             return false;
         }
         if (!WriteExecutorSelfTestFile(reloadPackageDir / "runtime.as", reloadSourceV2, error) ||
@@ -1476,25 +1510,31 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         return false;
     }
 
-    if (CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &behaviorContext) != CK_OK) {
+    if (CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDETACH, &behaviorContext) != CK_OK) {
         cleanup();
-        error = "Executor self-test DELETE callback failed.";
+        error = "Executor self-test DETACH callback failed.";
         return false;
     }
-    deleteCallbackSent = false;
     scratchValue = 0;
     mappedValue = 0;
     if (!scratchParam || scratchParam->GetValue(&scratchValue) != CK_OK || scratchValue != 901 ||
         !mappedParam || mappedParam->GetValue(&mappedValue) != CK_OK || mappedValue != 902) {
         cleanup();
-        error = "Executor self-test OnDestroy lost its logical local interface.";
+        error = "Executor self-test DETACH OnDestroy lost its logical local interface.";
         return false;
     }
-    if (bridge->HasFrameLocalInterface(behavior->GetID())) {
+    if (bridge->HasFrameLocalInterface(behavior->GetID()) ||
+        manager->GetExecutorState(behavior->GetID(), behavior)) {
         cleanup();
-        error = "Executor self-test did not clear its logical local interface after OnDestroy.";
+        error = "Executor self-test did not release its state after DETACH.";
         return false;
     }
+    if (CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &behaviorContext) != CK_OK) {
+        cleanup();
+        error = "Executor self-test DELETE after DETACH was not idempotent.";
+        return false;
+    }
+    deleteCallbackSent = false;
 
     cleanup();
     error.clear();

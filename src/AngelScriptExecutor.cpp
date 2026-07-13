@@ -1317,6 +1317,7 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
             }
             break;
         }
+        case CKM_BEHAVIORDETACH:
         case CKM_BEHAVIORDELETE: {
             ScriptExecutorState *state = GetState(behavior);
             if (state) {
