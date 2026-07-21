@@ -1253,11 +1253,11 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
     switch (behcontext.CallbackMessage) {
         case CKM_BEHAVIORCREATE:
         case CKM_BEHAVIORLOAD: {
-            if (!GetState(behavior)) {
-                ScriptManager *manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
-                if (manager) {
-                    manager->GetOrCreateExecutorState(behavior);
-                }
+            ScriptManager *manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
+            if (manager) {
+                manager->GetOrCreateExecutorState(behavior);
+            } else {
+                SetState(behavior, nullptr);
             }
             std::string error;
             if (!ApplyInterface(behcontext,

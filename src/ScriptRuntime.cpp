@@ -1020,7 +1020,7 @@ RuntimeScriptInfo ScriptRuntime::Info(const std::string &id) const {
 std::string ScriptRuntime::ModuleName(const std::string &id) {
     EnsureScanned();
     Module *module = FindModule(id);
-    if (!module || !module->Loaded || module->Failed || module->ModuleName.empty()) {
+    if (!module || !module->Loaded || module->Failed || !module->Enabled || module->ModuleName.empty()) {
         return std::string();
     }
     return module->ModuleName;
@@ -1705,6 +1705,9 @@ bool ScriptRuntime::DisableModule(Module &module) {
     if (!UsesRuntimeLifecycle(module.Meta)) {
         module.Enabled = false;
         module.PendingDisable = false;
+        if (m_Manager && !module.ModuleName.empty()) {
+            m_Manager->ReleaseExecutorStatesForModule(module.ModuleName.c_str());
+        }
         return true;
     }
     if (m_Manager && m_Manager->GetMessageBus()) {

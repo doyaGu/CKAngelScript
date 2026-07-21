@@ -585,6 +585,71 @@ bool RunExecutorStateStoreIsolationSelfTest(CKContext *context,
     return ok;
 }
 
+bool RunExecutorCreateStateRebindSelfTest(CKContext *context,
+                                          ScriptManager *manager,
+                                          std::string &error) {
+    CKBehavior *source = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ExecutorStateRebindSource"),
+        CK_OBJECTCREATION_DYNAMIC));
+    CKBehavior *target = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ExecutorStateRebindTarget"),
+        CK_OBJECTCREATION_DYNAMIC));
+    auto cleanup = [&]() {
+        ScriptExecutorState *nullState = nullptr;
+        if (target && target->GetLocalParameterCount() > 0) {
+            target->SetLocalParameterValue(0, &nullState);
+            manager->ReleaseExecutorState(target);
+        }
+        if (source && source->GetLocalParameterCount() > 0) {
+            source->SetLocalParameterValue(0, &nullState);
+            manager->ReleaseExecutorState(source);
+        }
+        DestroyExecutorSelfTestObject(context, target);
+        DestroyExecutorSelfTestObject(context, source);
+    };
+
+    if (!source || !target) {
+        cleanup();
+        error = "Executor state rebind self-test could not create its behaviors.";
+        return false;
+    }
+    source->UseFunction();
+    target->UseFunction();
+    const CKGUID executorGuid(0x15a41762, 0x0c7c4a91);
+    if (source->InitFromGuid(executorGuid) != CK_OK || target->InitFromGuid(executorGuid) != CK_OK) {
+        cleanup();
+        error = "Executor state rebind self-test could not initialize Executor behaviors.";
+        return false;
+    }
+
+    ScriptExecutorState *sourceState = manager->GetOrCreateExecutorState(source);
+    if (!sourceState || target->SetLocalParameterValue(0, &sourceState) != CK_OK) {
+        cleanup();
+        error = "Executor state rebind self-test could not install its foreign state pointer.";
+        return false;
+    }
+
+    CKBehaviorContext targetContext = MakeExecutorSelfTestContext(context, target);
+    if (CallBridgeBehaviorCallback(target, CKM_BEHAVIORCREATE, &targetContext) != CK_OK) {
+        cleanup();
+        error = "Executor state rebind self-test CREATE callback failed.";
+        return false;
+    }
+
+    ScriptExecutorState *boundState = nullptr;
+    target->GetLocalParameterValue(0, &boundState);
+    ScriptExecutorState *targetState = manager->GetExecutorState(target->GetID(), target);
+    const bool rebound = targetState && targetState != sourceState && boundState == targetState;
+    cleanup();
+    if (!rebound) {
+        error = "Executor CREATE callback retained a foreign behavior state pointer.";
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -599,6 +664,9 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         return false;
     }
     if (!RunExecutorStateStoreIsolationSelfTest(context, manager, error)) {
+        return false;
+    }
+    if (!RunExecutorCreateStateRebindSelfTest(context, manager, error)) {
         return false;
     }
     ScriptBehaviorBridge *bridge = manager->GetBehaviorBridge();
@@ -927,6 +995,41 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         if (executeAndReadVersion() != 2) {
             cleanupReloadBehavior();
             error = "Executor reload self-test kept executing the stale module generation.";
+            return false;
+        }
+        std::string enableError;
+        if (!manager->GetRuntime()->Enable(reloadScriptId, false, &enableError) ||
+            !manager->GetRuntime()->ModuleName(reloadScriptId).empty() ||
+            manager->GetExecutorState(reloadBehavior->GetID(), reloadBehavior) != nullptr) {
+            cleanupReloadBehavior();
+            error = enableError.empty()
+                ? "Executor reload self-test did not invalidate state when its entry was disabled."
+                : enableError;
+            return false;
+        }
+        CKParameterLocal *disabledVersion = reloadBehavior->GetLocalParameter(EXECUTOR_USER_LOCAL_START);
+        int resetVersion = 0;
+        if (!disabledVersion || disabledVersion->SetValue(&resetVersion) != CK_OK ||
+            executeAndReadVersion() != 0) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test executed a disabled entry.";
+            return false;
+        }
+        ScriptExecutorState *disabledState = manager->GetExecutorState(reloadBehavior->GetID(), reloadBehavior);
+        if (!disabledState || !disabledState->Failed || disabledState->Loaded ||
+            !disabledState->ModuleName.empty() || disabledState->Object) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test retained a live module while disabled.";
+            return false;
+        }
+        enableError.clear();
+        if (!manager->GetRuntime()->Enable(reloadScriptId, true, &enableError) ||
+            manager->GetRuntime()->ModuleName(reloadScriptId).empty() ||
+            executeAndReadVersion() != 2) {
+            cleanupReloadBehavior();
+            error = enableError.empty()
+                ? "Executor reload self-test did not recover after re-enabling its entry."
+                : enableError;
             return false;
         }
         cleanupReloadBehavior();
