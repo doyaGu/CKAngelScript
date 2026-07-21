@@ -125,6 +125,7 @@ struct SnapshotSection {
 struct BuildIncludeContext {
     std::unordered_map<std::string, SnapshotSection> Sections;
     std::vector<ScriptIncludeEdge> *IncludeEdges = nullptr;
+    std::string PackageRoot;
     bool UseSnapshotSections = false;
 };
 
@@ -151,7 +152,13 @@ int RecordingIncludeCallback(const char *include,
         return -1;
 
     if (!context->UseSnapshotSections) {
-        const std::string resolved = ScriptSourcePaths::ResolveFileIncludeName(include, from);
+        if (context->PackageRoot.empty()) {
+            context->PackageRoot = ScriptSourcePaths::DetectPackageRoot(from);
+        }
+        const std::string resolved = ScriptSourcePaths::ResolveFileIncludeName(
+            include,
+            from,
+            context->PackageRoot.c_str());
         const int r = builder->AddSectionFromFile(resolved.c_str());
         if (r < 0) {
             return r;

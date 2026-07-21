@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <filesystem>
 #include <system_error>
 #include <vector>
@@ -24,6 +25,19 @@ bool IsPackageRelativeInclude(const std::string &path) {
 bool IsRegularFile(const std::filesystem::path &path) {
     std::error_code ec;
     return std::filesystem::is_regular_file(path, ec);
+}
+
+bool EqualsIgnoreCase(const std::string &left, const char *right) {
+    if (!right || left.size() != std::strlen(right)) {
+        return false;
+    }
+    for (size_t i = 0; i < left.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(left[i])) !=
+            std::tolower(static_cast<unsigned char>(right[i]))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::string MakeBuilderAbsolutePath(std::string path) {
@@ -53,8 +67,10 @@ std::string MakeBuilderAbsolutePath(std::string path) {
     return path;
 }
 
-std::string ResolveAncestorIncludeName(const std::string &includeName, const char *from) {
-    if (!IsPackageRelativeInclude(includeName)) {
+std::string ResolveAncestorIncludeName(const std::string &includeName,
+                                       const char *from,
+                                       const char *packageRoot) {
+    if (!IsPackageRelativeInclude(includeName) || !packageRoot || packageRoot[0] == '\0') {
         return std::string();
     }
 
@@ -70,6 +86,20 @@ std::string ResolveAncestorIncludeName(const std::string &includeName, const cha
     }
 
     std::filesystem::path directory = basePath.has_filename() ? basePath.parent_path() : basePath;
+    const std::string normalizedRoot = NormalizeSectionName(MakeBuilderAbsolutePath(packageRoot));
+    std::string rootPrefix = normalizedRoot;
+    if (!rootPrefix.empty() && rootPrefix.back() != '/') {
+        rootPrefix.push_back('/');
+    }
+    const auto isInsidePackage = [&normalizedRoot, &rootPrefix](const std::filesystem::path &path) {
+        const std::string normalizedPath = NormalizeSectionName(MakeBuilderAbsolutePath(path.generic_string()));
+        return normalizedPath == normalizedRoot ||
+               (!rootPrefix.empty() && normalizedPath.compare(0, rootPrefix.size(), rootPrefix) == 0);
+    };
+    if (!isInsidePackage(directory)) {
+        return std::string();
+    }
+
     const std::filesystem::path includePath = std::filesystem::path(includeName);
     while (!directory.empty()) {
         const std::filesystem::path candidate = directory / includePath;
@@ -77,6 +107,9 @@ std::string ResolveAncestorIncludeName(const std::string &includeName, const cha
             return MakeBuilderAbsolutePath(candidate.generic_string());
         }
 
+        if (NormalizeSectionName(MakeBuilderAbsolutePath(directory.generic_string())) == normalizedRoot) {
+            break;
+        }
         const std::filesystem::path parent = directory.parent_path();
         if (parent == directory) {
             break;
@@ -161,7 +194,27 @@ std::string ResolveSnapshotIncludeName(const char *include, const char *from) {
     return NormalizeSectionName(includeName);
 }
 
-std::string ResolveFileIncludeName(const char *include, const char *from) {
+std::string DetectPackageRoot(const char *from) {
+    if (!from || from[0] == '\0') {
+        return std::string();
+    }
+
+    const std::filesystem::path sourcePath = MakeBuilderAbsolutePath(from);
+    std::filesystem::path directory = sourcePath.has_filename() ? sourcePath.parent_path() : sourcePath;
+    while (!directory.empty()) {
+        if (EqualsIgnoreCase(directory.filename().string(), "Scripts")) {
+            return MakeBuilderAbsolutePath(directory.parent_path().generic_string());
+        }
+        const std::filesystem::path parent = directory.parent_path();
+        if (parent == directory) {
+            break;
+        }
+        directory = parent;
+    }
+    return std::string();
+}
+
+std::string ResolveFileIncludeName(const char *include, const char *from, const char *packageRoot) {
     std::string includeName = include ? include : "";
     std::replace(includeName.begin(), includeName.end(), '\\', '/');
 
@@ -176,7 +229,7 @@ std::string ResolveFileIncludeName(const char *include, const char *from) {
                 return resolvedRelativeName;
             }
 
-            const std::string ancestorName = ResolveAncestorIncludeName(includeName, from);
+            const std::string ancestorName = ResolveAncestorIncludeName(includeName, from, packageRoot);
             return ancestorName.empty() ? resolvedRelativeName : ancestorName;
         }
     }
