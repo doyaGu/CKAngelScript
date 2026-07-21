@@ -1,11 +1,13 @@
 #include "ScriptSelfTests.h"
 
+#include <cstdint>
 #include <string>
 
 #include "CKAll.h"
 #include "CKAngelScript.h"
-#include "ScriptMessage.h"
 #include "ScriptComponentState.h"
+#include "ScriptComponentStateStore.h"
+#include "ScriptMessage.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
 #include "add_on/scriptdictionary/scriptdictionary.h"
@@ -339,6 +341,31 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
             context->DestroyObject(waitTarget);
         }
         error = "Message self-test could not create wait behavior output.";
+        return false;
+    }
+
+    ScriptComponentStateStore identityStore;
+    int identityRemovals = 0;
+    CKBehavior *foreignBehavior = reinterpret_cast<CKBehavior *>(static_cast<std::uintptr_t>(1));
+    ScriptComponentState *identityState = identityStore.GetOrCreate(
+        waitBehavior,
+        "component:identity-self-test",
+        {});
+    if (!identityState ||
+        identityStore.Get(waitBehavior->GetID(), foreignBehavior) != nullptr ||
+        identityStore.Remove(waitBehavior->GetID(), foreignBehavior, [&identityRemovals](CK_ID, ScriptComponentState *) {
+            ++identityRemovals;
+        }) ||
+        identityStore.Get(waitBehavior->GetID(), waitBehavior) != identityState ||
+        identityRemovals != 0 ||
+        !identityStore.Remove(waitBehavior->GetID(), waitBehavior, [&identityRemovals](CK_ID, ScriptComponentState *) {
+            ++identityRemovals;
+        }) ||
+        identityRemovals != 1 ||
+        identityStore.Get(waitBehavior->GetID()) != nullptr) {
+        context->DestroyObject(waitBehavior);
+        context->DestroyObject(waitTarget);
+        error = "Component state store did not reject a mismatched behavior identity.";
         return false;
     }
 

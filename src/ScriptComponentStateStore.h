@@ -20,9 +20,11 @@ public:
     ScriptComponentStateStore(const ScriptComponentStateStore &) = delete;
     ScriptComponentStateStore &operator=(const ScriptComponentStateStore &) = delete;
 
-    ScriptComponentState *GetOrCreate(CKBehavior *behavior, const std::string &messageTarget);
-    ScriptComponentState *Get(CK_ID id) const;
-    void Remove(CK_ID id, const StateCallback &beforeRemove);
+    ScriptComponentState *GetOrCreate(CKBehavior *behavior,
+                                      const std::string &messageTarget,
+                                      const StateCallback &beforeReplace);
+    ScriptComponentState *Get(CK_ID id, CKBehavior *expectedBehavior = nullptr) const;
+    bool Remove(CK_ID id, CKBehavior *expectedBehavior, const StateCallback &beforeRemove);
     void Clear(const StateCallback &beforeRemove);
 
 private:

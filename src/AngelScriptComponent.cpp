@@ -368,18 +368,19 @@ ScriptComponentState *GetState(const CKBehaviorContext &behcontext) {
         return nullptr;
     }
 
-    ScriptComponentState *state = nullptr;
-    beh->GetLocalParameterValue(COMPONENT_STATE, &state);
-    if (state) {
-        return state;
-    }
-
     ScriptManager *man = ScriptManager::GetManager(behcontext.Context);
     if (!man) {
         return nullptr;
     }
 
-    state = man->GetOrCreateComponentState(beh);
+    ScriptComponentState *state = nullptr;
+    beh->GetLocalParameterValue(COMPONENT_STATE, &state);
+    ScriptComponentState *stored = man->GetComponentState(beh->GetID(), beh);
+    if (state && state == stored) {
+        return state;
+    }
+
+    state = stored ? stored : man->GetOrCreateComponentState(beh);
     beh->SetLocalParameterValue(COMPONENT_STATE, &state);
     return state;
 }
@@ -1341,7 +1342,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         break;
 
         case CKM_BEHAVIORDELETE: {
-            state = ScriptComponentSupport::GetState(behcontext);
+            state = man->GetComponentState(beh->GetID(), beh);
             if (state) {
                 state->DesiredEnabled = false;
                 state->ScriptActive = false;

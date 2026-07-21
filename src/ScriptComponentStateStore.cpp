@@ -21,7 +21,10 @@ ScriptComponentStateStore::ScriptComponentStateStore()
 
 ScriptComponentStateStore::~ScriptComponentStateStore() = default;
 
-ScriptComponentState *ScriptComponentStateStore::GetOrCreate(CKBehavior *behavior, const std::string &messageTarget) {
+ScriptComponentState *ScriptComponentStateStore::GetOrCreate(
+    CKBehavior *behavior,
+    const std::string &messageTarget,
+    const StateCallback &beforeReplace) {
     if (!behavior) {
         return nullptr;
     }
@@ -29,8 +32,13 @@ ScriptComponentState *ScriptComponentStateStore::GetOrCreate(CKBehavior *behavio
     const CK_ID id = behavior->GetID();
     auto it = m_Impl->States.find(id);
     if (it != m_Impl->States.end()) {
-        it->second->Behavior = behavior;
-        return it->second.get();
+        if (it->second->Behavior == behavior) {
+            return it->second.get();
+        }
+        if (beforeReplace) {
+            beforeReplace(id, it->second.get());
+        }
+        m_Impl->States.erase(it);
     }
 
     auto state = std::make_unique<ScriptComponentState>();
@@ -47,25 +55,30 @@ ScriptComponentState *ScriptComponentStateStore::GetOrCreate(CKBehavior *behavio
     return raw;
 }
 
-ScriptComponentState *ScriptComponentStateStore::Get(CK_ID id) const {
+ScriptComponentState *ScriptComponentStateStore::Get(CK_ID id, CKBehavior *expectedBehavior) const {
     auto it = m_Impl->States.find(id);
-    if (it == m_Impl->States.end()) {
+    if (it == m_Impl->States.end() ||
+        (expectedBehavior && it->second->Behavior != expectedBehavior)) {
         return nullptr;
     }
 
     return it->second.get();
 }
 
-void ScriptComponentStateStore::Remove(CK_ID id, const StateCallback &beforeRemove) {
+bool ScriptComponentStateStore::Remove(CK_ID id,
+                                       CKBehavior *expectedBehavior,
+                                       const StateCallback &beforeRemove) {
     auto it = m_Impl->States.find(id);
-    if (it == m_Impl->States.end()) {
-        return;
+    if (it == m_Impl->States.end() ||
+        (expectedBehavior && it->second->Behavior != expectedBehavior)) {
+        return false;
     }
 
     if (beforeRemove) {
         beforeRemove(id, it->second.get());
     }
     m_Impl->States.erase(it);
+    return true;
 }
 
 void ScriptComponentStateStore::Clear(const StateCallback &beforeRemove) {
@@ -82,11 +95,16 @@ ScriptComponentState *ScriptManager::GetOrCreateComponentState(CKBehavior *behav
         return nullptr;
     }
 
-    return m_ComponentStates.GetOrCreate(behavior, ScriptMessageBus::ComponentTarget(behavior->GetID()));
+    return m_ComponentStates.GetOrCreate(
+        behavior,
+        ScriptMessageBus::ComponentTarget(behavior->GetID()),
+        [this](CK_ID, ScriptComponentState *replaced) {
+            ResetComponentStateRuntime(replaced, true);
+        });
 }
 
-ScriptComponentState *ScriptManager::GetComponentState(CK_ID id) const {
-    return m_ComponentStates.Get(id);
+ScriptComponentState *ScriptManager::GetComponentState(CK_ID id, CKBehavior *expectedBehavior) const {
+    return m_ComponentStates.Get(id, expectedBehavior);
 }
 
 void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool unloadOwnedModule) {
@@ -134,20 +152,18 @@ void ScriptManager::ReleaseComponentState(CKBehavior *behavior) {
         return;
     }
 
-    ScriptComponentState *state = GetComponentState(behavior->GetID());
-    if (state && state->Behavior) {
-        ScriptComponentState *nullState = nullptr;
-        state->Behavior->SetLocalParameterValue(0, &nullState);
-    }
-
-    ReleaseComponentState(behavior->GetID());
+    ScriptComponentState *nullState = nullptr;
+    behavior->SetLocalParameterValue(0, &nullState);
+    m_ComponentStates.Remove(
+        behavior->GetID(),
+        behavior,
+        [this](CK_ID, ScriptComponentState *state) {
+            ResetComponentStateRuntime(state, true);
+        });
 }
 
 void ScriptManager::ReleaseComponentState(CK_ID id) {
-    m_ComponentStates.Remove(id, [this](CK_ID stateId, ScriptComponentState *state) {
-        if (m_BehaviorBridge) {
-            m_BehaviorBridge->DestroyComponentTasks(stateId);
-        }
+    m_ComponentStates.Remove(id, nullptr, [this](CK_ID, ScriptComponentState *state) {
         ResetComponentStateRuntime(state, true);
     });
 }

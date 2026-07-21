@@ -38,7 +38,9 @@ std::string SourceFromRuntimeContext(const ScriptContext &ctx) {
 
 std::string SourceFromBehaviorContext(const CKBehaviorContext &ctx) {
     ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    ScriptComponentState *state = manager && ctx.Behavior ? manager->GetComponentState(ctx.Behavior->GetID()) : nullptr;
+    ScriptComponentState *state = manager && ctx.Behavior
+        ? manager->GetComponentState(ctx.Behavior->GetID(), ctx.Behavior)
+        : nullptr;
     return state ? state->MessageTarget : (ctx.Behavior ? ScriptMessageBus::ComponentTarget(ctx.Behavior->GetID()) : std::string());
 }
 

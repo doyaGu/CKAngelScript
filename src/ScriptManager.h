@@ -236,7 +236,7 @@ public:
     void ReleaseCKObjectCallbacks(CK_ID id);
 
     ScriptComponentState *GetOrCreateComponentState(CKBehavior *behavior);
-    ScriptComponentState *GetComponentState(CK_ID id) const;
+    ScriptComponentState *GetComponentState(CK_ID id, CKBehavior *expectedBehavior = nullptr) const;
     void ResetComponentStateRuntime(ScriptComponentState *state, bool unloadOwnedModule = true);
     void ReleaseComponentState(CKBehavior *behavior);
     void ReleaseComponentState(CK_ID id);
