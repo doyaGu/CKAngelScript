@@ -1594,6 +1594,18 @@ void ScriptAsyncTaskBase::AdvanceGraphTask() {
         Fail(m_GraphTask->Error().empty() ? "GraphTask.Step failed while awaiting task." : m_GraphTask->Error());
         return;
     }
+    if (m_GraphTask->TimedOut()) {
+        Fail(m_GraphTask->Error());
+        return;
+    }
+    if (m_GraphTask->Done(-1)) {
+        CompleteVoid();
+        return;
+    }
+    if (!m_GraphTask->IsAlive()) {
+        Fail(m_GraphTask->Error().empty() ? "GraphTask stopped before completion." : m_GraphTask->Error());
+        return;
+    }
     SetState(ScriptAsyncTaskState::Running);
 }
 

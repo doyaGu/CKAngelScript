@@ -4,8 +4,11 @@
 #include <fstream>
 #include <string>
 
+#include "CKAll.h"
 #include "CKAngelScript.h"
 #include "ScriptAsync.h"
+#include "ScriptBehaviorBridge.h"
+#include "ScriptBridgeHandles.h"
 #include "ScriptManager.h"
 
 #include "add_on/scriptarray/scriptarray.h"
@@ -236,6 +239,68 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     ScriptAsyncScheduler *managerScheduler = manager ? manager->GetAsyncScheduler() : nullptr;
     if (!managerScheduler) {
         error = "Async completed result self-test could not retrieve the manager scheduler.";
+        return false;
+    }
+
+    WriteAsyncSelfTestStage("graph-same-tick-completion");
+    ScriptBehaviorBridge *behaviorBridge = manager->GetBehaviorBridge();
+    CKBehavior *graphBehavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_AsyncGraphSameTickSelfTest"),
+        CK_OBJECTCREATION_DYNAMIC));
+    GraphTask *graphWatch = nullptr;
+    ScriptAsyncTaskBase *graphWait = nullptr;
+    auto cleanupGraphWait = [&]() {
+        if (graphWait) {
+            graphWait->Release();
+            graphWait = nullptr;
+        }
+        scheduler.Clear();
+        if (graphWatch) {
+            graphWatch->Release();
+            graphWatch = nullptr;
+        }
+        if (graphBehavior && !graphBehavior->IsToBeDeleted()) {
+            context->DestroyObject(graphBehavior);
+        }
+    };
+    if (!behaviorBridge || !graphBehavior) {
+        cleanupGraphWait();
+        error = "Async graph completion self-test could not create its behavior.";
+        return false;
+    }
+    graphBehavior->UseGraph();
+    graphBehavior->AddOutput(const_cast<CKSTRING>("Done"));
+    if (graphBehavior->GetOutputCount() != 1) {
+        cleanupGraphWait();
+        error = "Async graph completion self-test could not create its output.";
+        return false;
+    }
+    CKBehaviorContext graphContext = {};
+    graphContext.Behavior = graphBehavior;
+    graphContext.Context = context;
+    graphContext.ParameterManager = context->GetParameterManager();
+    graphContext.MessageManager = context->GetMessageManager();
+    graphContext.AttributeManager = context->GetAttributeManager();
+    graphContext.TimeManager = context->GetTimeManager();
+    graphWatch = behaviorBridge->CreateGraphWatch(graphBehavior, 0, 0.0f);
+    graphWait = graphWatch ? scheduler.CreateGraphTask(graphWatch, &graphContext) : nullptr;
+    if (!graphWatch || !graphWait) {
+        cleanupGraphWait();
+        error = "Async graph completion self-test could not create its graph wait.";
+        return false;
+    }
+    graphWatch->Release();
+    graphWatch = nullptr;
+    graphBehavior->ActivateOutput(0, TRUE);
+    scheduler.Tick();
+    const bool graphCompleted = graphWait->IsCompleted();
+    const std::string graphError = graphWait->Error();
+    cleanupGraphWait();
+    if (!graphCompleted) {
+        error = graphError.empty()
+            ? "Async graph wait did not complete in the tick that observed its output."
+            : graphError;
         return false;
     }
 
