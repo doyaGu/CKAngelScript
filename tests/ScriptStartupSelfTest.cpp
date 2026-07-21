@@ -5,6 +5,7 @@
 #include <string>
 
 #include "Logger.h"
+#include "ScriptCKPrototypeHook.h"
 #include "ScriptManager.h"
 
 namespace {
@@ -37,6 +38,29 @@ bool IsTruthyEnvironmentValue(const char *name) {
 
 bool ShouldRunStartupSelfTests() {
     return IsTruthyEnvironmentValue("CKAS_RUN_SELFTESTS") || IsTruthyEnvironmentValue("CKAS_SELFTEST_MARKER");
+}
+
+bool RunPrototypeHookFlagSelfTest(std::string &error) {
+    const char *truthy[] = { "1", "true", "TRUE", "yes", "on", " on " };
+    for (const char *value : truthy) {
+        if (!ParseCKASEnvironmentFlag(value)) {
+            error = std::string("Prototype hook flag parser rejected truthy value '") + value + "'.";
+            return false;
+        }
+    }
+
+    const char *falsey[] = { "", "0", "false", "no", "off", "oops", " off " };
+    if (ParseCKASEnvironmentFlag(nullptr)) {
+        error = "Prototype hook flag parser accepted a null value.";
+        return false;
+    }
+    for (const char *value : falsey) {
+        if (ParseCKASEnvironmentFlag(value)) {
+            error = std::string("Prototype hook flag parser accepted falsey value '") + value + "'.";
+            return false;
+        }
+    }
+    return true;
 }
 
 void WriteStartupSelfTestMarker(const char *status, const char *stage, const std::string &message) {
@@ -86,6 +110,12 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     WriteStartupSelfTestMarker("running", "start", std::string());
 
     std::string error;
+    WriteStartupSelfTestMarker("running", "prototype-hook-flag", std::string());
+    if (!RunPrototypeHookFlagSelfTest(error)) {
+        ReportSelfTestFailure(manager, "prototype-hook-flag", "Prototype hook flag", error);
+        return CKERR_INVALIDOPERATION;
+    }
+
     WriteStartupSelfTestMarker("running", "initial-lifecycle", std::string());
     if (!RunScriptInitialLifecycleSelfTest(error)) {
         ReportSelfTestFailure(manager, "initial-lifecycle", "Initial lifecycle", error);

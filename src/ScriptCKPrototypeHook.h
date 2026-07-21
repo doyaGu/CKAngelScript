@@ -3,6 +3,7 @@
 
 #include <string>
 
+bool ParseCKASEnvironmentFlag(const char *value);
 bool InstallCKBehaviorPrototypeRuntimeHook(std::string *error = nullptr);
 void UninstallCKBehaviorPrototypeRuntimeHook();
 bool IsCKBehaviorPrototypeRuntimeHookInstalled();

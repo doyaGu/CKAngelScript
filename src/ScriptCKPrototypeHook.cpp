@@ -1,5 +1,6 @@
 #include "ScriptCKPrototypeHook.h"
 
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -10,6 +11,36 @@
 #define NOMINMAX
 #include <windows.h>
 #include <tlhelp32.h>
+
+bool ParseCKASEnvironmentFlag(const char *value) {
+    if (!value) {
+        return false;
+    }
+
+    const char *begin = value;
+    while (*begin && std::isspace(static_cast<unsigned char>(*begin))) {
+        ++begin;
+    }
+    const char *end = begin + std::strlen(begin);
+    while (end > begin && std::isspace(static_cast<unsigned char>(end[-1]))) {
+        --end;
+    }
+
+    const auto equals = [begin, end](const char *expected) {
+        const size_t length = static_cast<size_t>(end - begin);
+        if (std::strlen(expected) != length) {
+            return false;
+        }
+        for (size_t i = 0; i < length; ++i) {
+            if (std::tolower(static_cast<unsigned char>(begin[i])) !=
+                std::tolower(static_cast<unsigned char>(expected[i]))) {
+                return false;
+            }
+        }
+        return true;
+    };
+    return equals("1") || equals("true") || equals("yes") || equals("on");
+}
 
 namespace {
 
@@ -126,10 +157,7 @@ bool EnvFlagEnabled(const char *name) {
         return false;
     }
 
-    return value[0] == '1' ||
-           value[0] == 'y' || value[0] == 'Y' ||
-           value[0] == 't' || value[0] == 'T' ||
-           value[0] == 'o' || value[0] == 'O';
+    return ParseCKASEnvironmentFlag(value);
 }
 
 void SetError(std::string *error, const char *message) {
