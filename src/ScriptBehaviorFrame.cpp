@@ -286,13 +286,18 @@ void BehaviorFrame::Refresh(const CKBehaviorContext &ctx) {
     m_ContextSnapshot = ctx;
     m_Context = ctx.Context ? ctx.Context : (ctx.Behavior ? ctx.Behavior->GetCKContext() : nullptr);
     m_BehaviorId = ctx.Behavior ? ctx.Behavior->GetID() : 0;
+    m_BehaviorAddress = ScriptBridgeObjectAddress(ctx.Behavior);
     m_BehaviorStamp = CaptureBridgeObjectStamp(ctx.Behavior);
     m_ContextSnapshot.Behavior = nullptr;
     m_ContextSnapshot.Context = m_Context;
 }
 
 CKBehavior *BehaviorFrame::Behavior() const {
-    return CKBehavior::Cast(GetStampedCKObjectById(m_Context, m_BehaviorId, m_BehaviorStamp));
+    CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(m_Context, m_BehaviorId, m_BehaviorStamp));
+    if (behavior && m_BehaviorAddress && ScriptBridgeObjectAddress(behavior) != m_BehaviorAddress) {
+        return nullptr;
+    }
+    return behavior;
 }
 
 CKContext *BehaviorFrame::Context() const {
@@ -2296,7 +2301,11 @@ CKBehaviorContext BehaviorFrame::MakeContext() const {
 }
 
 ScriptBehaviorBridge *BehaviorFrame::Bridge() const {
-    ScriptManager *manager = ManagerFromContext(MakeContext());
+    const CKBehaviorContext context = MakeContext();
+    if (!context.Behavior) {
+        return nullptr;
+    }
+    ScriptManager *manager = ManagerFromContext(context);
     return manager ? manager->GetBehaviorBridge() : nullptr;
 }
 

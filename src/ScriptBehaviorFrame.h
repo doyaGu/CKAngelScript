@@ -1,6 +1,7 @@
 #ifndef CK_SCRIPTBEHAVIORFRAME_H
 #define CK_SCRIPTBEHAVIORFRAME_H
 
+#include <cstdint>
 #include <string>
 
 #include "CKBehavior.h"
@@ -356,6 +357,7 @@ private:
     CKBehaviorContext m_ContextSnapshot;
     CKContext *m_Context = nullptr;
     CK_ID m_BehaviorId = 0;
+    std::uintptr_t m_BehaviorAddress = 0;
     ScriptBridgeObjectStamp m_BehaviorStamp;
 };
 
