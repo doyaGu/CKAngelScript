@@ -93,7 +93,9 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
     }
 
     WriteStartupSelfTestMarker("running", "parameter-conversion", std::string());
-    if (!RunScriptParameterConversionSelfTest(error)) {
+    if (!RunScriptParameterConversionSelfTest(manager ? manager->GetCKContext() : nullptr,
+                                              manager ? manager->GetScriptEngine() : nullptr,
+                                              error)) {
         ReportSelfTestFailure(manager,
                                                              "parameter-conversion",
                                                              "Parameter conversion",

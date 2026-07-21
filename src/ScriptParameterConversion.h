@@ -196,6 +196,17 @@ CKERROR WriteBehaviorParameterValue(CKBehavior *behavior,
                                     void *buffer,
                                     asIScriptEngine *engine,
                                     asIScriptContext *scriptContext);
+CKERROR ReadParameterGenericValue(CKParameter *parameter,
+                                  int typeId,
+                                  void *buffer,
+                                  bool update,
+                                  asIScriptEngine *engine,
+                                  asIScriptContext *scriptContext);
+CKERROR WriteParameterGenericValue(CKParameter *parameter,
+                                   int typeId,
+                                   void *buffer,
+                                   asIScriptEngine *engine,
+                                   asIScriptContext *scriptContext);
 bool ReadParameterText(CKParameter *source, std::string &value, std::string *error = nullptr);
 CKERROR WriteParameterText(CKParameter *target, const std::string &value, std::string &error);
 CKERROR WriteParameterRaw(CKParameter *target, const void *data, int size, CKGUID sourceGuid, const std::string &sourceTypeName, std::string &error);
