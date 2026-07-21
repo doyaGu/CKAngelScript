@@ -32,19 +32,150 @@ function Split-ListText {
     return @($Text -split "[;,]" | ForEach-Object { $_.Trim(" `t`r`n'`"") } | Where-Object { $_ })
 }
 
+function Test-MetadataLineStart {
+    param(
+        [string]$Text,
+        [int]$Index
+    )
+
+    for ($cursor = $Index - 1; $cursor -ge 0; $cursor--) {
+        $character = $Text[$cursor]
+        if ($character -eq "`r" -or $character -eq "`n") {
+            break
+        }
+        if (![char]::IsWhiteSpace($character)) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Get-MetadataBlocks {
+    param([string]$Text)
+
+    $blocks = New-Object System.Collections.Generic.List[object]
+    $index = 0
+    $previousMetadataEnd = -1
+    while ($index -lt $Text.Length) {
+        if ($index + 1 -lt $Text.Length -and $Text[$index] -eq '/' -and $Text[$index + 1] -eq '/') {
+            $index += 2
+            while ($index -lt $Text.Length -and $Text[$index] -ne "`r" -and $Text[$index] -ne "`n") {
+                $index++
+            }
+            continue
+        }
+        if ($index + 1 -lt $Text.Length -and $Text[$index] -eq '/' -and $Text[$index + 1] -eq '*') {
+            $commentEnd = $Text.IndexOf('*/', $index + 2, [System.StringComparison]::Ordinal)
+            if ($commentEnd -lt 0) {
+                break
+            }
+            $index = $commentEnd + 2
+            continue
+        }
+
+        $character = $Text[$index]
+        if ($character -eq '"' -or $character -eq "'") {
+            $quote = $character
+            $index++
+            while ($index -lt $Text.Length) {
+                if ([int]$Text[$index] -eq 92 -and $index + 1 -lt $Text.Length) {
+                    $index += 2
+                    continue
+                }
+                if ($Text[$index] -eq $quote) {
+                    $index++
+                    break
+                }
+                $index++
+            }
+            continue
+        }
+        if ($character -ne '[') {
+            $index++
+            continue
+        }
+
+        $metadataStart = Test-MetadataLineStart -Text $Text -Index $index
+        if (!$metadataStart -and $previousMetadataEnd -ge 0 -and $previousMetadataEnd -lt $index) {
+            $metadataStart = $true
+            for ($cursor = $previousMetadataEnd + 1; $cursor -lt $index; $cursor++) {
+                if (![char]::IsWhiteSpace($Text[$cursor])) {
+                    $metadataStart = $false
+                    break
+                }
+            }
+        }
+        if (!$metadataStart) {
+            $index++
+            continue
+        }
+
+        $tagMatch = [regex]::Match(
+            $Text.Substring($index + 1),
+            '^(?<kind>(?:script|runtime|executor)(?:\.(?:meta|depends|messages))?)(?=\s|\])',
+            [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        if (!$tagMatch.Success) {
+            $index++
+            continue
+        }
+
+        $kind = $tagMatch.Groups['kind'].Value.ToLowerInvariant()
+        $bodyStart = $index + 1 + $tagMatch.Length
+        $cursor = $bodyStart
+        $quote = [char]0
+        while ($cursor -lt $Text.Length) {
+            $current = $Text[$cursor]
+            if ($quote -ne [char]0 -and [int]$current -eq 92 -and $cursor + 1 -lt $Text.Length) {
+                $cursor += 2
+                continue
+            }
+            if ($current -eq '"' -or $current -eq "'") {
+                if ($quote -eq [char]0) {
+                    $quote = $current
+                } elseif ($quote -eq $current) {
+                    $quote = [char]0
+                }
+            } elseif ($current -eq ']' -and $quote -eq [char]0) {
+                break
+            }
+            $cursor++
+        }
+        if ($cursor -ge $Text.Length) {
+            break
+        }
+
+        [void]$blocks.Add([pscustomobject]@{
+            Kind = $kind
+            Body = $Text.Substring($bodyStart, $cursor - $bodyStart)
+        })
+        $previousMetadataEnd = $cursor
+        $index = $cursor + 1
+    }
+    return $blocks
+}
+
 function Read-Metadata {
     param([string]$Path)
     $text = Get-Content -LiteralPath $Path -Raw
     $metadata = @{}
-    foreach ($match in [regex]::Matches($text, "\[(?<kind>(?:script|runtime|executor)(?:\.[^\]\s]+)?)(?<body>(?:[^\]`"']+|`"[^`"]*`"|'[^']*')*)\]")) {
-        $kind = $match.Groups["kind"].Value.ToLowerInvariant()
+    $declaredHost = $null
+    $metadataError = $null
+    foreach ($block in Get-MetadataBlocks -Text $text) {
+        $kind = $block.Kind
         if ($kind -in @("script", "runtime", "executor")) {
             $metadata["__entry"] = "true"
         }
-        if ($kind -in @("runtime", "executor") -and !$metadata.ContainsKey("host")) {
-            $metadata["host"] = $kind
+        if ($kind -in @("runtime", "executor")) {
+            if ($declaredHost -and $declaredHost -ne $kind) {
+                $metadataError = "conflicting script host declarations '$declaredHost' and '$kind'"
+            } else {
+                $declaredHost = $kind
+            }
+            if (!$metadata.ContainsKey("host")) {
+                $metadata["host"] = $kind
+            }
         }
-        foreach ($pair in [regex]::Matches($match.Groups["body"].Value, "(?<key>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:(?<dq>`"[^`"]*`")|(?<sq>'[^']*')|(?<bare>\S+))")) {
+        foreach ($pair in [regex]::Matches($block.Body, "(?<key>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:(?<dq>`"[^`"]*`")|(?<sq>'[^']*')|(?<bare>\S+))")) {
             $key = $pair.Groups["key"].Value.ToLowerInvariant()
             $value = if ($pair.Groups["dq"].Success) {
                 $pair.Groups["dq"].Value.Trim("`"")
@@ -55,6 +186,15 @@ function Read-Metadata {
             }
             $metadata[$key] = $value
         }
+    }
+    if ($declaredHost -and $metadata.ContainsKey("host")) {
+        $explicitHost = [string]$metadata["host"]
+        if ($explicitHost.ToLowerInvariant() -ne $declaredHost) {
+            $metadataError = "conflicting script host declarations '$declaredHost' and '$explicitHost'"
+        }
+    }
+    if ($metadataError) {
+        $metadata["__error"] = $metadataError
     }
     return $metadata
 }
@@ -146,7 +286,10 @@ function Get-ScriptEntryCandidates {
                 }
             } elseif ($_.Extension -ieq ".as" -and $_.Name -notlike "*.inc.as" -and $_.Name -notlike "*.include.as") {
                 $text = Get-Content -LiteralPath $_.FullName -Raw
-                if ($text -match "\[(script|runtime|executor)(?=\s|\])") {
+                $hasEntryMetadata = @(Get-MetadataBlocks -Text $text | Where-Object {
+                    $_.Kind -in @("script", "runtime", "executor")
+                }).Count -gt 0
+                if ($hasEntryMetadata) {
                     $candidates += $_.FullName
                 }
             }
@@ -209,6 +352,10 @@ foreach ($root in $roots) {
     }
     foreach ($manifest in Get-ScriptEntryCandidates $scriptsDir) {
         $meta = Read-Metadata $manifest
+        if ($meta.ContainsKey("__error")) {
+            $errors += "[$manifest] $($meta["__error"])"
+            continue
+        }
         if (!$meta.ContainsKey("__entry")) {
             $errors += "[$manifest] missing main [runtime], [executor], or legacy [script] metadata"
             continue

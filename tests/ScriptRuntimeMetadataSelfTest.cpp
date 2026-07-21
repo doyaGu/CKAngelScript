@@ -116,6 +116,47 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
         return false;
     }
 
+    const std::string lexicalSource =
+        "// [executor name=\"Comment Host\"]\n"
+        "/*\n"
+        "[executor name=\"Block Comment Host\"]\n"
+        "*/\n"
+        "[runtime name=\"Lexical Runtime Host\"]\n"
+        "class LexicalRuntimeHost {\n"
+        "  string label = \"[executor]\";\n"
+        "  void Probe() { array<int> values(1); int runtime = 0; values[runtime] = 1; }\n"
+        "}\n";
+    ScriptRuntimeManifest lexicalHost;
+    lexicalHost.RootPath = std::filesystem::path("C:/Scripts/lexical");
+    lexicalHost.ManifestPath = lexicalHost.RootPath / "script.as";
+    lexicalHost.EntryPath = lexicalHost.ManifestPath;
+    if (!ParseManifestSource(lexicalSource, lexicalHost.ManifestPath, lexicalHost, error) ||
+        lexicalHost.Host != ScriptEntryHost::Runtime ||
+        lexicalHost.Name != "Lexical Runtime Host" ||
+        lexicalHost.ClassName != "LexicalRuntimeHost" ||
+        !lexicalHost.HasScriptManifest) {
+        error = error.empty()
+            ? "Runtime metadata parser treated comment, string, or index text as metadata."
+            : error;
+        return false;
+    }
+
+    const std::string fakeOnlySource =
+        "// [runtime]\n"
+        "string label = \"[executor]\";\n"
+        "/* [script] */\n";
+    ScriptRuntimeManifest fakeOnly;
+    fakeOnly.RootPath = std::filesystem::path("C:/Scripts/fake-only");
+    fakeOnly.ManifestPath = fakeOnly.RootPath / "helper.as";
+    fakeOnly.EntryPath = fakeOnly.ManifestPath;
+    if (!ParseManifestSource(fakeOnlySource, fakeOnly.ManifestPath, fakeOnly, error) ||
+        fakeOnly.HasManifest || fakeOnly.HasScriptManifest) {
+        error = error.empty()
+            ? "Runtime metadata parser discovered metadata inside comments or strings."
+            : error;
+        return false;
+    }
+
     const std::filesystem::path scriptsRoot = "C:/Game/Scripts";
     if (DeriveIdFromPath(scriptsRoot, scriptsRoot / "base/event/load_menu_level.as") !=
         "base.event.load_menu_level") {

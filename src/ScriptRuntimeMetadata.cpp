@@ -195,6 +195,63 @@ std::string HostFromMetadataKind(const std::string &kind) {
     return std::string();
 }
 
+std::size_t SkipQuotedLiteral(const std::string &source, std::size_t pos) {
+    if (pos >= source.size() || (source[pos] != '"' && source[pos] != '\'')) {
+        return pos;
+    }
+
+    const char quote = source[pos++];
+    while (pos < source.size()) {
+        if (source[pos] == '\\' && pos + 1 < source.size()) {
+            pos += 2;
+            continue;
+        }
+        if (source[pos++] == quote) {
+            break;
+        }
+    }
+    return pos;
+}
+
+bool IsLineLeadingMetadata(const std::string &source, std::size_t pos) {
+    std::size_t lineStart = pos;
+    while (lineStart > 0 && source[lineStart - 1] != '\n' && source[lineStart - 1] != '\r') {
+        --lineStart;
+    }
+
+    std::size_t cursor = lineStart;
+    if (cursor == 0 && source.size() >= 3 &&
+        static_cast<unsigned char>(source[0]) == 0xef &&
+        static_cast<unsigned char>(source[1]) == 0xbb &&
+        static_cast<unsigned char>(source[2]) == 0xbf) {
+        cursor = 3;
+    }
+    while (cursor < pos) {
+        if (!std::isspace(static_cast<unsigned char>(source[cursor]))) {
+            return false;
+        }
+        ++cursor;
+    }
+    return true;
+}
+
+bool IsMetadataStart(const std::string &source,
+                     std::size_t pos,
+                     std::size_t previousMetadataEnd) {
+    if (IsLineLeadingMetadata(source, pos)) {
+        return true;
+    }
+    if (previousMetadataEnd == std::string::npos || previousMetadataEnd >= pos) {
+        return false;
+    }
+    for (std::size_t cursor = previousMetadataEnd + 1; cursor < pos; ++cursor) {
+        if (!std::isspace(static_cast<unsigned char>(source[cursor]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::string ParseClassAfterMetadata(const std::string &source, std::size_t pos) {
     while (pos < source.size()) {
         while (pos < source.size() && std::isspace(static_cast<unsigned char>(source[pos]))) {
@@ -237,7 +294,32 @@ std::string ParseClassAfterMetadata(const std::string &source, std::size_t pos) 
 
 bool ScanMetadataBlocks(const std::string &source, std::vector<MetadataBlock> &blocks, std::string &error) {
     std::size_t pos = 0;
-    while ((pos = source.find('[', pos)) != std::string::npos) {
+    std::size_t previousMetadataEnd = std::string::npos;
+    while (pos < source.size()) {
+        if (source.compare(pos, 2, "//") == 0) {
+            pos = source.find_first_of("\r\n", pos + 2);
+            if (pos == std::string::npos) {
+                break;
+            }
+            continue;
+        }
+        if (source.compare(pos, 2, "/*") == 0) {
+            const std::size_t commentEnd = source.find("*/", pos + 2);
+            if (commentEnd == std::string::npos) {
+                break;
+            }
+            pos = commentEnd + 2;
+            continue;
+        }
+        if (source[pos] == '"' || source[pos] == '\'') {
+            pos = SkipQuotedLiteral(source, pos);
+            continue;
+        }
+        if (source[pos] != '[' || !IsMetadataStart(source, pos, previousMetadataEnd)) {
+            ++pos;
+            continue;
+        }
+
         std::size_t tagEnd = pos + 1;
         while (tagEnd < source.size()) {
             const char c = source[tagEnd];
@@ -248,7 +330,7 @@ bool ScanMetadataBlocks(const std::string &source, std::vector<MetadataBlock> &b
         }
         std::string kind = ScriptRuntimeMetadata::ToLower(source.substr(pos + 1, tagEnd - (pos + 1)));
         if (!IsMetadataKind(kind)) {
-            pos = tagEnd;
+            ++pos;
             continue;
         }
 
@@ -257,7 +339,9 @@ bool ScanMetadataBlocks(const std::string &source, std::vector<MetadataBlock> &b
         std::size_t end = tagEnd;
         for (; end < source.size(); ++end) {
             const char c = source[end];
-            if ((c == '"' || c == '\'') && (!quoted || quote == c)) {
+            if (quoted && c == '\\' && end + 1 < source.size()) {
+                ++end;
+            } else if ((c == '"' || c == '\'') && (!quoted || quote == c)) {
                 quoted = !quoted;
                 quote = quoted ? c : '\0';
             } else if (c == ']' && !quoted) {
@@ -274,6 +358,7 @@ bool ScanMetadataBlocks(const std::string &source, std::vector<MetadataBlock> &b
         block.Values = ParseKeyValues(source.substr(tagEnd, end - tagEnd));
         block.AttachedClass = ParseClassAfterMetadata(source, end + 1);
         blocks.push_back(std::move(block));
+        previousMetadataEnd = end;
         pos = end + 1;
     }
     return true;
