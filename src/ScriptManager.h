@@ -272,6 +272,10 @@ public:
         return (m_Flags & AS_INITED) != 0;
     }
 
+    CKERROR GetInitializationError() const {
+        return m_InitializationError;
+    }
+
     int Init();
     int Shutdown();
 
@@ -310,6 +314,7 @@ protected:
     std::string EndScriptMessageCapture(std::vector<CapturedScriptMessage> *messages = nullptr);
 
     int m_Flags = 0;
+    CKERROR m_InitializationError = CKERR_NOTINITIALIZED;
     ScriptPathResolver m_PathResolver;
     ScriptEngineHost m_EngineHost;
     ScriptModuleRegistry m_ModuleRegistry;

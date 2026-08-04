@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <memory>
+#include <new>
 #include <string>
 
 #include "Logger.h"
@@ -47,8 +49,25 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
 CKERROR InitInstance(CKContext *context) {
     InitAngelScriptLogger();
     EnsurePrototypeHook();
-    new ScriptManager(context);
 
+    if (!context) {
+        LOG_ERROR("Cannot initialize AngelScript Manager without a CKContext.");
+        return CKERR_INVALIDPARAMETER;
+    }
+
+    std::unique_ptr<ScriptManager> manager(new (std::nothrow) ScriptManager(context));
+    if (!manager) {
+        LOG_ERROR("Failed to allocate AngelScript Manager.");
+        return CKERR_OUTOFMEMORY;
+    }
+
+    const CKERROR error = manager->GetInitializationError();
+    if (error != CK_OK) {
+        LOG_ERROR("Failed to initialize AngelScript Manager (CKERROR %d).", error);
+        return error;
+    }
+
+    manager.release();
     return CK_OK;
 }
 

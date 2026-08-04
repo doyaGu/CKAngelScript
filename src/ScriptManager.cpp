@@ -44,11 +44,14 @@ void ClearPausedRuntimeQueues(ScriptMessageBus *messageBus, ScriptAsyncScheduler
 } // namespace
 
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
-    int r = Init();
-    if (r < 0)
+    const int r = Init();
+    if (r < 0) {
         return;
+    }
 
-    context->RegisterNewManager(this);
+    m_InitializationError = context
+                                ? context->RegisterNewManager(this)
+                                : CKERR_INVALIDPARAMETER;
 }
 
 ScriptManager::~ScriptManager() {
