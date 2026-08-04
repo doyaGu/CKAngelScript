@@ -937,11 +937,11 @@ BBConfig::BBConfig(ScriptBehaviorBridge *bridge,
     : m_Bridge(bridge), m_Context(ctx), m_Request(request), m_Error(error) {
     if (ctx.Behavior) {
         CKBeObject *owner = ctx.Behavior->GetOwner();
-        if (owner && m_Request.OwnerId == owner->GetID() && m_Request.OwnerStamp.Flags == 0) {
+        if (owner && m_Request.OwnerId == owner->GetID() && !m_Request.OwnerStamp.IsCaptured()) {
             m_Request.OwnerStamp = CaptureBridgeObjectStamp(owner);
         }
         CKBeObject *target = ctx.Behavior->GetTarget();
-        if (target && m_Request.TargetId == target->GetID() && m_Request.TargetStamp.Flags == 0) {
+        if (target && m_Request.TargetId == target->GetID() && !m_Request.TargetStamp.IsCaptured()) {
             m_Request.TargetStamp = CaptureBridgeObjectStamp(target);
         }
     }
@@ -1165,12 +1165,12 @@ bool BBConfig::Validate(const CKBehaviorContext &ctx) const {
     }
 
     CKObject *ownerObject = m_Request.OwnerId
-        ? (m_Request.OwnerStamp.Flags != 0
+        ? (m_Request.OwnerStamp.IsCaptured()
             ? GetStampedCKObjectById(context, m_Request.OwnerId, m_Request.OwnerStamp)
             : GetCKObjectById(context, m_Request.OwnerId))
         : nullptr;
     CKObject *targetObject = m_Request.TargetId
-        ? (m_Request.TargetStamp.Flags != 0
+        ? (m_Request.TargetStamp.IsCaptured()
             ? GetStampedCKObjectById(context, m_Request.TargetId, m_Request.TargetStamp)
             : GetCKObjectById(context, m_Request.TargetId))
         : nullptr;
@@ -2705,11 +2705,11 @@ BBTaskBuilder::BBTaskBuilder(ScriptBehaviorBridge *bridge,
     }
     if (ctx.Behavior) {
         CKBeObject *owner = ctx.Behavior->GetOwner();
-        if (owner && m_Request.OwnerId == owner->GetID() && m_Request.OwnerStamp.Flags == 0) {
+        if (owner && m_Request.OwnerId == owner->GetID() && !m_Request.OwnerStamp.IsCaptured()) {
             m_Request.OwnerStamp = CaptureBridgeObjectStamp(owner);
         }
         CKBeObject *target = ctx.Behavior->GetTarget();
-        if (target && m_Request.TargetId == target->GetID() && m_Request.TargetStamp.Flags == 0) {
+        if (target && m_Request.TargetId == target->GetID() && !m_Request.TargetStamp.IsCaptured()) {
             m_Request.TargetStamp = CaptureBridgeObjectStamp(target);
         }
     }

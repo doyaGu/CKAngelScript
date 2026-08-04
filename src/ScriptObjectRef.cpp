@@ -191,15 +191,14 @@ ObjectRef::ObjectRef(CKContext *context, CKObject *object) {
 
 ObjectRef::ObjectRef(CKContext *context, CK_ID id, std::string error) {
     CKObject *object = ObjectById(context, id);
-    ResetObject(context, id, CaptureBridgeObjectStamp(object), std::move(error), ScriptBridgeObjectAddress(object));
+    ResetObject(context, id, CaptureBridgeObjectStamp(object), std::move(error));
 }
 
 ObjectRef::ObjectRef(CKContext *context,
                      CK_ID id,
                      const ScriptBridgeObjectStamp &stamp,
-                     std::string error,
-                     std::uintptr_t objectAddress) {
-    ResetObject(context, id, stamp, std::move(error), objectAddress);
+                     std::string error) {
+    ResetObject(context, id, stamp, std::move(error));
 }
 
 bool ObjectRef::IsValid() const { return Resolve() != nullptr; }
@@ -266,10 +265,6 @@ CKObject *ObjectRef::Resolve() const {
         m_Error = fmt::format("Object id={} is pending deletion.", m_Id);
         return nullptr;
     }
-    if (m_ObjectAddress && ScriptBridgeObjectAddress(object) != m_ObjectAddress) {
-        m_Error = fmt::format("Object id={} was reused by another native object.", m_Id);
-        return nullptr;
-    }
     m_Error.clear();
     return object;
 }
@@ -279,24 +274,21 @@ void ObjectRef::ResetObject(CKContext *context, CKObject *object, std::string er
     ResetObject(resolvedContext,
                 object ? object->GetID() : 0,
                 CaptureBridgeObjectStamp(object),
-                std::move(error),
-                ScriptBridgeObjectAddress(object));
+                std::move(error));
 }
 
 void ObjectRef::ResetObject(CKContext *context,
                             CK_ID id,
                             const ScriptBridgeObjectStamp &stamp,
-                            std::string error,
-                            std::uintptr_t objectAddress) {
+                            std::string error) {
     m_Context = context;
     m_Id = id;
     m_Stamp = stamp;
-    m_ObjectAddress = objectAddress;
     m_Error = std::move(error);
 }
 
 void ObjectRef::ClearObject(std::string error) {
-    ResetObject(nullptr, 0, ScriptBridgeObjectStamp(), std::move(error), 0);
+    ResetObject(nullptr, 0, ScriptBridgeObjectStamp(), std::move(error));
 }
 
 CKSceneObject *SceneObjectRef::SceneObject() const { return CKSceneObject::Cast(Resolve()); }

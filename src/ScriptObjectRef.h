@@ -19,8 +19,7 @@ public:
     ObjectRef(CKContext *context,
               CK_ID id,
               const ScriptBridgeObjectStamp &stamp,
-              std::string error = std::string(),
-              std::uintptr_t objectAddress = 0);
+              std::string error = std::string());
 
     bool IsValid() const;
     bool valid() const;
@@ -46,15 +45,13 @@ protected:
     void ResetObject(CKContext *context,
                      CK_ID id,
                      const ScriptBridgeObjectStamp &stamp,
-                     std::string error = std::string(),
-                     std::uintptr_t objectAddress = 0);
+                     std::string error = std::string());
     void ClearObject(std::string error = std::string());
 
 private:
     CKContext *m_Context = nullptr;
     CK_ID m_Id = 0;
     ScriptBridgeObjectStamp m_Stamp;
-    std::uintptr_t m_ObjectAddress = 0;
     mutable std::string m_Error;
 };
 

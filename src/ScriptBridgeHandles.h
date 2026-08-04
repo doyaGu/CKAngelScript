@@ -480,7 +480,6 @@ private:
     CKBehaviorContext m_Context;
     CK_ID m_RootBehaviorId = 0;
     ScriptBridgeObjectStamp m_RootBehaviorStamp;
-    std::uintptr_t m_RootBehaviorAddress = 0;
     bool m_Ok = false;
     std::string m_Error;
     std::string m_Description;
@@ -604,7 +603,6 @@ private:
         ScriptBridgeObjectStamp ExistingLinkStamp;
         CK_ID CreatedLinkId = 0;
         ScriptBridgeObjectStamp CreatedLinkStamp;
-        std::uintptr_t CreatedLinkAddress = 0;
     };
 
     struct RemoveSpec {
@@ -776,7 +774,6 @@ public:
                     CK_ID linkId,
                     CK_ID componentId,
                     const ScriptBridgeObjectStamp &linkStamp,
-                    std::uintptr_t linkAddress,
                     CKContext *context = nullptr);
 
     bool IsValid() const;

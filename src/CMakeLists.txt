@@ -43,6 +43,7 @@ set(CKAS_HEADERS
         ScriptRuntimeDependency.h
         ScriptMessage.h
         ScriptObjectRef.h
+        ScriptObjectIdentity.h
         ScriptScene.h
         ScriptAsync.h
         ScriptRefCounted.h
@@ -128,6 +129,7 @@ set(CKAS_SOURCES
         ScriptRuntimeDependency.cpp
         ScriptMessage.cpp
         ScriptObjectRef.cpp
+        ScriptObjectIdentity.cpp
         ScriptScene.cpp
         ScriptAsync.cpp
         ScriptBehaviorBridge.cpp

@@ -684,7 +684,6 @@ GraphEditResult::GraphEditResult(ScriptBehaviorBridge *bridge,
       m_Context(ctx),
       m_RootBehaviorId(ctx.Behavior ? ctx.Behavior->GetID() : 0),
       m_RootBehaviorStamp(CaptureBridgeObjectStamp(ctx.Behavior)),
-      m_RootBehaviorAddress(ScriptBridgeObjectAddress(ctx.Behavior)),
       m_Ok(ok),
       m_Error(error),
       m_Description(description),
@@ -745,7 +744,6 @@ CScriptArray *GraphEditResult::CreatedLinks() const {
                                                                              link->GetID(),
                                                                              componentId,
                                                                              ref.Stamp,
-                                                                             ref.Address,
                                                                              GraphContext(m_Bridge, ctx)));
         }
     }
@@ -754,29 +752,17 @@ CScriptArray *GraphEditResult::CreatedLinks() const {
 
 CKBehavior *GraphEditResult::RootBehavior() const {
     CKContext *context = GraphContext(m_Bridge, m_Context);
-    CKBehavior *root = CKBehavior::Cast(GetStampedCKObjectById(context, m_RootBehaviorId, m_RootBehaviorStamp));
-    if (root && m_RootBehaviorAddress && ScriptBridgeObjectAddress(root) != m_RootBehaviorAddress) {
-        return nullptr;
-    }
-    return root;
+    return CKBehavior::Cast(GetStampedCKObjectById(context, m_RootBehaviorId, m_RootBehaviorStamp));
 }
 
 CKBehavior *GraphEditResult::CreatedBehavior(const ScriptBridgeStampedObjectRef &ref) const {
     CKContext *context = GraphContext(m_Bridge, m_Context);
-    CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(context, ref.Id, ref.Stamp));
-    if (behavior && ref.Address && ScriptBridgeObjectAddress(behavior) != ref.Address) {
-        return nullptr;
-    }
-    return behavior;
+    return CKBehavior::Cast(GetStampedCKObjectById(context, ref.Id, ref.Stamp));
 }
 
 CKBehaviorLink *GraphEditResult::CreatedLink(const ScriptBridgeStampedObjectRef &ref) const {
     CKContext *context = GraphContext(m_Bridge, m_Context);
-    CKBehaviorLink *link = CKBehaviorLink::Cast(GetStampedCKObjectById(context, ref.Id, ref.Stamp));
-    if (link && ref.Address && ScriptBridgeObjectAddress(link) != ref.Address) {
-        return nullptr;
-    }
-    return link;
+    return CKBehaviorLink::Cast(GetStampedCKObjectById(context, ref.Id, ref.Stamp));
 }
 
 bool GraphEditResult::Raise(const CKBehaviorContext &ctx) const {
@@ -1331,9 +1317,6 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         createdValueLocalSources.clear();
         for (const ScriptBridgeStampedObjectRef &linkRef : createdLinks) {
             if (CKBehaviorLink *link = CKBehaviorLink::Cast(GetStampedCKObjectById(context, linkRef.Id, linkRef.Stamp))) {
-                if (linkRef.Address && ScriptBridgeObjectAddress(link) != linkRef.Address) {
-                    continue;
-                }
                 if (root) {
                     root->RemoveSubBehaviorLink(link);
                 }
@@ -1373,9 +1356,6 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         appliedTargetEdits.clear();
         for (const ScriptBridgeStampedObjectRef &nodeRef : createdNodes) {
             if (CKBehavior *behavior = CKBehavior::Cast(GetStampedCKObjectById(context, nodeRef.Id, nodeRef.Stamp))) {
-                if (nodeRef.Address && ScriptBridgeObjectAddress(behavior) != nodeRef.Address) {
-                    continue;
-                }
                 if (m_Bridge) {
                     m_Bridge->ClearFrameLocalInterface(behavior->GetID(), true);
                 }
@@ -1443,8 +1423,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         spec.CreatedBehaviorId = behavior->GetID();
         spec.CreatedBehaviorStamp = CaptureBridgeObjectStamp(behavior);
         createdNodes.push_back(ScriptBridgeStampedObjectRef{behavior->GetID(),
-                                                            spec.CreatedBehaviorStamp,
-                                                            ScriptBridgeObjectAddress(behavior)});
+                                                            spec.CreatedBehaviorStamp});
     }
 
     for (const LocalBindingSpec &spec : m_LocalBindings) {
@@ -1581,10 +1560,8 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         }
         spec.CreatedLinkId = link->GetID();
         spec.CreatedLinkStamp = CaptureBridgeObjectStamp(link);
-        spec.CreatedLinkAddress = ScriptBridgeObjectAddress(link);
         createdLinks.push_back(ScriptBridgeStampedObjectRef{link->GetID(),
-                                                            spec.CreatedLinkStamp,
-                                                            spec.CreatedLinkAddress});
+                                                            spec.CreatedLinkStamp});
     }
 
     for (const ValueSpec &spec : m_Values) {
@@ -1771,7 +1748,6 @@ BehaviorLinkRef *BehaviorGraphEdit::ResolveLink(const GraphEditLink *link) const
     }
     CKBehaviorLink *rawLink = CKBehaviorLink::Cast(GetStampedCKObjectById(context, spec.CreatedLinkId, spec.CreatedLinkStamp));
     if (!rawLink ||
-        (spec.CreatedLinkAddress && ScriptBridgeObjectAddress(rawLink) != spec.CreatedLinkAddress) ||
         !GraphContainsLink(root, rawLink)) {
         return nullptr;
     }
@@ -1780,7 +1756,6 @@ BehaviorLinkRef *BehaviorGraphEdit::ResolveLink(const GraphEditLink *link) const
                                spec.CreatedLinkId,
                                ComponentIdFromContext(m_Context),
                                spec.CreatedLinkStamp,
-                               spec.CreatedLinkAddress,
                                context);
 }
 
@@ -2843,13 +2818,11 @@ BehaviorLinkRef::BehaviorLinkRef(ScriptBehaviorBridge *bridge,
                                  CK_ID linkId,
                                  CK_ID componentId,
                                  const ScriptBridgeObjectStamp &linkStamp,
-                                 std::uintptr_t linkAddress,
                                  CKContext *context)
     : ObjectRef(context ? context : (bridge && bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr),
                 linkId,
                 linkStamp,
-                std::string(),
-                linkAddress),
+                std::string()),
       m_Bridge(bridge),
       m_RootBehaviorId(rootBehaviorId),
       m_ComponentId(componentId) {}

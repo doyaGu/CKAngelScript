@@ -11,6 +11,7 @@
 
 #include "CKAngelScript.h"
 #include "VxMath.h"
+#include "ScriptObjectIdentity.h"
 #include "ScriptParameterConversion.h"
 
 class CKBehavior;
@@ -86,59 +87,6 @@ enum class ScriptBridgeTaskFlags : CKDWORD {
 enum class ScriptBridgePrototypeKind : CKBYTE {
     Name,
     Guid
-};
-
-enum class ScriptBridgeObjectStampFlags : CKDWORD {
-    None = 0,
-    ClassId = 1u << 0,
-    TypeGuid = 1u << 1,
-    PrototypeGuid = 1u << 2,
-    OperationGuid = 1u << 3,
-    OwnerId = 1u << 4,
-};
-
-inline CKDWORD ScriptBridgeObjectStampFlagMask(ScriptBridgeObjectStampFlags flag) {
-    return static_cast<CKDWORD>(flag);
-}
-
-inline bool HasScriptBridgeObjectStampFlag(CKDWORD flags, ScriptBridgeObjectStampFlags flag) {
-    return (flags & ScriptBridgeObjectStampFlagMask(flag)) != 0;
-}
-
-inline void SetScriptBridgeObjectStampFlag(CKDWORD &flags, ScriptBridgeObjectStampFlags flag, bool enabled) {
-    if (enabled) {
-        flags |= ScriptBridgeObjectStampFlagMask(flag);
-    } else {
-        flags &= ~ScriptBridgeObjectStampFlagMask(flag);
-    }
-}
-
-struct ScriptBridgeObjectStamp {
-    CKDWORD Flags = 0;
-    CK_CLASSID ClassId = 0;
-    CK_ID OwnerId = 0;
-    CKGUID TypeGuid;
-    CKGUID PrototypeGuid;
-    CKGUID OperationGuid;
-
-    bool Has(ScriptBridgeObjectStampFlags flag) const {
-        return HasScriptBridgeObjectStampFlag(Flags, flag);
-    }
-
-    void Set(ScriptBridgeObjectStampFlags flag, bool enabled) {
-        SetScriptBridgeObjectStampFlag(Flags, flag, enabled);
-    }
-};
-
-struct ScriptBridgeStampedObjectId {
-    CK_ID Id = 0;
-    ScriptBridgeObjectStamp Stamp;
-};
-
-struct ScriptBridgeStampedObjectRef {
-    CK_ID Id = 0;
-    ScriptBridgeObjectStamp Stamp;
-    std::uintptr_t Address = 0;
 };
 
 inline CKDWORD ScriptBridgeTaskFlagMask(ScriptBridgeTaskFlags flag) {

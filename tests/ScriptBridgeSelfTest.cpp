@@ -3958,11 +3958,19 @@ bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine
     }
     const CK_ID stampParamId = stampParam->GetID();
     ScriptBridgeObjectStamp stamp = CaptureBridgeObjectStamp(stampParam);
-    if (GetStampedCKObjectById(context, stampParamId, stamp) != stampParam) {
+    if (stamp.Address == 0 || GetStampedCKObjectById(context, stampParamId, stamp) != stampParam) {
         context->DestroyObject(stampParam);
         error = "Parameter stamp self-test failed to resolve the original object.";
         return false;
     }
+    const std::uintptr_t stampAddress = stamp.Address;
+    ++stamp.Address;
+    if (GetStampedCKObjectById(context, stampParamId, stamp) != nullptr) {
+        context->DestroyObject(stampParam);
+        error = "Parameter stamp self-test failed to reject a mismatched native address.";
+        return false;
+    }
+    stamp.Address = stampAddress;
     stamp.TypeGuid = CKPGUID_FLOAT;
     if (GetStampedCKObjectById(context, stampParamId, stamp) != nullptr) {
         context->DestroyObject(stampParam);

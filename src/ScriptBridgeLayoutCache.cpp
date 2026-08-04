@@ -47,7 +47,8 @@ bool RequestNeedsConfiguredLayout(const ScriptBridgeBBInvocationSpec &request) {
 }
 
 std::string LayoutStampKey(const ScriptBridgeObjectStamp &stamp) {
-    return fmt::format("{}:{}:{}:{}:{}:{}",
+    return fmt::format("{}:{}:{}:{}:{}:{}:{}",
+                       stamp.Address,
                        stamp.Flags,
                        stamp.ClassId,
                        stamp.OwnerId,
@@ -176,7 +177,7 @@ CKBeObject *ResolvePreviewBeObject(CKContext *context,
     if (!id) {
         return nullptr;
     }
-    CKObject *object = stamp.Flags != 0
+    CKObject *object = stamp.IsCaptured()
         ? GetStampedCKObjectById(context, id, stamp)
         : GetCKObjectById(context, id);
     if (!object) {

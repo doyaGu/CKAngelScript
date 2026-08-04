@@ -239,7 +239,7 @@ CKBeObject *ResolveRequestBeObject(CKContext *context,
         return nullptr;
     }
 
-    CKObject *object = stamp.Flags != 0 ? GetStampedCKObjectById(context, id, stamp) : GetCKObjectById(context, id);
+    CKObject *object = stamp.IsCaptured() ? GetStampedCKObjectById(context, id, stamp) : GetCKObjectById(context, id);
     if (!object) {
         error = fmt::format("{} object {} is no longer valid.", role ? role : "Building Block request", id);
         return nullptr;
