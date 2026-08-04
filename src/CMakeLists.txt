@@ -16,6 +16,7 @@ set(CKAS_HEADERS
         ScriptBuilder.h
         ScriptEngineHost.h
         ScriptImportBinder.h
+        ScriptInvocation.h
         ScriptInvoker.h
         ScriptModuleReplacer.h
         ScriptFormat.h
@@ -97,6 +98,7 @@ set(CKAS_SOURCES
         ScriptModuleRegistry.cpp
         ScriptCache.cpp
         ScriptBuilder.cpp
+        ScriptInvocation.cpp
         ScriptInvoker.cpp
         AngelScriptExecutor.cpp
         ScriptExecutorStateStore.cpp
@@ -166,6 +168,7 @@ if (CKAS_BUILD_SELF_TESTS)
     list(APPEND CKAS_SOURCES
             "${CKAS_TEST_DIR}/ScriptStartupSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptInitialLifecycleSelfTest.cpp"
+            "${CKAS_TEST_DIR}/ScriptInvocationSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptComponentMetadataSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptApiSelfTest.cpp"
             "${CKAS_TEST_DIR}/ScriptInfoExportSelfTest.cpp"

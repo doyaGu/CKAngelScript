@@ -1,131 +1,25 @@
 #include "ScriptInvoker.h"
 
-#include <fmt/format.h>
+#include <utility>
 
-#include "ScriptAsync.h"
 #include "ScriptBehaviorFrame.h"
 #include "ScriptManager.h"
 
-namespace {
-
-std::string BuildContextStackTrace(asIScriptContext *ctx, const char *prefix) {
-    if (!ctx) {
-        return std::string();
-    }
-
-    const char *section = nullptr;
-    int col = 0;
-    int row = ctx->GetExceptionLineNumber(&col, &section);
-
-    asIScriptFunction *exFunc = ctx->GetExceptionFunction();
-    const char *exFuncDecl = exFunc ? exFunc->GetDeclaration() : nullptr;
-    const char *exStr = ctx->GetExceptionString();
-
-    std::string stackTrace = fmt::format("Exception in '{}' at {}({},{}): '{}'\n",
-        exFuncDecl ? exFuncDecl : "<unknown function>",
-        section ? section : "<unknown section>",
-        row,
-        col,
-        exStr ? exStr : "");
-
-    for (asUINT i = 0; i < ctx->GetCallstackSize(); i++) {
-        asIScriptFunction *f = ctx->GetFunction(i);
-        row = ctx->GetLineNumber(i, &col, &section);
-        const char *funcDecl = f ? f->GetDeclaration() : nullptr;
-        stackTrace.append(fmt::format("\t{} at {}({},{})\n",
-            funcDecl ? funcDecl : "<unknown function>",
-            section ? section : "<unknown section>",
-            row,
-            col));
-    }
-
-    (void) prefix;
-    return stackTrace;
-}
-
-ScriptInvocationStatus HandleExecutionResult(ScriptInvoker *invoker, asIScriptContext *ctx, int result, const char *label) {
-    if (result == asEXECUTION_FINISHED) {
-        return ScriptInvocationStatus::Finished;
-    }
-    if (result == asEXECUTION_SUSPENDED) {
-        return ScriptInvocationStatus::Suspended;
-    }
-
-    if (result == asEXECUTION_EXCEPTION) {
-        invoker->SetStackTrace(BuildContextStackTrace(ctx, label));
-        invoker->SetErrorMessage(std::string(label ? label : "Script") + " Threw Exception.");
-    } else if (result == asEXECUTION_ABORTED) {
-        invoker->SetErrorMessage(std::string(label ? label : "Script") + " Aborted.");
-    } else {
-        invoker->SetErrorMessage(fmt::format("{} failed with result code: {}",
-                                            label ? label : "Script",
-                                            result));
-    }
-    return ScriptInvocationStatus::Failed;
-}
-
-void ReleaseFinishedContextState(asIScriptContext *ctx) {
-    if (ctx && ctx->GetState() == asEXECUTION_FINISHED) {
-        ctx->Unprepare();
-    }
-}
-
-void ReleaseAbortedContextState(asIScriptContext *ctx) {
-    if (!ctx) {
-        return;
-    }
-    const int state = ctx->GetState();
-    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
-        ctx->Abort();
-    }
-    ctx->Unprepare();
-}
-
-} // namespace
-
-ScriptInvoker::ScriptInvoker(ScriptManager *man) : m_ScriptManager(man) {}
+ScriptInvoker::ScriptInvoker(ScriptManager *manager)
+    : m_ScriptManager(manager),
+      m_Invocation(manager) {}
 
 ScriptInvoker::~ScriptInvoker() {
     ReleaseContext();
-    ReleaseBehaviorFrame();
-
-    // Release the cached script
-    if (m_CachedScript) {
-        m_CachedScript = nullptr;
-    }
+    m_CachedScript.reset();
 }
 
 asIScriptContext *ScriptInvoker::GetContext() const {
-    return m_Context;
-}
-
-void ScriptInvoker::SetContext(asIScriptContext* ctx) {
-    if (m_Context == ctx) {
-        return;
-    }
-
-    ReleaseContext();
-    m_Context = ctx;
+    return m_Invocation.GetContext();
 }
 
 void ScriptInvoker::ReleaseContext() {
-    if (!m_Context) {
-        ReleaseBehaviorFrame();
-        return;
-    }
-
-    auto *ctx = m_Context;
-    m_Context = nullptr;
-
-    if (m_ScriptManager && m_ScriptManager->GetAsyncScheduler()) {
-        m_ScriptManager->GetAsyncScheduler()->ForgetContext(ctx);
-    }
-    ReleaseAbortedContextState(ctx);
-    if (m_ScriptManager && m_ScriptManager->GetScriptEngine()) {
-        m_ScriptManager->GetScriptEngine()->ReturnContext(ctx);
-    } else {
-        ctx->Release();
-    }
+    m_Invocation.Cancel();
     ReleaseBehaviorFrame();
 }
 
@@ -136,68 +30,27 @@ void ScriptInvoker::ReleaseBehaviorFrame() {
     }
 }
 
-ScriptInvocationStatus ScriptInvoker::ResumePreparedObjectContext(const CKBehaviorContext &behcontext,
-                                                                  const char *label,
-                                                                  const ScriptFunctionArgumentHandler &retHandler) {
-    asIScriptContext *ctx = GetContext();
-    if (!ctx || ctx->GetState() != asEXECUTION_SUSPENDED) {
-        SetErrorMessage("No suspended script context to resume.");
-        return ScriptInvocationStatus::Failed;
-    }
-
-    m_BehaviorContextStorage = behcontext;
+ScriptInvocationStatus ScriptInvoker::ResumePreparedObjectContext(
+    const CKBehaviorContext &behaviorContext,
+    const char *label,
+    const ScriptFunctionArgumentHandler &resultHandler) {
+    m_BehaviorContextStorage = behaviorContext;
     if (m_BehaviorFrameStorage) {
-        m_BehaviorFrameStorage->Refresh(behcontext);
+        m_BehaviorFrameStorage->Refresh(behaviorContext);
     }
 
-    std::string waitError;
-    ScriptAsyncScheduler *scheduler = m_ScriptManager ? m_ScriptManager->GetAsyncScheduler() : nullptr;
-    const ScriptAsyncScheduler::ResumeState resume = scheduler
-        ? scheduler->PrepareContextResume(ctx, waitError)
-        : ScriptAsyncScheduler::ResumeState::Ready;
-    if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
-        m_LastResultCode = asEXECUTION_SUSPENDED;
-        return ScriptInvocationStatus::Suspended;
+    ScriptInvocationSpec spec;
+    spec.Label = label;
+    spec.Result = resultHandler;
+    if (IsProfiling()) {
+        spec.BeforeExecute = [this]() { StartTiming(); };
+        spec.AfterExecute = [this]() { EndTiming(); };
     }
-    if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
-        m_LastResultCode = asEXECUTION_ABORTED;
-        SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
-        ReleaseAbortedContextState(ctx);
+    const ScriptInvocationStatus status = m_Invocation.Resume(spec);
+    if (status != ScriptInvocationStatus::Suspended) {
         ReleaseBehaviorFrame();
-        return ScriptInvocationStatus::Failed;
     }
-
-    if (IsProfiling())
-        StartTiming();
-
-    const int r = ctx->Execute();
-    m_LastResultCode = r;
-    const ScriptInvocationStatus status = HandleExecutionResult(this, ctx, r, label);
-    if (status != ScriptInvocationStatus::Finished) {
-        if (IsProfiling())
-            EndTiming();
-        if (status == ScriptInvocationStatus::Failed) {
-            ReleaseBehaviorFrame();
-        }
-        return status;
-    }
-
-    if (retHandler) {
-        if (!retHandler(ctx)) {
-            m_LastResultCode = asEXECUTION_ABORTED;
-            SetErrorMessage("Script method result handler rejected execution.");
-            ReleaseFinishedContextState(ctx);
-            ReleaseBehaviorFrame();
-            return ScriptInvocationStatus::Failed;
-        }
-    }
-
-    if (IsProfiling())
-        EndTiming();
-
-    ReleaseFinishedContextState(ctx);
-    ReleaseBehaviorFrame();
-    return ScriptInvocationStatus::Finished;
+    return status;
 }
 
 bool ScriptInvoker::SetScript(const char *scriptName) {
@@ -206,32 +59,21 @@ bool ScriptInvoker::SetScript(const char *scriptName) {
         SetErrorMessage("Script module is invalid or failed to compile.");
         return false;
     }
-
     m_CachedScript = std::move(cachedScript);
     return true;
 }
 
 void ScriptInvoker::ResetScript() {
-    if (m_CachedScript) {
-        m_CachedScript = nullptr;
-    }
+    m_CachedScript.reset();
 }
 
 asIScriptModule *ScriptInvoker::GetModule() const {
-    if (!m_CachedScript) {
-        return nullptr;
-    }
-
-    return m_CachedScript->module;
+    return m_CachedScript ? m_CachedScript->module : nullptr;
 }
 
 asITypeInfo *ScriptInvoker::GetTypeInfoByName(const char *name) const {
     asIScriptModule *module = GetModule();
-    if (!module || !name || name[0] == '\0') {
-        return nullptr;
-    }
-
-    return module->GetTypeInfoByName(name);
+    return module && name && name[0] != '\0' ? module->GetTypeInfoByName(name) : nullptr;
 }
 
 asIScriptObject *ScriptInvoker::CreateScriptObject(asITypeInfo *type) {
@@ -239,324 +81,178 @@ asIScriptObject *ScriptInvoker::CreateScriptObject(asITypeInfo *type) {
         SetErrorMessage("No script type to instantiate.");
         return nullptr;
     }
-
     asIScriptEngine *engine = type->GetEngine();
     if (!engine) {
         SetErrorMessage("Script type has no engine.");
         return nullptr;
     }
-
     void *object = engine->CreateScriptObject(type);
     if (!object) {
         SetErrorMessage("Failed to create script object.");
         return nullptr;
     }
-
     return static_cast<asIScriptObject *>(object);
 }
 
 asIScriptFunction *ScriptInvoker::GetFunctionByName(const char *name) const {
-    if (!m_CachedScript) {
-        return nullptr;
-    }
-
-    asIScriptFunction *func = m_CachedScript->module->GetFunctionByName(name);
-    if (!func) {
-        return nullptr;
-    }
-
-    return func;
+    asIScriptModule *module = GetModule();
+    return module ? module->GetFunctionByName(name) : nullptr;
 }
 
-asIScriptFunction *ScriptInvoker::GetFunctionByDecl(const char *decl) const {
-    if (!m_CachedScript) {
-        return nullptr;
-    }
-
-    asIScriptFunction *func = m_CachedScript->module->GetFunctionByDecl(decl);
-    if (!func) {
-        return nullptr;
-    }
-
-    return func;
+asIScriptFunction *ScriptInvoker::GetFunctionByDecl(const char *declaration) const {
+    asIScriptModule *module = GetModule();
+    return module ? module->GetFunctionByDecl(declaration) : nullptr;
 }
 
-bool ScriptInvoker::ExecuteScript(asIScriptFunction *func, const ScriptFunctionArgumentHandler &argsHandler, const ScriptFunctionArgumentHandler &retHandler) {
-    return ExecuteScriptStatus(func, argsHandler, retHandler) == ScriptInvocationStatus::Finished;
+bool ScriptInvoker::ExecuteScript(asIScriptFunction *function,
+                                  const ScriptFunctionArgumentHandler &argumentHandler,
+                                  const ScriptFunctionArgumentHandler &resultHandler) {
+    return ExecuteScriptStatus(function, argumentHandler, resultHandler) == ScriptInvocationStatus::Finished;
 }
 
-ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(asIScriptFunction *func,
-                                                          const ScriptFunctionArgumentHandler &argsHandler,
-                                                          const ScriptFunctionArgumentHandler &retHandler,
-                                                          const ScriptFunctionArgumentHandler &resumeHandler) {
-    m_LastResultCode = 0;
-    m_ErrorMessage.clear();
-    m_StackTrace.clear();
-
-    if (!func) {
-        SetErrorMessage("No function to execute.");
-        return ScriptInvocationStatus::Failed;
+ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(
+    asIScriptFunction *function,
+    const ScriptFunctionArgumentHandler &argumentHandler,
+    const ScriptFunctionArgumentHandler &resultHandler,
+    const ScriptFunctionArgumentHandler &resumeHandler) {
+    ScriptInvocationSpec spec;
+    spec.Label = "Script Execution";
+    spec.Prepare = argumentHandler;
+    spec.Result = resultHandler;
+    spec.Resume = resumeHandler;
+    if (IsProfiling()) {
+        spec.BeforeExecute = [this]() { StartTiming(); };
+        spec.AfterExecute = [this]() { EndTiming(); };
     }
-
-    auto *engine = func->GetEngine();
-    if (!engine) {
-        SetErrorMessage("Script engine is null.");
-        return ScriptInvocationStatus::Failed;
+    if (!function) {
+        return m_Invocation.Start(nullptr, spec);
     }
-
-    asIScriptContext *ctx = GetContext();
-    if (!ctx) {
-        ctx = engine->RequestContext();
-        if (!ctx) {
-            SetErrorMessage("Failed to create AngelScript context.");
-            return ScriptInvocationStatus::Failed;
-        }
-        SetContext(ctx);
-    }
-
-    int r = 0;
-
-    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
-        std::string waitError;
-        ScriptAsyncScheduler *scheduler = m_ScriptManager ? m_ScriptManager->GetAsyncScheduler() : nullptr;
-        const ScriptAsyncScheduler::ResumeState resume = scheduler
-            ? scheduler->PrepareContextResume(ctx, waitError)
-            : ScriptAsyncScheduler::ResumeState::Ready;
-        if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
-            m_LastResultCode = asEXECUTION_SUSPENDED;
-            return ScriptInvocationStatus::Suspended;
-        }
-        if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
-            m_LastResultCode = asEXECUTION_ABORTED;
-            SetErrorMessage(waitError.empty() ? "Awaited async task failed." : waitError);
-            ReleaseAbortedContextState(ctx);
-            return ScriptInvocationStatus::Failed;
-        }
-        if (resumeHandler) {
-            if (!resumeHandler(ctx)) {
-                m_LastResultCode = asEXECUTION_ABORTED;
-                SetErrorMessage("Script resume handler rejected execution.");
-                ReleaseAbortedContextState(ctx);
-                return ScriptInvocationStatus::Failed;
-            }
-        }
-    } else {
-        if (func->GetFuncType() == asFUNC_DELEGATE) {
-            asIScriptFunction *delegate = func->GetDelegateFunction();
-            if (!delegate) {
-                r = asNO_FUNCTION;
-            } else {
-                void *delegateObject = func->GetDelegateObject();
-                r = ctx->Prepare(delegate);
-                if (r >= 0) {
-                    r = ctx->SetObject(delegateObject);
-                }
-            }
-        } else {
-            r = ctx->Prepare(func);
-        }
-
-        if (r < 0) {
-            m_LastResultCode = r;
-            SetErrorMessage("Failed to prepare script function.");
-            ReleaseAbortedContextState(ctx);
-            return ScriptInvocationStatus::Failed;
-        }
-
-        if (argsHandler) {
-            if (!argsHandler(ctx)) {
-                m_LastResultCode = asEXECUTION_ABORTED;
-                SetErrorMessage("Script argument handler rejected execution.");
-                ReleaseAbortedContextState(ctx);
-                return ScriptInvocationStatus::Failed;
-            }
-        }
-    }
-
-    if (IsProfiling())
-        StartTiming();
-
-    r = ctx->Execute();
-    m_LastResultCode = r;
-    const ScriptInvocationStatus status = HandleExecutionResult(this, ctx, r, "Script Execution");
-    if (status != ScriptInvocationStatus::Finished) {
-        if (IsProfiling())
-            EndTiming();
-        return status;
-    }
-
-    if (retHandler) {
-        if (!retHandler(ctx)) {
-            m_LastResultCode = asEXECUTION_ABORTED;
-            SetErrorMessage("Script result handler rejected execution.");
-            ReleaseFinishedContextState(ctx);
-            return ScriptInvocationStatus::Failed;
-        }
-    }
-
-    if (IsProfiling())
-        EndTiming();
-
-    ReleaseFinishedContextState(ctx);
-    return ScriptInvocationStatus::Finished;
+    return m_Invocation.IsSuspended()
+        ? m_Invocation.Resume(spec)
+        : m_Invocation.Start(function, spec);
 }
 
-bool ScriptInvoker::ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext) {
-    return ExecuteObjectMethodStatus(object, func, behcontext) == ScriptInvocationStatus::Finished;
+bool ScriptInvoker::ExecuteObjectMethod(asIScriptObject *object,
+                                        asIScriptFunction *function,
+                                        const CKBehaviorContext &behaviorContext) {
+    return ExecuteObjectMethodStatus(object, function, behaviorContext) == ScriptInvocationStatus::Finished;
 }
 
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext) {
-    return ExecuteObjectMethodStatus(object, func, behcontext, ScriptBehaviorArgumentKind::BehaviorContext, nullptr);
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
+    asIScriptObject *object,
+    asIScriptFunction *function,
+    const CKBehaviorContext &behaviorContext) {
+    return ExecuteObjectMethodStatus(object,
+                                     function,
+                                     behaviorContext,
+                                     ScriptBehaviorArgumentKind::BehaviorContext,
+                                     nullptr);
 }
 
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object,
-                                                                asIScriptFunction *func,
-                                                                const CKBehaviorContext &behcontext,
-                                                                ScriptBehaviorArgumentKind argumentKind) {
-    return ExecuteObjectMethodStatus(object, func, behcontext, argumentKind, nullptr);
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
+    asIScriptObject *object,
+    asIScriptFunction *function,
+    const CKBehaviorContext &behaviorContext,
+    ScriptBehaviorArgumentKind argumentKind) {
+    return ExecuteObjectMethodStatus(object, function, behaviorContext, argumentKind, nullptr);
 }
 
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object,
-                                                                asIScriptFunction *func,
-                                                                const CKBehaviorContext &behcontext,
-                                                                const ScriptFunctionArgumentHandler &retHandler) {
-    return ExecuteObjectMethodStatus(object, func, behcontext, ScriptBehaviorArgumentKind::BehaviorContext, retHandler);
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
+    asIScriptObject *object,
+    asIScriptFunction *function,
+    const CKBehaviorContext &behaviorContext,
+    const ScriptFunctionArgumentHandler &resultHandler) {
+    return ExecuteObjectMethodStatus(object,
+                                     function,
+                                     behaviorContext,
+                                     ScriptBehaviorArgumentKind::BehaviorContext,
+                                     resultHandler);
 }
 
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object,
-                                                                asIScriptFunction *func,
-                                                                const CKBehaviorContext &behcontext,
-                                                                ScriptBehaviorArgumentKind argumentKind,
-                                                                const ScriptFunctionArgumentHandler &retHandler) {
-    m_LastResultCode = 0;
-    m_ErrorMessage.clear();
-    m_StackTrace.clear();
-
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
+    asIScriptObject *object,
+    asIScriptFunction *function,
+    const CKBehaviorContext &behaviorContext,
+    ScriptBehaviorArgumentKind argumentKind,
+    const ScriptFunctionArgumentHandler &resultHandler) {
+    m_Invocation.ClearDiagnostics();
     if (!m_CachedScript) {
         SetErrorMessage("No script to execute.");
         return ScriptInvocationStatus::Failed;
     }
-
     if (!object) {
         SetErrorMessage("No script object to execute.");
         return ScriptInvocationStatus::Failed;
     }
-
-    if (!func) {
+    if (!function) {
         SetErrorMessage("No object method to execute.");
         return ScriptInvocationStatus::Failed;
     }
-
-    auto *engine = func->GetEngine();
-    if (!engine) {
-        SetErrorMessage("Script engine is null.");
-        return ScriptInvocationStatus::Failed;
+    if (m_Invocation.IsSuspended()) {
+        return ResumePreparedObjectContext(behaviorContext, "Script Method", resultHandler);
     }
 
-    asIScriptContext *ctx = GetContext();
-    if (!ctx) {
-        ctx = engine->RequestContext();
-        if (!ctx) {
-            SetErrorMessage("Failed to create AngelScript context.");
-            return ScriptInvocationStatus::Failed;
-        }
-        SetContext(ctx);
-    }
-
-    int r = 0;
-    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
-        return ResumePreparedObjectContext(behcontext, "Script Method", retHandler);
-    }
-
-    m_BehaviorContextStorage = behcontext;
+    m_BehaviorContextStorage = behaviorContext;
     ReleaseBehaviorFrame();
     if (argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame) {
-        m_BehaviorFrameStorage = new BehaviorFrame(behcontext);
+        m_BehaviorFrameStorage = new BehaviorFrame(behaviorContext);
     }
 
-    r = ctx->Prepare(func);
-    if (r < 0) {
-        m_LastResultCode = r;
-        SetErrorMessage("Failed to prepare script method.");
-        ReleaseAbortedContextState(ctx);
-        ReleaseBehaviorFrame();
-        return ScriptInvocationStatus::Failed;
-    }
-
-    r = ctx->SetObject(object);
-    if (r < 0) {
-        m_LastResultCode = r;
-        SetErrorMessage("Failed to bind script method object.");
-        ReleaseAbortedContextState(ctx);
-        ReleaseBehaviorFrame();
-        return ScriptInvocationStatus::Failed;
-    }
-
-    if (func->GetParamCount() > 0) {
+    ScriptInvocationSpec spec;
+    spec.Label = "Script Method";
+    spec.Prepare = [this, object, function, argumentKind](asIScriptContext *context) {
+        int result = context->SetObject(object);
+        if (result < 0) {
+            SetErrorMessage("Failed to bind script method object.");
+            return false;
+        }
+        if (function->GetParamCount() == 0) {
+            return true;
+        }
         void *argument = argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
             ? static_cast<void *>(m_BehaviorFrameStorage)
             : static_cast<void *>(&m_BehaviorContextStorage);
-        r = ctx->SetArgObject(0, argument);
-        if (r < 0) {
-            m_LastResultCode = r;
+        result = context->SetArgObject(0, argument);
+        if (result < 0) {
             SetErrorMessage(argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
                 ? "Failed to bind script method behavior frame."
                 : "Failed to bind script method behavior context.");
-            ReleaseAbortedContextState(ctx);
-            ReleaseBehaviorFrame();
-            return ScriptInvocationStatus::Failed;
+            return false;
         }
+        return true;
+    };
+    spec.Result = resultHandler;
+    if (IsProfiling()) {
+        spec.BeforeExecute = [this]() { StartTiming(); };
+        spec.AfterExecute = [this]() { EndTiming(); };
     }
 
-    if (IsProfiling())
-        StartTiming();
-
-    r = ctx->Execute();
-    m_LastResultCode = r;
-    const ScriptInvocationStatus status = HandleExecutionResult(this, ctx, r, "Script Method");
-    if (status != ScriptInvocationStatus::Finished) {
-        if (IsProfiling())
-            EndTiming();
-        if (status == ScriptInvocationStatus::Failed) {
-            ReleaseBehaviorFrame();
-        }
-        return status;
+    const ScriptInvocationStatus status = m_Invocation.Start(function, spec);
+    if (status != ScriptInvocationStatus::Suspended) {
+        ReleaseBehaviorFrame();
     }
-
-    if (retHandler) {
-        if (!retHandler(ctx)) {
-            m_LastResultCode = asEXECUTION_ABORTED;
-            SetErrorMessage("Script method result handler rejected execution.");
-            ReleaseFinishedContextState(ctx);
-            ReleaseBehaviorFrame();
-            return ScriptInvocationStatus::Failed;
-        }
-    }
-
-    if (IsProfiling())
-        EndTiming();
-
-    ReleaseFinishedContextState(ctx);
-    ReleaseBehaviorFrame();
-    return ScriptInvocationStatus::Finished;
+    return status;
 }
 
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object,
-                                                              asIScriptFunction *func,
-                                                              const ScriptMessage &message,
-                                                              const CKBehaviorContext &behcontext) {
-    return ExecuteObjectMethodStatus(object, func, message, behcontext, ScriptBehaviorArgumentKind::BehaviorContext);
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
+    asIScriptObject *object,
+    asIScriptFunction *function,
+    const ScriptMessage &message,
+    const CKBehaviorContext &behaviorContext) {
+    return ExecuteObjectMethodStatus(object,
+                                     function,
+                                     message,
+                                     behaviorContext,
+                                     ScriptBehaviorArgumentKind::BehaviorContext);
 }
 
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject *object,
-                                                              asIScriptFunction *func,
-                                                              const ScriptMessage &message,
-                                                              const CKBehaviorContext &behcontext,
-                                                              ScriptBehaviorArgumentKind argumentKind) {
-    m_LastResultCode = 0;
-    m_ErrorMessage.clear();
-    m_StackTrace.clear();
-
+ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
+    asIScriptObject *object,
+    asIScriptFunction *function,
+    const ScriptMessage &message,
+    const CKBehaviorContext &behaviorContext,
+    ScriptBehaviorArgumentKind argumentKind) {
+    m_Invocation.ClearDiagnostics();
     if (!m_CachedScript) {
         SetErrorMessage("No script to execute.");
         return ScriptInvocationStatus::Failed;
@@ -565,99 +261,62 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(asIScriptObject 
         SetErrorMessage("No script object to execute.");
         return ScriptInvocationStatus::Failed;
     }
-    if (!func) {
+    if (!function) {
         SetErrorMessage("No object method to execute.");
         return ScriptInvocationStatus::Failed;
     }
-    asIScriptEngine *engine = func->GetEngine();
-    if (!engine) {
-        SetErrorMessage("Script engine is null.");
-        return ScriptInvocationStatus::Failed;
-    }
-    asIScriptContext *ctx = GetContext();
-    if (!ctx) {
-        ctx = engine->RequestContext();
-        if (!ctx) {
-            SetErrorMessage("Failed to create AngelScript context.");
-            return ScriptInvocationStatus::Failed;
-        }
-        SetContext(ctx);
-    }
-
-    int r = 0;
-    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
-        return ResumePreparedObjectContext(behcontext, "Script Message", nullptr);
+    if (m_Invocation.IsSuspended()) {
+        return ResumePreparedObjectContext(behaviorContext, "Script Message", nullptr);
     }
 
     m_MessageStorage = message;
-    m_BehaviorContextStorage = behcontext;
+    m_BehaviorContextStorage = behaviorContext;
     ReleaseBehaviorFrame();
     if (argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame) {
-        m_BehaviorFrameStorage = new BehaviorFrame(behcontext);
-    }
-    r = ctx->Prepare(func);
-    if (r >= 0) {
-        r = ctx->SetObject(object);
-    }
-    if (r >= 0) {
-        r = ctx->SetArgObject(0, &m_MessageStorage);
-    }
-    if (r >= 0) {
-        void *argument = argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
-            ? static_cast<void *>(m_BehaviorFrameStorage)
-            : static_cast<void *>(&m_BehaviorContextStorage);
-        r = ctx->SetArgObject(1, argument);
-    }
-    if (r < 0) {
-        m_LastResultCode = r;
-        SetErrorMessage("Failed to prepare script message method.");
-        ReleaseAbortedContextState(ctx);
-        ReleaseBehaviorFrame();
-        return ScriptInvocationStatus::Failed;
+        m_BehaviorFrameStorage = new BehaviorFrame(behaviorContext);
     }
 
-    if (IsProfiling())
-        StartTiming();
-
-    r = ctx->Execute();
-    m_LastResultCode = r;
-    const ScriptInvocationStatus status = HandleExecutionResult(this, ctx, r, "Script Message");
-    if (status != ScriptInvocationStatus::Finished) {
-        if (IsProfiling())
-            EndTiming();
-        if (status == ScriptInvocationStatus::Failed) {
-            ReleaseBehaviorFrame();
+    ScriptInvocationSpec spec;
+    spec.Label = "Script Message";
+    spec.Prepare = [this, object, argumentKind](asIScriptContext *context) {
+        int result = context->SetObject(object);
+        if (result >= 0) {
+            result = context->SetArgObject(0, &m_MessageStorage);
         }
-        return status;
+        if (result >= 0) {
+            void *argument = argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
+                ? static_cast<void *>(m_BehaviorFrameStorage)
+                : static_cast<void *>(&m_BehaviorContextStorage);
+            result = context->SetArgObject(1, argument);
+        }
+        if (result < 0) {
+            SetErrorMessage("Failed to prepare script message method.");
+            return false;
+        }
+        return true;
+    };
+    if (IsProfiling()) {
+        spec.BeforeExecute = [this]() { StartTiming(); };
+        spec.AfterExecute = [this]() { EndTiming(); };
     }
 
-    if (IsProfiling())
-        EndTiming();
-
-    ReleaseFinishedContextState(ctx);
-    ReleaseBehaviorFrame();
-    return ScriptInvocationStatus::Finished;
+    const ScriptInvocationStatus status = m_Invocation.Start(function, spec);
+    if (status != ScriptInvocationStatus::Suspended) {
+        ReleaseBehaviorFrame();
+    }
+    return status;
 }
 
-ScriptInvocationStatus ScriptInvoker::ResumeObjectMessageStatus(const CKBehaviorContext &behcontext) {
-    m_LastResultCode = 0;
-    m_ErrorMessage.clear();
-    m_StackTrace.clear();
-    return ResumePreparedObjectContext(behcontext, "Script Message", nullptr);
+ScriptInvocationStatus ScriptInvoker::ResumeObjectMessageStatus(const CKBehaviorContext &behaviorContext) {
+    return ResumePreparedObjectContext(behaviorContext, "Script Message", nullptr);
 }
 
 bool ScriptInvoker::IsContextSuspended() const {
-    return m_Context && m_Context->GetState() == asEXECUTION_SUSPENDED;
+    return m_Invocation.IsSuspended();
 }
 
 void ScriptInvoker::AbortActiveContext() {
-    if (!m_Context) {
-        return;
-    }
-    const int state = m_Context->GetState();
-    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
-        m_Context->Abort();
-    }
+    m_Invocation.AbortActive();
 }
 
 void ScriptInvoker::AbortContext() {
@@ -669,7 +328,7 @@ void ScriptInvoker::StartTiming() {
 }
 
 void ScriptInvoker::EndTiming() {
-    auto endTime = std::chrono::high_resolution_clock::now();
+    const auto endTime = std::chrono::high_resolution_clock::now();
     m_ElapsedMs = std::chrono::duration<double, std::milli>(endTime - m_StartTime).count();
 }
 
@@ -678,25 +337,23 @@ double ScriptInvoker::GetElapsedTimeMs() const {
 }
 
 const std::string &ScriptInvoker::GetErrorMessage() const {
-    return m_ErrorMessage;
+    return m_Invocation.GetErrorMessage();
 }
 
-void ScriptInvoker::SetErrorMessage(const std::string& msg) {
-    m_ErrorMessage = msg;
+void ScriptInvoker::SetErrorMessage(const std::string &message) {
+    m_Invocation.SetErrorMessage(message);
 }
 
 const std::string &ScriptInvoker::GetStackTrace() const {
-    return m_StackTrace;
+    return m_Invocation.GetStackTrace();
 }
 
-void ScriptInvoker::SetStackTrace(const std::string& trace) {
-    m_StackTrace = trace;
+void ScriptInvoker::SetStackTrace(const std::string &trace) {
+    m_Invocation.SetStackTrace(trace);
 }
 
 void ScriptInvoker::Reset() {
     ReleaseContext();
     ResetScript();
-    SetErrorMessage("");
-    SetStackTrace("");
-    m_LastResultCode = 0;
+    m_Invocation.ClearDiagnostics();
 }

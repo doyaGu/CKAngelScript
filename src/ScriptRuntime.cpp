@@ -15,7 +15,7 @@
 #include "CKTimeManager.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
-#include "ScriptAsync.h"
+#include "ScriptInvocation.h"
 #include "ScriptManager.h"
 #include "ScriptInitialLifecycle.h"
 #include "ScriptMessage.h"
@@ -456,7 +456,7 @@ struct ScriptRuntime::Module {
     bool EnableCalled = false;
     bool Failed = false;
     std::string Error;
-    asIScriptContext *ActiveContext = nullptr;
+    std::unique_ptr<ScriptInvocationContext> ActiveCall;
     std::string ActiveInvocation;
     ScriptContext ContextStorage;
     ScriptMessage MessageStorage;
@@ -1073,7 +1073,7 @@ bool ScriptRuntime::DeliverMessage(const std::string &id, const ScriptMessage &m
         error = "Runtime message target is not ready.";
         return false;
     }
-    if (module->ActiveContext) {
+    if (module->ActiveCall) {
         error = "Runtime message target is busy.";
         return false;
     }
@@ -1764,7 +1764,7 @@ bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
                                   context.TimeSeconds());
     };
 
-    if (module.ActiveContext && module.ActiveInvocation == "OnDisable") {
+    if (module.ActiveCall && module.ActiveInvocation == "OnDisable") {
         const InvokeStatus status = Invoke(module, "OnDisable", makeDisableContext());
         if (status == InvokeStatus::Suspended) {
             return false;
@@ -1829,7 +1829,7 @@ const char *ScriptRuntime::ModuleState(const Module &module) const {
     if (module.PendingReset) {
         return kStateResetting;
     }
-    if (module.ActiveContext) {
+    if (module.ActiveCall) {
         return kStateSuspended;
     }
     if (!module.Loaded) {
@@ -1920,13 +1920,13 @@ void ScriptRuntime::FinalizePendingModules() {
             changed = true;
             continue;
         }
-        if (module->PendingErase && !module->PendingDestroy && !module->ActiveContext) {
+        if (module->PendingErase && !module->PendingDestroy && !module->ActiveCall) {
             DiscardPendingReplacement(*module);
             it = m_Modules.erase(it);
             changed = true;
             continue;
         }
-        if (module->PendingReplacement && !module->PendingDestroy && !module->ActiveContext) {
+        if (module->PendingReplacement && !module->PendingDestroy && !module->ActiveCall) {
             *it = std::move(module->PendingReplacement);
             SubscribeStaticTopics(**it);
             changed = true;
@@ -2015,63 +2015,37 @@ ScriptRuntime::InvokeStatus ScriptRuntime::InvokeMessage(Module &module, const S
     if (!module.OnMessage) {
         return InvokeStatus::Finished;
     }
-    asIScriptFunction *func = module.OnMessage;
-    asIScriptEngine *engine = module.ActiveContext ? module.ActiveContext->GetEngine() : (func ? func->GetEngine() : nullptr);
-    asIScriptContext *ctx = module.ActiveContext;
-    if (!ctx) {
-        ctx = engine ? engine->RequestContext() : nullptr;
-        if (!ctx) {
-            SetModuleError(module, "OnMessage: failed to request AngelScript context");
-            return InvokeStatus::Failed;
-        }
-        module.ActiveContext = ctx;
+    if (!module.ActiveCall) {
+        module.ActiveCall = std::make_unique<ScriptInvocationContext>(m_Manager);
         module.ActiveInvocation = "OnMessage";
         module.MessageStorage = message;
     }
     module.ContextStorage = context;
-    int r = 0;
-    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
-        std::string waitError;
-        ScriptAsyncScheduler *scheduler = m_Manager ? m_Manager->GetAsyncScheduler() : nullptr;
-        const ScriptAsyncScheduler::ResumeState resume = scheduler
-            ? scheduler->PrepareContextResume(ctx, waitError)
-            : ScriptAsyncScheduler::ResumeState::Ready;
-        if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
-            return InvokeStatus::Suspended;
+
+    ScriptInvocationSpec spec;
+    spec.Label = "OnMessage";
+    spec.Prepare = [&module](asIScriptContext *invocationContext) {
+        int result = module.Object ? invocationContext->SetObject(module.Object) : asSUCCESS;
+        if (result >= 0) {
+            result = invocationContext->SetArgObject(0, &module.MessageStorage);
         }
-        if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
-            CancelActiveInvocation(module);
-            SetModuleError(module, waitError.empty() ? "Awaited async task failed." : waitError);
-            return InvokeStatus::Failed;
+        if (result >= 0) {
+            result = invocationContext->SetArgObject(1, &module.ContextStorage);
         }
-    } else {
-        r = ctx->Prepare(func);
-        if (r >= 0 && module.Object) {
-            r = ctx->SetObject(module.Object);
-        }
-        if (r >= 0) {
-            r = ctx->SetArgObject(0, &module.MessageStorage);
-        }
-        if (r >= 0) {
-            r = ctx->SetArgObject(1, &module.ContextStorage);
-        }
-        if (r < 0) {
-            CancelActiveInvocation(module);
-            SetModuleError(module, "OnMessage: failed to prepare AngelScript context");
-            return InvokeStatus::Failed;
-        }
-    }
-    r = ctx->Execute();
-    if (r == asEXECUTION_SUSPENDED) {
+        return result >= 0;
+    };
+    const ScriptInvocationStatus status = module.ActiveCall->IsSuspended()
+        ? module.ActiveCall->Resume(spec)
+        : module.ActiveCall->Start(module.OnMessage, spec);
+    if (status == ScriptInvocationStatus::Suspended) {
         return InvokeStatus::Suspended;
     }
-    if (r != asEXECUTION_FINISHED) {
-        std::string messageText = fmt::format("OnMessage failed with AngelScript result {}", r);
-        if (r == asEXECUTION_EXCEPTION && ctx->GetExceptionString()) {
-            messageText = ctx->GetExceptionString();
-        }
+    if (status == ScriptInvocationStatus::Failed) {
+        const std::string invocationError = module.ActiveCall->GetStackTrace().empty()
+            ? module.ActiveCall->GetErrorMessage()
+            : module.ActiveCall->GetStackTrace();
         CancelActiveInvocation(module);
-        SetModuleError(module, messageText);
+        SetModuleError(module, invocationError);
         return InvokeStatus::Failed;
     }
     CancelActiveInvocation(module);
@@ -2084,7 +2058,7 @@ ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *na
         return required ? InvokeStatus::Failed : InvokeStatus::Finished;
     }
 
-    if (module.ActiveContext && module.ActiveInvocation != name) {
+    if (module.ActiveCall && module.ActiveInvocation != name) {
         const std::string active = module.ActiveInvocation;
         const ScriptContext activeContext = module.ContextStorage;
         const InvokeStatus activeStatus = active == "OnMessage"
@@ -2100,74 +2074,33 @@ ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *na
         return required ? InvokeStatus::Failed : InvokeStatus::Finished;
     }
 
-    asIScriptEngine *engine = module.ActiveContext ? module.ActiveContext->GetEngine() : (func ? func->GetEngine() : nullptr);
-    asIScriptContext *ctx = module.ActiveContext;
-    if (!ctx) {
-        ctx = engine ? engine->RequestContext() : nullptr;
-        if (!ctx) {
-            SetModuleError(module, fmt::format("{}: failed to request AngelScript context", name));
-            return InvokeStatus::Failed;
-        }
-        module.ActiveContext = ctx;
+    if (!module.ActiveCall) {
+        module.ActiveCall = std::make_unique<ScriptInvocationContext>(m_Manager);
         module.ActiveInvocation = name;
     }
 
     module.ContextStorage = context;
-    int r = 0;
-    if (ctx->GetState() == asEXECUTION_SUSPENDED) {
-        std::string waitError;
-        ScriptAsyncScheduler *scheduler = m_Manager ? m_Manager->GetAsyncScheduler() : nullptr;
-        const ScriptAsyncScheduler::ResumeState resume = scheduler
-            ? scheduler->PrepareContextResume(ctx, waitError)
-            : ScriptAsyncScheduler::ResumeState::Ready;
-        if (resume == ScriptAsyncScheduler::ResumeState::Pending) {
-            return InvokeStatus::Suspended;
+    ScriptInvocationSpec spec;
+    spec.Label = name;
+    spec.Prepare = [&module, func](asIScriptContext *invocationContext) {
+        int result = module.Object ? invocationContext->SetObject(module.Object) : asSUCCESS;
+        if (result >= 0 && func->GetParamCount() > 0) {
+            result = invocationContext->SetArgObject(0, &module.ContextStorage);
         }
-        if (resume == ScriptAsyncScheduler::ResumeState::Failed) {
-            CancelActiveInvocation(module);
-            SetModuleError(module, waitError.empty() ? "Awaited async task failed." : waitError);
-            return InvokeStatus::Failed;
-        }
-    } else {
-        r = ctx->Prepare(func);
-        if (r >= 0 && module.Object) {
-            r = ctx->SetObject(module.Object);
-        }
-        if (r >= 0 && func->GetParamCount() > 0) {
-            r = ctx->SetArgObject(0, &module.ContextStorage);
-        }
-        if (r < 0) {
-            CancelActiveInvocation(module);
-            SetModuleError(module, fmt::format("{}: failed to prepare AngelScript context", name));
-            return InvokeStatus::Failed;
-        }
-    }
-
-    r = ctx->Execute();
-    if (r == asEXECUTION_SUSPENDED) {
+        return result >= 0;
+    };
+    const ScriptInvocationStatus status = module.ActiveCall->IsSuspended()
+        ? module.ActiveCall->Resume(spec)
+        : module.ActiveCall->Start(func, spec);
+    if (status == ScriptInvocationStatus::Suspended) {
         return InvokeStatus::Suspended;
     }
-    if (r != asEXECUTION_FINISHED) {
-        std::string message;
-        if (r == asEXECUTION_EXCEPTION) {
-            const char *section = nullptr;
-            int col = 0;
-            const int row = ctx->GetExceptionLineNumber(&col, &section);
-            asIScriptFunction *exFunc = ctx->GetExceptionFunction();
-            message = fmt::format("{} threw in {} at {}({},{}): {}",
-                                  module.ActiveInvocation.empty() ? name : module.ActiveInvocation,
-                                  exFunc ? exFunc->GetDeclaration() : "<unknown>",
-                                  section ? section : "<unknown>",
-                                  row,
-                                  col,
-                                  ctx->GetExceptionString() ? ctx->GetExceptionString() : "");
-        } else {
-            message = fmt::format("{} failed with AngelScript result {}",
-                                  module.ActiveInvocation.empty() ? name : module.ActiveInvocation,
-                                  r);
-        }
+    if (status == ScriptInvocationStatus::Failed) {
+        const std::string invocationError = module.ActiveCall->GetStackTrace().empty()
+            ? module.ActiveCall->GetErrorMessage()
+            : module.ActiveCall->GetStackTrace();
         CancelActiveInvocation(module);
-        SetModuleError(module, message);
+        SetModuleError(module, invocationError);
         return InvokeStatus::Failed;
     }
 
@@ -2180,24 +2113,7 @@ bool ScriptRuntime::InvokeFinished(Module &module, const char *name, const Scrip
 }
 
 void ScriptRuntime::CancelActiveInvocation(Module &module) {
-    if (!module.ActiveContext) {
-        module.ActiveInvocation.clear();
-        return;
-    }
-    asIScriptContext *ctx = module.ActiveContext;
-    module.ActiveContext = nullptr;
-    if (m_Manager && m_Manager->GetAsyncScheduler()) {
-        m_Manager->GetAsyncScheduler()->ForgetContext(ctx);
-    }
-    const int state = ctx->GetState();
-    if (state == asEXECUTION_ACTIVE || state == asEXECUTION_SUSPENDED || state == asEXECUTION_PREPARED) {
-        ctx->Abort();
-    }
-    if (ctx->GetEngine()) {
-        ctx->GetEngine()->ReturnContext(ctx);
-    } else {
-        ctx->Release();
-    }
+    module.ActiveCall.reset();
     module.ActiveInvocation.clear();
 }
 

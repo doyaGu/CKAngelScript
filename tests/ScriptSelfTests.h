@@ -21,6 +21,7 @@ class asIScriptEngine;
 CKERROR RunScriptStartupSelfTests(ScriptManager *manager);
 
 bool RunScriptComponentMetadataSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
+bool RunScriptInvocationSelfTest(ScriptManager *manager, std::string &error);
 bool RunScriptParameterConversionSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptApiSelfTest(CKContext *context, std::string &error);

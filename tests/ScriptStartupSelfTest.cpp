@@ -122,6 +122,12 @@ CKERROR RunScriptStartupSelfTests(ScriptManager *manager) {
         return CKERR_INVALIDOPERATION;
     }
 
+    WriteStartupSelfTestMarker("running", "script-invocation", std::string());
+    if (!RunScriptInvocationSelfTest(manager, error)) {
+        ReportSelfTestFailure(manager, "script-invocation", "Script invocation", error);
+        return CKERR_INVALIDOPERATION;
+    }
+
     WriteStartupSelfTestMarker("running", "parameter-conversion", std::string());
     if (!RunScriptParameterConversionSelfTest(manager ? manager->GetCKContext() : nullptr,
                                               manager ? manager->GetScriptEngine() : nullptr,
