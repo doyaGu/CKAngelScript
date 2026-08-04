@@ -212,6 +212,7 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "  int messageCount = 0;\n"
         "  int legacyUpdateCount = 0;\n"
         "  int legacyMessageCount = 0;\n"
+        "  int destroyCount = 0;\n"
         "  int frameError = 0;\n"
         "  void Validate(BehaviorFrame@ frame, int code) {\n"
         "    if (frame is null) { frameError = code; return; }\n"
@@ -243,6 +244,7 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "    if (msg.Topic() == \"component.frame.runtime\") messageCount++; else frameError = 398;\n"
         "  }\n"
         "  void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) { legacyMessageCount++; }\n"
+        "  void OnDestroy(BehaviorFrame@ frame) { Validate(frame, 400); destroyCount++; }\n"
         "}\n";
 
     CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(
@@ -368,6 +370,21 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         cleanup();
         return false;
     }
+
+    object->AddRef();
+    const CKERROR deleteError = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &behaviorContext);
+    deleteCallbackSent = false;
+    if (deleteError != CK_OK || manager->GetComponentState(behavior->GetID()) != nullptr ||
+        !ExpectIntProperty(object, "destroyCount", 1, error) ||
+        !ExpectIntProperty(object, "frameError", 0, error)) {
+        object->Release();
+        cleanup();
+        if (error.empty()) {
+            error = "Component runtime self-test did not run OnDestroy during delete teardown.";
+        }
+        return false;
+    }
+    object->Release();
 
     cleanup();
     error.clear();

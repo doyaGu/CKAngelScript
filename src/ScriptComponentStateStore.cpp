@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "ScriptBehaviorBridge.h"
+#include "AngelScriptComponent.h"
 #include "ScriptComponentState.h"
 #include "ScriptInvoker.h"
 #include "ScriptManager.h"
@@ -116,6 +117,8 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
         m_BehaviorBridge->DestroyComponentTasks(state->BehaviorId);
     }
 
+    DestroyAngelScriptComponentRuntime(this, state);
+
     if (state->Invoker) {
         state->Invoker->Reset();
         delete state->Invoker;
@@ -143,6 +146,7 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->InstanceEnabled = false;
     state->Failed = false;
     state->PendingDestroy = false;
+    state->DestructionCompleted = false;
     state->PendingDisableOutput = false;
     state->PendingResetRuntime = false;
 }
@@ -152,14 +156,14 @@ void ScriptManager::ReleaseComponentState(CKBehavior *behavior) {
         return;
     }
 
-    ScriptComponentState *nullState = nullptr;
-    behavior->SetLocalParameterValue(0, &nullState);
     m_ComponentStates.Remove(
         behavior->GetID(),
         behavior,
         [this](CK_ID, ScriptComponentState *state) {
             ResetComponentStateRuntime(state, true);
         });
+    ScriptComponentState *nullState = nullptr;
+    behavior->SetLocalParameterValue(0, &nullState);
 }
 
 void ScriptManager::ReleaseComponentState(CK_ID id) {

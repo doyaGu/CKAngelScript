@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "ScriptManager.h"
+#include "AngelScriptComponent.h"
 #include "ScriptComponentMetadata.h"
 #include "ScriptComponentAutomation.h"
 #include "ScriptComponentInjection.h"
@@ -1006,6 +1007,7 @@ bool DestroyInstance(const CKBehaviorContext &behcontext, ScriptComponentState *
     }
     DestroyComponentLifetimeBBConfigs(state);
     state->PendingDestroy = false;
+    state->DestructionCompleted = true;
     return true;
 }
 
@@ -1034,6 +1036,59 @@ void SyncErrorOutputParameters(CKBehavior *beh) {
 }
 
 } // namespace ScriptComponentSupport
+
+void DestroyAngelScriptComponentRuntime(ScriptManager *manager, ScriptComponentState *state) {
+    if (!manager || !state || !state->Object || state->DestructionCompleted) {
+        return;
+    }
+
+    CKContext *context = manager->GetCKContext();
+    CKBehavior *behavior = state->Behavior;
+    if (!context || !behavior || CKGetObject(context, state->BehaviorId) != behavior) {
+        return;
+    }
+
+    CKBehaviorContext behcontext = {};
+    behcontext.Behavior = behavior;
+    behcontext.Context = context;
+    behcontext.ParameterManager = context->GetParameterManager();
+    behcontext.MessageManager = context->GetMessageManager();
+    behcontext.AttributeManager = context->GetAttributeManager();
+    behcontext.TimeManager = context->GetTimeManager();
+
+    state->PendingDestroy = true;
+    ScriptComponentSupport::CancelSuspendedLifecycle(state);
+
+    if (state->InstanceEnabled && state->OnDisable) {
+        const ScriptComponentSupport::LifecycleInvokeStatus status =
+            ScriptComponentSupport::InvokeLifecycle(behavior, state, state->OnDisable, behcontext, "OnDisable");
+        if (status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended && state->Invoker) {
+            state->Invoker->AbortContext();
+            state->ActiveLifecycle = nullptr;
+            state->ActiveLifecycleName.clear();
+        }
+    }
+    ScriptComponentSupport::StopComponentLifetimeBBConfigs(behcontext, state);
+    if (ScriptMessageBus *messageBus = manager->GetMessageBus()) {
+        const std::string target = ScriptMessageBus::ComponentTarget(state->BehaviorId);
+        messageBus->ClearDynamicSubscriptions(target);
+        messageBus->FailPendingForTarget(target, "Component was destroyed.");
+    }
+    state->InstanceEnabled = false;
+
+    ScriptComponentSupport::CancelSuspendedLifecycle(state);
+    const ScriptComponentSupport::LifecycleInvokeStatus status =
+        ScriptComponentSupport::InvokeLifecycle(behavior, state, state->OnDestroy, behcontext, "OnDestroy");
+    if (status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended && state->Invoker) {
+        state->Invoker->AbortContext();
+        state->ActiveLifecycle = nullptr;
+        state->ActiveLifecycleName.clear();
+    }
+
+    ScriptComponentSupport::DestroyComponentLifetimeBBConfigs(state);
+    state->PendingDestroy = false;
+    state->DestructionCompleted = true;
+}
 
 CKObjectDeclaration *FillBehaviorAngelScriptComponentDecl() {
     CKObjectDeclaration *od = CreateCKObjectDeclaration("AngelScript Component");
@@ -1342,12 +1397,6 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         break;
 
         case CKM_BEHAVIORDELETE: {
-            state = man->GetComponentState(beh->GetID(), beh);
-            if (state) {
-                state->DesiredEnabled = false;
-                state->ScriptActive = false;
-                man->ResetComponentStateRuntime(state, true);
-            }
             man->ReleaseComponentState(beh);
         }
         break;

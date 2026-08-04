@@ -167,6 +167,7 @@ struct ScriptComponentState {
     bool Paused = false;
     bool Failed = false;
     bool PendingDestroy = false;
+    bool DestructionCompleted = false;
     bool PendingDisableOutput = false;
     bool PendingResetRuntime = false;
 

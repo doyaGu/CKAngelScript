@@ -7,6 +7,7 @@ set(CKAS_HEADERS
         AngelScriptExecutor.h
         ScriptExecutorState.h
         ScriptExecutorStateStore.h
+        AngelScriptComponent.h
         AngelScriptEventHook.h
         ScriptApiDiagnostics.h
         ScriptApiHandles.h
