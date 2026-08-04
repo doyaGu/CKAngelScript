@@ -752,6 +752,54 @@ bool ScriptBehaviorBridge::ApplyFrameLocalInterface(CKBehavior *behavior,
     return true;
 }
 
+bool ScriptBehaviorBridge::ApplyFrameLocalInterfaceTransaction(
+    CKBehavior *behavior,
+    const std::vector<ScriptBridgeFrameLocalDecl> &locals,
+    int ownedLocalStart,
+    bool strict,
+    const std::function<bool(std::string &)> &commit,
+    std::string &error) {
+    if (!behavior || !commit) {
+        error = "Frame local interface transaction requires a behavior and commit action.";
+        return false;
+    }
+
+    std::vector<OwnedFrameLocalSnapshot> localSnapshot;
+    if (!CaptureOwnedFrameLocals(behavior, ownedLocalStart, localSnapshot, error)) {
+        return false;
+    }
+
+    const CK_ID behaviorId = behavior->GetID();
+    const auto oldInterfaceIt = m_FrameLocalInterfaces.find(behaviorId);
+    const bool hadOldInterface = oldInterfaceIt != m_FrameLocalInterfaces.end();
+    const ScriptBridgeFrameLocalInterface oldInterface = hadOldInterface
+        ? oldInterfaceIt->second
+        : ScriptBridgeFrameLocalInterface();
+
+    if (!ApplyFrameLocalInterface(behavior, locals, ownedLocalStart, strict, error)) {
+        return false;
+    }
+
+    std::string commitError;
+    if (commit(commitError)) {
+        return true;
+    }
+
+    std::string restoreError;
+    if (!RestoreOwnedFrameLocals(behavior, ownedLocalStart, localSnapshot, restoreError)) {
+        error = commitError + " Failed to restore previous frame locals: " + restoreError;
+        return false;
+    }
+    if (hadOldInterface) {
+        m_FrameLocalInterfaces.insert_or_assign(behaviorId, oldInterface);
+    } else {
+        m_FrameLocalInterfaces.erase(behaviorId);
+    }
+    InvalidateBehaviorLayout(behaviorId);
+    error = commitError;
+    return false;
+}
+
 void ScriptBehaviorBridge::ClearFrameLocalInterface(CK_ID behaviorId, bool clearBindings) {
     if (behaviorId == 0) {
         return;

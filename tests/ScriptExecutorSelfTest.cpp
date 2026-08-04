@@ -9,6 +9,7 @@
 
 #include "CKAll.h"
 #include "CKAngelScript.h"
+#include "AngelScriptExecutor.h"
 #include "ScriptAsync.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeCommon.h"
@@ -1176,6 +1177,50 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         return false;
     }
 
+    const char *failedInterfaceText =
+        "input 0 name=\"ChangedIn\"\n"
+        "output 0 name=\"Out\"\n"
+        "pin 0 name=\"Value\" type=\"Integer\"\n"
+        "pout 0 name=\"Handled\" type=\"Boolean\"\n"
+        "local 0 name=\"__CKAS_ChangedScratch\" type=\"Integer\" default=\"99\"\n"
+        "local 1 name=\"__CKAS_MappedLocal\" type=\"Integer\"\n";
+    AngelScriptExecutorFailNextPhysicalInterfaceSyncForSelfTest();
+    if (!SetExecutorStringSetting(behavior,
+                                  EXECUTOR_SETTING_INTERFACE,
+                                  failedInterfaceText,
+                                  error) ||
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED, &behaviorContext) != CK_OK) {
+        cleanup();
+        if (error.empty()) {
+            error = "Executor interface transaction self-test could not inject a failed update.";
+        }
+        return false;
+    }
+    ScriptExecutorState *transactionState = manager->GetExecutorState(behavior->GetID(), behavior);
+    CKParameterLocal *transactionLocal = behavior->GetLocalParameter(EXECUTOR_USER_LOCAL_START);
+    int transactionLocalValue = 0;
+    if (!transactionState || !transactionState->Failed || transactionState->InterfaceText != interfaceText ||
+        behavior->GetInputCount() != 1 ||
+        std::string(behavior->GetInput(0)->GetName() ? behavior->GetInput(0)->GetName() : "") != "In" ||
+        bridge->FindFrameLocal(behavior->GetID(), "__CKAS_FrameScratch", 0) != 0 ||
+        bridge->FindFrameLocal(behavior->GetID(), "__CKAS_ChangedScratch", 0) >= 0 ||
+        !transactionLocal ||
+        transactionLocal->GetValue(&transactionLocalValue) != CK_OK ||
+        transactionLocalValue != 7) {
+        cleanup();
+        error = "Executor interface transaction self-test did not restore the previous layout and identity.";
+        return false;
+    }
+    if (!SetExecutorStringSetting(behavior, EXECUTOR_SETTING_INTERFACE, interfaceText, error) ||
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED, &behaviorContext) != CK_OK ||
+        transactionState->Failed) {
+        cleanup();
+        if (error.empty()) {
+            error = "Executor interface transaction self-test did not recover after rollback.";
+        }
+        return false;
+    }
+
     sourceParam = context->CreateCKParameterLocal(
         const_cast<CKSTRING>("__CKAS_ExecutorSelfTestValue"),
         CKPGUID_INT,
@@ -1188,6 +1233,37 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         pin->SetDirectSource(sourceParam) != CK_OK) {
         cleanup();
         error = "Executor self-test failed to install input parameter source.";
+        return false;
+    }
+    const char *removeConnectedPinInterface =
+        "input 0 name=\"In\"\n"
+        "output 0 name=\"Out\"\n"
+        "pout 0 name=\"Handled\" type=\"Boolean\"\n"
+        "local 0 name=\"__CKAS_FrameScratch\" type=\"Integer\" default=\"7\"\n"
+        "local 1 name=\"__CKAS_MappedLocal\" type=\"Integer\"\n";
+    if (!SetExecutorStringSetting(behavior,
+                                  EXECUTOR_SETTING_INTERFACE,
+                                  removeConnectedPinInterface,
+                                  error) ||
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED, &behaviorContext) != CK_OK ||
+        behavior->GetInputParameterCount() != 1 ||
+        behavior->GetInputParameter(0) != pin ||
+        pin->GetRealSource() != sourceParam ||
+        transactionState->InterfaceText != interfaceText ||
+        !transactionState->Failed) {
+        cleanup();
+        if (error.empty()) {
+            error = "Executor interface transaction self-test removed a connected input parameter.";
+        }
+        return false;
+    }
+    if (!SetExecutorStringSetting(behavior, EXECUTOR_SETTING_INTERFACE, interfaceText, error) ||
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORSETTINGSEDITED, &behaviorContext) != CK_OK ||
+        transactionState->Failed) {
+        cleanup();
+        if (error.empty()) {
+            error = "Executor interface transaction self-test did not recover after rejecting a connected mutation.";
+        }
         return false;
     }
     scratchParam = behavior->GetLocalParameter(EXECUTOR_USER_LOCAL_START);

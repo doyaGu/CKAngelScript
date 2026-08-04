@@ -2,6 +2,7 @@
 #define CK_SCRIPTBEHAVIORBRIDGE_H
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -414,6 +415,12 @@ public:
                                   int ownedLocalStart,
                                   bool strict,
                                   std::string &error);
+    bool ApplyFrameLocalInterfaceTransaction(CKBehavior *behavior,
+                                             const std::vector<ScriptBridgeFrameLocalDecl> &locals,
+                                             int ownedLocalStart,
+                                             bool strict,
+                                             const std::function<bool(std::string &)> &commit,
+                                             std::string &error);
     void ClearFrameLocalInterface(CK_ID behaviorId, bool clearBindings);
     bool HasFrameLocalInterface(CK_ID behaviorId) const;
     int FrameLocalCount(CK_ID behaviorId) const;

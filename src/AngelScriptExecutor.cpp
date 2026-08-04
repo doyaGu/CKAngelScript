@@ -18,7 +18,15 @@
 #include "ScriptRuntime.h"
 #include "ScriptExecutorState.h"
 
+#ifndef CKAS_BUILD_SELF_TESTS
+#define CKAS_BUILD_SELF_TESTS 0
+#endif
+
 namespace {
+
+#if CKAS_BUILD_SELF_TESTS
+bool g_FailNextPhysicalInterfaceSyncForSelfTest = false;
+#endif
 
 constexpr int LOCAL_STATE = 0;
 constexpr int SETTING_SCRIPT = 1;
@@ -397,6 +405,17 @@ bool SyncPhysicalInterface(CKBehavior *behavior,
                            const std::vector<ExecutorSlotSpec> &pins,
                            const std::vector<ExecutorSlotSpec> &pouts,
                            std::string &error) {
+#if CKAS_BUILD_SELF_TESTS
+    const bool injectFailure = g_FailNextPhysicalInterfaceSyncForSelfTest;
+    g_FailNextPhysicalInterfaceSyncForSelfTest = false;
+    if (injectFailure) {
+        if (!SyncInputCount(behavior, inputs, error)) {
+            return false;
+        }
+        error = "Injected executor physical interface synchronization failure.";
+        return false;
+    }
+#endif
     if (behavior->GetInputCount() <= static_cast<int>(inputs.size()) &&
         !SyncInputCount(behavior, inputs, error)) return false;
     if (behavior->GetOutputCount() <= static_cast<int>(outputs.size()) &&
@@ -413,6 +432,119 @@ bool SyncPhysicalInterface(CKBehavior *behavior,
         !SyncPinCount(behavior, pins, error)) return false;
     if (behavior->GetOutputParameterCount() > static_cast<int>(pouts.size()) &&
         !SyncPoutCount(behavior, pouts, error)) return false;
+    return true;
+}
+
+bool CapturePhysicalInterface(CKBehavior *behavior,
+                              ExecutorInterface &interfaceShape,
+                              std::string &error) {
+    interfaceShape = ExecutorInterface();
+    if (!behavior) {
+        error = "Executor interface requires a behavior.";
+        return false;
+    }
+
+    for (int i = 0; i < behavior->GetInputCount(); ++i) {
+        CKBehaviorIO *io = behavior->GetInput(i);
+        if (!io) {
+            error = "Cannot snapshot missing executor input " + std::to_string(i) + ".";
+            return false;
+        }
+        ExecutorSlotSpec spec;
+        spec.Kind = ExecutorSlotKind::Input;
+        spec.Name = ObjectName(io);
+        interfaceShape.Inputs.push_back(std::move(spec));
+    }
+    for (int i = 0; i < behavior->GetOutputCount(); ++i) {
+        CKBehaviorIO *io = behavior->GetOutput(i);
+        if (!io) {
+            error = "Cannot snapshot missing executor output " + std::to_string(i) + ".";
+            return false;
+        }
+        ExecutorSlotSpec spec;
+        spec.Kind = ExecutorSlotKind::Output;
+        spec.Name = ObjectName(io);
+        interfaceShape.Outputs.push_back(std::move(spec));
+    }
+    for (int i = 0; i < behavior->GetInputParameterCount(); ++i) {
+        CKParameterIn *param = behavior->GetInputParameter(i);
+        if (!param) {
+            error = "Cannot snapshot missing executor input parameter " + std::to_string(i) + ".";
+            return false;
+        }
+        ExecutorSlotSpec spec;
+        spec.Kind = ExecutorSlotKind::Pin;
+        spec.Name = ObjectName(param);
+        spec.Guid = param->GetGUID();
+        interfaceShape.Pins.push_back(std::move(spec));
+    }
+    for (int i = 0; i < behavior->GetOutputParameterCount(); ++i) {
+        CKParameterOut *param = behavior->GetOutputParameter(i);
+        if (!param) {
+            error = "Cannot snapshot missing executor output parameter " + std::to_string(i) + ".";
+            return false;
+        }
+        ExecutorSlotSpec spec;
+        spec.Kind = ExecutorSlotKind::Pout;
+        spec.Name = ObjectName(param);
+        spec.Guid = param->GetGUID();
+        interfaceShape.Pouts.push_back(std::move(spec));
+    }
+    return true;
+}
+
+bool IsBehaviorIoConnected(CKBehavior *behavior, CKBehaviorIO *io) {
+    if (!behavior || !io) {
+        return false;
+    }
+    CKBehavior *graph = behavior->GetParent();
+    if (!graph) {
+        graph = behavior;
+    }
+    for (int i = 0; i < graph->GetSubBehaviorLinkCount(); ++i) {
+        CKBehaviorLink *link = graph->GetSubBehaviorLink(i);
+        if (link && (link->GetInBehaviorIO() == io || link->GetOutBehaviorIO() == io)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ValidatePhysicalMutationSafety(CKBehavior *behavior,
+                                    const ExecutorInterface &target,
+                                    std::string &error) {
+    for (int i = static_cast<int>(target.Inputs.size()); i < behavior->GetInputCount(); ++i) {
+        if (IsBehaviorIoConnected(behavior, behavior->GetInput(i))) {
+            error = "Executor interface cannot remove connected input " + std::to_string(i) + ".";
+            return false;
+        }
+    }
+    for (int i = static_cast<int>(target.Outputs.size()); i < behavior->GetOutputCount(); ++i) {
+        if (IsBehaviorIoConnected(behavior, behavior->GetOutput(i))) {
+            error = "Executor interface cannot remove connected output " + std::to_string(i) + ".";
+            return false;
+        }
+    }
+    for (int i = 0; i < behavior->GetInputParameterCount(); ++i) {
+        CKParameterIn *param = behavior->GetInputParameter(i);
+        const bool removed = i >= static_cast<int>(target.Pins.size());
+        const bool typeChanged = !removed && param && param->GetGUID() != target.Pins[i].Guid;
+        if (param && (removed || typeChanged) && param->GetRealSource()) {
+            error = "Executor interface cannot remove or retype connected input parameter " +
+                std::to_string(i) + ".";
+            return false;
+        }
+    }
+    for (int i = 0; i < behavior->GetOutputParameterCount(); ++i) {
+        CKParameterOut *param = behavior->GetOutputParameter(i);
+        const bool removed = i >= static_cast<int>(target.Pouts.size());
+        const bool typeChanged = !removed && param && param->GetGUID() != target.Pouts[i].Guid;
+        if (param && (removed || typeChanged) && param->GetDestinationCount() > 0) {
+            error = "Executor interface cannot remove or retype connected output parameter " +
+                std::to_string(i) + ".";
+            return false;
+        }
+    }
     return true;
 }
 
@@ -502,6 +634,44 @@ bool ValidateInterface(const CKBehaviorContext &ctx,
            ValidateOutputParameterGuids(ctx, behavior, interfaceShape.Pouts, error);
 }
 
+bool CommitPhysicalInterface(const CKBehaviorContext &ctx,
+                             CKBehavior *behavior,
+                             const ExecutorInterface &target,
+                             bool strict,
+                             std::string &error) {
+    ExecutorInterface snapshot;
+    if (!CapturePhysicalInterface(behavior, snapshot, error) ||
+        !ValidatePhysicalMutationSafety(behavior, target, error)) {
+        return false;
+    }
+
+    std::string commitError;
+    const bool committed =
+        SyncPhysicalInterface(behavior,
+                              target.Inputs,
+                              target.Outputs,
+                              target.Pins,
+                              target.Pouts,
+                              commitError) &&
+        (!strict || ValidateInterface(ctx, behavior, target, commitError));
+    if (committed) {
+        return true;
+    }
+
+    std::string restoreError;
+    if (!SyncPhysicalInterface(behavior,
+                               snapshot.Inputs,
+                               snapshot.Outputs,
+                               snapshot.Pins,
+                               snapshot.Pouts,
+                               restoreError)) {
+        error = commitError + " Failed to restore previous executor interface: " + restoreError;
+    } else {
+        error = commitError;
+    }
+    return false;
+}
+
 std::vector<ScriptBridgeFrameLocalDecl> FrameLocalDecls(const std::vector<ExecutorSlotSpec> &locals) {
     std::vector<ScriptBridgeFrameLocalDecl> decls;
     decls.reserve(locals.size());
@@ -530,61 +700,34 @@ bool ApplyInterface(const CKBehaviorContext &ctx,
         return true;
     }
     ScriptBehaviorBridge *bridge = BehaviorBridgeFromContext(ctx);
+    if (!bridge) {
+        error = "Executor interface requires ScriptBehaviorBridge.";
+        return false;
+    }
+
+    ExecutorInterface interfaceShape;
     if (interfaceText.empty()) {
         ExecutorSlotSpec defaultInput;
         defaultInput.Kind = ExecutorSlotKind::Input;
         defaultInput.Name = "In";
+        interfaceShape.Inputs.push_back(std::move(defaultInput));
         ExecutorSlotSpec defaultOutput;
         defaultOutput.Kind = ExecutorSlotKind::Output;
         defaultOutput.Name = "Out";
-        if (bridge) {
-            if (!bridge->ApplyFrameLocalInterface(behavior, {}, USER_LOCAL_START, false, error)) {
-                return false;
-            }
-        } else {
-            while (behavior->GetLocalParameterCount() > USER_LOCAL_START) {
-                const int index = behavior->GetLocalParameterCount() - 1;
-                if (behavior->IsLocalParameterSetting(index)) {
-                    error = "Executor empty interface would remove an internal setting.";
-                    return false;
-                }
-                CKDestroyObject(behavior->RemoveLocalParameter(index));
-            }
-        }
-        return SyncPhysicalInterface(behavior,
-                                     std::vector<ExecutorSlotSpec>{defaultInput},
-                                     std::vector<ExecutorSlotSpec>{defaultOutput},
-                                     {},
-                                     {},
-                                     error);
-    }
-    ExecutorInterface interfaceShape;
-    if (!ParseInterface(ctx.Context, interfaceText, interfaceShape, error)) {
+        interfaceShape.Outputs.push_back(std::move(defaultOutput));
+    } else if (!ParseInterface(ctx.Context, interfaceText, interfaceShape, error)) {
         return false;
     }
-    if (!bridge) {
-        error = "Executor interface locals require ScriptBehaviorBridge.";
-        return false;
-    }
-    if (!bridge->ApplyFrameLocalInterface(behavior,
-                                          FrameLocalDecls(interfaceShape.Locals),
-                                          USER_LOCAL_START,
-                                          strict,
-                                          error)) {
-        return false;
-    }
-    if (!SyncPhysicalInterface(behavior,
-                               interfaceShape.Inputs,
-                               interfaceShape.Outputs,
-                               interfaceShape.Pins,
-                               interfaceShape.Pouts,
-                               error)) {
-        return false;
-    }
-    if (strict && !ValidateInterface(ctx, behavior, interfaceShape, error)) {
-        return false;
-    }
-    return true;
+
+    return bridge->ApplyFrameLocalInterfaceTransaction(
+        behavior,
+        FrameLocalDecls(interfaceShape.Locals),
+        USER_LOCAL_START,
+        strict,
+        [&](std::string &commitError) {
+            return CommitPhysicalInterface(ctx, behavior, interfaceShape, strict, commitError);
+        },
+        error);
 }
 
 ScriptExecutorState *GetState(CKBehavior *behavior) {
@@ -882,6 +1025,14 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
 
     ScriptRuntime *runtime = manager->GetRuntime();
     const std::string moduleName = runtime ? runtime->ModuleName(scriptId) : std::string();
+    std::string interfaceError;
+    const bool strictInterface = ReadLocalBool(behavior, SETTING_STRICT_INTERFACE, true);
+    if (!ApplyInterface(ctx, behavior, interfaceText, strictInterface, interfaceError)) {
+        ConsoleError(ctx, interfaceError);
+        state->Failed = true;
+        return ExecutorReadyStatus::Failed;
+    }
+
     TransitionIdentity(ctx, state, scriptId, moduleName, className, interfaceText);
 
     if (state->Failed) {
@@ -900,14 +1051,6 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         }
         state->InitialLifecycle.ResetStart();
         return ExecutorReadyStatus::LifecycleOnly;
-    }
-
-    std::string interfaceError;
-    const bool strictInterface = ReadLocalBool(behavior, SETTING_STRICT_INTERFACE, true);
-    if (!ApplyInterface(ctx, behavior, interfaceText, strictInterface, interfaceError)) {
-        ConsoleError(ctx, interfaceError);
-        state->Failed = true;
-        return ExecutorReadyStatus::Failed;
     }
 
     if (!state->Loaded) {
@@ -1047,6 +1190,12 @@ CKBehaviorContext ExecutorContext(ScriptManager *manager, ScriptExecutorState *s
 }
 
 } // namespace
+
+#if CKAS_BUILD_SELF_TESTS
+void AngelScriptExecutorFailNextPhysicalInterfaceSyncForSelfTest() {
+    g_FailNextPhysicalInterfaceSyncForSelfTest = true;
+}
+#endif
 
 ScriptExecutorState *ScriptManager::GetOrCreateExecutorState(CKBehavior *behavior) {
     ScriptExecutorState *state = m_ExecutorStates.GetOrCreate(
@@ -1271,6 +1420,19 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
         }
         case CKM_BEHAVIORSETTINGSEDITED: {
             ScriptExecutorState *state = GetState(behavior);
+            const std::string interfaceText = ReadLocalString(behavior, SETTING_INTERFACE);
+            std::string error;
+            if (!ApplyInterface(behcontext,
+                                behavior,
+                                interfaceText,
+                                ReadLocalBool(behavior, SETTING_STRICT_INTERFACE, true),
+                                error)) {
+                if (state) {
+                    state->Failed = true;
+                }
+                ConsoleError(behcontext, error);
+                break;
+            }
             if (state) {
                 const std::string scriptId = Trim(ReadLocalString(behavior, SETTING_SCRIPT));
                 const std::string className = Trim(ReadLocalString(behavior, SETTING_CLASS));
@@ -1282,16 +1444,8 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
                                    scriptId,
                                    moduleName,
                                    className,
-                                   ReadLocalString(behavior, SETTING_INTERFACE));
+                                   interfaceText);
                 state->Failed = false;
-            }
-            std::string error;
-            if (!ApplyInterface(behcontext,
-                               behavior,
-                               ReadLocalString(behavior, SETTING_INTERFACE),
-                               ReadLocalBool(behavior, SETTING_STRICT_INTERFACE, true),
-                               error)) {
-                ConsoleError(behcontext, error);
             }
             break;
         }

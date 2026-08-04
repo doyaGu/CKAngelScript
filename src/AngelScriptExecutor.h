@@ -12,4 +12,8 @@ CKERROR CreateAngelScriptExecutorProto(CKBehaviorPrototype **pproto);
 int AngelScriptExecutor(const CKBehaviorContext &behcontext);
 CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext);
 
+#if CKAS_BUILD_SELF_TESTS
+void AngelScriptExecutorFailNextPhysicalInterfaceSyncForSelfTest();
+#endif
+
 #endif // CK_ANGELSCRIPTEXECUTOR_H
