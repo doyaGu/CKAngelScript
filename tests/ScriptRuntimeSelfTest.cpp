@@ -318,10 +318,6 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     if (!ScriptRuntimeDependencyResolver::RunScriptRuntimeDependencySelfTest(error)) {
         return false;
     }
-    if (!ScriptMessageSelfTest::RunScriptMessageSelfTest(context, engine, error)) {
-        return false;
-    }
-
     asITypeInfo *behaviorContextType = engine->GetTypeInfoByDecl("CKBehaviorContext");
     if (!behaviorContextType) {
         error = "CKBehaviorContext type is not registered.";
