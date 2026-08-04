@@ -48,11 +48,17 @@ cmake -B build -G "Visual Studio 17 2022" -A Win32 `
   -DDYNCALL_ROOT=C:\Path\To\dyncall `
   -DDYNCALLBACK_ROOT=C:\Path\To\dyncall `
   -DDYNLOAD_ROOT=C:\Path\To\dyncall `
+  -DCKAS_BUILD_CORE_TESTS=ON `
   -DCKAS_BUILD_SELF_TESTS=ON
 
 cmake --build build --config Release
+ctest --test-dir build --build-config Release --output-on-failure
 Copy-Item build\src\Release\AngelScript.dll C:\Path\To\Virtools\BuildingBlocks\
 ```
+
+`CKAS_BUILD_CORE_TESTS` builds a normal executable for lifecycle, runtime metadata,
+and dependency resolution tests; it does not require Virtools Player. DLL startup
+self-tests remain controlled separately by `CKAS_BUILD_SELF_TESTS`.
 
 To create a distributable ZIP:
 

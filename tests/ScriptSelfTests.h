@@ -4,6 +4,7 @@
 #include <string>
 
 #include "CKDefines.h"
+#include "ScriptCoreSelfTests.h"
 
 #ifndef CKAS_ENABLE_API_EXPORT
 #define CKAS_ENABLE_API_EXPORT 0
@@ -18,7 +19,6 @@ class ScriptManager;
 class asIScriptEngine;
 
 CKERROR RunScriptStartupSelfTests(ScriptManager *manager);
-bool RunScriptInitialLifecycleSelfTest(std::string &error);
 
 bool RunScriptComponentMetadataSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptParameterConversionSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
@@ -37,14 +37,6 @@ bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error);
 #if CKAS_ENABLE_DYNCALL
 bool RunScriptDynLoadSelfTest(asIScriptEngine *engine, std::string &error);
 #endif
-
-namespace ScriptRuntimeMetadata {
-bool RunScriptRuntimeMetadataSelfTest(std::string &error);
-}
-
-namespace ScriptRuntimeDependencyResolver {
-bool RunScriptRuntimeDependencySelfTest(std::string &error);
-}
 
 namespace ScriptMessageSelfTest {
 bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);

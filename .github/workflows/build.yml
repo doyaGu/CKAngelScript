@@ -84,6 +84,7 @@ jobs:
           $env:CXX = "cl"
           cmake -G Ninja -B "${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}" `
             -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} `
+            -DCKAS_BUILD_CORE_TESTS=ON `
             -DCKAS_BUILD_SELF_TESTS=ON `
             -DVIRTOOLS_SDK_PATH="${{ github.workspace }}\Virtools-SDK-2.1" `
             -DCMAKE_INSTALL_PREFIX="${{ env.BASE_DIST_DIR }}\${{ matrix.configuration }}"
@@ -91,6 +92,13 @@ jobs:
       - name: Build the project
         shell: pwsh
         run: cmake --build "${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}"
+
+      - name: Run host-independent core tests
+        shell: pwsh
+        run: >
+          ctest --test-dir "${{ env.BASE_BUILD_DIR }}\${{ matrix.configuration }}"
+          --build-config ${{ matrix.configuration }}
+          --output-on-failure
 
       - name: Install binaries to distribution folder
         shell: pwsh

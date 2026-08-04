@@ -1,4 +1,4 @@
-#include "ScriptSelfTests.h"
+#include "ScriptCoreSelfTests.h"
 
 #include "ScriptInitialLifecycle.h"
 
