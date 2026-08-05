@@ -61,7 +61,7 @@ BBInstance@ instance = config.SpawnStarted(ctx);
 | `Target` | Optional native text target such as `runtime:bml.sr_timer`; empty means topic subscribers. This BB parameter is the text adapter for persistent graphs, while AngelScript calls use `ScriptMessageTarget`. |
 | `Payload` | Optional string stored in the message payload under `text`. |
 
-When triggered, the BB publishes through the `Message` bus with source text `behavior:event_hook:<CK_ID>`, then activates `Out`. If publishing fails, it writes `Error Message` and activates `Error`. The BB is host-neutral; Ballance/BML integrations should insert it from scripts and register BML-specific services through the public extension API.
+When triggered, the BB publishes through the `Message` bus with source text `behavior:event_hook:<CK_ID>`, then activates `Out`. If publishing fails, it writes `Error Message` and activates `Error`. The BB is host-neutral; game/mod-loader integrations should insert it from scripts and register host-specific services through the public extension API.
 
 Use the deeper sections below when you need graph traversal, persistent graph edits, transaction semantics, or catalog generation.
 
@@ -509,13 +509,13 @@ string description = Param::Describe(ctx, renderOptions);
 For IDE hints or script constants, generate a catalog from validation exports:
 
 ```text
-python tools/generate_angelscript_catalog.py --validation-dir build/validation/ballance
+python tools/generate_angelscript_catalog.py --validation-dir build/validation/host
 ```
 
 For scripts that use only a few BBs, ask the generator for selected wrappers instead of a large hand-written helper layer:
 
 ```text
-python tools/generate_angelscript_catalog.py --validation-dir build/validation/ballance --selected-bb "Interface/Text/2D Text" --selected-bb "Interface/Fonts/Create System Font"
+python tools/generate_angelscript_catalog.py --validation-dir build/validation/host --selected-bb "Interface/Text/2D Text" --selected-bb "Interface/Fonts/Create System Font"
 ```
 
 The generated hints keep the flat GUID functions and add ergonomic helper namespaces:

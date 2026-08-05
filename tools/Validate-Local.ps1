@@ -6,13 +6,7 @@ param(
     [string]$VirtoolsSdkPath = "",
     [string]$DynCallRoot = "",
     [string[]]$ScriptRoot = @(),
-    [switch]$NoSelfTests,
-    [switch]$RunBallance,
-    [string]$BallanceRoot = "",
-    [int]$PlayerSeconds = 60,
-    [int]$LogTailLines = 40,
-    [switch]$IncludeLogTail,
-    [switch]$SkipPlayer
+    [switch]$NoSelfTests
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,30 +49,11 @@ if ($ScriptRoot.Count -gt 0) {
     & (Join-Path $PSScriptRoot "Validate-ScriptEntries.ps1") -ScriptRoot $ScriptRoot
 }
 
-if ($RunBallance) {
-    $ballanceArgs = @{
-        BuildDll = $buildDll
-        PlayerSeconds = $PlayerSeconds
-        LogTailLines = $LogTailLines
-    }
-    if (-not [string]::IsNullOrWhiteSpace($BallanceRoot)) {
-        $ballanceArgs.BallanceRoot = $BallanceRoot
-    }
-    if ($SkipPlayer) {
-        $ballanceArgs.SkipPlayer = $true
-    }
-    if ($IncludeLogTail) {
-        $ballanceArgs.IncludeLogTail = $true
-    }
-    & (Join-Path $PSScriptRoot "Validate-Ballance.ps1") @ballanceArgs
-}
-
 [pscustomobject]@{
     BuildDir = $BuildDir
     Configuration = $Configuration
     SelfTestsBuilt = -not $NoSelfTests
     Dll = $buildDll
     ScriptEntryRoots = ($ScriptRoot -join ";")
-    BallanceValidation = [bool]$RunBallance
     Status = "ok"
 }

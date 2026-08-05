@@ -414,7 +414,7 @@ class Overlay {
 | Field name conflicts with `Script`, `Class`, `Source`, `File`, or `Manifest` | Component input cannot be created correctly | Rename the field or use `name=` for editor text. |
 | `BBSlot@` omits `from` when it belongs to a config | Defaults and lifecycle metadata are not attached to the config | Prefer `from="ConfigField"`. |
 | Runtime BB uses `lifetime="manual"` without cleanup | Runtime behavior can remain after disable/reset | Use `lifetime="component"` or call `Destroy()`. |
-| Enum/flags text does not match the SDK parameter type | Conversion fails during injection or validation | Validate with `Validate-Ballance.ps1` and inspect `Explain()`. |
+| Enum/flags text does not match the SDK parameter type | Conversion fails during injection or validation | Run the host integration's validation tool and inspect `Explain()`. |
 | Parameterless lifecycle callbacks | Component conventions are not met | Use `BehaviorFrame@ frame` or the compatible `const CKBehaviorContext &in ctx` form. |
 
 ## Injection Rules

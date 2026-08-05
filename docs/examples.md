@@ -155,7 +155,7 @@ class TextOverlay {
 After exporter validation:
 
 ```powershell
-python tools\generate_angelscript_catalog.py --validation-dir build\validation\ballance
+python tools\generate_angelscript_catalog.py --validation-dir build\validation\host
 ```
 
 Script:
@@ -165,4 +165,4 @@ BBDecl@ componentDecl = CKASCatalog::BBHints::AngelScript_AngelScript_Component:
 CKGUID stringType = CKASCatalog::ParamTypes::String();
 ```
 
-The exact generated names depend on the exported host metadata. See [catalog-ballance.md](catalog-ballance.md).
+The exact generated names depend on the exported host metadata.

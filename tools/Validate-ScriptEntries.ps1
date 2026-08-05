@@ -1,10 +1,4 @@
-param(
-    [string[]]$ScriptRoot = @(),
-    [switch]$CompileProbe,
-    [string]$BallanceRoot = "",
-    [string]$BuildDll = "",
-    [int]$PlayerSeconds = 8
-)
+param([string[]]$ScriptRoot = @())
 
 $ErrorActionPreference = "Stop"
 
@@ -411,31 +405,8 @@ if ($errors.Count -gt 0) {
     throw "Script entry validation failed with $($errors.Count) error(s)."
 }
 
-if ($CompileProbe) {
-    if ([string]::IsNullOrWhiteSpace($BallanceRoot)) {
-        $BallanceRoot = if ($env:BALLANCE_ROOT) { $env:BALLANCE_ROOT } else { $env:CKAS_BALLANCE_ROOT }
-    }
-    if ([string]::IsNullOrWhiteSpace($BuildDll)) {
-        $BuildDll = Join-Path $repoRoot "build\src\Release\AngelScript.dll"
-    }
-    if ([string]::IsNullOrWhiteSpace($BallanceRoot)) {
-        throw "Compile probe requires -BallanceRoot or BALLANCE_ROOT/CKAS_BALLANCE_ROOT."
-    }
-    $oldRoots = $env:CKAS_SCRIPT_ROOTS
-    $oldValidate = $env:CKAS_SCRIPT_VALIDATE_ONLY
-    $env:CKAS_SCRIPT_ROOTS = ($scriptEntryRoots | Select-Object -Unique) -join ";"
-    $env:CKAS_SCRIPT_VALIDATE_ONLY = "1"
-    try {
-        & (Join-Path $PSScriptRoot "Validate-Ballance.ps1") -BallanceRoot $BallanceRoot -BuildDll $BuildDll -PlayerSeconds $PlayerSeconds
-    } finally {
-        if ($null -eq $oldRoots) { Remove-Item Env:\CKAS_SCRIPT_ROOTS -ErrorAction SilentlyContinue } else { $env:CKAS_SCRIPT_ROOTS = $oldRoots }
-        if ($null -eq $oldValidate) { Remove-Item Env:\CKAS_SCRIPT_VALIDATE_ONLY -ErrorAction SilentlyContinue } else { $env:CKAS_SCRIPT_VALIDATE_ONLY = $oldValidate }
-    }
-}
-
 [pscustomobject]@{
     ScriptEntries = $scriptCount
     Roots = ($roots -join ";")
-    CompileProbe = [bool]$CompileProbe
     Status = "ok"
 }

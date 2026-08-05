@@ -12,7 +12,7 @@ This guide takes a clean checkout to a validated `AngelScript.dll`.
 
 For offline builds, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=C:\Path\To\angelscript_2.38.0.zip`. Use `CKAS_ANGELSCRIPT_URL` and `CKAS_ANGELSCRIPT_SHA256` when pointing CMake at a mirror or a different SDK archive.
 
-The plugin is built as 32-bit because Virtools/Ballance hosts are 32-bit.
+The plugin is built as 32-bit for supported Virtools 2.x hosts.
 
 ## Configure and Build
 
@@ -58,18 +58,8 @@ Run the repeatable local workflow:
 tools\Validate-Local.ps1 -BuildDir build -Configuration Release
 ```
 
-This configures and builds the plugin. Add `-RunBallance` when a Ballance install is available:
-
-```powershell
-$env:BALLANCE_ROOT = "C:\Path\To\Ballance"
-tools\Validate-Local.ps1 `
-  -BuildDir build `
-  -Configuration Release `
-  -RunBallance `
-  -BallanceRoot $env:BALLANCE_ROOT
-```
-
-The Ballance validation path installs the DLL, runs `VirtoolsDataExporter.exe`, starts Player, waits for the CKAngelScript startup self-test marker, and expects `status=ok`.
+This configures and builds the plugin. Game- or application-specific launch
+automation belongs in the corresponding host integration project.
 
 ## First Runtime Script
 

@@ -19,7 +19,7 @@ option(CKAS_ENABLE_API_EXPORT "Build runtime AngelScript API JSON export support
 option(CKAS_INSTALL_DOCS "Install README, license, and Markdown documentation" ON)
 option(CKAS_BUILD_API_DOCS "Enable the docs-api target for generated Natural Docs API reference" OFF)
 set(CKAS_NATURALDOCS_EXECUTABLE "" CACHE FILEPATH "Path to the Natural Docs executable used by docs-api")
-set(CKAS_DOCS_BALLANCE_ROOT "" CACHE PATH "Optional Ballance root used by docs-api runtime export")
+set(CKAS_SCRIPT_API_JSON_INPUT "" CACHE FILEPATH "Host-exported AngelScript API JSON used by docs-api")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED NO)
@@ -77,7 +77,6 @@ if (CKAS_BUILD_CORE_TESTS)
 endif ()
 #add_subdirectory(tools)
 
-set(CKAS_SCRIPT_API_JSON "${CMAKE_BINARY_DIR}/docs/script-api.json")
 set(CKAS_API_SOURCE_DIR "${CMAKE_BINARY_DIR}/docs/api-source")
 set(CKAS_API_OUTPUT_DIR "${CMAKE_BINARY_DIR}/docs/api")
 set(CKAS_API_QUALITY_JSON "${CMAKE_BINARY_DIR}/docs/api-quality.json")
@@ -89,22 +88,16 @@ if (CKAS_BUILD_API_DOCS)
     if (NOT CKAS_NATURALDOCS_EXECUTABLE)
         message(FATAL_ERROR "CKAS_BUILD_API_DOCS requires CKAS_NATURALDOCS_EXECUTABLE to point at NaturalDocs.exe.")
     endif ()
+    if (NOT CKAS_SCRIPT_API_JSON_INPUT)
+        message(FATAL_ERROR "CKAS_BUILD_API_DOCS requires CKAS_SCRIPT_API_JSON_INPUT to point at an API JSON exported by a host integration.")
+    endif ()
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
     add_custom_command(
             OUTPUT "${CKAS_API_OUTPUT_DIR}/index.html"
-            COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/docs"
-            COMMAND powershell
-                    -NoProfile
-                    -ExecutionPolicy Bypass
-                    -File "${PROJECT_SOURCE_DIR}/tools/Validate-Ballance.ps1"
-                    -BallanceRoot "${CKAS_DOCS_BALLANCE_ROOT}"
-                    -BuildDll "$<TARGET_FILE:CKAngelScript>"
-                    -ValidationDir "${CMAKE_BINARY_DIR}/validation/ballance"
-                    -ExportScriptApi "${CKAS_SCRIPT_API_JSON}"
             COMMAND "${Python3_EXECUTABLE}"
                     "${PROJECT_SOURCE_DIR}/tools/generate_naturaldocs_api.py"
-                    --api-json "${CKAS_SCRIPT_API_JSON}"
+                    --api-json "${CKAS_SCRIPT_API_JSON_INPUT}"
                     --metadata "${PROJECT_SOURCE_DIR}/docs/api-reference.yml"
                     --out-dir "${CKAS_API_SOURCE_DIR}"
                     --quality-json "${CKAS_API_QUALITY_JSON}"
@@ -115,15 +108,13 @@ if (CKAS_BUILD_API_DOCS)
                     "${CKAS_API_OUTPUT_DIR}/index.html"
                     "${CKAS_API_OUTPUT_DIR}/index.html"
             DEPENDS
-                    CKAngelScript
-                    "${PROJECT_SOURCE_DIR}/tools/Validate-Ballance.ps1"
+                    "${CKAS_SCRIPT_API_JSON_INPUT}"
                     "${PROJECT_SOURCE_DIR}/tools/generate_naturaldocs_api.py"
                     "${PROJECT_SOURCE_DIR}/docs/api-reference.yml"
                     "${PROJECT_SOURCE_DIR}/docs/naturaldocs/Project.txt"
                     "${PROJECT_SOURCE_DIR}/docs/naturaldocs/Languages.txt"
                     "${PROJECT_SOURCE_DIR}/docs/naturaldocs/Comments.txt"
             BYPRODUCTS
-                    "${CKAS_SCRIPT_API_JSON}"
                     "${CKAS_API_QUALITY_JSON}"
             COMMENT "Generating CKAngelScript Natural Docs API reference"
             VERBATIM
@@ -131,7 +122,7 @@ if (CKAS_BUILD_API_DOCS)
     add_custom_target(docs-api DEPENDS "${CKAS_API_OUTPUT_DIR}/index.html")
 else ()
     add_custom_target(docs-api
-            COMMAND "${CMAKE_COMMAND}" -E echo "Reconfigure with -DCKAS_BUILD_API_DOCS=ON and -DCKAS_NATURALDOCS_EXECUTABLE=<path> to enable docs-api."
+            COMMAND "${CMAKE_COMMAND}" -E echo "Reconfigure with -DCKAS_BUILD_API_DOCS=ON, -DCKAS_NATURALDOCS_EXECUTABLE=<path>, and -DCKAS_SCRIPT_API_JSON_INPUT=<host-export.json> to enable docs-api."
             COMMAND "${CMAKE_COMMAND}" -E false
             VERBATIM)
 endif ()

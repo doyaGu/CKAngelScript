@@ -1,25 +1,12 @@
 param(
-    [string[]]$ScriptRoot = @(),
-    [switch]$CompileProbe,
-    [string]$BallanceRoot = "",
-    [string]$BuildDll = "",
-    [int]$PlayerSeconds = 8
+    [string[]]$ScriptRoot = @()
 )
 
 $ErrorActionPreference = "Stop"
 
-$scriptEntryArgs = @{
-    CompileProbe = [bool]$CompileProbe
-    PlayerSeconds = $PlayerSeconds
-}
+$scriptEntryArgs = @{}
 if ($ScriptRoot.Count -gt 0) {
     $scriptEntryArgs.ScriptRoot = $ScriptRoot
-}
-if (-not [string]::IsNullOrWhiteSpace($BallanceRoot)) {
-    $scriptEntryArgs.BallanceRoot = $BallanceRoot
-}
-if (-not [string]::IsNullOrWhiteSpace($BuildDll)) {
-    $scriptEntryArgs.BuildDll = $BuildDll
 }
 
 $result = & (Join-Path $PSScriptRoot "Validate-ScriptEntries.ps1") @scriptEntryArgs

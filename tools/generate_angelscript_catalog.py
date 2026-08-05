@@ -354,7 +354,7 @@ def generate(params: list[dict[str, Any]],
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    default_validation_dir = root / "build" / "validation" / "ballance"
+    default_validation_dir = root / "build" / "validation" / "host"
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--validation-dir", type=Path, default=default_validation_dir)

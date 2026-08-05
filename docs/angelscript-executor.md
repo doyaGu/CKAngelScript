@@ -37,17 +37,17 @@ Base prototype:
 
 `Script` is a stable script module id. New Executor code should point it at an
 `[executor]` entry such as `base.loading.register_activate_init`; using a
-`[runtime]` entry is supported only for compatibility with older packages such
-as `ballance.logic`. The Executor resolves that id through the script entry
+`[runtime]` entry is supported only for compatibility with older packages. The
+Executor resolves that id through the script entry
 manager and attaches the loaded module behind it. It does not
 accept generated internal module names such as `__CKASRuntime_*` or arbitrary
 module names outside the script entry manager.
 
 The Executor declaration is intentionally not targetable. A replacement root
 should expose target behavior only when the original graph interface has a real
-target slot and the replacement host explicitly implements that slot. The
-Ballance `base\Loading_Manager\Register & Activate Init_Script` tracer slice has
-no root target, so making the Executor targetable prevents exact dispatch.
+target slot and the replacement host explicitly implements that slot. If the
+original graph has no root target, making the Executor targetable prevents exact
+dispatch.
 
 When `Interface` is non-empty, the BB callback reshapes the instance by adding,
 removing, and renaming inputs, outputs, input parameters, and output parameters.
@@ -388,59 +388,6 @@ The first implementation intentionally keeps the surface small:
   tool and later validation work.
 
 This is enough to start testing the replacement host inside Player without
-committing to the final Ballance patch-manifest format.
-
-## Ballance Use
-
-For an exact replacement slice:
-
-1. `nmo` inspects the original script graph or child graph.
-2. `nmo` inserts `AngelScript Executor` in the same parent graph.
-3. `nmo` writes the Executor shape and settings.
-4. inbound links are rewired from the original graph branch to the Executor;
-5. outbound links are rewired from the Executor to the original downstream
-   targets;
-6. parameter source links and output parameter consumers are rewired by index;
-7. the original graph remains present but unreachable until verification passes.
-
-The Executor is the runtime host. The patch manifest remains the source of truth
-for persistent graph edits and rollback.
-
-## Ballance Persistence Rules
-
-These rules were verified against Ballance Player while replacing
-`base.cmo` behavior `#237`, `Register & Activate Init_Script`, under
-`#363 Loading_Manager`.
-
-- Generated `CKBehaviorIO` objects must use the same persistent input/output
-  flag shape as Virtools-authored nodes. For the current `nmo` output, set the
-  replacement input IO `old_flags` to `1` and output IO `old_flags` to `2`.
-  The Player can load a visually valid graph but never dispatch the Executor if
-  these flags remain at the tool-generated defaults.
-- Preserve one-way parameter source links. For original Ballance source outputs
-  such as `#186`, `#206`, and `#171`, set the new `CKParameterIn.source_id`
-  directly. Do not add a `destination_count` back-reference unless the original
-  graph already has one; doing so changed `Get Row` execution and caused an
-  immediate loading failure.
-- Dynamic BB input parameters are target-dependent. For example, `Add Row` has
-  no static input-parameter list in its declaration; its row-value pins appear
-  after the target `CKDataArray` is set. Replacement scripts should set the
-  target first, then use the live behavior instance pin order. For the verified
-  loader slice, `BehaviorRef.Pin(int)` is the available stable access path.
-- Preserve original settings on delegated BBs. In the verified loader slice,
-  `Add Row` must run with `Unique Key Column=true`. Because `Add Row` can update
-  its dynamic layout after settings, target assignment, and execution, rebind
-  live slots from the `BBInstance@` after those phases instead of reusing stale
-  `BBSlot@` handles.
-- Treat Ballanced BB source as the execution-semantic reference when static
-  graph data is ambiguous. For `Activate Script`, the reference implementation
-  is
-  `C:\Users\kakut\Works\Ballanced\Source\BuildingBlocks\Narratives\Behaviors\ActivateScript.cpp`.
-  Its new-version path activates `Out`, skips null script parameters as a
-  successful no-op, schedules real scripts through the current
-  `CKScene::Activate(script, reset)`, and wakes inactive owner objects. The
-  verified loader replacement implements that scene activation directly instead
-  of treating transient `BB::Call("Activate Script")` output as sufficient.
-- A copied patched asset must pass `nmo validate all`, launch in Player, execute
-  the replacement input, activate the expected output, and restore the original
-  `base.cmo` after smoke testing.
+committing to a host-specific patch-manifest format. Persistent asset editing,
+game object names, and verified graph slices belong in the host integration
+project.

@@ -8,6 +8,11 @@ CKAngelScript integrates AngelScript into the Virtools/CK2 runtime. It builds as
 - High-level `Scene`, `Behavior`/`BB`, `Param`, `Message`, and `Async` APIs.
 - Optional DynCall-backed native FFI helpers for advanced integrations.
 
+Game-specific packages and Player automation are maintained outside this core
+repository. The Ballance port lives in the sibling `CKAngelScript-Ballance`
+project and consumes this project through its public runtime and validation
+surface.
+
 ## Documentation Map
 
 | Topic | Start here |
@@ -24,7 +29,6 @@ CKAngelScript integrates AngelScript into the Virtools/CK2 runtime. It builds as
 | C API and C++ wrapper | [docs/public-api.md](docs/public-api.md) |
 | API inventory | [docs/api-inventory.md](docs/api-inventory.md) |
 | Raw SDK bindings | [docs/sdk-bindings.md](docs/sdk-bindings.md) |
-| Ballance catalog snapshot | [docs/catalog-ballance.md](docs/catalog-ballance.md) |
 | Examples | [docs/examples.md](docs/examples.md) |
 | Troubleshooting | [docs/validation-and-troubleshooting.md](docs/validation-and-troubleshooting.md) |
 
@@ -68,7 +72,11 @@ cmake --build build --config Release --target PACKAGE
 
 The package contains `bin\AngelScript.dll`, public headers under `include\`, and project documentation under `share\doc\CKAngelScript\`.
 
-To generate the optional AngelScript API reference, provide Natural Docs and run the `docs-api` target. This starts Ballance/Player, exports the live `asIScriptEngine` API to JSON, applies the curated metadata in `docs\api-reference.yml`, converts it to Natural Docs `.as` stubs, writes a quality report to `build\docs\api-quality.json`, and writes HTML under `build\docs\api`.
+To generate the optional AngelScript API reference, first export the live
+`asIScriptEngine` API JSON from a host integration. Then provide that JSON and
+Natural Docs to the host-neutral `docs-api` target. The target applies the
+curated metadata in `docs\api-reference.yml`, writes a quality report to
+`build\docs\api-quality.json`, and writes HTML under `build\docs\api`.
 
 ```powershell
 cmake -B build -G "Visual Studio 17 2022" -A Win32 `
@@ -76,6 +84,7 @@ cmake -B build -G "Visual Studio 17 2022" -A Win32 `
   -DCKAS_BUILD_SELF_TESTS=ON `
   -DCKAS_ENABLE_API_EXPORT=ON `
   -DCKAS_BUILD_API_DOCS=ON `
+  -DCKAS_SCRIPT_API_JSON_INPUT=C:\Path\To\script-api.json `
   -DCKAS_NATURALDOCS_EXECUTABLE=C:\Path\To\NaturalDocs.exe
 
 cmake --build build --config Release --target docs-api
@@ -87,17 +96,6 @@ For the repeatable local path:
 
 ```powershell
 tools\Validate-Local.ps1 -BuildDir build -Configuration Release
-```
-
-With a Ballance install:
-
-```powershell
-$env:BALLANCE_ROOT = "C:\Path\To\Ballance"
-tools\Validate-Local.ps1 `
-  -BuildDir build `
-  -Configuration Release `
-  -RunBallance `
-  -BallanceRoot $env:BALLANCE_ROOT
 ```
 
 ## First Runtime Script

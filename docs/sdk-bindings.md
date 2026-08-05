@@ -53,7 +53,7 @@ Some bindings are guarded by `CKVERSION` because Virtools SDK versions expose di
 There is no full generated raw SDK reference committed in this repository. Use:
 
 - Source registration files for exact AngelScript declarations.
-- [catalog-ballance.md](catalog-ballance.md) for exported host parameter/BB metadata.
+- A catalog generated from your host export for parameter and BB metadata.
 - High-level guides for stable user workflows.
 
 When writing docs or scripts, prefer the exact declaration registered in source over assumptions from native C++ headers.

@@ -55,10 +55,11 @@ metadata and surfaced through runtime inspection.
 
 `#include` first resolves relative to the including file. If that file is not
 found and the include path is package-style such as `Libs/foo.as`, CKAS searches
-upward from the including file's directory and uses the first matching file.
-This lets packages keep reusable source under a root-level `Libs` directory and
-write stable includes such as `#include "Libs/Ballance/loading.as"` instead of
-deep `../../../` paths.
+upward from the including file's directory through the package root (the parent
+of its `Scripts` directory) and uses the first matching file. The search never
+escapes that package root. This lets packages keep reusable source under a
+root-level `Libs` directory and write stable includes such as
+`#include "Libs/game/loading.as"` instead of deep `../../../` paths.
 
 ## Manifest Field Reference
 
@@ -160,7 +161,9 @@ Run static validation with:
 tools\Validate-ScriptEntries.ps1 -ScriptRoot C:\Game\Data
 ```
 
-When a Ballance/Player environment is available, add `-CompileProbe` to install the built DLL, set `CKAS_SCRIPT_VALIDATE_ONLY=1`, and compile discovered script entries without running runtime lifecycle callbacks.
+Host integration projects can set `CKAS_SCRIPT_VALIDATE_ONLY=1` while launching
+their host to compile discovered script entries without running runtime
+lifecycle callbacks.
 
 For a full local project check, use:
 
@@ -168,7 +171,11 @@ For a full local project check, use:
 tools\Validate-Local.ps1 -ScriptRoot C:\Game\Data
 ```
 
-Build startup self-tests with `-DCKAS_BUILD_SELF_TESTS=ON`. At runtime, set `CKAS_RUN_SELFTESTS=1` to run them inside the host, or set `CKAS_SELFTEST_MARKER` to a marker file path; the marker records `status`, `stage`, and any failure message. The Ballance validation script uses the marker path to verify that startup self-tests reached `status=ok`.
+Build startup self-tests with `-DCKAS_BUILD_SELF_TESTS=ON`. At runtime, set
+`CKAS_RUN_SELFTESTS=1` to run them inside the host, or set
+`CKAS_SELFTEST_MARKER` to a marker file path; the marker records `status`,
+`stage`, and any failure message. Host validation tools can use that marker to
+verify that startup self-tests reached `status=ok`.
 
 ## Troubleshooting
 

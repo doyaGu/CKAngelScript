@@ -96,7 +96,7 @@ Supporting public structs/enums are `CKAS_STATUS`, `CKAS_FEATURE`, `CKAS_CALLFLA
 ## Maintenance Checklist
 
 - Keep user-facing workflow APIs under named namespaces such as `Scene`, `Behavior`, `BB`, `Param`, `Message`, `Async`, or `Runtime`.
-- Prefer SDK-driven metadata over hard-coded Ballance or plugin-specific tables.
+- Prefer SDK-driven metadata over hard-coded game or plugin-specific tables.
 - Treat bytecode as an executable module cache only. CKAngelScript metadata reflection is backed by `CScriptBuilder` source metadata, so bytecode-only module loads need a source/metadata sidecar if callers still need metadata diagnostics or discovery.
 - Treat module graph/fingerprint data as CKAngelScript diagnostics. It explains public load/import API activity and source-section snapshot includes, but raw AngelScript mutations can bypass it.
 - Add new public entry points only through the C ABI in `include/CKAngelScript.h`, then mirror them in the C++ wrapper and document result lifetime rules.
