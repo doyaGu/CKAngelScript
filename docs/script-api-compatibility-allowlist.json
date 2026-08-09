@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "allowedRemovals": [
+    {
+      "key": "method|ScriptMessage|ScriptMessageTarget Target() const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Restore the pre-existing string Target() ABI; the typed accessor remains available as additive TypedTarget()."
+    }
+  ]
+}

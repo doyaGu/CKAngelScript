@@ -69,9 +69,10 @@ tools\Export-LiveApiCatalog.ps1 `
   -Refresh
 ```
 
-The refresh normalizes the live export, removes volatile process addresses,
-writes `docs/script-api.json`, regenerates `as.predefined`, and records a hash
-of every source file that contributes AngelScript registrations in
+The refresh normalizes the live export, removes volatile process addresses and
+registration-order IDs, writes `docs/script-api.json`, regenerates
+`as.predefined`, and records a hash of every source/configuration file that
+contributes AngelScript registrations in
 `docs/script-api.lock.json`. `-RunSelfTests` also waits for the startup marker
 to reach `status=ok`; the installed plugin is restored on success, failure, or
 timeout.
@@ -82,10 +83,26 @@ Run the same consistency check used by CI with:
 python tools\sync_api_catalog.py --check
 ```
 
+Pull-request CI additionally compares the catalog with the target branch and
+rejects removed or changed declarations. Intentional removals require an exact,
+reasoned entry in `docs/script-api-compatibility-allowlist.json`; approvals are
+bound to the baseline catalog hash rather than acting as permanent exceptions.
+
 If a registration source changes without a fresh live export, or a generator
 change makes `as.predefined` stale, the check fails and lists the drifting
 files. The live export must come from the canonical release configuration,
 including `CKAS_ENABLE_DYNCALL=ON` when the published API includes DynCall.
+The canonical `full` profile and pinned dependency versions are recorded in
+`docs/script-api.lock.json`.
+
+The manual `Player Validation` workflow runs the same export and startup tests
+on a runner labelled `virtools-player`. Configure these repository variables to
+paths that exist on that self-hosted runner:
+
+- `CKAS_PLAYER_PATH`: `Player.exe`.
+- `CKAS_GAME_ROOT`: the game root used as Player's working directory.
+- `CKAS_PLUGIN_DESTINATION`: the installed `AngelScript.dll` to replace and
+  restore during validation.
 
 ## Environment Variables
 

@@ -1,0 +1,89 @@
+name: Player Validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-api-and-self-tests:
+    runs-on: [ self-hosted, Windows, X64, virtools-player ]
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6.0.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Checkout pinned Virtools SDK
+        uses: actions/checkout@v6.0.2
+        with:
+          repository: doyaGu/Virtools-SDK-2.1
+          ref: 175bcb12d829c687359b90615be53524cdba0132
+          path: Virtools-SDK-2.1
+
+      - name: Validate runner configuration
+        shell: pwsh
+        env:
+          CKAS_PLAYER_PATH: ${{ vars.CKAS_PLAYER_PATH }}
+          CKAS_GAME_ROOT: ${{ vars.CKAS_GAME_ROOT }}
+          CKAS_PLUGIN_DESTINATION: ${{ vars.CKAS_PLUGIN_DESTINATION }}
+        run: |
+          foreach ($name in 'CKAS_PLAYER_PATH', 'CKAS_GAME_ROOT', 'CKAS_PLUGIN_DESTINATION') {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ([string]::IsNullOrWhiteSpace($value) -or -not (Test-Path -LiteralPath $value)) {
+              throw "Repository variable $name must point to an existing path on the self-hosted runner."
+            }
+          }
+
+      - name: Setup MSVC
+        uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
+        with:
+          arch: x86
+
+      - name: Prepare pinned DynCall
+        shell: pwsh
+        run: >
+          .\tools\Prepare-DynCall.ps1
+          -InstallRoot "${{ github.workspace }}\DynCall"
+          -WorkRoot "${{ github.workspace }}\build-player\DynCall"
+          -Configuration Release
+
+      - name: Configure full catalog profile
+        shell: pwsh
+        run: |
+          cmake -G Ninja -B build-player `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCKAS_BUILD_CORE_TESTS=ON `
+            -DCKAS_BUILD_SELF_TESTS=ON `
+            -DCKAS_ENABLE_API_EXPORT=ON `
+            -DCKAS_ENABLE_DYNCALL=ON `
+            -DDYNCALL_ROOT="${{ github.workspace }}\DynCall" `
+            -DDYNCALLBACK_ROOT="${{ github.workspace }}\DynCall" `
+            -DDYNLOAD_ROOT="${{ github.workspace }}\DynCall" `
+            -DVIRTOOLS_SDK_PATH="${{ github.workspace }}\Virtools-SDK-2.1"
+
+      - name: Build and run host-independent tests
+        shell: pwsh
+        run: |
+          cmake --build build-player
+          ctest --test-dir build-player --output-on-failure
+
+      - name: Run Player self-tests and compare live API catalog
+        shell: pwsh
+        env:
+          CKAS_PLAYER_PATH: ${{ vars.CKAS_PLAYER_PATH }}
+          CKAS_GAME_ROOT: ${{ vars.CKAS_GAME_ROOT }}
+          CKAS_PLUGIN_DESTINATION: ${{ vars.CKAS_PLUGIN_DESTINATION }}
+        run: |
+          .\tools\Export-LiveApiCatalog.ps1 `
+            -PlayerPath $env:CKAS_PLAYER_PATH `
+            -GameRoot $env:CKAS_GAME_ROOT `
+            -PluginDll "${{ github.workspace }}\build-player\src\AngelScript.dll" `
+            -PluginDestination $env:CKAS_PLUGIN_DESTINATION `
+            -Output "${{ github.workspace }}\build-player\docs\script-api.live.json" `
+            -RunSelfTests `
+            -Refresh
+          git diff --exit-code -- docs/script-api.json docs/script-api.lock.json docs/api-inventory.md as.predefined

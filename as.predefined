@@ -28,6 +28,35 @@ typedef uint size_t;
 typedef uint uintptr_t;
 typedef uint WIN_HANDLE;
 
+funcdef float AsyncFloatFunc();
+funcdef int AsyncIntFunc();
+funcdef CKObject@ AsyncObjectFunc();
+funcdef string AsyncStringFunc();
+funcdef void AsyncVoidFunc();
+funcdef VX_EFFECTCALLBACK_RETVAL CK_EFFECTCALLBACK(CKRenderContext@ dev, CKMaterial@ mat, int stage, NativePointer argument);
+funcdef CKERROR CK_EXITINSTANCEFCT(CKContext@ context);
+funcdef CKERROR CK_INITINSTANCEFCT(CKContext@ context);
+funcdef int CK_MATERIALCALLBACK(CKRenderContext@ dev, CKMaterial@ mat);
+funcdef void CK_MESHRENDERCALLBACK(CKRenderContext@ dev, CK3dEntity@ mov, CKMesh@ object);
+funcdef void CK_PARAMETERCHECKFUNCTION(CKParameter@ param);
+funcdef void CK_PARAMETERCOPYFUNCTION(CKParameter@ destParam, CKParameter@ srcParam);
+funcdef CKERROR CK_PARAMETERCREATEDEFAULTFUNCTION(CKParameter@ param);
+funcdef void CK_PARAMETERDELETEFUNCTION(CKParameter@ param);
+funcdef void CK_PARAMETEROPERATION(CKContext@ context, CKParameterOut@ res, CKParameterIn@ p1, CKParameterIn@ p2);
+funcdef void CK_PARAMETERREMAPFUNCTION(CKParameter@ param, CKDependenciesContext@ context);
+funcdef void CK_PARAMETERSAVELOADFUNCTION(CKParameter@ param, CKStateChunk@&out chunk, bool load);
+funcdef int CK_PARAMETERSTRINGFUNCTION(CKParameter@ param, string valueString, bool readFromString);
+funcdef uint CK_PARAMETERUICREATORFUNCTION(CKParameter@ param, uint parentWindow, CKRECT&in rect);
+funcdef void CK_RENDERCALLBACK(CKRenderContext@ dev);
+funcdef bool CK_RENDEROBJECT_CALLBACK(CKRenderContext@ dev, CKRenderObject@ entity);
+funcdef void CK_SUBMESHRENDERCALLBACK(CKRenderContext@ dev, CK3dEntity@ mov, CKMesh@ object, CKMaterial@ mat);
+funcdef CKERROR CKBEHAVIORCALLBACKFCT(const CKBehaviorContext&in context);
+funcdef int CKBEHAVIORFCT(const CKBehaviorContext&in context);
+funcdef CKERROR CKDLL_CREATEPROTOFUNCTION(CKBehaviorPrototype@&out prototype);
+funcdef void CKDLL_OBJECTDECLARATIONFUNCTION(XObjectDeclarationArray&out declArray);
+funcdef CKERROR CKUICALLBACKFCT(CKUICallbackStruct&in param);
+funcdef int8 DynCallbackHandler(NativePointer pcb, DynArgs&inout args, DynValue&inout result);
+
 enum CK_2DENTITY_FLAGS {
     CK_2DENTITY_BACKGROUND = 64,
     CK_2DENTITY_CLIPTOCAMERAVIEW = 1024,
@@ -2206,7 +2235,9 @@ class BehaviorFrame {
     CKObject@ BehaviorLocalObject(const string&in name, int occurrence = 0) const;
     CKObject@ BehaviorLocalObject(int index) const;
     CKParameterLocal@ BehaviorLocalParameter(int index) const;
+    NativeBuffer@ BehaviorLocalReadData(int index) const;
     NativePointer BehaviorLocalReadDataPtr(int index) const;
+    NativeBuffer@ BehaviorLocalWriteData(int index) const;
     NativePointer BehaviorLocalWriteDataPtr(int index) const;
     CKERROR CKDestroyObject(CKObject@ object, uint flags = 0, CKDependencies&in depoptions = void);
     CKERROR CKDestroyObject(uint id, uint flags = 0, CKDependencies&in depoptions = void);
@@ -2282,6 +2313,7 @@ class BehaviorFrame {
     int GetInputParameterCount() const;
     CKObject@ GetInputParameterObject(int index) const;
     int GetInputParameterPosition(CKParameterIn@ pin) const;
+    NativeBuffer@ GetInputParameterReadData(int index) const;
     NativePointer GetInputParameterReadDataPtr(int index) const;
     int GetInputPosition(CKBehaviorIO@ io) const;
     CKStateChunk@ GetInterfaceChunk() const;
@@ -2290,7 +2322,9 @@ class BehaviorFrame {
     int GetLocalParameterCount() const;
     CKObject@ GetLocalParameterObject(int index) const;
     int GetLocalParameterPosition(CKParameterLocal@ local) const;
+    NativeBuffer@ GetLocalParameterReadData(int index) const;
     NativePointer GetLocalParameterReadDataPtr(int index) const;
+    NativeBuffer@ GetLocalParameterWriteData(int index) const;
     NativePointer GetLocalParameterWriteDataPtr(int index) const;
     int GetMemoryOccupation() const;
     string GetName() const;
@@ -2301,6 +2335,7 @@ class BehaviorFrame {
     int GetOutputParameterCount() const;
     CKObject@ GetOutputParameterObject(int index) const;
     int GetOutputParameterPosition(CKParameterOut@ pout) const;
+    NativeBuffer@ GetOutputParameterWriteData(int index) const;
     NativePointer GetOutputParameterWriteDataPtr(int index) const;
     int GetOutputPosition(CKBehaviorIO@ io) const;
     CKBeObject@ GetOwner() const;
@@ -2385,9 +2420,11 @@ class BehaviorFrame {
     CKObject@ LocalObject(int index) const;
     CKParameterLocal@ LocalParameter(int index) const;
     int LocalPosition(CKParameterLocal@ local) const;
+    NativeBuffer@ LocalReadData(int index) const;
     NativePointer LocalReadDataPtr(int index) const;
     string LocalString(const string&in name, const string&in defaultValue = "", int occurrence = 0) const;
     string LocalString(int index, const string&in defaultValue = "") const;
+    NativeBuffer@ LocalWriteData(int index) const;
     NativePointer LocalWriteDataPtr(int index) const;
     int MemoryOccupation() const;
     CKMessageManager@ MessageManager() const;
@@ -2425,6 +2462,7 @@ class BehaviorFrame {
     CKObject@ PinObject(const string&in name, int occurrence = 0) const;
     CKObject@ PinObject(int index) const;
     int PinPosition(CKParameterIn@ pin) const;
+    NativeBuffer@ PinReadData(int index) const;
     NativePointer PinReadDataPtr(int index) const;
     string PinString(const string&in name, const string&in defaultValue = "", int occurrence = 0) const;
     string PinString(int index, const string&in defaultValue = "") const;
@@ -2436,6 +2474,7 @@ class BehaviorFrame {
     bool PoutEnabled(int index) const;
     CKObject@ PoutObject(int index) const;
     int PoutPosition(CKParameterOut@ pout) const;
+    NativeBuffer@ PoutWriteData(int index) const;
     NativePointer PoutWriteDataPtr(int index) const;
     void PreDelete();
     void PreSave(CKFile@ file, uint flags);
@@ -12482,8 +12521,9 @@ class ScriptMessage {
     dictionary@ Payload() const;
     bool RequiresReply() const;
     string Source() const;
-    ScriptMessageTarget Target() const;
+    string Target() const;
     string Topic() const;
+    ScriptMessageTarget TypedTarget() const;
     ScriptMessage& opAssign(const ScriptMessage&in other);
 }
 

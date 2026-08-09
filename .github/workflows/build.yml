@@ -27,10 +27,21 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Test API catalog compatibility checker
+        shell: pwsh
+        run: python tools/test_sync_api_catalog.py
 
       - name: Check live API catalog drift
         shell: pwsh
         run: python tools/sync_api_catalog.py --check
+
+      - name: Check AngelScript API compatibility
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: python tools/sync_api_catalog.py --check --check-compatibility-ref "origin/${{ github.base_ref }}"
 
   validate-release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -55,6 +66,7 @@ jobs:
           }
 
   build:
+    needs: [ api-catalog ]
     runs-on: windows-latest
 
     strategy:
@@ -71,6 +83,7 @@ jobs:
         uses: actions/checkout@v6.0.2
         with:
           repository: doyaGu/Virtools-SDK-2.1
+          ref: 175bcb12d829c687359b90615be53524cdba0132
           path: Virtools-SDK-2.1
 
       - name: Show tool versions
@@ -88,6 +101,14 @@ jobs:
         with:
           arch: x86
 
+      - name: Prepare pinned DynCall
+        shell: pwsh
+        run: >
+          .\tools\Prepare-DynCall.ps1
+          -InstallRoot "${{ github.workspace }}\DynCall"
+          -WorkRoot "${{ env.BASE_BUILD_DIR }}\DynCall-${{ matrix.configuration }}"
+          -Configuration ${{ matrix.configuration }}
+
       - name: Configure CMake
         shell: pwsh
         run: |
@@ -97,6 +118,10 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} `
             -DCKAS_BUILD_CORE_TESTS=ON `
             -DCKAS_BUILD_SELF_TESTS=ON `
+            -DCKAS_ENABLE_DYNCALL=ON `
+            -DDYNCALL_ROOT="${{ github.workspace }}\DynCall" `
+            -DDYNCALLBACK_ROOT="${{ github.workspace }}\DynCall" `
+            -DDYNLOAD_ROOT="${{ github.workspace }}\DynCall" `
             -DVIRTOOLS_SDK_PATH="${{ github.workspace }}\Virtools-SDK-2.1" `
             -DCMAKE_INSTALL_PREFIX="${{ env.BASE_DIST_DIR }}\${{ matrix.configuration }}"
 
@@ -152,7 +177,7 @@ jobs:
 
   package-release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ validate-release, build ]
+    needs: [ api-catalog, validate-release, build ]
     runs-on: windows-latest
 
     steps:

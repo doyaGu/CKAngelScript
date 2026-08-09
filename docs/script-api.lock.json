@@ -1,10 +1,16 @@
 {
   "schemaVersion": 1,
   "catalog": "docs/script-api.json",
-  "catalogSha256": "b58c9af8a3ea48b4aafdaf47d9c384e817f69e28a3e0ab59cad0cbc50a0dbbe3",
-  "registrationSurfaceSha256": "6699ca82e46b60157e36c51c0c0a99f9622ed42bfd8146ee93b040d041f95b60",
+  "catalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+  "registrationSurfaceSha256": "46197b418cf8db21cfb89e97d41b70b5339abab1a4cac543af0a4a4292cdfec3",
   "registrationInputs": [
+    ".github/workflows/build.yml",
+    "CMakeLists.txt",
+    "cmake/FindDynCall.cmake",
+    "cmake/FindDynCallback.cmake",
+    "cmake/FindDynLoad.cmake",
     "deps/CMakeLists.txt",
+    "src/CMakeLists.txt",
     "src/ScriptAsync.cpp",
     "src/ScriptBridgeRegistration.cpp",
     "src/ScriptBuilder.cpp",
@@ -18,6 +24,8 @@
     "src/ScriptEngineHost.cpp",
     "src/ScriptEngineHost.h",
     "src/ScriptFormat.cpp",
+    "src/ScriptInfo.cpp",
+    "src/ScriptInfo.h",
     "src/ScriptMessage.cpp",
     "src/ScriptNativeBuffer.cpp",
     "src/ScriptNativePointer.cpp",
@@ -32,8 +40,30 @@
     "src/ScriptXBitArray.cpp",
     "src/ScriptXHashTable.h",
     "src/ScriptXObjectArray.cpp",
-    "src/ScriptXString.cpp"
+    "src/ScriptXString.cpp",
+    "tools/Prepare-DynCall.ps1"
   ],
+  "catalogProfile": {
+    "name": "full",
+    "cmakeOptions": {
+      "CKAS_ENABLE_DYNCALL": "ON"
+    },
+    "dependencies": {
+      "AngelScript": {
+        "version": "2.38.0",
+        "sha256": "b33b5dbcda10317ef67d628353d83246984ce6fcac102d4dc2aed121eba52e6f"
+      },
+      "DynCall": {
+        "version": "1.4",
+        "url": "https://dyncall.org/r1.4/dyncall-1.4.zip",
+        "sha256": "877d62fe1beb41e21c9518144065074b35331aeeee303d6452e2482a5cb6500e"
+      },
+      "VirtoolsSDK": {
+        "repository": "doyaGu/Virtools-SDK-2.1",
+        "commit": "175bcb12d829c687359b90615be53524cdba0132"
+      }
+    }
+  },
   "generated": [
     "as.predefined",
     "docs/api-inventory.md"
