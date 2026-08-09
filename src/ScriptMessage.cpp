@@ -1019,7 +1019,10 @@ void RegisterScriptMessage(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ScriptMessage", "string Kind() const", asMETHOD(ScriptMessage, Kind), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "string Topic() const", asMETHOD(ScriptMessage, Topic), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "string Source() const", asMETHOD(ScriptMessage, Source), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ScriptMessage", "ScriptMessageTarget Target() const", asMETHOD(ScriptMessage, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    // Target() is a long-standing string ABI. Keep the typed form additive so
+    // existing scripts continue to compile unchanged.
+    r = engine->RegisterObjectMethod("ScriptMessage", "string Target() const", asMETHOD(ScriptMessage, TargetText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "ScriptMessageTarget TypedTarget() const", asMETHOD(ScriptMessage, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "uint64 FrameIndex() const", asMETHOD(ScriptMessage, FrameIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "bool RequiresReply() const", asMETHOD(ScriptMessage, RequiresReply), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "dictionary@ Payload() const", asMETHOD(ScriptMessage, Payload), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
