@@ -1800,13 +1800,6 @@ CKParameterIn *BehaviorFrame::ReplacePin(int index, CKParameterIn *pin) {
     return previous;
 }
 
-NativePointer BehaviorFrame::PinReadDataPtr(int index) const {
-    CKBehavior *behavior = Behavior();
-    return NativePointer(behavior && index >= 0 && index < behavior->GetInputParameterCount()
-        ? behavior->GetInputParameterReadDataPtr(index)
-        : nullptr);
-}
-
 NativeBuffer *BehaviorFrame::PinReadData(int index) const {
     CKBehavior *behavior = Behavior();
     CKParameterIn *pin = behavior && index >= 0 && index < behavior->GetInputParameterCount()
@@ -1917,13 +1910,6 @@ CKParameterOut *BehaviorFrame::ReplacePout(int index, CKParameterOut *pout) {
     CKParameterOut *previous = behavior->ReplaceOutputParameter(index, pout);
     InvalidateLayout();
     return previous;
-}
-
-NativePointer BehaviorFrame::PoutWriteDataPtr(int index) const {
-    CKBehavior *behavior = Behavior();
-    return NativePointer(behavior && index >= 0 && index < behavior->GetOutputParameterCount()
-        ? behavior->GetOutputParameterWriteDataPtr(index)
-        : nullptr);
 }
 
 NativeBuffer *BehaviorFrame::PoutWriteData(int index) const {
@@ -2074,18 +2060,8 @@ int BehaviorFrame::LocalPosition(CKParameterLocal *local) const {
     return behavior && local ? behavior->GetLocalParameterPosition(local) : -1;
 }
 
-NativePointer BehaviorFrame::LocalWriteDataPtr(int index) const {
-    CKParameter *local = FindLocalSourceIndex(index);
-    return NativePointer(local ? local->GetWriteDataPtr() : nullptr);
-}
-
 NativeBuffer *BehaviorFrame::LocalWriteData(int index) const {
     return ParameterWriteBuffer(FindLocalSourceIndex(index));
-}
-
-NativePointer BehaviorFrame::LocalReadDataPtr(int index) const {
-    CKParameter *local = FindLocalSourceIndex(index);
-    return NativePointer(local ? local->GetReadDataPtr(TRUE) : nullptr);
 }
 
 NativeBuffer *BehaviorFrame::LocalReadData(int index) const {
@@ -2097,22 +2073,8 @@ CKObject *BehaviorFrame::LocalObject(int index) const {
     return local ? local->GetValueObject(TRUE) : nullptr;
 }
 
-NativePointer BehaviorFrame::BehaviorLocalWriteDataPtr(int index) const {
-    CKBehavior *behavior = Behavior();
-    return NativePointer(behavior && index >= 0 && index < behavior->GetLocalParameterCount()
-        ? behavior->GetLocalParameterWriteDataPtr(index)
-        : nullptr);
-}
-
 NativeBuffer *BehaviorFrame::BehaviorLocalWriteData(int index) const {
     return ParameterWriteBuffer(LocalParameter(index));
-}
-
-NativePointer BehaviorFrame::BehaviorLocalReadDataPtr(int index) const {
-    CKBehavior *behavior = Behavior();
-    return NativePointer(behavior && index >= 0 && index < behavior->GetLocalParameterCount()
-        ? behavior->GetLocalParameterReadDataPtr(index)
-        : nullptr);
 }
 
 NativeBuffer *BehaviorFrame::BehaviorLocalReadData(int index) const {

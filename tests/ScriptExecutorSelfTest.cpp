@@ -664,6 +664,47 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         error = "Executor self-test could not retrieve ScriptManager.";
         return false;
     }
+    asITypeInfo *frameType = engine->GetTypeInfoByDecl("BehaviorFrame");
+    const char *requiredSizedDataMethods[] = {
+        "NativeBuffer@ PinReadData(int index) const",
+        "NativeBuffer@ PoutWriteData(int index) const",
+        "NativeBuffer@ LocalReadData(int index) const",
+        "NativeBuffer@ LocalWriteData(int index) const",
+        "NativeBuffer@ BehaviorLocalReadData(int index) const",
+        "NativeBuffer@ BehaviorLocalWriteData(int index) const",
+        "NativeBuffer@ GetInputParameterReadData(int index) const",
+        "NativeBuffer@ GetOutputParameterWriteData(int index) const",
+        "NativeBuffer@ GetLocalParameterReadData(int index) const",
+        "NativeBuffer@ GetLocalParameterWriteData(int index) const",
+    };
+    if (!frameType) {
+        error = "Executor self-test could not resolve BehaviorFrame.";
+        return false;
+    }
+    for (const char *decl : requiredSizedDataMethods) {
+        if (!frameType->GetMethodByDecl(decl)) {
+            error = std::string("Executor self-test could not resolve sized BehaviorFrame method: ") + decl;
+            return false;
+        }
+    }
+    const char *forbiddenRawDataMethods[] = {
+        "NativePointer PinReadDataPtr(int index) const",
+        "NativePointer PoutWriteDataPtr(int index) const",
+        "NativePointer LocalReadDataPtr(int index) const",
+        "NativePointer LocalWriteDataPtr(int index) const",
+        "NativePointer BehaviorLocalReadDataPtr(int index) const",
+        "NativePointer BehaviorLocalWriteDataPtr(int index) const",
+        "NativePointer GetInputParameterReadDataPtr(int index) const",
+        "NativePointer GetOutputParameterWriteDataPtr(int index) const",
+        "NativePointer GetLocalParameterReadDataPtr(int index) const",
+        "NativePointer GetLocalParameterWriteDataPtr(int index) const",
+    };
+    for (const char *decl : forbiddenRawDataMethods) {
+        if (frameType->GetMethodByDecl(decl)) {
+            error = std::string("Executor self-test found removed raw BehaviorFrame method: ") + decl;
+            return false;
+        }
+    }
     if (!RunExecutorStateStoreIsolationSelfTest(context, manager, error)) {
         return false;
     }
@@ -713,7 +754,6 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (frame.GetInputParameter(0) is null || frame.GetOutputParameter(0) is null) return 152;\n"
         "    if (frame.GetInputParameterPosition(frame.GetInputParameter(0)) != 0 || frame.GetOutputParameterPosition(frame.GetOutputParameter(0)) != 0) return 158;\n"
         "    if (frame.PinPosition(frame.InputParameter(0)) != 0 || frame.PoutPosition(frame.OutputParameter(0)) != 0) return 145;\n"
-        "    if (frame.PinReadDataPtr(0).IsNull() || frame.GetInputParameterReadDataPtr(0).IsNull()) return 146;\n"
         "    NativeBuffer@ pinData = frame.PinReadData(0); NativeBuffer@ sdkPinData = frame.GetInputParameterReadData(0);\n"
         "    int bufferedPinValue = 0; if (pinData is null || sdkPinData is null || pinData.Size() != 4 || sdkPinData.Size() != 4 || pinData.Read(bufferedPinValue) != 4 || bufferedPinValue != 41) return 182;\n"
         "    NativeBuffer@ poutData = frame.PoutWriteData(0); NativeBuffer@ sdkPoutData = frame.GetOutputParameterWriteData(0); if (poutData is null || sdkPoutData is null || poutData.Size() != 4 || sdkPoutData.Size() != 4) return 183;\n"
@@ -746,9 +786,7 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (frame.LocalObject(\"__CKAS_MissingLocal\") !is null) return 173;\n"
         "    if (frame.BehaviorLocalParameter(scratchPhysical) is null || frame.GetLocalParameter(scratchPhysical) is null) return 153;\n"
         "    if (frame.LocalPosition(frame.BehaviorLocalParameter(scratchPhysical)) != scratchPhysical || frame.GetLocalParameterPosition(frame.GetLocalParameter(scratchPhysical)) != scratchPhysical) return 147;\n"
-        "    if (frame.LocalReadDataPtr(scratchLocal).IsNull() || frame.LocalWriteDataPtr(scratchLocal).IsNull()) return 148;\n"
         "    NativeBuffer@ localRead = frame.LocalReadData(scratchLocal); NativeBuffer@ localWrite = frame.LocalWriteData(scratchLocal); if (localRead is null || localWrite is null || localRead.Size() != 4 || localWrite.Size() != 4) return 184;\n"
-        "    if (frame.BehaviorLocalReadDataPtr(scratchPhysical).IsNull() || frame.BehaviorLocalWriteDataPtr(scratchPhysical).IsNull()) return 181;\n"
         "    NativeBuffer@ physicalRead = frame.BehaviorLocalReadData(scratchPhysical); NativeBuffer@ physicalWrite = frame.BehaviorLocalWriteData(scratchPhysical); NativeBuffer@ sdkLocalRead = frame.GetLocalParameterReadData(scratchPhysical); NativeBuffer@ sdkLocalWrite = frame.GetLocalParameterWriteData(scratchPhysical);\n"
         "    if (physicalRead is null || physicalWrite is null || sdkLocalRead is null || sdkLocalWrite is null || physicalRead.Size() != 4 || physicalWrite.Size() != 4 || sdkLocalRead.Size() != 4 || sdkLocalWrite.Size() != 4) return 185;\n"
         "    frame.LocalObject(scratchLocal);\n"

@@ -99,8 +99,9 @@ The SDK-style aliases are `GetInputParameterReadData`,
 `GetOutputParameterWriteData`, `GetLocalParameterReadData`, and
 `GetLocalParameterWriteData`. These buffers are bounded but borrow live
 Virtools parameter memory: consume them during the current behavior call and do
-not retain them across frames or layout changes. The `*DataPtr` variants remain
-only for compatibility and cannot validate an allocation length.
+not retain them across frames or layout changes. The old `BehaviorFrame`
+`*DataPtr` variants are intentionally not exposed because they cannot validate
+an allocation length.
 
 Use script arrays for typed lists instead of packing integers manually:
 

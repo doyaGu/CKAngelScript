@@ -253,10 +253,12 @@ ParamRef@ Setting(int index) const
 int PinPosition(CKParameterIn@ pin) const
 int PoutPosition(CKParameterOut@ pout) const
 int LocalPosition(CKParameterLocal@ local) const
-NativePointer PinReadDataPtr(int index) const
-NativePointer PoutWriteDataPtr(int index) const
-NativePointer LocalReadDataPtr(int index) const
-NativePointer LocalWriteDataPtr(int index) const
+NativeBuffer@ PinReadData(int index) const
+NativeBuffer@ PoutWriteData(int index) const
+NativeBuffer@ LocalReadData(int index) const
+NativeBuffer@ LocalWriteData(int index) const
+NativeBuffer@ BehaviorLocalReadData(int index) const
+NativeBuffer@ BehaviorLocalWriteData(int index) const
 CKERROR GetInputParameterValue(int index, ?&out value)
 CKERROR GetOutputParameterValue(int index, ?&out value)
 CKERROR SetOutputParameterValue(int index, ?&in value)
