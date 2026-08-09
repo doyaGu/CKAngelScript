@@ -10,38 +10,13 @@
 #include "add_on/scriptarray/scriptarray.h"
 #include "ScriptBridgeCommon.h"
 #include "ScriptBridgeHandles.h"
+#include "ScriptHostScope.h"
 #include "ScriptRuntime.h"
 #include "ScriptRegistration.h"
 
 #undef GetObject
 
 namespace {
-
-CKContext *ContextFrom(const CKBehaviorContext &ctx) {
-    if (ctx.Context) {
-        return ctx.Context;
-    }
-    return ctx.Behavior ? ctx.Behavior->GetCKContext() : nullptr;
-}
-
-CKContext *ContextFrom(const ScriptContext &ctx) {
-    return ctx.Context();
-}
-
-ScriptBehaviorBridge *BridgeFrom(CKContext *context) {
-    ScriptManager *manager = ScriptManager::GetManager(context);
-    return manager ? manager->GetBehaviorBridge() : nullptr;
-}
-
-ScriptBehaviorBridge *BridgeFrom(const CKBehaviorContext &ctx) {
-    ScriptManager *manager = ManagerFromContext(ctx);
-    return manager ? manager->GetBehaviorBridge() : BridgeFrom(ContextFrom(ctx));
-}
-
-ScriptBehaviorBridge *BridgeFrom(const ScriptContext &ctx) {
-    ScriptManager *manager = ScriptManager::GetManager(ctx.Context());
-    return manager ? manager->GetBehaviorBridge() : BridgeFrom(ctx.Context());
-}
 
 ObjectRef *MakeRef(CKContext *context,
                    CKObject *object,
@@ -566,16 +541,12 @@ SceneRef *CurrentSceneImpl(CKContext *context) {
     return MakeTypedRef<SceneRef>(context, context->GetCurrentScene(), "Current scene is not available.");
 }
 
-ObjectRef *TargetImpl(const CKBehaviorContext &ctx, ScriptBehaviorBridge *bridge = nullptr) {
-    CKContext *context = ContextFrom(ctx);
-    CKBeObject *target = ctx.Behavior ? ctx.Behavior->GetTarget() : nullptr;
-    return MakeRef(context, target, "Behavior target is not available.", bridge, ComponentIdFromContext(ctx));
+ObjectRef *TargetImpl(const ScriptHostScope &scope) {
+    return MakeRef(scope.Context(), scope.Target(), "Behavior target is not available.", scope.Bridge(), scope.ComponentId());
 }
 
-ObjectRef *OwnerImpl(const CKBehaviorContext &ctx, ScriptBehaviorBridge *bridge = nullptr) {
-    CKContext *context = ContextFrom(ctx);
-    CKObject *owner = ctx.Behavior ? ctx.Behavior->GetOwner() : nullptr;
-    return MakeRef(context, owner, "Behavior owner is not available.", bridge, ComponentIdFromContext(ctx));
+ObjectRef *OwnerImpl(const ScriptHostScope &scope) {
+    return MakeRef(scope.Context(), scope.Owner(), "Behavior owner is not available.", scope.Bridge(), scope.ComponentId());
 }
 
 bool RejectSceneMutation(const char *apiName) {
@@ -820,40 +791,118 @@ bool SelectImpl(CKContext *context, CScriptArray *objects, bool clearSelection) 
     return context->Select(ids, clearSelection) == CK_OK;
 }
 
+LevelRef *CurrentLevelInScope(const ScriptHostScope &scope) {
+    return scope.CurrentLevel() ? MakeTypedRef<LevelRef>(scope.Context(), scope.CurrentLevel())
+                                : CurrentLevelImpl(scope.Context());
+}
+
+SceneRef *CurrentSceneInScope(const ScriptHostScope &scope) {
+    return scope.CurrentScene() ? MakeTypedRef<SceneRef>(scope.Context(), scope.CurrentScene())
+                                : CurrentSceneImpl(scope.Context());
+}
+
+ObjectRef *TargetInScope(const ScriptHostScope &scope) {
+    return scope.Kind() == ScriptHostScopeKind::Raw
+        ? MakeInvalid(scope.Context(), "CKContext has no behavior target.")
+        : TargetImpl(scope);
+}
+
+ObjectRef *OwnerInScope(const ScriptHostScope &scope) {
+    return scope.Kind() == ScriptHostScopeKind::Raw
+        ? MakeInvalid(scope.Context(), "CKContext has no behavior owner.")
+        : OwnerImpl(scope);
+}
+
+ObjectRef *RefInScope(const ScriptHostScope &scope, CKObject *object) {
+    return MakeRef(scope.Context(), object, std::string(), scope.Bridge(), scope.ComponentId());
+}
+
+ObjectRef *ByIdInScope(const ScriptHostScope &scope, CK_ID id) {
+    return ByIdImpl(scope.Context(), id, scope.Bridge(), scope.ComponentId());
+}
+
+ObjectRef *FindInScope(const ScriptHostScope &scope, const std::string &name, CK_CLASSID cid, bool derived, int occurrence, bool currentSceneOnly) {
+    return FindImpl(scope.Context(), name, cid, derived, occurrence, currentSceneOnly, scope.Bridge(), scope.ComponentId());
+}
+
+ObjectRef *FindOneInScope(const ScriptHostScope &scope, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) {
+    return FindOneImpl(scope.Context(), name, cid, derived, currentSceneOnly, scope.Bridge(), scope.ComponentId());
+}
+
+CScriptArray *FindAllInScope(const ScriptHostScope &scope, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) {
+    return FindAllImpl(scope.Context(), name, cid, derived, currentSceneOnly, scope.Bridge(), scope.ComponentId());
+}
+
+template <typename T>
+T *FindTypedInScope(const ScriptHostScope &scope, const std::string &name, CK_CLASSID cid, int occurrence, bool currentSceneOnly, const char *label) {
+    return FindTypedImpl<T>(scope.Context(), name, cid, occurrence, currentSceneOnly, label);
+}
+
+BehaviorRef *FindBehaviorInScope(const ScriptHostScope &scope, const std::string &name, int occurrence, bool currentSceneOnly) {
+    return FindBehaviorImpl(scope.Context(), name, occurrence, currentSceneOnly, scope.Bridge(), scope.ComponentId());
+}
+
+template <typename T>
+T *FindOneTypedInScope(const ScriptHostScope &scope, const std::string &name, CK_CLASSID cid, bool currentSceneOnly, const char *label) {
+    return FindOneTypedImpl<T>(scope.Context(), name, cid, currentSceneOnly, label);
+}
+
+BehaviorRef *FindOneBehaviorInScope(const ScriptHostScope &scope, const std::string &name, bool currentSceneOnly) {
+    return FindOneBehaviorImpl(scope.Context(), name, currentSceneOnly, scope.Bridge(), scope.ComponentId());
+}
+
+template <typename T>
+CScriptArray *FindAllTypedInScope(const ScriptHostScope &scope, const std::string &name, CK_CLASSID cid, bool currentSceneOnly, const char *arrayDecl) {
+    return FindAllTypedImpl<T>(scope.Context(), name, cid, currentSceneOnly, arrayDecl);
+}
+
+CScriptArray *FindAllBehaviorInScope(const ScriptHostScope &scope, const std::string &name, bool currentSceneOnly) {
+    return FindAllBehaviorImpl(scope.Context(), name, currentSceneOnly, scope.Bridge(), scope.ComponentId());
+}
+
+ObjectRef *CreateInScope(const ScriptHostScope &scope, CK_CLASSID cid, const std::string &name, bool dynamic) {
+    return CreateImpl(scope.Context(), cid, name, dynamic, scope.Bridge(), scope.ComponentId());
+}
+
+template <typename T>
+T *CreateTypedInScope(const ScriptHostScope &scope, CK_CLASSID cid, const std::string &name, bool dynamic, const char *label) {
+    return CreateTypedImpl<T>(scope.Context(), cid, name, dynamic, label);
+}
+
 // CKContext overloads.
-LevelRef *CurrentLevelCtx(CKContext *context) { return CurrentLevelImpl(context); }
-SceneRef *CurrentSceneCtx(CKContext *context) { return CurrentSceneImpl(context); }
-ObjectRef *TargetCtx(CKContext *context) { return MakeInvalid(context, "CKContext has no behavior target."); }
-ObjectRef *OwnerCtx(CKContext *context) { return MakeInvalid(context, "CKContext has no behavior owner."); }
-ObjectRef *RefCtx(CKContext *context, CKObject *object) { return MakeRef(context, object); }
-ObjectRef *ByIdCtx(CKContext *context, CK_ID id) { return ByIdImpl(context, id); }
-ObjectRef *FindCtx(CKContext *context, const std::string &name, CK_CLASSID cid, bool derived, int occurrence, bool currentSceneOnly) { return FindImpl(context, name, cid, derived, occurrence, currentSceneOnly); }
-ObjectRef *FindOneCtx(CKContext *context, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindOneImpl(context, name, cid, derived, currentSceneOnly); }
-CScriptArray *FindAllCtx(CKContext *context, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindAllImpl(context, name, cid, derived, currentSceneOnly); }
-Entity3DRef *FindEntity3DCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedImpl<Entity3DRef>(context, name, CKCID_3DENTITY, occurrence, currentSceneOnly, "CK3dEntity"); }
-Entity2DRef *FindEntity2DCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedImpl<Entity2DRef>(context, name, CKCID_2DENTITY, occurrence, currentSceneOnly, "CK2dEntity"); }
-MaterialRef *FindMaterialCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedImpl<MaterialRef>(context, name, CKCID_MATERIAL, occurrence, currentSceneOnly, "CKMaterial"); }
-TextureRef *FindTextureCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedImpl<TextureRef>(context, name, CKCID_TEXTURE, occurrence, currentSceneOnly, "CKTexture"); }
-MeshRef *FindMeshCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedImpl<MeshRef>(context, name, CKCID_MESH, occurrence, currentSceneOnly, "CKMesh"); }
-BehaviorRef *FindBehaviorCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindBehaviorImpl(context, name, occurrence, currentSceneOnly, BridgeFrom(context), 0); }
-Entity3DRef *FindOneEntity3DCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedImpl<Entity3DRef>(context, name, CKCID_3DENTITY, currentSceneOnly, "CK3dEntity"); }
-Entity2DRef *FindOneEntity2DCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedImpl<Entity2DRef>(context, name, CKCID_2DENTITY, currentSceneOnly, "CK2dEntity"); }
-MaterialRef *FindOneMaterialCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedImpl<MaterialRef>(context, name, CKCID_MATERIAL, currentSceneOnly, "CKMaterial"); }
-TextureRef *FindOneTextureCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedImpl<TextureRef>(context, name, CKCID_TEXTURE, currentSceneOnly, "CKTexture"); }
-MeshRef *FindOneMeshCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedImpl<MeshRef>(context, name, CKCID_MESH, currentSceneOnly, "CKMesh"); }
-BehaviorRef *FindOneBehaviorCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneBehaviorImpl(context, name, currentSceneOnly, BridgeFrom(context), 0); }
-CScriptArray *FindAllEntity3DCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedImpl<Entity3DRef>(context, name, CKCID_3DENTITY, currentSceneOnly, "array<Entity3DRef@>"); }
-CScriptArray *FindAllEntity2DCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedImpl<Entity2DRef>(context, name, CKCID_2DENTITY, currentSceneOnly, "array<Entity2DRef@>"); }
-CScriptArray *FindAllMaterialCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedImpl<MaterialRef>(context, name, CKCID_MATERIAL, currentSceneOnly, "array<MaterialRef@>"); }
-CScriptArray *FindAllTextureCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedImpl<TextureRef>(context, name, CKCID_TEXTURE, currentSceneOnly, "array<TextureRef@>"); }
-CScriptArray *FindAllMeshCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedImpl<MeshRef>(context, name, CKCID_MESH, currentSceneOnly, "array<MeshRef@>"); }
-CScriptArray *FindAllBehaviorCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllBehaviorImpl(context, name, currentSceneOnly, BridgeFrom(context), 0); }
-ObjectRef *CreateCtx(CKContext *context, CK_CLASSID cid, const std::string &name, bool dynamic) { return CreateImpl(context, cid, name, dynamic); }
-Entity3DRef *CreateEntity3DCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<Entity3DRef>(context, CKCID_3DENTITY, name, dynamic, "CK3dEntity"); }
-Entity2DRef *CreateEntity2DCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<Entity2DRef>(context, CKCID_2DENTITY, name, dynamic, "CK2dEntity"); }
-MaterialRef *CreateMaterialCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<MaterialRef>(context, CKCID_MATERIAL, name, dynamic, "CKMaterial"); }
-TextureRef *CreateTextureCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<TextureRef>(context, CKCID_TEXTURE, name, dynamic, "CKTexture"); }
-MeshRef *CreateMeshCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedImpl<MeshRef>(context, CKCID_MESH, name, dynamic, "CKMesh"); }
+LevelRef *CurrentLevelCtx(CKContext *context) { return CurrentLevelInScope(ScriptHostScope::From(context)); }
+SceneRef *CurrentSceneCtx(CKContext *context) { return CurrentSceneInScope(ScriptHostScope::From(context)); }
+ObjectRef *TargetCtx(CKContext *context) { return TargetInScope(ScriptHostScope::From(context)); }
+ObjectRef *OwnerCtx(CKContext *context) { return OwnerInScope(ScriptHostScope::From(context)); }
+ObjectRef *RefCtx(CKContext *context, CKObject *object) { return RefInScope(ScriptHostScope::From(context), object); }
+ObjectRef *ByIdCtx(CKContext *context, CK_ID id) { return ByIdInScope(ScriptHostScope::From(context), id); }
+ObjectRef *FindCtx(CKContext *context, const std::string &name, CK_CLASSID cid, bool derived, int occurrence, bool currentSceneOnly) { return FindInScope(ScriptHostScope::From(context), name, cid, derived, occurrence, currentSceneOnly); }
+ObjectRef *FindOneCtx(CKContext *context, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindOneInScope(ScriptHostScope::From(context), name, cid, derived, currentSceneOnly); }
+CScriptArray *FindAllCtx(CKContext *context, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindAllInScope(ScriptHostScope::From(context), name, cid, derived, currentSceneOnly); }
+Entity3DRef *FindEntity3DCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<Entity3DRef>(ScriptHostScope::From(context), name, CKCID_3DENTITY, occurrence, currentSceneOnly, "CK3dEntity"); }
+Entity2DRef *FindEntity2DCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<Entity2DRef>(ScriptHostScope::From(context), name, CKCID_2DENTITY, occurrence, currentSceneOnly, "CK2dEntity"); }
+MaterialRef *FindMaterialCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<MaterialRef>(ScriptHostScope::From(context), name, CKCID_MATERIAL, occurrence, currentSceneOnly, "CKMaterial"); }
+TextureRef *FindTextureCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<TextureRef>(ScriptHostScope::From(context), name, CKCID_TEXTURE, occurrence, currentSceneOnly, "CKTexture"); }
+MeshRef *FindMeshCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<MeshRef>(ScriptHostScope::From(context), name, CKCID_MESH, occurrence, currentSceneOnly, "CKMesh"); }
+BehaviorRef *FindBehaviorCtx(CKContext *context, const std::string &name, int occurrence, bool currentSceneOnly) { return FindBehaviorInScope(ScriptHostScope::From(context), name, occurrence, currentSceneOnly); }
+Entity3DRef *FindOneEntity3DCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<Entity3DRef>(ScriptHostScope::From(context), name, CKCID_3DENTITY, currentSceneOnly, "CK3dEntity"); }
+Entity2DRef *FindOneEntity2DCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<Entity2DRef>(ScriptHostScope::From(context), name, CKCID_2DENTITY, currentSceneOnly, "CK2dEntity"); }
+MaterialRef *FindOneMaterialCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<MaterialRef>(ScriptHostScope::From(context), name, CKCID_MATERIAL, currentSceneOnly, "CKMaterial"); }
+TextureRef *FindOneTextureCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<TextureRef>(ScriptHostScope::From(context), name, CKCID_TEXTURE, currentSceneOnly, "CKTexture"); }
+MeshRef *FindOneMeshCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<MeshRef>(ScriptHostScope::From(context), name, CKCID_MESH, currentSceneOnly, "CKMesh"); }
+BehaviorRef *FindOneBehaviorCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindOneBehaviorInScope(ScriptHostScope::From(context), name, currentSceneOnly); }
+CScriptArray *FindAllEntity3DCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<Entity3DRef>(ScriptHostScope::From(context), name, CKCID_3DENTITY, currentSceneOnly, "array<Entity3DRef@>"); }
+CScriptArray *FindAllEntity2DCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<Entity2DRef>(ScriptHostScope::From(context), name, CKCID_2DENTITY, currentSceneOnly, "array<Entity2DRef@>"); }
+CScriptArray *FindAllMaterialCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<MaterialRef>(ScriptHostScope::From(context), name, CKCID_MATERIAL, currentSceneOnly, "array<MaterialRef@>"); }
+CScriptArray *FindAllTextureCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<TextureRef>(ScriptHostScope::From(context), name, CKCID_TEXTURE, currentSceneOnly, "array<TextureRef@>"); }
+CScriptArray *FindAllMeshCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<MeshRef>(ScriptHostScope::From(context), name, CKCID_MESH, currentSceneOnly, "array<MeshRef@>"); }
+CScriptArray *FindAllBehaviorCtx(CKContext *context, const std::string &name, bool currentSceneOnly) { return FindAllBehaviorInScope(ScriptHostScope::From(context), name, currentSceneOnly); }
+ObjectRef *CreateCtx(CKContext *context, CK_CLASSID cid, const std::string &name, bool dynamic) { return CreateInScope(ScriptHostScope::From(context), cid, name, dynamic); }
+Entity3DRef *CreateEntity3DCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedInScope<Entity3DRef>(ScriptHostScope::From(context), CKCID_3DENTITY, name, dynamic, "CK3dEntity"); }
+Entity2DRef *CreateEntity2DCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedInScope<Entity2DRef>(ScriptHostScope::From(context), CKCID_2DENTITY, name, dynamic, "CK2dEntity"); }
+MaterialRef *CreateMaterialCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedInScope<MaterialRef>(ScriptHostScope::From(context), CKCID_MATERIAL, name, dynamic, "CKMaterial"); }
+TextureRef *CreateTextureCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedInScope<TextureRef>(ScriptHostScope::From(context), CKCID_TEXTURE, name, dynamic, "CKTexture"); }
+MeshRef *CreateMeshCtx(CKContext *context, const std::string &name, bool dynamic) { return CreateTypedInScope<MeshRef>(ScriptHostScope::From(context), CKCID_MESH, name, dynamic, "CKMesh"); }
 void ReleaseScriptArrayParam(CScriptArray *array) {
     if (array) {
         array->Release();
@@ -874,95 +923,95 @@ bool SelectCtx(CKContext *context, CScriptArray *objects, bool clearSelection) {
 }
 
 // CKBehaviorContext overloads.
-LevelRef *CurrentLevelBehavior(const CKBehaviorContext &ctx) { return ctx.CurrentLevel ? MakeTypedRef<LevelRef>(ContextFrom(ctx), ctx.CurrentLevel) : CurrentLevelImpl(ContextFrom(ctx)); }
-SceneRef *CurrentSceneBehavior(const CKBehaviorContext &ctx) { return ctx.CurrentScene ? MakeTypedRef<SceneRef>(ContextFrom(ctx), ctx.CurrentScene) : CurrentSceneImpl(ContextFrom(ctx)); }
-ObjectRef *TargetBehavior(const CKBehaviorContext &ctx) { return TargetImpl(ctx, BridgeFrom(ctx)); }
-ObjectRef *OwnerBehavior(const CKBehaviorContext &ctx) { return OwnerImpl(ctx, BridgeFrom(ctx)); }
-ObjectRef *RefBehavior(const CKBehaviorContext &ctx, CKObject *object) { return MakeRef(ContextFrom(ctx), object, std::string(), BridgeFrom(ctx), ComponentIdFromContext(ctx)); }
-ObjectRef *ByIdBehavior(const CKBehaviorContext &ctx, CK_ID id) { return ByIdImpl(ContextFrom(ctx), id, BridgeFrom(ctx), ComponentIdFromContext(ctx)); }
-ObjectRef *FindBehaviorContext(const CKBehaviorContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, int occurrence, bool currentSceneOnly) { return FindImpl(ContextFrom(ctx), name, cid, derived, occurrence, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx)); }
-ObjectRef *FindOneBehaviorContext(const CKBehaviorContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindOneImpl(ContextFrom(ctx), name, cid, derived, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx)); }
-CScriptArray *FindAllBehavior(const CKBehaviorContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindAllImpl(ContextFrom(ctx), name, cid, derived, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx)); }
-Entity3DRef *FindEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindEntity3DCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-Entity2DRef *FindEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindEntity2DCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-MaterialRef *FindMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindMaterialCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-TextureRef *FindTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTextureCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-MeshRef *FindMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindMeshCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-BehaviorRef *FindBehaviorBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindBehaviorImpl(ContextFrom(ctx), name, occurrence, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx)); }
-Entity3DRef *FindOneEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneEntity3DCtx(ContextFrom(ctx), name, currentSceneOnly); }
-Entity2DRef *FindOneEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneEntity2DCtx(ContextFrom(ctx), name, currentSceneOnly); }
-MaterialRef *FindOneMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneMaterialCtx(ContextFrom(ctx), name, currentSceneOnly); }
-TextureRef *FindOneTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTextureCtx(ContextFrom(ctx), name, currentSceneOnly); }
-MeshRef *FindOneMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneMeshCtx(ContextFrom(ctx), name, currentSceneOnly); }
-BehaviorRef *FindOneBehaviorBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneBehaviorImpl(ContextFrom(ctx), name, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx)); }
-CScriptArray *FindAllEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllEntity3DCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllEntity2DCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllMaterialCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTextureCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllMeshCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllBehaviorBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllBehaviorImpl(ContextFrom(ctx), name, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx)); }
-ObjectRef *CreateBehavior(const CKBehaviorContext &ctx, CK_CLASSID cid, const std::string &name, bool dynamic) { return CreateImpl(ContextFrom(ctx), cid, name, dynamic, BridgeFrom(ctx), ComponentIdFromContext(ctx)); }
-Entity3DRef *CreateEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateEntity3DCtx(ContextFrom(ctx), name, dynamic); }
-Entity2DRef *CreateEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateEntity2DCtx(ContextFrom(ctx), name, dynamic); }
-MaterialRef *CreateMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateMaterialCtx(ContextFrom(ctx), name, dynamic); }
-TextureRef *CreateTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTextureCtx(ContextFrom(ctx), name, dynamic); }
-MeshRef *CreateMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateMeshCtx(ContextFrom(ctx), name, dynamic); }
-bool AddToCurrentSceneBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool dependencies) { return AddToCurrentSceneImpl(ContextFrom(ctx), ref, dependencies); }
-bool RemoveFromCurrentSceneBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool dependencies) { return RemoveFromCurrentSceneImpl(ContextFrom(ctx), ref, dependencies); }
-bool IsInCurrentSceneBehavior(const CKBehaviorContext &ctx, ObjectRef *ref) { return IsInCurrentSceneImpl(ContextFrom(ctx), ref); }
-bool IsInSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref) { return IsInSceneImpl(ContextFrom(ctx), scene, ref); }
-bool AddToSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return AddToSceneImpl(ContextFrom(ctx), scene, ref, dependencies); }
-bool RemoveFromSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return RemoveFromSceneImpl(ContextFrom(ctx), scene, ref, dependencies); }
-bool DestroyBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool allowPersistent, CKDWORD flags) { return DestroyImpl(ContextFrom(ctx), ref, allowPersistent, flags); }
+LevelRef *CurrentLevelBehavior(const CKBehaviorContext &ctx) { return CurrentLevelInScope(ScriptHostScope::From(ctx)); }
+SceneRef *CurrentSceneBehavior(const CKBehaviorContext &ctx) { return CurrentSceneInScope(ScriptHostScope::From(ctx)); }
+ObjectRef *TargetBehavior(const CKBehaviorContext &ctx) { return TargetInScope(ScriptHostScope::From(ctx)); }
+ObjectRef *OwnerBehavior(const CKBehaviorContext &ctx) { return OwnerInScope(ScriptHostScope::From(ctx)); }
+ObjectRef *RefBehavior(const CKBehaviorContext &ctx, CKObject *object) { return RefInScope(ScriptHostScope::From(ctx), object); }
+ObjectRef *ByIdBehavior(const CKBehaviorContext &ctx, CK_ID id) { return ByIdInScope(ScriptHostScope::From(ctx), id); }
+ObjectRef *FindBehaviorContext(const CKBehaviorContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, int occurrence, bool currentSceneOnly) { return FindInScope(ScriptHostScope::From(ctx), name, cid, derived, occurrence, currentSceneOnly); }
+ObjectRef *FindOneBehaviorContext(const CKBehaviorContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindOneInScope(ScriptHostScope::From(ctx), name, cid, derived, currentSceneOnly); }
+CScriptArray *FindAllBehavior(const CKBehaviorContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindAllInScope(ScriptHostScope::From(ctx), name, cid, derived, currentSceneOnly); }
+Entity3DRef *FindEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), name, CKCID_3DENTITY, occurrence, currentSceneOnly, "CK3dEntity"); }
+Entity2DRef *FindEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), name, CKCID_2DENTITY, occurrence, currentSceneOnly, "CK2dEntity"); }
+MaterialRef *FindMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), name, CKCID_MATERIAL, occurrence, currentSceneOnly, "CKMaterial"); }
+TextureRef *FindTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<TextureRef>(ScriptHostScope::From(ctx), name, CKCID_TEXTURE, occurrence, currentSceneOnly, "CKTexture"); }
+MeshRef *FindMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<MeshRef>(ScriptHostScope::From(ctx), name, CKCID_MESH, occurrence, currentSceneOnly, "CKMesh"); }
+BehaviorRef *FindBehaviorBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindBehaviorInScope(ScriptHostScope::From(ctx), name, occurrence, currentSceneOnly); }
+Entity3DRef *FindOneEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), name, CKCID_3DENTITY, currentSceneOnly, "CK3dEntity"); }
+Entity2DRef *FindOneEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), name, CKCID_2DENTITY, currentSceneOnly, "CK2dEntity"); }
+MaterialRef *FindOneMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), name, CKCID_MATERIAL, currentSceneOnly, "CKMaterial"); }
+TextureRef *FindOneTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<TextureRef>(ScriptHostScope::From(ctx), name, CKCID_TEXTURE, currentSceneOnly, "CKTexture"); }
+MeshRef *FindOneMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<MeshRef>(ScriptHostScope::From(ctx), name, CKCID_MESH, currentSceneOnly, "CKMesh"); }
+BehaviorRef *FindOneBehaviorBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneBehaviorInScope(ScriptHostScope::From(ctx), name, currentSceneOnly); }
+CScriptArray *FindAllEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), name, CKCID_3DENTITY, currentSceneOnly, "array<Entity3DRef@>"); }
+CScriptArray *FindAllEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), name, CKCID_2DENTITY, currentSceneOnly, "array<Entity2DRef@>"); }
+CScriptArray *FindAllMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), name, CKCID_MATERIAL, currentSceneOnly, "array<MaterialRef@>"); }
+CScriptArray *FindAllTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<TextureRef>(ScriptHostScope::From(ctx), name, CKCID_TEXTURE, currentSceneOnly, "array<TextureRef@>"); }
+CScriptArray *FindAllMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<MeshRef>(ScriptHostScope::From(ctx), name, CKCID_MESH, currentSceneOnly, "array<MeshRef@>"); }
+CScriptArray *FindAllBehaviorBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllBehaviorInScope(ScriptHostScope::From(ctx), name, currentSceneOnly); }
+ObjectRef *CreateBehavior(const CKBehaviorContext &ctx, CK_CLASSID cid, const std::string &name, bool dynamic) { return CreateInScope(ScriptHostScope::From(ctx), cid, name, dynamic); }
+Entity3DRef *CreateEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), CKCID_3DENTITY, name, dynamic, "CK3dEntity"); }
+Entity2DRef *CreateEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), CKCID_2DENTITY, name, dynamic, "CK2dEntity"); }
+MaterialRef *CreateMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), CKCID_MATERIAL, name, dynamic, "CKMaterial"); }
+TextureRef *CreateTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<TextureRef>(ScriptHostScope::From(ctx), CKCID_TEXTURE, name, dynamic, "CKTexture"); }
+MeshRef *CreateMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<MeshRef>(ScriptHostScope::From(ctx), CKCID_MESH, name, dynamic, "CKMesh"); }
+bool AddToCurrentSceneBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool dependencies) { return AddToCurrentSceneImpl(ScriptHostScope::From(ctx).Context(), ref, dependencies); }
+bool RemoveFromCurrentSceneBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool dependencies) { return RemoveFromCurrentSceneImpl(ScriptHostScope::From(ctx).Context(), ref, dependencies); }
+bool IsInCurrentSceneBehavior(const CKBehaviorContext &ctx, ObjectRef *ref) { return IsInCurrentSceneImpl(ScriptHostScope::From(ctx).Context(), ref); }
+bool IsInSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref) { return IsInSceneImpl(ScriptHostScope::From(ctx).Context(), scene, ref); }
+bool AddToSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return AddToSceneImpl(ScriptHostScope::From(ctx).Context(), scene, ref, dependencies); }
+bool RemoveFromSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return RemoveFromSceneImpl(ScriptHostScope::From(ctx).Context(), scene, ref, dependencies); }
+bool DestroyBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool allowPersistent, CKDWORD flags) { return DestroyImpl(ScriptHostScope::From(ctx).Context(), ref, allowPersistent, flags); }
 bool SelectBehavior(const CKBehaviorContext &ctx, CScriptArray *objects, bool clearSelection) {
-    const bool result = SelectImpl(ContextFrom(ctx), objects, clearSelection);
+    const bool result = SelectImpl(ScriptHostScope::From(ctx).Context(), objects, clearSelection);
     ReleaseScriptArrayParam(objects);
     return result;
 }
 
 // ScriptContext overloads.
-LevelRef *CurrentLevelScript(const ScriptContext &ctx) { return CurrentLevelImpl(ContextFrom(ctx)); }
-SceneRef *CurrentSceneScript(const ScriptContext &ctx) { return CurrentSceneImpl(ContextFrom(ctx)); }
-ObjectRef *TargetScript(const ScriptContext &ctx) { return TargetImpl(ctx.ToBehaviorContext(), BridgeFrom(ctx)); }
-ObjectRef *OwnerScript(const ScriptContext &ctx) { return OwnerImpl(ctx.ToBehaviorContext(), BridgeFrom(ctx)); }
-ObjectRef *RefScript(const ScriptContext &ctx, CKObject *object) { return MakeRef(ContextFrom(ctx), object, std::string(), BridgeFrom(ctx), ComponentIdFromContext(ctx.ToBehaviorContext())); }
-ObjectRef *ByIdScript(const ScriptContext &ctx, CK_ID id) { return ByIdImpl(ContextFrom(ctx), id, BridgeFrom(ctx), ComponentIdFromContext(ctx.ToBehaviorContext())); }
-ObjectRef *FindScript(const ScriptContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, int occurrence, bool currentSceneOnly) { return FindImpl(ContextFrom(ctx), name, cid, derived, occurrence, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx.ToBehaviorContext())); }
-ObjectRef *FindOneScript(const ScriptContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindOneImpl(ContextFrom(ctx), name, cid, derived, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx.ToBehaviorContext())); }
-CScriptArray *FindAllScript(const ScriptContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindAllImpl(ContextFrom(ctx), name, cid, derived, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx.ToBehaviorContext())); }
-Entity3DRef *FindEntity3DScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindEntity3DCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-Entity2DRef *FindEntity2DScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindEntity2DCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-MaterialRef *FindMaterialScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindMaterialCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-TextureRef *FindTextureScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTextureCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-MeshRef *FindMeshScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindMeshCtx(ContextFrom(ctx), name, occurrence, currentSceneOnly); }
-BehaviorRef *FindBehaviorScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindBehaviorImpl(ContextFrom(ctx), name, occurrence, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx.ToBehaviorContext())); }
-Entity3DRef *FindOneEntity3DScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneEntity3DCtx(ContextFrom(ctx), name, currentSceneOnly); }
-Entity2DRef *FindOneEntity2DScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneEntity2DCtx(ContextFrom(ctx), name, currentSceneOnly); }
-MaterialRef *FindOneMaterialScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneMaterialCtx(ContextFrom(ctx), name, currentSceneOnly); }
-TextureRef *FindOneTextureScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTextureCtx(ContextFrom(ctx), name, currentSceneOnly); }
-MeshRef *FindOneMeshScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneMeshCtx(ContextFrom(ctx), name, currentSceneOnly); }
-BehaviorRef *FindOneBehaviorScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneBehaviorImpl(ContextFrom(ctx), name, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx.ToBehaviorContext())); }
-CScriptArray *FindAllEntity3DScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllEntity3DCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllEntity2DScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllEntity2DCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllMaterialScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllMaterialCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllTextureScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTextureCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllMeshScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllMeshCtx(ContextFrom(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllBehaviorScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllBehaviorImpl(ContextFrom(ctx), name, currentSceneOnly, BridgeFrom(ctx), ComponentIdFromContext(ctx.ToBehaviorContext())); }
-ObjectRef *CreateScript(const ScriptContext &ctx, CK_CLASSID cid, const std::string &name, bool dynamic) { return CreateImpl(ContextFrom(ctx), cid, name, dynamic, BridgeFrom(ctx), ComponentIdFromContext(ctx.ToBehaviorContext())); }
-Entity3DRef *CreateEntity3DScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateEntity3DCtx(ContextFrom(ctx), name, dynamic); }
-Entity2DRef *CreateEntity2DScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateEntity2DCtx(ContextFrom(ctx), name, dynamic); }
-MaterialRef *CreateMaterialScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateMaterialCtx(ContextFrom(ctx), name, dynamic); }
-TextureRef *CreateTextureScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateTextureCtx(ContextFrom(ctx), name, dynamic); }
-MeshRef *CreateMeshScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateMeshCtx(ContextFrom(ctx), name, dynamic); }
-bool AddToCurrentSceneScript(const ScriptContext &ctx, ObjectRef *ref, bool dependencies) { return AddToCurrentSceneImpl(ContextFrom(ctx), ref, dependencies); }
-bool RemoveFromCurrentSceneScript(const ScriptContext &ctx, ObjectRef *ref, bool dependencies) { return RemoveFromCurrentSceneImpl(ContextFrom(ctx), ref, dependencies); }
-bool IsInCurrentSceneScript(const ScriptContext &ctx, ObjectRef *ref) { return IsInCurrentSceneImpl(ContextFrom(ctx), ref); }
-bool IsInSceneScript(const ScriptContext &ctx, SceneRef *scene, ObjectRef *ref) { return IsInSceneImpl(ContextFrom(ctx), scene, ref); }
-bool AddToSceneScript(const ScriptContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return AddToSceneImpl(ContextFrom(ctx), scene, ref, dependencies); }
-bool RemoveFromSceneScript(const ScriptContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return RemoveFromSceneImpl(ContextFrom(ctx), scene, ref, dependencies); }
-bool DestroyScript(const ScriptContext &ctx, ObjectRef *ref, bool allowPersistent, CKDWORD flags) { return DestroyImpl(ContextFrom(ctx), ref, allowPersistent, flags); }
+LevelRef *CurrentLevelScript(const ScriptContext &ctx) { return CurrentLevelInScope(ScriptHostScope::From(ctx)); }
+SceneRef *CurrentSceneScript(const ScriptContext &ctx) { return CurrentSceneInScope(ScriptHostScope::From(ctx)); }
+ObjectRef *TargetScript(const ScriptContext &ctx) { return TargetInScope(ScriptHostScope::From(ctx)); }
+ObjectRef *OwnerScript(const ScriptContext &ctx) { return OwnerInScope(ScriptHostScope::From(ctx)); }
+ObjectRef *RefScript(const ScriptContext &ctx, CKObject *object) { return RefInScope(ScriptHostScope::From(ctx), object); }
+ObjectRef *ByIdScript(const ScriptContext &ctx, CK_ID id) { return ByIdInScope(ScriptHostScope::From(ctx), id); }
+ObjectRef *FindScript(const ScriptContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, int occurrence, bool currentSceneOnly) { return FindInScope(ScriptHostScope::From(ctx), name, cid, derived, occurrence, currentSceneOnly); }
+ObjectRef *FindOneScript(const ScriptContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindOneInScope(ScriptHostScope::From(ctx), name, cid, derived, currentSceneOnly); }
+CScriptArray *FindAllScript(const ScriptContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindAllInScope(ScriptHostScope::From(ctx), name, cid, derived, currentSceneOnly); }
+Entity3DRef *FindEntity3DScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), name, CKCID_3DENTITY, occurrence, currentSceneOnly, "CK3dEntity"); }
+Entity2DRef *FindEntity2DScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), name, CKCID_2DENTITY, occurrence, currentSceneOnly, "CK2dEntity"); }
+MaterialRef *FindMaterialScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), name, CKCID_MATERIAL, occurrence, currentSceneOnly, "CKMaterial"); }
+TextureRef *FindTextureScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<TextureRef>(ScriptHostScope::From(ctx), name, CKCID_TEXTURE, occurrence, currentSceneOnly, "CKTexture"); }
+MeshRef *FindMeshScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<MeshRef>(ScriptHostScope::From(ctx), name, CKCID_MESH, occurrence, currentSceneOnly, "CKMesh"); }
+BehaviorRef *FindBehaviorScript(const ScriptContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindBehaviorInScope(ScriptHostScope::From(ctx), name, occurrence, currentSceneOnly); }
+Entity3DRef *FindOneEntity3DScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), name, CKCID_3DENTITY, currentSceneOnly, "CK3dEntity"); }
+Entity2DRef *FindOneEntity2DScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), name, CKCID_2DENTITY, currentSceneOnly, "CK2dEntity"); }
+MaterialRef *FindOneMaterialScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), name, CKCID_MATERIAL, currentSceneOnly, "CKMaterial"); }
+TextureRef *FindOneTextureScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<TextureRef>(ScriptHostScope::From(ctx), name, CKCID_TEXTURE, currentSceneOnly, "CKTexture"); }
+MeshRef *FindOneMeshScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<MeshRef>(ScriptHostScope::From(ctx), name, CKCID_MESH, currentSceneOnly, "CKMesh"); }
+BehaviorRef *FindOneBehaviorScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneBehaviorInScope(ScriptHostScope::From(ctx), name, currentSceneOnly); }
+CScriptArray *FindAllEntity3DScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), name, CKCID_3DENTITY, currentSceneOnly, "array<Entity3DRef@>"); }
+CScriptArray *FindAllEntity2DScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), name, CKCID_2DENTITY, currentSceneOnly, "array<Entity2DRef@>"); }
+CScriptArray *FindAllMaterialScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), name, CKCID_MATERIAL, currentSceneOnly, "array<MaterialRef@>"); }
+CScriptArray *FindAllTextureScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<TextureRef>(ScriptHostScope::From(ctx), name, CKCID_TEXTURE, currentSceneOnly, "array<TextureRef@>"); }
+CScriptArray *FindAllMeshScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<MeshRef>(ScriptHostScope::From(ctx), name, CKCID_MESH, currentSceneOnly, "array<MeshRef@>"); }
+CScriptArray *FindAllBehaviorScript(const ScriptContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllBehaviorInScope(ScriptHostScope::From(ctx), name, currentSceneOnly); }
+ObjectRef *CreateScript(const ScriptContext &ctx, CK_CLASSID cid, const std::string &name, bool dynamic) { return CreateInScope(ScriptHostScope::From(ctx), cid, name, dynamic); }
+Entity3DRef *CreateEntity3DScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), CKCID_3DENTITY, name, dynamic, "CK3dEntity"); }
+Entity2DRef *CreateEntity2DScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), CKCID_2DENTITY, name, dynamic, "CK2dEntity"); }
+MaterialRef *CreateMaterialScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), CKCID_MATERIAL, name, dynamic, "CKMaterial"); }
+TextureRef *CreateTextureScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<TextureRef>(ScriptHostScope::From(ctx), CKCID_TEXTURE, name, dynamic, "CKTexture"); }
+MeshRef *CreateMeshScript(const ScriptContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<MeshRef>(ScriptHostScope::From(ctx), CKCID_MESH, name, dynamic, "CKMesh"); }
+bool AddToCurrentSceneScript(const ScriptContext &ctx, ObjectRef *ref, bool dependencies) { return AddToCurrentSceneImpl(ScriptHostScope::From(ctx).Context(), ref, dependencies); }
+bool RemoveFromCurrentSceneScript(const ScriptContext &ctx, ObjectRef *ref, bool dependencies) { return RemoveFromCurrentSceneImpl(ScriptHostScope::From(ctx).Context(), ref, dependencies); }
+bool IsInCurrentSceneScript(const ScriptContext &ctx, ObjectRef *ref) { return IsInCurrentSceneImpl(ScriptHostScope::From(ctx).Context(), ref); }
+bool IsInSceneScript(const ScriptContext &ctx, SceneRef *scene, ObjectRef *ref) { return IsInSceneImpl(ScriptHostScope::From(ctx).Context(), scene, ref); }
+bool AddToSceneScript(const ScriptContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return AddToSceneImpl(ScriptHostScope::From(ctx).Context(), scene, ref, dependencies); }
+bool RemoveFromSceneScript(const ScriptContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return RemoveFromSceneImpl(ScriptHostScope::From(ctx).Context(), scene, ref, dependencies); }
+bool DestroyScript(const ScriptContext &ctx, ObjectRef *ref, bool allowPersistent, CKDWORD flags) { return DestroyImpl(ScriptHostScope::From(ctx).Context(), ref, allowPersistent, flags); }
 bool SelectScript(const ScriptContext &ctx, CScriptArray *objects, bool clearSelection) {
-    const bool result = SelectImpl(ContextFrom(ctx), objects, clearSelection);
+    const bool result = SelectImpl(ScriptHostScope::From(ctx).Context(), objects, clearSelection);
     ReleaseScriptArrayParam(objects);
     return result;
 }

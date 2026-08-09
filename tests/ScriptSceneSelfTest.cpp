@@ -6,7 +6,9 @@
 #include <fmt/format.h>
 
 #include "CKAngelScript.h"
+#include "ScriptHostScope.h"
 #include "ScriptManager.h"
+#include "ScriptRuntime.h"
 
 namespace {
 
@@ -51,6 +53,7 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     constexpr const char *scoped2DMaterialName = "__CKAS_SceneInteropScoped2DMaterial";
     constexpr const char *scopedMeshName = "__CKAS_SceneInteropScopedMesh";
     constexpr const char *scopedBehaviorName = "__CKAS_SceneInteropScopedBehavior";
+    constexpr const char *scopeProbeBehaviorName = "__CKAS_SceneScopeProbeBehavior";
     CleanupNamedObject(context, objectName);
     CleanupNamedObject(context, persistentName);
     CleanupNamedObject(context, parent3DName);
@@ -65,6 +68,7 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     CleanupNamedObject(context, scoped2DMaterialName);
     CleanupNamedObject(context, scopedMeshName);
     CleanupNamedObject(context, scopedBehaviorName);
+    CleanupNamedObject(context, scopeProbeBehaviorName);
 
     CKAngelScriptApi api = CKAngelScriptApi::Get(context);
     if (!api.IsValid()) {
@@ -223,6 +227,41 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         "  if (replacement.Id() == createdId && created.valid) return 28;\n"
         "  if (!Scene::Destroy(ctx, replacement)) return 29;\n"
         "  return 0;\n"
+        "}\n"
+        "int ProbeScopes(const CKBehaviorContext &in behaviorCtx, const ScriptContext &in runtimeCtx, CKContext@ rawCtx, CK_ID objectId) {\n"
+        "  ObjectRef@ rawObject = Scene::ById(rawCtx, objectId);\n"
+        "  ObjectRef@ runtimeObject = Scene::ById(runtimeCtx, objectId);\n"
+        "  ObjectRef@ behaviorObject = Scene::ById(behaviorCtx, objectId);\n"
+        "  if (rawObject is null || runtimeObject is null || behaviorObject is null) return 201;\n"
+        "  if (!rawObject.valid || !runtimeObject.valid || !behaviorObject.valid) return 202;\n"
+        "  if (rawObject.Id() != objectId || runtimeObject.Id() != objectId || behaviorObject.Id() != objectId) return 203;\n"
+        "  SceneRef@ rawScene = Scene::CurrentScene(rawCtx);\n"
+        "  SceneRef@ runtimeScene = Scene::CurrentScene(runtimeCtx);\n"
+        "  SceneRef@ behaviorScene = Scene::CurrentScene(behaviorCtx);\n"
+        "  if (rawScene is null || runtimeScene is null || behaviorScene is null) return 204;\n"
+        "  if (rawScene.valid != runtimeScene.valid || rawScene.valid != behaviorScene.valid) return 205;\n"
+        "  if (rawScene.valid && (rawScene.Id() != runtimeScene.Id() || rawScene.Id() != behaviorScene.Id())) return 206;\n"
+        "  LevelRef@ rawLevel = Scene::CurrentLevel(rawCtx);\n"
+        "  LevelRef@ runtimeLevel = Scene::CurrentLevel(runtimeCtx);\n"
+        "  LevelRef@ behaviorLevel = Scene::CurrentLevel(behaviorCtx);\n"
+        "  if (rawLevel is null || runtimeLevel is null || behaviorLevel is null) return 207;\n"
+        "  if (rawLevel.valid != runtimeLevel.valid || rawLevel.valid != behaviorLevel.valid) return 208;\n"
+        "  if (rawLevel.valid && (rawLevel.Id() != runtimeLevel.Id() || rawLevel.Id() != behaviorLevel.Id())) return 209;\n"
+        "  ObjectRef@ rawTarget = Scene::Target(rawCtx);\n"
+        "  ObjectRef@ rawOwner = Scene::Owner(rawCtx);\n"
+        "  if (rawTarget is null || rawTarget.valid || rawTarget.Error() != \"CKContext has no behavior target.\") return 210;\n"
+        "  if (rawOwner is null || rawOwner.valid || rawOwner.Error() != \"CKContext has no behavior owner.\") return 211;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeNullScope() {\n"
+        "  CKContext@ missingContext = null;\n"
+        "  BehaviorRef@ missingBehavior = Scene::FindBehavior(missingContext, \"__missing__\", 0, false);\n"
+        "  if (missingBehavior is null || missingBehavior.valid || missingBehavior.Error().findFirst(\"CKContext is not available\") < 0) return 220;\n"
+        "  ObjectRef@ missingObject = Scene::ById(missingContext, 1);\n"
+        "  if (missingObject is null || missingObject.valid || missingObject.Error().findFirst(\"CKContext is not available\") < 0) return 221;\n"
+        "  SceneRef@ missingScene = Scene::CurrentScene(missingContext);\n"
+        "  if (missingScene is null || missingScene.valid || missingScene.Error().findFirst(\"CKContext is not available\") < 0) return 222;\n"
+        "  return 0;\n"
         "}\n";
 
     CKAngelScriptResult compileResult = {};
@@ -250,8 +289,11 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     asIScriptModule *module = nullptr;
     api->BorrowModule(moduleName, &module, nullptr);
     asIScriptFunction *function = module ? module->GetFunctionByDecl("int Run(const CKBehaviorContext &in ctx)") : nullptr;
-    if (!function) {
-        error = "Scene API self-test could not find Run() function.";
+    asIScriptFunction *scopeFunction = module ? module->GetFunctionByDecl(
+        "int ProbeScopes(const CKBehaviorContext &in, const ScriptContext &in, CKContext@, CK_ID)") : nullptr;
+    asIScriptFunction *nullScopeFunction = module ? module->GetFunctionByDecl("int ProbeNullScope()") : nullptr;
+    if (!function || !scopeFunction || !nullScopeFunction) {
+        error = "Scene API self-test could not find one or more probe functions.";
         api->UnloadModule(moduleName, nullptr);
         CleanupNamedObject(context, objectName);
         CleanupNamedObject(context, persistentName);
@@ -296,7 +338,42 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
 
-    int r = scriptContext->Prepare(function);
+    CKBehavior *scopeProbeBehavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>(scopeProbeBehaviorName),
+        CK_OBJECTCREATION_DYNAMIC));
+    ScriptContext runtimeContext(context, nullptr, "SelfTest", "Running", 1, 0, 0.0f, 0.0f);
+    CKBehaviorContext fallbackBehaviorContext = behaviorContext;
+    fallbackBehaviorContext.Context = nullptr;
+    fallbackBehaviorContext.Behavior = scopeProbeBehavior;
+
+    int r = scopeProbeBehavior ? 0 : asERROR;
+    if (!scopeProbeBehavior) {
+        error = "Scene API self-test could not create its scope probe behavior.";
+    } else {
+        const ScriptHostScope rawScope = ScriptHostScope::From(context);
+        const ScriptHostScope runtimeScope = ScriptHostScope::From(runtimeContext);
+        const ScriptHostScope behaviorScope = ScriptHostScope::From(fallbackBehaviorContext);
+        const ScriptHostScope nullScope = ScriptHostScope::From(static_cast<CKContext *>(nullptr));
+        if (rawScope.Kind() != ScriptHostScopeKind::Raw ||
+            runtimeScope.Kind() != ScriptHostScopeKind::Runtime ||
+            behaviorScope.Kind() != ScriptHostScopeKind::Behavior ||
+            rawScope.Context() != context || runtimeScope.Context() != context || behaviorScope.Context() != context ||
+            rawScope.CurrentLevel() != context->GetCurrentLevel() || runtimeScope.CurrentLevel() != context->GetCurrentLevel() ||
+            behaviorScope.CurrentLevel() != context->GetCurrentLevel() ||
+            rawScope.CurrentScene() != context->GetCurrentScene() || runtimeScope.CurrentScene() != context->GetCurrentScene() ||
+            behaviorScope.CurrentScene() != context->GetCurrentScene() ||
+            behaviorScope.Behavior() != scopeProbeBehavior || behaviorScope.ComponentId() != scopeProbeBehavior->GetID() ||
+            nullScope.IsValid() || nullScope.Context() || nullScope.Manager() || nullScope.Bridge()) {
+            error = "Scene API self-test detected an invalid ScriptHostScope resolution invariant.";
+            r = asERROR;
+        }
+    }
+
+    behaviorContext.Behavior = scopeProbeBehavior;
+    if (r >= 0) {
+        r = scriptContext->Prepare(function);
+    }
     if (r >= 0) {
         r = scriptContext->SetArgObject(0, &behaviorContext);
     }
@@ -320,6 +397,48 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         error = fmt::format("Scene API self-test execution failed ({}).", r);
     }
 
+    if (ok) {
+        scriptContext->Unprepare();
+        r = scriptContext->Prepare(scopeFunction);
+        if (r >= 0) r = scriptContext->SetArgObject(0, &fallbackBehaviorContext);
+        if (r >= 0) r = scriptContext->SetArgObject(1, &runtimeContext);
+        if (r >= 0) r = scriptContext->SetArgObject(2, context);
+        if (r >= 0) r = scriptContext->SetArgDWord(3, scopeProbeBehavior->GetID());
+        if (r >= 0) r = scriptContext->Execute();
+        if (r == asEXECUTION_FINISHED) {
+            const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+            ok = returnCode == 0;
+            if (!ok) error = fmt::format("Scene scope equivalence probe returned {}.", returnCode);
+        } else if (r == asEXECUTION_EXCEPTION) {
+            const char *exception = scriptContext->GetExceptionString();
+            ok = false;
+            error = fmt::format("Scene scope equivalence probe exception: {}.",
+                                exception && exception[0] ? exception : "<empty>");
+        } else {
+            ok = false;
+            error = fmt::format("Scene scope equivalence probe execution failed ({}).", r);
+        }
+    }
+
+    if (ok) {
+        scriptContext->Unprepare();
+        r = scriptContext->Prepare(nullScopeFunction);
+        if (r >= 0) r = scriptContext->Execute();
+        if (r == asEXECUTION_FINISHED) {
+            const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+            ok = returnCode == 0;
+            if (!ok) error = fmt::format("Scene null-scope probe returned {}.", returnCode);
+        } else if (r == asEXECUTION_EXCEPTION) {
+            const char *exception = scriptContext->GetExceptionString();
+            ok = false;
+            error = fmt::format("Scene null-scope probe exception: {}.",
+                                exception && exception[0] ? exception : "<empty>");
+        } else {
+            ok = false;
+            error = fmt::format("Scene null-scope probe execution failed ({}).", r);
+        }
+    }
+
     scriptContext->Unprepare();
     engine->ReturnContext(scriptContext);
     engine->GarbageCollect(asGC_FULL_CYCLE);
@@ -338,5 +457,6 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     CleanupNamedObject(context, scoped2DMaterialName);
     CleanupNamedObject(context, scopedMeshName);
     CleanupNamedObject(context, scopedBehaviorName);
+    CleanupNamedObject(context, scopeProbeBehaviorName);
     return ok;
 }

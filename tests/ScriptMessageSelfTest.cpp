@@ -7,6 +7,7 @@
 #include "CKAngelScript.h"
 #include "ScriptComponentState.h"
 #include "ScriptComponentStateStore.h"
+#include "ScriptHostScope.h"
 #include "ScriptMessage.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
@@ -157,6 +158,24 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  AsyncTask<dictionary@>@ task = Message::Request(ctx, target, \"compat.reply\", null, 1);\n"
         "  if (task is null || !task.IsCompleted()) return 34;\n"
         "  return 0;\n"
+        "}\n"
+        "int __ckas_message_null_runtime(const ScriptContext &in ctx, const string &in target) {\n"
+        "  if (Message::Publish(ctx, \"compat.null.runtime.publish\", null, target)) return 41;\n"
+        "  if (Message::Send(ctx, target, \"compat.null.runtime.send\", null)) return 42;\n"
+        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, target, \"compat.null.runtime.request\", null, 1);\n"
+        "  if (task !is null) return 43;\n"
+        "  if (Message::Subscribe(ctx, \"compat.null.runtime.subscription\")) return 44;\n"
+        "  if (Message::Unsubscribe(ctx, \"compat.null.runtime.subscription\")) return 45;\n"
+        "  return 0;\n"
+        "}\n"
+        "int __ckas_message_null_behavior(const CKBehaviorContext &in ctx, const string &in target) {\n"
+        "  if (Message::Publish(ctx, \"compat.null.behavior.publish\", null, target)) return 46;\n"
+        "  if (Message::Send(ctx, target, \"compat.null.behavior.send\", null)) return 47;\n"
+        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, target, \"compat.null.behavior.request\", null, 1);\n"
+        "  if (task !is null) return 48;\n"
+        "  if (Message::Subscribe(ctx, \"compat.null.behavior.subscription\")) return 49;\n"
+        "  if (Message::Unsubscribe(ctx, \"compat.null.behavior.subscription\")) return 50;\n"
+        "  return 0;\n"
         "}\n";
 
     CKAngelScriptResult compileResult = {};
@@ -306,6 +325,35 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
     ScriptContext runtimeContext(context, nullptr, "SelfTest", "Running", 1, 0, 0.0f, 0.0f);
     CKBehaviorContext compatibilityBehaviorContext = {};
     compatibilityBehaviorContext.Context = context;
+    compatibilityBehaviorContext.Behavior = compatibilityReceiver;
+    CKBehaviorContext behaviorOnlyContext = compatibilityBehaviorContext;
+    behaviorOnlyContext.Context = nullptr;
+    ScriptContext nullRuntimeContext(nullptr, nullptr, "SelfTest", "Running", 1, 0, 0.0f, 0.0f);
+
+    const ScriptHostScope directBehaviorScope = ScriptHostScope::From(
+        compatibilityBehaviorContext,
+        ScriptHostScopeContextResolution::DirectContext);
+    const ScriptHostScope fallbackBehaviorScope = ScriptHostScope::From(behaviorOnlyContext);
+    const ScriptHostScope directBehaviorOnlyScope = ScriptHostScope::From(
+        behaviorOnlyContext,
+        ScriptHostScopeContextResolution::DirectContext);
+    if (directBehaviorScope.Context() != context ||
+        directBehaviorScope.Manager() != manager ||
+        directBehaviorScope.MessageBus() != manager->GetMessageBus() ||
+        directBehaviorScope.MessageSource() != compatibilityTarget ||
+        fallbackBehaviorScope.Context() != context ||
+        fallbackBehaviorScope.Manager() != manager ||
+        directBehaviorOnlyScope.Context() != nullptr ||
+        directBehaviorOnlyScope.Manager() != nullptr ||
+        directBehaviorOnlyScope.MessageBus() != nullptr ||
+        directBehaviorOnlyScope.MessageSource() != compatibilityTarget) {
+        manager->ReleaseComponentState(compatibilityReceiver);
+        context->DestroyObject(compatibilityReceiver);
+        manager->UnloadModule(moduleName, nullptr);
+        error = "Message Script Host Scope compatibility policy changed context or source resolution.";
+        return false;
+    }
+
     if (!receiverState->Loaded ||
         !executeCompatibilityProbe("int __ckas_message_string_runtime(const ScriptContext &in ctx, const string &in target)",
                                    &runtimeContext,
@@ -314,7 +362,15 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         !executeCompatibilityProbe("int __ckas_message_string_behavior(const CKBehaviorContext &in ctx, const string &in target)",
                                    &compatibilityBehaviorContext,
                                    compatibilityTarget,
-                                   "behavior string target")) {
+                                   "behavior string target") ||
+        !executeCompatibilityProbe("int __ckas_message_null_runtime(const ScriptContext &in ctx, const string &in target)",
+                                   &nullRuntimeContext,
+                                   compatibilityTarget,
+                                   "null runtime context") ||
+        !executeCompatibilityProbe("int __ckas_message_null_behavior(const CKBehaviorContext &in ctx, const string &in target)",
+                                   &behaviorOnlyContext,
+                                   compatibilityTarget,
+                                   "behavior-only context")) {
         manager->ReleaseComponentState(compatibilityReceiver);
         context->DestroyObject(compatibilityReceiver);
         manager->UnloadModule(moduleName, nullptr);

@@ -5,30 +5,24 @@
 #include <fmt/format.h>
 #include "ScriptRegistration.h"
 #include "ScriptBehaviorFrame.h"
+#include "ScriptBridgeScope.h"
 
 namespace {
 
+ScriptHostScope BehaviorBridgeScope(const CKBehaviorContext &ctx) {
+    return ScriptHostScope::From(ctx, ScriptHostScopeContextResolution::DirectContext);
+}
+
 ScriptBehaviorBridge *BridgeFromContext(const CKBehaviorContext &ctx) {
-    ScriptManager *manager = ManagerFromContext(ctx);
-    return manager ? manager->GetBehaviorBridge() : nullptr;
+    return BehaviorBridgeScope(ctx).Bridge();
 }
 
 BehaviorBridge *BehaviorFromContext(const CKBehaviorContext &ctx) {
-    if (ScriptBehaviorBridge *bridge = BridgeFromContext(ctx)) {
-        return bridge->CreateBehaviorBridge(ctx);
-    }
-    SetScriptException("AngelScript behavior bridge is not available.");
-    return nullptr;
+    return ScriptBehaviorAdapter::From(BehaviorBridgeScope(ctx));
 }
 
 BehaviorGraph *BehaviorGraphFromContext(const CKBehaviorContext &ctx) {
-    BehaviorBridge *bridge = BehaviorFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BehaviorGraph *graph = bridge->Graph();
-    bridge->Release();
-    return graph;
+    return ScriptBehaviorAdapter::Graph(BehaviorBridgeScope(ctx));
 }
 
 BehaviorQuery *BehaviorQueryFactory() {
@@ -36,21 +30,11 @@ BehaviorQuery *BehaviorQueryFactory() {
 }
 
 BBBridge *BBFromContext(const CKBehaviorContext &ctx) {
-    if (ScriptBehaviorBridge *bridge = BridgeFromContext(ctx)) {
-        return new BBBridge(bridge, ctx);
-    }
-    SetScriptException("AngelScript BB bridge is not available.");
-    return nullptr;
+    return ScriptBBAdapter::From(BehaviorBridgeScope(ctx), ScriptBridgeFailureMode::ScriptException);
 }
 
 BehaviorRef *BehaviorFindByName(const CKBehaviorContext &ctx, const std::string &name) {
-    BehaviorBridge *bridge = BehaviorFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BehaviorRef *ref = bridge->Find(name);
-    bridge->Release();
-    return ref;
+    return ScriptBehaviorAdapter::Find(BehaviorBridgeScope(ctx), name);
 }
 
 BehaviorRef *BehaviorFindOnOwner(const CKBehaviorContext &ctx, CKBeObject *owner, const std::string &name) {
@@ -64,13 +48,7 @@ BehaviorRef *BehaviorFindOnOwner(const CKBehaviorContext &ctx, CKBeObject *owner
 }
 
 BehaviorRef *BehaviorFindById(const CKBehaviorContext &ctx, CK_ID id) {
-    BehaviorBridge *bridge = BehaviorFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BehaviorRef *ref = bridge->FindByID(id);
-    bridge->Release();
-    return ref;
+    return ScriptBehaviorAdapter::FindById(BehaviorBridgeScope(ctx), id);
 }
 
 GraphTask *BehaviorStartByName(const CKBehaviorContext &ctx,
@@ -122,43 +100,21 @@ BBPrototype *BBPrototypeByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
 }
 
 int BBCount(const CKBehaviorContext &ctx) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return 0;
-    }
-    const int count = bridge->Count();
-    bridge->Release();
-    return count;
+    return ScriptBBAdapter::Count(BehaviorBridgeScope(ctx), ScriptBridgeFailureMode::ScriptException);
 }
 
 BBPrototype *BBAt(const CKBehaviorContext &ctx, int index) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBPrototype *prototype = bridge->At(index);
-    bridge->Release();
-    return prototype;
+    return ScriptBBAdapter::At(BehaviorBridgeScope(ctx), index, ScriptBridgeFailureMode::ScriptException);
 }
 
 BBPrototype *BBFind(const CKBehaviorContext &ctx, const std::string &query, int occurrence) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBPrototype *prototype = bridge->Find(query, occurrence);
-    bridge->Release();
-    return prototype;
+    return ScriptBBAdapter::Find(
+        BehaviorBridgeScope(ctx), query, occurrence, ScriptBridgeFailureMode::ScriptException);
 }
 
 CScriptArray *BBFindAll(const CKBehaviorContext &ctx, const std::string &query) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    CScriptArray *prototypes = bridge->FindAll(query);
-    bridge->Release();
-    return prototypes;
+    return ScriptBBAdapter::FindAll(
+        BehaviorBridgeScope(ctx), query, ScriptBridgeFailureMode::ScriptException);
 }
 
 BBCallBuilder *BBCallByName(const CKBehaviorContext &ctx, const std::string &name) {
@@ -202,23 +158,13 @@ BBTaskBuilder *BBSpawnByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
 }
 
 BBDecl *BBRequireByName(const CKBehaviorContext &ctx, const std::string &query) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBDecl *spec = bridge->Require(query);
-    bridge->Release();
-    return spec;
+    return ScriptBBAdapter::Require(
+        BehaviorBridgeScope(ctx), query, ScriptBridgeFailureMode::ScriptException);
 }
 
 BBDecl *BBRequireByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBDecl *spec = bridge->RequireGuid(guid);
-    bridge->Release();
-    return spec;
+    return ScriptBBAdapter::Require(
+        BehaviorBridgeScope(ctx), guid, ScriptBridgeFailureMode::ScriptException);
 }
 
 ParamValue *ParamInt(int value) { return new ParamValue(MakeScriptParamInt(value)); }

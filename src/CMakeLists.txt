@@ -42,6 +42,7 @@ set(CKAS_HEADERS
         ScriptRuntime.h
         ScriptRuntimeMetadata.h
         ScriptRuntimeDependency.h
+        ScriptHostScope.h
         ScriptMessage.h
         ScriptObjectRef.h
         ScriptObjectIdentity.h
@@ -60,6 +61,7 @@ set(CKAS_HEADERS
         ScriptBridgeHandles.h
         ScriptBridgeParameterIO.h
         ScriptBridgeSnapshot.h
+        ScriptBridgeScope.h
         ScriptRegistration.h
         ScriptApiSupport.h
         ScriptPublicOptions.h
@@ -129,6 +131,7 @@ set(CKAS_SOURCES
         ScriptRuntime.cpp
         ScriptRuntimeMetadata.cpp
         ScriptRuntimeDependency.cpp
+        ScriptHostScope.cpp
         ScriptMessage.cpp
         ScriptObjectRef.cpp
         ScriptObjectIdentity.cpp
@@ -141,6 +144,7 @@ set(CKAS_SOURCES
         ScriptBridgeLayoutCache.cpp
         ScriptBridgeWatch.cpp
         ScriptBridgeCommon.cpp
+        ScriptBridgeScope.cpp
         ScriptBridgeParameterIO.cpp
         ScriptBridgeRegistration.cpp
         ScriptBridgeParams.cpp

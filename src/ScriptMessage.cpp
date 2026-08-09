@@ -11,6 +11,7 @@
 #include "CKAll.h"
 #include "ScriptAsync.h"
 #include "ScriptComponentState.h"
+#include "ScriptHostScope.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
 #include "add_on/scriptdictionary/scriptdictionary.h"
@@ -22,26 +23,6 @@ std::string TrimTopic(const std::string &topic) {
     const auto first = std::find_if_not(topic.begin(), topic.end(), [](unsigned char c) { return std::isspace(c) != 0; });
     const auto last = std::find_if_not(topic.rbegin(), topic.rend(), [](unsigned char c) { return std::isspace(c) != 0; }).base();
     return first < last ? std::string(first, last) : std::string();
-}
-
-ScriptManager *ManagerFromRuntimeContext(const ScriptContext &ctx) {
-    return ctx.Context() ? ScriptManager::GetManager(ctx.Context()) : nullptr;
-}
-
-ScriptManager *ManagerFromBehaviorContext(const CKBehaviorContext &ctx) {
-    return ctx.Context ? ScriptManager::GetManager(ctx.Context) : nullptr;
-}
-
-std::string SourceFromRuntimeContext(const ScriptContext &ctx) {
-    return ctx.Target();
-}
-
-std::string SourceFromBehaviorContext(const CKBehaviorContext &ctx) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    ScriptComponentState *state = manager && ctx.Behavior
-        ? manager->GetComponentState(ctx.Behavior->GetID(), ctx.Behavior)
-        : nullptr;
-    return state ? state->MessageTarget : (ctx.Behavior ? ScriptMessageBus::ComponentTarget(ctx.Behavior->GetID()) : std::string());
 }
 
 void RaiseRuntimeError(const ScriptContext &ctx, const std::string &error) {
@@ -90,276 +71,249 @@ ScriptMessageTarget ComponentMessageTarget(ScriptManager *manager, CK_ID id) {
     return target;
 }
 
+ScriptHostScope BehaviorMessageScope(const CKBehaviorContext &ctx) {
+    return ScriptHostScope::From(ctx, ScriptHostScopeContextResolution::DirectContext);
+}
+
+template <typename Invocation>
+bool InvokeRuntimeMessage(const ScriptContext &ctx, const char *fallbackError, Invocation &&invocation) {
+    const ScriptHostScope scope = ScriptHostScope::From(ctx);
+    std::string error;
+    const bool ok = invocation(scope, error);
+    if (!ok) {
+        RaiseRuntimeError(ctx, error.empty() ? fallbackError : error);
+    }
+    return ok;
+}
+
+template <typename Invocation>
+bool InvokeBehaviorMessage(const CKBehaviorContext &ctx, const char *fallbackError, Invocation &&invocation) {
+    const ScriptHostScope scope = BehaviorMessageScope(ctx);
+    std::string error;
+    const bool ok = invocation(scope, error);
+    if (!ok) {
+        RaiseBehaviorError(ctx, error.empty() ? fallbackError : error);
+    }
+    return ok;
+}
+
+template <typename Invocation>
+ScriptAsyncTaskBase *InvokeRuntimeMessageTask(const ScriptContext &ctx,
+                                              const char *fallbackError,
+                                              Invocation &&invocation) {
+    const ScriptHostScope scope = ScriptHostScope::From(ctx);
+    std::string error;
+    ScriptAsyncTaskBase *task = invocation(scope, error);
+    if (!task) {
+        RaiseRuntimeError(ctx, error.empty() ? fallbackError : error);
+    }
+    return task;
+}
+
+template <typename Invocation>
+ScriptAsyncTaskBase *InvokeBehaviorMessageTask(const CKBehaviorContext &ctx,
+                                               const char *fallbackError,
+                                               Invocation &&invocation) {
+    const ScriptHostScope scope = BehaviorMessageScope(ctx);
+    std::string error;
+    ScriptAsyncTaskBase *task = invocation(scope, error);
+    if (!task) {
+        RaiseBehaviorError(ctx, error.empty() ? fallbackError : error);
+    }
+    return task;
+}
+
+template <typename Target>
+bool PublishInScope(const ScriptHostScope &scope,
+                    const Target &target,
+                    const std::string &topic,
+                    CScriptDictionary *payload,
+                    std::string &error) {
+    ScriptMessageBus *bus = scope.MessageBus();
+    return bus && bus->Publish(scope.MessageSource(), topic, payload, target, error);
+}
+
+template <typename Target>
+bool SendInScope(const ScriptHostScope &scope,
+                 const Target &target,
+                 const std::string &topic,
+                 CScriptDictionary *payload,
+                 std::string &error) {
+    ScriptMessageBus *bus = scope.MessageBus();
+    return bus && bus->Send(scope.MessageSource(), target, topic, payload, error);
+}
+
+template <typename Target>
+ScriptAsyncTaskBase *RequestInScope(const ScriptHostScope &scope,
+                                    const Target &target,
+                                    const std::string &topic,
+                                    CScriptDictionary *payload,
+                                    int timeoutFrames,
+                                    std::string &error) {
+    ScriptMessageBus *bus = scope.MessageBus();
+    return bus ? bus->Request(scope.MessageSource(), target, topic, payload, timeoutFrames, error) : nullptr;
+}
+
+bool ReplyInScope(const ScriptHostScope &scope,
+                  const ScriptMessage &request,
+                  CScriptDictionary *payload,
+                  std::string &error) {
+    ScriptMessageBus *bus = scope.MessageBus();
+    return bus && bus->Reply(scope.MessageSource(), request, payload, error);
+}
+
+bool RejectInScope(const ScriptHostScope &scope,
+                   const ScriptMessage &request,
+                   const std::string &message,
+                   std::string &error) {
+    ScriptMessageBus *bus = scope.MessageBus();
+    return bus && bus->Reject(scope.MessageSource(), request, message, error);
+}
+
+bool SubscribeInScope(const ScriptHostScope &scope, const std::string &topic, std::string &error) {
+    ScriptMessageBus *bus = scope.MessageBus();
+    return bus && bus->Subscribe(scope.MessageSource(), topic, false, error);
+}
+
+bool UnsubscribeInScope(const ScriptHostScope &scope, const std::string &topic) {
+    ScriptMessageBus *bus = scope.MessageBus();
+    return bus && bus->Unsubscribe(scope.MessageSource(), topic);
+}
+
 ScriptMessageTarget ComponentRuntimeMessageTarget(const ScriptContext &ctx, CK_ID id) {
-    return ComponentMessageTarget(ManagerFromRuntimeContext(ctx), id);
+    return ComponentMessageTarget(ScriptHostScope::From(ctx).Manager(), id);
 }
 
 ScriptMessageTarget ComponentBehaviorMessageTarget(const CKBehaviorContext &ctx, CK_ID id) {
-    return ComponentMessageTarget(ManagerFromBehaviorContext(ctx), id);
+    return ComponentMessageTarget(BehaviorMessageScope(ctx).Manager(), id);
 }
 
 bool PublishRuntime(const ScriptContext &ctx, const std::string &topic, CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Publish(SourceFromRuntimeContext(ctx), topic, payload, ScriptMessageTarget(), error);
-    if (!ok) {
-        RaiseRuntimeError(ctx, error.empty() ? "Message::Publish failed." : error);
-    }
-    return ok;
+    return InvokeRuntimeMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return PublishInScope(scope, ScriptMessageTarget(), topic, payload, error);
+    });
 }
 
 bool PublishBehavior(const CKBehaviorContext &ctx, const std::string &topic, CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Publish(SourceFromBehaviorContext(ctx), topic, payload, ScriptMessageTarget(), error);
-    if (!ok) {
-        RaiseBehaviorError(ctx, error.empty() ? "Message::Publish failed." : error);
-    }
-    return ok;
+    return InvokeBehaviorMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return PublishInScope(scope, ScriptMessageTarget(), topic, payload, error);
+    });
 }
 
-bool PublishTargetRuntime(const ScriptContext &ctx,
-                          const ScriptMessageTarget &target,
-                          const std::string &topic,
-                          CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Publish(SourceFromRuntimeContext(ctx), topic, payload, target, error);
-    if (!ok) {
-        RaiseRuntimeError(ctx, error.empty() ? "Message::Publish failed." : error);
-    }
-    return ok;
+bool PublishTargetRuntime(const ScriptContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
+    return InvokeRuntimeMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return PublishInScope(scope, target, topic, payload, error);
+    });
 }
 
-bool PublishTargetBehavior(const CKBehaviorContext &ctx,
-                           const ScriptMessageTarget &target,
-                           const std::string &topic,
-                           CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Publish(SourceFromBehaviorContext(ctx), topic, payload, target, error);
-    if (!ok) {
-        RaiseBehaviorError(ctx, error.empty() ? "Message::Publish failed." : error);
-    }
-    return ok;
+bool PublishTargetBehavior(const CKBehaviorContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
+    return InvokeBehaviorMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return PublishInScope(scope, target, topic, payload, error);
+    });
 }
 
-bool PublishStringRuntime(const ScriptContext &ctx,
-                          const std::string &topic,
-                          CScriptDictionary *payload,
-                          const std::string &target) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Publish(SourceFromRuntimeContext(ctx), topic, payload, target, error);
-    if (!ok) {
-        RaiseRuntimeError(ctx, error.empty() ? "Message::Publish failed." : error);
-    }
-    return ok;
+bool PublishStringRuntime(const ScriptContext &ctx, const std::string &topic, CScriptDictionary *payload, const std::string &target) {
+    return InvokeRuntimeMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return PublishInScope(scope, target, topic, payload, error);
+    });
 }
 
-bool PublishStringBehavior(const CKBehaviorContext &ctx,
-                           const std::string &topic,
-                           CScriptDictionary *payload,
-                           const std::string &target) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Publish(SourceFromBehaviorContext(ctx), topic, payload, target, error);
-    if (!ok) {
-        RaiseBehaviorError(ctx, error.empty() ? "Message::Publish failed." : error);
-    }
-    return ok;
+bool PublishStringBehavior(const CKBehaviorContext &ctx, const std::string &topic, CScriptDictionary *payload, const std::string &target) {
+    return InvokeBehaviorMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return PublishInScope(scope, target, topic, payload, error);
+    });
 }
 
 bool SendRuntime(const ScriptContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Send(SourceFromRuntimeContext(ctx), target, topic, payload, error);
-    if (!ok) {
-        RaiseRuntimeError(ctx, error.empty() ? "Message::Send failed." : error);
-    }
-    return ok;
+    return InvokeRuntimeMessage(ctx, "Message::Send failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return SendInScope(scope, target, topic, payload, error);
+    });
 }
 
 bool SendBehavior(const CKBehaviorContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Send(SourceFromBehaviorContext(ctx), target, topic, payload, error);
-    if (!ok) {
-        RaiseBehaviorError(ctx, error.empty() ? "Message::Send failed." : error);
-    }
-    return ok;
+    return InvokeBehaviorMessage(ctx, "Message::Send failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return SendInScope(scope, target, topic, payload, error);
+    });
 }
 
 bool SendStringRuntime(const ScriptContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Send(SourceFromRuntimeContext(ctx), target, topic, payload, error);
-    if (!ok) {
-        RaiseRuntimeError(ctx, error.empty() ? "Message::Send failed." : error);
-    }
-    return ok;
+    return InvokeRuntimeMessage(ctx, "Message::Send failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return SendInScope(scope, target, topic, payload, error);
+    });
 }
 
 bool SendStringBehavior(const CKBehaviorContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Send(SourceFromBehaviorContext(ctx), target, topic, payload, error);
-    if (!ok) {
-        RaiseBehaviorError(ctx, error.empty() ? "Message::Send failed." : error);
-    }
-    return ok;
+    return InvokeBehaviorMessage(ctx, "Message::Send failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return SendInScope(scope, target, topic, payload, error);
+    });
 }
 
-ScriptAsyncTaskBase *RequestRuntime(const ScriptContext &ctx,
-                                    const ScriptMessageTarget &target,
-                                    const std::string &topic,
-                                    CScriptDictionary *payload,
-                                    int timeoutFrames) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    ScriptAsyncTaskBase *task = manager && manager->GetMessageBus()
-        ? manager->GetMessageBus()->Request(SourceFromRuntimeContext(ctx), target, topic, payload, timeoutFrames, error)
-        : nullptr;
-    if (!task) {
-        RaiseRuntimeError(ctx, error.empty() ? "Message::Request failed." : error);
-    }
-    return task;
+ScriptAsyncTaskBase *RequestRuntime(const ScriptContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload, int timeoutFrames) {
+    return InvokeRuntimeMessageTask(ctx, "Message::Request failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return RequestInScope(scope, target, topic, payload, timeoutFrames, error);
+    });
 }
 
-ScriptAsyncTaskBase *RequestBehavior(const CKBehaviorContext &ctx,
-                                     const ScriptMessageTarget &target,
-                                     const std::string &topic,
-                                     CScriptDictionary *payload,
-                                     int timeoutFrames) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    ScriptAsyncTaskBase *task = manager && manager->GetMessageBus()
-        ? manager->GetMessageBus()->Request(SourceFromBehaviorContext(ctx), target, topic, payload, timeoutFrames, error)
-        : nullptr;
-    if (!task) {
-        RaiseBehaviorError(ctx, error.empty() ? "Message::Request failed." : error);
-    }
-    return task;
+ScriptAsyncTaskBase *RequestBehavior(const CKBehaviorContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload, int timeoutFrames) {
+    return InvokeBehaviorMessageTask(ctx, "Message::Request failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return RequestInScope(scope, target, topic, payload, timeoutFrames, error);
+    });
 }
 
-ScriptAsyncTaskBase *RequestStringRuntime(const ScriptContext &ctx,
-                                          const std::string &target,
-                                          const std::string &topic,
-                                          CScriptDictionary *payload,
-                                          int timeoutFrames) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    ScriptAsyncTaskBase *task = manager && manager->GetMessageBus()
-        ? manager->GetMessageBus()->Request(SourceFromRuntimeContext(ctx), target, topic, payload, timeoutFrames, error)
-        : nullptr;
-    if (!task) {
-        RaiseRuntimeError(ctx, error.empty() ? "Message::Request failed." : error);
-    }
-    return task;
+ScriptAsyncTaskBase *RequestStringRuntime(const ScriptContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload, int timeoutFrames) {
+    return InvokeRuntimeMessageTask(ctx, "Message::Request failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return RequestInScope(scope, target, topic, payload, timeoutFrames, error);
+    });
 }
 
-ScriptAsyncTaskBase *RequestStringBehavior(const CKBehaviorContext &ctx,
-                                           const std::string &target,
-                                           const std::string &topic,
-                                           CScriptDictionary *payload,
-                                           int timeoutFrames) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    ScriptAsyncTaskBase *task = manager && manager->GetMessageBus()
-        ? manager->GetMessageBus()->Request(SourceFromBehaviorContext(ctx), target, topic, payload, timeoutFrames, error)
-        : nullptr;
-    if (!task) {
-        RaiseBehaviorError(ctx, error.empty() ? "Message::Request failed." : error);
-    }
-    return task;
+ScriptAsyncTaskBase *RequestStringBehavior(const CKBehaviorContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload, int timeoutFrames) {
+    return InvokeBehaviorMessageTask(ctx, "Message::Request failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return RequestInScope(scope, target, topic, payload, timeoutFrames, error);
+    });
 }
 
 bool ReplyRuntime(const ScriptContext &ctx, const ScriptMessage &request, CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Reply(SourceFromRuntimeContext(ctx), request, payload, error);
-    if (!ok) {
-        RaiseRuntimeError(ctx, error.empty() ? "Message::Reply failed." : error);
-    }
-    return ok;
+    return InvokeRuntimeMessage(ctx, "Message::Reply failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return ReplyInScope(scope, request, payload, error);
+    });
 }
 
 bool ReplyBehavior(const CKBehaviorContext &ctx, const ScriptMessage &request, CScriptDictionary *payload) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Reply(SourceFromBehaviorContext(ctx), request, payload, error);
-    if (!ok) {
-        RaiseBehaviorError(ctx, error.empty() ? "Message::Reply failed." : error);
-    }
-    return ok;
+    return InvokeBehaviorMessage(ctx, "Message::Reply failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return ReplyInScope(scope, request, payload, error);
+    });
 }
 
 bool RejectRuntime(const ScriptContext &ctx, const ScriptMessage &request, const std::string &message) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Reject(SourceFromRuntimeContext(ctx), request, message, error);
-    if (!ok) {
-        RaiseRuntimeError(ctx, error.empty() ? "Message::Reject failed." : error);
-    }
-    return ok;
+    return InvokeRuntimeMessage(ctx, "Message::Reject failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return RejectInScope(scope, request, message, error);
+    });
 }
 
 bool RejectBehavior(const CKBehaviorContext &ctx, const ScriptMessage &request, const std::string &message) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Reject(SourceFromBehaviorContext(ctx), request, message, error);
-    if (!ok) {
-        RaiseBehaviorError(ctx, error.empty() ? "Message::Reject failed." : error);
-    }
-    return ok;
+    return InvokeBehaviorMessage(ctx, "Message::Reject failed.", [&](const ScriptHostScope &scope, std::string &error) {
+        return RejectInScope(scope, request, message, error);
+    });
 }
 
 bool SubscribeRuntime(const ScriptContext &ctx, const std::string &topic) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Subscribe(SourceFromRuntimeContext(ctx), topic, false, error);
-    if (!ok) {
-        RaiseRuntimeError(ctx, error);
-    }
-    return ok;
+    return InvokeRuntimeMessage(ctx, "", [&](const ScriptHostScope &scope, std::string &error) {
+        return SubscribeInScope(scope, topic, error);
+    });
 }
 
 bool SubscribeBehavior(const CKBehaviorContext &ctx, const std::string &topic) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    std::string error;
-    const bool ok = manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Subscribe(SourceFromBehaviorContext(ctx), topic, false, error);
-    if (!ok) {
-        RaiseBehaviorError(ctx, error);
-    }
-    return ok;
+    return InvokeBehaviorMessage(ctx, "", [&](const ScriptHostScope &scope, std::string &error) {
+        return SubscribeInScope(scope, topic, error);
+    });
 }
 
 bool UnsubscribeRuntime(const ScriptContext &ctx, const std::string &topic) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    return manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Unsubscribe(SourceFromRuntimeContext(ctx), topic);
+    return UnsubscribeInScope(ScriptHostScope::From(ctx), topic);
 }
 
 bool UnsubscribeBehavior(const CKBehaviorContext &ctx, const std::string &topic) {
-    ScriptManager *manager = ManagerFromBehaviorContext(ctx);
-    return manager && manager->GetMessageBus() &&
-        manager->GetMessageBus()->Unsubscribe(SourceFromBehaviorContext(ctx), topic);
+    return UnsubscribeInScope(BehaviorMessageScope(ctx), topic);
 }
 
 } // namespace

@@ -15,6 +15,8 @@
 #include "CKTimeManager.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
+#include "ScriptBridgeScope.h"
+#include "ScriptHostScope.h"
 #include "ScriptInvocation.h"
 #include "ScriptManager.h"
 #include "ScriptInitialLifecycle.h"
@@ -96,19 +98,6 @@ bool ScriptEntryValidateOnly() {
 
 BehaviorGraph *RuntimeBehaviorGraphByRoot(const ScriptContext &ctx, const std::string &rootBehaviorName);
 
-CKBehavior *FindBehaviorByName(CKContext *context, const std::string &name) {
-    if (!context || name.empty()) {
-        return nullptr;
-    }
-    return CKBehavior::Cast(context->GetObjectByName(const_cast<CKSTRING>(name.c_str())));
-}
-
-CKBehaviorContext MakeBehaviorContext(const ScriptContext &ctx, CKBehavior *behavior = nullptr) {
-    CKBehaviorContext behaviorContext = ctx.ToBehaviorContext();
-    behaviorContext.Behavior = behavior;
-    return behaviorContext;
-}
-
 ScriptContext MakeRuntimeContext(CKContext *context,
                                         const ScriptRuntimeManifest &metadata,
                                         const char *phase,
@@ -175,18 +164,12 @@ ScriptManager *ManagerFromRuntimeContext(const ScriptContext &ctx) {
     return ctx.Context() ? ScriptManager::GetManager(ctx.Context()) : nullptr;
 }
 
-ScriptBehaviorBridge *BridgeFromRuntimeContext(const ScriptContext &ctx) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    return manager ? manager->GetBehaviorBridge() : nullptr;
-}
-
 bool UsesRuntimeLifecycle(const ScriptRuntimeManifest &metadata) {
     return metadata.Host == ScriptEntryHost::Runtime;
 }
 
 BehaviorBridge *RuntimeBehaviorFrom(const ScriptContext &ctx) {
-    ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
-    return bridge ? new BehaviorBridge(bridge, MakeBehaviorContext(ctx)) : nullptr;
+    return ScriptBehaviorAdapter::From(ScriptHostScope::From(ctx));
 }
 
 BehaviorGraph *RuntimeBehaviorGraph(const ScriptContext &ctx) {
@@ -194,129 +177,72 @@ BehaviorGraph *RuntimeBehaviorGraph(const ScriptContext &ctx) {
 }
 
 BehaviorGraph *RuntimeBehaviorGraphByRoot(const ScriptContext &ctx, const std::string &rootBehaviorName) {
-    ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    CKBehavior *root = nullptr;
-    if (!rootBehaviorName.empty()) {
-        root = FindBehaviorByName(ctx.Context(), rootBehaviorName);
-    }
-    return new BehaviorGraph(bridge, MakeBehaviorContext(ctx, root), root ? root->GetID() : 0);
-}
-
-BehaviorQuery *RuntimeBehaviorQuery() {
-    return new BehaviorQuery();
+    return ScriptBehaviorAdapter::Graph(ScriptHostScope::From(ctx), rootBehaviorName);
 }
 
 BehaviorRef *RuntimeBehaviorFind(const ScriptContext &ctx, const std::string &name) {
-    ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
-    CKBehavior *behavior = FindBehaviorByName(ctx.Context(), name);
-    return bridge ? bridge->WrapBehavior(behavior, 0) : nullptr;
+    return ScriptBehaviorAdapter::Find(ScriptHostScope::From(ctx), name);
 }
 
 BehaviorRef *RuntimeBehaviorFindById(const ScriptContext &ctx, CK_ID id) {
-    ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
-    CKObject *object = ctx.Context() ? CKGetObject(ctx.Context(), id) : nullptr;
-    return bridge ? bridge->WrapBehavior(CKBehavior::Cast(object), 0) : nullptr;
+    return ScriptBehaviorAdapter::FindById(ScriptHostScope::From(ctx), id);
 }
 
 BBBridge *RuntimeBBFrom(const ScriptContext &ctx) {
-    ScriptBehaviorBridge *bridge = BridgeFromRuntimeContext(ctx);
-    return bridge ? new BBBridge(bridge, MakeBehaviorContext(ctx)) : nullptr;
+    return ScriptBBAdapter::From(ScriptHostScope::From(ctx), ScriptBridgeFailureMode::Quiet);
 }
 
 BBDecl *RuntimeBBRequireByName(const ScriptContext &ctx, const std::string &query) {
-    BBBridge *bridge = RuntimeBBFrom(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBDecl *decl = bridge->Require(query);
-    bridge->Release();
-    return decl;
+    return ScriptBBAdapter::Require(ScriptHostScope::From(ctx), query, ScriptBridgeFailureMode::Quiet);
 }
 
 BBDecl *RuntimeBBRequireByGuid(const ScriptContext &ctx, CKGUID guid) {
-    BBBridge *bridge = RuntimeBBFrom(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBDecl *decl = bridge->RequireGuid(guid);
-    bridge->Release();
-    return decl;
+    return ScriptBBAdapter::Require(ScriptHostScope::From(ctx), guid, ScriptBridgeFailureMode::Quiet);
 }
 
 int RuntimeBBCount(const ScriptContext &ctx) {
-    BBBridge *bridge = RuntimeBBFrom(ctx);
-    if (!bridge) {
-        return 0;
-    }
-    const int count = bridge->Count();
-    bridge->Release();
-    return count;
+    return ScriptBBAdapter::Count(ScriptHostScope::From(ctx), ScriptBridgeFailureMode::Quiet);
 }
 
 BBPrototype *RuntimeBBAt(const ScriptContext &ctx, int index) {
-    BBBridge *bridge = RuntimeBBFrom(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBPrototype *prototype = bridge->At(index);
-    bridge->Release();
-    return prototype;
+    return ScriptBBAdapter::At(ScriptHostScope::From(ctx), index, ScriptBridgeFailureMode::Quiet);
 }
 
 BBPrototype *RuntimeBBFind(const ScriptContext &ctx, const std::string &query, int occurrence) {
-    BBBridge *bridge = RuntimeBBFrom(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBPrototype *prototype = bridge->Find(query, occurrence);
-    bridge->Release();
-    return prototype;
+    return ScriptBBAdapter::Find(
+        ScriptHostScope::From(ctx), query, occurrence, ScriptBridgeFailureMode::Quiet);
 }
 
 CScriptArray *RuntimeBBFindAll(const ScriptContext &ctx, const std::string &query) {
-    BBBridge *bridge = RuntimeBBFrom(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    CScriptArray *array = bridge->FindAll(query);
-    bridge->Release();
-    return array;
+    return ScriptBBAdapter::FindAll(ScriptHostScope::From(ctx), query, ScriptBridgeFailureMode::Quiet);
 }
 
 ParamTypeInfo *RuntimeParamAt(const ScriptContext &ctx, int index) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
+    ScriptParameterRegistry *registry = ScriptHostScope::From(ctx).ParameterRegistry();
     const ScriptParamTypeRecord *record = registry ? registry->At(index) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
 ParamTypeInfo *RuntimeParamFind(const ScriptContext &ctx, const std::string &query, int occurrence) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
+    ScriptParameterRegistry *registry = ScriptHostScope::From(ctx).ParameterRegistry();
     const ScriptParamTypeRecord *record = registry ? registry->Find(query, occurrence) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
 ParamTypeInfo *RuntimeParamTypeByName(const ScriptContext &ctx, const std::string &typeName) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
+    ScriptParameterRegistry *registry = ScriptHostScope::From(ctx).ParameterRegistry();
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
 ParamTypeInfo *RuntimeParamTypeByGuid(const ScriptContext &ctx, CKGUID guid) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
+    ScriptParameterRegistry *registry = ScriptHostScope::From(ctx).ParameterRegistry();
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
 int RuntimeParamCount(const ScriptContext &ctx) {
-    ScriptManager *manager = ManagerFromRuntimeContext(ctx);
-    ScriptParameterRegistry *registry = manager ? manager->GetParameterRegistry() : nullptr;
+    ScriptParameterRegistry *registry = ScriptHostScope::From(ctx).ParameterRegistry();
     return registry ? registry->Count() : 0;
 }
 

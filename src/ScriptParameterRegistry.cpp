@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "CKAll.h"
+#include "ScriptHostScope.h"
 #include "ScriptManager.h"
 #include "ScriptParameterConversion.h"
 #include "ScriptXArray.h"
@@ -93,12 +94,12 @@ CKParameterManager *ParameterManagerFromContext(CKContext *context) {
     return context ? context->GetParameterManager() : nullptr;
 }
 
-CKParameterManager *ParameterManagerFromBehaviorContext(const CKBehaviorContext &context) {
-    return context.ParameterManager ? context.ParameterManager : ParameterManagerFromContext(context.Context);
+ScriptHostScope ParamScope(CKContext *context) {
+    return ScriptHostScope::From(context);
 }
 
-ScriptParameterRegistry *RegistryFromBehaviorContext(const CKBehaviorContext &context) {
-    return ScriptParameterRegistry::FromContext(context.Context);
+ScriptHostScope ParamScope(const CKBehaviorContext &context) {
+    return ScriptHostScope::From(context, ScriptHostScopeContextResolution::DirectContext);
 }
 
 bool GuidIsValid(CKGUID guid) {
@@ -150,75 +151,63 @@ bool TypeRecordMatchesSearch(const ScriptParamTypeRecord &record, const std::str
            guidLower.find(queryLower) != std::string::npos;
 }
 
-ParamTypeInfo *ParamTypeFromName(CKContext *context, const std::string &typeName) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+ParamTypeInfo *ParamTypeFromNameInScope(const ScriptHostScope &scope, const std::string &typeName) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     const ScriptParamTypeRecord *record = RequireType(registry, typeName);
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
-int ParamCount(CKContext *context) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+ParamTypeInfo *ParamTypeFromName(CKContext *context, const std::string &typeName) {
+    return ParamTypeFromNameInScope(ParamScope(context), typeName);
+}
+
+int ParamCountInScope(const ScriptHostScope &scope) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return registry ? registry->Count() : 0;
 }
 
-int ParamCountCtx(const CKBehaviorContext &ctx) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return registry ? registry->Count() : 0;
-}
+int ParamCount(CKContext *context) { return ParamCountInScope(ParamScope(context)); }
+int ParamCountCtx(const CKBehaviorContext &ctx) { return ParamCountInScope(ParamScope(ctx)); }
 
-ParamTypeInfo *ParamAt(CKContext *context, int index) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+ParamTypeInfo *ParamAtInScope(const ScriptHostScope &scope, int index) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     const ScriptParamTypeRecord *record = registry ? registry->At(index) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
-ParamTypeInfo *ParamAtCtx(const CKBehaviorContext &ctx, int index) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    const ScriptParamTypeRecord *record = registry ? registry->At(index) : nullptr;
-    return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
-}
+ParamTypeInfo *ParamAt(CKContext *context, int index) { return ParamAtInScope(ParamScope(context), index); }
+ParamTypeInfo *ParamAtCtx(const CKBehaviorContext &ctx, int index) { return ParamAtInScope(ParamScope(ctx), index); }
 
-ParamTypeInfo *ParamFind(CKContext *context, const std::string &query, int occurrence) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+ParamTypeInfo *ParamFindInScope(const ScriptHostScope &scope, const std::string &query, int occurrence) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     const ScriptParamTypeRecord *record = registry ? registry->Find(query, occurrence) : nullptr;
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
-ParamTypeInfo *ParamFindCtx(const CKBehaviorContext &ctx, const std::string &query, int occurrence) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    const ScriptParamTypeRecord *record = registry ? registry->Find(query, occurrence) : nullptr;
-    return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
-}
+ParamTypeInfo *ParamFind(CKContext *context, const std::string &query, int occurrence) { return ParamFindInScope(ParamScope(context), query, occurrence); }
+ParamTypeInfo *ParamFindCtx(const CKBehaviorContext &ctx, const std::string &query, int occurrence) { return ParamFindInScope(ParamScope(ctx), query, occurrence); }
 
 ParamTypeInfo *ParamTypeFromNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    const ScriptParamTypeRecord *record = RequireType(registry, typeName);
-    return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
+    return ParamTypeFromNameInScope(ParamScope(ctx), typeName);
 }
 
-ParamTypeInfo *ParamTypeFromGuid(CKContext *context, CKGUID guid) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+ParamTypeInfo *ParamTypeFromGuidInScope(const ScriptHostScope &scope, CKGUID guid) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     const ScriptParamTypeRecord *record = RequireType(registry, guid);
     return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
 }
 
-ParamTypeInfo *ParamTypeFromGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    const ScriptParamTypeRecord *record = RequireType(registry, guid);
-    return record ? new ParamTypeInfo(registry, record->Type) : nullptr;
-}
+ParamTypeInfo *ParamTypeFromGuid(CKContext *context, CKGUID guid) { return ParamTypeFromGuidInScope(ParamScope(context), guid); }
+ParamTypeInfo *ParamTypeFromGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) { return ParamTypeFromGuidInScope(ParamScope(ctx), guid); }
 
-CKGUID ParamGuidFromName(CKContext *context, const std::string &typeName) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+CKGUID ParamGuidFromNameInScope(const ScriptHostScope &scope, const std::string &typeName) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     const ScriptParamTypeRecord *record = RequireType(registry, typeName);
     return record ? record->Guid : CKGUID();
 }
 
-CKGUID ParamGuidFromNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    const ScriptParamTypeRecord *record = RequireType(registry, typeName);
-    return record ? record->Guid : CKGUID();
-}
+CKGUID ParamGuidFromName(CKContext *context, const std::string &typeName) { return ParamGuidFromNameInScope(ParamScope(context), typeName); }
+CKGUID ParamGuidFromNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) { return ParamGuidFromNameInScope(ParamScope(ctx), typeName); }
 
 bool ParamIsEnum(ScriptParameterRegistry *registry, const ScriptParamTypeRecord *record) {
     return registry && record && record->Has(ScriptParamTypeCaps::EnumLike);
@@ -228,45 +217,37 @@ bool ParamIsFlags(ScriptParameterRegistry *registry, const ScriptParamTypeRecord
     return registry && record && record->Has(ScriptParamTypeCaps::FlagsLike);
 }
 
-bool ParamIsEnumByName(CKContext *context, const std::string &typeName) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+bool ParamIsEnumByNameInScope(const ScriptHostScope &scope, const std::string &typeName) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamIsEnum(registry, RequireType(registry, typeName));
 }
 
-bool ParamIsEnumByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamIsEnum(registry, RequireType(registry, typeName));
-}
+bool ParamIsEnumByName(CKContext *context, const std::string &typeName) { return ParamIsEnumByNameInScope(ParamScope(context), typeName); }
+bool ParamIsEnumByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) { return ParamIsEnumByNameInScope(ParamScope(ctx), typeName); }
 
-bool ParamIsEnumByGuid(CKContext *context, CKGUID guid) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+bool ParamIsEnumByGuidInScope(const ScriptHostScope &scope, CKGUID guid) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamIsEnum(registry, RequireType(registry, guid));
 }
 
-bool ParamIsEnumByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamIsEnum(registry, RequireType(registry, guid));
-}
+bool ParamIsEnumByGuid(CKContext *context, CKGUID guid) { return ParamIsEnumByGuidInScope(ParamScope(context), guid); }
+bool ParamIsEnumByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) { return ParamIsEnumByGuidInScope(ParamScope(ctx), guid); }
 
-bool ParamIsFlagsByName(CKContext *context, const std::string &typeName) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+bool ParamIsFlagsByNameInScope(const ScriptHostScope &scope, const std::string &typeName) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamIsFlags(registry, RequireType(registry, typeName));
 }
 
-bool ParamIsFlagsByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamIsFlags(registry, RequireType(registry, typeName));
-}
+bool ParamIsFlagsByName(CKContext *context, const std::string &typeName) { return ParamIsFlagsByNameInScope(ParamScope(context), typeName); }
+bool ParamIsFlagsByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) { return ParamIsFlagsByNameInScope(ParamScope(ctx), typeName); }
 
-bool ParamIsFlagsByGuid(CKContext *context, CKGUID guid) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+bool ParamIsFlagsByGuidInScope(const ScriptHostScope &scope, CKGUID guid) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamIsFlags(registry, RequireType(registry, guid));
 }
 
-bool ParamIsFlagsByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamIsFlags(registry, RequireType(registry, guid));
-}
+bool ParamIsFlagsByGuid(CKContext *context, CKGUID guid) { return ParamIsFlagsByGuidInScope(ParamScope(context), guid); }
+bool ParamIsFlagsByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) { return ParamIsFlagsByGuidInScope(ParamScope(ctx), guid); }
 
 int ParamValueFromRecord(ScriptParameterRegistry *registry,
                          const ScriptParamTypeRecord *record,
@@ -277,25 +258,21 @@ int ParamValueFromRecord(ScriptParameterRegistry *registry,
     return record && registry && registry->ParseEnumValue(record->Guid, nameOrValue, value, error) ? value : fallback;
 }
 
-int ParamValueByName(CKContext *context, const std::string &typeName, const std::string &nameOrValue, int fallback) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+int ParamValueByNameInScope(const ScriptHostScope &scope, const std::string &typeName, const std::string &nameOrValue, int fallback) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamValueFromRecord(registry, RequireType(registry, typeName), nameOrValue, fallback);
 }
 
-int ParamValueByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &nameOrValue, int fallback) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamValueFromRecord(registry, RequireType(registry, typeName), nameOrValue, fallback);
-}
+int ParamValueByName(CKContext *context, const std::string &typeName, const std::string &nameOrValue, int fallback) { return ParamValueByNameInScope(ParamScope(context), typeName, nameOrValue, fallback); }
+int ParamValueByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &nameOrValue, int fallback) { return ParamValueByNameInScope(ParamScope(ctx), typeName, nameOrValue, fallback); }
 
-int ParamValueByGuid(CKContext *context, CKGUID guid, const std::string &nameOrValue, int fallback) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+int ParamValueByGuidInScope(const ScriptHostScope &scope, CKGUID guid, const std::string &nameOrValue, int fallback) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamValueFromRecord(registry, RequireType(registry, guid), nameOrValue, fallback);
 }
 
-int ParamValueByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid, const std::string &nameOrValue, int fallback) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamValueFromRecord(registry, RequireType(registry, guid), nameOrValue, fallback);
-}
+int ParamValueByGuid(CKContext *context, CKGUID guid, const std::string &nameOrValue, int fallback) { return ParamValueByGuidInScope(ParamScope(context), guid, nameOrValue, fallback); }
+int ParamValueByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid, const std::string &nameOrValue, int fallback) { return ParamValueByGuidInScope(ParamScope(ctx), guid, nameOrValue, fallback); }
 
 CKDWORD ParamFlagsMaskFromRecord(ScriptParameterRegistry *registry,
                                  const ScriptParamTypeRecord *record,
@@ -306,52 +283,44 @@ CKDWORD ParamFlagsMaskFromRecord(ScriptParameterRegistry *registry,
     return record && registry && registry->ParseFlagsValue(record->Guid, namesOrMask, value, error) ? value : fallback;
 }
 
-CKDWORD ParamFlagByName(CKContext *context, const std::string &typeName, const std::string &flagName, CKDWORD fallback) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+CKDWORD ParamFlagByNameInScope(const ScriptHostScope &scope, const std::string &typeName, const std::string &flagName, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamFlagsMaskFromRecord(registry, RequireType(registry, typeName), flagName, fallback);
 }
 
-CKDWORD ParamFlagByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &flagName, CKDWORD fallback) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamFlagsMaskFromRecord(registry, RequireType(registry, typeName), flagName, fallback);
-}
+CKDWORD ParamFlagByName(CKContext *context, const std::string &typeName, const std::string &flagName, CKDWORD fallback) { return ParamFlagByNameInScope(ParamScope(context), typeName, flagName, fallback); }
+CKDWORD ParamFlagByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &flagName, CKDWORD fallback) { return ParamFlagByNameInScope(ParamScope(ctx), typeName, flagName, fallback); }
 
-CKDWORD ParamFlagByGuid(CKContext *context, CKGUID guid, const std::string &flagName, CKDWORD fallback) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+CKDWORD ParamFlagByGuidInScope(const ScriptHostScope &scope, CKGUID guid, const std::string &flagName, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamFlagsMaskFromRecord(registry, RequireType(registry, guid), flagName, fallback);
 }
 
-CKDWORD ParamFlagByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid, const std::string &flagName, CKDWORD fallback) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamFlagsMaskFromRecord(registry, RequireType(registry, guid), flagName, fallback);
-}
+CKDWORD ParamFlagByGuid(CKContext *context, CKGUID guid, const std::string &flagName, CKDWORD fallback) { return ParamFlagByGuidInScope(ParamScope(context), guid, flagName, fallback); }
+CKDWORD ParamFlagByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid, const std::string &flagName, CKDWORD fallback) { return ParamFlagByGuidInScope(ParamScope(ctx), guid, flagName, fallback); }
 
-CKDWORD ParamFlagsMaskByNameValue(CKContext *context, const std::string &typeName, const std::string &namesOrMask, CKDWORD fallback) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+CKDWORD ParamFlagsMaskByNameValueInScope(const ScriptHostScope &scope, const std::string &typeName, const std::string &namesOrMask, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamFlagsMaskFromRecord(registry, RequireType(registry, typeName), namesOrMask, fallback);
 }
 
-CKDWORD ParamFlagsMaskByNameValueCtx(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &namesOrMask, CKDWORD fallback) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamFlagsMaskFromRecord(registry, RequireType(registry, typeName), namesOrMask, fallback);
-}
+CKDWORD ParamFlagsMaskByNameValue(CKContext *context, const std::string &typeName, const std::string &namesOrMask, CKDWORD fallback) { return ParamFlagsMaskByNameValueInScope(ParamScope(context), typeName, namesOrMask, fallback); }
+CKDWORD ParamFlagsMaskByNameValueCtx(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &namesOrMask, CKDWORD fallback) { return ParamFlagsMaskByNameValueInScope(ParamScope(ctx), typeName, namesOrMask, fallback); }
 
-CKDWORD ParamFlagsMaskByGuidValue(CKContext *context, CKGUID guid, const std::string &namesOrMask, CKDWORD fallback) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+CKDWORD ParamFlagsMaskByGuidValueInScope(const ScriptHostScope &scope, CKGUID guid, const std::string &namesOrMask, CKDWORD fallback) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamFlagsMaskFromRecord(registry, RequireType(registry, guid), namesOrMask, fallback);
 }
 
-CKDWORD ParamFlagsMaskByGuidValueCtx(const CKBehaviorContext &ctx, CKGUID guid, const std::string &namesOrMask, CKDWORD fallback) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamFlagsMaskFromRecord(registry, RequireType(registry, guid), namesOrMask, fallback);
-}
+CKDWORD ParamFlagsMaskByGuidValue(CKContext *context, CKGUID guid, const std::string &namesOrMask, CKDWORD fallback) { return ParamFlagsMaskByGuidValueInScope(ParamScope(context), guid, namesOrMask, fallback); }
+CKDWORD ParamFlagsMaskByGuidValueCtx(const CKBehaviorContext &ctx, CKGUID guid, const std::string &namesOrMask, CKDWORD fallback) { return ParamFlagsMaskByGuidValueInScope(ParamScope(ctx), guid, namesOrMask, fallback); }
 
-std::string ParamNumericText(CKContext *context, const ScriptParamTypeRecord *record, CKDWORD value) {
+std::string ParamNumericTextInScope(const ScriptHostScope &scope, const ScriptParamTypeRecord *record, CKDWORD value) {
     if (!record) {
         return std::to_string(value);
     }
 
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     if (record->Has(ScriptParamTypeCaps::FlagsLike) && registry) {
         return registry->FlagsText(record->Guid, value);
     }
@@ -363,6 +332,7 @@ std::string ParamNumericText(CKContext *context, const ScriptParamTypeRecord *re
         }
     }
 
+    CKContext *context = scope.Context();
     CKParameterLocal *param = context ? context->CreateCKParameterLocal(const_cast<CKSTRING>("__CKAS_ParamText"), record->Guid, TRUE) : nullptr;
     if (!param) {
         return std::to_string(value);
@@ -380,45 +350,37 @@ std::string ParamNumericText(CKContext *context, const ScriptParamTypeRecord *re
     return std::to_string(value);
 }
 
-std::string ParamTextByNameInt(CKContext *context, const std::string &typeName, int value) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
-    return ParamNumericText(context, RequireType(registry, typeName), static_cast<CKDWORD>(value));
+std::string ParamTextByNameIntInScope(const ScriptHostScope &scope, const std::string &typeName, int value) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
+    return ParamNumericTextInScope(scope, RequireType(registry, typeName), static_cast<CKDWORD>(value));
 }
 
-std::string ParamTextByNameIntCtx(const CKBehaviorContext &ctx, const std::string &typeName, int value) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamNumericText(ctx.Context, RequireType(registry, typeName), static_cast<CKDWORD>(value));
+std::string ParamTextByNameInt(CKContext *context, const std::string &typeName, int value) { return ParamTextByNameIntInScope(ParamScope(context), typeName, value); }
+std::string ParamTextByNameIntCtx(const CKBehaviorContext &ctx, const std::string &typeName, int value) { return ParamTextByNameIntInScope(ParamScope(ctx), typeName, value); }
+
+std::string ParamTextByGuidIntInScope(const ScriptHostScope &scope, CKGUID guid, int value) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
+    return ParamNumericTextInScope(scope, RequireType(registry, guid), static_cast<CKDWORD>(value));
 }
 
-std::string ParamTextByGuidInt(CKContext *context, CKGUID guid, int value) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
-    return ParamNumericText(context, RequireType(registry, guid), static_cast<CKDWORD>(value));
+std::string ParamTextByGuidInt(CKContext *context, CKGUID guid, int value) { return ParamTextByGuidIntInScope(ParamScope(context), guid, value); }
+std::string ParamTextByGuidIntCtx(const CKBehaviorContext &ctx, CKGUID guid, int value) { return ParamTextByGuidIntInScope(ParamScope(ctx), guid, value); }
+
+std::string ParamTextByNameDwordInScope(const ScriptHostScope &scope, const std::string &typeName, CKDWORD value) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
+    return ParamNumericTextInScope(scope, RequireType(registry, typeName), value);
 }
 
-std::string ParamTextByGuidIntCtx(const CKBehaviorContext &ctx, CKGUID guid, int value) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamNumericText(ctx.Context, RequireType(registry, guid), static_cast<CKDWORD>(value));
+std::string ParamTextByNameDword(CKContext *context, const std::string &typeName, CKDWORD value) { return ParamTextByNameDwordInScope(ParamScope(context), typeName, value); }
+std::string ParamTextByNameDwordCtx(const CKBehaviorContext &ctx, const std::string &typeName, CKDWORD value) { return ParamTextByNameDwordInScope(ParamScope(ctx), typeName, value); }
+
+std::string ParamTextByGuidDwordInScope(const ScriptHostScope &scope, CKGUID guid, CKDWORD value) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
+    return ParamNumericTextInScope(scope, RequireType(registry, guid), value);
 }
 
-std::string ParamTextByNameDword(CKContext *context, const std::string &typeName, CKDWORD value) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
-    return ParamNumericText(context, RequireType(registry, typeName), value);
-}
-
-std::string ParamTextByNameDwordCtx(const CKBehaviorContext &ctx, const std::string &typeName, CKDWORD value) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamNumericText(ctx.Context, RequireType(registry, typeName), value);
-}
-
-std::string ParamTextByGuidDword(CKContext *context, CKGUID guid, CKDWORD value) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
-    return ParamNumericText(context, RequireType(registry, guid), value);
-}
-
-std::string ParamTextByGuidDwordCtx(const CKBehaviorContext &ctx, CKGUID guid, CKDWORD value) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamNumericText(ctx.Context, RequireType(registry, guid), value);
-}
+std::string ParamTextByGuidDword(CKContext *context, CKGUID guid, CKDWORD value) { return ParamTextByGuidDwordInScope(ParamScope(context), guid, value); }
+std::string ParamTextByGuidDwordCtx(const CKBehaviorContext &ctx, CKGUID guid, CKDWORD value) { return ParamTextByGuidDwordInScope(ParamScope(ctx), guid, value); }
 
 std::string ParamDescribeRecord(const ScriptParamTypeRecord *record, ScriptParameterRegistry *registry) {
     if (!record || !registry) {
@@ -428,25 +390,21 @@ std::string ParamDescribeRecord(const ScriptParamTypeRecord *record, ScriptParam
     return info.Describe();
 }
 
-std::string ParamDescribeByName(CKContext *context, const std::string &typeName) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+std::string ParamDescribeByNameInScope(const ScriptHostScope &scope, const std::string &typeName) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamDescribeRecord(RequireType(registry, typeName), registry);
 }
 
-std::string ParamDescribeByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamDescribeRecord(RequireType(registry, typeName), registry);
-}
+std::string ParamDescribeByName(CKContext *context, const std::string &typeName) { return ParamDescribeByNameInScope(ParamScope(context), typeName); }
+std::string ParamDescribeByNameCtx(const CKBehaviorContext &ctx, const std::string &typeName) { return ParamDescribeByNameInScope(ParamScope(ctx), typeName); }
 
-std::string ParamDescribeByGuid(CKContext *context, CKGUID guid) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+std::string ParamDescribeByGuidInScope(const ScriptHostScope &scope, CKGUID guid) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return ParamDescribeRecord(RequireType(registry, guid), registry);
 }
 
-std::string ParamDescribeByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) {
-    ScriptParameterRegistry *registry = RegistryFromBehaviorContext(ctx);
-    return ParamDescribeRecord(RequireType(registry, guid), registry);
-}
+std::string ParamDescribeByGuid(CKContext *context, CKGUID guid) { return ParamDescribeByGuidInScope(ParamScope(context), guid); }
+std::string ParamDescribeByGuidCtx(const CKBehaviorContext &ctx, CKGUID guid) { return ParamDescribeByGuidInScope(ParamScope(ctx), guid); }
 
 ParamValue *ParamEnumByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &nameOrValue);
 ParamValue *ParamEnumByGuid(const CKBehaviorContext &ctx, CKGUID guid, const std::string &nameOrValue);
@@ -457,26 +415,34 @@ ParamValue *ParamFlagsByGuid(const CKBehaviorContext &ctx, CKGUID guid, const st
 ParamValue *ParamFlagsMaskByName(const CKBehaviorContext &ctx, const std::string &typeName, CKDWORD value);
 ParamValue *ParamFlagsMaskByGuid(const CKBehaviorContext &ctx, CKGUID guid, CKDWORD value);
 
-CKERROR RegisterEnumByContext(CKContext *context, CKGUID guid, const std::string &name, const std::string &data) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+CKERROR RegisterEnumInScope(const ScriptHostScope &scope, CKGUID guid, const std::string &name, const std::string &data) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return registry ? registry->RegisterEnum(guid, name, data) : CKERR_INVALIDPARAMETER;
 }
 
-CKERROR RegisterEnumByBehaviorContext(const CKBehaviorContext &ctx, CKGUID guid, const std::string &name, const std::string &data) {
-    return RegisterEnumByContext(ctx.Context, guid, name, data);
+CKERROR RegisterEnumByContext(CKContext *context, CKGUID guid, const std::string &name, const std::string &data) {
+    return RegisterEnumInScope(ParamScope(context), guid, name, data);
 }
 
-CKERROR RegisterFlagsByContext(CKContext *context, CKGUID guid, const std::string &name, const std::string &data) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+CKERROR RegisterEnumByBehaviorContext(const CKBehaviorContext &ctx, CKGUID guid, const std::string &name, const std::string &data) {
+    return RegisterEnumInScope(ParamScope(ctx), guid, name, data);
+}
+
+CKERROR RegisterFlagsInScope(const ScriptHostScope &scope, CKGUID guid, const std::string &name, const std::string &data) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     return registry ? registry->RegisterFlags(guid, name, data) : CKERR_INVALIDPARAMETER;
 }
 
-CKERROR RegisterFlagsByBehaviorContext(const CKBehaviorContext &ctx, CKGUID guid, const std::string &name, const std::string &data) {
-    return RegisterFlagsByContext(ctx.Context, guid, name, data);
+CKERROR RegisterFlagsByContext(CKContext *context, CKGUID guid, const std::string &name, const std::string &data) {
+    return RegisterFlagsInScope(ParamScope(context), guid, name, data);
 }
 
-CKERROR RegisterStructByContext(CKContext *context, CKGUID guid, const std::string &name, const std::string &members, XArray<CKGUID> &memberGuids) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
+CKERROR RegisterFlagsByBehaviorContext(const CKBehaviorContext &ctx, CKGUID guid, const std::string &name, const std::string &data) {
+    return RegisterFlagsInScope(ParamScope(ctx), guid, name, data);
+}
+
+CKERROR RegisterStructInScope(const ScriptHostScope &scope, CKGUID guid, const std::string &name, const std::string &members, XArray<CKGUID> &memberGuids) {
+    ScriptParameterRegistry *registry = scope.ParameterRegistry();
     if (!registry) {
         return CKERR_INVALIDPARAMETER;
     }
@@ -488,8 +454,12 @@ CKERROR RegisterStructByContext(CKContext *context, CKGUID guid, const std::stri
     return registry->RegisterStruct(guid, name, members, guids);
 }
 
+CKERROR RegisterStructByContext(CKContext *context, CKGUID guid, const std::string &name, const std::string &members, XArray<CKGUID> &memberGuids) {
+    return RegisterStructInScope(ParamScope(context), guid, name, members, memberGuids);
+}
+
 CKERROR RegisterStructByBehaviorContext(const CKBehaviorContext &ctx, CKGUID guid, const std::string &name, const std::string &members, XArray<CKGUID> &memberGuids) {
-    return RegisterStructByContext(ctx.Context, guid, name, members, memberGuids);
+    return RegisterStructInScope(ParamScope(ctx), guid, name, members, memberGuids);
 }
 
 }
