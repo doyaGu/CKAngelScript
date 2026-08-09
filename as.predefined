@@ -2236,9 +2236,7 @@ class BehaviorFrame {
     CKObject@ BehaviorLocalObject(int index) const;
     CKParameterLocal@ BehaviorLocalParameter(int index) const;
     NativeBuffer@ BehaviorLocalReadData(int index) const;
-    NativePointer BehaviorLocalReadDataPtr(int index) const;
     NativeBuffer@ BehaviorLocalWriteData(int index) const;
-    NativePointer BehaviorLocalWriteDataPtr(int index) const;
     CKERROR CKDestroyObject(CKObject@ object, uint flags = 0, CKDependencies&in depoptions = void);
     CKERROR CKDestroyObject(uint id, uint flags = 0, CKDependencies&in depoptions = void);
     CKERROR CKDestroyObjects(const XObjectArray&in ids, uint flags = 0, CKDependencies&in depoptions = void);
@@ -2314,7 +2312,6 @@ class BehaviorFrame {
     CKObject@ GetInputParameterObject(int index) const;
     int GetInputParameterPosition(CKParameterIn@ pin) const;
     NativeBuffer@ GetInputParameterReadData(int index) const;
-    NativePointer GetInputParameterReadDataPtr(int index) const;
     int GetInputPosition(CKBehaviorIO@ io) const;
     CKStateChunk@ GetInterfaceChunk() const;
     float GetLastExecutionTime() const;
@@ -2323,9 +2320,7 @@ class BehaviorFrame {
     CKObject@ GetLocalParameterObject(int index) const;
     int GetLocalParameterPosition(CKParameterLocal@ local) const;
     NativeBuffer@ GetLocalParameterReadData(int index) const;
-    NativePointer GetLocalParameterReadDataPtr(int index) const;
     NativeBuffer@ GetLocalParameterWriteData(int index) const;
-    NativePointer GetLocalParameterWriteDataPtr(int index) const;
     int GetMemoryOccupation() const;
     string GetName() const;
     uint GetObjectFlags() const;
@@ -2336,7 +2331,6 @@ class BehaviorFrame {
     CKObject@ GetOutputParameterObject(int index) const;
     int GetOutputParameterPosition(CKParameterOut@ pout) const;
     NativeBuffer@ GetOutputParameterWriteData(int index) const;
-    NativePointer GetOutputParameterWriteDataPtr(int index) const;
     int GetOutputPosition(CKBehaviorIO@ io) const;
     CKBeObject@ GetOwner() const;
     CKBehavior@ GetOwnerScript() const;
@@ -2421,11 +2415,9 @@ class BehaviorFrame {
     CKParameterLocal@ LocalParameter(int index) const;
     int LocalPosition(CKParameterLocal@ local) const;
     NativeBuffer@ LocalReadData(int index) const;
-    NativePointer LocalReadDataPtr(int index) const;
     string LocalString(const string&in name, const string&in defaultValue = "", int occurrence = 0) const;
     string LocalString(int index, const string&in defaultValue = "") const;
     NativeBuffer@ LocalWriteData(int index) const;
-    NativePointer LocalWriteDataPtr(int index) const;
     int MemoryOccupation() const;
     CKMessageManager@ MessageManager() const;
     CK_BEHAVIOR_FLAGS ModifyFlags(uint add, uint remove);
@@ -2463,7 +2455,6 @@ class BehaviorFrame {
     CKObject@ PinObject(int index) const;
     int PinPosition(CKParameterIn@ pin) const;
     NativeBuffer@ PinReadData(int index) const;
-    NativePointer PinReadDataPtr(int index) const;
     string PinString(const string&in name, const string&in defaultValue = "", int occurrence = 0) const;
     string PinString(int index, const string&in defaultValue = "") const;
     void PostLoad();
@@ -2475,7 +2466,6 @@ class BehaviorFrame {
     CKObject@ PoutObject(int index) const;
     int PoutPosition(CKParameterOut@ pout) const;
     NativeBuffer@ PoutWriteData(int index) const;
-    NativePointer PoutWriteDataPtr(int index) const;
     void PreDelete();
     void PreSave(CKFile@ file, uint flags);
     CKERROR PrepareDependencies(CKDependenciesContext&in context);
@@ -12521,9 +12511,8 @@ class ScriptMessage {
     dictionary@ Payload() const;
     bool RequiresReply() const;
     string Source() const;
-    string Target() const;
+    ScriptMessageTarget Target() const;
     string Topic() const;
-    ScriptMessageTarget TypedTarget() const;
     ScriptMessage& opAssign(const ScriptMessage&in other);
 }
 

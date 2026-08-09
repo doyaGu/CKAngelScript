@@ -2,9 +2,114 @@
   "schemaVersion": 1,
   "allowedRemovals": [
     {
-      "key": "method|ScriptMessage|ScriptMessageTarget Target() const",
+      "key": "method|BehaviorFrame|NativePointer BehaviorLocalReadDataPtr(int index) const",
       "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
-      "reason": "Restore the pre-existing string Target() ABI; the typed accessor remains available as additive TypedTarget()."
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer BehaviorLocalWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer GetInputParameterReadDataPtr(int index) const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer GetLocalParameterReadDataPtr(int index) const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer GetLocalParameterWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer GetOutputParameterWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer LocalReadDataPtr(int index) const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer LocalWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer PinReadDataPtr(int index) const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer PoutWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "b2219ce0d7d8b1e6f14dda14350ea3e042df1b6b94a2533931f001a4d1ac7e7d",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer BehaviorLocalReadDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer BehaviorLocalWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer GetInputParameterReadDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer GetLocalParameterReadDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer GetLocalParameterWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer GetOutputParameterWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer LocalReadDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer LocalWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer PinReadDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer PoutWriteDataPtr(int index) const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the unbounded BehaviorFrame pointer compatibility surface; use the NativeBuffer overload."
+    },
+    {
+      "key": "method|ScriptMessage|ScriptMessageTarget TypedTarget() const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the temporary typed compatibility alias; Target() now returns ScriptMessageTarget directly."
+    },
+    {
+      "key": "method|ScriptMessage|string Target() const",
+      "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
+      "reason": "Remove the string compatibility ABI; Target() now returns ScriptMessageTarget directly."
     }
   ]
 }

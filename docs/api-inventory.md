@@ -22,14 +22,14 @@ Generated from the tracked live-engine export in `docs/script-api.json`:
 | Global functions | 598 |
 | Global properties | 301 |
 | Object types | 336 |
-| Object methods | 11033 |
+| Object methods | 11022 |
 | Object behaviours | 777 |
 | Object properties | 465 |
 | Funcdefs | 29 |
 | Enums | 139 |
 | Enum values | 1427 |
 | Typedefs | 24 |
-| Total | 15129 |
+| Total | 15118 |
 
 Large raw SDK binding files and exported cast/behaviour entries dominate the total. The high-level and integration files are still the workflow surface; raw CK/Vx bindings and SDK constants account for most exported symbols.
 

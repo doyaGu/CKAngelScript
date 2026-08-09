@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "catalog": "docs/script-api.json",
-  "catalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
-  "registrationSurfaceSha256": "46197b418cf8db21cfb89e97d41b70b5339abab1a4cac543af0a4a4292cdfec3",
+  "catalogSha256": "6659a21eab8cb49c597e1b04bb83d331c048b50b114c7ec3dcfbe7e17b777397",
+  "registrationSurfaceSha256": "fd167c1f8814a3ab62c77ebd7229345f4e01889140879b2d7dba137742176adf",
   "registrationInputs": [
     ".github/workflows/build.yml",
     "CMakeLists.txt",
