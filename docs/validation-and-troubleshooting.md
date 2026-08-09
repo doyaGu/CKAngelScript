@@ -42,6 +42,51 @@ python tools\generate_naturaldocs_api.py `
 
 `docs\api-reference.yml` is the curated reference metadata layer for grouping, summaries, funcdef display declarations, and quality gates. The generated quality report records hidden internals, skipped declarations, group counts, metadata orphans, and required high-level type coverage.
 
+### Refresh The Tracked Live API Catalog
+
+Build the DLL with `CKAS_ENABLE_API_EXPORT=ON`, set `CKAS_EXPORT_SCRIPT_API` to
+an output path, then launch a real Virtools host that loads the DLL. After the
+initialized engine writes the export, refresh the tracked catalog and derived
+language-server file:
+
+```powershell
+tools\Refresh-ApiCatalog.ps1 -LiveApiJson build\docs\script-api.live.json
+```
+
+For a local Player installation, the export/restore/refresh cycle can be
+automated. The script refuses to proceed when Player is already running and
+restores the previously installed plugin in a `finally` block:
+
+```powershell
+tools\Export-LiveApiCatalog.ps1 `
+  -PlayerPath C:\Game\Bin\Player.exe `
+  -GameRoot C:\Game `
+  -PluginDll build-api\src\AngelScript.dll `
+  -PluginDestination C:\Game\BuildingBlocks\AngelScript.dll `
+  -Output build-api\docs\script-api.live.json `
+  -RunSelfTests `
+  -SelfTestMarker build-api\docs\script-api.live.selftest `
+  -Refresh
+```
+
+The refresh normalizes the live export, removes volatile process addresses,
+writes `docs/script-api.json`, regenerates `as.predefined`, and records a hash
+of every source file that contributes AngelScript registrations in
+`docs/script-api.lock.json`. `-RunSelfTests` also waits for the startup marker
+to reach `status=ok`; the installed plugin is restored on success, failure, or
+timeout.
+
+Run the same consistency check used by CI with:
+
+```powershell
+python tools\sync_api_catalog.py --check
+```
+
+If a registration source changes without a fresh live export, or a generator
+change makes `as.predefined` stale, the check fails and lists the drifting
+files. The live export must come from the canonical release configuration,
+including `CKAS_ENABLE_DYNCALL=ON` when the published API includes DynCall.
+
 ## Environment Variables
 
 | Variable | Used by | Meaning |

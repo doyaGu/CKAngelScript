@@ -1,0 +1,4 @@
+as.predefined text eol=lf linguist-generated=true
+docs/script-api.json text eol=lf linguist-generated=true
+docs/script-api.lock.json text eol=lf linguist-generated=true
+docs/api-inventory.md text eol=lf

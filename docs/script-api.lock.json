@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "catalog": "docs/script-api.json",
+  "catalogSha256": "b58c9af8a3ea48b4aafdaf47d9c384e817f69e28a3e0ab59cad0cbc50a0dbbe3",
+  "registrationSurfaceSha256": "6699ca82e46b60157e36c51c0c0a99f9622ed42bfd8146ee93b040d041f95b60",
+  "registrationInputs": [
+    "deps/CMakeLists.txt",
+    "src/ScriptAsync.cpp",
+    "src/ScriptBridgeRegistration.cpp",
+    "src/ScriptBuilder.cpp",
+    "src/ScriptCKContext.cpp",
+    "src/ScriptCKDefines.cpp",
+    "src/ScriptCKEnums.cpp",
+    "src/ScriptCKManagers.cpp",
+    "src/ScriptCKObjects.cpp",
+    "src/ScriptCKTypes.cpp",
+    "src/ScriptDynCall.cpp",
+    "src/ScriptEngineHost.cpp",
+    "src/ScriptEngineHost.h",
+    "src/ScriptFormat.cpp",
+    "src/ScriptMessage.cpp",
+    "src/ScriptNativeBuffer.cpp",
+    "src/ScriptNativePointer.cpp",
+    "src/ScriptObjectRef.cpp",
+    "src/ScriptParameterRegistry.cpp",
+    "src/ScriptParameterRegistry.h",
+    "src/ScriptRuntime.cpp",
+    "src/ScriptScene.cpp",
+    "src/ScriptUtils.h",
+    "src/ScriptVxMath.cpp",
+    "src/ScriptXArray.h",
+    "src/ScriptXBitArray.cpp",
+    "src/ScriptXHashTable.h",
+    "src/ScriptXObjectArray.cpp",
+    "src/ScriptXString.cpp"
+  ],
+  "generated": [
+    "as.predefined",
+    "docs/api-inventory.md"
+  ]
+}

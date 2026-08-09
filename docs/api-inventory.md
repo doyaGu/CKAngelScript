@@ -1,6 +1,6 @@
 # API Inventory
 
-This page inventories the public API surface currently exposed by CKAngelScript. It is a map for maintainers, not a replacement for the task-focused guides. Counts come from the AngelScript registration calls in `src/*.cpp` and the public C ABI in `include/CKAngelScript.h`.
+This page inventories the public API surface currently exposed by CKAngelScript. It is a map for maintainers, not a replacement for the task-focused guides. Script registration counts come from the tracked live-engine export in `docs/script-api.json`; the native public ABI is declared in `include/CKAngelScript.h`.
 
 ## Summary
 
@@ -12,23 +12,24 @@ This page inventories the public API surface currently exposed by CKAngelScript.
 | Raw CK/Vx SDK bindings | CK context/managers/objects, SDK enums/defines/structs, Vx math types, containers | `src/ScriptCK*.cpp`, `src/ScriptVxMath.cpp`, `src/ScriptX*.cpp` |
 | Component/editor integration | `AngelScript Component`, `AngelScript Executor`, metadata manifest, injected fields, BB config/slot metadata, `BehaviorFrame@` lifecycle invocation | `src/ScriptComponent*.cpp`, `src/AngelScriptExecutor.cpp`, `src/ScriptInvoker.cpp`, `docs/component-metadata-manifest.md`, `docs/angelscript-executor.md` |
 
+<!-- BEGIN GENERATED API CATALOG SUMMARY -->
 ## Registration Counts
 
-Current AngelScript API export scan:
+Generated from the tracked live-engine export in `docs/script-api.json`:
 
 | Registration kind | Count |
 | --- | ---: |
-| Global functions | 584 |
+| Global functions | 598 |
 | Global properties | 301 |
-| Object types | 335 |
-| Object methods | 10953 |
-| Object behaviours | 774 |
+| Object types | 336 |
+| Object methods | 11022 |
+| Object behaviours | 777 |
 | Object properties | 465 |
 | Funcdefs | 29 |
 | Enums | 139 |
 | Enum values | 1427 |
 | Typedefs | 24 |
-| Total | 15031 |
+| Total | 15118 |
 
 Large raw SDK binding files and exported cast/behaviour entries dominate the total. The high-level and integration files are still the workflow surface; raw CK/Vx bindings and SDK constants account for most exported symbols.
 
@@ -37,15 +38,16 @@ Large raw SDK binding files and exported cast/behaviour entries dominate the tot
 | Namespace | Global functions | Main responsibility |
 | --- | ---: | --- |
 | `Scene` | 123 | Safe scene lookup, typed refs, creation, scene membership, selection, destruction |
-| `Param` | 55 | Parameter values, enum/flags/type metadata, text/raw conversion, operations |
-| `Async` | 23 | Frame-based cooperative tasks, aggregates, waits for BB/graph tasks |
-| `BB` | 18 | Building Block prototype discovery, declaration/config creation, runtime bridge entry points |
-| `Message` | 14 | Publish/send/request/reply messaging between runtime entries and components |
+| `Param` | 83 | Parameter values, enum/flags/type metadata, text/raw conversion, operations |
+| `Async` | 25 | Frame-based cooperative tasks, aggregates, waits for BB/graph tasks |
+| `BB` | 20 | Building Block prototype discovery, declaration/config creation, runtime bridge entry points |
+| `Message` | 25 | Publish/send/request/reply messaging between runtime entries and components |
 | `Behavior` | 13 | Behavior graph lookup, query construction, graph bridge entry points |
 | `Runtime` | 11 | Script entry manager inspection and control |
-| Global | 267 | Raw CK/Vx helpers, constructors/operators, allocation helpers, format/info functions |
+| `Global` | 298 | Raw CK/Vx helpers, constructors/operators, allocation helpers, format/info functions |
 
 The global bucket includes raw SDK-style helpers and constructors, so new high-level workflow APIs should normally prefer a named namespace.
+<!-- END GENERATED API CATALOG SUMMARY -->
 
 ## High-Level Script API Families
 

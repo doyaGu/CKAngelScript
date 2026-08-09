@@ -21,6 +21,17 @@ env:
   PACKAGE_DIR: ${{ github.workspace }}\packages
 
 jobs:
+  api-catalog:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6.0.2
+
+      - name: Check live API catalog drift
+        shell: pwsh
+        run: python tools/sync_api_catalog.py --check
+
   validate-release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
