@@ -25,6 +25,23 @@ BEGIN_AS_NAMESPACE
 static string GetCurrentDir();
 static string GetAbsolutePath(const string &path);
 
+static void GetLineAndColumn(const string &script, size_t position, int lineOffset, int &line, int &column)
+{
+	line = lineOffset + 1;
+	column = 1;
+	const size_t end = position < script.size() ? position : script.size();
+	for( size_t i = 0; i < end; ++i )
+	{
+		if( script[i] == '\n' )
+		{
+			++line;
+			column = 1;
+		}
+		else
+			++column;
+	}
+}
+
 static bool IsIdentifierChar(char ch)
 {
 	unsigned char value = static_cast<unsigned char>(ch);
@@ -854,9 +871,10 @@ int ScriptBuilder::ProcessScriptSection(const char *script, unsigned int length,
 						size_t p = includefile.find('\n');
 						if (p != string::npos)
 						{
-							// TODO: Show the correct line number for the error
+							int line = 0, column = 0;
+							GetLineAndColumn(modifiedScript, start, lineOffset, line, column);
 							string str = "Invalid file name for #include; it contains a line-break: '" + includefile.substr(0, p) + "'";
-							engine->WriteMessage(sectionname, 0, 0, asMSGTYPE_ERROR, str.c_str());
+							engine->WriteMessage(sectionname, line, column, asMSGTYPE_ERROR, str.c_str());
 						}
 						else
 						{
@@ -879,8 +897,9 @@ int ScriptBuilder::ProcessScriptSection(const char *script, unsigned int length,
 					int r = pragmaCallback ? pragmaCallback(pragmaText, *this, pragmaParam) : -1;
 					if (r < 0)
 					{
-						// TODO: Report the correct line number
-						engine->WriteMessage(sectionname, 0, 0, asMSGTYPE_ERROR, "Invalid #pragma directive");
+						int line = 0, column = 0;
+						GetLineAndColumn(modifiedScript, start, lineOffset, line, column);
+						engine->WriteMessage(sectionname, line, column, asMSGTYPE_ERROR, "Invalid #pragma directive");
 						return r;
 					}
 

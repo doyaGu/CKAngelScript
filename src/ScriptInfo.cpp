@@ -588,7 +588,16 @@ std::string ExportFuncdef(asIScriptEngine *engine, asITypeInfo *type) {
     if (!type) {
         return "{}";
     }
-    const std::string typeDeclaration = TypeDeclaration(engine, type->GetTypeId());
+    // Template member funcdefs (notably array<T>::less) contain unresolved
+    // placeholder types. AngelScript 2.38.0 cannot safely render their native
+    // declaration before a concrete template instance exists.
+    asIScriptFunction *signature = type->GetParentType() ? nullptr : type->GetFuncdefSignature();
+    const std::string declaration = signature
+        ? FunctionDeclaration(signature, false)
+        : TypeDeclaration(engine, type->GetTypeId());
+    const std::string declarationWithNamespace = signature
+        ? FunctionDeclaration(signature, true)
+        : declaration;
     return WriteObject(WithApiCategory({
         {"docId", JoinDocId({"funcdef", SafeString(type->GetNamespace()), SafeString(type->GetName())})},
         {"name", SafeString(type->GetName())},
@@ -596,9 +605,9 @@ std::string ExportFuncdef(asIScriptEngine *engine, asITypeInfo *type) {
         {"typeId", JsonInt(type->GetTypeId()), true},
         {"configGroup", SafeString(type->GetConfigGroup())},
         {"accessMask", JsonUInt(type->GetAccessMask()), true},
-        {"declaration", typeDeclaration},
-        {"declarationWithNamespace", typeDeclaration},
-        {"typeDeclaration", typeDeclaration}
+        {"declaration", declaration},
+        {"declarationWithNamespace", declarationWithNamespace},
+        {"typeDeclaration", declaration}
     }, ClassifyApi(SafeString(type->GetNamespace()))), 6);
 }
 
