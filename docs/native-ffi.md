@@ -62,6 +62,44 @@ Useful buffer methods:
 
 `NativeBuffer(uintptr_t, size_t)` and `NativeBuffer(NativePointer, size_t)` wrap existing memory. Those buffers do not own the memory; the original owner must keep it alive.
 
+## Prefer Sized and Typed SDK Overloads
+
+When a CK SDK method has both `NativePointer` and `NativeBuffer`/array overloads, use the sized or typed overload. The compatibility `NativePointer` form cannot verify the allocation length.
+
+Load a complete in-memory Virtools file synchronously:
+
+```angelscript
+NativeBuffer@ bytes = NativeBuffer(fileSize);
+bytes.Load(path, fileSize);
+
+CKFile@ ckFile = ctx.CreateCKFile();
+CKObjectArray@ loaded = CreateCKObjectArray();
+CKERROR result = ckFile.Load(bytes, loaded);
+
+DeleteCKObjectArray(loaded);
+ctx.DeleteCKFile(ckFile);
+```
+
+`CKFile.Load(NativeBuffer@, ...)` derives the byte count from `NativeBuffer.Size()` and completes before the call returns. `CKFile.OpenMemory` intentionally remains a `NativePointer` API: it is the first half of a two-stage `OpenMemory`/`LoadFileData` operation, and the CK parser continues borrowing the memory between those calls.
+
+Use script arrays for typed lists instead of packing integers manually:
+
+```angelscript
+bool AddDependencies(CKDependenciesContext@ dependencies, CKObject@ object) {
+    array<CK_ID> ids = { object.GetID() };
+    return dependencies.AddObjects(ids);
+}
+
+void FindObjectsWithAttributes(CKContext@ ctx,
+                               CKAttributeType first,
+                               CKAttributeType second) {
+    array<CKAttributeType> attributes = { first, second };
+    ctx.GetAttributeManager().FillListByAttributes(attributes);
+}
+```
+
+The array overloads infer their element count and validate the AngelScript element type. In generated catalog output, typedefs may appear in canonical form (`CK_ID` as `uint`, `CKAttributeType` as `int`).
+
 ## DynLoad and DynCall
 
 DynLoad locates libraries and symbols. DynCall invokes function pointers using a call signature. The exact helpers are registered by `ScriptDynCall.cpp`; verify the required signature before calling into a library.

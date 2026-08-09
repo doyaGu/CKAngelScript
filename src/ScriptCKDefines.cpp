@@ -12,6 +12,8 @@
 
 #include "CKAll.h"
 
+#include "add_on/scriptarray/scriptarray.h"
+
 #include "ScriptUtils.h"
 #include "ScriptXArray.h"
 #include "ScriptNativeBuffer.h"
@@ -5117,6 +5119,138 @@ static int ReadCKStateChunkString(CKStateChunk *self, std::string &str) {
     return result;
 }
 
+static void SetCKStateChunkBufferException(const char *message) {
+    if (asIScriptContext *ctx = asGetActiveContext()) {
+        ctx->SetException(message);
+    }
+}
+
+static bool ComputeCKStateChunkBufferSize(int count, int elementSize, const char *method, size_t &required) {
+    required = 0;
+    if (count < 0 || elementSize < 0) {
+        SetCKStateChunkBufferException((std::string(method) + " requires non-negative count and size values.").c_str());
+        return false;
+    }
+    const size_t n = static_cast<size_t>(count);
+    const size_t width = static_cast<size_t>(elementSize);
+    if (width != 0 && n > static_cast<size_t>(-1) / width) {
+        SetCKStateChunkBufferException((std::string(method) + " byte size overflowed.").c_str());
+        return false;
+    }
+    required = n * width;
+    return true;
+}
+
+static bool ValidateCKStateChunkBuffer(NativeBuffer *buffer, size_t required, const char *method) {
+    if (required == 0) {
+        return true;
+    }
+    if (!buffer || !buffer->Data() || buffer->Size() < required) {
+        SetCKStateChunkBufferException((std::string(method) + " requires a NativeBuffer with at least " +
+                                        std::to_string(required) + " bytes.").c_str());
+        return false;
+    }
+    return true;
+}
+
+template <void (CKStateChunk::*Method)(int, void *)>
+static bool WriteCKStateChunkBuffer(CKStateChunk *self, int size, NativeBuffer *buffer, const char *method) {
+    size_t required = 0;
+    if (!self || !ComputeCKStateChunkBufferSize(size, 1, method, required) ||
+        !ValidateCKStateChunkBuffer(buffer, required, method)) {
+        return false;
+    }
+    (self->*Method)(size, required == 0 ? nullptr : buffer->Data());
+    return true;
+}
+
+#if CKVERSION == 0x13022002
+template <void (CKStateChunk::*Method)(int, int, void *)>
+static bool WriteCKStateChunkArray(CKStateChunk *self, int elementCount, int elementSize, NativeBuffer *buffer, const char *method) {
+    size_t required = 0;
+    if (!self || !ComputeCKStateChunkBufferSize(elementCount, elementSize, method, required) ||
+        !ValidateCKStateChunkBuffer(buffer, required, method)) {
+        return false;
+    }
+    (self->*Method)(elementCount, elementSize, required == 0 ? nullptr : buffer->Data());
+    return true;
+}
+#endif
+
+template <void (CKStateChunk::*Method)(int, void *)>
+static bool ReadAndFillCKStateChunkBuffer(CKStateChunk *self, int size, NativeBuffer *buffer, const char *method) {
+    size_t required = 0;
+    if (!self || !ComputeCKStateChunkBufferSize(size, 1, method, required) ||
+        !ValidateCKStateChunkBuffer(buffer, required, method)) {
+        return false;
+    }
+    (self->*Method)(size, required == 0 ? nullptr : buffer->Data());
+    return true;
+}
+
+static NativeBuffer *ReadCKStateChunkBuffer(CKStateChunk *self) {
+    if (!self) {
+        SetCKStateChunkBufferException("CKStateChunk.ReadBuffer requires a valid state chunk.");
+        return nullptr;
+    }
+    void *data = nullptr;
+    const int size = self->ReadBuffer(&data);
+    if (size < 0 || (size > 0 && !data)) {
+        CKDeletePointer(data);
+        SetCKStateChunkBufferException("CKStateChunk.ReadBuffer failed to return a valid allocated buffer.");
+        return nullptr;
+    }
+    NativeBuffer *buffer = NativeBuffer::Create(static_cast<size_t>(size));
+    if (size > 0) {
+        std::memcpy(buffer->Data(), data, static_cast<size_t>(size));
+    }
+    CKDeletePointer(data);
+    return buffer;
+}
+
+static NativeBuffer *ConvertCKStateChunkToOwnedBuffer(CKStateChunk *self) {
+    if (!self) {
+        SetCKStateChunkBufferException("CKStateChunk.ConvertToBuffer requires a valid state chunk.");
+        return nullptr;
+    }
+    const int required = self->ConvertToBuffer(nullptr);
+    if (required < 0) {
+        SetCKStateChunkBufferException("CKStateChunk.ConvertToBuffer failed to determine the required size.");
+        return nullptr;
+    }
+    NativeBuffer *buffer = NativeBuffer::Create(static_cast<size_t>(required));
+    if (required > 0 && self->ConvertToBuffer(buffer->Data()) < 0) {
+        buffer->Release();
+        SetCKStateChunkBufferException("CKStateChunk.ConvertToBuffer failed to serialize the chunk.");
+        return nullptr;
+    }
+    return buffer;
+}
+
+static int ConvertCKStateChunkToBuffer(CKStateChunk *self, NativeBuffer *buffer) {
+    if (!self) {
+        SetCKStateChunkBufferException("CKStateChunk.ConvertToBuffer requires a valid state chunk.");
+        return 0;
+    }
+    const int required = self->ConvertToBuffer(nullptr);
+    if (required < 0 || !ValidateCKStateChunkBuffer(buffer, static_cast<size_t>(required), "CKStateChunk.ConvertToBuffer")) {
+        return 0;
+    }
+    return self->ConvertToBuffer(required == 0 ? nullptr : buffer->Data());
+}
+
+static int RemapCKStateChunkInts(CKStateChunk *self, CKGUID guid, NativeBuffer *table, int count, bool parameter) {
+    size_t required = 0;
+    const char *method = parameter ? "CKStateChunk.RemapParameterInt" : "CKStateChunk.RemapManagerInt";
+    if (!self || !ComputeCKStateChunkBufferSize(count, sizeof(int), method, required) ||
+        !ValidateCKStateChunkBuffer(table, required, method)) {
+        return 0;
+    }
+    int *values = required == 0 ? nullptr : reinterpret_cast<int *>(table->Data());
+    return parameter ? self->RemapParameterInt(guid, values, count)
+                     : self->RemapManagerInt(guid, values, count);
+}
+
 void RegisterCKStateChunk(asIScriptEngine *engine) {
     int r = 0;
 
@@ -5172,16 +5306,24 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteBuffer(int size, NativePointer buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativePointer buf) { self->WriteBuffer(size, buf.Get()); }, (CKStateChunk *, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteBufferNoSize(int size, NativePointer buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativePointer buf) { self->WriteBufferNoSize(size, buf.Get()); }, (CKStateChunk *, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool WriteBuffer(int size, NativeBuffer@ buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativeBuffer *buf) -> bool { return WriteCKStateChunkBuffer<&CKStateChunk::WriteBuffer>(self, size, buf, "CKStateChunk.WriteBuffer"); }, (CKStateChunk *, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool WriteBufferNoSize(int size, NativeBuffer@ buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativeBuffer *buf) -> bool { return WriteCKStateChunkBuffer<&CKStateChunk::WriteBufferNoSize>(self, size, buf, "CKStateChunk.WriteBufferNoSize"); }, (CKStateChunk *, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteBuffer_LEndian(int size, NativePointer buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativePointer buf) { self->WriteBuffer_LEndian(size, buf.Get()); }, (CKStateChunk *, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteBuffer_LEndian16(int size, NativePointer buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativePointer buf) { self->WriteBuffer_LEndian16(size, buf.Get()); }, (CKStateChunk *, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool WriteBuffer_LEndian(int size, NativeBuffer@ buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativeBuffer *buf) -> bool { return WriteCKStateChunkBuffer<&CKStateChunk::WriteBuffer_LEndian>(self, size, buf, "CKStateChunk.WriteBuffer_LEndian"); }, (CKStateChunk *, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool WriteBuffer_LEndian16(int size, NativeBuffer@ buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativeBuffer *buf) -> bool { return WriteCKStateChunkBuffer<&CKStateChunk::WriteBuffer_LEndian16>(self, size, buf, "CKStateChunk.WriteBuffer_LEndian16"); }, (CKStateChunk *, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteArray_LEndian(int elementCount, int elementSize, NativePointer srcData)", asFUNCTIONPR([](CKStateChunk *self, int elementCount, int elementSize, NativePointer srcData) { self->WriteArray_LEndian(elementCount, elementSize, srcData.Get()); }, (CKStateChunk *, int, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteArray_LEndian16(int elementCount, int elementSize, NativePointer srcData)", asFUNCTIONPR([](CKStateChunk *self, int elementCount, int elementSize, NativePointer srcData) { self->WriteArray_LEndian16(elementCount, elementSize, srcData.Get()); }, (CKStateChunk *, int, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool WriteArray_LEndian(int elementCount, int elementSize, NativeBuffer@ srcData)", asFUNCTIONPR([](CKStateChunk *self, int elementCount, int elementSize, NativeBuffer *srcData) -> bool { return WriteCKStateChunkArray<&CKStateChunk::WriteArray_LEndian>(self, elementCount, elementSize, srcData, "CKStateChunk.WriteArray_LEndian"); }, (CKStateChunk *, int, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool WriteArray_LEndian16(int elementCount, int elementSize, NativeBuffer@ srcData)", asFUNCTIONPR([](CKStateChunk *self, int elementCount, int elementSize, NativeBuffer *srcData) -> bool { return WriteCKStateChunkArray<&CKStateChunk::WriteArray_LEndian16>(self, elementCount, elementSize, srcData, "CKStateChunk.WriteArray_LEndian16"); }, (CKStateChunk *, int, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteBufferNoSize_LEndian(int size, NativePointer buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativePointer buf) { self->WriteBufferNoSize_LEndian(size, buf.Get()); }, (CKStateChunk *, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteBufferNoSize_LEndian16(int size, NativePointer buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativePointer buf) { self->WriteBufferNoSize_LEndian16(size, buf.Get()); }, (CKStateChunk *, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool WriteBufferNoSize_LEndian(int size, NativeBuffer@ buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativeBuffer *buf) -> bool { return WriteCKStateChunkBuffer<&CKStateChunk::WriteBufferNoSize_LEndian>(self, size, buf, "CKStateChunk.WriteBufferNoSize_LEndian"); }, (CKStateChunk *, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool WriteBufferNoSize_LEndian16(int size, NativeBuffer@ buf)", asFUNCTIONPR([](CKStateChunk *self, int size, NativeBuffer *buf) -> bool { return WriteCKStateChunkBuffer<&CKStateChunk::WriteBufferNoSize_LEndian16>(self, size, buf, "CKStateChunk.WriteBufferNoSize_LEndian16"); }, (CKStateChunk *, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void StartObjectIDSequence(int count)", asMETHODPR(CKStateChunk, StartObjectIDSequence, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void WriteObjectIDSequence(CK_ID id)", asMETHODPR(CKStateChunk, WriteObjectIDSequence, (CK_ID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -5222,12 +5364,15 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer(NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer buffer) { self->ReadAndFillBuffer(buffer.Get()); }, (CKStateChunk *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer(int size, NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, int size, NativePointer buffer) { self->ReadAndFillBuffer(size, buffer.Get()); }, (CKStateChunk *, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool ReadAndFillBuffer(int size, NativeBuffer@ buffer)", asFUNCTIONPR([](CKStateChunk *self, int size, NativeBuffer *buffer) -> bool { return ReadAndFillCKStateChunkBuffer<static_cast<void (CKStateChunk::*)(int, void *)>(&CKStateChunk::ReadAndFillBuffer)>(self, size, buffer, "CKStateChunk.ReadAndFillBuffer"); }, (CKStateChunk *, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer_LEndian(NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer buffer) { self->ReadAndFillBuffer_LEndian(buffer.Get()); }, (CKStateChunk *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer_LEndian(int size, NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, int size, NativePointer buffer) { self->ReadAndFillBuffer_LEndian(size, buffer.Get()); }, (CKStateChunk *, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool ReadAndFillBuffer_LEndian(int size, NativeBuffer@ buffer)", asFUNCTIONPR([](CKStateChunk *self, int size, NativeBuffer *buffer) -> bool { return ReadAndFillCKStateChunkBuffer<static_cast<void (CKStateChunk::*)(int, void *)>(&CKStateChunk::ReadAndFillBuffer_LEndian)>(self, size, buffer, "CKStateChunk.ReadAndFillBuffer_LEndian"); }, (CKStateChunk *, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer_LEndian16(NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer buffer) { self->ReadAndFillBuffer_LEndian16(buffer.Get()); }, (CKStateChunk *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "void ReadAndFillBuffer_LEndian16(int size, NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, int size, NativePointer buffer) { self->ReadAndFillBuffer_LEndian16(size, buffer.Get()); }, (CKStateChunk *, int, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "bool ReadAndFillBuffer_LEndian16(int size, NativeBuffer@ buffer)", asFUNCTIONPR([](CKStateChunk *self, int size, NativeBuffer *buffer) -> bool { return ReadAndFillCKStateChunkBuffer<static_cast<void (CKStateChunk::*)(int, void *)>(&CKStateChunk::ReadAndFillBuffer_LEndian16)>(self, size, buffer, "CKStateChunk.ReadAndFillBuffer_LEndian16"); }, (CKStateChunk *, int, NativeBuffer *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
     r = engine->RegisterObjectMethod("CKStateChunk", "CKStateChunk@ ReadSubChunk()", asMETHODPR(CKStateChunk, ReadSubChunk, (), CKStateChunk *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -5235,6 +5380,7 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "CKStateChunk@ ReadSubChunk(CK_READSUBCHUNK_FLAGS flags = CK_RSC_DEFAULT)", asMETHODPR(CKStateChunk, ReadSubChunk, (CK_READSUBCHUNK_FLAGS), CKStateChunk *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 #endif
     r = engine->RegisterObjectMethod("CKStateChunk", "int ReadBuffer(NativePointer &out buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer *buffer) { void *ptr = nullptr; int result = self->ReadBuffer(&ptr); *buffer = ptr; return result; }, (CKStateChunk *, NativePointer *), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "NativeBuffer@ ReadBuffer()", asFUNCTION(ReadCKStateChunkBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "int ReadString(string &out str)", asFUNCTION(ReadCKStateChunkString), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "BITMAP_HANDLE ReadBitmap()", asMETHODPR(CKStateChunk, ReadBitmap, (), BITMAP_HANDLE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -5246,10 +5392,14 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("CKStateChunk", "int RemapObjects(CKContext@ context, CKDependenciesContext@ depContext = null)", asMETHODPR(CKStateChunk, RemapObjects, (CKContext *, CKDependenciesContext *), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "int RemapManagerInt(CKGUID manager, NativePointer conversionTable, int nbEntries)", asFUNCTIONPR([](CKStateChunk *self, CKGUID manager, NativePointer conversionTable, int nbEntries) { return self->RemapManagerInt(manager, reinterpret_cast<int*>(conversionTable.Get()), nbEntries); }, (CKStateChunk *, CKGUID, NativePointer, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "int RemapParameterInt(CKGUID parameterType, NativePointer conversionTable, int nbEntries)", asFUNCTIONPR([](CKStateChunk *self, CKGUID parameterType, NativePointer conversionTable, int nbEntries) { return self->RemapParameterInt(parameterType, reinterpret_cast<int*>(conversionTable.Get()), nbEntries); }, (CKStateChunk *, CKGUID, NativePointer, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "int RemapManagerInt(CKGUID manager, NativeBuffer@ conversionTable, int nbEntries)", asFUNCTIONPR([](CKStateChunk *self, CKGUID manager, NativeBuffer *conversionTable, int nbEntries) { return RemapCKStateChunkInts(self, manager, conversionTable, nbEntries, false); }, (CKStateChunk *, CKGUID, NativeBuffer *, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "int RemapParameterInt(CKGUID parameterType, NativeBuffer@ conversionTable, int nbEntries)", asFUNCTIONPR([](CKStateChunk *self, CKGUID parameterType, NativeBuffer *conversionTable, int nbEntries) { return RemapCKStateChunkInts(self, parameterType, conversionTable, nbEntries, true); }, (CKStateChunk *, CKGUID, NativeBuffer *, int), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "void AddChunk(CKStateChunk@ chunk)", asMETHODPR(CKStateChunk, AddChunk, (CKStateChunk *), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "int ConvertToBuffer(NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer buffer) { return self->ConvertToBuffer(buffer.Get()); }, (CKStateChunk *, NativePointer), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "int ConvertToBuffer(NativeBuffer@ buffer)", asFUNCTION(ConvertCKStateChunkToBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKStateChunk", "NativeBuffer@ ConvertToBuffer()", asFUNCTION(ConvertCKStateChunkToOwnedBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKStateChunk", "bool ConvertFromBuffer(NativePointer buffer)", asFUNCTIONPR([](CKStateChunk *self, NativePointer buffer) -> bool { return self->ConvertFromBuffer(buffer.Get()); }, (CKStateChunk *, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKStateChunk", "NativePointer LockWriteBuffer(int dwordCount)", asFUNCTIONPR([](CKStateChunk *self, int dwordCount) { return NativePointer(self->LockWriteBuffer(dwordCount)); }, (CKStateChunk *, int), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -5264,6 +5414,31 @@ void RegisterCKStateChunk(asIScriptEngine *engine) {
 
 // CKFile
 
+static CKERROR LoadCKFileFromNativeBuffer(CKFile *self,
+                                          NativeBuffer *buffer,
+                                          CKObjectArray *objArray,
+                                          CK_LOAD_FLAGS flags) {
+    if (!self) {
+        SetCKStateChunkBufferException("CKFile.Load requires a valid CKFile.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (!buffer) {
+        SetCKStateChunkBufferException("CKFile.Load requires a NativeBuffer.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (buffer->Size() > static_cast<size_t>(INT_MAX)) {
+        SetCKStateChunkBufferException(
+            "CKFile.Load NativeBuffer is too large for the Virtools memory-load API.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    if (buffer->Size() > 0 && !buffer->Data()) {
+        SetCKStateChunkBufferException("CKFile.Load requires valid NativeBuffer data.");
+        return CKERR_INVALIDPARAMETER;
+    }
+    const int size = static_cast<int>(buffer->Size());
+    return self->Load(size > 0 ? buffer->Data() : nullptr, size, objArray, flags);
+}
+
 void RegisterCKFile(asIScriptEngine *engine) {
     int r = 0;
 
@@ -5274,6 +5449,7 @@ void RegisterCKFile(asIScriptEngine *engine) {
 
     r = engine->RegisterObjectMethod("CKFile", "CKERROR Load(const string &in filename, CKObjectArray@ objArray, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)", asFUNCTIONPR([](CKFile *self, const std::string &filename, CKObjectArray *objArray, CK_LOAD_FLAGS flags) { return self->Load(const_cast<CKSTRING>(filename.c_str()), objArray, flags); }, (CKFile *, const std::string &, CKObjectArray *, CK_LOAD_FLAGS), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKFile", "CKERROR Load(NativePointer buffer, int bufferSize, CKObjectArray@ objArray, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)", asFUNCTIONPR([](CKFile *self, NativePointer buffer, int bufferSize, CKObjectArray * objArray, CK_LOAD_FLAGS flags) { return self->Load(buffer.Get(), bufferSize, objArray, flags); }, (CKFile *, NativePointer, int, CKObjectArray *, CK_LOAD_FLAGS), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKFile", "CKERROR Load(NativeBuffer@ buffer, CKObjectArray@ objArray, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)", asFUNCTION(LoadCKFileFromNativeBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKFile", "void UpdateAndApplyAnimationsTo(CKCharacter@ character)", asMETHODPR(CKFile, UpdateAndApplyAnimationsTo, (CKCharacter*), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
@@ -5311,10 +5487,48 @@ static void CopyCKDependenciesContext(CKDependenciesContext *self, const std::st
     }
 }
 
+static bool AddCKDependenciesObjectsBuffer(CKDependenciesContext *self, NativeBuffer *ids, int count) {
+    size_t required = 0;
+    if (!self || !ComputeCKStateChunkBufferSize(count, sizeof(CK_ID), "CKDependenciesContext.AddObjects", required) ||
+        !ValidateCKStateChunkBuffer(ids, required, "CKDependenciesContext.AddObjects")) {
+        return false;
+    }
+    self->AddObjects(required == 0 ? nullptr : reinterpret_cast<CK_ID *>(ids->Data()), count);
+    return true;
+}
+
+static bool AddCKDependenciesObjectsArray(CKDependenciesContext *self,
+                                          const CScriptArray &ids) {
+    if (!self) {
+        SetCKStateChunkBufferException(
+            "CKDependenciesContext.AddObjects requires a valid dependencies context.");
+        return false;
+    }
+    if (ids.GetElementTypeId() != asTYPEID_UINT32) {
+        SetCKStateChunkBufferException(
+            "CKDependenciesContext.AddObjects requires an array<CK_ID>.");
+        return false;
+    }
+    const asUINT count = ids.GetSize();
+    if (count > static_cast<asUINT>(INT_MAX)) {
+        SetCKStateChunkBufferException(
+            "CKDependenciesContext.AddObjects array is too large for the Virtools API.");
+        return false;
+    }
+    static_assert(sizeof(CK_ID) == sizeof(asDWORD), "CK_ID must match AngelScript uint.");
+    CK_ID *values = count == 0
+        ? nullptr
+        : static_cast<CK_ID *>(const_cast<CScriptArray &>(ids).GetBuffer());
+    self->AddObjects(values, static_cast<int>(count));
+    return true;
+}
+
 void RegisterCKDependenciesContext(asIScriptEngine *engine) {
     int r = 0;
 
     r = engine->RegisterObjectMethod("CKDependenciesContext", "void AddObjects(NativePointer ids, int count)", asFUNCTIONPR([](CKDependenciesContext *self, NativePointer ids, int count) { self->AddObjects(reinterpret_cast<CK_ID *>(ids.Get()), count); }, (CKDependenciesContext *, NativePointer, int), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKDependenciesContext", "bool AddObjects(NativeBuffer@ ids, int count)", asFUNCTION(AddCKDependenciesObjectsBuffer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKDependenciesContext", "bool AddObjects(const array<CK_ID> &in ids)", asFUNCTION(AddCKDependenciesObjectsArray), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKDependenciesContext", "int GetObjectsCount()", asMETHODPR(CKDependenciesContext, GetObjectsCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDependenciesContext", "CKObject@ GetObjects(int i)", asMETHODPR(CKDependenciesContext, GetObjects, (int), CKObject *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

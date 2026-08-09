@@ -10,7 +10,9 @@
 #include "CKStateChunk.h"
 #include "CKParameterOperation.h"
 #include "CKParameterManager.h"
+#include "ScriptHostScope.h"
 #include "ScriptParameterRegistry.h"
+#include "ScriptRuntime.h"
 
 namespace {
 
@@ -2312,6 +2314,45 @@ bool ExecuteCKStateChunkProbe(asIScriptEngine *engine,
     return ok;
 }
 
+bool ExecuteSingleObjectProbe(asIScriptEngine *engine,
+                              asIScriptFunction *function,
+                              void *arg0,
+                              const char *label,
+                              std::string &error) {
+    asIScriptContext *scriptContext = engine->RequestContext();
+    if (!scriptContext) {
+        error = std::string(label) + " could not create an execution context.";
+        return false;
+    }
+
+    int r = scriptContext->Prepare(function);
+    if (r >= 0) {
+        r = scriptContext->SetArgObject(0, arg0);
+    }
+    if (r >= 0) {
+        r = scriptContext->Execute();
+    }
+
+    bool ok = false;
+    if (r == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+        ok = returnCode == 0;
+        if (!ok) {
+            error = std::string(label) + " returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (r == asEXECUTION_EXCEPTION) {
+        const char *exception = scriptContext->GetExceptionString();
+        error = std::string(label) + " exception: " +
+                (exception && exception[0] ? exception : "<empty>") + ".";
+    } else {
+        error = std::string(label) + " failed with code " + std::to_string(r) + ".";
+    }
+
+    scriptContext->Unprepare();
+    engine->ReturnContext(scriptContext);
+    return ok;
+}
+
 bool ExecuteCKAttributeDescProbe(asIScriptEngine *engine,
                                  asIScriptFunction *function,
                                  bool expectException,
@@ -3168,6 +3209,74 @@ bool RunCKFileExtensionScriptSelfTest(asIScriptEngine *engine, std::string &erro
     }
 
     const bool ok = ExecuteCKAttributeDescProbe(engine, probe, false, "CKFileExtension value probe", error);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
+bool RunCKFileNativeBufferScriptSelfTest(CKContext *context,
+                                         asIScriptEngine *engine,
+                                         std::string &error) {
+    if (!context || !engine) {
+        error = "CKFile NativeBuffer self-test requires CKContext and AngelScript engine.";
+        return false;
+    }
+
+    asITypeInfo *fileType = engine->GetTypeInfoByDecl("CKFile");
+    if (!fileType ||
+        fileType->GetMethodByDecl(
+            "CKERROR Load(NativeBuffer@ buffer, CKObjectArray@ objArray, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)") == nullptr) {
+        error = "CKFile self-test could not find the synchronous NativeBuffer Load declaration.";
+        return false;
+    }
+    if (fileType->GetMethodByDecl(
+            "CKERROR OpenMemory(NativeBuffer@ buffer, CK_LOAD_FLAGS flags = CK_LOAD_DEFAULT)") != nullptr) {
+        error = "CKFile self-test found an unsafe NativeBuffer OpenMemory declaration.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_CKFileNativeBufferSelfTest";
+    const char *source =
+        "int ProbeCKFileNativeBuffer(CKContext@ ctx) {\n"
+        "  if (ctx is null) return 1;\n"
+        "  CKFile@ ckFile = ctx.CreateCKFile();\n"
+        "  CKObjectArray@ objects = CreateCKObjectArray();\n"
+        "  if (ckFile is null || objects is null) return 2;\n"
+        "  NativeBuffer@ invalid = NativeBuffer(4);\n"
+        "  if (invalid.WriteUInt(0) != 4) return 3;\n"
+        "  CKERROR invalidResult = ckFile.Load(invalid, objects);\n"
+        "  NativeBuffer@ empty = NativeBuffer(0);\n"
+        "  CKERROR emptyResult = ckFile.Load(empty, objects);\n"
+        "  DeleteCKObjectArray(objects);\n"
+        "  CKERROR deleteResult = ctx.DeleteCKFile(ckFile);\n"
+        "  if (invalidResult == CK_OK || emptyResult == CK_OK) return 4;\n"
+        "  if (deleteResult != CK_OK) return 5;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    if (!module) {
+        error = "CKFile NativeBuffer self-test could not create a script module.";
+        return false;
+    }
+    int r = module->AddScriptSection("ck-file-native-buffer-self-test", source);
+    if (r >= 0) {
+        r = module->Build();
+    }
+    if (r < 0) {
+        engine->DiscardModule(moduleName);
+        error = "CKFile NativeBuffer self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeCKFileNativeBuffer(CKContext@)");
+    if (!probe) {
+        engine->DiscardModule(moduleName);
+        error = "CKFile NativeBuffer self-test function was not found.";
+        return false;
+    }
+
+    const bool ok = ExecuteCKParameterTypeDescProbe(
+        engine, probe, context, false, "CKFile NativeBuffer probe", error);
     engine->DiscardModule(moduleName);
     return ok;
 }
@@ -6478,8 +6587,10 @@ bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *en
         return false;
     }
     if (!managerType->GetMethodByDecl("const XObjectPointerArray &FillListByAttributes(NativeBuffer@ attribList, int count)") ||
-        !managerType->GetMethodByDecl("const XObjectPointerArray &FillListByGlobalAttributes(NativeBuffer@ attribList, int count)")) {
-        error = "CKAttributeManager self-test could not find NativeBuffer list declarations.";
+        !managerType->GetMethodByDecl("const XObjectPointerArray &FillListByGlobalAttributes(NativeBuffer@ attribList, int count)") ||
+        !managerType->GetMethodByDecl("const XObjectPointerArray &FillListByAttributes(const array<CKAttributeType> &in attribList)") ||
+        !managerType->GetMethodByDecl("const XObjectPointerArray &FillListByGlobalAttributes(const array<CKAttributeType> &in attribList)")) {
+        error = "CKAttributeManager self-test could not find NativeBuffer and typed-array list declarations.";
         return false;
     }
 
@@ -6501,6 +6612,19 @@ bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *en
         "  if (am is null || attrs is null) return;\n"
         "  am.FillListByAttributes(attrs, 1);\n"
         "  am.FillListByGlobalAttributes(attrs, 1);\n"
+        "}\n"
+        "int ProbeAttributeManagerTypedArrays(CKContext@ ctx) {\n"
+        "  CKAttributeManager@ am = ctx.GetAttributeManager();\n"
+        "  if (am is null) return 1;\n"
+        "  array<CKAttributeType> attrs;\n"
+        "  am.FillListByAttributes(attrs);\n"
+        "  am.FillListByGlobalAttributes(attrs);\n"
+        "  if (am.GetAttributeCount() > 0) {\n"
+        "    attrs.insertLast(0);\n"
+        "    am.FillListByAttributes(attrs);\n"
+        "    am.FillListByGlobalAttributes(attrs);\n"
+        "  }\n"
+        "  return 0;\n"
         "}\n"
         "int ProbeAttributeManagerCallbackReject(CKContext@ ctx) {\n"
         "  CKAttributeManager@ am = ctx.GetAttributeManager();\n"
@@ -6540,15 +6664,17 @@ bool RunCKAttributeManagerScriptSelfTest(CKContext *context, asIScriptEngine *en
 
     asIScriptFunction *probe = module->GetFunctionByDecl("int ProbeAttributeManager(CKContext@)");
     asIScriptFunction *bufferProbe = module->GetFunctionByDecl("void ProbeAttributeManagerNativeBuffer(CKAttributeManager@, NativeBuffer@)");
+    asIScriptFunction *typedArrayProbe = module->GetFunctionByDecl("int ProbeAttributeManagerTypedArrays(CKContext@)");
     asIScriptFunction *callbackReject = module->GetFunctionByDecl("int ProbeAttributeManagerCallbackReject(CKContext@)");
     asIScriptFunction *callbackArgReject = module->GetFunctionByDecl("int ProbeAttributeManagerCallbackArgReject(CKContext@)");
-    if (!probe || !bufferProbe || !callbackReject || !callbackArgReject) {
+    if (!probe || !bufferProbe || !typedArrayProbe || !callbackReject || !callbackArgReject) {
         engine->DiscardModule(moduleName);
         error = "CKAttributeManager self-test functions were not found.";
         return false;
     }
 
     bool ok = ExecuteCKParameterTypeDescProbe(engine, probe, context, false, "CKAttributeManager value probe", error) &&
+              ExecuteCKParameterTypeDescProbe(engine, typedArrayProbe, context, false, "CKAttributeManager typed-array probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, callbackReject, context, true, "CKAttributeManager callback rejection probe", error) &&
               ExecuteCKParameterTypeDescProbe(engine, callbackArgReject, context, true, "CKAttributeManager callback argument rejection probe", error);
 
@@ -13772,8 +13898,36 @@ bool RunCKStateChunkScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
     }
     if (stateChunkType->GetMethodByDecl("int ReadString(string &out str)") == nullptr ||
         stateChunkType->GetMethodByDecl("CKObject@ ReadObject(CKContext@ context)") == nullptr ||
-        stateChunkType->GetMethodByDecl("const XObjectPointerArray &ReadXObjectArray(CKContext@ context)") == nullptr) {
+        stateChunkType->GetMethodByDecl("const XObjectPointerArray &ReadXObjectArray(CKContext@ context)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool WriteBuffer(int size, NativeBuffer@ buf)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool WriteBufferNoSize(int size, NativeBuffer@ buf)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool WriteBuffer_LEndian(int size, NativeBuffer@ buf)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool WriteBuffer_LEndian16(int size, NativeBuffer@ buf)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool WriteBufferNoSize_LEndian(int size, NativeBuffer@ buf)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool WriteBufferNoSize_LEndian16(int size, NativeBuffer@ buf)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool ReadAndFillBuffer(int size, NativeBuffer@ buffer)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool ReadAndFillBuffer_LEndian(int size, NativeBuffer@ buffer)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool ReadAndFillBuffer_LEndian16(int size, NativeBuffer@ buffer)") == nullptr ||
+        stateChunkType->GetMethodByDecl("NativeBuffer@ ReadBuffer()") == nullptr ||
+        stateChunkType->GetMethodByDecl("int RemapManagerInt(CKGUID manager, NativeBuffer@ conversionTable, int nbEntries)") == nullptr ||
+        stateChunkType->GetMethodByDecl("int RemapParameterInt(CKGUID parameterType, NativeBuffer@ conversionTable, int nbEntries)") == nullptr ||
+        stateChunkType->GetMethodByDecl("int ConvertToBuffer(NativeBuffer@ buffer)") == nullptr ||
+        stateChunkType->GetMethodByDecl("NativeBuffer@ ConvertToBuffer()") == nullptr) {
         error = "CKStateChunk self-test could not find the guarded read declarations.";
+        return false;
+    }
+#if CKVERSION == 0x13022002
+    if (stateChunkType->GetMethodByDecl("bool WriteArray_LEndian(int elementCount, int elementSize, NativeBuffer@ srcData)") == nullptr ||
+        stateChunkType->GetMethodByDecl("bool WriteArray_LEndian16(int elementCount, int elementSize, NativeBuffer@ srcData)") == nullptr) {
+        error = "CKStateChunk self-test could not find the sized array-write declarations.";
+        return false;
+    }
+#endif
+    asITypeInfo *dependenciesType = engine->GetTypeInfoByDecl("CKDependenciesContext");
+    if (!dependenciesType ||
+        dependenciesType->GetMethodByDecl("bool AddObjects(NativeBuffer@ ids, int count)") == nullptr ||
+        dependenciesType->GetMethodByDecl("bool AddObjects(const array<CK_ID> &in ids)") == nullptr) {
+        error = "CKStateChunk self-test could not find the sized CKDependenciesContext declarations.";
         return false;
     }
     if (stateChunkType->GetMethodByDecl("void AddChunkAndDelete(CKStateChunk@ chunk)") != nullptr) {
@@ -13797,6 +13951,35 @@ bool RunCKStateChunkScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
         "}\n"
         "void ProbeCKStateChunkReadXObjectArrayNull(CKStateChunk@ chunk, CKContext@ context) {\n"
         "  chunk.ReadXObjectArray(null);\n"
+        "}\n"
+        "int ProbeCKStateChunkNativeBuffer(CKStateChunk@ chunk, CKContext@ context) {\n"
+        "  NativeBuffer@ payload = NativeBuffer(4);\n"
+        "  if (payload.WriteUInt(0x12345678) != 4) return 10;\n"
+        "  chunk.StartWrite();\n"
+        "  if (!chunk.WriteBuffer(4, payload)) return 11;\n"
+        "  chunk.CloseChunk();\n"
+        "  NativeBuffer@ serialized = chunk.ConvertToBuffer();\n"
+        "  if (serialized is null || serialized.Size() == 0) return 12;\n"
+        "  NativeBuffer@ serializedCopy = NativeBuffer(serialized.Size());\n"
+        "  if (chunk.ConvertToBuffer(serializedCopy) <= 0) return 13;\n"
+        "  chunk.StartRead();\n"
+        "  NativeBuffer@ payloadCopy = chunk.ReadBuffer();\n"
+        "  if (payloadCopy is null || payloadCopy.Size() != 4) return 14;\n"
+        "  uint value = 0;\n"
+        "  if (payloadCopy.ReadUInt(value) != 4 || value != 0x12345678) return 15;\n"
+        "  return 0;\n"
+        "}\n"
+        "void ProbeCKStateChunkSmallBuffer(CKStateChunk@ chunk, CKContext@ context) {\n"
+        "  NativeBuffer@ tooSmall = NativeBuffer(3);\n"
+        "  chunk.StartWrite();\n"
+        "  chunk.WriteBuffer(4, tooSmall);\n"
+        "}\n"
+        "int ProbeCKDependenciesTypedArray(CKDependenciesContext@ deps) {\n"
+        "  if (deps is null) return 20;\n"
+        "  array<CK_ID> ids;\n"
+        "  if (!deps.AddObjects(ids)) return 21;\n"
+        "  if (deps.GetObjectsCount() != 0) return 22;\n"
+        "  return 0;\n"
         "}\n";
 
     asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
@@ -13821,7 +14004,12 @@ bool RunCKStateChunkScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
     asIScriptFunction *readString = module->GetFunctionByDecl("int ProbeCKStateChunkReadString(CKStateChunk@, CKContext@)");
     asIScriptFunction *readObjectNull = module->GetFunctionByDecl("void ProbeCKStateChunkReadObjectNull(CKStateChunk@, CKContext@)");
     asIScriptFunction *readXObjectArrayNull = module->GetFunctionByDecl("void ProbeCKStateChunkReadXObjectArrayNull(CKStateChunk@, CKContext@)");
-    if (!readString || !readObjectNull || !readXObjectArrayNull) {
+    asIScriptFunction *nativeBuffer = module->GetFunctionByDecl("int ProbeCKStateChunkNativeBuffer(CKStateChunk@, CKContext@)");
+    asIScriptFunction *smallBuffer = module->GetFunctionByDecl("void ProbeCKStateChunkSmallBuffer(CKStateChunk@, CKContext@)");
+    asIScriptFunction *dependenciesArray = module->GetFunctionByDecl(
+        "int ProbeCKDependenciesTypedArray(CKDependenciesContext@)");
+    if (!readString || !readObjectNull || !readXObjectArrayNull || !nativeBuffer ||
+        !smallBuffer || !dependenciesArray) {
         engine->DiscardModule(moduleName);
         error = "CKStateChunk self-test function was not found.";
         return false;
@@ -13838,9 +14026,16 @@ bool RunCKStateChunkScriptSelfTest(CKContext *context, asIScriptEngine *engine, 
     chunk->WriteString(const_cast<CKSTRING>("ckas-statechunk"));
     chunk->CloseChunk();
 
-    const bool ok = ExecuteCKStateChunkProbe(engine, readString, chunk, context, false, "CKStateChunk ReadString probe", error) &&
-                    ExecuteCKStateChunkProbe(engine, readObjectNull, chunk, context, true, "CKStateChunk ReadObject null context probe", error) &&
-                    ExecuteCKStateChunkProbe(engine, readXObjectArrayNull, chunk, context, true, "CKStateChunk ReadXObjectArray null context probe", error);
+    bool ok = ExecuteCKStateChunkProbe(engine, readString, chunk, context, false, "CKStateChunk ReadString probe", error);
+    ok = ok && ExecuteCKStateChunkProbe(engine, readObjectNull, chunk, context, true, "CKStateChunk ReadObject null context probe", error);
+    ok = ok && ExecuteCKStateChunkProbe(engine, readXObjectArrayNull, chunk, context, true, "CKStateChunk ReadXObjectArray null context probe", error);
+    ok = ok && ExecuteCKStateChunkProbe(engine, nativeBuffer, chunk, context, false, "CKStateChunk NativeBuffer probe", error);
+    ok = ok && ExecuteCKStateChunkProbe(engine, smallBuffer, chunk, context, true, "CKStateChunk small NativeBuffer probe", error);
+    {
+        CKDependenciesContext dependencies(context);
+        ok = ok && ExecuteSingleObjectProbe(
+            engine, dependenciesArray, &dependencies, "CKDependenciesContext typed-array probe", error);
+    }
 
     DeleteCKStateChunk(chunk);
     engine->DiscardModule(moduleName);
@@ -14823,6 +15018,165 @@ bool RunCKParameterTypeDescScriptSelfTest(CKContext *context, asIScriptEngine *e
     return ok;
 }
 
+bool RunParamHostScopeSelfTest(CKContext *context,
+                               asIScriptEngine *engine,
+                               ScriptParameterRegistry *registry,
+                               CKParameterManager *parameterManager,
+                               std::string &error) {
+    if (!context || !engine || !registry || !parameterManager) {
+        error = "Param Script Host Scope self-test requires its host dependencies.";
+        return false;
+    }
+
+    ScriptContext runtimeContext(context, nullptr, "SelfTest", "Running", 1, 0, 0.0f, 0.0f);
+    CKBehavior *behavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ParamHostScopeSelfTest"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!behavior) {
+        error = "Param Script Host Scope self-test could not create its behavior.";
+        return false;
+    }
+
+    CKBehaviorContext behaviorContext = {};
+    behaviorContext.Context = context;
+    behaviorContext.ParameterManager = parameterManager;
+    behaviorContext.Behavior = behavior;
+    CKBehaviorContext behaviorOnlyContext = behaviorContext;
+    behaviorOnlyContext.Context = nullptr;
+
+    const ScriptHostScope rawScope = ScriptHostScope::From(context);
+    const ScriptHostScope runtimeScope = ScriptHostScope::From(runtimeContext);
+    const ScriptHostScope directBehaviorScope = ScriptHostScope::From(
+        behaviorContext,
+        ScriptHostScopeContextResolution::DirectContext);
+    const ScriptHostScope fallbackBehaviorOnlyScope = ScriptHostScope::From(behaviorOnlyContext);
+    const ScriptHostScope directBehaviorOnlyScope = ScriptHostScope::From(
+        behaviorOnlyContext,
+        ScriptHostScopeContextResolution::DirectContext);
+    if (rawScope.ParameterRegistry() != registry ||
+        runtimeScope.ParameterRegistry() != registry ||
+        directBehaviorScope.Context() != context ||
+        directBehaviorScope.ParameterRegistry() != registry ||
+        fallbackBehaviorOnlyScope.Context() != context ||
+        fallbackBehaviorOnlyScope.ParameterRegistry() != registry ||
+        directBehaviorOnlyScope.Context() != nullptr ||
+        directBehaviorOnlyScope.Manager() != nullptr ||
+        directBehaviorOnlyScope.ParameterRegistry() != nullptr) {
+        context->DestroyObject(behavior);
+        error = "Param Script Host Scope changed direct-context compatibility semantics.";
+        return false;
+    }
+
+    constexpr const char *moduleName = "__CKAS_ParamHostScopeSelfTest";
+    const char *source =
+        "int ProbeParamScopeEquivalence(CKContext@ rawCtx, const ScriptContext &in runtimeCtx, const CKBehaviorContext &in behaviorCtx) {\n"
+        "  int rawCount = Param::Count(rawCtx);\n"
+        "  if (rawCount <= 0 || Param::Count(runtimeCtx) != rawCount || Param::Count(behaviorCtx) != rawCount) return 1;\n"
+        "  ParamTypeInfo@ rawAt = Param::At(rawCtx, 0);\n"
+        "  ParamTypeInfo@ runtimeAt = Param::At(runtimeCtx, 0);\n"
+        "  ParamTypeInfo@ behaviorAt = Param::At(behaviorCtx, 0);\n"
+        "  if (rawAt is null || runtimeAt is null || behaviorAt is null) return 2;\n"
+        "  if (!rawAt.IsValid() || !runtimeAt.IsValid() || !behaviorAt.IsValid()) return 3;\n"
+        "  if (runtimeAt.Type() != rawAt.Type() || behaviorAt.Type() != rawAt.Type()) return 4;\n"
+        "  if (runtimeAt.Guid().opCmp(rawAt.Guid()) != 0 || behaviorAt.Guid().opCmp(rawAt.Guid()) != 0) return 5;\n"
+        "  if (runtimeAt.Name() != rawAt.Name() || behaviorAt.Name() != rawAt.Name()) return 6;\n"
+        "  ParamTypeInfo@ rawType = Param::Type(rawCtx, rawAt.Guid());\n"
+        "  ParamTypeInfo@ runtimeType = Param::Type(runtimeCtx, rawAt.Guid());\n"
+        "  ParamTypeInfo@ behaviorType = Param::Type(behaviorCtx, rawAt.Guid());\n"
+        "  if (rawType is null || runtimeType is null || behaviorType is null) return 7;\n"
+        "  if (runtimeType.Type() != rawType.Type() || behaviorType.Type() != rawType.Type()) return 8;\n"
+        "  ParamTypeInfo@ rawFind = Param::Find(rawCtx, rawAt.Name());\n"
+        "  ParamTypeInfo@ runtimeFind = Param::Find(runtimeCtx, rawAt.Name());\n"
+        "  ParamTypeInfo@ behaviorFind = Param::Find(behaviorCtx, rawAt.Name());\n"
+        "  if (rawFind is null || runtimeFind is null || behaviorFind is null) return 9;\n"
+        "  if (runtimeFind.Type() != rawFind.Type() || behaviorFind.Type() != rawFind.Type()) return 10;\n"
+        "  return 0;\n"
+        "}\n"
+        "int ProbeParamScopeBehaviorOnly(const CKBehaviorContext &in ctx) {\n"
+        "  if (Param::Count(ctx) != 0) return 11;\n"
+        "  if (Param::At(ctx, 0) !is null) return 12;\n"
+        "  if (Param::Find(ctx, \"int\") !is null) return 13;\n"
+        "  if (Param::Type(ctx, \"int\") !is null) return 14;\n"
+        "  if (Param::Value(ctx, \"int\", \"1\", 77) != 77) return 15;\n"
+        "  if (Param::Text(ctx, \"int\", 7) != \"7\") return 16;\n"
+        "  if (Param::Describe(ctx, \"int\") != \"\") return 17;\n"
+        "  return 0;\n"
+        "}\n";
+
+    asIScriptModule *module = engine->GetModule(moduleName, asGM_ALWAYS_CREATE);
+    int r = module ? module->AddScriptSection("param-host-scope-self-test", source) : -1;
+    if (r >= 0) {
+        r = module->Build();
+    }
+    if (r < 0) {
+        context->DestroyObject(behavior);
+        engine->DiscardModule(moduleName);
+        error = "Param Script Host Scope self-test script failed to build.";
+        return false;
+    }
+
+    asIScriptFunction *equivalence = module->GetFunctionByDecl(
+        "int ProbeParamScopeEquivalence(CKContext@, const ScriptContext &in, const CKBehaviorContext &in)");
+    asIScriptFunction *behaviorOnly = module->GetFunctionByDecl(
+        "int ProbeParamScopeBehaviorOnly(const CKBehaviorContext &in)");
+    if (!equivalence || !behaviorOnly) {
+        context->DestroyObject(behavior);
+        engine->DiscardModule(moduleName);
+        error = "Param Script Host Scope self-test functions were not found.";
+        return false;
+    }
+
+    auto executeProbe = [&](asIScriptFunction *function,
+                            void *arg0,
+                            void *arg1,
+                            void *arg2,
+                            const char *label) {
+        asIScriptContext *scriptContext = engine->RequestContext();
+        if (!scriptContext) {
+            error = std::string("Param ") + label + " probe could not create an execution context.";
+            return false;
+        }
+        int result = scriptContext->Prepare(function);
+        if (result >= 0) result = scriptContext->SetArgObject(0, arg0);
+        if (result >= 0 && arg1) result = scriptContext->SetArgObject(1, arg1);
+        if (result >= 0 && arg2) result = scriptContext->SetArgObject(2, arg2);
+        if (result >= 0) result = scriptContext->Execute();
+
+        bool ok = false;
+        if (result == asEXECUTION_FINISHED) {
+            const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());
+            ok = returnCode == 0;
+            if (!ok) {
+                error = std::string("Param ") + label + " probe returned " + std::to_string(returnCode) + ".";
+            }
+        } else if (result == asEXECUTION_EXCEPTION) {
+            const char *exception = scriptContext->GetExceptionString();
+            error = std::string("Param ") + label + " probe exception: " +
+                    (exception && exception[0] ? exception : "<empty>") + ".";
+        } else {
+            error = std::string("Param ") + label + " probe failed with code " + std::to_string(result) + ".";
+        }
+        scriptContext->Unprepare();
+        engine->ReturnContext(scriptContext);
+        return ok;
+    };
+
+    const bool ok = executeProbe(equivalence,
+                                 context,
+                                 &runtimeContext,
+                                 &behaviorContext,
+                                 "raw/runtime/behavior equivalence") &&
+                    executeProbe(behaviorOnly,
+                                 &behaviorOnlyContext,
+                                 nullptr,
+                                 nullptr,
+                                 "behavior-only direct-context");
+    context->DestroyObject(behavior);
+    engine->DiscardModule(moduleName);
+    return ok;
+}
+
 } // namespace
 
 bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -14838,6 +15192,11 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
     CKParameterManager *pm = registry->GetParameterManager();
     if (!pm) {
         error = "CKParameterManager is not available.";
+        return false;
+    }
+
+    WriteParameterRegistrySelfTestStage("host-scope");
+    if (!RunParamHostScopeSelfTest(context, engine, registry, pm, error)) {
         return false;
     }
 
@@ -14935,6 +15294,9 @@ bool RunScriptParameterRegistrySelfTest(CKContext *context, asIScriptEngine *eng
         return false;
     }
     if (!RunCKFileExtensionScriptSelfTest(engine, error)) {
+        return false;
+    }
+    if (!RunCKFileNativeBufferScriptSelfTest(context, engine, error)) {
         return false;
     }
 #if CKVERSION == 0x13022002
