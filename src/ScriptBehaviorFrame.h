@@ -19,6 +19,7 @@ class BehaviorRef;
 class GraphTask;
 class ParamRef;
 class ScriptAsyncTaskBase;
+class NativeBuffer;
 class XObjectArray;
 struct ScriptParamValue;
 
@@ -247,6 +248,7 @@ public:
     int PinPosition(CKParameterIn *pin) const;
     CKParameterIn *RemovePin(int index);
     CKParameterIn *ReplacePin(int index, CKParameterIn *pin);
+    NativeBuffer *PinReadData(int index) const;
     NativePointer PinReadDataPtr(int index) const;
     bool PoutEnabled(const std::string &name, int occurrence = 0) const;
     bool PoutEnabledIndex(int index) const;
@@ -260,6 +262,7 @@ public:
     int PoutPosition(CKParameterOut *pout) const;
     CKParameterOut *RemovePout(int index);
     CKParameterOut *ReplacePout(int index, CKParameterOut *pout);
+    NativeBuffer *PoutWriteData(int index) const;
     NativePointer PoutWriteDataPtr(int index) const;
     CKObject *PoutObject(int index) const;
     CKERROR SetOutputParameterObject(int index, CKObject *object);
@@ -290,9 +293,13 @@ public:
     CKParameterLocal *RemoveLocal(int index);
     void AddLocal(CKParameterLocal *local);
     int LocalPosition(CKParameterLocal *local) const;
+    NativeBuffer *LocalWriteData(int index) const;
+    NativeBuffer *LocalReadData(int index) const;
     NativePointer LocalWriteDataPtr(int index) const;
     NativePointer LocalReadDataPtr(int index) const;
     CKObject *LocalObject(int index) const;
+    NativeBuffer *BehaviorLocalWriteData(int index) const;
+    NativeBuffer *BehaviorLocalReadData(int index) const;
     NativePointer BehaviorLocalWriteDataPtr(int index) const;
     NativePointer BehaviorLocalReadDataPtr(int index) const;
     CKParameterLocal *BehaviorLocalParameter(int index) const;

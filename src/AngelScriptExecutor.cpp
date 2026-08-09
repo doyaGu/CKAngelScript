@@ -12,6 +12,7 @@
 #include "Logger.h"
 #include "ScriptCache.h"
 #include "ScriptBridgeCommon.h"
+#include "ScriptHostScope.h"
 #include "ScriptInvoker.h"
 #include "ScriptManager.h"
 #include "ScriptParameterConversion.h"
@@ -687,8 +688,8 @@ std::vector<ScriptBridgeFrameLocalDecl> FrameLocalDecls(const std::vector<Execut
 }
 
 ScriptBehaviorBridge *BehaviorBridgeFromContext(const CKBehaviorContext &ctx) {
-    ScriptManager *manager = ctx.Context ? ScriptManager::GetManager(ctx.Context) : nullptr;
-    return manager ? manager->GetBehaviorBridge() : nullptr;
+    return ScriptHostScope::From(
+        ctx, ScriptHostScopeContextResolution::DirectContext).Bridge();
 }
 
 bool ApplyInterface(const CKBehaviorContext &ctx,
@@ -1008,7 +1009,8 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
     if (!behavior || !state) {
         return ExecutorReadyStatus::Failed;
     }
-    ScriptManager *manager = ctx.Context ? ScriptManager::GetManager(ctx.Context) : nullptr;
+    ScriptManager *manager = ScriptHostScope::From(
+        ctx, ScriptHostScopeContextResolution::DirectContext).Manager();
     if (!manager) {
         ConsoleError(ctx, "AngelScript manager is not available.");
         return ExecutorReadyStatus::Failed;
@@ -1298,7 +1300,8 @@ int AngelScriptExecutor(const CKBehaviorContext &behcontext) {
 
     ScriptExecutorState *state = GetState(behavior);
     if (!state) {
-        ScriptManager *manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
+        ScriptManager *manager = ScriptHostScope::From(
+            behcontext, ScriptHostScopeContextResolution::DirectContext).Manager();
         state = manager ? manager->GetOrCreateExecutorState(behavior) : nullptr;
         if (!state) {
             ConsoleError(behcontext, "AngelScript manager is not available.");
@@ -1402,7 +1405,8 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
     switch (behcontext.CallbackMessage) {
         case CKM_BEHAVIORCREATE:
         case CKM_BEHAVIORLOAD: {
-            ScriptManager *manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
+            ScriptManager *manager = ScriptHostScope::From(
+                behcontext, ScriptHostScopeContextResolution::DirectContext).Manager();
             if (manager) {
                 manager->GetOrCreateExecutorState(behavior);
             } else {
@@ -1436,7 +1440,8 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
             if (state) {
                 const std::string scriptId = Trim(ReadLocalString(behavior, SETTING_SCRIPT));
                 const std::string className = Trim(ReadLocalString(behavior, SETTING_CLASS));
-                ScriptManager *manager = behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr;
+                ScriptManager *manager = ScriptHostScope::From(
+                    behcontext, ScriptHostScopeContextResolution::DirectContext).Manager();
                 ScriptRuntime *runtime = manager ? manager->GetRuntime() : nullptr;
                 const std::string moduleName = runtime ? runtime->ModuleName(scriptId) : std::string();
                 TransitionIdentity(behcontext,
@@ -1477,7 +1482,8 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
             if (state) {
                 ScriptManager *manager = state->Manager
                     ? state->Manager
-                    : (behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr);
+                    : ScriptHostScope::From(
+                          behcontext, ScriptHostScopeContextResolution::DirectContext).Manager();
                 if (manager) {
                     manager->ReleaseExecutorState(behavior);
                 }

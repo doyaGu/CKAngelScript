@@ -82,6 +82,26 @@ ctx.DeleteCKFile(ckFile);
 
 `CKFile.Load(NativeBuffer@, ...)` derives the byte count from `NativeBuffer.Size()` and completes before the call returns. `CKFile.OpenMemory` intentionally remains a `NativePointer` API: it is the first half of a two-stage `OpenMemory`/`LoadFileData` operation, and the CK parser continues borrowing the memory between those calls.
 
+`BehaviorFrame` also exposes sized views for parameter storage:
+
+```angelscript
+NativeBuffer@ input = frame.PinReadData(0);
+NativeBuffer@ output = frame.PoutWriteData(0);
+NativeBuffer@ local = frame.LocalReadData(0);
+
+if (input !is null && input.Size() == 4) {
+    int value = 0;
+    input.Read(value);
+}
+```
+
+The SDK-style aliases are `GetInputParameterReadData`,
+`GetOutputParameterWriteData`, `GetLocalParameterReadData`, and
+`GetLocalParameterWriteData`. These buffers are bounded but borrow live
+Virtools parameter memory: consume them during the current behavior call and do
+not retain them across frames or layout changes. The `*DataPtr` variants remain
+only for compatibility and cannot validate an allocation length.
+
 Use script arrays for typed lists instead of packing integers manually:
 
 ```angelscript

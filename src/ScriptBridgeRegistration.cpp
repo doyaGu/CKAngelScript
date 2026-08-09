@@ -518,6 +518,10 @@ void RegisterBehaviorFrameSdkAliases(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR SetOutputParameterValue(int index, ?&in value)", asFUNCTION(BehaviorFrameSetOutputParameterValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR GetLocalParameterValue(int index, ?&out value)", asFUNCTION(BehaviorFrameGetLocalParameterValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR SetLocalParameterValue(int index, ?&in value)", asFUNCTION(BehaviorFrameSetLocalParameterValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ GetInputParameterReadData(int index) const", asMETHOD(BehaviorFrame, PinReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ GetOutputParameterWriteData(int index) const", asMETHOD(BehaviorFrame, PoutWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ GetLocalParameterReadData(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ GetLocalParameterWriteData(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetInputParameterReadDataPtr(int index) const", asMETHOD(BehaviorFrame, PinReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetOutputParameterWriteDataPtr(int index) const", asMETHOD(BehaviorFrame, PoutWriteDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetLocalParameterReadDataPtr(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -770,6 +774,7 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "int PinPosition(CKParameterIn@ pin) const", asMETHOD(BehaviorFrame, PinPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ RemovePin(int index)", asMETHOD(BehaviorFrame, RemovePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ ReplacePin(int index, CKParameterIn@ pin)", asMETHOD(BehaviorFrame, ReplacePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ PinReadData(int index) const", asMETHOD(BehaviorFrame, PinReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer PinReadDataPtr(int index) const", asMETHOD(BehaviorFrame, PinReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool PoutEnabled(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, PoutEnabled), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool PoutEnabled(int index) const", asMETHOD(BehaviorFrame, PoutEnabledIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -783,6 +788,7 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "int PoutPosition(CKParameterOut@ pout) const", asMETHOD(BehaviorFrame, PoutPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ RemovePout(int index)", asMETHOD(BehaviorFrame, RemovePout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ ReplacePout(int index, CKParameterOut@ pout)", asMETHOD(BehaviorFrame, ReplacePout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ PoutWriteData(int index) const", asMETHOD(BehaviorFrame, PoutWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer PoutWriteDataPtr(int index) const", asMETHOD(BehaviorFrame, PoutWriteDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ PoutObject(int index) const", asMETHOD(BehaviorFrame, PoutObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetPout(const string &in name, int value, int occurrence = 0)", asMETHOD(BehaviorFrame, SetPoutInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -810,9 +816,13 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ RemoveLocal(int index)", asMETHOD(BehaviorFrame, RemoveLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void AddLocal(CKParameterLocal@ local)", asMETHOD(BehaviorFrame, AddLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int LocalPosition(CKParameterLocal@ local) const", asMETHOD(BehaviorFrame, LocalPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ LocalWriteData(int index) const", asMETHOD(BehaviorFrame, LocalWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ LocalReadData(int index) const", asMETHOD(BehaviorFrame, LocalReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer LocalWriteDataPtr(int index) const", asMETHOD(BehaviorFrame, LocalWriteDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer LocalReadDataPtr(int index) const", asMETHOD(BehaviorFrame, LocalReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ LocalObject(int index) const", asMETHODPR(BehaviorFrame, LocalObject, (int) const, CKObject *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ BehaviorLocalWriteData(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ BehaviorLocalReadData(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer BehaviorLocalWriteDataPtr(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalWriteDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer BehaviorLocalReadDataPtr(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalReadDataPtr), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ BehaviorLocalParameter(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

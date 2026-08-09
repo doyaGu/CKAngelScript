@@ -7,7 +7,9 @@
 #include "CKAll.h"
 #include "ScriptAsync.h"
 #include "ScriptBridgeHandles.h"
+#include "ScriptHostScope.h"
 #include "ScriptManager.h"
+#include "ScriptNativeBuffer.h"
 #include "ScriptParameterConversion.h"
 #include "XObjectArray.h"
 
@@ -34,13 +36,30 @@ bool ValidIndex(int index, int count, const char *method, const char *kind) {
     return false;
 }
 
+NativeBuffer *ParameterReadBuffer(CKParameter *parameter, bool update = true) {
+    if (!parameter) {
+        return NativeBuffer::Create(0);
+    }
+    const int size = parameter->GetDataSize();
+    void *data = size > 0 ? parameter->GetReadDataPtr(update ? TRUE : FALSE) : nullptr;
+    return data ? NativeBuffer::Create(data, static_cast<size_t>(size)) : NativeBuffer::Create(0);
+}
+
+NativeBuffer *ParameterWriteBuffer(CKParameter *parameter) {
+    if (!parameter) {
+        return NativeBuffer::Create(0);
+    }
+    const int size = parameter->GetDataSize();
+    void *data = size > 0 ? parameter->GetWriteDataPtr() : nullptr;
+    return data ? NativeBuffer::Create(data, static_cast<size_t>(size)) : NativeBuffer::Create(0);
+}
+
 ScriptAsyncScheduler *RequireAsyncScheduler(CKContext *context, const char *method) {
     if (!context) {
         SetScriptException(fmt::format("{} requires a CKContext.", method ? method : "BehaviorFrame async API"));
         return nullptr;
     }
-    ScriptManager *manager = ScriptManager::GetManager(context);
-    ScriptAsyncScheduler *scheduler = manager ? manager->GetAsyncScheduler() : nullptr;
+    ScriptAsyncScheduler *scheduler = ScriptHostScope::From(context).AsyncScheduler();
     if (!scheduler) {
         SetScriptException(fmt::format("{} requires an async scheduler.", method ? method : "BehaviorFrame async API"));
         return nullptr;
@@ -284,7 +303,7 @@ BehaviorFrame::BehaviorFrame(const CKBehaviorContext &ctx) {
 
 void BehaviorFrame::Refresh(const CKBehaviorContext &ctx) {
     m_ContextSnapshot = ctx;
-    m_Context = ctx.Context ? ctx.Context : (ctx.Behavior ? ctx.Behavior->GetCKContext() : nullptr);
+    m_Context = ScriptHostScope::From(ctx).Context();
     m_BehaviorId = ctx.Behavior ? ctx.Behavior->GetID() : 0;
     m_BehaviorStamp = CaptureBridgeObjectStamp(ctx.Behavior);
     m_ContextSnapshot.Behavior = nullptr;
@@ -1788,6 +1807,14 @@ NativePointer BehaviorFrame::PinReadDataPtr(int index) const {
         : nullptr);
 }
 
+NativeBuffer *BehaviorFrame::PinReadData(int index) const {
+    CKBehavior *behavior = Behavior();
+    CKParameterIn *pin = behavior && index >= 0 && index < behavior->GetInputParameterCount()
+        ? behavior->GetInputParameter(index)
+        : nullptr;
+    return ParameterReadBuffer(pin ? pin->GetRealSource() : nullptr);
+}
+
 bool BehaviorFrame::PoutEnabled(const std::string &name, int occurrence) const {
     const int index = ResolvePout(name, occurrence, "BehaviorFrame.PoutEnabled");
     return PoutEnabledIndex(index);
@@ -1897,6 +1924,14 @@ NativePointer BehaviorFrame::PoutWriteDataPtr(int index) const {
     return NativePointer(behavior && index >= 0 && index < behavior->GetOutputParameterCount()
         ? behavior->GetOutputParameterWriteDataPtr(index)
         : nullptr);
+}
+
+NativeBuffer *BehaviorFrame::PoutWriteData(int index) const {
+    CKBehavior *behavior = Behavior();
+    CKParameterOut *pout = behavior && index >= 0 && index < behavior->GetOutputParameterCount()
+        ? behavior->GetOutputParameter(index)
+        : nullptr;
+    return ParameterWriteBuffer(pout);
 }
 
 CKObject *BehaviorFrame::PoutObject(int index) const {
@@ -2044,9 +2079,17 @@ NativePointer BehaviorFrame::LocalWriteDataPtr(int index) const {
     return NativePointer(local ? local->GetWriteDataPtr() : nullptr);
 }
 
+NativeBuffer *BehaviorFrame::LocalWriteData(int index) const {
+    return ParameterWriteBuffer(FindLocalSourceIndex(index));
+}
+
 NativePointer BehaviorFrame::LocalReadDataPtr(int index) const {
     CKParameter *local = FindLocalSourceIndex(index);
     return NativePointer(local ? local->GetReadDataPtr(TRUE) : nullptr);
+}
+
+NativeBuffer *BehaviorFrame::LocalReadData(int index) const {
+    return ParameterReadBuffer(FindLocalSourceIndex(index));
 }
 
 CKObject *BehaviorFrame::LocalObject(int index) const {
@@ -2061,11 +2104,19 @@ NativePointer BehaviorFrame::BehaviorLocalWriteDataPtr(int index) const {
         : nullptr);
 }
 
+NativeBuffer *BehaviorFrame::BehaviorLocalWriteData(int index) const {
+    return ParameterWriteBuffer(LocalParameter(index));
+}
+
 NativePointer BehaviorFrame::BehaviorLocalReadDataPtr(int index) const {
     CKBehavior *behavior = Behavior();
     return NativePointer(behavior && index >= 0 && index < behavior->GetLocalParameterCount()
         ? behavior->GetLocalParameterReadDataPtr(index)
         : nullptr);
+}
+
+NativeBuffer *BehaviorFrame::BehaviorLocalReadData(int index) const {
+    return ParameterReadBuffer(LocalParameter(index));
 }
 
 CKParameterLocal *BehaviorFrame::BehaviorLocalParameter(int index) const {
@@ -2300,8 +2351,8 @@ ScriptBehaviorBridge *BehaviorFrame::Bridge() const {
     if (!context.Behavior) {
         return nullptr;
     }
-    ScriptManager *manager = ManagerFromContext(context);
-    return manager ? manager->GetBehaviorBridge() : nullptr;
+    return ScriptHostScope::From(
+        context, ScriptHostScopeContextResolution::DirectContext).Bridge();
 }
 
 void BehaviorFrame::InvalidateLayout() const {

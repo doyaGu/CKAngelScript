@@ -161,7 +161,7 @@ void ReleaseScriptFunction(asIScriptFunction *&func) {
 }
 
 ScriptManager *ManagerFromRuntimeContext(const ScriptContext &ctx) {
-    return ctx.Context() ? ScriptManager::GetManager(ctx.Context()) : nullptr;
+    return ScriptHostScope::From(ctx).Manager();
 }
 
 bool UsesRuntimeLifecycle(const ScriptRuntimeManifest &metadata) {

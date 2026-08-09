@@ -6,6 +6,7 @@
 
 #include "add_on/scriptarray/scriptarray.h"
 #include "ScriptBehaviorFrame.h"
+#include "ScriptHostScope.h"
 #include "ScriptParameterConversion.h"
 
 namespace {
@@ -2695,7 +2696,7 @@ bool BBCallBuilder::ResolvePinSlot(BBSlot *slot, int &pinIndex, const char *meth
 BBTaskBuilder::BBTaskBuilder(ScriptBehaviorBridge *bridge,
                              const CKBehaviorContext &ctx,
                              const ScriptBridgeBBInvocationSpec &request)
-    : m_Context(ctx.Context ? ctx.Context : (ctx.Behavior ? ctx.Behavior->GetCKContext() : nullptr)),
+    : m_Context(ScriptHostScope::From(ctx).Context()),
       m_ComponentId(ComponentIdFromContext(ctx)),
       m_ComponentStamp(CaptureBridgeObjectStamp(ctx.Behavior)),
       m_Request(request) {
@@ -2841,8 +2842,7 @@ bool BBTaskBuilder::ResolvePinSlot(BBSlot *slot, int &pinIndex, const char *meth
 }
 
 ScriptBehaviorBridge *BBTaskBuilder::Bridge() const {
-    ScriptManager *manager = m_Context ? ScriptManager::GetManager(m_Context) : nullptr;
-    return manager ? manager->GetBehaviorBridge() : nullptr;
+    return ScriptHostScope::From(m_Context).Bridge();
 }
 
 CKBehavior *BBTaskBuilder::Component() const {
@@ -2923,13 +2923,13 @@ CKBehaviorPrototype *BBPrototype::Prototype(std::string &error) const {
 }
 
 BBBridge::BBBridge(ScriptBehaviorBridge *, const CKBehaviorContext &ctx)
-    : m_Context(ctx.Context),
+    : m_Context(ScriptHostScope::From(
+          ctx, ScriptHostScopeContextResolution::DirectContext).Context()),
       m_ComponentId(ComponentIdFromContext(ctx)),
       m_ComponentStamp(CaptureBridgeObjectStamp(ctx.Behavior)) {}
 
 ScriptBehaviorBridge *BBBridge::Bridge() const {
-    ScriptManager *manager = m_Context ? ScriptManager::GetManager(m_Context) : nullptr;
-    return manager ? manager->GetBehaviorBridge() : nullptr;
+    return ScriptHostScope::From(m_Context).Bridge();
 }
 
 CKBehavior *BBBridge::Component() const {

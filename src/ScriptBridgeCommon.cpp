@@ -8,6 +8,7 @@
 #include <fmt/format.h>
 
 #include "CKAll.h"
+#include "ScriptHostScope.h"
 #include "ScriptRefCounted.h"
 #include "ScriptManager.h"
 #include "XObjectArray.h"
@@ -971,7 +972,8 @@ CK_ID ComponentIdFromContext(const CKBehaviorContext &ctx) {
 }
 
 ScriptManager *ManagerFromContext(const CKBehaviorContext &ctx) {
-    return ctx.Context ? ScriptManager::GetManager(ctx.Context) : nullptr;
+    return ScriptHostScope::From(
+        ctx, ScriptHostScopeContextResolution::DirectContext).Manager();
 }
 
 CKBehavior *FindBehaviorRecursive(CKBehavior *root, const std::string &name) {
