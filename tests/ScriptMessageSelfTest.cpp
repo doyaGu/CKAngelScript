@@ -109,10 +109,10 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
 
     asITypeInfo *messageType = engine->GetTypeInfoByDecl("ScriptMessage");
     if (!messageType ||
-        !messageType->GetMethodByDecl("string Target() const") ||
-        !messageType->GetMethodByDecl("ScriptMessageTarget TypedTarget() const") ||
-        messageType->GetMethodByDecl("ScriptMessageTarget Target() const")) {
-        error = "Message self-test detected a ScriptMessage.Target compatibility regression.";
+        !messageType->GetMethodByDecl("ScriptMessageTarget Target() const") ||
+        messageType->GetMethodByDecl("string Target() const") ||
+        messageType->GetMethodByDecl("ScriptMessageTarget TypedTarget() const")) {
+        error = "Message self-test detected an unexpected ScriptMessage.Target surface.";
         return false;
     }
 
@@ -128,9 +128,8 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  if (msg.Id() != 123) return 1;\n"
         "  if (msg.Kind() != \"direct\") return 2;\n"
         "  if (msg.Topic() != \"topic.exec\" || msg.Source() != \"runtime:source\") return 3;\n"
-        "  if (msg.Target() != \"runtime:target\") return 4;\n"
-        "  ScriptMessageTarget target = msg.TypedTarget();\n"
-        "  if (!target.IsValid() || target.Kind() != \"runtime\" || target.ToString() != msg.Target() || msg.FrameIndex() != 456 || msg.RequiresReply()) return 4;\n"
+        "  ScriptMessageTarget target = msg.Target();\n"
+        "  if (!target.IsValid() || target.Kind() != \"runtime\" || target.ToString() != \"runtime:target\" || msg.FrameIndex() != 456 || msg.RequiresReply()) return 4;\n"
         "  dictionary@ payload = msg.Payload();\n"
         "  if (payload is null) return 5;\n"
         "  string text;\n"

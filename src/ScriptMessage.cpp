@@ -455,7 +455,6 @@ ScriptMessageKind ScriptMessage::KindValue() const { return m_Kind; }
 std::string ScriptMessage::Topic() const { return m_Topic; }
 std::string ScriptMessage::Source() const { return m_Source; }
 ScriptMessageTarget ScriptMessage::Target() const { return m_Target; }
-std::string ScriptMessage::TargetText() const { return m_Target.Text; }
 std::uint64_t ScriptMessage::FrameIndex() const { return m_FrameIndex; }
 bool ScriptMessage::RequiresReply() const { return m_RequiresReply; }
 
@@ -593,7 +592,7 @@ ScriptAsyncTaskBase *ScriptMessageBus::Request(const std::string &source,
     pending.Task = task;
     pending.Task->AddRef();
     pending.Source = source;
-    pending.Target = message.TargetText();
+    pending.Target = message.m_Target.Text;
     pending.StartedFrame = m_FrameIndex;
     pending.TimeoutFrames = timeoutFrames;
     pending.DueFrame = timeoutFrames > 0
@@ -622,7 +621,7 @@ bool ScriptMessageBus::Reply(const std::string &source, const ScriptMessage &req
         error = "Message request is no longer pending.";
         return false;
     }
-    if (request.TargetText() != source) {
+    if (request.m_Target.Text != source) {
         error = "Only the request target can reply.";
         return false;
     }
@@ -644,7 +643,7 @@ bool ScriptMessageBus::Reject(const std::string &source, const ScriptMessage &re
         error = "Message request is no longer pending.";
         return false;
     }
-    if (request.TargetText() != source) {
+    if (request.m_Target.Text != source) {
         error = "Only the request target can reject.";
         return false;
     }
@@ -841,14 +840,14 @@ ScriptMessage ScriptMessageBus::MakeMessage(ScriptMessageKind kind,
 }
 
 bool ScriptMessageBus::Deliver(const ScriptMessage &message, bool immediate, std::string &error) {
-    if (!message.TargetText().empty()) {
+    if (!message.m_Target.Text.empty()) {
         return DeliverTarget(message.m_Target, message, immediate, error);
     }
     auto it = m_TopicSubscriptions.find(message.Topic());
     if (it == m_TopicSubscriptions.end() || it->second.Targets.empty()) {
-        error = message.TargetText().empty()
+        error = message.m_Target.Text.empty()
             ? fmt::format("No subscribers for message topic '{}'.", message.Topic())
-            : fmt::format("Message target '{}' is not available.", message.TargetText());
+            : fmt::format("Message target '{}' is not available.", message.m_Target.Text);
         return message.KindValue() == ScriptMessageKind::Event;
     }
     TopicTargets &topicTargets = it->second;
@@ -1019,10 +1018,7 @@ void RegisterScriptMessage(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ScriptMessage", "string Kind() const", asMETHOD(ScriptMessage, Kind), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "string Topic() const", asMETHOD(ScriptMessage, Topic), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "string Source() const", asMETHOD(ScriptMessage, Source), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    // Target() is a long-standing string ABI. Keep the typed form additive so
-    // existing scripts continue to compile unchanged.
-    r = engine->RegisterObjectMethod("ScriptMessage", "string Target() const", asMETHOD(ScriptMessage, TargetText), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ScriptMessage", "ScriptMessageTarget TypedTarget() const", asMETHOD(ScriptMessage, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("ScriptMessage", "ScriptMessageTarget Target() const", asMETHOD(ScriptMessage, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "uint64 FrameIndex() const", asMETHOD(ScriptMessage, FrameIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "bool RequiresReply() const", asMETHOD(ScriptMessage, RequiresReply), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptMessage", "dictionary@ Payload() const", asMETHOD(ScriptMessage, Payload), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

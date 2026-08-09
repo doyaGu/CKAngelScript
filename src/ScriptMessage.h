@@ -76,7 +76,6 @@ public:
     std::string Topic() const;
     std::string Source() const;
     ScriptMessageTarget Target() const;
-    std::string TargetText() const;
     std::uint64_t FrameIndex() const;
     bool RequiresReply() const;
     CScriptDictionary *Payload() const;
