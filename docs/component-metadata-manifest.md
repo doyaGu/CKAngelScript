@@ -292,6 +292,9 @@ wrong.
 `OnMessage` may suspend through `Await`. A suspended message handler is resumed
 explicitly on a later Component activation before normal lifecycle/update work
 continues; new component messages are rejected while the handler is suspended.
+Every script-object teardown/rebuild advances the Component message
+incarnation. A `ScriptMessageTarget` captured before that boundary is rejected
+as stale and cannot be delivered to the replacement object.
 
 ## Injection Timing
 

@@ -12,7 +12,7 @@ Use topics for event names, and targets for directed messages.
 | `Message::Runtime("script-id")` | A runtime entry instance. |
 | `Message::Component(ctx, behaviorId)` | The current generation of an AngelScript Component behavior. |
 
-`ScriptMessageTarget` is a copied value. `IsValid()`, `Kind()`, and `ToString()` are available for validation and diagnostics. Component targets capture the component state's generation; deleting and recreating a component with the same `CK_ID` makes the old target stale.
+`ScriptMessageTarget` is a copied value. `IsValid()`, `Kind()`, and `ToString()` are available for validation and diagnostics. Component targets capture the component state's generation; deleting, recreating, or rebuilding a component runtime makes the old target stale even when the `CK_ID` and state object are reused.
 
 String-target `Publish`, `Send`, and `Request` overloads remain available for existing scripts and native text adapters. New code should construct a typed target when it needs generation-safe Component identity. `ScriptMessage.Target()` returns `ScriptMessageTarget`; use `msg.Target().ToString()` when text is needed for logging.
 
@@ -112,7 +112,12 @@ Payloads are AngelScript dictionaries. Keep payload values simple: strings, numb
 
 ## Delivery Timing
 
-Messages are processed by the manager during runtime ticks. Do not assume a publish call immediately invokes every receiver before the next line of code. Use `Request` and `Await` when the caller needs a response.
+Messages are processed by the manager during runtime ticks. CK Pause freezes
+queued delivery and request timeout frame counts; Play resumes them from the
+same logical frame. Reset cancels queued work and pending requests from the old
+reset epoch before Runtime Entry `OnReset` callbacks run. Do not assume a
+publish call immediately invokes every receiver before the next line of code.
+Use `Request` and `Await` when the caller needs a response.
 
 ## Failure Modes
 

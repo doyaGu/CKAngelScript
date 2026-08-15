@@ -115,6 +115,18 @@ if (!task.Cancel()) {
 }
 ```
 
+An `Await` registered with the scheduler has exactly one terminal result.
+Lifecycle cancellation is reported as cancellation/failure to the suspended
+invocation; removal of scheduler ownership is never interpreted as successful
+completion. Polling code can distinguish `IsCancelled()` from `IsFailed()` and
+read the stored reason through `Error()`.
+
 ## Scheduler Timing
 
-Async tasks advance during manager processing. A task that waits for frames or BB/graph progress will not complete until the host continues ticking. Avoid blocking native code while waiting for a script task.
+Async tasks advance during manager processing. CK Pause freezes scheduler frame
+advancement; Play continues from the remaining frame count. Reset, End, and CK
+object clear cancel work that belongs to the preceding lifecycle epoch. A task
+created by a Runtime Entry `OnReset` callback belongs to the new epoch and is
+not removed by a late global scheduler clear. A task that waits for frames or
+BB/graph progress will not complete until the host continues ticking. Avoid
+blocking native code while waiting for a script task.

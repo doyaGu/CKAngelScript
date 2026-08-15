@@ -261,7 +261,7 @@ if (status == CKAS_OK) {
 CKAngelScriptReleaseFunction(angelScript, function, &result);
 ```
 
-`StartExecution` only accepts `CKAS_EXECUTION_READY`. `ResumeExecution` only accepts `CKAS_EXECUTION_SUSPENDED`. Invalid transitions return `CKAS_INVALIDSTATE` and leave the stored execution result unchanged. On resume, `ConfigureContext` is an optional raw context hook called before the suspended context continues; it must not rewrite initial arguments that have already been consumed. `ReadResult` is called only when the script reaches a finished state, not when it suspends. `CancelExecution` accepts ready, running, or suspended executions, returns `CKAS_OK` when accepted, and stores `CKAS_CANCELLED` in the execution result. Cancelling a finished, failed, or already cancelled execution returns `CKAS_INVALIDSTATE` and leaves the stored execution result unchanged. If `CKAS_CALL_NO_SUSPEND` is set and a script suspends, CKAngelScript aborts the context and returns `CKAS_UNSUPPORTED`.
+`StartExecution` only accepts `CKAS_EXECUTION_READY`. `ResumeExecution` only accepts `CKAS_EXECUTION_SUSPENDED`. Invalid transitions return `CKAS_INVALIDSTATE` and leave the stored execution result unchanged. On resume, `ConfigureContext` is an optional raw context hook called before the suspended context continues; it must not rewrite initial arguments that have already been consumed. `ReadResult` is called only when the script reaches a finished state, not when it suspends. `CancelExecution` accepts ready, running, or suspended executions, returns `CKAS_OK` when accepted, and stores `CKAS_CANCELLED` in the execution result. CK Reset, End, and object clear also cancel running or suspended public executions; the stored cancellation reason identifies the host transition, and a later resume is rejected. Cancelling a finished, failed, or already cancelled execution returns `CKAS_INVALIDSTATE` and leaves the stored execution result unchanged. If `CKAS_CALL_NO_SUSPEND` is set and a script suspends, CKAngelScript aborts the context and returns `CKAS_UNSUPPORTED`.
 
 ## Object And Method Calls
 
@@ -412,7 +412,7 @@ Typed result helpers clear their writable out parameters before validation. `CKA
 
 ## Unload Constraints
 
-`CKAngelScriptObject` and `CKAngelScriptExecution` handles block unload/replace of their module and cause `CKAS_INUSE`. Release them before unloading or replacing a module.
+`CKAngelScriptObject` and `CKAngelScriptExecution` handles block unload/replace of their module and cause `CKAS_INUSE`. Live AngelScript Component and Executor states are internal consumers and enforce the same rejection policy. Release or retire those consumers before unloading or replacing a module.
 
 `CKAngelScriptFunction` and `CKAngelScriptMethod` symbol handles do not block unload. They become stale across unload/replace and later use returns `CKAS_STALEHANDLE`.
 
