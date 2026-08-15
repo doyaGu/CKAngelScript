@@ -777,8 +777,11 @@ void ScriptRuntime::OnPause() {
                                                                              m_FrameIndex,
                                                                              0.0f,
                                                                              0.0f);
-        CancelActiveInvocation(*module);
         module->InitialLifecycle.RequestPause(module->EnableCalled);
+        if (module->InitialLifecycle.ResetPending()) {
+            continue;
+        }
+        CancelActiveInvocation(*module);
         PauseModule(*module, ctx);
     }
 }
@@ -1832,14 +1835,14 @@ const char *ScriptRuntime::ModuleState(const Module &module) const {
     if (module.PendingDisable) {
         return kStateDisabling;
     }
+    if (module.InitialLifecycle.ResetPending()) {
+        return kStateResetting;
+    }
     if (module.InitialLifecycle.PausePending() || m_Paused) {
         return kStatePaused;
     }
     if (module.InitialLifecycle.ResumePending()) {
         return kStateResuming;
-    }
-    if (module.InitialLifecycle.ResetPending()) {
-        return kStateResetting;
     }
     if (module.ActiveCall) {
         return kStateSuspended;
@@ -1974,14 +1977,14 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         DisableModule(module);
         return;
     }
-    if (module.InitialLifecycle.PausePending()) {
-        ScriptContext ctx = makeContext("OnPause");
-        PauseModule(module, ctx);
-        return;
-    }
     if (module.InitialLifecycle.ResetPending()) {
         ScriptContext ctx = makeContext("OnReset");
         ResetModule(module, ctx);
+        return;
+    }
+    if (module.InitialLifecycle.PausePending()) {
+        ScriptContext ctx = makeContext("OnPause");
+        PauseModule(module, ctx);
         return;
     }
     if (module.InitialLifecycle.ResumePending()) {

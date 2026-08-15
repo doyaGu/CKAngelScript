@@ -648,6 +648,14 @@ bool RunRuntimeAsyncOwnerResetSelfTest(ScriptManager *manager, std::string &erro
         return false;
     }
     runtime.OnReset();
+    runtime.OnPause();
+    info = runtime.Info(scriptId);
+    if (info.State() != "resetting" || info.Phase() != "OnReset") {
+        cleanup();
+        error = "Runtime Pause did not preserve the suspended Reset phase.";
+        return false;
+    }
+    runtime.OnResume();
     manager->GetAsyncScheduler()->Tick();
     runtime.PreProcess();
 
