@@ -280,7 +280,10 @@ Component retains the resume request. The old disable finishes first, then
 `OnEnable` runs once before normal update work continues. If `OnEnable` also
 suspends, the resume request remains pending until it finishes, and `Update`
 does not run in that completion frame. A later Pause or an explicit Disable
-supersedes the retained request.
+supersedes the retained request. The shared lifecycle Module tracks the same
+Pause phase position used by Runtime Entries; because Component scripts do not
+define `OnPause`, the Component Adapter maps that phase to a no-op before
+advancing `OnDisable`.
 
 Component Reset cancels async tasks created by the preceding Component
 invocations before `OnReset` starts. It does not cancel another Component or

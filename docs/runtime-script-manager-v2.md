@@ -106,7 +106,7 @@ void OnResume(const ScriptContext &in ctx) {}
 void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx) {}
 ```
 
-Parameterless lifecycle functions are invalid for runtime entries in v2. Async callbacks are serialized per runtime entry; a suspended phase resumes before a later phase runs. The shared Initial Lifecycle module owns `OnLoad` → `Awake` → `Start` progression for Runtime Entry, Component, and Executor adapters. It commits a phase only after the adapter reports completion; suspension or failure leaves that phase current. `OnEnable` remains host activation and may occur between `Awake` and `Start`.
+Parameterless lifecycle functions are invalid for runtime entries in v2. Async callbacks are serialized per runtime entry; a suspended phase resumes before a later phase runs. The shared lifecycle Module owns `OnLoad` → `Awake` → `Start` progression for Runtime Entry, Component, and Executor Adapters, plus pending `OnPause` → `OnDisable` position for Runtime Entry and Component Adapters. Host-specific context construction and side effects stay in each Adapter. An initial phase commits only after the Adapter reports completion; suspension or failure leaves it current. `OnEnable` remains Host Activation and may occur between `Awake` and `Start`.
 
 If Play arrives while `OnPause` or its following `OnDisable` is suspended, Host Activation retains the resume event: the old phase finishes first, followed by `OnResume` and `OnEnable`. If `OnEnable` also suspends, the Runtime Entry remains in its resuming state until that invocation finishes. Normal update work starts on a later transition step, never in the frame that completes the retained Resume. A later Pause supersedes the pending Resume.
 

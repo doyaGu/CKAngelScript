@@ -17,7 +17,7 @@ The once-per-incarnation `OnLoad` → `Awake` → `Start` progression shared by 
 _Avoid_: Startup callbacks, initialization list
 
 **Host Activation**:
-The desired paused-or-active condition of a Runtime Entry or Component. Resume remains pending while an earlier disable or enable phase is suspended, is fulfilled only after re-enabling completes, and is superseded by a later Pause or explicit Disable.
+The desired paused-or-active condition of a Runtime Entry or Component. The shared lifecycle Module owns pending `OnPause` → `OnDisable` phase position; the Component Adapter treats its unsupported `OnPause` phase as a no-op. Resume remains pending while an earlier disable or enable phase is suspended, is fulfilled only after re-enabling completes, and is superseded by a later Pause or explicit Disable.
 _Avoid_: Pending resume flag, callback boolean
 
 **Behavior Frame**:

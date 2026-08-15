@@ -19,13 +19,14 @@ Implemented correctness work includes:
   suspended, then run in `OnResume` → `OnEnable` order;
 - Component resume requests are retained while `OnDisable` is suspended, then
   run `OnEnable` exactly once after disable completes;
-- the Initial Lifecycle module owns `OnLoad` → `Awake` → `Start` ordering and
+- the shared lifecycle Module owns `OnLoad` → `Awake` → `Start` ordering and
   suspension/failure outcomes for Runtime Entry, Component, and Executor
-  adapters; host-specific context construction remains local to each adapter;
-- the same module owns Host Activation's desired pause state and deferred
-  Resume event for Runtime Entry and Component adapters; Resume remains pending
-  through a suspended `OnEnable`, and its completion frame does not run normal
-  update work;
+  Adapters; host-specific context construction remains local to each Adapter;
+- the same Module owns Host Activation's desired pause state, pending
+  `OnPause` → `OnDisable` position, and deferred Resume event for Runtime Entry
+  and Component Adapters; the Component Adapter supplies a no-op `OnPause`
+  phase, Resume remains pending through a suspended `OnEnable`, and its
+  completion frame does not run normal update work;
 - async tasks created by Runtime Entry, Component, and Executor invocations
   carry stable owner identities; their Reset callbacks cancel the preceding
   work for that owner before `OnReset`, without cancelling another host or work
@@ -51,8 +52,8 @@ The following work remains open:
 - separate the manager-wide reset fallback into explicit public/orphan cleanup
   after all Script Host Scope transitions; Executor has no pause/resume
   lifecycle surface, so no synthetic resume callback was added;
-- consolidate remaining Pause phase execution, desired enabled state, and
-  Reset/Destroy ordering behind the shared lifecycle seam;
+- consolidate desired enabled state and Reset/Destroy ordering behind the
+  shared lifecycle seam;
 - add the engine-backed CTest target and obtain a passing real Player callback
   trace for the new startup regressions.
 
@@ -122,15 +123,16 @@ shutdown even though those transitions require different behavior.
 ### 2. A deferred resume can be lost after a suspended pause phase
 
 Runtime Entry callbacks are documented as serialized: a suspended lifecycle
-phase must resume before a later phase runs. If `OnPause` or its following
-`OnDisable` suspends and CK resumes, `ScriptRuntime::OnResume()` skips the module
-while `PendingPause` is set. The pending pause later completes from
-`UpdateModule()`, but the skipped `OnResume` event is not retained.
+phase must resume before a later phase runs. In the original implementation,
+if `OnPause` or its following `OnDisable` suspended and CK resumed,
+`ScriptRuntime::OnResume()` skipped the module while `PendingPause` was set.
+The pending pause later completed from `UpdateModule()`, but the skipped
+`OnResume` event was not retained.
 
-Component state has an equivalent risk. `CKM_BEHAVIORRESUME` calls
-`EnableInstance()`, which returns early while `InstanceEnabled` is still true.
-The previously suspended `OnDisable` can then finish and set the instance to
-disabled after the host has already resumed.
+The original Component state had an equivalent risk. `CKM_BEHAVIORRESUME`
+called `EnableInstance()`, which returned early while `InstanceEnabled` was
+still true. The previously suspended `OnDisable` could then finish and set the
+instance to disabled after the host had already resumed.
 
 Relevant implementation:
 
@@ -138,9 +140,9 @@ Relevant implementation:
 - [`EnableInstance`, `DisableInstance`, and the Component callback`](../src/AngelScriptComponent.cpp)
 - [documented Runtime Entry serialization](runtime-script-manager-v2.md)
 
-Actual Virtools callback ordering must be captured in Player validation before
-changing Component transition code, but no ordering can make deletion of the
-pending resume event correct.
+Actual Virtools callback ordering still requires Player validation. The shared
+lifecycle Interface now retains the event and phase position independently of
+that ordering; no callback order is allowed to erase either state.
 
 ### 3. Module mutation did not account for all internal consumers
 
@@ -486,18 +488,22 @@ Exit gate:
 
 1. **In progress:** `ScriptInitialLifecycle` now owns the active initial phase
    and terminal invocation outcome, plus Host Activation's desired pause state
-   and deferred Resume event. Pending Pause phase execution, desired enabled
-   state, and Reset/Destroy events remain to be consolidated.
+   and deferred Resume event. Desired enabled state and Reset/Destroy events
+   remain to be consolidated.
 2. **Done for Initial Lifecycle:** move `OnLoad` → `Awake` → `Start` ordering
    out of Runtime Entry, Component, and Executor callers.
 3. **Done for deferred Resume:** retain Resume across suspended disable/enable
-   phases in Runtime Entry and Component adapters; a later Pause supersedes it.
-4. **Preserved for migrated transitions:** keep context construction, parameter
+   phases in Runtime Entry and Component Adapters; a later Pause supersedes it.
+4. **Done for Pause phases:** advance `OnPause` → `OnDisable` once behind the
+   shared lifecycle Interface. Runtime Entry and Component Adapters both use
+   it; the Component Adapter maps its absent `OnPause` callback to a no-op.
+5. **Preserved for migrated transitions:** keep context construction, parameter
    injection, Behavior Frame refresh, and host-specific side effects in the
-   adapters.
-5. Delete duplicated pending flags only after parity tests pass for each entry
-   kind. Runtime Entry `PendingResume` and Component `Paused`/`PendingResume`
-   are removed; remaining transition flags stay until their phases migrate.
+   Adapters.
+6. Delete duplicated pending flags only after parity tests pass for each entry
+   kind. Runtime Entry `PendingPause`/`PendingResume` and Component
+   `Paused`/`PendingResume` are removed; remaining transition flags stay until
+   their phases migrate.
 
 Exit gate:
 
