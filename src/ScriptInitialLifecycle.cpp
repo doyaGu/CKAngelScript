@@ -133,6 +133,38 @@ void ScriptInitialLifecycle::CompleteResume() {
     m_ResumePending = false;
 }
 
+void ScriptInitialLifecycle::RequestReset() {
+    CompletePause();
+    CompleteResume();
+    ResetStart();
+    m_ResetPending = true;
+}
+
+ScriptLifecycleInvocationStatus ScriptInitialLifecycle::AdvanceReset(
+    const ScriptResetLifecycleInvoker &invoke) {
+    if (!ResetPending()) {
+        return ScriptLifecycleInvocationStatus::Finished;
+    }
+    if (!invoke) {
+        CompleteReset();
+        return ScriptLifecycleInvocationStatus::Failed;
+    }
+
+    const ScriptLifecycleInvocationStatus status = invoke();
+    if (status != ScriptLifecycleInvocationStatus::Suspended) {
+        CompleteReset();
+    }
+    return status;
+}
+
+bool ScriptInitialLifecycle::ResetPending() const {
+    return m_ResetPending;
+}
+
+void ScriptInitialLifecycle::CompleteReset() {
+    m_ResetPending = false;
+}
+
 void ScriptInitialLifecycle::ResetStart() {
     if (m_CompletedPhases > 2) {
         m_CompletedPhases = 2;
@@ -142,6 +174,7 @@ void ScriptInitialLifecycle::ResetStart() {
 void ScriptInitialLifecycle::Clear() {
     m_CompletedPhases = 0;
     CompletePause();
+    CompleteReset();
     m_Paused = false;
     m_ResumePending = false;
 }

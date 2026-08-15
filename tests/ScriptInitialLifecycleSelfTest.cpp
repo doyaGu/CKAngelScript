@@ -130,5 +130,43 @@ bool RunScriptInitialLifecycleSelfTest(std::string &error) {
         error = "Lifecycle did not terminate a failed Pause transition.";
         return false;
     }
+    if (!lifecycle.Complete(ScriptInitialPhase::Start)) {
+        error = "Lifecycle could not prepare the Reset progression self-test.";
+        return false;
+    }
+    lifecycle.RequestResume(true);
+    lifecycle.RequestPause(true);
+    lifecycle.RequestResume(true);
+    lifecycle.RequestReset();
+    if (!lifecycle.ResetPending() || lifecycle.PausePending() ||
+        lifecycle.ResumePending() || lifecycle.Next() != ScriptInitialPhase::Start) {
+        error = "Lifecycle Reset did not supersede activation events and rewind Start.";
+        return false;
+    }
+    bool suspendedReset = false;
+    int resetInvocations = 0;
+    const auto invokeReset = [&]() {
+        ++resetInvocations;
+        if (!suspendedReset) {
+            suspendedReset = true;
+            return ScriptLifecycleInvocationStatus::Suspended;
+        }
+        return ScriptLifecycleInvocationStatus::Finished;
+    };
+    if (lifecycle.AdvanceReset(invokeReset) != ScriptLifecycleInvocationStatus::Suspended ||
+        !lifecycle.ResetPending() || resetInvocations != 1 ||
+        lifecycle.AdvanceReset(invokeReset) != ScriptLifecycleInvocationStatus::Finished ||
+        lifecycle.ResetPending() || resetInvocations != 2) {
+        error = "Lifecycle did not retain and complete a suspended Reset phase.";
+        return false;
+    }
+    lifecycle.RequestReset();
+    if (lifecycle.AdvanceReset([]() {
+            return ScriptLifecycleInvocationStatus::Failed;
+        }) != ScriptLifecycleInvocationStatus::Failed ||
+        lifecycle.ResetPending()) {
+        error = "Lifecycle did not terminate a failed Reset transition.";
+        return false;
+    }
     return true;
 }

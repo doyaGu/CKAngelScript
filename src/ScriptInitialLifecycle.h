@@ -27,6 +27,8 @@ using ScriptInitialLifecycleInvoker =
     std::function<ScriptLifecycleInvocationStatus(ScriptInitialPhase)>;
 using ScriptPauseLifecycleInvoker =
     std::function<ScriptLifecycleInvocationStatus(ScriptPausePhase)>;
+using ScriptResetLifecycleInvoker =
+    std::function<ScriptLifecycleInvocationStatus()>;
 
 class ScriptInitialLifecycle final {
 public:
@@ -47,6 +49,11 @@ public:
     bool ResumePending() const;
     bool ResumeReady(bool transitionBlocked) const;
     void CompleteResume();
+    void RequestReset();
+    ScriptLifecycleInvocationStatus AdvanceReset(
+        const ScriptResetLifecycleInvoker &invoke);
+    bool ResetPending() const;
+    void CompleteReset();
     void ResetStart();
     void Clear();
 
@@ -57,6 +64,7 @@ private:
     bool m_DesiredEnabled = false;
     bool m_Paused = false;
     bool m_ResumePending = false;
+    bool m_ResetPending = false;
 };
 
 #endif // CK_SCRIPT_INITIAL_LIFECYCLE_H
