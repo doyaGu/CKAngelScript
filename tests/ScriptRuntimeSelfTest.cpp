@@ -345,8 +345,12 @@ bool RunRuntimeAsyncOwnerReloadSelfTest(ScriptManager *manager, std::string &err
     const std::string reloadedSource =
         "bool spawned = false;\n"
         "void Background() { AsyncTask<void>@ delay = Async::Delay(1000); Await(delay); }\n"
+        "void MessageBackground() { AsyncTask<void>@ delay = Async::Delay(1000); Await(delay); }\n"
         "void Update(const ScriptContext &in ctx) {\n"
         "  if (!spawned) { spawned = true; Async::Spawn(AsyncVoidFunc(Background)); }\n"
+        "}\n"
+        "void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx) {\n"
+        "  Async::Spawn(AsyncVoidFunc(MessageBackground));\n"
         "}\n";
     const std::string independentSource =
         "bool spawned = false;\n"
@@ -377,6 +381,15 @@ bool RunRuntimeAsyncOwnerReloadSelfTest(ScriptManager *manager, std::string &err
         return false;
     }
     runtime.PreProcess();
+    ScriptMessage ownerMessage;
+    std::string ownerMessageError;
+    if (!runtime.DeliverMessage(reloadedScriptId, ownerMessage, true, ownerMessageError)) {
+        cleanup();
+        error = ownerMessageError.empty()
+                    ? "Runtime async owner self-test could not deliver its owner-scoped message."
+                    : ownerMessageError;
+        return false;
+    }
 
     const std::string oldModuleName = runtime.ModuleName(reloadedScriptId);
     const std::string independentModuleName = runtime.ModuleName(independentScriptId);
