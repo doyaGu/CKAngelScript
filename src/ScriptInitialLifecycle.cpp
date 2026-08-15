@@ -51,6 +51,17 @@ bool ScriptInitialLifecycle::Complete(ScriptInitialPhase phase) {
     return true;
 }
 
+void ScriptInitialLifecycle::SetDesiredEnabled(bool enabled) {
+    m_DesiredEnabled = enabled;
+    if (!enabled) {
+        CompleteResume();
+    }
+}
+
+bool ScriptInitialLifecycle::DesiredEnabled() const {
+    return m_DesiredEnabled;
+}
+
 void ScriptInitialLifecycle::RequestPause(bool disableRequired) {
     const bool startsTransition = !m_Paused && !PausePending();
     m_Paused = true;

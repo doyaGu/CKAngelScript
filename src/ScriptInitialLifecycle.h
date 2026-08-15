@@ -35,6 +35,8 @@ public:
         ScriptInitialPhase finalPhase,
         const ScriptInitialLifecycleInvoker &invoke);
     bool Complete(ScriptInitialPhase phase);
+    void SetDesiredEnabled(bool enabled);
+    bool DesiredEnabled() const;
     void RequestPause(bool disableRequired = false);
     ScriptLifecycleInvocationStatus AdvancePause(
         const ScriptPauseLifecycleInvoker &invoke);
@@ -52,6 +54,7 @@ private:
     std::uint8_t m_CompletedPhases = 0;
     ScriptPausePhase m_PausePhase = ScriptPausePhase::Ready;
     bool m_DisableAfterPause = false;
+    bool m_DesiredEnabled = false;
     bool m_Paused = false;
     bool m_ResumePending = false;
 };

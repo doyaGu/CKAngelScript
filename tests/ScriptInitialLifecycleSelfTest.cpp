@@ -6,11 +6,13 @@
 
 bool RunScriptInitialLifecycleSelfTest(std::string &error) {
     ScriptInitialLifecycle lifecycle;
-    if (lifecycle.Next() != ScriptInitialPhase::OnLoad ||
+    if (lifecycle.DesiredEnabled() ||
+        lifecycle.Next() != ScriptInitialPhase::OnLoad ||
         lifecycle.Complete(ScriptInitialPhase::Awake)) {
         error = "Initial lifecycle accepted an out-of-order phase.";
         return false;
     }
+    lifecycle.SetDesiredEnabled(true);
     if (!lifecycle.Complete(ScriptInitialPhase::OnLoad) ||
         lifecycle.Next() != ScriptInitialPhase::Awake ||
         lifecycle.Complete(ScriptInitialPhase::OnLoad)) {
@@ -31,8 +33,9 @@ bool RunScriptInitialLifecycleSelfTest(std::string &error) {
         return false;
     }
     lifecycle.Clear();
-    if (lifecycle.Next() != ScriptInitialPhase::OnLoad) {
-        error = "Initial lifecycle did not clear all phases.";
+    if (lifecycle.Next() != ScriptInitialPhase::OnLoad ||
+        !lifecycle.DesiredEnabled()) {
+        error = "Initial lifecycle did not clear phases while preserving desired activation.";
         return false;
     }
 
@@ -97,8 +100,15 @@ bool RunScriptInitialLifecycleSelfTest(std::string &error) {
         error = "Lifecycle did not finish Pause before releasing retained Resume.";
         return false;
     }
+    lifecycle.SetDesiredEnabled(false);
+    if (lifecycle.DesiredEnabled() || lifecycle.ResumePending()) {
+        error = "Lifecycle explicit Disable did not supersede the retained Resume event.";
+        return false;
+    }
+    lifecycle.SetDesiredEnabled(true);
+    lifecycle.RequestResume(true);
     lifecycle.CompleteResume();
-    if (lifecycle.ResumePending()) {
+    if (!lifecycle.DesiredEnabled() || lifecycle.ResumePending()) {
         error = "Lifecycle did not complete the retained Resume event.";
         return false;
     }
