@@ -51,9 +51,54 @@ bool ScriptInitialLifecycle::Complete(ScriptInitialPhase phase) {
     return true;
 }
 
-void ScriptInitialLifecycle::RequestPause() {
+void ScriptInitialLifecycle::RequestPause(bool disableRequired) {
+    const bool startsTransition = !m_Paused && !PausePending();
     m_Paused = true;
     m_ResumePending = false;
+    if (startsTransition) {
+        m_PausePhase = ScriptPausePhase::OnPause;
+        m_DisableAfterPause = disableRequired;
+    } else if (PausePending()) {
+        m_DisableAfterPause = m_DisableAfterPause || disableRequired;
+    }
+}
+
+ScriptLifecycleInvocationStatus ScriptInitialLifecycle::AdvancePause(
+    const ScriptPauseLifecycleInvoker &invoke) {
+    if (!PausePending()) {
+        return ScriptLifecycleInvocationStatus::Finished;
+    }
+    if (!invoke) {
+        return ScriptLifecycleInvocationStatus::Failed;
+    }
+
+    while (PausePending()) {
+        const ScriptPausePhase phase = m_PausePhase;
+        const ScriptLifecycleInvocationStatus status = invoke(phase);
+        if (status == ScriptLifecycleInvocationStatus::Suspended) {
+            return status;
+        }
+        if (status == ScriptLifecycleInvocationStatus::Failed) {
+            CompletePause();
+            return status;
+        }
+
+        if (phase == ScriptPausePhase::OnPause && m_DisableAfterPause) {
+            m_PausePhase = ScriptPausePhase::OnDisable;
+        } else {
+            CompletePause();
+        }
+    }
+    return ScriptLifecycleInvocationStatus::Finished;
+}
+
+bool ScriptInitialLifecycle::PausePending() const {
+    return m_PausePhase != ScriptPausePhase::Ready;
+}
+
+void ScriptInitialLifecycle::CompletePause() {
+    m_PausePhase = ScriptPausePhase::Ready;
+    m_DisableAfterPause = false;
 }
 
 void ScriptInitialLifecycle::RequestResume(bool eligible) {
@@ -85,6 +130,7 @@ void ScriptInitialLifecycle::ResetStart() {
 
 void ScriptInitialLifecycle::Clear() {
     m_CompletedPhases = 0;
+    CompletePause();
     m_Paused = false;
     m_ResumePending = false;
 }

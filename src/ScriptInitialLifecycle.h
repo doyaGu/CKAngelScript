@@ -17,8 +17,16 @@ enum class ScriptLifecycleInvocationStatus : std::uint8_t {
     Failed,
 };
 
+enum class ScriptPausePhase : std::uint8_t {
+    OnPause,
+    OnDisable,
+    Ready,
+};
+
 using ScriptInitialLifecycleInvoker =
     std::function<ScriptLifecycleInvocationStatus(ScriptInitialPhase)>;
+using ScriptPauseLifecycleInvoker =
+    std::function<ScriptLifecycleInvocationStatus(ScriptPausePhase)>;
 
 class ScriptInitialLifecycle final {
 public:
@@ -27,7 +35,11 @@ public:
         ScriptInitialPhase finalPhase,
         const ScriptInitialLifecycleInvoker &invoke);
     bool Complete(ScriptInitialPhase phase);
-    void RequestPause();
+    void RequestPause(bool disableRequired = false);
+    ScriptLifecycleInvocationStatus AdvancePause(
+        const ScriptPauseLifecycleInvoker &invoke);
+    bool PausePending() const;
+    void CompletePause();
     void RequestResume(bool eligible);
     bool Paused() const;
     bool ResumePending() const;
@@ -38,6 +50,8 @@ public:
 
 private:
     std::uint8_t m_CompletedPhases = 0;
+    ScriptPausePhase m_PausePhase = ScriptPausePhase::Ready;
+    bool m_DisableAfterPause = false;
     bool m_Paused = false;
     bool m_ResumePending = false;
 };
