@@ -97,6 +97,112 @@ std::string RuntimeSelfTestModuleName(const std::string &id, int generation) {
     return "__CKASRuntime_" + id + "_" + std::to_string(generation);
 }
 
+bool RunRuntimeInitialLifecycleSelfTest(ScriptManager *manager, std::string &error) {
+    if (!manager || !manager->GetScriptEngine() || !manager->GetAsyncScheduler()) {
+        error = "Runtime initial lifecycle self-test requires an initialized ScriptManager.";
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    constexpr const char *scriptId = "ckas.runtime.initial.lifecycle.selftest";
+    const fs::path root = fs::temp_directory_path() / "ckas-runtime-initial-lifecycle-selftest";
+    std::error_code fsError;
+    fs::remove_all(root, fsError);
+    fsError.clear();
+
+    const ScopedEnvVar scriptRoots("CKAS_SCRIPT_ROOTS", root.string());
+    const ScopedEnvVar validateOnly("CKAS_SCRIPT_VALIDATE_ONLY", "0");
+    const std::string source =
+        "int sequence = 0;\n"
+        "int badContext = 0;\n"
+        "int loadCount = 0;\n"
+        "int awakeCount = 0;\n"
+        "int enableCount = 0;\n"
+        "int startCount = 0;\n"
+        "int updateCount = 0;\n"
+        "void OnLoad(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"OnLoad\" || ctx.State() != \"loading\" || sequence != 0) badContext++;\n"
+        "  loadCount++; sequence = 1;\n"
+        "  AsyncTask<void>@ delay = Async::Delay(1); Await(delay);\n"
+        "  if (sequence != 1) badContext++; sequence = 2;\n"
+        "}\n"
+        "void Awake(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"Awake\" || ctx.State() != \"loaded\" || sequence != 2) badContext++;\n"
+        "  awakeCount++; sequence = 3;\n"
+        "}\n"
+        "void OnEnable(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"OnEnable\" || ctx.State() != \"loaded\" || sequence != 3) badContext++;\n"
+        "  enableCount++; sequence = 4;\n"
+        "}\n"
+        "void Start(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"Start\" || ctx.State() != \"enabled\" || sequence != 4) badContext++;\n"
+        "  startCount++; sequence = 5;\n"
+        "}\n"
+        "void Update(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"Update\" || ctx.State() != \"enabled\" || sequence != 5) badContext++;\n"
+        "  updateCount++; sequence = 6;\n"
+        "}\n";
+    if (!PrepareRuntimeSelfTestPackage(root, scriptId, source, error)) {
+        fs::remove_all(root, fsError);
+        return false;
+    }
+
+    ScriptRuntime runtime(manager);
+    auto cleanup = [&]() {
+        runtime.Clear();
+        manager->GetAsyncScheduler()->Clear();
+        fs::remove_all(root, fsError);
+    };
+
+    std::string loadError;
+    if (!runtime.ReloadAll(&loadError)) {
+        cleanup();
+        error = loadError.empty()
+            ? "Runtime initial lifecycle self-test failed to load script package."
+            : loadError;
+        return false;
+    }
+
+    const std::string moduleName = runtime.ModuleName(scriptId);
+    RuntimeScriptInfo info = runtime.Info(scriptId);
+    int sequence = 0;
+    int loadCount = 0;
+    if (!info.Exists() || !info.Loaded() || info.Failed() ||
+        info.State() != "suspended" || info.Phase() != "OnLoad" ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "sequence", sequence) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "loadCount", loadCount) ||
+        sequence != 1 || loadCount != 1) {
+        cleanup();
+        error = "Runtime initial lifecycle self-test did not retain suspended OnLoad.";
+        return false;
+    }
+
+    manager->GetAsyncScheduler()->Tick();
+    runtime.PreProcess();
+
+    int badContext = 0;
+    int awakeCount = 0;
+    int enableCount = 0;
+    int startCount = 0;
+    int updateCount = 0;
+    if (!ReadRuntimeGlobalInt(manager, moduleName, "sequence", sequence) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "badContext", badContext) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "loadCount", loadCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "awakeCount", awakeCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "enableCount", enableCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "startCount", startCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "updateCount", updateCount) ||
+        sequence != 6 || badContext != 0 || loadCount != 1 || awakeCount != 1 ||
+        enableCount != 1 || startCount != 1 || updateCount != 1) {
+        cleanup();
+        error = "Runtime initial lifecycle self-test did not resume in strict phase order.";
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
+
 bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error) {
     if (!manager || !manager->GetScriptEngine()) {
         error = "Runtime pause lifecycle self-test requires an initialized ScriptManager.";
@@ -980,6 +1086,9 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     }
     api->UnloadModule(oldApiModuleName, nullptr);
 
+    if (!RunRuntimeInitialLifecycleSelfTest(manager, error)) {
+        return false;
+    }
     if (!RunRuntimePauseLifecycleSelfTest(manager, error)) {
         return false;
     }
