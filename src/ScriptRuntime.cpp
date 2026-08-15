@@ -393,7 +393,6 @@ struct ScriptRuntime::Module {
     bool PendingDestroy = false;
     bool PendingErase = false;
     bool PendingPause = false;
-    bool PendingResume = false;
     bool PendingReset = false;
     std::unique_ptr<Module> PendingReplacement;
 };
@@ -776,7 +775,7 @@ void ScriptRuntime::OnPause() {
                                                                              m_FrameIndex,
                                                                              0.0f,
                                                                              0.0f);
-        module->PendingResume = false;
+        module->InitialLifecycle.RequestPause();
         PauseModule(*module, ctx);
     }
 }
@@ -799,8 +798,12 @@ void ScriptRuntime::OnResume() {
                                                                              m_FrameIndex,
                                                                              0.0f,
                                                                              0.0f);
-        module->PendingResume = true;
-        if (module->PendingPause || module->PendingDisable || module->PendingDestroy || module->PendingReset) {
+        const bool transitionBlocked = module->PendingPause ||
+                                       module->PendingDisable ||
+                                       module->PendingDestroy ||
+                                       module->PendingReset;
+        module->InitialLifecycle.RequestResume(true);
+        if (!module->InitialLifecycle.ResumeReady(transitionBlocked)) {
             continue;
         }
         ResumeModule(*module, ctx);
@@ -1613,7 +1616,7 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
     module.PendingDestroy = false;
     module.PendingDisable = false;
     module.PendingPause = false;
-    module.PendingResume = false;
+    module.InitialLifecycle.CompleteResume();
     module.PendingReset = false;
     return true;
 }
@@ -1714,11 +1717,10 @@ bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
 
 bool ScriptRuntime::ResumeModule(Module &module, const ScriptContext &context) {
     if (!UsesRuntimeLifecycle(module.Meta) || !module.Loaded || module.Failed || !module.Enabled) {
-        module.PendingResume = false;
+        module.InitialLifecycle.CompleteResume();
         return true;
     }
 
-    module.PendingResume = true;
     const bool resumingEnable = module.ActiveCall && module.ActiveInvocation == "OnEnable";
     if (!resumingEnable) {
         const InvokeStatus status = Invoke(module, "OnResume", context);
@@ -1726,7 +1728,7 @@ bool ScriptRuntime::ResumeModule(Module &module, const ScriptContext &context) {
             return false;
         }
         if (status == InvokeStatus::Failed) {
-            module.PendingResume = false;
+            module.InitialLifecycle.CompleteResume();
             return true;
         }
     }
@@ -1748,13 +1750,13 @@ bool ScriptRuntime::ResumeModule(Module &module, const ScriptContext &context) {
             module.EnableCalled = true;
         }
     }
-    module.PendingResume = false;
+    module.InitialLifecycle.CompleteResume();
     return true;
 }
 
 bool ScriptRuntime::ResetModule(Module &module, const ScriptContext &context) {
     if (!UsesRuntimeLifecycle(module.Meta)) {
-        module.PendingResume = false;
+        module.InitialLifecycle.CompleteResume();
         module.PendingReset = false;
         return true;
     }
@@ -1762,7 +1764,7 @@ bool ScriptRuntime::ResetModule(Module &module, const ScriptContext &context) {
         CancelOwnedAsyncWork(module,
                              "Async work was cancelled because its Runtime Entry is resetting.");
         CancelActiveInvocation(module);
-        module.PendingResume = false;
+        module.InitialLifecycle.CompleteResume();
     }
     module.PendingReset = true;
     const InvokeStatus status = Invoke(module, "OnReset", context);
@@ -1843,7 +1845,7 @@ const char *ScriptRuntime::ModuleState(const Module &module) const {
     if (module.PendingPause || m_Paused) {
         return kStatePaused;
     }
-    if (module.PendingResume) {
+    if (module.InitialLifecycle.ResumePending()) {
         return kStateResuming;
     }
     if (module.PendingReset) {
@@ -1992,9 +1994,11 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         ResetModule(module, ctx);
         return;
     }
-    if (module.PendingResume) {
+    if (module.InitialLifecycle.ResumePending()) {
         ScriptContext ctx = makeContext("OnResume");
-        ResumeModule(module, ctx);
+        if (module.InitialLifecycle.ResumeReady(false)) {
+            ResumeModule(module, ctx);
+        }
         return;
     }
     if (AdvanceInitialLifecycle(module,
