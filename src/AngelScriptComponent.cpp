@@ -1088,6 +1088,18 @@ LifecycleInvokeStatus AdvancePauseTransition(const CKBehaviorContext &behcontext
         });
 }
 
+LifecycleInvokeStatus AdvanceResetTransition(CKBehavior *beh,
+                                             const CKBehaviorContext &behcontext,
+                                             ScriptComponentState *state) {
+    if (!state) {
+        return LifecycleInvokeStatus::Failed;
+    }
+    return state->InitialLifecycle.AdvanceReset(
+        [&]() {
+            return InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset");
+        });
+}
+
 bool DestroyInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
     if (!state || !state->Object) {
         return true;
@@ -1110,6 +1122,7 @@ bool DestroyInstance(const CKBehaviorContext &behcontext, ScriptComponentState *
     state->DestructionCompleted = true;
     state->InitialLifecycle.CompletePause();
     state->InitialLifecycle.CompleteResume();
+    state->InitialLifecycle.CompleteReset();
     return true;
 }
 
@@ -1282,9 +1295,9 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
             : CKBR_OK;
     }
 
-    if (state->ActiveLifecycleName == "OnReset") {
+    if (state->InitialLifecycle.ResetPending()) {
         const ScriptComponentSupport::LifecycleInvokeStatus status =
-            ScriptComponentSupport::InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset");
+            ScriptComponentSupport::AdvanceResetTransition(beh, behcontext, state);
         if (status != ScriptComponentSupport::LifecycleInvokeStatus::Finished) {
             return status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended
                 ? CKBR_ACTIVATENEXTFRAME
@@ -1465,6 +1478,9 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                     man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), true);
                 }
                 state->InitialLifecycle.RequestPause(state->InstanceEnabled);
+                if (state->InitialLifecycle.ResetPending()) {
+                    break;
+                }
                 const ScriptComponentSupport::LifecycleInvokeStatus status =
                     ScriptComponentSupport::AdvancePauseTransition(behcontext, state);
                 if (status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended) {
@@ -1480,7 +1496,8 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), false);
                 }
-                const bool transitionBlocked = state->InitialLifecycle.PausePending();
+                const bool transitionBlocked = state->InitialLifecycle.PausePending() ||
+                                               state->InitialLifecycle.ResetPending();
                 state->InitialLifecycle.RequestResume(state->ScriptActive);
                 const bool resumeEligible = state->InitialLifecycle.ResumePending();
                 if (resumeEligible) {
@@ -1510,20 +1527,16 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                     man->GetBehaviorBridge()->ResetComponentTasks(beh->GetID());
                 }
                 state->Failed = false;
-                state->InitialLifecycle.CompletePause();
-                state->InitialLifecycle.CompleteResume();
-                state->InitialLifecycle.ResetStart();
-                if (state->Object) {
-                    ScriptComponentSupport::CancelSuspendedLifecycle(state);
-                    const ScriptComponentSupport::LifecycleInvokeStatus status =
-                        ScriptComponentSupport::InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset");
-                    if (status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended) {
-                        beh->Activate(TRUE);
-                        return CKBR_OK;
-                    }
-                    if (status == ScriptComponentSupport::LifecycleInvokeStatus::Failed) {
-                        return CKBR_OK;
-                    }
+                ScriptComponentSupport::CancelSuspendedLifecycle(state);
+                state->InitialLifecycle.RequestReset();
+                const ScriptComponentSupport::LifecycleInvokeStatus status =
+                    ScriptComponentSupport::AdvanceResetTransition(beh, behcontext, state);
+                if (status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended) {
+                    beh->Activate(TRUE);
+                    return CKBR_OK;
+                }
+                if (status == ScriptComponentSupport::LifecycleInvokeStatus::Failed) {
+                    return CKBR_OK;
                 }
                 if (state->InitialLifecycle.DesiredEnabled() && state->ScriptActive &&
                     !state->InitialLifecycle.Paused()) {

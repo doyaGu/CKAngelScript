@@ -214,6 +214,7 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "  int legacyMessageCount = 0;\n"
         "  int enableCount = 0;\n"
         "  int disableCount = 0;\n"
+        "  int resetCount = 0;\n"
         "  int resetSawCancelled = 0;\n"
         "  int resetCompleted = 0;\n"
         "  int destroyCount = 0;\n"
@@ -256,6 +257,7 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "  void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) { legacyMessageCount++; }\n"
         "  void OnReset(BehaviorFrame@ frame) {\n"
         "    Validate(frame, 350);\n"
+        "    resetCount++;\n"
         "    resetSawCancelled = pendingMessage !is null && pendingMessage.IsCancelled() ? 1 : -1;\n"
         "    AsyncTask<void>@ delay = Async::Delay(1);\n"
         "    Await(delay);\n"
@@ -466,11 +468,20 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
             : messageError;
         return false;
     }
+    if (CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORRESET, &behaviorContext) != CK_OK ||
+        !state->Invoker->IsContextSuspended() ||
+        state->ActiveLifecycleName != "OnReset" ||
+        !state->InitialLifecycle.ResetPending()) {
+        cleanup();
+        error = "Component runtime self-test did not supersede suspended OnReset with a new epoch.";
+        return false;
+    }
     scheduler->Tick();
     const int resetResumeCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
     if (resetResumeCode != CKBR_ACTIVATENEXTFRAME ||
         state->Invoker->IsContextSuspended() ||
-        state->ActiveLifecycleName == "OnReset") {
+        state->ActiveLifecycleName == "OnReset" ||
+        state->InitialLifecycle.ResetPending()) {
         cleanup();
         error = "Component runtime self-test did not complete new-epoch OnReset work.";
         return false;
@@ -482,6 +493,7 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         !ExpectIntProperty(object, "messageCount", 1, error) ||
         !ExpectIntProperty(object, "enableCount", 4, error) ||
         !ExpectIntProperty(object, "disableCount", 2, error) ||
+        !ExpectIntProperty(object, "resetCount", 2, error) ||
         !ExpectIntProperty(object, "resetSawCancelled", 1, error) ||
         !ExpectIntProperty(object, "resetCompleted", 1, error) ||
         !ExpectIntProperty(object, "legacyUpdateCount", 0, error) ||
