@@ -20,6 +20,7 @@ struct CapturedScriptMessage;
 enum class ScriptModuleMutationOrigin {
     Public,
     RuntimeEntryRetirement,
+    PrivateComponentRetirement,
 };
 
 class ScriptModuleRegistry {

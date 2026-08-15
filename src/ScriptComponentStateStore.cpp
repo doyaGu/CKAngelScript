@@ -211,7 +211,9 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->PendingResume = false;
 
     if (!ownedModuleName.empty()) {
-        UnloadModule(ownedModuleName.c_str(), nullptr);
+        UnloadOwnedModule(ownedModuleName.c_str(),
+                          ScriptModuleMutationOrigin::PrivateComponentRetirement,
+                          nullptr);
     }
 }
 

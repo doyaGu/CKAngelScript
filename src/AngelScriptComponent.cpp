@@ -907,7 +907,9 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
     }
 
     if (moduleBinding.IsPrivate()) {
-        man->UnloadModule(moduleBinding.ModuleName.c_str(), nullptr);
+        man->UnloadOwnedModule(moduleBinding.ModuleName.c_str(),
+                               ScriptModuleMutationOrigin::PrivateComponentRetirement,
+                               nullptr);
         CKAngelScriptResult result = {};
         CKAS_STATUS status = CKAS_OK;
         if (source.empty()) {

@@ -316,11 +316,13 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
     }
 
     ScriptComponentState *state = manager->GetComponentState(behavior->GetID());
-    if (!state || !state->Loaded || !state->InstanceEnabled || !state->Object) {
+    if (!state || !state->Loaded || !state->InstanceEnabled || !state->Object ||
+        state->ModuleKind != ScriptComponentModuleKind::Private || state->ModuleName.empty()) {
         cleanup();
         error = "Component runtime self-test did not create an enabled component instance.";
         return false;
     }
+    const std::string privateModuleName = state->ModuleName;
     if (state->StartArgument != ScriptBehaviorArgumentKind::BehaviorFrame ||
         state->UpdateArgument != ScriptBehaviorArgumentKind::BehaviorFrame ||
         state->OnMessageArgument != ScriptBehaviorArgumentKind::BehaviorFrame) {
@@ -437,6 +439,7 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
     const CKERROR deleteError = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &behaviorContext);
     deleteCallbackSent = false;
     if (deleteError != CK_OK || manager->GetComponentState(behavior->GetID()) != nullptr ||
+        manager->HasModule(privateModuleName.c_str()) ||
         !ExpectIntProperty(object, "destroyCount", 1, error) ||
         !ExpectIntProperty(object, "frameError", 0, error)) {
         object->Release();
