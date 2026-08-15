@@ -227,6 +227,8 @@ bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error
         "void OnEnable(const ScriptContext &in ctx) {\n"
         "  if (ctx.Phase() != \"OnEnable\") { badPhaseCount++; }\n"
         "  enableCount++;\n"
+        "  if (enableCount == 2) { AsyncTask<void>@ delay = Async::Delay(1); Await(delay);\n"
+        "    if (ctx.Phase() != \"OnEnable\") { badPhaseCount++; } }\n"
         "}\n"
         "void OnPause(const ScriptContext &in ctx) {\n"
         "  if (ctx.Phase() != \"OnPause\") { badPhaseCount++; }\n"
@@ -287,6 +289,14 @@ bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error
     runtime.OnResume();
     scheduler->Tick();
     runtime.PreProcess();
+    runtime.PreProcess();
+    info = runtime.Info(scriptId);
+    if (info.State() != "resuming" || info.Phase() != "OnEnable") {
+        cleanup();
+        error = "Runtime pause lifecycle self-test did not retain Resume through suspended OnEnable.";
+        return false;
+    }
+    scheduler->Tick();
     runtime.PreProcess();
 
     const std::string moduleName = runtime.ModuleName(scriptId);
