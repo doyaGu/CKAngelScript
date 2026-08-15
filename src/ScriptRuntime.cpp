@@ -391,7 +391,6 @@ struct ScriptRuntime::Module {
     bool PendingDisable = false;
     bool PendingDestroy = false;
     bool PendingErase = false;
-    bool PendingReset = false;
     std::unique_ptr<Module> PendingReplacement;
 };
 
@@ -677,7 +676,7 @@ void ScriptRuntime::PreProcess() {
                 !module->PendingDisable &&
                 !module->PendingDestroy &&
                 !module->InitialLifecycle.PausePending() &&
-                !module->PendingReset) {
+                !module->InitialLifecycle.ResetPending()) {
                 continue;
             }
             UpdateModule(*module, deltaTime, timeSeconds);
@@ -745,6 +744,10 @@ void ScriptRuntime::OnReset() {
         if (!module || !UsesRuntimeLifecycle(module->Meta) || !module->Loaded || module->Failed) {
             continue;
         }
+        CancelOwnedAsyncWork(*module,
+                             "Async work was cancelled because its Runtime Entry is resetting.");
+        CancelActiveInvocation(*module);
+        module->InitialLifecycle.RequestReset();
         ScriptContext ctx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
                                                                              module->Meta,
                                                                              "OnReset",
@@ -801,7 +804,7 @@ void ScriptRuntime::OnResume() {
         const bool transitionBlocked = module->InitialLifecycle.PausePending() ||
                                        module->PendingDisable ||
                                        module->PendingDestroy ||
-                                       module->PendingReset;
+                                       module->InitialLifecycle.ResetPending();
         module->InitialLifecycle.RequestResume(true);
         if (!module->InitialLifecycle.ResumeReady(transitionBlocked)) {
             continue;
@@ -1619,7 +1622,7 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
     module.PendingDisable = false;
     module.InitialLifecycle.CompletePause();
     module.InitialLifecycle.CompleteResume();
-    module.PendingReset = false;
+    module.InitialLifecycle.CompleteReset();
     return true;
 }
 
@@ -1744,24 +1747,23 @@ bool ScriptRuntime::ResumeModule(Module &module, const ScriptContext &context) {
 
 bool ScriptRuntime::ResetModule(Module &module, const ScriptContext &context) {
     if (!UsesRuntimeLifecycle(module.Meta)) {
-        module.InitialLifecycle.CompleteResume();
-        module.PendingReset = false;
+        module.InitialLifecycle.CompleteReset();
         return true;
     }
-    if (!module.PendingReset) {
-        CancelOwnedAsyncWork(module,
-                             "Async work was cancelled because its Runtime Entry is resetting.");
-        CancelActiveInvocation(module);
-        module.InitialLifecycle.CompleteResume();
-    }
-    module.PendingReset = true;
-    const InvokeStatus status = Invoke(module, "OnReset", context);
-    if (status == InvokeStatus::Suspended) {
-        return false;
-    }
-    module.InitialLifecycle.ResetStart();
-    module.PendingReset = false;
-    return true;
+    const ScriptLifecycleInvocationStatus status = module.InitialLifecycle.AdvanceReset(
+        [&]() {
+            const InvokeStatus invokeStatus = Invoke(module, "OnReset", context);
+            switch (invokeStatus) {
+            case InvokeStatus::Finished:
+                return ScriptLifecycleInvocationStatus::Finished;
+            case InvokeStatus::Suspended:
+                return ScriptLifecycleInvocationStatus::Suspended;
+            case InvokeStatus::Failed:
+                return ScriptLifecycleInvocationStatus::Failed;
+            }
+            return ScriptLifecycleInvocationStatus::Failed;
+        });
+    return status != ScriptLifecycleInvocationStatus::Suspended;
 }
 
 ScriptRuntime::InvokeStatus ScriptRuntime::AdvanceInitialLifecycle(
@@ -1836,7 +1838,7 @@ const char *ScriptRuntime::ModuleState(const Module &module) const {
     if (module.InitialLifecycle.ResumePending()) {
         return kStateResuming;
     }
-    if (module.PendingReset) {
+    if (module.InitialLifecycle.ResetPending()) {
         return kStateResetting;
     }
     if (module.ActiveCall) {
@@ -1977,7 +1979,7 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         PauseModule(module, ctx);
         return;
     }
-    if (module.PendingReset) {
+    if (module.InitialLifecycle.ResetPending()) {
         ScriptContext ctx = makeContext("OnReset");
         ResetModule(module, ctx);
         return;

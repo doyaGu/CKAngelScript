@@ -606,6 +606,7 @@ bool RunRuntimeAsyncOwnerResetSelfTest(ScriptManager *manager, std::string &erro
         "int oldRan = 0;\n"
         "int newRan = 0;\n"
         "int resetCount = 0;\n"
+        "int resetCompleted = 0;\n"
         "void OldWork() { oldRan++; }\n"
         "void NewWork() { newRan++; }\n"
         "void Update(const ScriptContext &in ctx) {\n"
@@ -614,6 +615,9 @@ bool RunRuntimeAsyncOwnerResetSelfTest(ScriptManager *manager, std::string &erro
         "void OnReset(const ScriptContext &in ctx) {\n"
         "  resetCount++;\n"
         "  Async::Spawn(AsyncVoidFunc(NewWork));\n"
+        "  AsyncTask<void>@ delay = Async::Delay(1);\n"
+        "  Await(delay);\n"
+        "  resetCompleted++;\n"
         "}\n";
     if (!PrepareRuntimeSelfTestPackage(root, scriptId, source, error)) {
         fs::remove_all(root, fsError);
@@ -637,18 +641,28 @@ bool RunRuntimeAsyncOwnerResetSelfTest(ScriptManager *manager, std::string &erro
     }
     runtime.PreProcess();
     runtime.OnReset();
+    RuntimeScriptInfo info = runtime.Info(scriptId);
+    if (info.State() != "resetting" || info.Phase() != "OnReset") {
+        cleanup();
+        error = "Runtime async reset owner self-test did not retain suspended OnReset.";
+        return false;
+    }
+    runtime.OnReset();
     manager->GetAsyncScheduler()->Tick();
+    runtime.PreProcess();
 
     const std::string moduleName = runtime.ModuleName(scriptId);
     int oldRan = 0;
     int newRan = 0;
     int resetCount = 0;
+    int resetCompleted = 0;
     if (!ReadRuntimeGlobalInt(manager, moduleName, "oldRan", oldRan) ||
         !ReadRuntimeGlobalInt(manager, moduleName, "newRan", newRan) ||
         !ReadRuntimeGlobalInt(manager, moduleName, "resetCount", resetCount) ||
-        oldRan != 0 || newRan != 1 || resetCount != 1) {
+        !ReadRuntimeGlobalInt(manager, moduleName, "resetCompleted", resetCompleted) ||
+        oldRan != 0 || newRan != 1 || resetCount != 2 || resetCompleted != 1) {
         cleanup();
-        error = "Runtime async reset owner self-test did not isolate old and new reset epochs.";
+        error = "Runtime async reset owner self-test did not supersede the prior reset epoch.";
         return false;
     }
 
