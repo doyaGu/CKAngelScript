@@ -630,11 +630,7 @@ bool CacheComponentMethods(ScriptComponentState *state, asITypeInfo *type) {
            CacheMessageMethod(type, state);
 }
 
-enum class LifecycleInvokeStatus {
-    Finished,
-    Suspended,
-    Failed
-};
+using LifecycleInvokeStatus = ScriptLifecycleInvocationStatus;
 
 ScriptBehaviorArgumentKind LifecycleArgumentKind(ScriptComponentState *state, asIScriptFunction *method) {
     if (!state || !method) {
@@ -789,24 +785,25 @@ void CancelSuspendedLifecycle(ScriptComponentState *state, const char *unlessNam
     state->ActiveLifecycleName.clear();
 }
 
-bool CompleteInitialLifecycles(CKBehavior *beh, ScriptComponentState *state, const CKBehaviorContext &behcontext) {
-    if (state->InitialLifecycle.Next() == ScriptInitialPhase::OnLoad) {
-        const LifecycleInvokeStatus status = InvokeLifecycle(beh, state, state->OnLoad, behcontext, "OnLoad");
-        if (!LifecycleFinished(status)) {
-            return false;
-        }
-        state->InitialLifecycle.Complete(ScriptInitialPhase::OnLoad);
-    }
-
-    if (state->InitialLifecycle.Next() == ScriptInitialPhase::Awake) {
-        const LifecycleInvokeStatus status = InvokeLifecycle(beh, state, state->Awake, behcontext, "Awake");
-        if (!LifecycleFinished(status)) {
-            return false;
-        }
-        state->InitialLifecycle.Complete(ScriptInitialPhase::Awake);
-    }
-
-    return true;
+LifecycleInvokeStatus AdvanceInitialLifecycle(CKBehavior *beh,
+                                              ScriptComponentState *state,
+                                              const CKBehaviorContext &behcontext,
+                                              ScriptInitialPhase finalPhase) {
+    return state->InitialLifecycle.AdvanceThrough(
+        finalPhase,
+        [&](ScriptInitialPhase phase) {
+            switch (phase) {
+            case ScriptInitialPhase::OnLoad:
+                return InvokeLifecycle(beh, state, state->OnLoad, behcontext, "OnLoad");
+            case ScriptInitialPhase::Awake:
+                return InvokeLifecycle(beh, state, state->Awake, behcontext, "Awake");
+            case ScriptInitialPhase::Start:
+                return InvokeLifecycle(beh, state, state->Start, behcontext, "Start");
+            case ScriptInitialPhase::Ready:
+                break;
+            }
+            return LifecycleInvokeStatus::Failed;
+        });
 }
 
 bool ComponentIdentityChanged(ScriptComponentState *state,
@@ -898,7 +895,11 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
             SetErrorOutput(beh, state, injectError);
             return false;
         }
-        if (!CompleteInitialLifecycles(beh, state, behcontext)) {
+        if (!LifecycleFinished(AdvanceInitialLifecycle(
+                beh,
+                state,
+                behcontext,
+                ScriptInitialPhase::Awake))) {
             return false;
         }
         asITypeInfo *type = state->Invoker ? state->Invoker->GetTypeInfoByName(className.c_str()) : nullptr;
@@ -994,7 +995,11 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
 
     state->Loaded = true;
 
-    if (!CompleteInitialLifecycles(beh, state, behcontext)) {
+    if (!LifecycleFinished(AdvanceInitialLifecycle(
+            beh,
+            state,
+            behcontext,
+            ScriptInitialPhase::Awake))) {
         return false;
     }
 
@@ -1314,15 +1319,18 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         return state->Invoker && state->Invoker->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
     }
 
-    if (state->InitialLifecycle.Next() == ScriptInitialPhase::Start) {
+    {
         const ScriptComponentSupport::LifecycleInvokeStatus status =
-            ScriptComponentSupport::InvokeLifecycle(beh, state, state->Start, behcontext, "Start");
+            ScriptComponentSupport::AdvanceInitialLifecycle(
+                beh,
+                state,
+                behcontext,
+                ScriptInitialPhase::Start);
         if (status != ScriptComponentSupport::LifecycleInvokeStatus::Finished) {
             return status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended
                 ? CKBR_ACTIVATENEXTFRAME
                 : CKBR_OK;
         }
-        state->InitialLifecycle.Complete(ScriptInitialPhase::Start);
     }
 
     {
