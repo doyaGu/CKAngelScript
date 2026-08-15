@@ -16,6 +16,7 @@ class ScriptManager;
 struct ScriptExecutorState {
     CK_ID BehaviorId = 0;
     std::uint64_t AsyncOwnerId = 0;
+    CKDWORD AttachedModuleGeneration = 0;
     CKBehavior *Behavior = nullptr;
     ScriptManager *Manager = nullptr;
     ScriptInvoker *Invoker = nullptr;

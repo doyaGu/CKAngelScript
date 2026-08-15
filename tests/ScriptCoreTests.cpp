@@ -16,6 +16,7 @@ struct CoreTestCase {
 int main() {
     const CoreTestCase tests[] = {
         {"Initial lifecycle", RunScriptInitialLifecycleSelfTest},
+        {"Module generation", RunScriptModuleGenerationSelfTest},
         {"Runtime metadata", ScriptRuntimeMetadata::RunScriptRuntimeMetadataSelfTest},
         {"Runtime dependencies", ScriptRuntimeDependencyResolver::RunScriptRuntimeDependencySelfTest},
     };

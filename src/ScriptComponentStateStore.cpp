@@ -11,6 +11,7 @@
 #include "ScriptInvoker.h"
 #include "ScriptManager.h"
 #include "ScriptMessage.h"
+#include "ScriptModuleGeneration.h"
 
 struct ScriptComponentStateStore::Impl {
     std::unordered_map<CK_ID, std::unique_ptr<ScriptComponentState> > States;
@@ -173,6 +174,7 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
         ? state->ModuleName
         : std::string();
     state->ModuleName.clear();
+    state->AttachedModuleGeneration = 0;
     state->ScriptEntryId.clear();
     state->Bindings.clear();
     if (m_MessageBus) {
@@ -234,6 +236,21 @@ bool ScriptManager::DeliverComponentMessage(CK_ID id,
     ScriptComponentState *state = GetComponentState(id);
     if (state && generation != state->MessageGeneration) {
         error = "Component message target is stale.";
+        return false;
+    }
+    const CKDWORD currentModuleGeneration = state
+        ? GetModuleGeneration(state->ModuleName.c_str())
+        : 0;
+    if (state && state->Loaded &&
+        !IsAttachedModuleGenerationCurrent(state->AttachedModuleGeneration,
+                                           currentModuleGeneration)) {
+        if (state->Invoker && state->Invoker->IsContextSuspended()) {
+            state->Invoker->AbortContext();
+        }
+        state->ActiveLifecycle = nullptr;
+        state->ActiveLifecycleName.clear();
+        state->Failed = true;
+        error = "Component attached module generation is stale.";
         return false;
     }
     if (!state || !state->Loaded || state->Failed || !state->InstanceEnabled || !state->Object || !state->Invoker || !state->OnMessage) {

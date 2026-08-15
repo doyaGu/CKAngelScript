@@ -1012,6 +1012,13 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
             error = "Executor reload self-test did not execute generation 1.";
             return false;
         }
+        ScriptExecutorState *reloadState = manager->GetExecutorState(reloadBehavior->GetID(), reloadBehavior);
+        if (!reloadState || reloadState->AttachedModuleGeneration == 0 ||
+            reloadState->AttachedModuleGeneration != manager->GetModuleGeneration(reloadState->ModuleName.c_str())) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test did not record generation 1 attachment.";
+            return false;
+        }
         if (!WriteExecutorSelfTestFile(reloadPackageDir / "runtime.as",
                                        "class ExecutorReloadProbe { this is not valid AngelScript; }\n",
                                        error)) {
@@ -1041,6 +1048,13 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         if (executeAndReadVersion() != 2) {
             cleanupReloadBehavior();
             error = "Executor reload self-test kept executing the stale module generation.";
+            return false;
+        }
+        reloadState = manager->GetExecutorState(reloadBehavior->GetID(), reloadBehavior);
+        if (!reloadState || reloadState->AttachedModuleGeneration == 0 ||
+            reloadState->AttachedModuleGeneration != manager->GetModuleGeneration(reloadState->ModuleName.c_str())) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test did not record generation 2 attachment.";
             return false;
         }
         std::string enableError;
@@ -1076,6 +1090,21 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
             error = enableError.empty()
                 ? "Executor reload self-test did not recover after re-enabling its entry."
                 : enableError;
+            return false;
+        }
+        reloadState = manager->GetExecutorState(reloadBehavior->GetID(), reloadBehavior);
+        CKParameterLocal *reenabledVersion = reloadBehavior->GetLocalParameter(EXECUTOR_USER_LOCAL_START);
+        int reenabledResetVersion = 0;
+        if (!reloadState || !reenabledVersion ||
+            reenabledVersion->SetValue(&reenabledResetVersion) != CK_OK) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test could not prepare stale-generation fault injection.";
+            return false;
+        }
+        reloadState->AttachedModuleGeneration += 1;
+        if (executeAndReadVersion() != 0 || !reloadState->Failed) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test executed a stale attached module generation.";
             return false;
         }
         cleanupReloadBehavior();

@@ -27,6 +27,7 @@
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptMessage.h"
+#include "ScriptModuleGeneration.h"
 #include "ScriptParameterConversion.h"
 #include "ScriptRuntime.h"
 #include "ScriptRuntimeMetadata.h"
@@ -650,6 +651,37 @@ ScriptBehaviorArgumentKind LifecycleArgumentKind(ScriptComponentState *state, as
     return ScriptBehaviorArgumentKind::BehaviorContext;
 }
 
+bool ValidateAttachedModuleGeneration(CKBehavior *behavior,
+                                      ScriptComponentState *state,
+                                      ScriptManager *manager,
+                                      const char *operation) {
+    if (!state || !state->Loaded) {
+        return true;
+    }
+    const CKDWORD currentGeneration = manager
+        ? manager->GetModuleGeneration(state->ModuleName.c_str())
+        : 0;
+    if (IsAttachedModuleGenerationCurrent(state->AttachedModuleGeneration,
+                                          currentGeneration)) {
+        return true;
+    }
+
+    if (state->Invoker && state->Invoker->IsContextSuspended()) {
+        state->Invoker->AbortContext();
+    }
+    state->ActiveLifecycle = nullptr;
+    state->ActiveLifecycleName.clear();
+
+    std::ostringstream message;
+    message << (operation ? operation : "Component invocation")
+            << " rejected because module generation is stale: module='"
+            << state->ModuleName
+            << "' attached=" << state->AttachedModuleGeneration
+            << " current=" << currentGeneration << ".";
+    SetErrorOutput(behavior, state, message.str());
+    return false;
+}
+
 LifecycleInvokeStatus InvokeLifecycle(CKBehavior *beh, ScriptComponentState *state, asIScriptFunction *method, const CKBehaviorContext &behcontext, const char *name) {
     if (!method) {
         return LifecycleInvokeStatus::Finished;
@@ -657,6 +689,13 @@ LifecycleInvokeStatus InvokeLifecycle(CKBehavior *beh, ScriptComponentState *sta
 
     if (!state || !state->Invoker || !state->Object) {
         SetErrorOutput(beh, state, std::string("Cannot execute lifecycle method: ") + name);
+        return LifecycleInvokeStatus::Failed;
+    }
+    if (!ValidateAttachedModuleGeneration(
+            beh,
+            state,
+            behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr,
+            name)) {
         return LifecycleInvokeStatus::Failed;
     }
 
@@ -686,6 +725,13 @@ LifecycleInvokeStatus InvokeLifecycle(CKBehavior *beh, ScriptComponentState *sta
 LifecycleInvokeStatus ResumeMessage(CKBehavior *beh, ScriptComponentState *state, const CKBehaviorContext &behcontext) {
     if (!state || !state->Invoker || !state->Object || !state->OnMessage) {
         SetErrorOutput(beh, state, "Cannot resume message handler.");
+        return LifecycleInvokeStatus::Failed;
+    }
+    if (!ValidateAttachedModuleGeneration(
+            beh,
+            state,
+            behcontext.Context ? ScriptManager::GetManager(behcontext.Context) : nullptr,
+            "OnMessage resume")) {
         return LifecycleInvokeStatus::Failed;
     }
     if (!state->Invoker->IsContextSuspended()) {
@@ -838,6 +884,10 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
         state->Failed = false;
     }
 
+    if (!ValidateAttachedModuleGeneration(beh, state, man, "Component invocation")) {
+        return false;
+    }
+
     if (state->Failed) {
         return false;
     }
@@ -888,6 +938,14 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
     if (!state->Invoker->SetScript(moduleBinding.ModuleName.c_str())) {
         const std::string attachContext = ComponentAttachErrorPrefix(man, moduleBinding);
         SetInvocationErrorOutput(beh, state, attachContext.c_str());
+        return false;
+    }
+    state->AttachedModuleGeneration = man->GetModuleGeneration(moduleBinding.ModuleName.c_str());
+    if (state->AttachedModuleGeneration == 0) {
+        SetErrorOutput(beh,
+                       state,
+                       "Component module does not have a tracked generation: " +
+                           moduleBinding.ModuleName);
         return false;
     }
 

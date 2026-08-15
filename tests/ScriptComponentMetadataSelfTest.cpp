@@ -578,6 +578,12 @@ bool RunComponentScriptEntryModuleSelfTest(CKContext *context, asIScriptEngine *
         error = "Component script-entry self-test did not resolve Script through the script entry manager.";
         return false;
     }
+    if (state->AttachedModuleGeneration == 0 ||
+        state->AttachedModuleGeneration != manager->GetModuleGeneration(state->ModuleName.c_str())) {
+        cleanup();
+        error = "Component script-entry self-test did not record its attached module generation.";
+        return false;
+    }
     if (!ExpectIntProperty(state->Object, "startCount", 1, error) ||
         !ExpectIntProperty(state->Object, "updateCount", 1, error) ||
         !ExpectIntProperty(state->Object, "frameError", 0, error)) {
@@ -596,6 +602,34 @@ bool RunComponentScriptEntryModuleSelfTest(CKContext *context, asIScriptEngine *
         api->UnloadModule(liveModuleName.c_str(), &mutationResult) != CKAS_INUSE) {
         cleanup();
         error = "Component script-entry self-test expected live components to block public module mutation.";
+        return false;
+    }
+
+    const CKDWORD attachedModuleGeneration = state->AttachedModuleGeneration;
+    state->AttachedModuleGeneration = attachedModuleGeneration + 1;
+    ScriptMessage staleModuleMessage;
+    std::string staleModuleError;
+    if (manager->DeliverComponentMessage(behavior->GetID(),
+                                         state->MessageGeneration,
+                                         staleModuleMessage,
+                                         false,
+                                         staleModuleError) ||
+        staleModuleError.find("module generation is stale") == std::string::npos ||
+        !state->Failed) {
+        cleanup();
+        error = "Component script-entry self-test expected direct messages to reject stale module generations.";
+        return false;
+    }
+
+    state->AttachedModuleGeneration = attachedModuleGeneration;
+    state->Failed = false;
+    state->AttachedModuleGeneration = attachedModuleGeneration + 1;
+    ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (!state->Failed || !ExpectIntProperty(state->Object, "updateCount", 1, error)) {
+        cleanup();
+        if (error.empty()) {
+            error = "Component script-entry self-test executed a stale module lifecycle method.";
+        }
         return false;
     }
 

@@ -1,9 +1,11 @@
 add_executable(CKAngelScriptCoreTests
         ScriptCoreTests.cpp
         ScriptInitialLifecycleSelfTest.cpp
+        ScriptModuleGenerationSelfTest.cpp
         ScriptRuntimeMetadataSelfTest.cpp
         ScriptRuntimeDependencySelfTest.cpp
         "${PROJECT_SOURCE_DIR}/src/ScriptInitialLifecycle.cpp"
+        "${PROJECT_SOURCE_DIR}/src/ScriptModuleGeneration.cpp"
         "${PROJECT_SOURCE_DIR}/src/ScriptRuntimeMetadata.cpp"
         "${PROJECT_SOURCE_DIR}/src/ScriptRuntimeDependency.cpp"
 )

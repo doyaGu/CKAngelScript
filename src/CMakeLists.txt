@@ -88,6 +88,7 @@ set(CKAS_SOURCES
         ScriptSourcePaths.cpp
         ScriptModuleBytecode.cpp
         ScriptModuleBytecodeStore.cpp
+        ScriptModuleGeneration.cpp
         ScriptModuleMutationPolicy.cpp
         ScriptModuleStateStore.cpp
         ScriptInitialLifecycle.cpp

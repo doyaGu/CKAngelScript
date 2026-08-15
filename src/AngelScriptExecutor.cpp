@@ -16,6 +16,7 @@
 #include "ScriptHostScope.h"
 #include "ScriptInvoker.h"
 #include "ScriptManager.h"
+#include "ScriptModuleGeneration.h"
 #include "ScriptParameterConversion.h"
 #include "ScriptRuntime.h"
 #include "ScriptExecutorState.h"
@@ -833,6 +834,37 @@ bool CacheLifecycle(asITypeInfo *type,
     return true;
 }
 
+bool ValidateAttachedModuleGeneration(const CKBehaviorContext &ctx,
+                                      ScriptExecutorState *state,
+                                      const char *operation) {
+    if (!state || !state->Loaded) {
+        return true;
+    }
+    const CKDWORD currentGeneration = state->Manager
+        ? state->Manager->GetModuleGeneration(state->ModuleName.c_str())
+        : 0;
+    if (IsAttachedModuleGenerationCurrent(state->AttachedModuleGeneration,
+                                          currentGeneration)) {
+        return true;
+    }
+
+    if (state->Invoker && state->Invoker->IsContextSuspended()) {
+        state->Invoker->AbortContext();
+    }
+    state->SuspendedInputs.clear();
+    state->ActiveLifecycleName.clear();
+    state->Failed = true;
+
+    std::ostringstream message;
+    message << (operation ? operation : "Executor invocation")
+            << " rejected because module generation is stale: module='"
+            << state->ModuleName
+            << "' attached=" << state->AttachedModuleGeneration
+            << " current=" << currentGeneration << ".";
+    ConsoleError(ctx, message.str());
+    return false;
+}
+
 LifecycleInvokeStatus InvokeLifecycle(const CKBehaviorContext &ctx,
                                       ScriptExecutorState *state,
                                       asIScriptFunction *method,
@@ -840,6 +872,9 @@ LifecycleInvokeStatus InvokeLifecycle(const CKBehaviorContext &ctx,
                                       const char *name) {
     if (!state || !method) {
         return LifecycleInvokeStatus::Finished;
+    }
+    if (!ValidateAttachedModuleGeneration(ctx, state, name)) {
+        return LifecycleInvokeStatus::Failed;
     }
     if (state->Invoker && !state->Invoker->IsContextSuspended()) {
         state->ActiveLifecycleName = name ? name : "";
@@ -869,6 +904,9 @@ void CancelExecutorAsyncWork(ScriptExecutorState *state, const char *reason) {
 
 void InvokeOnDestroy(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
     if (state->Invoker && state->Object && state->OnDestroy) {
+        if (!ValidateAttachedModuleGeneration(ctx, state, "OnDestroy")) {
+            return;
+        }
         if (state->Invoker->IsContextSuspended()) {
             state->Invoker->AbortContext();
             state->SuspendedInputs.clear();
@@ -924,6 +962,7 @@ void ReleaseRuntimeState(ScriptExecutorState *state) {
     delete state->Invoker;
     state->Invoker = nullptr;
     state->Loaded = false;
+    state->AttachedModuleGeneration = 0;
     state->InitialLifecycle.Clear();
     state->SuspendedInputs.clear();
     state->ActiveLifecycleName.clear();
@@ -1060,6 +1099,10 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
 
     TransitionIdentity(ctx, state, scriptId, moduleName, className, interfaceText);
 
+    if (!ValidateAttachedModuleGeneration(ctx, state, "Executor invocation")) {
+        return ExecutorReadyStatus::Failed;
+    }
+
     if (state->Failed) {
         return ExecutorReadyStatus::Failed;
     }
@@ -1084,6 +1127,13 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         std::string attachError;
         if (!AttachScriptEntryModule(manager, state->Invoker, scriptId, moduleName, attachError)) {
             FailSetup(ctx, state, "Failed to attach script module: " + attachError);
+            return ExecutorReadyStatus::Failed;
+        }
+        state->AttachedModuleGeneration = manager->GetModuleGeneration(moduleName.c_str());
+        if (state->AttachedModuleGeneration == 0) {
+            FailSetup(ctx,
+                      state,
+                      "Executor module does not have a tracked generation: " + moduleName);
             return ExecutorReadyStatus::Failed;
         }
 

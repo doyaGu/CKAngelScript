@@ -4,6 +4,7 @@
 #include <string>
 
 bool RunScriptInitialLifecycleSelfTest(std::string &error);
+bool RunScriptModuleGenerationSelfTest(std::string &error);
 
 namespace ScriptRuntimeMetadata {
 bool RunScriptRuntimeMetadataSelfTest(std::string &error);
