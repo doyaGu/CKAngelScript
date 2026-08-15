@@ -392,7 +392,6 @@ struct ScriptRuntime::Module {
     bool PendingDisable = false;
     bool PendingDestroy = false;
     bool PendingErase = false;
-    bool PendingPause = false;
     bool PendingReset = false;
     std::unique_ptr<Module> PendingReplacement;
 };
@@ -678,7 +677,7 @@ void ScriptRuntime::PreProcess() {
             if (m_Paused &&
                 !module->PendingDisable &&
                 !module->PendingDestroy &&
-                !module->PendingPause &&
+                !module->InitialLifecycle.PausePending() &&
                 !module->PendingReset) {
                 continue;
             }
@@ -775,7 +774,8 @@ void ScriptRuntime::OnPause() {
                                                                              m_FrameIndex,
                                                                              0.0f,
                                                                              0.0f);
-        module->InitialLifecycle.RequestPause();
+        CancelActiveInvocation(*module);
+        module->InitialLifecycle.RequestPause(module->EnableCalled);
         PauseModule(*module, ctx);
     }
 }
@@ -798,7 +798,7 @@ void ScriptRuntime::OnResume() {
                                                                              m_FrameIndex,
                                                                              0.0f,
                                                                              0.0f);
-        const bool transitionBlocked = module->PendingPause ||
+        const bool transitionBlocked = module->InitialLifecycle.PausePending() ||
                                        module->PendingDisable ||
                                        module->PendingDestroy ||
                                        module->PendingReset;
@@ -1615,7 +1615,7 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
     module.Loaded = false;
     module.PendingDestroy = false;
     module.PendingDisable = false;
-    module.PendingPause = false;
+    module.InitialLifecycle.CompletePause();
     module.InitialLifecycle.CompleteResume();
     module.PendingReset = false;
     return true;
@@ -1661,58 +1661,43 @@ bool ScriptRuntime::DisableModule(Module &module) {
 
 bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
     if (!UsesRuntimeLifecycle(module.Meta)) {
-        module.PendingPause = false;
+        module.InitialLifecycle.CompletePause();
         return true;
     }
-    if (!module.PendingPause) {
-        CancelActiveInvocation(module);
-    }
-    module.PendingPause = true;
-    if (!module.Enabled) {
-        module.PendingPause = false;
-        return true;
-    }
+    const ScriptLifecycleInvocationStatus status = module.InitialLifecycle.AdvancePause(
+        [&](ScriptPausePhase phase) {
+            const bool disablePhase = phase == ScriptPausePhase::OnDisable;
+            if ((!disablePhase && !module.Enabled) ||
+                (disablePhase && !module.EnableCalled)) {
+                return ScriptLifecycleInvocationStatus::Finished;
+            }
 
-    auto makeDisableContext = [&]() {
-        return MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                  module.Meta,
-                                  "OnDisable",
-                                  ModuleState(module),
-                                  module.Generation,
-                                  m_FrameIndex,
-                                  context.DeltaTime(),
-                                  context.TimeSeconds());
-    };
-
-    if (module.ActiveCall && module.ActiveInvocation == "OnDisable") {
-        const InvokeStatus status = Invoke(module, "OnDisable", makeDisableContext());
-        if (status == InvokeStatus::Suspended) {
-            return false;
-        }
-        if (module.EnableCalled) {
-            module.EnableCalled = false;
-        }
-        module.PendingPause = false;
-        return true;
-    }
-
-    InvokeStatus status = Invoke(module, "OnPause", context);
-    if (status == InvokeStatus::Suspended) {
-        return false;
-    }
-    if (status == InvokeStatus::Failed) {
-        module.PendingPause = false;
-        return true;
-    }
-    if (module.EnableCalled) {
-        status = Invoke(module, "OnDisable", makeDisableContext());
-        if (status == InvokeStatus::Suspended) {
-            return false;
-        }
-        module.EnableCalled = false;
-    }
-    module.PendingPause = false;
-    return true;
+            const char *name = disablePhase ? "OnDisable" : "OnPause";
+            const ScriptContext phaseContext = disablePhase
+                ? MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                     module.Meta,
+                                     name,
+                                     ModuleState(module),
+                                     module.Generation,
+                                     m_FrameIndex,
+                                     context.DeltaTime(),
+                                     context.TimeSeconds())
+                : context;
+            const InvokeStatus invokeStatus = Invoke(module, name, phaseContext);
+            if (disablePhase && invokeStatus != InvokeStatus::Suspended) {
+                module.EnableCalled = false;
+            }
+            switch (invokeStatus) {
+            case InvokeStatus::Finished:
+                return ScriptLifecycleInvocationStatus::Finished;
+            case InvokeStatus::Suspended:
+                return ScriptLifecycleInvocationStatus::Suspended;
+            case InvokeStatus::Failed:
+                return ScriptLifecycleInvocationStatus::Failed;
+            }
+            return ScriptLifecycleInvocationStatus::Failed;
+        });
+    return status != ScriptLifecycleInvocationStatus::Suspended;
 }
 
 bool ScriptRuntime::ResumeModule(Module &module, const ScriptContext &context) {
@@ -1842,7 +1827,7 @@ const char *ScriptRuntime::ModuleState(const Module &module) const {
     if (module.PendingDisable) {
         return kStateDisabling;
     }
-    if (module.PendingPause || m_Paused) {
+    if (module.InitialLifecycle.PausePending() || m_Paused) {
         return kStatePaused;
     }
     if (module.InitialLifecycle.ResumePending()) {
@@ -1984,7 +1969,7 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
         DisableModule(module);
         return;
     }
-    if (module.PendingPause) {
+    if (module.InitialLifecycle.PausePending()) {
         ScriptContext ctx = makeContext("OnPause");
         PauseModule(module, ctx);
         return;
