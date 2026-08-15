@@ -38,6 +38,15 @@ abort the suspended context and fail the Component without executing stale
 script state. Public unload/replace remains blocked with `CKAS_INUSE` while the
 Component is attached.
 
+Module retirement also preserves ownership boundaries. Runtime Entry retirement
+uses an explicit Module Mutation Origin: after unowned blockers pass preflight,
+it tears down Component and Executor states attached to the old physical module
+before unloading that generation. The Component behavior then resolves and
+instantiates the new Runtime Entry generation on its next invocation. Private
+Component rebuild/delete uses a separate owner origin and unloads only its
+per-behavior module. Neither path grants those permissions to public raw module
+mutation.
+
 ## Metadata Syntax
 
 Metadata is attached to public writable class fields:

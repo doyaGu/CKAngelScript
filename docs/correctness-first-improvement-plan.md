@@ -32,17 +32,15 @@ The first three correctness tranches are implemented:
   abort and fail before touching cached script state when that equality token
   no longer matches the manager;
 - public replacement and unload no longer run a post-commit consumer-detachment
-  hook. Runtime Entry retirement retains its explicit owner-side Executor
-  release, while public raw mutation remains rejection-only.
+  hook. Module Mutation Origin now distinguishes rejection-only public calls,
+  Runtime Entry retirement that coordinates attached Component and Executor
+  teardown, and private Component module retirement.
 
 The following work remains open:
 
 - extend the owner seam to Runtime Entries if the manager-wide reset fallback
   is retired; Executor has no pause/resume lifecycle surface, so no synthetic
   resume callback was added;
-- formalize owner-coordinated Runtime Entry and private Component mutation
-  origins in the module registry; public mutation now has no post-commit
-  detachment path;
 - consolidate lifecycle ordering behind the shared lifecycle seam;
 - add the engine-backed CTest target and obtain a passing real Player callback
   trace for the new startup regressions.
@@ -143,8 +141,11 @@ The implemented default policy now rejects replacement/unload while either
 state store has a matching live consumer. Component and Executor states also
 record the manager generation captured at attach time and reject unknown (`0`)
 or mismatched generations before direct invocation or resume. The redundant
-post-commit `PrepareModuleMutation()` hook has been removed; owner-side Runtime
-Entry retirement remains explicit.
+post-commit `PrepareModuleMutation()` hook has been removed. Runtime Entry
+retirement now preflights external handles, async tasks, and bound import
+consumers before it releases attached Component and Executor states and unloads
+the old physical module. Private Component teardown carries its own explicit
+Module Mutation Origin.
 
 Relevant implementation:
 
@@ -154,9 +155,12 @@ Relevant implementation:
 - [`ScriptComponentState`](../src/ScriptComponentState.h)
 - [Component module ownership contract](component-metadata-manifest.md)
 
-Runtime Entry reloads usually avoid this exact failure because each discovered
-generation receives a different engine module name. Loaded shared modules do
-not have that protection.
+Each Runtime Entry generation receives a different engine module name, which
+keeps candidate staging independent from the active generation. The old
+physical module still has to be retired after its host consumers are quiesced;
+otherwise the unique name only hides a leaked generation. Loaded shared modules
+do not have independent candidate names and remain rejection-only while live
+consumers are attached.
 
 The message-incarnation gap is also closed. Every Component runtime rebuild
 advances `MessageGeneration`, and direct delivery validates both that
@@ -430,8 +434,10 @@ Exit gate:
    policy and remove post-commit consumer detachment.
 4. **Done:** reject public raw mutation with `CKAS_INUSE` for every live
    internal consumer.
-5. Give Runtime Entry retirement and private Component retirement explicit
-   owner-coordinated mutation origins.
+5. **Done:** give Runtime Entry retirement and private Component retirement
+   explicit owner-coordinated Module Mutation Origins. Runtime Entry retirement
+   preflights unowned blockers before releasing its Component and Executor
+   consumers.
 6. Keep replacement staging transactional. Public raw mutation never detaches
    consumers; an owner-coordinated migration stages a generation-specific
    physical module before switching consumers.
@@ -521,7 +527,7 @@ Exit gate:
 | Mutation rejected as in-use | Generation, cache, imports, and consumer remain unchanged |
 | Component is released, then module replaced | Replacement succeeds and generation increments once |
 | Runtime Entry candidate fails to compile | Old Runtime Entry and consumers continue unchanged |
-| Runtime Entry reload succeeds | Consumers attach to the new engine module name; old code no longer executes |
+| Runtime Entry reload retires immediately | Old Component and Executor states and the old physical module are removed; the behaviors rebuild against the new engine module name |
 | Private Component source changes | Only the owning private module is retired and rebuilt |
 | Module has a suspended async consumer | Mutation returns `CKAS_INUSE` |
 | Component runtime is rebuilt with queued messages | Old message target is stale; old message is not delivered to the new object |

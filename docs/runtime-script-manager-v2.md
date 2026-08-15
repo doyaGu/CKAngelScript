@@ -113,6 +113,21 @@ resolve to a script entry id when no loaded module has that name, but the
 Component lifecycle is still owned by the Component BB instance and receives
 `BehaviorFrame@`, not `ScriptContext`.
 
+## Reload and Module Ownership
+
+Reload compiles and validates a candidate under a generation-specific physical
+module name before disturbing the active Runtime Entry. A failed candidate
+therefore leaves the active generation and its consumers unchanged.
+
+Retiring the old generation carries an explicit Runtime Entry Module Mutation
+Origin. The module registry first rejects unowned blockers such as public
+object/execution handles, async tasks, and bound import consumers. It then
+tears down Component and Executor states attached to that physical module and
+unloads it. A Component behavior whose state was retired resolves the Runtime
+Entry again and builds against the new generation on its next invocation.
+Public raw replace/unload has no such authority and continues to return
+`CKAS_INUSE` while either host consumer is attached.
+
 ## Lifecycle Order
 
 | Phase | When it is used |

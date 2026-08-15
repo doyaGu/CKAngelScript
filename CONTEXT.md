@@ -24,6 +24,10 @@ _Avoid_: Cached CK pointer, object wrapper
 A configured one-shot or task-based execution of a Virtools Building Block prototype through the behavior bridge.
 _Avoid_: Native callback, direct BB pointer call
 
+**Module Mutation Origin**:
+The explicit authority carried into module load, replace, or unload policy. Public mutation is rejection-only; Runtime Entry retirement may quiesce Component and Executor consumers attached to its physical module generation; private Component retirement may unload only the module owned by that Component.
+_Avoid_: Caller type, reload flag, internal unload
+
 ## Flagged ambiguities
 
 - `Context` alone is ambiguous between AngelScript execution context, `CKContext`, `ScriptContext`, and `CKBehaviorContext`. Use the exact type, or Script Host Scope for the resolved high-level host identity.
