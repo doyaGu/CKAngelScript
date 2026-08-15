@@ -163,7 +163,6 @@ struct ScriptComponentState {
     bool Loaded = false;
     bool StaticMessageSubscriptionsRegistered = false;
     ScriptInitialLifecycle InitialLifecycle;
-    bool DesiredEnabled = false;
     bool InstanceEnabled = false;
     bool ScriptActive = false;
     bool Failed = false;

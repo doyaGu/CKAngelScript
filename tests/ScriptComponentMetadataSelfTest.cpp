@@ -238,7 +238,7 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "  void Start(BehaviorFrame@ frame) { Validate(frame, 100); startCount++; }\n"
         "  void OnEnable(BehaviorFrame@ frame) {\n"
         "    Validate(frame, 150); enableCount++;\n"
-        "    if (enableCount == 2) { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); Validate(frame, 155); }\n"
+        "    if (enableCount == 2 || enableCount == 3) { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); Validate(frame, 155); }\n"
         "  }\n"
         "  void OnDisable(BehaviorFrame@ frame) { Validate(frame, 160); disableCount++; AsyncTask<void>@ delay = Async::Delay(1); Await(delay); Validate(frame, 170); }\n"
         "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
@@ -412,6 +412,44 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         return false;
     }
 
+    if (CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORPAUSE, &behaviorContext) != CK_OK ||
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORRESUME, &behaviorContext) != CK_OK) {
+        cleanup();
+        error = "Component explicit disable self-test could not begin Host Activation.";
+        return false;
+    }
+    scheduler->Tick();
+    const int secondLifecycleResumeCode =
+        ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (secondLifecycleResumeCode != CKBR_ACTIVATENEXTFRAME ||
+        !state->Invoker->IsContextSuspended() ||
+        state->ActiveLifecycleName != "OnEnable" ||
+        !state->InitialLifecycle.DesiredEnabled() ||
+        !state->InitialLifecycle.ResumePending()) {
+        cleanup();
+        error = "Component explicit disable self-test did not reach suspended OnEnable.";
+        return false;
+    }
+    behavior->ActivateInput(1, TRUE);
+    const int disableCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (disableCode != CKBR_OK || state->Invoker->IsContextSuspended() ||
+        !state->ActiveLifecycleName.empty() || state->InstanceEnabled ||
+        state->InitialLifecycle.DesiredEnabled() ||
+        state->InitialLifecycle.ResumePending()) {
+        cleanup();
+        error = "Component explicit Disable did not supersede suspended Host Activation.";
+        return false;
+    }
+    behavior->ActivateInput(0, TRUE);
+    const int reenableCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (reenableCode != CKBR_ACTIVATENEXTFRAME || !state->InstanceEnabled ||
+        !state->InitialLifecycle.DesiredEnabled() ||
+        state->InitialLifecycle.ResumePending()) {
+        cleanup();
+        error = "Component explicit disable self-test could not reactivate the instance.";
+        return false;
+    }
+
     messageError.clear();
     if (!manager->DeliverComponentMessage(behavior->GetID(),
                                           state->MessageGeneration,
@@ -440,10 +478,10 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
 
     asIScriptObject *object = state->Object;
     if (!ExpectIntProperty(object, "startCount", 1, error) ||
-        !ExpectIntProperty(object, "updateCount", 1, error) ||
+        !ExpectIntProperty(object, "updateCount", 2, error) ||
         !ExpectIntProperty(object, "messageCount", 1, error) ||
-        !ExpectIntProperty(object, "enableCount", 2, error) ||
-        !ExpectIntProperty(object, "disableCount", 1, error) ||
+        !ExpectIntProperty(object, "enableCount", 4, error) ||
+        !ExpectIntProperty(object, "disableCount", 2, error) ||
         !ExpectIntProperty(object, "resetSawCancelled", 1, error) ||
         !ExpectIntProperty(object, "resetCompleted", 1, error) ||
         !ExpectIntProperty(object, "legacyUpdateCount", 0, error) ||
