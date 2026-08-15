@@ -433,6 +433,76 @@ bool RunRuntimeAsyncOwnerReloadSelfTest(ScriptManager *manager, std::string &err
     return true;
 }
 
+bool RunRuntimeAsyncOwnerResetSelfTest(ScriptManager *manager, std::string &error) {
+    if (!manager || !manager->GetScriptEngine() || !manager->GetAsyncScheduler()) {
+        error = "Runtime async reset owner self-test requires an initialized ScriptManager and async scheduler.";
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    constexpr const char *scriptId = "ckas.runtime.owner.reset.selftest";
+    const fs::path root = fs::temp_directory_path() / "ckas-runtime-async-reset-owner-selftest";
+    std::error_code fsError;
+    fs::remove_all(root, fsError);
+    fsError.clear();
+
+    const ScopedEnvVar scriptRoots("CKAS_SCRIPT_ROOTS", root.string());
+    const ScopedEnvVar validateOnly("CKAS_SCRIPT_VALIDATE_ONLY", "0");
+    const std::string source =
+        "bool spawned = false;\n"
+        "int oldRan = 0;\n"
+        "int newRan = 0;\n"
+        "int resetCount = 0;\n"
+        "void OldWork() { oldRan++; }\n"
+        "void NewWork() { newRan++; }\n"
+        "void Update(const ScriptContext &in ctx) {\n"
+        "  if (!spawned) { spawned = true; Async::Spawn(AsyncVoidFunc(OldWork)); }\n"
+        "}\n"
+        "void OnReset(const ScriptContext &in ctx) {\n"
+        "  resetCount++;\n"
+        "  Async::Spawn(AsyncVoidFunc(NewWork));\n"
+        "}\n";
+    if (!PrepareRuntimeSelfTestPackage(root, scriptId, source, error)) {
+        fs::remove_all(root, fsError);
+        return false;
+    }
+
+    ScriptRuntime runtime(manager);
+    auto cleanup = [&]() {
+        runtime.Clear();
+        manager->GetAsyncScheduler()->Clear();
+        fs::remove_all(root, fsError);
+    };
+
+    std::string loadError;
+    if (!runtime.ReloadAll(&loadError)) {
+        cleanup();
+        error = loadError.empty()
+                    ? "Runtime async reset owner self-test failed to load its script package."
+                    : loadError;
+        return false;
+    }
+    runtime.PreProcess();
+    runtime.OnReset();
+    manager->GetAsyncScheduler()->Tick();
+
+    const std::string moduleName = runtime.ModuleName(scriptId);
+    int oldRan = 0;
+    int newRan = 0;
+    int resetCount = 0;
+    if (!ReadRuntimeGlobalInt(manager, moduleName, "oldRan", oldRan) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "newRan", newRan) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "resetCount", resetCount) ||
+        oldRan != 0 || newRan != 1 || resetCount != 1) {
+        cleanup();
+        error = "Runtime async reset owner self-test did not isolate old and new reset epochs.";
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
+
 } // namespace
 
 bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -917,6 +987,9 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         return false;
     }
     if (!RunRuntimeAsyncOwnerReloadSelfTest(manager, error)) {
+        return false;
+    }
+    if (!RunRuntimeAsyncOwnerResetSelfTest(manager, error)) {
         return false;
     }
     return true;
