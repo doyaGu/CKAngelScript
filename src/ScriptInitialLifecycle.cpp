@@ -51,6 +51,32 @@ bool ScriptInitialLifecycle::Complete(ScriptInitialPhase phase) {
     return true;
 }
 
+void ScriptInitialLifecycle::RequestPause() {
+    m_Paused = true;
+    m_ResumePending = false;
+}
+
+void ScriptInitialLifecycle::RequestResume(bool eligible) {
+    m_Paused = false;
+    m_ResumePending = eligible;
+}
+
+bool ScriptInitialLifecycle::Paused() const {
+    return m_Paused;
+}
+
+bool ScriptInitialLifecycle::ResumePending() const {
+    return m_ResumePending;
+}
+
+bool ScriptInitialLifecycle::ResumeReady(bool transitionBlocked) const {
+    return m_ResumePending && !m_Paused && !transitionBlocked;
+}
+
+void ScriptInitialLifecycle::CompleteResume() {
+    m_ResumePending = false;
+}
+
 void ScriptInitialLifecycle::ResetStart() {
     if (m_CompletedPhases > 2) {
         m_CompletedPhases = 2;
@@ -59,4 +85,6 @@ void ScriptInitialLifecycle::ResetStart() {
 
 void ScriptInitialLifecycle::Clear() {
     m_CompletedPhases = 0;
+    m_Paused = false;
+    m_ResumePending = false;
 }

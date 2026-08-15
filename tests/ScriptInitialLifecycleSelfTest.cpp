@@ -63,5 +63,25 @@ bool RunScriptInitialLifecycleSelfTest(std::string &error) {
         error = "Initial lifecycle did not resume from the suspended phase.";
         return false;
     }
+
+    lifecycle.RequestPause();
+    lifecycle.RequestResume(true);
+    if (lifecycle.Paused() || !lifecycle.ResumePending() ||
+        lifecycle.ResumeReady(true) || !lifecycle.ResumePending() ||
+        !lifecycle.ResumeReady(false)) {
+        error = "Lifecycle did not retain Resume while Pause completion was blocked.";
+        return false;
+    }
+    lifecycle.CompleteResume();
+    if (lifecycle.ResumePending()) {
+        error = "Lifecycle did not complete the retained Resume event.";
+        return false;
+    }
+    lifecycle.RequestResume(true);
+    lifecycle.RequestPause();
+    if (!lifecycle.Paused() || lifecycle.ResumePending()) {
+        error = "Lifecycle did not let a new Pause supersede the retained Resume event.";
+        return false;
+    }
     return true;
 }
