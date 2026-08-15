@@ -381,8 +381,10 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
     }
 
     if (CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORPAUSE, &behaviorContext) != CK_OK ||
+        !state->InitialLifecycle.PausePending() ||
         !state->Invoker->IsContextSuspended() || state->ActiveLifecycleName != "OnDisable" ||
-        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORRESUME, &behaviorContext) != CK_OK) {
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORRESUME, &behaviorContext) != CK_OK ||
+        !state->InitialLifecycle.PausePending()) {
         cleanup();
         error = "Component runtime self-test could not suspend disable across Pause and Resume.";
         return false;
@@ -393,6 +395,7 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         !state->Invoker->IsContextSuspended() ||
         state->ActiveLifecycleName != "OnEnable" ||
         state->InstanceEnabled || state->InitialLifecycle.Paused() ||
+        state->InitialLifecycle.PausePending() ||
         !state->InitialLifecycle.ResumePending()) {
         cleanup();
         error = "Component runtime self-test did not retain Resume through suspended OnEnable.";
