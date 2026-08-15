@@ -54,6 +54,18 @@ ScriptExecutorState *ScriptExecutorStateStore::Get(CK_ID id, CKBehavior *expecte
     return it->second.get();
 }
 
+bool ScriptExecutorStateStore::HasModuleConsumer(const std::string &moduleName) const {
+    if (moduleName.empty()) {
+        return false;
+    }
+    for (const auto &entry : m_Impl->States) {
+        if (entry.second && entry.second->ModuleName == moduleName) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool ScriptExecutorStateStore::Remove(CK_ID id,
                                       CKBehavior *expectedBehavior,
                                       const StateCallback &beforeRemove) {

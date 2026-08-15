@@ -44,10 +44,7 @@ ScriptComponentState *ScriptComponentStateStore::GetOrCreate(
 
     auto state = std::make_unique<ScriptComponentState>();
     state->BehaviorId = id;
-    state->MessageGeneration = m_Impl->NextMessageGeneration++;
-    if (m_Impl->NextMessageGeneration == 0) {
-        m_Impl->NextMessageGeneration = 1;
-    }
+    AdvanceMessageGeneration(state.get());
     state->Behavior = behavior;
     state->MessageTarget = messageTarget;
 
@@ -64,6 +61,28 @@ ScriptComponentState *ScriptComponentStateStore::Get(CK_ID id, CKBehavior *expec
     }
 
     return it->second.get();
+}
+
+void ScriptComponentStateStore::AdvanceMessageGeneration(ScriptComponentState *state) {
+    if (!state) {
+        return;
+    }
+    state->MessageGeneration = m_Impl->NextMessageGeneration++;
+    if (m_Impl->NextMessageGeneration == 0) {
+        m_Impl->NextMessageGeneration = 1;
+    }
+}
+
+bool ScriptComponentStateStore::HasModuleConsumer(const std::string &moduleName) const {
+    if (moduleName.empty()) {
+        return false;
+    }
+    for (const auto &entry : m_Impl->States) {
+        if (entry.second && entry.second->ModuleName == moduleName) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ScriptComponentStateStore::Remove(CK_ID id,
@@ -113,6 +132,8 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
         return;
     }
 
+    m_ComponentStates.AdvanceMessageGeneration(state);
+
     if (m_BehaviorBridge && state->BehaviorId) {
         m_BehaviorBridge->DestroyComponentTasks(state->BehaviorId);
     }
@@ -128,10 +149,9 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->ReleaseCachedMethods();
     state->ReleaseObject();
 
-    if (unloadOwnedModule && state->OwnsModule() && !state->ModuleName.empty()) {
-        UnloadModule(state->ModuleName.c_str(), nullptr);
-    }
-
+    const std::string ownedModuleName = unloadOwnedModule && state->OwnsModule()
+        ? state->ModuleName
+        : std::string();
     state->ModuleName.clear();
     state->ScriptEntryId.clear();
     state->Bindings.clear();
@@ -149,6 +169,10 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->DestructionCompleted = false;
     state->PendingDisableOutput = false;
     state->PendingResetRuntime = false;
+
+    if (!ownedModuleName.empty()) {
+        UnloadModule(ownedModuleName.c_str(), nullptr);
+    }
 }
 
 void ScriptManager::ReleaseComponentState(CKBehavior *behavior) {

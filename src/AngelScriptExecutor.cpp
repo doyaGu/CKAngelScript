@@ -1243,6 +1243,14 @@ void ScriptManager::ClearExecutorStates() {
     });
 }
 
+bool ScriptManager::HasInternalModuleConsumerForModule(const char *moduleName) const {
+    if (!moduleName || moduleName[0] == '\0') {
+        return false;
+    }
+    return m_ComponentStates.HasModuleConsumer(moduleName) ||
+           m_ExecutorStates.HasModuleConsumer(moduleName);
+}
+
 void ScriptManager::PrepareModuleMutation(const char *moduleName) {
     ReleaseExecutorStatesForModule(moduleName);
 }

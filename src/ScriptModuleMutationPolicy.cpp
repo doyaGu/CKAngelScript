@@ -7,14 +7,22 @@
 #include "ScriptApiDiagnostics.h"
 #include "ScriptAsync.h"
 #include "ScriptHandleRegistry.h"
+#include "ScriptManager.h"
 #include "ScriptModuleStateStore.h"
 
 CKAS_STATUS ScriptModuleMutationPolicy::CheckRuntimeHandlesReleased(
+    const ScriptManager &manager,
     const ScriptHandleRegistry &handles,
     const ScriptAsyncScheduler *asyncScheduler,
     ScriptApiDiagnostics &diagnostics,
     const char *moduleName,
     CKAngelScriptResult *result) {
+    if (manager.HasInternalModuleConsumerForModule(moduleName)) {
+        return diagnostics.StoreResult(result,
+                                       CKAS_INUSE,
+                                       0,
+                                       "Module has live component or executor consumers.");
+    }
     if (handles.HasRuntimeHandleForModule(moduleName)) {
         return diagnostics.StoreResult(result,
                                        CKAS_INUSE,
@@ -47,6 +55,7 @@ CKAS_STATUS ScriptModuleMutationPolicy::CheckNoBoundImportConsumers(
 }
 
 CKAS_STATUS ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
+    const ScriptManager &manager,
     const ScriptHandleRegistry &handles,
     const ScriptAsyncScheduler *asyncScheduler,
     const ScriptModuleStateStore &stateStore,
@@ -54,7 +63,7 @@ CKAS_STATUS ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
     const char *moduleName,
     CKAngelScriptResult *result) {
     const CKAS_STATUS runtimeStatus =
-        CheckRuntimeHandlesReleased(handles, asyncScheduler, diagnostics, moduleName, result);
+        CheckRuntimeHandlesReleased(manager, handles, asyncScheduler, diagnostics, moduleName, result);
     if (runtimeStatus != CKAS_OK) {
         return runtimeStatus;
     }

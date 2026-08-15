@@ -6,11 +6,13 @@
 class ScriptApiDiagnostics;
 class ScriptAsyncScheduler;
 class ScriptHandleRegistry;
+class ScriptManager;
 class ScriptModuleStateStore;
 
 class ScriptModuleMutationPolicy {
 public:
-    static CKAS_STATUS CheckRuntimeHandlesReleased(const ScriptHandleRegistry &handles,
+    static CKAS_STATUS CheckRuntimeHandlesReleased(const ScriptManager &manager,
+                                                   const ScriptHandleRegistry &handles,
                                                    const ScriptAsyncScheduler *asyncScheduler,
                                                    ScriptApiDiagnostics &diagnostics,
                                                    const char *moduleName,
@@ -19,7 +21,8 @@ public:
                                                    ScriptApiDiagnostics &diagnostics,
                                                    const char *moduleName,
                                                    CKAngelScriptResult *result);
-    static CKAS_STATUS CheckReplaceOrUnloadAllowed(const ScriptHandleRegistry &handles,
+    static CKAS_STATUS CheckReplaceOrUnloadAllowed(const ScriptManager &manager,
+                                                   const ScriptHandleRegistry &handles,
                                                    const ScriptAsyncScheduler *asyncScheduler,
                                                    const ScriptModuleStateStore &stateStore,
                                                    ScriptApiDiagnostics &diagnostics,

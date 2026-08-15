@@ -523,6 +523,36 @@ bool RunComponentScriptEntryModuleSelfTest(CKContext *context, asIScriptEngine *
         return false;
     }
 
+    CKAngelScriptApi api = CKAngelScriptApi::Get(context);
+    CKAngelScriptResult mutationResult = {};
+    const std::string liveModuleName = state->ModuleName;
+    if (!api.IsValid() ||
+        api->CompileModule(liveModuleName.c_str(),
+                           "int replacementProbe = 1;\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &mutationResult) != CKAS_INUSE ||
+        api->UnloadModule(liveModuleName.c_str(), &mutationResult) != CKAS_INUSE) {
+        cleanup();
+        error = "Component script-entry self-test expected live components to block public module mutation.";
+        return false;
+    }
+
+    const std::uint64_t staleMessageGeneration = state->MessageGeneration;
+    manager->ResetComponentStateRuntime(state, false);
+    ScriptMessage staleMessage;
+    std::string staleMessageError;
+    if (state->MessageGeneration == staleMessageGeneration ||
+        manager->DeliverComponentMessage(behavior->GetID(),
+                                         staleMessageGeneration,
+                                         staleMessage,
+                                         false,
+                                         staleMessageError) ||
+        staleMessageError != "Component message target is stale.") {
+        cleanup();
+        error = "Component script-entry self-test expected runtime rebuild to invalidate queued message targets.";
+        return false;
+    }
+
     cleanup();
     error.clear();
     return true;

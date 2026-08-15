@@ -24,6 +24,8 @@ public:
                                       const std::string &messageTarget,
                                       const StateCallback &beforeReplace);
     ScriptComponentState *Get(CK_ID id, CKBehavior *expectedBehavior = nullptr) const;
+    void AdvanceMessageGeneration(ScriptComponentState *state);
+    bool HasModuleConsumer(const std::string &moduleName) const;
     bool Remove(CK_ID id, CKBehavior *expectedBehavior, const StateCallback &beforeRemove);
     void Clear(const StateCallback &beforeRemove);
 

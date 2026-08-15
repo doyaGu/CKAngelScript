@@ -304,6 +304,7 @@ CKAS_STATUS ScriptModuleRegistry::Load(MutationContext &context,
             return context.Diagnostics.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
         const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
+            context.Manager,
             context.HandleRegistry,
             context.AsyncScheduler,
             context.StateStore,
@@ -417,6 +418,7 @@ CKAS_STATUS ScriptModuleRegistry::Compile(MutationContext &context,
             return context.Diagnostics.StoreResult(result, CKAS_ALREADYEXISTS, 0, "Module already exists.");
         }
         const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
+            context.Manager,
             context.HandleRegistry,
             context.AsyncScheduler,
             context.StateStore,
@@ -462,6 +464,7 @@ CKAS_STATUS ScriptModuleRegistry::Unload(MutationContext &context,
         return callbackStatus;
     }
     const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
+        context.Manager,
         context.HandleRegistry,
         context.AsyncScheduler,
         context.StateStore,
