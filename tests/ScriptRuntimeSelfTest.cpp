@@ -326,6 +326,100 @@ bool RunRuntimePendingReplacementSelfTest(ScriptManager *manager, std::string &e
     return true;
 }
 
+bool RunRuntimeAsyncOwnerReloadSelfTest(ScriptManager *manager, std::string &error) {
+    if (!manager || !manager->GetScriptEngine() || !manager->GetAsyncScheduler()) {
+        error = "Runtime async owner self-test requires an initialized ScriptManager and async scheduler.";
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    constexpr const char *reloadedScriptId = "ckas.runtime.owner.reload.selftest";
+    constexpr const char *independentScriptId = "ckas.runtime.owner.independent.selftest";
+    const fs::path root = fs::temp_directory_path() / "ckas-runtime-async-owner-selftest";
+    std::error_code fsError;
+    fs::remove_all(root, fsError);
+    fsError.clear();
+
+    const ScopedEnvVar scriptRoots("CKAS_SCRIPT_ROOTS", root.string());
+    const ScopedEnvVar validateOnly("CKAS_SCRIPT_VALIDATE_ONLY", "0");
+    const std::string reloadedSource =
+        "bool spawned = false;\n"
+        "void Background() { AsyncTask<void>@ delay = Async::Delay(1000); Await(delay); }\n"
+        "void Update(const ScriptContext &in ctx) {\n"
+        "  if (!spawned) { spawned = true; Async::Spawn(AsyncVoidFunc(Background)); }\n"
+        "}\n";
+    const std::string independentSource =
+        "bool spawned = false;\n"
+        "int completed = 0;\n"
+        "void Background() { completed = 1; }\n"
+        "void Update(const ScriptContext &in ctx) {\n"
+        "  if (!spawned) { spawned = true; Async::Spawn(AsyncVoidFunc(Background)); }\n"
+        "}\n";
+    if (!PrepareRuntimeSelfTestPackage(root, reloadedScriptId, reloadedSource, error) ||
+        !PrepareRuntimeSelfTestPackage(root, independentScriptId, independentSource, error)) {
+        fs::remove_all(root, fsError);
+        return false;
+    }
+
+    ScriptRuntime runtime(manager);
+    auto cleanup = [&]() {
+        runtime.Clear();
+        manager->GetAsyncScheduler()->Clear();
+        fs::remove_all(root, fsError);
+    };
+
+    std::string loadError;
+    if (!runtime.ReloadAll(&loadError)) {
+        cleanup();
+        error = loadError.empty()
+                    ? "Runtime async owner self-test failed to load its script packages."
+                    : loadError;
+        return false;
+    }
+    runtime.PreProcess();
+
+    const std::string oldModuleName = runtime.ModuleName(reloadedScriptId);
+    const std::string independentModuleName = runtime.ModuleName(independentScriptId);
+    const std::string replacementSource = "int replacementLoaded = 1;\n";
+    if (oldModuleName.empty() || independentModuleName.empty() ||
+        !PrepareRuntimeSelfTestPackage(root, reloadedScriptId, replacementSource, error)) {
+        cleanup();
+        if (error.empty()) {
+            error = "Runtime async owner self-test could not prepare its replacement generation.";
+        }
+        return false;
+    }
+
+    std::string reloadError;
+    if (!runtime.Reload(reloadedScriptId, &reloadError)) {
+        cleanup();
+        error = reloadError.empty()
+                    ? "Runtime async owner self-test failed to reload its target Runtime Entry."
+                    : reloadError;
+        return false;
+    }
+    const std::string replacementModuleName = runtime.ModuleName(reloadedScriptId);
+    if (manager->HasModule(oldModuleName.c_str()) ||
+        replacementModuleName.empty() || replacementModuleName == oldModuleName ||
+        !manager->HasModule(replacementModuleName.c_str())) {
+        cleanup();
+        error = "Runtime async owner self-test did not retire the reloaded Runtime Entry's owned task generation.";
+        return false;
+    }
+
+    manager->GetAsyncScheduler()->Tick();
+    int independentCompleted = 0;
+    if (!ReadRuntimeGlobalInt(manager, independentModuleName, "completed", independentCompleted) ||
+        independentCompleted != 1) {
+        cleanup();
+        error = "Runtime async owner self-test cancelled an independent Runtime Entry's task.";
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
+
 } // namespace
 
 bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
@@ -807,6 +901,9 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         return false;
     }
     if (!RunRuntimePendingReplacementSelfTest(manager, error)) {
+        return false;
+    }
+    if (!RunRuntimeAsyncOwnerReloadSelfTest(manager, error)) {
         return false;
     }
     return true;

@@ -200,6 +200,7 @@ private:
     InvokeStatus InvokeMessage(Module &module, const ScriptMessage &message, const ScriptContext &context);
     InvokeStatus Invoke(Module &module, const char *name, const ScriptContext &context, bool required = false);
     bool InvokeFinished(Module &module, const char *name, const ScriptContext &context, bool required = false);
+    void CancelOwnedAsyncWork(Module &module, const char *reason);
     void CancelActiveInvocation(Module &module);
     void SetModuleError(Module &module, const std::string &error);
     void OutputDiagnostic(const std::string &message) const;

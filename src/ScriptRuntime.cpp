@@ -13,6 +13,7 @@
 #include "CKAll.h"
 #include "CKPathManager.h"
 #include "CKTimeManager.h"
+#include "ScriptAsync.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptBridgeScope.h"
@@ -380,6 +381,7 @@ struct ScriptRuntime::Module {
     bool Enabled = true;
     bool Loaded = false;
     ScriptInitialLifecycle InitialLifecycle;
+    ScriptAsyncOwnerId AsyncOwnerId = 0;
     bool EnableCalled = false;
     bool Failed = false;
     std::string Error;
@@ -1352,6 +1354,9 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     loaded->Loaded = true;
 
     const bool runtimeLifecycle = UsesRuntimeLifecycle(metadata);
+    if (runtimeLifecycle && m_Manager->GetAsyncScheduler()) {
+        loaded->AsyncOwnerId = m_Manager->GetAsyncScheduler()->CreateOwner();
+    }
 
     if (!metadata.ClassName.empty()) {
         loaded->Type = cached->module->GetTypeInfoByName(metadata.ClassName.c_str());
@@ -1562,6 +1567,10 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
     if (m_Manager && m_Manager->GetMessageBus()) {
         m_Manager->GetMessageBus()->ClearTarget(module.MessageTarget, "Script entry was destroyed.");
     }
+    if (hard || !module.PendingDestroy) {
+        CancelOwnedAsyncWork(module,
+                             "Async work was cancelled because its Runtime Entry is being destroyed.");
+    }
     if (hard) {
         CancelActiveInvocation(module);
     }
@@ -1601,6 +1610,8 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
             CancelActiveInvocation(module);
         }
     }
+    CancelOwnedAsyncWork(module,
+                         "Async work was cancelled because its Runtime Entry was destroyed.");
     ReleaseCachedFunctions(module);
     if (module.Object) {
         module.Object->Release();
@@ -1772,6 +1783,8 @@ bool ScriptRuntime::ResetModule(Module &module, const ScriptContext &context) {
         return true;
     }
     if (!module.PendingReset) {
+        CancelOwnedAsyncWork(module,
+                             "Async work was cancelled because its Runtime Entry is resetting.");
         CancelActiveInvocation(module);
         module.PendingResume = false;
     }
@@ -2004,6 +2017,7 @@ ScriptRuntime::InvokeStatus ScriptRuntime::InvokeMessage(Module &module, const S
 
     ScriptInvocationSpec spec;
     spec.Label = "OnMessage";
+    spec.AsyncOwnerId = module.AsyncOwnerId;
     spec.Prepare = [&module](asIScriptContext *invocationContext) {
         int result = module.Object ? invocationContext->SetObject(module.Object) : asSUCCESS;
         if (result >= 0) {
@@ -2062,6 +2076,7 @@ ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *na
     module.ContextStorage = context;
     ScriptInvocationSpec spec;
     spec.Label = name;
+    spec.AsyncOwnerId = module.AsyncOwnerId;
     spec.Prepare = [&module, func](asIScriptContext *invocationContext) {
         int result = module.Object ? invocationContext->SetObject(module.Object) : asSUCCESS;
         if (result >= 0 && func->GetParamCount() > 0) {
@@ -2090,6 +2105,15 @@ ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *na
 
 bool ScriptRuntime::InvokeFinished(Module &module, const char *name, const ScriptContext &context, bool required) {
     return Invoke(module, name, context, required) == InvokeStatus::Finished;
+}
+
+void ScriptRuntime::CancelOwnedAsyncWork(Module &module, const char *reason) {
+    ScriptAsyncScheduler *scheduler = m_Manager ? m_Manager->GetAsyncScheduler() : nullptr;
+    if (!scheduler || module.AsyncOwnerId == 0) {
+        return;
+    }
+    scheduler->CancelOwner(module.AsyncOwnerId,
+                           reason ? reason : "Async work was cancelled by its Runtime Entry.");
 }
 
 void ScriptRuntime::CancelActiveInvocation(Module &module) {
