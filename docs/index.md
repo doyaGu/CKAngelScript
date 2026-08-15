@@ -13,6 +13,7 @@ This manual is written for AngelScript authors using CKAngelScript inside a Virt
 7. [Messaging](messaging.md) and [Async](async.md): script-to-script communication and cooperative tasks.
 8. [Native FFI](native-ffi.md), [Public API](public-api.md), and [SDK Bindings](sdk-bindings.md): advanced integrations.
 9. [AngelScript Executor](angelscript-executor.md): graph execution BB for AngelScript-driven replacements.
+10. [Correctness-First Runtime Improvement Plan](correctness-first-improvement-plan.md): implementation status for async, lifecycle, module-generation, and validation improvements.
 
 ## Which Doc Do I Need?
 
@@ -31,6 +32,7 @@ This manual is written for AngelScript authors using CKAngelScript inside a Virt
 | Audit exposed API surface | [API Inventory](api-inventory.md) |
 | Understand raw CK/Vx bindings | [SDK Bindings](sdk-bindings.md) |
 | Use a graph execution BB | [AngelScript Executor](angelscript-executor.md) |
+| Review the correctness-first architecture plan | [Correctness-First Runtime Improvement Plan](correctness-first-improvement-plan.md) |
 
 ## Feature Map
 
