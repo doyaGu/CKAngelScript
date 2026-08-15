@@ -227,7 +227,7 @@ bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error
         "void OnEnable(const ScriptContext &in ctx) {\n"
         "  if (ctx.Phase() != \"OnEnable\") { badPhaseCount++; }\n"
         "  enableCount++;\n"
-        "  if (enableCount == 2) { AsyncTask<void>@ delay = Async::Delay(1); Await(delay);\n"
+        "  if (enableCount == 2 || enableCount == 3) { AsyncTask<void>@ delay = Async::Delay(1); Await(delay);\n"
         "    if (ctx.Phase() != \"OnEnable\") { badPhaseCount++; } }\n"
         "}\n"
         "void OnPause(const ScriptContext &in ctx) {\n"
@@ -322,6 +322,43 @@ bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error
                 ", enable=" + std::to_string(enableCount) +
                 ", disable=" + std::to_string(disableCount) +
                 ", badPhase=" + std::to_string(badPhaseCount) + "; expected 1, 1, 2, 1, 0.";
+        return false;
+    }
+
+    runtime.OnPause();
+    runtime.OnResume();
+    scheduler->Tick();
+    runtime.PreProcess();
+    runtime.PreProcess();
+    info = runtime.Info(scriptId);
+    if (info.State() != "resuming" || info.Phase() != "OnEnable") {
+        cleanup();
+        error = "Runtime explicit disable self-test did not reach suspended OnEnable.";
+        return false;
+    }
+    std::string enableError;
+    if (!runtime.Enable(scriptId, false, &enableError)) {
+        cleanup();
+        error = enableError.empty()
+            ? "Runtime explicit disable self-test could not disable the Runtime Entry."
+            : enableError;
+        return false;
+    }
+    info = runtime.Info(scriptId);
+    if (info.Enabled() || info.State() != "disabled" || !info.Phase().empty()) {
+        cleanup();
+        error = "Runtime explicit Disable did not supersede suspended Host Activation.";
+        return false;
+    }
+    scheduler->Tick();
+    runtime.PreProcess();
+    if (!ReadRuntimeGlobalInt(manager, moduleName, "pauseCount", pauseCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "resumeCount", resumeCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "enableCount", enableCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "disableCount", disableCount) ||
+        pauseCount != 2 || resumeCount != 2 || enableCount != 3 || disableCount != 2) {
+        cleanup();
+        error = "Runtime explicit Disable did not prevent suspended OnEnable from resuming.";
         return false;
     }
 

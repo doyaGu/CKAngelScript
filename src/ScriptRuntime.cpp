@@ -378,7 +378,6 @@ struct ScriptRuntime::Module {
     asITypeInfo *Type = nullptr;
     asIScriptFunction *Lifecycle[LifecycleCount] = {};
     asIScriptFunction *OnMessage = nullptr;
-    bool Enabled = true;
     bool Loaded = false;
     ScriptInitialLifecycle InitialLifecycle;
     ScriptAsyncOwnerId AsyncOwnerId = 0;
@@ -700,7 +699,8 @@ void ScriptRuntime::PostProcess() {
     const float timeSeconds = time ? (time->GetTime() * 0.001f) : 0.0f;
     for (std::unique_ptr<Module> &module : m_Modules) {
         if (!module || !UsesRuntimeLifecycle(module->Meta) ||
-            !module->Loaded || module->Failed || !module->Enabled || !module->EnableCalled) {
+            !module->Loaded || module->Failed ||
+            !module->InitialLifecycle.DesiredEnabled() || !module->EnableCalled) {
             continue;
         }
         ScriptContext ctx = MakeRuntimeContext(context,
@@ -787,7 +787,7 @@ void ScriptRuntime::OnResume() {
     m_Paused = false;
     for (std::unique_ptr<Module> &module : m_Modules) {
         if (!module || !UsesRuntimeLifecycle(module->Meta) ||
-            !module->Loaded || module->Failed || !module->Enabled) {
+            !module->Loaded || module->Failed) {
             continue;
         }
         ScriptContext ctx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
@@ -802,7 +802,8 @@ void ScriptRuntime::OnResume() {
                                        module->PendingDisable ||
                                        module->PendingDestroy ||
                                        module->PendingReset;
-        module->InitialLifecycle.RequestResume(true);
+        module->InitialLifecycle.RequestResume(
+            module->InitialLifecycle.DesiredEnabled());
         if (!module->InitialLifecycle.ResumeReady(transitionBlocked)) {
             continue;
         }
@@ -900,7 +901,7 @@ bool ScriptRuntime::Enable(const std::string &id, bool enabled, std::string *err
     EnsureScanned();
     Module *module = FindModule(id);
     if (module) {
-        module->Enabled = enabled;
+        module->InitialLifecycle.SetDesiredEnabled(enabled);
         module->Meta.Enabled = enabled;
         if (!enabled) {
             DisableModule(*module);
@@ -942,7 +943,8 @@ RuntimeScriptInfo ScriptRuntime::Info(const std::string &id) const {
 std::string ScriptRuntime::ModuleName(const std::string &id) {
     EnsureScanned();
     Module *module = FindModule(id);
-    if (!module || !module->Loaded || module->Failed || !module->Enabled || module->ModuleName.empty()) {
+    if (!module || !module->Loaded || module->Failed ||
+        !module->InitialLifecycle.DesiredEnabled() || module->ModuleName.empty()) {
         return std::string();
     }
     return module->ModuleName;
@@ -991,7 +993,8 @@ bool ScriptRuntime::DeliverMessage(const std::string &id, const ScriptMessage &m
         error = "Message target is not a runtime entry.";
         return false;
     }
-    if (!module->Loaded || module->Failed || !module->Enabled || !module->EnableCalled) {
+    if (!module->Loaded || module->Failed ||
+        !module->InitialLifecycle.DesiredEnabled() || !module->EnableCalled) {
         error = "Runtime message target is not ready.";
         return false;
     }
@@ -1259,7 +1262,7 @@ bool ScriptRuntime::ReplaceWithFailedModule(const ScriptRuntimeManifest &metadat
     std::unique_ptr<Module> failed = std::make_unique<Module>();
     failed->Meta = metadata;
     failed->MessageTarget = ScriptMessageBus::RuntimeTarget(metadata.Id);
-    failed->Enabled = metadata.Enabled;
+    failed->InitialLifecycle.SetDesiredEnabled(metadata.Enabled);
     failed->Loaded = false;
     failed->Failed = true;
     failed->Error = error;
@@ -1353,7 +1356,7 @@ bool ScriptRuntime::LoadModule(const ScriptRuntimeManifest &metadata, std::uniqu
     loaded->ModuleName = moduleName;
     loaded->Generation = generation;
     loaded->Cached = cached;
-    loaded->Enabled = metadata.Enabled;
+    loaded->InitialLifecycle.SetDesiredEnabled(metadata.Enabled);
     loaded->Loaded = true;
 
     const bool runtimeLifecycle = UsesRuntimeLifecycle(metadata);
@@ -1623,7 +1626,7 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
 
 bool ScriptRuntime::DisableModule(Module &module) {
     if (!UsesRuntimeLifecycle(module.Meta)) {
-        module.Enabled = false;
+        module.InitialLifecycle.SetDesiredEnabled(false);
         module.PendingDisable = false;
         if (m_Manager && !module.ModuleName.empty()) {
             m_Manager->ReleaseExecutorStatesForModule(module.ModuleName.c_str());
@@ -1667,7 +1670,7 @@ bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
     const ScriptLifecycleInvocationStatus status = module.InitialLifecycle.AdvancePause(
         [&](ScriptPausePhase phase) {
             const bool disablePhase = phase == ScriptPausePhase::OnDisable;
-            if ((!disablePhase && !module.Enabled) ||
+            if ((!disablePhase && !module.InitialLifecycle.DesiredEnabled()) ||
                 (disablePhase && !module.EnableCalled)) {
                 return ScriptLifecycleInvocationStatus::Finished;
             }
@@ -1701,7 +1704,8 @@ bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
 }
 
 bool ScriptRuntime::ResumeModule(Module &module, const ScriptContext &context) {
-    if (!UsesRuntimeLifecycle(module.Meta) || !module.Loaded || module.Failed || !module.Enabled) {
+    if (!UsesRuntimeLifecycle(module.Meta) || !module.Loaded || module.Failed ||
+        !module.InitialLifecycle.DesiredEnabled()) {
         module.InitialLifecycle.CompleteResume();
         return true;
     }
@@ -1842,7 +1846,7 @@ const char *ScriptRuntime::ModuleState(const Module &module) const {
     if (!module.Loaded) {
         return kStateUnloaded;
     }
-    if (!module.Enabled) {
+    if (!module.InitialLifecycle.DesiredEnabled()) {
         return kStateDisabled;
     }
     if (module.EnableCalled) {
@@ -1871,7 +1875,7 @@ RuntimeScriptInfo ScriptRuntime::BuildInfo(const Module &module) const {
     info.m_Author = module.Meta.Author;
     info.m_Category = module.Meta.Category;
     info.m_Tags = module.Meta.Tags;
-    info.m_Enabled = module.Enabled;
+    info.m_Enabled = module.InitialLifecycle.DesiredEnabled();
     info.m_Loaded = module.Loaded;
     info.m_Failed = module.Failed;
     info.m_State = ModuleState(module);
@@ -1993,7 +1997,7 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
                                 timeSeconds) != InvokeStatus::Finished) {
         return;
     }
-    if (!module.Enabled) {
+    if (!module.InitialLifecycle.DesiredEnabled()) {
         return;
     }
     if (!module.EnableCalled) {
@@ -2135,7 +2139,7 @@ void ScriptRuntime::CancelActiveInvocation(Module &module) {
 void ScriptRuntime::SetModuleError(Module &module, const std::string &error) {
     module.Error = error;
     module.Failed = true;
-    module.Enabled = false;
+    module.InitialLifecycle.SetDesiredEnabled(false);
     OutputDiagnostic(fmt::format("{}: {}", module.Meta.Id, error));
 }
 
