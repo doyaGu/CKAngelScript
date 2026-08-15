@@ -236,7 +236,10 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "    if (frame.PinInt(\"Missing\", code + 3) != code + 3) { frameError = code + 3; return; }\n"
         "  }\n"
         "  void Start(BehaviorFrame@ frame) { Validate(frame, 100); startCount++; }\n"
-        "  void OnEnable(BehaviorFrame@ frame) { Validate(frame, 150); enableCount++; }\n"
+        "  void OnEnable(BehaviorFrame@ frame) {\n"
+        "    Validate(frame, 150); enableCount++;\n"
+        "    if (enableCount == 2) { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); Validate(frame, 155); }\n"
+        "  }\n"
         "  void OnDisable(BehaviorFrame@ frame) { Validate(frame, 160); disableCount++; AsyncTask<void>@ delay = Async::Delay(1); Await(delay); Validate(frame, 170); }\n"
         "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
         "  void Update(const CKBehaviorContext &in ctx) { legacyUpdateCount++; }\n"
@@ -387,10 +390,22 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
     scheduler->Tick();
     const int lifecycleResumeCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
     if (lifecycleResumeCode != CKBR_ACTIVATENEXTFRAME ||
-        state->Invoker->IsContextSuspended() ||
-        !state->InstanceEnabled || state->Paused) {
+        !state->Invoker->IsContextSuspended() ||
+        state->ActiveLifecycleName != "OnEnable" ||
+        state->InstanceEnabled || state->InitialLifecycle.Paused() ||
+        !state->InitialLifecycle.ResumePending()) {
         cleanup();
-        error = "Component runtime self-test lost the deferred Resume after suspended OnDisable.";
+        error = "Component runtime self-test did not retain Resume through suspended OnEnable.";
+        return false;
+    }
+    scheduler->Tick();
+    const int enableResumeCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (enableResumeCode != CKBR_ACTIVATENEXTFRAME ||
+        state->Invoker->IsContextSuspended() ||
+        !state->InstanceEnabled || state->InitialLifecycle.Paused() ||
+        state->InitialLifecycle.ResumePending()) {
+        cleanup();
+        error = "Component runtime self-test did not complete deferred Resume after OnEnable.";
         return false;
     }
 

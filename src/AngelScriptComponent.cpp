@@ -1010,7 +1010,7 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
 
 bool EnableInstance(const CKBehaviorContext &behcontext, ScriptComponentState *state) {
     CKBehavior *beh = behcontext.Behavior;
-    if (!state || state->InstanceEnabled || state->Paused || !state->ScriptActive) {
+    if (!state || state->InstanceEnabled || state->InitialLifecycle.Paused() || !state->ScriptActive) {
         return true;
     }
 
@@ -1241,7 +1241,7 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
                 ? CKBR_ACTIVATENEXTFRAME
                 : CKBR_OK;
         }
-        return state->DesiredEnabled && state->ScriptActive && !state->Paused
+        return state->DesiredEnabled && state->ScriptActive && !state->InitialLifecycle.Paused()
             ? CKBR_ACTIVATENEXTFRAME
             : CKBR_OK;
     }
@@ -1254,7 +1254,7 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
                 ? CKBR_ACTIVATENEXTFRAME
                 : CKBR_OK;
         }
-        return state->DesiredEnabled && state->ScriptActive && !state->Paused
+        return state->DesiredEnabled && state->ScriptActive && !state->InitialLifecycle.Paused()
             ? CKBR_ACTIVATENEXTFRAME
             : CKBR_OK;
     }
@@ -1267,26 +1267,29 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
             state->PendingDisableOutput = false;
             beh->ActivateOutput(1);
         }
-        const bool shouldResume = state->PendingResume &&
+        const bool shouldResume = state->InitialLifecycle.ResumeReady(false) &&
                                   state->DesiredEnabled &&
-                                  state->ScriptActive &&
-                                  !state->Paused;
-        state->PendingResume = false;
+                                  state->ScriptActive;
         if (shouldResume) {
             if (!ScriptComponentSupport::EnableInstance(behcontext, state)) {
+                if (!state->Invoker || !state->Invoker->IsContextSuspended()) {
+                    state->InitialLifecycle.CompleteResume();
+                }
                 return state->Invoker && state->Invoker->IsContextSuspended()
                     ? CKBR_ACTIVATENEXTFRAME
                     : CKBR_OK;
             }
+            state->InitialLifecycle.CompleteResume();
             return CKBR_ACTIVATENEXTFRAME;
         }
+        state->InitialLifecycle.CompleteResume();
         return CKBR_OK;
     }
 
     if (beh->IsInputActive(1)) {
         beh->ActivateInput(1, FALSE);
         state->DesiredEnabled = false;
-        state->PendingResume = false;
+        state->InitialLifecycle.CompleteResume();
         if (!ScriptComponentSupport::DisableInstance(behcontext, state)) {
             state->PendingDisableOutput = true;
             return state->Invoker && state->Invoker->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
@@ -1299,7 +1302,7 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         beh->ActivateInput(0, FALSE);
         state->DesiredEnabled = true;
         state->ScriptActive = true;
-        state->Paused = false;
+        state->InitialLifecycle.RequestResume(false);
         state->Failed = false;
 
         if (!ScriptComponentSupport::EnsureComponentReady(behcontext, state) ||
@@ -1310,13 +1313,17 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
         beh->ActivateOutput(0);
     }
 
-    if (!state->DesiredEnabled || !state->ScriptActive || state->Paused || state->Failed) {
+    if (!state->DesiredEnabled || !state->ScriptActive || state->InitialLifecycle.Paused() || state->Failed) {
         return CKBR_OK;
     }
 
     if (!ScriptComponentSupport::EnsureComponentReady(behcontext, state) ||
         !ScriptComponentSupport::EnableInstance(behcontext, state)) {
         return state->Invoker && state->Invoker->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
+    }
+    if (state->InitialLifecycle.ResumeReady(false)) {
+        state->InitialLifecycle.CompleteResume();
+        return CKBR_ACTIVATENEXTFRAME;
     }
 
     {
@@ -1413,8 +1420,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), true);
                 }
-                state->PendingResume = false;
-                state->Paused = true;
+                state->InitialLifecycle.RequestPause();
                 if (!ScriptComponentSupport::DisableInstance(behcontext, state)) {
                     ScriptComponentSupport::ActivateForSuspendedLifecycle(beh, state);
                 }
@@ -1428,12 +1434,16 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), false);
                 }
-                state->Paused = false;
-                if (state->DesiredEnabled && state->ScriptActive) {
-                    if (state->ActiveLifecycleName == "OnDisable") {
-                        state->PendingResume = true;
-                    } else {
-                        ScriptComponentSupport::EnableInstance(behcontext, state);
+                const bool resumeEligible = state->DesiredEnabled && state->ScriptActive;
+                const bool transitionBlocked = state->ActiveLifecycleName == "OnDisable";
+                state->InitialLifecycle.RequestResume(resumeEligible);
+                if (resumeEligible) {
+                    if (state->InitialLifecycle.ResumeReady(transitionBlocked)) {
+                        if (ScriptComponentSupport::EnableInstance(behcontext, state) ||
+                            !state->Invoker ||
+                            !state->Invoker->IsContextSuspended()) {
+                            state->InitialLifecycle.CompleteResume();
+                        }
                     }
                     beh->Activate(TRUE);
                 }
@@ -1454,7 +1464,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                     man->GetBehaviorBridge()->ResetComponentTasks(beh->GetID());
                 }
                 state->Failed = false;
-                state->PendingResume = false;
+                state->InitialLifecycle.CompleteResume();
                 state->InitialLifecycle.ResetStart();
                 if (state->Object) {
                     ScriptComponentSupport::CancelSuspendedLifecycle(state);
@@ -1468,7 +1478,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                         return CKBR_OK;
                     }
                 }
-                if (state->DesiredEnabled && state->ScriptActive && !state->Paused) {
+                if (state->DesiredEnabled && state->ScriptActive && !state->InitialLifecycle.Paused()) {
                     beh->Activate(TRUE);
                 }
             }

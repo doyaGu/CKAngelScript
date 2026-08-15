@@ -208,7 +208,6 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->DestructionCompleted = false;
     state->PendingDisableOutput = false;
     state->PendingResetRuntime = false;
-    state->PendingResume = false;
 
     if (!ownedModuleName.empty()) {
         UnloadOwnedModule(ownedModuleName.c_str(),

@@ -166,13 +166,11 @@ struct ScriptComponentState {
     bool DesiredEnabled = false;
     bool InstanceEnabled = false;
     bool ScriptActive = false;
-    bool Paused = false;
     bool Failed = false;
     bool PendingDestroy = false;
     bool DestructionCompleted = false;
     bool PendingDisableOutput = false;
     bool PendingResetRuntime = false;
-    bool PendingResume = false;
 
     bool OwnsModule() const {
         return ModuleKind == ScriptComponentModuleKind::Private;
