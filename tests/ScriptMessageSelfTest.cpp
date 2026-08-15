@@ -49,6 +49,14 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         error = "Message performance self-test failed to publish broadcast: " + busError;
         return false;
     }
+    bus.PauseProcessing();
+    bus.Tick();
+    stats = bus.PerfStats();
+    if (stats.BroadcastSnapshotBuilds != 0 || stats.PendingRequestFullScans != 0) {
+        error = "Message pause self-test processed queued work while paused.";
+        return false;
+    }
+    bus.ResumeProcessing();
     bus.Tick();
     stats = bus.PerfStats();
     if (stats.BroadcastSnapshotBuilds != 1 || stats.PendingRequestFullScans != 0) {

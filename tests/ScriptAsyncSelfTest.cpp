@@ -345,6 +345,67 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     }
     cleanupDelayWait();
 
+    WriteAsyncSelfTestStage("pause-freezes-scheduler");
+    ScriptAsyncTaskBase *pausedTask = scheduler.CreateDelay(2);
+    if (!pausedTask) {
+        error = "Async pause self-test could not create delay task.";
+        return false;
+    }
+    scheduler.PauseProcessing();
+    scheduler.Tick();
+    scheduler.Tick();
+    if (!pausedTask->IsPending()) {
+        scheduler.ResumeProcessing();
+        pausedTask->Release();
+        error = "Async pause self-test advanced a task while processing was paused.";
+        return false;
+    }
+    scheduler.ResumeProcessing();
+    scheduler.Tick();
+    scheduler.Tick();
+    if (!pausedTask->IsCompleted()) {
+        pausedTask->Release();
+        error = "Async pause self-test did not resume task advancement.";
+        return false;
+    }
+    pausedTask->Release();
+
+    WriteAsyncSelfTestStage("await-cancel-resume-check");
+    asIScriptContext *cancelledWaitContext = engine->RequestContext();
+    if (!cancelledWaitContext) {
+        error = "Async cancellation resume self-test could not request a script context.";
+        return false;
+    }
+    ScriptAsyncTaskBase *cancelledTask = scheduler.CreateDelay(2);
+    auto cleanupCancelledWait = [&]() {
+        scheduler.ForgetContext(cancelledWaitContext);
+        if (cancelledTask) {
+            cancelledTask->Release();
+            cancelledTask = nullptr;
+        }
+        engine->ReturnContext(cancelledWaitContext);
+    };
+    waitError.clear();
+    if (!cancelledTask ||
+        !scheduler.WaitForTask(cancelledWaitContext, cancelledTask, nullptr, asTYPEID_VOID, waitError)) {
+        cleanupCancelledWait();
+        error = waitError.empty()
+            ? "Async cancellation resume self-test could not register await."
+            : waitError;
+        return false;
+    }
+    const std::string cancellationReason = "Async wait cancelled by lifecycle transition.";
+    scheduler.CancelAll(cancellationReason);
+    waitError.clear();
+    if (scheduler.PrepareContextResume(cancelledWaitContext, waitError) !=
+            ScriptAsyncScheduler::ResumeState::Failed ||
+        waitError != cancellationReason) {
+        cleanupCancelledWait();
+        error = "Async cancellation resume self-test expected the waiter to observe cancellation.";
+        return false;
+    }
+    cleanupCancelledWait();
+
     WriteAsyncSelfTestStage("completed-result-dependencies");
     constexpr const char *primitiveResultModuleName = "__CKAS_AsyncCompletedPrimitiveSelfTest";
     if (api->CompileModule(primitiveResultModuleName,

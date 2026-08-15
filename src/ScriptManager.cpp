@@ -32,15 +32,6 @@ void ClearRuntimeQueues(ScriptMessageBus *messageBus, ScriptAsyncScheduler *asyn
     }
 }
 
-void ClearPausedRuntimeQueues(ScriptMessageBus *messageBus, ScriptAsyncScheduler *asyncScheduler) {
-    if (messageBus) {
-        messageBus->ClearPendingRequests("Message requests were cancelled because CK is pausing.");
-    }
-    if (asyncScheduler) {
-        asyncScheduler->Clear();
-    }
-}
-
 } // namespace
 
 ScriptManager::ScriptManager(CKContext *context) : CKBaseManager(context, SCRIPT_MANAGER_GUID, (CKSTRING) "AngelScript Manager") {
@@ -69,6 +60,13 @@ CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
 
 
 CKERROR ScriptManager::PostClearAll() {
+    m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because CK objects are being cleared.");
+    if (m_MessageBus) {
+        m_MessageBus->CancelPendingWork("Message work was cancelled because CK objects are being cleared.");
+    }
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->CancelAll("Async task was cancelled because CK objects are being cleared.");
+    }
     ClearExecutorStates();
     if (m_Runtime) {
         m_Runtime->Clear();
@@ -113,6 +111,13 @@ CKERROR ScriptManager::OnCKInit() {
 }
 
 CKERROR ScriptManager::OnCKEnd() {
+    m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because CK is ending.");
+    if (m_MessageBus) {
+        m_MessageBus->CancelPendingWork("Message work was cancelled because CK is ending.");
+    }
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->CancelAll("Async task was cancelled because CK is ending.");
+    }
     ClearExecutorStates();
     if (m_Runtime) {
         m_Runtime->OnEnd();
@@ -126,13 +131,19 @@ CKERROR ScriptManager::OnCKEnd() {
 }
 
 CKERROR ScriptManager::OnCKReset() {
+    m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because CK is resetting.");
+    if (m_MessageBus) {
+        m_MessageBus->CancelPendingWork("Message work was cancelled because CK is resetting.");
+    }
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->CancelAll("Async task was cancelled because CK is resetting.");
+    }
     if (m_Runtime) {
         m_Runtime->OnReset();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear(false);
     }
-    ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
     return CK_OK;
 }
 
@@ -140,11 +151,22 @@ CKERROR ScriptManager::OnCKPause() {
     if (m_Runtime) {
         m_Runtime->OnPause();
     }
-    ClearPausedRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->PauseProcessing();
+    }
+    if (m_MessageBus) {
+        m_MessageBus->PauseProcessing();
+    }
     return CK_OK;
 }
 
 CKERROR ScriptManager::OnCKPlay() {
+    if (m_AsyncScheduler) {
+        m_AsyncScheduler->ResumeProcessing();
+    }
+    if (m_MessageBus) {
+        m_MessageBus->ResumeProcessing();
+    }
     if (m_Runtime) {
         m_Runtime->OnResume();
     }
@@ -192,6 +214,7 @@ int ScriptManager::Shutdown() {
     if (!IsInited())
         return -2;
 
+    m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because the script manager is shutting down.");
     m_HandleRegistry.Clear();
 
     ClearExecutorStates();

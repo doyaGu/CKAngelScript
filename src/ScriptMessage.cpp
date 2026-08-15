@@ -721,14 +721,28 @@ void ScriptMessageBus::ClearTarget(const std::string &target, const std::string 
 }
 
 void ScriptMessageBus::Clear() {
-    m_Queue.clear();
-    m_DrainQueue.clear();
-    ClearPendingRequests("Message bus was cleared.");
+    CancelPendingWork("Message bus was cleared.");
     m_Subscriptions.clear();
     m_TopicSubscriptions.clear();
 }
 
+void ScriptMessageBus::CancelPendingWork(const std::string &error) {
+    m_Queue.clear();
+    if (m_Draining) {
+        m_CancelDrain = true;
+    } else {
+        m_DrainQueue.clear();
+        m_CancelDrain = false;
+    }
+    ClearPendingRequests(error.empty()
+        ? "Pending message work was cancelled by a lifecycle transition."
+        : error);
+}
+
 void ScriptMessageBus::Tick() {
+    if (m_ProcessingPaused) {
+        return;
+    }
     ++m_FrameIndex;
     while (!m_Timeouts.empty() && m_Timeouts.top().DueFrame <= m_FrameIndex) {
         const TimeoutEntry entry = m_Timeouts.top();
@@ -747,14 +761,24 @@ void ScriptMessageBus::Tick() {
         return;
     }
     m_Draining = true;
+    m_CancelDrain = false;
     m_DrainQueue.clear();
     m_DrainQueue.swap(m_Queue);
-    for (const ScriptMessage &message : m_DrainQueue) {
+    for (std::size_t index = 0; index < m_DrainQueue.size() && !m_CancelDrain; ++index) {
         std::string error;
-        Deliver(message, false, error);
+        Deliver(m_DrainQueue[index], false, error);
     }
     m_DrainQueue.clear();
     m_Draining = false;
+    m_CancelDrain = false;
+}
+
+void ScriptMessageBus::PauseProcessing() {
+    m_ProcessingPaused = true;
+}
+
+void ScriptMessageBus::ResumeProcessing() {
+    m_ProcessingPaused = false;
 }
 
 std::string ScriptMessageBus::RuntimeTarget(const std::string &scriptId) {

@@ -54,6 +54,7 @@ public:
     void ReleaseObject(CKAngelScriptObject *object);
     void ReleaseMethod(CKAngelScriptMethod *method);
 
+    void CancelActiveExecutions(const char *reason);
     bool HasExecutionForModule(const char *moduleName) const;
     bool HasRuntimeHandleForModule(const char *moduleName) const;
 

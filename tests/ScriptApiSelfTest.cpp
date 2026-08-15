@@ -4588,6 +4588,35 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
     }
     api->ReleaseExecution(execution);
 
+    execution = nullptr;
+    if (api->CreateFunctionExecution(asyncOptions, &execution, &result) != CKAS_OK ||
+        !execution ||
+        api->StartExecution(execution, asyncStepOptions, &result) != CKAS_SUSPENDED) {
+        error = "CKAngelScript API self-test could not create the reset cancellation case.";
+        if (execution) {
+            api->ReleaseExecution(execution);
+        }
+        api->ReleaseFunction(asyncFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    ScriptManager *scriptManager = ScriptManager::GetManager(context);
+    if (!scriptManager || scriptManager->OnCKReset() != CK_OK ||
+        api->GetExecutionState(execution, &state, &result) != CKAS_OK ||
+        state != CKAS_EXECUTION_CANCELLED ||
+        api->BorrowExecutionResult(execution, &executionResult, &result) != CKAS_OK ||
+        !executionResult ||
+        executionResult->Status != CKAS_CANCELLED ||
+        !executionResult->ErrorMessage ||
+        std::string(executionResult->ErrorMessage) != "Execution was cancelled because CK is resetting.") {
+        error = "CKAngelScript API self-test expected CK reset to cancel suspended public executions.";
+        api->ReleaseExecution(execution);
+        api->ReleaseFunction(asyncFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
+    api->ReleaseExecution(execution);
+
     asyncOptions.Flags = CKAS_CALL_NO_SUSPEND;
     execution = nullptr;
     if (api->CreateFunctionExecution(asyncOptions, &execution, &result) != CKAS_OK ||

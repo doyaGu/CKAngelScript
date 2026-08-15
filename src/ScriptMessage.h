@@ -140,9 +140,12 @@ public:
     void ClearDynamicSubscriptions(const std::string &target);
     void FailPendingForTarget(const std::string &target, const std::string &error);
     void ClearPendingRequests(const std::string &error);
+    void CancelPendingWork(const std::string &error);
     void ClearTarget(const std::string &target, const std::string &error = std::string());
     void Clear();
     void Tick();
+    void PauseProcessing();
+    void ResumeProcessing();
     ScriptMessageBusPerfStats PerfStats() const;
     void ResetPerfStats();
 
@@ -198,7 +201,9 @@ private:
     ScriptManager *m_Manager = nullptr;
     std::uint64_t m_FrameIndex = 0;
     std::uint64_t m_NextId = 1;
+    bool m_ProcessingPaused = false;
     bool m_Draining = false;
+    bool m_CancelDrain = false;
     int m_DictionaryHandleTypeId = 0;
     std::vector<ScriptMessage> m_Queue;
     std::vector<ScriptMessage> m_DrainQueue;

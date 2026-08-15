@@ -926,11 +926,16 @@ std::string ScriptAsyncTaskBase::Error() const {
 }
 
 bool ScriptAsyncTaskBase::Cancel() {
-    std::unordered_set<ScriptAsyncTaskBase *> visited;
-    return CancelVisited(visited);
+    return CancelWithReason("Async task was cancelled.");
 }
 
-bool ScriptAsyncTaskBase::CancelVisited(std::unordered_set<ScriptAsyncTaskBase *> &visited) {
+bool ScriptAsyncTaskBase::CancelWithReason(const std::string &reason) {
+    std::unordered_set<ScriptAsyncTaskBase *> visited;
+    return CancelVisited(visited, reason.empty() ? "Async task was cancelled." : reason);
+}
+
+bool ScriptAsyncTaskBase::CancelVisited(std::unordered_set<ScriptAsyncTaskBase *> &visited,
+                                        const std::string &reason) {
     if (visited.find(this) != visited.end()) {
         return false;
     }
@@ -944,7 +949,7 @@ bool ScriptAsyncTaskBase::CancelVisited(std::unordered_set<ScriptAsyncTaskBase *
     }
     for (ScriptAsyncTaskBase *child : m_Children) {
         if (child) {
-            child->CancelVisited(visited);
+            child->CancelVisited(visited, reason);
         }
     }
     if (m_BBTask) {
@@ -953,7 +958,7 @@ bool ScriptAsyncTaskBase::CancelVisited(std::unordered_set<ScriptAsyncTaskBase *
     if (m_GraphTask) {
         m_GraphTask->Cancel();
     }
-    m_Error = "Async task was cancelled.";
+    m_Error = reason;
     SetState(ScriptAsyncTaskState::Cancelled);
     return true;
 }
@@ -1774,6 +1779,10 @@ void ScriptAsyncScheduler::Track(ScriptAsyncTaskBase *task) {
 }
 
 void ScriptAsyncScheduler::Tick() {
+    if (m_ProcessingPaused) {
+        return;
+    }
+
     std::vector<ScriptAsyncTaskBase *> tasks = m_Tasks;
     for (ScriptAsyncTaskBase *task : tasks) {
         if (task) {
@@ -1788,6 +1797,14 @@ void ScriptAsyncScheduler::Tick() {
         }
     }
     RemoveFinishedTrackedTasks();
+}
+
+void ScriptAsyncScheduler::PauseProcessing() {
+    m_ProcessingPaused = true;
+}
+
+void ScriptAsyncScheduler::ResumeProcessing() {
+    m_ProcessingPaused = false;
 }
 
 bool ScriptAsyncScheduler::WaitForTask(asIScriptContext *context,
@@ -1869,6 +1886,19 @@ bool ScriptAsyncScheduler::HasTaskForModule(const char *moduleName) const {
         }
     }
     return false;
+}
+
+void ScriptAsyncScheduler::CancelAll(const std::string &reason) {
+    asIScriptEngine *engine = GetEngine();
+    std::vector<ScriptAsyncTaskBase *> tasks;
+    tasks.swap(m_Tasks);
+    for (ScriptAsyncTaskBase *task : tasks) {
+        if (task) {
+            task->CancelWithReason(reason);
+            task->ReleaseAllReferences(engine);
+            task->Release();
+        }
+    }
 }
 
 void ScriptAsyncScheduler::Clear() {

@@ -87,6 +87,7 @@ public:
     bool IsDone() const;
     std::string Error() const;
     bool Cancel();
+    bool CancelWithReason(const std::string &reason);
     bool UsesModule(const char *moduleName) const;
     void EnumReferences(asIScriptEngine *engine);
     void ReleaseAllReferences(asIScriptEngine *engine);
@@ -113,7 +114,8 @@ public:
     void Fail(const std::string &error);
 
 private:
-    bool CancelVisited(std::unordered_set<ScriptAsyncTaskBase *> &visited);
+    bool CancelVisited(std::unordered_set<ScriptAsyncTaskBase *> &visited,
+                       const std::string &reason);
     bool UsesModule(const char *moduleName,
                     std::unordered_set<const ScriptAsyncTaskBase *> &visited) const;
     void SetState(ScriptAsyncTaskState state);
@@ -192,6 +194,8 @@ public:
 
     void Track(ScriptAsyncTaskBase *task);
     void Tick();
+    void PauseProcessing();
+    void ResumeProcessing();
     bool WaitForTask(asIScriptContext *context,
                      ScriptAsyncTaskBase *task,
                      void *outAddress,
@@ -200,6 +204,7 @@ public:
     ResumeState PrepareContextResume(asIScriptContext *context, std::string &error);
     void ForgetContext(asIScriptContext *context);
     bool HasTaskForModule(const char *moduleName) const;
+    void CancelAll(const std::string &reason);
     void Clear();
 
 private:
@@ -214,6 +219,7 @@ private:
     void RemoveFinishedTrackedTasks();
 
     ScriptManager *m_Manager = nullptr;
+    bool m_ProcessingPaused = false;
     std::vector<ScriptAsyncTaskBase *> m_Tasks;
     std::unordered_map<asIScriptContext *, WaitRecord> m_Waits;
 };

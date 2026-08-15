@@ -295,6 +295,29 @@ void ScriptHandleRegistry::ReleaseExecution(CKAngelScriptExecution *execution) {
     delete execution;
 }
 
+void ScriptHandleRegistry::CancelActiveExecutions(const char *reason) {
+    const std::string cancellationReason = ScriptApiSupport::IsNonEmpty(reason)
+        ? reason
+        : "Execution was cancelled by a lifecycle transition.";
+    for (CKAngelScriptExecution *execution : m_Executions) {
+        if (!execution ||
+            (execution->State != CKAS_EXECUTION_RUNNING &&
+             execution->State != CKAS_EXECUTION_SUSPENDED)) {
+            continue;
+        }
+        if (execution->State == CKAS_EXECUTION_RUNNING) {
+            execution->Invoker.AbortActiveContext();
+        } else {
+            execution->Invoker.AbortContext();
+        }
+        execution->State = CKAS_EXECUTION_CANCELLED;
+        ScriptApiSupport::MakeExecutionResult(execution,
+                                              CKAS_CANCELLED,
+                                              asEXECUTION_ABORTED,
+                                              cancellationReason);
+    }
+}
+
 bool ScriptHandleRegistry::HasExecutionForModule(const char *moduleName) const {
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return false;
