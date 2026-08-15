@@ -130,3 +130,9 @@ created by a Runtime Entry `OnReset` callback belongs to the new epoch and is
 not removed by a late global scheduler clear. A task that waits for frames or
 BB/graph progress will not complete until the host continues ticking. Avoid
 blocking native code while waiting for a script task.
+
+Component and Executor invocations assign an internal Script Host Scope owner
+to every task they create, including nested `Async::Spawn` work. Their Reset
+callbacks cancel only the previous work for that owner before calling
+`OnReset`; work owned by another behavior is unaffected, and tasks created by
+the new `OnReset` invocation belong to the new reset epoch.

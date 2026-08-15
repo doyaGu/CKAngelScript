@@ -343,7 +343,10 @@ refreshes runtime layout resolution.
 Lifecycle methods may suspend through CKAS async support. Initial lifecycle
 suspension keeps the Executor active until the lifecycle resumes. `OnReset`
 suspension resumes on a later Executor activation and does not run `Execute` as
-part of the reset-only resume.
+part of the reset-only resume. Reset first aborts the preceding suspended
+Executor invocation and cancels async tasks owned by that Executor. Tasks owned
+by other behaviors are not affected, while tasks created by the new `OnReset`
+invocation remain eligible to complete.
 
 Example:
 

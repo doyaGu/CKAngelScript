@@ -4,7 +4,7 @@ Status: implementation in progress (started 2026-08-14).
 
 ## Implementation Progress
 
-The first correctness tranche is implemented:
+The first two correctness tranches are implemented:
 
 - scheduler-wide cancellation preserves wait records until the waiter consumes
   the cancellation or its invocation explicitly forgets the context;
@@ -17,6 +17,12 @@ The first correctness tranche is implemented:
   teardown;
 - Runtime Entry resume events are retained while `OnPause`/`OnDisable` is
   suspended, then run in `OnResume` → `OnEnable` order;
+- Component resume requests are retained while `OnDisable` is suspended, then
+  run `OnEnable` exactly once after disable completes;
+- async tasks created by Component and Executor invocations carry stable owner
+  identities; their Reset callbacks cancel the preceding owner's work before
+  `OnReset`, without cancelling another behavior or work created by the new
+  reset epoch;
 - public module replace/unload preflight includes live Component and Executor
   consumers and returns `CKAS_INUSE`;
 - every Component runtime reset advances its message incarnation, so targets
@@ -24,9 +30,9 @@ The first correctness tranche is implemented:
 
 The following work remains open:
 
-- apply the deferred resume state machine to Component and Executor adapters;
-- make reset cancellation owner-scoped for every Component/Executor invocation,
-  including work created inside their `OnReset` callbacks;
+- extend the owner seam to Runtime Entries if the manager-wide reset fallback
+  is retired; Executor has no pause/resume lifecycle surface, so no synthetic
+  resume callback was added;
 - record attached module generations in Component/Executor state and validate
   them at direct invocation boundaries;
 - move all mutation ownership/orphan retirement into the module registry and

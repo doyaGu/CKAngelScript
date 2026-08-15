@@ -258,6 +258,16 @@ lifecycle methods and `OnMessage(const ScriptMessage &in msg, const
 CKBehaviorContext &in ctx)`. If both forms exist on the same class, the
 `BehaviorFrame@` form is selected.
 
+If CK Resume arrives while a suspendable `OnDisable` is still pending, the
+Component retains the resume request. The old disable finishes first, then
+`OnEnable` runs once before normal update work continues. A later Pause or an
+explicit Disable supersedes that retained request.
+
+Component Reset cancels async tasks created by the preceding Component
+invocations before `OnReset` starts. It does not cancel another Component or
+Executor's tasks, and work created inside the new `OnReset` callback may
+suspend and resume normally.
+
 Use `BehaviorFrame` for current-BB work. It fully covers the current
 `CKBehaviorContext` and the current `CKBehavior` as a high-level facade:
 context fields, owner/target, target parameter, current behavior identity,
