@@ -19,6 +19,7 @@
 
 #include "ScriptManager.h"
 #include "AngelScriptComponent.h"
+#include "ScriptAsync.h"
 #include "ScriptComponentMetadata.h"
 #include "ScriptComponentAutomation.h"
 #include "ScriptComponentInjection.h"
@@ -881,6 +882,7 @@ bool EnsureComponentReady(const CKBehaviorContext &behcontext, ScriptComponentSt
 
     if (!state->Invoker) {
         state->Invoker = new ScriptInvoker(man);
+        state->Invoker->SetAsyncOwnerId(state->AsyncOwnerId);
     }
 
     if (!state->Invoker->SetScript(moduleBinding.ModuleName.c_str())) {
@@ -1200,12 +1202,26 @@ int AngelScriptComponent(const CKBehaviorContext &behcontext) {
             state->PendingDisableOutput = false;
             beh->ActivateOutput(1);
         }
+        const bool shouldResume = state->PendingResume &&
+                                  state->DesiredEnabled &&
+                                  state->ScriptActive &&
+                                  !state->Paused;
+        state->PendingResume = false;
+        if (shouldResume) {
+            if (!ScriptComponentSupport::EnableInstance(behcontext, state)) {
+                return state->Invoker && state->Invoker->IsContextSuspended()
+                    ? CKBR_ACTIVATENEXTFRAME
+                    : CKBR_OK;
+            }
+            return CKBR_ACTIVATENEXTFRAME;
+        }
         return CKBR_OK;
     }
 
     if (beh->IsInputActive(1)) {
         beh->ActivateInput(1, FALSE);
         state->DesiredEnabled = false;
+        state->PendingResume = false;
         if (!ScriptComponentSupport::DisableInstance(behcontext, state)) {
             state->PendingDisableOutput = true;
             return state->Invoker && state->Invoker->IsContextSuspended() ? CKBR_ACTIVATENEXTFRAME : CKBR_OK;
@@ -1329,6 +1345,7 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), true);
                 }
+                state->PendingResume = false;
                 state->Paused = true;
                 if (!ScriptComponentSupport::DisableInstance(behcontext, state)) {
                     ScriptComponentSupport::ActivateForSuspendedLifecycle(beh, state);
@@ -1345,7 +1362,11 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                 }
                 state->Paused = false;
                 if (state->DesiredEnabled && state->ScriptActive) {
-                    ScriptComponentSupport::EnableInstance(behcontext, state);
+                    if (state->ActiveLifecycleName == "OnDisable") {
+                        state->PendingResume = true;
+                    } else {
+                        ScriptComponentSupport::EnableInstance(behcontext, state);
+                    }
                     beh->Activate(TRUE);
                 }
             }
@@ -1355,14 +1376,20 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
         case CKM_BEHAVIORRESET: {
             state = ScriptComponentSupport::GetState(behcontext);
             if (state) {
+                if (man->GetAsyncScheduler() && state->AsyncOwnerId != 0) {
+                    man->GetAsyncScheduler()->CancelOwner(
+                        state->AsyncOwnerId,
+                        "Async work was cancelled because its Component is resetting.");
+                }
                 ScriptComponentSupport::DestroyComponentLifetimeBBConfigs(state);
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->ResetComponentTasks(beh->GetID());
                 }
                 state->Failed = false;
+                state->PendingResume = false;
                 state->InitialLifecycle.ResetStart();
                 if (state->Object) {
-                    ScriptComponentSupport::CancelSuspendedLifecycle(state, "OnReset");
+                    ScriptComponentSupport::CancelSuspendedLifecycle(state);
                     const ScriptComponentSupport::LifecycleInvokeStatus status =
                         ScriptComponentSupport::InvokeLifecycle(beh, state, state->OnReset, behcontext, "OnReset");
                     if (status == ScriptComponentSupport::LifecycleInvokeStatus::Suspended) {

@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "ScriptBehaviorBridge.h"
+#include "ScriptAsync.h"
 #include "AngelScriptComponent.h"
 #include "ScriptComponentState.h"
 #include "ScriptInvoker.h"
@@ -115,12 +116,19 @@ ScriptComponentState *ScriptManager::GetOrCreateComponentState(CKBehavior *behav
         return nullptr;
     }
 
-    return m_ComponentStates.GetOrCreate(
+    ScriptComponentState *state = m_ComponentStates.GetOrCreate(
         behavior,
         ScriptMessageBus::ComponentTarget(behavior->GetID()),
         [this](CK_ID, ScriptComponentState *replaced) {
             ResetComponentStateRuntime(replaced, true);
         });
+    if (state && state->AsyncOwnerId == 0 && m_AsyncScheduler) {
+        state->AsyncOwnerId = m_AsyncScheduler->CreateOwner();
+    }
+    if (state && state->Invoker) {
+        state->Invoker->SetAsyncOwnerId(state->AsyncOwnerId);
+    }
+    return state;
 }
 
 ScriptComponentState *ScriptManager::GetComponentState(CK_ID id, CKBehavior *expectedBehavior) const {
@@ -134,11 +142,23 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
 
     m_ComponentStates.AdvanceMessageGeneration(state);
 
+    if (m_AsyncScheduler && state->AsyncOwnerId != 0) {
+        m_AsyncScheduler->CancelOwner(
+            state->AsyncOwnerId,
+            "Async work was cancelled because its Component runtime is being reset.");
+    }
+
     if (m_BehaviorBridge && state->BehaviorId) {
         m_BehaviorBridge->DestroyComponentTasks(state->BehaviorId);
     }
 
     DestroyAngelScriptComponentRuntime(this, state);
+
+    if (m_AsyncScheduler && state->AsyncOwnerId != 0) {
+        m_AsyncScheduler->CancelOwner(
+            state->AsyncOwnerId,
+            "Async work was cancelled because its Component runtime was torn down.");
+    }
 
     if (state->Invoker) {
         state->Invoker->Reset();
@@ -169,6 +189,7 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->DestructionCompleted = false;
     state->PendingDisableOutput = false;
     state->PendingResetRuntime = false;
+    state->PendingResume = false;
 
     if (!ownedModuleName.empty()) {
         UnloadModule(ownedModuleName.c_str(), nullptr);

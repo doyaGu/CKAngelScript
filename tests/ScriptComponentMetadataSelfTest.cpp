@@ -212,8 +212,13 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "  int messageCount = 0;\n"
         "  int legacyUpdateCount = 0;\n"
         "  int legacyMessageCount = 0;\n"
+        "  int enableCount = 0;\n"
+        "  int disableCount = 0;\n"
+        "  int resetSawCancelled = 0;\n"
+        "  int resetCompleted = 0;\n"
         "  int destroyCount = 0;\n"
         "  int frameError = 0;\n"
+        "  AsyncTask<void>@ pendingMessage;\n"
         "  void Validate(BehaviorFrame@ frame, int code) {\n"
         "    if (frame is null) { frameError = code; return; }\n"
         "    if (frame.Behavior() is null) { frameError = code + 1; return; }\n"
@@ -231,19 +236,29 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "    if (frame.PinInt(\"Missing\", code + 3) != code + 3) { frameError = code + 3; return; }\n"
         "  }\n"
         "  void Start(BehaviorFrame@ frame) { Validate(frame, 100); startCount++; }\n"
+        "  void OnEnable(BehaviorFrame@ frame) { Validate(frame, 150); enableCount++; }\n"
+        "  void OnDisable(BehaviorFrame@ frame) { Validate(frame, 160); disableCount++; AsyncTask<void>@ delay = Async::Delay(1); Await(delay); Validate(frame, 170); }\n"
         "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
         "  void Update(const CKBehaviorContext &in ctx) { legacyUpdateCount++; }\n"
         "  void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) {\n"
         "    Validate(frame, 300);\n"
         "    if (frameError != 0) return;\n"
         "    if (msg.Topic() != \"component.frame.runtime\") { frameError = 399; return; }\n"
-        "    AsyncTask<void>@ delay = Async::Delay(1);\n"
-        "    Await(delay);\n"
+        "    @pendingMessage = Async::Delay(1);\n"
+        "    Await(pendingMessage);\n"
         "    Validate(frame, 310);\n"
         "    if (frameError != 0) return;\n"
         "    if (msg.Topic() == \"component.frame.runtime\") messageCount++; else frameError = 398;\n"
         "  }\n"
         "  void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) { legacyMessageCount++; }\n"
+        "  void OnReset(BehaviorFrame@ frame) {\n"
+        "    Validate(frame, 350);\n"
+        "    resetSawCancelled = pendingMessage !is null && pendingMessage.IsCancelled() ? 1 : -1;\n"
+        "    AsyncTask<void>@ delay = Async::Delay(1);\n"
+        "    Await(delay);\n"
+        "    Validate(frame, 360);\n"
+        "    resetCompleted++;\n"
+        "  }\n"
         "  void OnDestroy(BehaviorFrame@ frame) { Validate(frame, 400); destroyCount++; }\n"
         "}\n";
 
@@ -360,10 +375,57 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         return false;
     }
 
+    if (CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORPAUSE, &behaviorContext) != CK_OK ||
+        !state->Invoker->IsContextSuspended() || state->ActiveLifecycleName != "OnDisable" ||
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORRESUME, &behaviorContext) != CK_OK) {
+        cleanup();
+        error = "Component runtime self-test could not suspend disable across Pause and Resume.";
+        return false;
+    }
+    scheduler->Tick();
+    const int lifecycleResumeCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (lifecycleResumeCode != CKBR_ACTIVATENEXTFRAME ||
+        state->Invoker->IsContextSuspended() ||
+        !state->InstanceEnabled || state->Paused) {
+        cleanup();
+        error = "Component runtime self-test lost the deferred Resume after suspended OnDisable.";
+        return false;
+    }
+
+    messageError.clear();
+    if (!manager->DeliverComponentMessage(behavior->GetID(),
+                                          state->MessageGeneration,
+                                          message,
+                                          true,
+                                          messageError) ||
+        !state->Invoker->IsContextSuspended() ||
+        CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORRESET, &behaviorContext) != CK_OK ||
+        !state->Invoker->IsContextSuspended() ||
+        state->ActiveLifecycleName != "OnReset") {
+        cleanup();
+        error = messageError.empty()
+            ? "Component runtime self-test could not replace old suspended work with OnReset."
+            : messageError;
+        return false;
+    }
+    scheduler->Tick();
+    const int resetResumeCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    if (resetResumeCode != CKBR_ACTIVATENEXTFRAME ||
+        state->Invoker->IsContextSuspended() ||
+        state->ActiveLifecycleName == "OnReset") {
+        cleanup();
+        error = "Component runtime self-test did not complete new-epoch OnReset work.";
+        return false;
+    }
+
     asIScriptObject *object = state->Object;
     if (!ExpectIntProperty(object, "startCount", 1, error) ||
         !ExpectIntProperty(object, "updateCount", 1, error) ||
         !ExpectIntProperty(object, "messageCount", 1, error) ||
+        !ExpectIntProperty(object, "enableCount", 2, error) ||
+        !ExpectIntProperty(object, "disableCount", 1, error) ||
+        !ExpectIntProperty(object, "resetSawCancelled", 1, error) ||
+        !ExpectIntProperty(object, "resetCompleted", 1, error) ||
         !ExpectIntProperty(object, "legacyUpdateCount", 0, error) ||
         !ExpectIntProperty(object, "legacyMessageCount", 0, error) ||
         !ExpectIntProperty(object, "frameError", 0, error)) {
