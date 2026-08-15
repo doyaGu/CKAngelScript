@@ -1331,10 +1331,6 @@ bool ScriptManager::HasInternalModuleConsumerForModule(const char *moduleName) c
            m_ExecutorStates.HasModuleConsumer(moduleName);
 }
 
-void ScriptManager::PrepareModuleMutation(const char *moduleName) {
-    ReleaseExecutorStatesForModule(moduleName);
-}
-
 CKObjectDeclaration *FillBehaviorAngelScriptExecutorDecl() {
     CKObjectDeclaration *od = CreateCKObjectDeclaration("AngelScript Executor");
     od->SetDescription("Execute an AngelScript class from a Virtools behavior graph with dynamic IO");

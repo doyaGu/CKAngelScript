@@ -233,8 +233,6 @@ bool ScriptModuleReplacer::CommitBytecodeCandidate(
         return false;
     }
 
-    manager.PrepareModuleMutation(moduleName);
-
     if (outCommittedModule) {
         *outCommittedModule = committedModule;
     }

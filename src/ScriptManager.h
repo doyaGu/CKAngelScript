@@ -253,7 +253,6 @@ public:
     void ReleaseExecutorStatesForModule(const char *moduleName);
     void ClearExecutorStates();
     bool HasInternalModuleConsumerForModule(const char *moduleName) const;
-    void PrepareModuleMutation(const char *moduleName);
 
     ScriptBehaviorBridge *GetBehaviorBridge();
     ScriptRuntime *GetRuntime() const {
