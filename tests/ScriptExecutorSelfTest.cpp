@@ -863,7 +863,14 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "  }\n"
         "  void OnReset(BehaviorFrame@ frame) {\n"
         "    ++resets;\n"
-        "    if (resets == 1) { if (frame !is null) frame.SetLocal(\"__CKAS_FrameScratch\", pending !is null && pending.IsCancelled() ? 777 : 776); return; }\n"
+        "    if (resets == 1) {\n"
+        "      if (frame !is null) frame.SetLocal(\"__CKAS_FrameScratch\", pending !is null && pending.IsCancelled() ? 777 : 776);\n"
+        "      @pending = frame !is null ? frame.LinkDelay(10) : null;\n"
+        "      if (pending is null) { if (frame !is null) frame.SetLocal(\"__CKAS_FrameScratch\", 774); return; }\n"
+        "      Await(pending);\n"
+        "      if (frame !is null) frame.SetLocal(\"__CKAS_FrameScratch\", 775);\n"
+        "      return;\n"
+        "    }\n"
         "    array<int> values; values[1] = 1;\n"
         "  }\n"
         "  void OnDestroy(BehaviorFrame@ frame) {\n"
@@ -1505,8 +1512,18 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         error = "Executor self-test resumed suspended Execute instead of invoking OnReset.";
         return false;
     }
-    if (CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORRESET, &retriggerContext) != CK_OK ||
-        !SetExecutorBoolSetting(retriggerBehavior, EXECUTOR_SETTING_TRACE, true, error) ||
+    if (CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORRESET, &retriggerContext) != CK_OK) {
+        cleanup();
+        error = "Executor self-test second RESET callback failed.";
+        return false;
+    }
+    resetScratchValue = 0;
+    if (resetScratch->GetValue(&resetScratchValue) != CK_OK || resetScratchValue != 777) {
+        cleanup();
+        error = "Executor self-test resumed the superseded OnReset epoch.";
+        return false;
+    }
+    if (!SetExecutorBoolSetting(retriggerBehavior, EXECUTOR_SETTING_TRACE, true, error) ||
         CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORSETTINGSEDITED, &retriggerContext) != CK_OK) {
         cleanup();
         if (error.empty()) {

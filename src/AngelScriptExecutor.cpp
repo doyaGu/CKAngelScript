@@ -923,6 +923,24 @@ LifecycleInvokeStatus AdvanceInitialLifecycle(const CKBehaviorContext &ctx,
         });
 }
 
+LifecycleInvokeStatus AdvanceResetTransition(const CKBehaviorContext &ctx,
+                                             ScriptExecutorState *state) {
+    if (!state) {
+        return LifecycleInvokeStatus::Failed;
+    }
+    return state->InitialLifecycle.AdvanceReset(
+        [&]() {
+            if (!state->Invoker || !state->Object) {
+                return LifecycleInvokeStatus::Finished;
+            }
+            return InvokeLifecycle(ctx,
+                                   state,
+                                   state->OnReset,
+                                   state->OnResetArgument,
+                                   "OnReset");
+        });
+}
+
 void CancelExecutorAsyncWork(ScriptExecutorState *state, const char *reason) {
     if (!state || !state->Manager || !state->Manager->GetAsyncScheduler() ||
         state->AsyncOwnerId == 0) {
@@ -1138,17 +1156,14 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         return ExecutorReadyStatus::Failed;
     }
 
-    if (state->Invoker &&
-        state->Invoker->IsContextSuspended() &&
-        state->ActiveLifecycleName == "OnReset") {
-        const LifecycleInvokeStatus status = InvokeLifecycle(ctx, state, state->OnReset, state->OnResetArgument, "OnReset");
+    if (state->InitialLifecycle.ResetPending()) {
+        const LifecycleInvokeStatus status = AdvanceResetTransition(ctx, state);
         if (status == LifecycleInvokeStatus::Suspended) {
             return ExecutorReadyStatus::Suspended;
         }
         if (status == LifecycleInvokeStatus::Failed) {
             return ExecutorReadyStatus::Failed;
         }
-        state->InitialLifecycle.ResetStart();
         return ExecutorReadyStatus::LifecycleOnly;
     }
 
@@ -1550,7 +1565,6 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
         case CKM_BEHAVIORRESET: {
             ScriptExecutorState *state = GetState(behavior);
             if (state) {
-                state->InitialLifecycle.ResetStart();
                 CancelExecutorAsyncWork(
                     state,
                     "Async work was cancelled because its Executor is resetting.");
@@ -1560,8 +1574,9 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
                 state->SuspendedInputs.clear();
                 state->ActiveLifecycleName.clear();
             }
-            if (state && state->Invoker && state->Object && state->OnReset) {
-                const LifecycleInvokeStatus status = InvokeLifecycle(behcontext, state, state->OnReset, state->OnResetArgument, "OnReset");
+            if (state) {
+                state->InitialLifecycle.RequestReset();
+                const LifecycleInvokeStatus status = AdvanceResetTransition(behcontext, state);
                 if (status == LifecycleInvokeStatus::Suspended) {
                     behavior->Activate(TRUE);
                     return CKBR_OK;
