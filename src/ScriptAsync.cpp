@@ -1173,6 +1173,37 @@ bool ScriptAsyncTaskBase::SetMessageWait(CKContext *context,
     return true;
 }
 
+bool ScriptAsyncTaskBase::CancelOwnedVisited(
+    std::unordered_set<ScriptAsyncTaskBase *> &visited,
+    ScriptAsyncOwnerId ownerId,
+    const std::string &reason) {
+    if (m_OwnerId != ownerId || visited.find(this) != visited.end()) {
+        return false;
+    }
+    visited.insert(this);
+
+    if (IsDone()) {
+        return false;
+    }
+    if (m_Context) {
+        m_Context->Abort();
+    }
+    for (ScriptAsyncTaskBase *child : m_Children) {
+        if (child) {
+            child->CancelOwnedVisited(visited, ownerId, reason);
+        }
+    }
+    if (m_BBTask) {
+        m_BBTask->Destroy();
+    }
+    if (m_GraphTask) {
+        m_GraphTask->Cancel();
+    }
+    m_Error = reason;
+    SetState(ScriptAsyncTaskState::Cancelled);
+    return true;
+}
+
 void ScriptAsyncTaskBase::Advance() {
     if (IsDone()) {
         return;
@@ -1415,7 +1446,13 @@ void ScriptAsyncTaskBase::AdvanceScript() {
     }
 
     SetState(ScriptAsyncTaskState::Running);
+    if (m_Scheduler) {
+        m_Scheduler->BeginOwnerExecution(m_Context, m_OwnerId);
+    }
     r = m_Context->Execute();
+    if (m_Scheduler) {
+        m_Scheduler->EndOwnerExecution(m_Context);
+    }
     if (r == asEXECUTION_FINISHED) {
         const int returnTypeId = m_Function->GetReturnTypeId();
         if (returnTypeId == asTYPEID_VOID) {
@@ -1693,6 +1730,32 @@ asIScriptEngine *ScriptAsyncScheduler::GetEngine() const {
     return m_Manager ? m_Manager->GetScriptEngine() : nullptr;
 }
 
+ScriptAsyncOwnerId ScriptAsyncScheduler::CreateOwner() {
+    const ScriptAsyncOwnerId ownerId = m_NextOwnerId++;
+    if (m_NextOwnerId == 0) {
+        m_NextOwnerId = 1;
+    }
+    return ownerId;
+}
+
+void ScriptAsyncScheduler::BeginOwnerExecution(asIScriptContext *context,
+                                               ScriptAsyncOwnerId ownerId) {
+    if (!context) {
+        return;
+    }
+    if (ownerId == 0) {
+        m_ActiveOwners.erase(context);
+        return;
+    }
+    m_ActiveOwners[context] = ownerId;
+}
+
+void ScriptAsyncScheduler::EndOwnerExecution(asIScriptContext *context) {
+    if (context) {
+        m_ActiveOwners.erase(context);
+    }
+}
+
 ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateDelay(int frames) {
     ScriptAsyncTaskBase *task = new ScriptAsyncTaskBase(this, GetEngine(), ScriptAsyncTaskKind::Delay, asTYPEID_VOID);
     task->NotifyGarbageCollector();
@@ -1773,6 +1836,11 @@ ScriptAsyncTaskBase *ScriptAsyncScheduler::CreateMessageWait(CKContext *context,
 void ScriptAsyncScheduler::Track(ScriptAsyncTaskBase *task) {
     if (!task) {
         return;
+    }
+    asIScriptContext *activeContext = asGetActiveContext();
+    const auto owner = activeContext ? m_ActiveOwners.find(activeContext) : m_ActiveOwners.end();
+    if (owner != m_ActiveOwners.end()) {
+        task->SetOwnerId(owner->second);
     }
     task->AddRef();
     m_Tasks.push_back(task);
@@ -1888,6 +1956,33 @@ bool ScriptAsyncScheduler::HasTaskForModule(const char *moduleName) const {
     return false;
 }
 
+bool ScriptAsyncScheduler::CancelOwner(ScriptAsyncOwnerId ownerId, const std::string &reason) {
+    if (ownerId == 0) {
+        return false;
+    }
+    bool cancelled = false;
+    std::unordered_set<ScriptAsyncTaskBase *> visited;
+    asIScriptEngine *engine = GetEngine();
+    auto it = m_Tasks.begin();
+    while (it != m_Tasks.end()) {
+        ScriptAsyncTaskBase *task = *it;
+        if (!task || task->OwnerId() != ownerId) {
+            ++it;
+            continue;
+        }
+        task->CancelOwnedVisited(visited,
+                                 ownerId,
+                                 reason.empty()
+                                     ? "Async task was cancelled by its script host."
+                                     : reason);
+        task->ReleaseAllReferences(engine);
+        task->Release();
+        it = m_Tasks.erase(it);
+        cancelled = true;
+    }
+    return cancelled;
+}
+
 void ScriptAsyncScheduler::CancelAll(const std::string &reason) {
     asIScriptEngine *engine = GetEngine();
     std::vector<ScriptAsyncTaskBase *> tasks;
@@ -1918,6 +2013,7 @@ void ScriptAsyncScheduler::Clear() {
             task->Release();
         }
     }
+    m_ActiveOwners.clear();
 }
 
 void ScriptAsyncScheduler::ReleaseWaitRecord(WaitRecord &record) {

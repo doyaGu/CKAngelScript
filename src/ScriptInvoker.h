@@ -1,6 +1,7 @@
 #ifndef CK_SCRIPTINVOKER_H
 #define CK_SCRIPTINVOKER_H
 
+#include <cstdint>
 #include <string>
 #include <chrono>
 #include <memory>
@@ -31,6 +32,7 @@ public:
     ScriptInvoker& operator=(const ScriptInvoker&) = delete;
 
     asIScriptContext *GetContext() const;
+    void SetAsyncOwnerId(std::uint64_t ownerId) { m_AsyncOwnerId = ownerId; }
 
     bool SetScript(const char *scriptName);
     void ResetScript();
@@ -99,6 +101,7 @@ private:
                                                        const ScriptFunctionArgumentHandler &retHandler);
 
     ScriptManager *m_ScriptManager = nullptr;
+    std::uint64_t m_AsyncOwnerId = 0;
     ScriptInvocationContext m_Invocation;
     std::shared_ptr<CachedScript> m_CachedScript;
     bool m_Profiling = false;

@@ -406,6 +406,140 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     }
     cleanupCancelledWait();
 
+    WriteAsyncSelfTestStage("owner-scoped-cancellation");
+    constexpr const char *ownerModuleName = "__CKAS_AsyncOwnerCancellationSelfTest";
+    if (api->CompileModule(ownerModuleName,
+                           "void __ckas_async_owner_wait() { Await(Async::Delay(20)); }\n"
+                           "void __ckas_async_new_epoch_wait() { Await(Async::Delay(1)); }\n"
+                           "void __ckas_async_other_owner_wait() { Await(Async::Delay(1)); }\n",
+                           CKAS_COMPILE_REPLACEEXISTING,
+                           &result) != CKAS_OK) {
+        error = result.ErrorMessage && result.ErrorMessage[0] != '\0'
+            ? result.ErrorMessage
+            : "Async owner cancellation self-test compile failed.";
+        return false;
+    }
+    asIScriptModule *ownerModule = engine->GetModule(ownerModuleName, asGM_ONLY_IF_EXISTS);
+    asIScriptFunction *ownerFunction = ownerModule
+        ? ownerModule->GetFunctionByDecl("void __ckas_async_owner_wait()")
+        : nullptr;
+    asIScriptContext *ownerContext = ownerFunction ? engine->RequestContext() : nullptr;
+    asIScriptContext *otherOwnerContext = nullptr;
+    auto cleanupOwner = [&]() {
+        if (otherOwnerContext) {
+            managerScheduler->ForgetContext(otherOwnerContext);
+            otherOwnerContext->Abort();
+            otherOwnerContext->Unprepare();
+            engine->ReturnContext(otherOwnerContext);
+            otherOwnerContext = nullptr;
+        }
+        if (ownerContext) {
+            managerScheduler->ForgetContext(ownerContext);
+            ownerContext->Abort();
+            ownerContext->Unprepare();
+            engine->ReturnContext(ownerContext);
+            ownerContext = nullptr;
+        }
+        api->UnloadModule(ownerModuleName, nullptr);
+    };
+    if (!ownerContext || ownerContext->Prepare(ownerFunction) < 0) {
+        cleanupOwner();
+        error = "Async owner cancellation self-test could not prepare its invocation.";
+        return false;
+    }
+    const ScriptAsyncOwnerId ownerId = managerScheduler->CreateOwner();
+    managerScheduler->BeginOwnerExecution(ownerContext, ownerId);
+    const int ownerExecuteResult = ownerContext->Execute();
+    managerScheduler->EndOwnerExecution(ownerContext);
+    asIScriptFunction *otherOwnerFunction = ownerModule->GetFunctionByDecl(
+        "void __ckas_async_other_owner_wait()");
+    otherOwnerContext = otherOwnerFunction ? engine->RequestContext() : nullptr;
+    const ScriptAsyncOwnerId otherOwnerId = managerScheduler->CreateOwner();
+    if (!otherOwnerContext || otherOwnerContext->Prepare(otherOwnerFunction) < 0) {
+        cleanupOwner();
+        error = "Async owner cancellation self-test could not prepare independent owner work.";
+        return false;
+    }
+    managerScheduler->BeginOwnerExecution(otherOwnerContext, otherOwnerId);
+    const int otherOwnerExecuteResult = otherOwnerContext->Execute();
+    managerScheduler->EndOwnerExecution(otherOwnerContext);
+    const std::string ownerCancellationReason = "Async work was cancelled because its script host is resetting.";
+    waitError.clear();
+    if (ownerExecuteResult != asEXECUTION_SUSPENDED ||
+        !managerScheduler->CancelOwner(ownerId, ownerCancellationReason) ||
+        managerScheduler->PrepareContextResume(ownerContext, waitError) !=
+            ScriptAsyncScheduler::ResumeState::Failed ||
+        waitError != ownerCancellationReason) {
+        cleanupOwner();
+        error = "Async owner cancellation self-test did not cancel only the old host invocation work.";
+        return false;
+    }
+    managerScheduler->Tick();
+    waitError.clear();
+    if (otherOwnerExecuteResult != asEXECUTION_SUSPENDED ||
+        managerScheduler->PrepareContextResume(otherOwnerContext, waitError) !=
+            ScriptAsyncScheduler::ResumeState::Ready) {
+        cleanupOwner();
+        error = "Async owner cancellation self-test cancelled an independent script host's work.";
+        return false;
+    }
+    ownerContext->Abort();
+    ownerContext->Unprepare();
+    asIScriptFunction *newEpochFunction = ownerModule->GetFunctionByDecl(
+        "void __ckas_async_new_epoch_wait()");
+    if (!newEpochFunction || ownerContext->Prepare(newEpochFunction) < 0) {
+        cleanupOwner();
+        error = "Async owner cancellation self-test could not prepare new-epoch work.";
+        return false;
+    }
+    managerScheduler->BeginOwnerExecution(ownerContext, ownerId);
+    const int newEpochExecuteResult = ownerContext->Execute();
+    managerScheduler->EndOwnerExecution(ownerContext);
+    managerScheduler->Tick();
+    waitError.clear();
+    if (newEpochExecuteResult != asEXECUTION_SUSPENDED ||
+        managerScheduler->PrepareContextResume(ownerContext, waitError) !=
+            ScriptAsyncScheduler::ResumeState::Ready) {
+        cleanupOwner();
+        error = "Async owner cancellation self-test cancelled work created in the new reset epoch.";
+        return false;
+    }
+    cleanupOwner();
+
+    WriteAsyncSelfTestStage("owner-aggregate-isolation");
+    const ScriptAsyncOwnerId aggregateOwner = scheduler.CreateOwner();
+    const ScriptAsyncOwnerId childOwner = scheduler.CreateOwner();
+    ScriptAsyncTaskBase *foreignChild = scheduler.CreateDelay(5);
+    if (!foreignChild) {
+        error = "Async owner aggregate self-test could not create foreign child task.";
+        return false;
+    }
+    foreignChild->SetOwnerId(childOwner);
+    std::vector<ScriptAsyncTaskBase *> aggregateChildren = {foreignChild};
+    ScriptAsyncTaskBase *ownedAggregate = scheduler.CreateAggregate(
+        ScriptAsyncTaskKind::All,
+        asTYPEID_VOID,
+        aggregateChildren);
+    if (!ownedAggregate) {
+        foreignChild->Release();
+        error = "Async owner aggregate self-test could not create aggregate task.";
+        return false;
+    }
+    ownedAggregate->SetOwnerId(aggregateOwner);
+    const bool aggregateCancelled = scheduler.CancelOwner(
+        aggregateOwner,
+        "Aggregate owner was reset.");
+    if (!aggregateCancelled || !ownedAggregate->IsCancelled() || !foreignChild->IsPending()) {
+        ownedAggregate->Release();
+        foreignChild->Release();
+        scheduler.Clear();
+        error = "Async owner aggregate self-test cancelled a child owned by another script host.";
+        return false;
+    }
+    ownedAggregate->Release();
+    foreignChild->Release();
+    scheduler.Clear();
+
     WriteAsyncSelfTestStage("completed-result-dependencies");
     constexpr const char *primitiveResultModuleName = "__CKAS_AsyncCompletedPrimitiveSelfTest";
     if (api->CompileModule(primitiveResultModuleName,

@@ -1,6 +1,7 @@
 #ifndef CK_SCRIPTINVOCATION_H
 #define CK_SCRIPTINVOCATION_H
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <utility>
@@ -24,6 +25,7 @@ struct ScriptInvocationSpec {
     ScriptInvocationHandler Resume;
     std::function<void()> BeforeExecute;
     std::function<void()> AfterExecute;
+    std::uint64_t AsyncOwnerId = 0;
 };
 
 // Owns one reusable AngelScript context and centralizes its execution contract.

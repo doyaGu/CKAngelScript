@@ -42,6 +42,7 @@ ScriptInvocationStatus ScriptInvoker::ResumePreparedObjectContext(
     ScriptInvocationSpec spec;
     spec.Label = label;
     spec.Result = resultHandler;
+    spec.AsyncOwnerId = m_AsyncOwnerId;
     if (IsProfiling()) {
         spec.BeforeExecute = [this]() { StartTiming(); };
         spec.AfterExecute = [this]() { EndTiming(); };
@@ -120,6 +121,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(
     spec.Prepare = argumentHandler;
     spec.Result = resultHandler;
     spec.Resume = resumeHandler;
+    spec.AsyncOwnerId = m_AsyncOwnerId;
     if (IsProfiling()) {
         spec.BeforeExecute = [this]() { StartTiming(); };
         spec.AfterExecute = [this]() { EndTiming(); };
@@ -200,6 +202,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
 
     ScriptInvocationSpec spec;
     spec.Label = "Script Method";
+    spec.AsyncOwnerId = m_AsyncOwnerId;
     spec.Prepare = [this, object, function, argumentKind](asIScriptContext *context) {
         int result = context->SetObject(object);
         if (result < 0) {
@@ -278,6 +281,7 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
 
     ScriptInvocationSpec spec;
     spec.Label = "Script Message";
+    spec.AsyncOwnerId = m_AsyncOwnerId;
     spec.Prepare = [this, object, argumentKind](asIScriptContext *context) {
         int result = context->SetObject(object);
         if (result >= 0) {

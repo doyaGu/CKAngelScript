@@ -1,6 +1,7 @@
 #ifndef CK_SCRIPTASYNC_H
 #define CK_SCRIPTASYNC_H
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -16,6 +17,8 @@
 class BBTask;
 class GraphTask;
 class ScriptManager;
+
+using ScriptAsyncOwnerId = std::uint64_t;
 
 bool ScriptAsyncBBTaskWaitComplete(bool outputActive, int returnCode);
 
@@ -95,6 +98,8 @@ public:
     ScriptAsyncTaskState State() const { return m_State; }
     ScriptAsyncTaskKind Kind() const { return m_Kind; }
     int SubTypeId() const { return m_SubTypeId; }
+    ScriptAsyncOwnerId OwnerId() const { return m_OwnerId; }
+    void SetOwnerId(ScriptAsyncOwnerId ownerId) { m_OwnerId = ownerId; }
     void NotifyGarbageCollector();
 
     void SetDelayFrames(int frames);
@@ -114,8 +119,13 @@ public:
     void Fail(const std::string &error);
 
 private:
+    friend class ScriptAsyncScheduler;
+
     bool CancelVisited(std::unordered_set<ScriptAsyncTaskBase *> &visited,
                        const std::string &reason);
+    bool CancelOwnedVisited(std::unordered_set<ScriptAsyncTaskBase *> &visited,
+                            ScriptAsyncOwnerId ownerId,
+                            const std::string &reason);
     bool UsesModule(const char *moduleName,
                     std::unordered_set<const ScriptAsyncTaskBase *> &visited) const;
     void SetState(ScriptAsyncTaskState state);
@@ -140,6 +150,7 @@ private:
     asIScriptEngine *m_Engine = nullptr;
     ScriptAsyncTaskKind m_Kind = ScriptAsyncTaskKind::Delay;
     ScriptAsyncTaskState m_State = ScriptAsyncTaskState::Pending;
+    ScriptAsyncOwnerId m_OwnerId = 0;
     int m_SubTypeId = asTYPEID_VOID;
     ScriptAsyncStoredValue m_Result;
     std::string m_Error;
@@ -180,6 +191,10 @@ public:
 
     ScriptManager *GetManager() const { return m_Manager; }
     asIScriptEngine *GetEngine() const;
+    ScriptAsyncOwnerId CreateOwner();
+    void BeginOwnerExecution(asIScriptContext *context, ScriptAsyncOwnerId ownerId);
+    void EndOwnerExecution(asIScriptContext *context);
+    bool CancelOwner(ScriptAsyncOwnerId ownerId, const std::string &reason);
 
     ScriptAsyncTaskBase *CreateDelay(int frames);
     ScriptAsyncTaskBase *CreateManualTask(int subtypeId);
@@ -219,9 +234,11 @@ private:
     void RemoveFinishedTrackedTasks();
 
     ScriptManager *m_Manager = nullptr;
+    ScriptAsyncOwnerId m_NextOwnerId = 1;
     bool m_ProcessingPaused = false;
     std::vector<ScriptAsyncTaskBase *> m_Tasks;
     std::unordered_map<asIScriptContext *, WaitRecord> m_Waits;
+    std::unordered_map<asIScriptContext *, ScriptAsyncOwnerId> m_ActiveOwners;
 };
 
 void RegisterScriptAsync(asIScriptEngine *engine);

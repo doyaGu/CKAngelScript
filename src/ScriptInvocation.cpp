@@ -158,12 +158,19 @@ ScriptInvocationStatus ScriptInvocationContext::Resume(const ScriptInvocationSpe
 }
 
 ScriptInvocationStatus ScriptInvocationContext::ExecutePrepared(const ScriptInvocationSpec &spec) {
+    ScriptAsyncScheduler *scheduler = m_Manager ? m_Manager->GetAsyncScheduler() : nullptr;
+    if (scheduler) {
+        scheduler->BeginOwnerExecution(m_Context, spec.AsyncOwnerId);
+    }
     if (spec.BeforeExecute) {
         spec.BeforeExecute();
     }
     const int result = m_Context->Execute();
     if (spec.AfterExecute) {
         spec.AfterExecute();
+    }
+    if (scheduler) {
+        scheduler->EndOwnerExecution(m_Context);
     }
     m_LastResultCode = result;
 
