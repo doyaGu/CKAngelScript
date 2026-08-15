@@ -11,6 +11,7 @@
 #include "CKAll.h"
 #include "Logger.h"
 #include "ScriptCache.h"
+#include "ScriptAsync.h"
 #include "ScriptBridgeCommon.h"
 #include "ScriptHostScope.h"
 #include "ScriptInvoker.h"
@@ -856,6 +857,16 @@ LifecycleInvokeStatus InvokeLifecycle(const CKBehaviorContext &ctx,
     return LifecycleInvokeStatus::Finished;
 }
 
+void CancelExecutorAsyncWork(ScriptExecutorState *state, const char *reason) {
+    if (!state || !state->Manager || !state->Manager->GetAsyncScheduler() ||
+        state->AsyncOwnerId == 0) {
+        return;
+    }
+    state->Manager->GetAsyncScheduler()->CancelOwner(
+        state->AsyncOwnerId,
+        reason ? reason : "Async work was cancelled by its Executor.");
+}
+
 void InvokeOnDestroy(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
     if (state->Invoker && state->Object && state->OnDestroy) {
         if (state->Invoker->IsContextSuspended()) {
@@ -878,8 +889,14 @@ void ReleaseStateContents(const CKBehaviorContext &ctx, ScriptExecutorState *sta
     if (!state) {
         return;
     }
+    CancelExecutorAsyncWork(
+        state,
+        "Async work was cancelled because its Executor runtime is being released.");
     SetState(state->Behavior, nullptr);
     InvokeOnDestroy(ctx, state);
+    CancelExecutorAsyncWork(
+        state,
+        "Async work was cancelled because its Executor runtime was torn down.");
     if (state->Invoker) {
         state->Invoker->AbortContext();
     }
@@ -896,6 +913,9 @@ void ReleaseRuntimeState(ScriptExecutorState *state) {
     if (!state) {
         return;
     }
+    CancelExecutorAsyncWork(
+        state,
+        "Async work was cancelled because its Executor runtime was reset.");
     if (state->Invoker) {
         state->Invoker->AbortContext();
     }
@@ -939,6 +959,9 @@ void TransitionIdentity(const CKBehaviorContext &ctx,
     if (!IdentityChanged(state, scriptId, moduleName, className, interfaceText)) {
         return;
     }
+    CancelExecutorAsyncWork(
+        state,
+        "Async work was cancelled because its Executor identity changed.");
     InvokeOnDestroy(ctx, state);
     ReleaseRuntimeState(state);
     state->Failed = false;
@@ -1057,6 +1080,7 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
 
     if (!state->Loaded) {
         state->Invoker = new ScriptInvoker(manager);
+        state->Invoker->SetAsyncOwnerId(state->AsyncOwnerId);
         std::string attachError;
         if (!AttachScriptEntryModule(manager, state->Invoker, scriptId, moduleName, attachError)) {
             FailSetup(ctx, state, "Failed to attach script module: " + attachError);
@@ -1206,6 +1230,12 @@ ScriptExecutorState *ScriptManager::GetOrCreateExecutorState(CKBehavior *behavio
         [this](CK_ID, ScriptExecutorState *replaced) {
             ReleaseStateContents(ExecutorContext(this, replaced), replaced);
         });
+    if (state && state->AsyncOwnerId == 0 && m_AsyncScheduler) {
+        state->AsyncOwnerId = m_AsyncScheduler->CreateOwner();
+    }
+    if (state && state->Invoker) {
+        state->Invoker->SetAsyncOwnerId(state->AsyncOwnerId);
+    }
     SetState(behavior, state);
     return state;
 }
@@ -1466,6 +1496,9 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
             ScriptExecutorState *state = GetState(behavior);
             if (state) {
                 state->InitialLifecycle.ResetStart();
+                CancelExecutorAsyncWork(
+                    state,
+                    "Async work was cancelled because its Executor is resetting.");
             }
             if (state && state->Invoker && state->Invoker->IsContextSuspended()) {
                 state->Invoker->AbortContext();

@@ -1,6 +1,7 @@
 #ifndef CK_SCRIPT_EXECUTOR_STATE_H
 #define CK_SCRIPT_EXECUTOR_STATE_H
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,7 @@ class ScriptManager;
 
 struct ScriptExecutorState {
     CK_ID BehaviorId = 0;
+    std::uint64_t AsyncOwnerId = 0;
     CKBehavior *Behavior = nullptr;
     ScriptManager *Manager = nullptr;
     ScriptInvoker *Invoker = nullptr;
