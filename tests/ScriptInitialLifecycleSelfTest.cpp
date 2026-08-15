@@ -1,5 +1,7 @@
 #include "ScriptCoreSelfTests.h"
 
+#include <vector>
+
 #include "ScriptInitialLifecycle.h"
 
 bool RunScriptInitialLifecycleSelfTest(std::string &error) {
@@ -31,6 +33,34 @@ bool RunScriptInitialLifecycleSelfTest(std::string &error) {
     lifecycle.Clear();
     if (lifecycle.Next() != ScriptInitialPhase::OnLoad) {
         error = "Initial lifecycle did not clear all phases.";
+        return false;
+    }
+
+    std::vector<ScriptInitialPhase> invoked;
+    bool suspendedAwake = false;
+    const auto invoke = [&](ScriptInitialPhase phase) {
+        invoked.push_back(phase);
+        if (phase == ScriptInitialPhase::Awake && !suspendedAwake) {
+            suspendedAwake = true;
+            return ScriptLifecycleInvocationStatus::Suspended;
+        }
+        return ScriptLifecycleInvocationStatus::Finished;
+    };
+    if (lifecycle.AdvanceThrough(ScriptInitialPhase::Awake, invoke) !=
+            ScriptLifecycleInvocationStatus::Suspended ||
+        lifecycle.Next() != ScriptInitialPhase::Awake ||
+        invoked != std::vector<ScriptInitialPhase>{ScriptInitialPhase::OnLoad,
+                                                   ScriptInitialPhase::Awake}) {
+        error = "Initial lifecycle did not retain a suspended phase.";
+        return false;
+    }
+    if (lifecycle.AdvanceThrough(ScriptInitialPhase::Awake, invoke) !=
+            ScriptLifecycleInvocationStatus::Finished ||
+        lifecycle.Next() != ScriptInitialPhase::Start ||
+        invoked != std::vector<ScriptInitialPhase>{ScriptInitialPhase::OnLoad,
+                                                   ScriptInitialPhase::Awake,
+                                                   ScriptInitialPhase::Awake}) {
+        error = "Initial lifecycle did not resume from the suspended phase.";
         return false;
     }
     return true;

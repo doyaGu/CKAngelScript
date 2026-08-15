@@ -2,6 +2,7 @@
 #define CK_SCRIPT_INITIAL_LIFECYCLE_H
 
 #include <cstdint>
+#include <functional>
 
 enum class ScriptInitialPhase : std::uint8_t {
     OnLoad,
@@ -10,9 +11,21 @@ enum class ScriptInitialPhase : std::uint8_t {
     Ready,
 };
 
+enum class ScriptLifecycleInvocationStatus : std::uint8_t {
+    Finished,
+    Suspended,
+    Failed,
+};
+
+using ScriptInitialLifecycleInvoker =
+    std::function<ScriptLifecycleInvocationStatus(ScriptInitialPhase)>;
+
 class ScriptInitialLifecycle final {
 public:
     ScriptInitialPhase Next() const;
+    ScriptLifecycleInvocationStatus AdvanceThrough(
+        ScriptInitialPhase finalPhase,
+        const ScriptInitialLifecycleInvoker &invoke);
     bool Complete(ScriptInitialPhase phase);
     void ResetStart();
     void Clear();
