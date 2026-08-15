@@ -131,8 +131,11 @@ not removed by a late global scheduler clear. A task that waits for frames or
 BB/graph progress will not complete until the host continues ticking. Avoid
 blocking native code while waiting for a script task.
 
-Component and Executor invocations assign an internal Script Host Scope owner
-to every task they create, including nested `Async::Spawn` work. Their Reset
-callbacks cancel only the previous work for that owner before calling
-`OnReset`; work owned by another behavior is unaffected, and tasks created by
-the new `OnReset` invocation belong to the new reset epoch.
+Each physical Runtime Entry generation and each Component or Executor instance
+has a stable internal Script Host Scope owner. Lifecycle, message, and Behavior
+Frame invocations propagate that owner to every task they create, including
+nested `Async::Spawn` work. Reset cancels only the previous work for that owner
+before calling `OnReset`; work owned by another host is unaffected, and tasks
+created by the new `OnReset` invocation belong to the new reset epoch. Retiring
+a Runtime Entry generation likewise cancels its owned tasks before unloading
+its physical module without cancelling work owned by another Runtime Entry.

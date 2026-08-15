@@ -19,10 +19,13 @@ The first three correctness tranches are implemented:
   suspended, then run in `OnResume` → `OnEnable` order;
 - Component resume requests are retained while `OnDisable` is suspended, then
   run `OnEnable` exactly once after disable completes;
-- async tasks created by Component and Executor invocations carry stable owner
-  identities; their Reset callbacks cancel the preceding owner's work before
-  `OnReset`, without cancelling another behavior or work created by the new
-  reset epoch;
+- async tasks created by Runtime Entry, Component, and Executor invocations
+  carry stable owner identities; their Reset callbacks cancel the preceding
+  work for that owner before `OnReset`, without cancelling another host or work
+  created by the new reset epoch;
+- Runtime Entry lifecycle and message invocations share the physical
+  generation's owner; reload cancels that generation's tasks before unload
+  without cancelling work owned by another Runtime Entry;
 - public module replace/unload preflight includes live Component and Executor
   consumers and returns `CKAS_INUSE`;
 - every Component runtime reset advances its message incarnation, so targets
@@ -38,9 +41,9 @@ The first three correctness tranches are implemented:
 
 The following work remains open:
 
-- extend the owner seam to Runtime Entries if the manager-wide reset fallback
-  is retired; Executor has no pause/resume lifecycle surface, so no synthetic
-  resume callback was added;
+- separate the manager-wide reset fallback into explicit public/orphan cleanup
+  after all Script Host Scope transitions; Executor has no pause/resume
+  lifecycle surface, so no synthetic resume callback was added;
 - consolidate lifecycle ordering behind the shared lifecycle seam;
 - add the engine-backed CTest target and obtain a passing real Player callback
   trace for the new startup regressions.
@@ -398,8 +401,10 @@ Exit gate:
 1. Split scheduler processing state from destructive teardown.
 2. Preserve terminal wait results until consumed or explicitly forgotten.
 3. Replace pause-time queue clearing with freeze/resume behavior.
-4. Replace reset-time global clearing with Script Host Scope cancellation before
-   each owner's `OnReset`.
+4. **Done for host-owned work:** use Script Host Scope cancellation before each
+   Runtime Entry, Component, and Executor owner's `OnReset`. CK Reset still uses
+   a manager-wide `CancelAll` before those callbacks for public and orphaned
+   work; split that fallback into explicit cleanup after owner transitions.
 5. Retain deferred resume events until pending pause/disable phases complete.
 6. Make shutdown ordering explicit: abort invocations, forget contexts, cancel
    tasks, release task references, then release the engine.
@@ -436,8 +441,8 @@ Exit gate:
    internal consumer.
 5. **Done:** give Runtime Entry retirement and private Component retirement
    explicit owner-coordinated Module Mutation Origins. Runtime Entry retirement
-   preflights unowned blockers before releasing its Component and Executor
-   consumers.
+   cancels work owned by the retiring physical generation, then preflights
+   unowned blockers before releasing its Component and Executor consumers.
 6. Keep replacement staging transactional. Public raw mutation never detaches
    consumers; an owner-coordinated migration stages a generation-specific
    physical module before switching consumers.
@@ -514,6 +519,7 @@ Exit gate:
 | Component `OnDisable` suspends and host resumes | Disable completes before re-enable; Component ends enabled |
 | Reset while `Update` awaits | Old invocation is aborted; cancellation is not observed as success |
 | `OnReset` creates and awaits a task | New task survives reset and completes before later lifecycle phases |
+| Runtime Entry reset with another entry active | Only preceding work for the reset entry is cancelled; the other entry's work survives |
 | Message request spans pause | Request and timeout freeze, then continue after resume |
 | Shutdown while a context awaits | Context never resumes; no wait/task references leak |
 | Public execution is suspended during pause | It remains suspended until processing resumes; no false completion |
@@ -528,6 +534,7 @@ Exit gate:
 | Component is released, then module replaced | Replacement succeeds and generation increments once |
 | Runtime Entry candidate fails to compile | Old Runtime Entry and consumers continue unchanged |
 | Runtime Entry reload retires immediately | Old Component and Executor states and the old physical module are removed; the behaviors rebuild against the new engine module name |
+| Runtime Entry reload with lifecycle/message tasks | Tasks owned by the old physical generation are cancelled; another Runtime Entry's tasks survive |
 | Private Component source changes | Only the owning private module is retired and rebuilt |
 | Module has a suspended async consumer | Mutation returns `CKAS_INUSE` |
 | Component runtime is rebuilt with queued messages | Old message target is stale; old message is not delivered to the new object |

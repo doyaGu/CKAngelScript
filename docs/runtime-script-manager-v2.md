@@ -120,13 +120,19 @@ module name before disturbing the active Runtime Entry. A failed candidate
 therefore leaves the active generation and its consumers unchanged.
 
 Retiring the old generation carries an explicit Runtime Entry Module Mutation
-Origin. The module registry first rejects unowned blockers such as public
-object/execution handles, async tasks, and bound import consumers. It then
-tears down Component and Executor states attached to that physical module and
-unloads it. A Component behavior whose state was retired resolves the Runtime
-Entry again and builds against the new generation on its next invocation.
-Public raw replace/unload has no such authority and continues to return
-`CKAS_INUSE` while either host consumer is attached.
+Origin. Every physical generation has a stable Script Host Scope owner that is
+propagated through lifecycle and `OnMessage` invocations. Reset cancels that
+owner's preceding work before `OnReset`, and retirement cancels its owned tasks
+before the module registry evaluates the remaining blockers. Work owned by
+another Runtime Entry is unaffected.
+
+The registry rejects remaining unowned blockers such as public
+object/execution handles, unowned async tasks, and bound import consumers. It
+then tears down Component and Executor states attached to that physical module
+and unloads it. A Component behavior whose state was retired resolves the
+Runtime Entry again and builds against the new generation on its next
+invocation. Public raw replace/unload has no such authority and continues to
+return `CKAS_INUSE` while either host consumer is attached.
 
 ## Lifecycle Order
 
