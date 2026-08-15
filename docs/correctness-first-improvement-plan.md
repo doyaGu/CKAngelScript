@@ -22,11 +22,11 @@ Implemented correctness work includes:
 - the shared lifecycle Module owns `OnLoad` → `Awake` → `Start` ordering and
   suspension/failure outcomes for Runtime Entry, Component, and Executor
   Adapters; host-specific context construction remains local to each Adapter;
-- the same Module owns Host Activation's desired pause state, pending
-  `OnPause` → `OnDisable` position, and deferred Resume event for Runtime Entry
-  and Component Adapters; the Component Adapter supplies a no-op `OnPause`
-  phase, Resume remains pending through a suspended `OnEnable`, and its
-  completion frame does not run normal update work;
+- the same Module owns Host Activation's desired enabled and pause states,
+  pending `OnPause` → `OnDisable` position, and deferred Resume event for
+  Runtime Entry and Component Adapters; the Component Adapter supplies a no-op
+  `OnPause` phase, explicit Disable clears retained Resume and aborts a
+  suspended `OnEnable`, and Resume completion does not run normal update work;
 - async tasks created by Runtime Entry, Component, and Executor invocations
   carry stable owner identities; their Reset callbacks cancel the preceding
   work for that owner before `OnReset`, without cancelling another host or work
@@ -52,8 +52,7 @@ The following work remains open:
 - separate the manager-wide reset fallback into explicit public/orphan cleanup
   after all Script Host Scope transitions; Executor has no pause/resume
   lifecycle surface, so no synthetic resume callback was added;
-- consolidate desired enabled state and Reset/Destroy ordering behind the
-  shared lifecycle seam;
+- consolidate Reset/Destroy ordering behind the shared lifecycle Seam;
 - add the engine-backed CTest target and obtain a passing real Player callback
   trace for the new startup regressions.
 
@@ -487,9 +486,9 @@ Exit gate:
 ### Phase 3 — Consolidate lifecycle ordering
 
 1. **In progress:** `ScriptInitialLifecycle` now owns the active initial phase
-   and terminal invocation outcome, plus Host Activation's desired pause state
-   and deferred Resume event. Desired enabled state and Reset/Destroy events
-   remain to be consolidated.
+   and terminal invocation outcome, plus Host Activation's desired enabled and
+   pause states and deferred Resume event. Reset/Destroy events remain to be
+   consolidated.
 2. **Done for Initial Lifecycle:** move `OnLoad` → `Awake` → `Start` ordering
    out of Runtime Entry, Component, and Executor callers.
 3. **Done for deferred Resume:** retain Resume across suspended disable/enable
@@ -497,13 +496,17 @@ Exit gate:
 4. **Done for Pause phases:** advance `OnPause` → `OnDisable` once behind the
    shared lifecycle Interface. Runtime Entry and Component Adapters both use
    it; the Component Adapter maps its absent `OnPause` callback to a no-op.
-5. **Preserved for migrated transitions:** keep context construction, parameter
+5. **Done for desired activation:** own desired enabled state and combine it
+   with Adapter eligibility before retaining Resume. Explicit Disable clears a
+   retained Resume; Runtime Entry and Component Adapters retain actual enabled
+   state and side effects.
+6. **Preserved for migrated transitions:** keep context construction, parameter
    injection, Behavior Frame refresh, and host-specific side effects in the
    Adapters.
-6. Delete duplicated pending flags only after parity tests pass for each entry
-   kind. Runtime Entry `PendingPause`/`PendingResume` and Component
-   `Paused`/`PendingResume` are removed; remaining transition flags stay until
-   their phases migrate.
+7. Delete duplicated pending flags only after parity tests pass for each entry
+   kind. Runtime Entry `Enabled`/`PendingPause`/`PendingResume` and Component
+   `DesiredEnabled`/`Paused`/`PendingResume` are removed; remaining transition
+   flags stay until their phases migrate.
 
 Exit gate:
 
@@ -540,6 +543,7 @@ Exit gate:
 | `OnPause` suspends and host resumes | `OnPause` completes, then `OnResume` runs exactly once |
 | Component `OnDisable` suspends and host resumes | Disable completes before re-enable; Component ends enabled |
 | Retained Resume reaches a suspended `OnEnable` | Resume remains pending through completion; `Update` does not run in that completion frame |
+| Explicit Disable reaches a suspended `OnEnable` | The prepared invocation is aborted, retained Resume is cleared, and the host remains disabled |
 | Reset while `Update` awaits | Old invocation is aborted; cancellation is not observed as success |
 | `OnReset` creates and awaits a task | New task survives reset and completes before later lifecycle phases |
 | Runtime Entry reset with another entry active | Only preceding work for the reset entry is cancelled; the other entry's work survives |

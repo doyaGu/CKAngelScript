@@ -283,7 +283,8 @@ does not run in that completion frame. A later Pause or an explicit Disable
 supersedes the retained request. The shared lifecycle Module tracks the same
 Pause phase position used by Runtime Entries; because Component scripts do not
 define `OnPause`, the Component Adapter maps that phase to a no-op before
-advancing `OnDisable`.
+advancing `OnDisable`. Explicit Disable also aborts a suspended `OnEnable`
+prepared context, so it cannot resume after the Component becomes disabled.
 
 Component Reset cancels async tasks created by the preceding Component
 invocations before `OnReset` starts. It does not cancel another Component or
