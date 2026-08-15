@@ -10,6 +10,7 @@
 #include <angelscript.h>
 
 #include "CKAngelScript.h"
+#include "ScriptInitialLifecycle.h"
 #include "ScriptRuntimeDependency.h"
 #include "ScriptRuntimeMetadata.h"
 
@@ -190,6 +191,11 @@ private:
     bool PauseModule(Module &module, const ScriptContext &context);
     bool ResumeModule(Module &module, const ScriptContext &context);
     bool ResetModule(Module &module, const ScriptContext &context);
+    InvokeStatus AdvanceInitialLifecycle(Module &module,
+                                         ScriptInitialPhase finalPhase,
+                                         const char *stateOverride,
+                                         float deltaTime,
+                                         float timeSeconds);
     const char *ModuleState(const Module &module) const;
     Module *FindModule(const std::string &id) const;
     RuntimeScriptInfo BuildInfo(const Module &module) const;
