@@ -54,11 +54,7 @@ enum class ExecutorReadyStatus {
     Failed,
 };
 
-enum class LifecycleInvokeStatus {
-    Finished,
-    Suspended,
-    Failed,
-};
+using LifecycleInvokeStatus = ScriptLifecycleInvocationStatus;
 
 struct ExecutorSlotSpec {
     ExecutorSlotKind Kind = ExecutorSlotKind::Input;
@@ -892,6 +888,41 @@ LifecycleInvokeStatus InvokeLifecycle(const CKBehaviorContext &ctx,
     return LifecycleInvokeStatus::Finished;
 }
 
+LifecycleInvokeStatus AdvanceInitialLifecycle(const CKBehaviorContext &ctx,
+                                              ScriptExecutorState *state,
+                                              ScriptInitialPhase finalPhase) {
+    if (!state) {
+        return LifecycleInvokeStatus::Failed;
+    }
+    return state->InitialLifecycle.AdvanceThrough(
+        finalPhase,
+        [&](ScriptInitialPhase phase) {
+            switch (phase) {
+            case ScriptInitialPhase::OnLoad:
+                return InvokeLifecycle(ctx,
+                                       state,
+                                       state->OnLoad,
+                                       state->OnLoadArgument,
+                                       "OnLoad");
+            case ScriptInitialPhase::Awake:
+                return InvokeLifecycle(ctx,
+                                       state,
+                                       state->Awake,
+                                       state->AwakeArgument,
+                                       "Awake");
+            case ScriptInitialPhase::Start:
+                return InvokeLifecycle(ctx,
+                                       state,
+                                       state->Start,
+                                       state->StartArgument,
+                                       "Start");
+            case ScriptInitialPhase::Ready:
+                break;
+            }
+            return LifecycleInvokeStatus::Failed;
+        });
+}
+
 void CancelExecutorAsyncWork(ScriptExecutorState *state, const char *reason) {
     if (!state || !state->Manager || !state->Manager->GetAsyncScheduler() ||
         state->AsyncOwnerId == 0) {
@@ -1162,35 +1193,13 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         state->Loaded = true;
     }
 
-    if (state->InitialLifecycle.Next() == ScriptInitialPhase::OnLoad) {
-        const LifecycleInvokeStatus status = InvokeLifecycle(ctx, state, state->OnLoad, state->OnLoadArgument, "OnLoad");
-        if (status == LifecycleInvokeStatus::Suspended) {
-            return ExecutorReadyStatus::Suspended;
-        }
-        if (status == LifecycleInvokeStatus::Failed) {
-            return ExecutorReadyStatus::Failed;
-        }
-        state->InitialLifecycle.Complete(ScriptInitialPhase::OnLoad);
+    const LifecycleInvokeStatus lifecycleStatus =
+        AdvanceInitialLifecycle(ctx, state, ScriptInitialPhase::Start);
+    if (lifecycleStatus == LifecycleInvokeStatus::Suspended) {
+        return ExecutorReadyStatus::Suspended;
     }
-    if (state->InitialLifecycle.Next() == ScriptInitialPhase::Awake) {
-        const LifecycleInvokeStatus status = InvokeLifecycle(ctx, state, state->Awake, state->AwakeArgument, "Awake");
-        if (status == LifecycleInvokeStatus::Suspended) {
-            return ExecutorReadyStatus::Suspended;
-        }
-        if (status == LifecycleInvokeStatus::Failed) {
-            return ExecutorReadyStatus::Failed;
-        }
-        state->InitialLifecycle.Complete(ScriptInitialPhase::Awake);
-    }
-    if (state->InitialLifecycle.Next() == ScriptInitialPhase::Start) {
-        const LifecycleInvokeStatus status = InvokeLifecycle(ctx, state, state->Start, state->StartArgument, "Start");
-        if (status == LifecycleInvokeStatus::Suspended) {
-            return ExecutorReadyStatus::Suspended;
-        }
-        if (status == LifecycleInvokeStatus::Failed) {
-            return ExecutorReadyStatus::Failed;
-        }
-        state->InitialLifecycle.Complete(ScriptInitialPhase::Start);
+    if (lifecycleStatus == LifecycleInvokeStatus::Failed) {
+        return ExecutorReadyStatus::Failed;
     }
 
     return ExecutorReadyStatus::Ready;
