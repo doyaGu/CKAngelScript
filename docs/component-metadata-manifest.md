@@ -30,6 +30,14 @@ entries are still discovered and compiled by the script entry manager; the
 Component BB only attaches to the resolved module and instantiates `Class` for
 that specific `CKBehavior`.
 
+Attachment requires a tracked, non-zero module generation. The Component stores
+that equality token with its script object and cached methods. Before lifecycle
+invocation, direct `OnMessage` delivery, or suspended-message resume, it compares
+the token with the manager's current generation; unknown or mismatched values
+abort the suspended context and fail the Component without executing stale
+script state. Public unload/replace remains blocked with `CKAS_INUSE` while the
+Component is attached.
+
 ## Metadata Syntax
 
 Metadata is attached to public writable class fields:

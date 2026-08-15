@@ -373,10 +373,14 @@ input activation and checks the existing suspended context without deactivating
 the upstream output, which may also feed other graph nodes.
 
 Executor instances can hold script objects and method references into script
-entry modules. `ScriptManager` releases those Executor states before clearing
-loaded modules on `PostClearAll`, `OnCKEnd`, and shutdown, so a loaded
-replacement root does not keep `__CKASRuntime_*` modules alive during Player
-close.
+entry modules. Each instance records the non-zero manager generation captured
+when it attaches. Lifecycle, `Execute`, and suspended-context resume boundaries
+compare that equality token before entering cached script state; a mismatch
+aborts the context and fails the Executor. Public unload/replace returns
+`CKAS_INUSE` while an Executor remains attached. Runtime Entry retirement and
+manager teardown explicitly release their owned Executor states before module
+unload, so a loaded replacement root does not keep `__CKASRuntime_*` modules
+alive during Player close.
 
 ## Current Implementation Boundaries
 

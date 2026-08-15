@@ -4,7 +4,7 @@ Status: implementation in progress (started 2026-08-14).
 
 ## Implementation Progress
 
-The first two correctness tranches are implemented:
+The first three correctness tranches are implemented:
 
 - scheduler-wide cancellation preserves wait records until the waiter consumes
   the cancellation or its invocation explicitly forgets the context;
@@ -26,17 +26,23 @@ The first two correctness tranches are implemented:
 - public module replace/unload preflight includes live Component and Executor
   consumers and returns `CKAS_INUSE`;
 - every Component runtime reset advances its message incarnation, so targets
-  captured before the rebuild are stale.
+  captured before the rebuild are stale;
+- Component and Executor states record a non-zero attached module generation;
+  lifecycle, Execute, direct message, and suspended-message resume boundaries
+  abort and fail before touching cached script state when that equality token
+  no longer matches the manager;
+- public replacement and unload no longer run a post-commit consumer-detachment
+  hook. Runtime Entry retirement retains its explicit owner-side Executor
+  release, while public raw mutation remains rejection-only.
 
 The following work remains open:
 
 - extend the owner seam to Runtime Entries if the manager-wide reset fallback
   is retired; Executor has no pause/resume lifecycle surface, so no synthetic
   resume callback was added;
-- record attached module generations in Component/Executor state and validate
-  them at direct invocation boundaries;
-- move all mutation ownership/orphan retirement into the module registry and
-  remove the post-commit `PrepareModuleMutation()` hook;
+- formalize owner-coordinated Runtime Entry and private Component mutation
+  origins in the module registry; public mutation now has no post-commit
+  detachment path;
 - consolidate lifecycle ordering behind the shared lifecycle seam;
 - add the engine-backed CTest target and obtain a passing real Player callback
   trace for the new startup regressions.
@@ -127,21 +133,23 @@ Actual Virtools callback ordering must be captured in Player validation before
 changing Component transition code, but no ordering can make deletion of the
 pending resume event correct.
 
-### 3. Module mutation does not account for all internal consumers
+### 3. Module mutation did not account for all internal consumers
 
-The mutation policy checks public runtime handles, async tasks, and bound import
-consumers. It does not include Component or Executor states. The post-commit
-preparation hook releases Executor states only.
+The original mutation policy checked public runtime handles, async tasks, and
+bound import consumers, but not Component or Executor states. Its post-commit
+preparation hook released Executor states only.
 
-A Component attached to a loaded shared module stores the module name but not
-the manager's module generation. `ComponentIdentityChanged()` therefore cannot
-detect a same-name replacement, and the loaded fast path continues to use the
-old script object and cached methods.
+The implemented default policy now rejects replacement/unload while either
+state store has a matching live consumer. Component and Executor states also
+record the manager generation captured at attach time and reject unknown (`0`)
+or mismatched generations before direct invocation or resume. The redundant
+post-commit `PrepareModuleMutation()` hook has been removed; owner-side Runtime
+Entry retirement remains explicit.
 
 Relevant implementation:
 
 - [`ScriptModuleMutationPolicy`](../src/ScriptModuleMutationPolicy.cpp)
-- [`ScriptManager::PrepareModuleMutation`](../src/AngelScriptExecutor.cpp)
+- [`IsAttachedModuleGenerationCurrent`](../src/ScriptModuleGeneration.cpp)
 - [`ComponentIdentityChanged`](../src/AngelScriptComponent.cpp)
 - [`ScriptComponentState`](../src/ScriptComponentState.h)
 - [Component module ownership contract](component-metadata-manifest.md)
@@ -150,12 +158,10 @@ Runtime Entry reloads usually avoid this exact failure because each discovered
 generation receives a different engine module name. Loaded shared modules do
 not have that protection.
 
-There is also a message-incarnation gap. `MessageGeneration` changes when a
-Component state is created, but not when its script object and module binding
-are rebuilt in the same state. A queued or retained typed target can therefore
-cross a runtime incarnation and reach whichever object happens to be installed
-when delivery runs. Direct Component message delivery also enters the cached
-`OnMessage` method without first validating the attached module generation.
+The message-incarnation gap is also closed. Every Component runtime rebuild
+advances `MessageGeneration`, and direct delivery validates both that
+incarnation and the attached module generation before entering cached
+`OnMessage` state.
 
 Relevant implementation:
 
@@ -417,21 +423,22 @@ Exit gate:
 
 ### Phase 2 — Make module mutation generation-safe
 
-1. Add module-consumer queries to Component and Executor state stores.
-2. Record attached generation in Component and Executor state for diagnostics.
-3. Move preflight and post-commit consumer handling into the registry mutation
-   transaction.
-4. Reject public raw mutation with `CKAS_INUSE` for every live internal
-   consumer.
+1. **Done:** add module-consumer queries to Component and Executor state stores.
+2. **Done:** record and validate attached generation in Component and Executor
+   state.
+3. **Done for public mutation:** centralize preflight in the registry mutation
+   policy and remove post-commit consumer detachment.
+4. **Done:** reject public raw mutation with `CKAS_INUSE` for every live
+   internal consumer.
 5. Give Runtime Entry retirement and private Component retirement explicit
    owner-coordinated mutation origins.
 6. Keep replacement staging transactional. Public raw mutation never detaches
    consumers; an owner-coordinated migration stages a generation-specific
    physical module before switching consumers.
-7. Increment Component message incarnation on every runtime rebuild and validate
-   module generation before direct message delivery.
-8. Remove `ScriptManager::PrepareModuleMutation()` after all mutation paths use
-   the deeper registry interface.
+7. **Done:** increment Component message incarnation on every runtime rebuild
+   and validate module generation before direct message delivery.
+8. **Done:** remove `ScriptManager::PrepareModuleMutation()`; public mutation
+   never detaches host consumers after commit.
 
 Primary files:
 
