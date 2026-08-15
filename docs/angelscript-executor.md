@@ -346,7 +346,10 @@ suspension resumes on a later Executor activation and does not run `Execute` as
 part of the reset-only resume. Reset first aborts the preceding suspended
 Executor invocation and cancels async tasks owned by that Executor. Tasks owned
 by other behaviors are not affected, while tasks created by the new `OnReset`
-invocation remain eligible to complete.
+invocation remain eligible to complete. The shared lifecycle Module retains
+the Reset phase and rewinds `Start`. A repeated Reset cancels work from the
+first Reset Epoch, aborts its suspended `OnReset`, and invokes a replacement
+`OnReset`; the old context is never resumed.
 
 Example:
 

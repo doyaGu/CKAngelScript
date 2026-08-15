@@ -13,12 +13,16 @@ A long-lived discovered AngelScript module identified by a stable runtime id and
 _Avoid_: Global script, runtime component
 
 **Initial Lifecycle**:
-The once-per-incarnation `OnLoad` → `Awake` → `Start` progression shared by Runtime Entry and Behavior Frame adapters. A phase advances only after its invocation finishes; suspension or failure retains the current phase. `OnEnable` is host activation that may occur between `Awake` and `Start`, and Reset rewinds only `Start`.
+The once-per-incarnation `OnLoad` → `Awake` → `Start` progression shared by Runtime Entry and Behavior Frame adapters. An initial phase advances only after its invocation finishes; suspension or failure retains the current phase. The shared Module also owns Reset phase progression and the `Start` rewind. `OnEnable` is Host Activation that may occur between `Awake` and `Start`.
 _Avoid_: Startup callbacks, initialization list
 
 **Host Activation**:
 The desired enabled-or-disabled and paused-or-active conditions of a Runtime Entry or Component. The shared lifecycle Module owns desired enabled state, pending `OnPause` → `OnDisable` phase position, and Resume eligibility; each Adapter owns its actual enabled side effects, and the Component Adapter treats its unsupported `OnPause` phase as a no-op. Resume remains pending while an earlier disable or enable phase is suspended, is fulfilled only after re-enabling completes, and is superseded by a later Pause or explicit Disable.
 _Avoid_: Pending resume flag, callback boolean
+
+**Reset Epoch**:
+The lifecycle interval for one Script Host Scope opened by a host Reset. Opening an epoch cancels work owned by the preceding epoch, aborts its prepared invocation, clears older Pause/Resume transitions, rewinds `Start`, and begins a new `OnReset` phase. A repeated Reset supersedes a suspended `OnReset`; work created by the replacement `OnReset` belongs to the new epoch and may suspend normally. A Pause arriving after the Reset is retained until that Reset phase finishes.
+_Avoid_: Pending reset flag, reset callback state
 
 **Behavior Frame**:
 The revalidating execution-frame facade for the currently executing Component or Executor behavior. It is transient execution state, not persistent gameplay state.

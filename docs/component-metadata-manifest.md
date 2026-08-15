@@ -289,7 +289,11 @@ prepared context, so it cannot resume after the Component becomes disabled.
 Component Reset cancels async tasks created by the preceding Component
 invocations before `OnReset` starts. It does not cancel another Component or
 Executor's tasks, and work created inside the new `OnReset` callback may
-suspend and resume normally.
+suspend and resume normally. The shared lifecycle Module retains that Reset
+phase and rewinds `Start`. A repeated Reset cancels the first Reset Epoch's
+owned work, aborts its suspended `OnReset`, and invokes a replacement `OnReset`
+instead of resuming the old context. Pause requested while `OnReset` is pending
+is retained and advances only after Reset finishes.
 
 Use `BehaviorFrame` for current-BB work. It fully covers the current
 `CKBehaviorContext` and the current `CKBehavior` as a high-level facade:

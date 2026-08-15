@@ -115,7 +115,7 @@ Payloads are AngelScript dictionaries. Keep payload values simple: strings, numb
 Messages are processed by the manager during runtime ticks. CK Pause freezes
 queued delivery and request timeout frame counts; Play resumes them from the
 same logical frame. Reset cancels queued work and pending requests from the old
-reset epoch before Runtime Entry `OnReset` callbacks run. Do not assume a
+Reset Epoch before Runtime Entry `OnReset` callbacks run. Do not assume a
 publish call immediately invokes every receiver before the next line of code.
 Use `Request` and `Await` when the caller needs a response.
 

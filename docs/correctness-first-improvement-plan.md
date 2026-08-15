@@ -27,10 +27,14 @@ Implemented correctness work includes:
   Runtime Entry and Component Adapters; the Component Adapter supplies a no-op
   `OnPause` phase, explicit Disable clears retained Resume and aborts a
   suspended `OnEnable`, and Resume completion does not run normal update work;
+- the same Module owns Reset phase progression and the `Start` rewind for
+  Runtime Entry, Component, and Executor Adapters. Every host Reset opens a new
+  Reset Epoch: it supersedes a suspended `OnReset`, while a later Pause is
+  retained until the replacement Reset finishes;
 - async tasks created by Runtime Entry, Component, and Executor invocations
   carry stable owner identities; their Reset callbacks cancel the preceding
   work for that owner before `OnReset`, without cancelling another host or work
-  created by the new reset epoch;
+  created by the new Reset Epoch;
 - Runtime Entry lifecycle and message invocations share the physical
   generation's owner; reload cancels that generation's tasks before unload
   without cancelling work owned by another Runtime Entry;
@@ -52,7 +56,7 @@ The following work remains open:
 - separate the manager-wide reset fallback into explicit public/orphan cleanup
   after all Script Host Scope transitions; Executor has no pause/resume
   lifecycle surface, so no synthetic resume callback was added;
-- consolidate Reset/Destroy ordering behind the shared lifecycle Seam;
+- consolidate Destroy ordering behind the shared lifecycle Seam;
 - add the engine-backed CTest target and obtain a passing real Player callback
   trace for the new startup regressions.
 
@@ -230,7 +234,7 @@ Host transitions have distinct semantics:
 | --- | --- | --- | --- |
 | Pause | Freeze; do not consume frames or timeout | Preserve | Finish `OnPause`/`OnDisable` after processing resumes, then deliver the retained resume event |
 | Resume | Resume scheduler and message processing | Resume pending phase first | `OnPause`/`OnDisable` completion precedes `OnResume`/`OnEnable`, which precedes `Update`/`Execute` |
-| Reset | Cancel prior work for the affected Script Host Scope before `OnReset` starts | Abort superseded phase | Work created by `OnReset` belongs to the new reset epoch and may suspend normally |
+| Reset | Cancel prior work for the affected Script Host Scope before `OnReset` starts | Abort the superseded phase, including an earlier `OnReset` | Every Reset opens a new Reset Epoch; its `OnReset` may suspend normally, and a later Pause waits behind it |
 | End / clear / shutdown | Cancel all work, including public execution handles | Abort before forgetting wait records | No script context resumes after teardown begins |
 
 Pause therefore freezes pending message requests as well as async tasks. A
@@ -486,9 +490,9 @@ Exit gate:
 ### Phase 3 — Consolidate lifecycle ordering
 
 1. **In progress:** `ScriptInitialLifecycle` now owns the active initial phase
-   and terminal invocation outcome, plus Host Activation's desired enabled and
-   pause states and deferred Resume event. Reset/Destroy events remain to be
-   consolidated.
+   and terminal invocation outcome, Host Activation's desired enabled and
+   pause states and deferred Resume event, and Reset phase progression. Destroy
+   remains to be consolidated.
 2. **Done for Initial Lifecycle:** move `OnLoad` → `Awake` → `Start` ordering
    out of Runtime Entry, Component, and Executor callers.
 3. **Done for deferred Resume:** retain Resume across suspended disable/enable
@@ -500,13 +504,20 @@ Exit gate:
    with Adapter eligibility before retaining Resume. Explicit Disable clears a
    retained Resume; Runtime Entry and Component Adapters retain actual enabled
    state and side effects.
-6. **Preserved for migrated transitions:** keep context construction, parameter
+6. **Done for Reset phases:** every Runtime Entry, Component, and Executor
+   Adapter cancels owner-scoped work and aborts the superseded prepared context
+   before requesting Reset from the shared Module. The Module clears older
+   Pause/Resume transitions, rewinds `Start`, retains suspended `OnReset`
+   position, and lets a repeated Reset replace that position with a new Reset
+   Epoch. Pause requested after Reset remains queued behind it.
+7. **Preserved for migrated transitions:** keep context construction, parameter
    injection, Behavior Frame refresh, and host-specific side effects in the
    Adapters.
-7. Delete duplicated pending flags only after parity tests pass for each entry
+8. Delete duplicated pending flags only after parity tests pass for each entry
    kind. Runtime Entry `Enabled`/`PendingPause`/`PendingResume` and Component
-   `DesiredEnabled`/`Paused`/`PendingResume` are removed; remaining transition
-   flags stay until their phases migrate.
+   `DesiredEnabled`/`Paused`/`PendingResume` are removed. Runtime Entry
+   `PendingReset` is also removed; remaining Destroy transition flags stay
+   until that phase migrates.
 
 Exit gate:
 
@@ -546,6 +557,8 @@ Exit gate:
 | Explicit Disable reaches a suspended `OnEnable` | The prepared invocation is aborted, retained Resume is cleared, and the host remains disabled |
 | Reset while `Update` awaits | Old invocation is aborted; cancellation is not observed as success |
 | `OnReset` creates and awaits a task | New task survives reset and completes before later lifecycle phases |
+| Reset repeats while `OnReset` awaits | The first Reset Epoch is cancelled and aborted; only the replacement `OnReset` may complete |
+| Pause arrives while `OnReset` awaits | Reset remains current; Pause runs only after `OnReset` finishes, followed by any retained Resume |
 | Runtime Entry reset with another entry active | Only preceding work for the reset entry is cancelled; the other entry's work survives |
 | Message request spans pause | Request and timeout freeze, then continue after resume |
 | Shutdown while a context awaits | Context never resumes; no wait/task references leak |

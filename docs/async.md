@@ -136,6 +136,9 @@ has a stable internal Script Host Scope owner. Lifecycle, message, and Behavior
 Frame invocations propagate that owner to every task they create, including
 nested `Async::Spawn` work. Reset cancels only the previous work for that owner
 before calling `OnReset`; work owned by another host is unaffected, and tasks
-created by the new `OnReset` invocation belong to the new reset epoch. Retiring
+created by the new `OnReset` invocation belong to the new Reset Epoch. Retiring
 a Runtime Entry generation likewise cancels its owned tasks before unloading
 its physical module without cancelling work owned by another Runtime Entry.
+A repeated host Reset cancels tasks from the suspended `OnReset`, aborts that
+prepared invocation, and opens a replacement Reset Epoch; only tasks created by
+the replacement invocation remain owned by the current epoch.

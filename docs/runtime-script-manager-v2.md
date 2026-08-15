@@ -110,7 +110,16 @@ Parameterless lifecycle functions are invalid for runtime entries in v2. Async c
 
 If Play arrives while `OnPause` or its following `OnDisable` is suspended, Host Activation retains the resume event: the old phase finishes first, followed by `OnResume` and `OnEnable`. If `OnEnable` also suspends, the Runtime Entry remains in its resuming state until that invocation finishes. Normal update work starts on a later transition step, never in the frame that completes the retained Resume. A later Pause supersedes the pending Resume. `Runtime::Enable(ctx, id, false)` also clears retained Resume and aborts a suspended `OnEnable`; a disabled Runtime Entry still consumes the host Resume condition without scheduling lifecycle callbacks.
 
-Reset cancels work from the previous reset epoch before invoking `OnReset`; work created by `OnReset` remains eligible to suspend and resume. `[executor]` entries may define Executor lifecycle methods such as `OnLoad(BehaviorFrame@ frame)` on their Executor classes; those are invoked by each `AngelScript Executor` BB instance, not by the runtime manager.
+The shared lifecycle Module owns Reset phase position and the `Start` rewind.
+Before opening a Reset Epoch, the Runtime Entry Adapter cancels work owned by
+the previous epoch and aborts its prepared invocation. `OnReset` may then
+suspend and resume. A repeated Reset supersedes that suspended `OnReset` and
+opens another epoch; it never resumes the old context. Pause requested while
+`OnReset` is pending waits behind Reset, after which the retained Pause/Resume
+sequence runs before normal update work. `[executor]` entries may define
+Executor lifecycle methods such as `OnLoad(BehaviorFrame@ frame)` on their
+Executor classes; those are invoked by each `AngelScript Executor` BB instance,
+not by the runtime manager.
 
 `AngelScript Component` is not a script-entry host. Its `Script` parameter may
 resolve to a script entry id when no loaded module has that name, but the
