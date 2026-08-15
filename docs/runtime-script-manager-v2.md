@@ -106,7 +106,9 @@ void OnResume(const ScriptContext &in ctx) {}
 void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx) {}
 ```
 
-Parameterless lifecycle functions are invalid for runtime entries in v2. Async callbacks are serialized per runtime entry; a suspended phase resumes before a later phase runs. If Play arrives while `OnPause` or its following `OnDisable` is suspended, the resume event is retained: the old phase finishes first, followed by `OnResume`, `OnEnable`, and only then normal update work. Reset cancels work from the previous reset epoch before invoking `OnReset`; work created by `OnReset` remains eligible to suspend and resume. `[executor]` entries may define Executor lifecycle methods such as `OnLoad(BehaviorFrame@ frame)` on their Executor classes; those are invoked by each `AngelScript Executor` BB instance, not by the runtime manager.
+Parameterless lifecycle functions are invalid for runtime entries in v2. Async callbacks are serialized per runtime entry; a suspended phase resumes before a later phase runs. The shared Initial Lifecycle module owns `OnLoad` → `Awake` → `Start` progression for Runtime Entry, Component, and Executor adapters. It commits a phase only after the adapter reports completion; suspension or failure leaves that phase current. `OnEnable` remains host activation and may occur between `Awake` and `Start`.
+
+If Play arrives while `OnPause` or its following `OnDisable` is suspended, the resume event is retained: the old phase finishes first, followed by `OnResume`, `OnEnable`, and only then normal update work. Reset cancels work from the previous reset epoch before invoking `OnReset`; work created by `OnReset` remains eligible to suspend and resume. `[executor]` entries may define Executor lifecycle methods such as `OnLoad(BehaviorFrame@ frame)` on their Executor classes; those are invoked by each `AngelScript Executor` BB instance, not by the runtime manager.
 
 `AngelScript Component` is not a script-entry host. Its `Script` parameter may
 resolve to a script entry id when no loaded module has that name, but the

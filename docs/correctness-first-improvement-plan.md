@@ -4,7 +4,7 @@ Status: implementation in progress (started 2026-08-14).
 
 ## Implementation Progress
 
-The first three correctness tranches are implemented:
+Implemented correctness work includes:
 
 - scheduler-wide cancellation preserves wait records until the waiter consumes
   the cancellation or its invocation explicitly forgets the context;
@@ -19,6 +19,9 @@ The first three correctness tranches are implemented:
   suspended, then run in `OnResume` → `OnEnable` order;
 - Component resume requests are retained while `OnDisable` is suspended, then
   run `OnEnable` exactly once after disable completes;
+- the Initial Lifecycle module owns `OnLoad` → `Awake` → `Start` ordering and
+  suspension/failure outcomes for Runtime Entry, Component, and Executor
+  adapters; host-specific context construction remains local to each adapter;
 - async tasks created by Runtime Entry, Component, and Executor invocations
   carry stable owner identities; their Reset callbacks cancel the preceding
   work for that owner before `OnReset`, without cancelling another host or work
@@ -44,7 +47,8 @@ The following work remains open:
 - separate the manager-wide reset fallback into explicit public/orphan cleanup
   after all Script Host Scope transitions; Executor has no pause/resume
   lifecycle surface, so no synthetic resume callback was added;
-- consolidate lifecycle ordering behind the shared lifecycle seam;
+- consolidate the remaining Pause/Resume/Reset/Destroy ordering behind the
+  shared lifecycle seam;
 - add the engine-backed CTest target and obtain a passing real Player callback
   trace for the new startup regressions.
 
@@ -476,11 +480,14 @@ Exit gate:
 
 ### Phase 3 — Consolidate lifecycle ordering
 
-1. Extend `ScriptInitialLifecycle` to represent active phase, pending host
-   events, desired enabled/paused state, and terminal invocation outcome.
-2. Move ordering rules out of Runtime Entry, Component, and Executor callers.
-3. Keep context construction, parameter injection, Behavior Frame refresh, and
-   host-specific side effects in the adapters.
+1. **In progress:** `ScriptInitialLifecycle` now owns the active initial phase
+   and terminal invocation outcome. Pending host events and desired
+   enabled/paused state remain to be consolidated.
+2. **Done for Initial Lifecycle:** move `OnLoad` → `Awake` → `Start` ordering
+   out of Runtime Entry, Component, and Executor callers.
+3. **Preserved for Initial Lifecycle:** keep context construction, parameter
+   injection, Behavior Frame refresh, and host-specific side effects in the
+   adapters.
 4. Delete duplicated pending flags only after parity tests pass for each entry
    kind.
 
@@ -515,6 +522,7 @@ Exit gate:
 | --- | --- |
 | Delay completes normally | Await resumes once with success |
 | Pause while Delay is pending | No frames consumed while paused; wait resumes after remaining frames |
+| Initial Lifecycle phase suspends | The same phase resumes without replaying completed phases; later phases remain ordered |
 | `OnPause` suspends and host resumes | `OnPause` completes, then `OnResume` runs exactly once |
 | Component `OnDisable` suspends and host resumes | Disable completes before re-enable; Component ends enabled |
 | Reset while `Update` awaits | Old invocation is aborted; cancellation is not observed as success |

@@ -12,6 +12,10 @@ _Avoid_: Generic context, API context, environment
 A long-lived discovered AngelScript module identified by a stable runtime id and managed by the Script Entry Manager.
 _Avoid_: Global script, runtime component
 
+**Initial Lifecycle**:
+The once-per-incarnation `OnLoad` → `Awake` → `Start` progression shared by Runtime Entry and Behavior Frame adapters. A phase advances only after its invocation finishes; suspension or failure retains the current phase. `OnEnable` is host activation that may occur between `Awake` and `Start`, and Reset rewinds only `Start`.
+_Avoid_: Startup callbacks, initialization list
+
 **Behavior Frame**:
 The revalidating execution-frame facade for the currently executing Component or Executor behavior. It is transient execution state, not persistent gameplay state.
 _Avoid_: Behavior context wrapper, component context
