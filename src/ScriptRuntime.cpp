@@ -1607,7 +1607,19 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
         module.Object = nullptr;
     }
     if (m_Manager && !module.ModuleName.empty()) {
-        m_Manager->UnloadModule(module.ModuleName.c_str(), nullptr);
+        CKAngelScriptResult unloadResult = {};
+        const CKAS_STATUS unloadStatus = m_Manager->UnloadOwnedModule(
+            module.ModuleName.c_str(),
+            ScriptModuleMutationOrigin::RuntimeEntryRetirement,
+            &unloadResult);
+        if (unloadStatus != CKAS_OK && unloadStatus != CKAS_NOTFOUND) {
+            module.PendingDestroy = true;
+            module.Error = unloadResult.ErrorMessage && unloadResult.ErrorMessage[0] != '\0'
+                ? unloadResult.ErrorMessage
+                : fmt::format("Runtime Entry module '{}' could not be retired.", module.ModuleName);
+            OutputDiagnostic(fmt::format("{}: {}", module.Meta.Id, module.Error));
+            return false;
+        }
     }
     module.Cached.reset();
     module.Loaded = false;

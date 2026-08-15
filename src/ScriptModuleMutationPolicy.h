@@ -21,6 +21,12 @@ public:
                                                    ScriptApiDiagnostics &diagnostics,
                                                    const char *moduleName,
                                                    CKAngelScriptResult *result);
+    static CKAS_STATUS CheckOwnedRetirementAllowed(const ScriptHandleRegistry &handles,
+                                                   const ScriptAsyncScheduler *asyncScheduler,
+                                                   const ScriptModuleStateStore &stateStore,
+                                                   ScriptApiDiagnostics &diagnostics,
+                                                   const char *moduleName,
+                                                   CKAngelScriptResult *result);
     static CKAS_STATUS CheckReplaceOrUnloadAllowed(const ScriptManager &manager,
                                                    const ScriptHandleRegistry &handles,
                                                    const ScriptAsyncScheduler *asyncScheduler,

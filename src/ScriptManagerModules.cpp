@@ -39,6 +39,21 @@ CKAS_STATUS ScriptManager::UnloadModule(const char *moduleName, CKAngelScriptRes
     return m_ModuleRegistry.Unload(context, moduleName, result);
 }
 
+CKAS_STATUS ScriptManager::UnloadOwnedModule(const char *moduleName,
+                                             ScriptModuleMutationOrigin origin,
+                                             CKAngelScriptResult *result) {
+    ScriptModuleRegistry::MutationContext context = {
+        *this,
+        m_ModuleStateStore,
+        m_HandleRegistry,
+        m_AsyncScheduler.get(),
+        m_ImportBinder,
+        m_Diagnostics,
+        m_PublicCallbackDepth,
+        origin};
+    return m_ModuleRegistry.Unload(context, moduleName, result);
+}
+
 bool ScriptManager::HasModule(const char *moduleName) {
     return m_ModuleRegistry.Has(*this, moduleName);
 }

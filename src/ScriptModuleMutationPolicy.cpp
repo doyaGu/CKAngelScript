@@ -54,6 +54,28 @@ CKAS_STATUS ScriptModuleMutationPolicy::CheckNoBoundImportConsumers(
     return CKAS_OK;
 }
 
+CKAS_STATUS ScriptModuleMutationPolicy::CheckOwnedRetirementAllowed(
+    const ScriptHandleRegistry &handles,
+    const ScriptAsyncScheduler *asyncScheduler,
+    const ScriptModuleStateStore &stateStore,
+    ScriptApiDiagnostics &diagnostics,
+    const char *moduleName,
+    CKAngelScriptResult *result) {
+    if (handles.HasRuntimeHandleForModule(moduleName)) {
+        return diagnostics.StoreResult(result,
+                                       CKAS_INUSE,
+                                       0,
+                                       "Module has live object or execution handles.");
+    }
+    if (asyncScheduler && asyncScheduler->HasTaskForModule(moduleName)) {
+        return diagnostics.StoreResult(result,
+                                       CKAS_INUSE,
+                                       0,
+                                       "Module has live async tasks.");
+    }
+    return CheckNoBoundImportConsumers(stateStore, diagnostics, moduleName, result);
+}
+
 CKAS_STATUS ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
     const ScriptManager &manager,
     const ScriptHandleRegistry &handles,

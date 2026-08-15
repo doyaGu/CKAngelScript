@@ -463,6 +463,22 @@ CKAS_STATUS ScriptModuleRegistry::Unload(MutationContext &context,
     if (callbackStatus != CKAS_OK) {
         return callbackStatus;
     }
+    if (context.Origin == ScriptModuleMutationOrigin::RuntimeEntryRetirement) {
+        if (!Has(context.Manager, moduleName)) {
+            return context.Diagnostics.StoreResult(result, CKAS_NOTFOUND, 0, "Module was not loaded.");
+        }
+        const CKAS_STATUS retirementStatus = ScriptModuleMutationPolicy::CheckOwnedRetirementAllowed(
+            context.HandleRegistry,
+            context.AsyncScheduler,
+            context.StateStore,
+            context.Diagnostics,
+            moduleName,
+            result);
+        if (retirementStatus != CKAS_OK) {
+            return retirementStatus;
+        }
+        context.Manager.ReleaseExecutorStatesForModule(moduleName);
+    }
     const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(
         context.Manager,
         context.HandleRegistry,

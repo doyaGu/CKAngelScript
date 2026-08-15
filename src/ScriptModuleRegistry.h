@@ -17,6 +17,11 @@ class ScriptManager;
 class ScriptModuleStateStore;
 struct CapturedScriptMessage;
 
+enum class ScriptModuleMutationOrigin {
+    Public,
+    RuntimeEntryRetirement,
+};
+
 class ScriptModuleRegistry {
 public:
     void Clear();
@@ -34,6 +39,7 @@ public:
         ScriptImportBinder &ImportBinder;
         ScriptApiDiagnostics &Diagnostics;
         int &PublicCallbackDepth;
+        ScriptModuleMutationOrigin Origin = ScriptModuleMutationOrigin::Public;
     };
 
     CKAS_STATUS Load(MutationContext &context, const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result);

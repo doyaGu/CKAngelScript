@@ -1019,6 +1019,7 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
             error = "Executor reload self-test did not record generation 1 attachment.";
             return false;
         }
+        const std::string generation1ModuleName = reloadState->ModuleName;
         if (!WriteExecutorSelfTestFile(reloadPackageDir / "runtime.as",
                                        "class ExecutorReloadProbe { this is not valid AngelScript; }\n",
                                        error)) {
@@ -1043,6 +1044,12 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
             if (error.empty()) {
                 error = reloadError.empty() ? "Executor reload self-test could not reload generation 2." : reloadError;
             }
+            return false;
+        }
+        if (manager->HasModule(generation1ModuleName.c_str()) ||
+            manager->GetExecutorState(reloadBehavior->GetID(), reloadBehavior) != nullptr) {
+            cleanupReloadBehavior();
+            error = "Executor reload self-test did not retire the previous Runtime Entry generation.";
             return false;
         }
         if (executeAndReadVersion() != 2) {

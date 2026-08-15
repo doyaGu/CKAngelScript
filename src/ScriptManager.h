@@ -123,6 +123,9 @@ public:
                                     CKDWORD flags = CKAS_COMPILE_DEFAULT,
                                     CKAngelScriptResult *result = nullptr);
     CKAS_STATUS UnloadModule(const char *moduleName, CKAngelScriptResult *result = nullptr);
+    CKAS_STATUS UnloadOwnedModule(const char *moduleName,
+                                  ScriptModuleMutationOrigin origin,
+                                  CKAngelScriptResult *result = nullptr);
     bool HasModule(const char *moduleName);
     CKDWORD GetModuleGeneration(const char *moduleName) const;
     asIScriptModule *GetModule(const char *moduleName);
