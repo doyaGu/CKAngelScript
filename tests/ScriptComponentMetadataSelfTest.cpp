@@ -484,6 +484,19 @@ bool RunComponentScriptEntryModuleSelfTest(CKContext *context, asIScriptEngine *
         "class ComponentEntryProbe {\n"
         "  int startCount = 0;\n"
         "  int updateCount = 0;\n"
+        "  int version = 1;\n"
+        "  int frameError = 0;\n"
+        "  void Validate(BehaviorFrame@ frame, int code) {\n"
+        "    if (frame is null || frame.Behavior() is null || frame.Context() is null) { frameError = code; }\n"
+        "  }\n"
+        "  void Start(BehaviorFrame@ frame) { Validate(frame, 100); startCount++; }\n"
+        "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
+        "}\n";
+    const std::string reloadedSource =
+        "class ComponentEntryProbe {\n"
+        "  int startCount = 0;\n"
+        "  int updateCount = 0;\n"
+        "  int version = 2;\n"
         "  int frameError = 0;\n"
         "  void Validate(BehaviorFrame@ frame, int code) {\n"
         "    if (frame is null || frame.Behavior() is null || frame.Context() is null) { frameError = code; }\n"
@@ -586,6 +599,7 @@ bool RunComponentScriptEntryModuleSelfTest(CKContext *context, asIScriptEngine *
     }
     if (!ExpectIntProperty(state->Object, "startCount", 1, error) ||
         !ExpectIntProperty(state->Object, "updateCount", 1, error) ||
+        !ExpectIntProperty(state->Object, "version", 1, error) ||
         !ExpectIntProperty(state->Object, "frameError", 0, error)) {
         cleanup();
         return false;
@@ -602,6 +616,41 @@ bool RunComponentScriptEntryModuleSelfTest(CKContext *context, asIScriptEngine *
         api->UnloadModule(liveModuleName.c_str(), &mutationResult) != CKAS_INUSE) {
         cleanup();
         error = "Component script-entry self-test expected live components to block public module mutation.";
+        return false;
+    }
+
+    if (!WriteComponentSelfTestFile(packageDir / "component.as", reloadedSource, error)) {
+        cleanup();
+        return false;
+    }
+    reloadError.clear();
+    if (!runtime->Reload(scriptId, &reloadError)) {
+        cleanup();
+        error = reloadError.empty()
+                    ? "Component script-entry self-test failed to reload its Runtime Entry."
+                    : reloadError;
+        return false;
+    }
+    if (manager->HasModule(liveModuleName.c_str()) ||
+        manager->GetComponentState(behavior->GetID(), behavior) != nullptr) {
+        cleanup();
+        error = "Component script-entry self-test did not retire the previous Runtime Entry generation.";
+        return false;
+    }
+
+    behavior->ActivateInput(0, TRUE);
+    const int reloadedReturnCode = ExecuteComponentSelfTestBehavior(context, behavior, behaviorContext);
+    state = manager->GetComponentState(behavior->GetID(), behavior);
+    if (reloadedReturnCode != CKBR_ACTIVATENEXTFRAME ||
+        !state || !state->Loaded || !state->Object || state->ModuleName == liveModuleName ||
+        !ExpectIntProperty(state->Object, "startCount", 1, error) ||
+        !ExpectIntProperty(state->Object, "updateCount", 1, error) ||
+        !ExpectIntProperty(state->Object, "version", 2, error) ||
+        !ExpectIntProperty(state->Object, "frameError", 0, error)) {
+        cleanup();
+        if (error.empty()) {
+            error = "Component script-entry self-test did not rebuild against the reloaded Runtime Entry.";
+        }
         return false;
     }
 

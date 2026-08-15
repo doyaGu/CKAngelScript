@@ -27,6 +27,7 @@ public:
     void AdvanceMessageGeneration(ScriptComponentState *state);
     bool HasModuleConsumer(const std::string &moduleName) const;
     bool Remove(CK_ID id, CKBehavior *expectedBehavior, const StateCallback &beforeRemove);
+    void ReleaseModule(const std::string &moduleName, const StateCallback &beforeRemove);
     void Clear(const StateCallback &beforeRemove);
 
 private:

@@ -103,6 +103,23 @@ bool ScriptComponentStateStore::Remove(CK_ID id,
     return true;
 }
 
+void ScriptComponentStateStore::ReleaseModule(const std::string &moduleName,
+                                              const StateCallback &beforeRemove) {
+    if (moduleName.empty()) {
+        return;
+    }
+    for (auto it = m_Impl->States.begin(); it != m_Impl->States.end();) {
+        if (it->second->ModuleName != moduleName) {
+            ++it;
+            continue;
+        }
+        if (beforeRemove) {
+            beforeRemove(it->first, it->second.get());
+        }
+        it = m_Impl->States.erase(it);
+    }
+}
+
 void ScriptComponentStateStore::Clear(const StateCallback &beforeRemove) {
     for (auto &entry : m_Impl->States) {
         if (beforeRemove) {
@@ -217,6 +234,22 @@ void ScriptManager::ReleaseComponentState(CK_ID id) {
     m_ComponentStates.Remove(id, nullptr, [this](CK_ID, ScriptComponentState *state) {
         ResetComponentStateRuntime(state, true);
     });
+}
+
+void ScriptManager::ReleaseComponentStatesForModule(const char *moduleName) {
+    if (!moduleName || moduleName[0] == '\0') {
+        return;
+    }
+    m_ComponentStates.ReleaseModule(
+        moduleName,
+        [this](CK_ID id, ScriptComponentState *state) {
+            CKBehavior *behavior = state ? state->Behavior : nullptr;
+            ResetComponentStateRuntime(state, true);
+            if (behavior && m_Context && ::CKGetObject(m_Context, id) == behavior) {
+                ScriptComponentState *nullState = nullptr;
+                behavior->SetLocalParameterValue(0, &nullState);
+            }
+        });
 }
 
 void ScriptManager::ClearComponentStates() {

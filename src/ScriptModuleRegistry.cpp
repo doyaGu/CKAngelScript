@@ -477,6 +477,7 @@ CKAS_STATUS ScriptModuleRegistry::Unload(MutationContext &context,
         if (retirementStatus != CKAS_OK) {
             return retirementStatus;
         }
+        context.Manager.ReleaseComponentStatesForModule(moduleName);
         context.Manager.ReleaseExecutorStatesForModule(moduleName);
     }
     const CKAS_STATUS mutationStatus = ScriptModuleMutationPolicy::CheckReplaceOrUnloadAllowed(

@@ -243,6 +243,7 @@ public:
     void ResetComponentStateRuntime(ScriptComponentState *state, bool unloadOwnedModule = true);
     void ReleaseComponentState(CKBehavior *behavior);
     void ReleaseComponentState(CK_ID id);
+    void ReleaseComponentStatesForModule(const char *moduleName);
     void ClearComponentStates();
     bool DeliverComponentMessage(CK_ID id,
                                  std::uint64_t generation,
