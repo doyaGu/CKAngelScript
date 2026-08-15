@@ -112,9 +112,9 @@ void ScriptInitialLifecycle::CompletePause() {
     m_DisableAfterPause = false;
 }
 
-void ScriptInitialLifecycle::RequestResume(bool eligible) {
+void ScriptInitialLifecycle::RequestResume(bool hostEligible) {
     m_Paused = false;
-    m_ResumePending = eligible;
+    m_ResumePending = m_DesiredEnabled && hostEligible;
 }
 
 bool ScriptInitialLifecycle::Paused() const {

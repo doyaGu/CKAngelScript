@@ -1480,10 +1480,9 @@ CKERROR AngelScriptComponentCallBack(const CKBehaviorContext &behcontext) {
                 if (man->GetBehaviorBridge()) {
                     man->GetBehaviorBridge()->PauseComponentTasks(beh->GetID(), false);
                 }
-                const bool resumeEligible =
-                    state->InitialLifecycle.DesiredEnabled() && state->ScriptActive;
                 const bool transitionBlocked = state->InitialLifecycle.PausePending();
-                state->InitialLifecycle.RequestResume(resumeEligible);
+                state->InitialLifecycle.RequestResume(state->ScriptActive);
+                const bool resumeEligible = state->InitialLifecycle.ResumePending();
                 if (resumeEligible) {
                     if (state->InitialLifecycle.ResumeReady(transitionBlocked)) {
                         if (ScriptComponentSupport::EnableInstance(behcontext, state) ||

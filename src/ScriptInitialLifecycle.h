@@ -42,7 +42,7 @@ public:
         const ScriptPauseLifecycleInvoker &invoke);
     bool PausePending() const;
     void CompletePause();
-    void RequestResume(bool eligible);
+    void RequestResume(bool hostEligible);
     bool Paused() const;
     bool ResumePending() const;
     bool ResumeReady(bool transitionBlocked) const;

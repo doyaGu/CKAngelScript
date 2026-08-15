@@ -802,8 +802,7 @@ void ScriptRuntime::OnResume() {
                                        module->PendingDisable ||
                                        module->PendingDestroy ||
                                        module->PendingReset;
-        module->InitialLifecycle.RequestResume(
-            module->InitialLifecycle.DesiredEnabled());
+        module->InitialLifecycle.RequestResume(true);
         if (!module->InitialLifecycle.ResumeReady(transitionBlocked)) {
             continue;
         }

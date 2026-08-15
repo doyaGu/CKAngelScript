@@ -105,6 +105,11 @@ bool RunScriptInitialLifecycleSelfTest(std::string &error) {
         error = "Lifecycle explicit Disable did not supersede the retained Resume event.";
         return false;
     }
+    lifecycle.RequestResume(true);
+    if (lifecycle.ResumePending()) {
+        error = "Lifecycle retained Resume while desired activation was disabled.";
+        return false;
+    }
     lifecycle.SetDesiredEnabled(true);
     lifecycle.RequestResume(true);
     lifecycle.CompleteResume();
