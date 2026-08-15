@@ -277,8 +277,10 @@ CKBehaviorContext &in ctx)`. If both forms exist on the same class, the
 
 If CK Resume arrives while a suspendable `OnDisable` is still pending, the
 Component retains the resume request. The old disable finishes first, then
-`OnEnable` runs once before normal update work continues. A later Pause or an
-explicit Disable supersedes that retained request.
+`OnEnable` runs once before normal update work continues. If `OnEnable` also
+suspends, the resume request remains pending until it finishes, and `Update`
+does not run in that completion frame. A later Pause or an explicit Disable
+supersedes the retained request.
 
 Component Reset cancels async tasks created by the preceding Component
 invocations before `OnReset` starts. It does not cancel another Component or

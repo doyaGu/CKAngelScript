@@ -22,6 +22,10 @@ Implemented correctness work includes:
 - the Initial Lifecycle module owns `OnLoad` → `Awake` → `Start` ordering and
   suspension/failure outcomes for Runtime Entry, Component, and Executor
   adapters; host-specific context construction remains local to each adapter;
+- the same module owns Host Activation's desired pause state and deferred
+  Resume event for Runtime Entry and Component adapters; Resume remains pending
+  through a suspended `OnEnable`, and its completion frame does not run normal
+  update work;
 - async tasks created by Runtime Entry, Component, and Executor invocations
   carry stable owner identities; their Reset callbacks cancel the preceding
   work for that owner before `OnReset`, without cancelling another host or work
@@ -47,12 +51,12 @@ The following work remains open:
 - separate the manager-wide reset fallback into explicit public/orphan cleanup
   after all Script Host Scope transitions; Executor has no pause/resume
   lifecycle surface, so no synthetic resume callback was added;
-- consolidate the remaining Pause/Resume/Reset/Destroy ordering behind the
-  shared lifecycle seam;
+- consolidate remaining Pause phase execution, desired enabled state, and
+  Reset/Destroy ordering behind the shared lifecycle seam;
 - add the engine-backed CTest target and obtain a passing real Player callback
   trace for the new startup regressions.
 
-Validation on 2026-08-14: the Release DLL builds and links with startup
+Validation on 2026-08-15: the Release DLL builds and links with startup
 self-tests compiled in, and `CKAngelScript.Core` passes. Local Player validation
 was attempted but could not reach the startup marker: the Ballance host failed
 render-engine initialization, while the separate NeMo test distribution did
@@ -481,15 +485,19 @@ Exit gate:
 ### Phase 3 — Consolidate lifecycle ordering
 
 1. **In progress:** `ScriptInitialLifecycle` now owns the active initial phase
-   and terminal invocation outcome. Pending host events and desired
-   enabled/paused state remain to be consolidated.
+   and terminal invocation outcome, plus Host Activation's desired pause state
+   and deferred Resume event. Pending Pause phase execution, desired enabled
+   state, and Reset/Destroy events remain to be consolidated.
 2. **Done for Initial Lifecycle:** move `OnLoad` → `Awake` → `Start` ordering
    out of Runtime Entry, Component, and Executor callers.
-3. **Preserved for Initial Lifecycle:** keep context construction, parameter
+3. **Done for deferred Resume:** retain Resume across suspended disable/enable
+   phases in Runtime Entry and Component adapters; a later Pause supersedes it.
+4. **Preserved for migrated transitions:** keep context construction, parameter
    injection, Behavior Frame refresh, and host-specific side effects in the
    adapters.
-4. Delete duplicated pending flags only after parity tests pass for each entry
-   kind.
+5. Delete duplicated pending flags only after parity tests pass for each entry
+   kind. Runtime Entry `PendingResume` and Component `Paused`/`PendingResume`
+   are removed; remaining transition flags stay until their phases migrate.
 
 Exit gate:
 
@@ -525,6 +533,7 @@ Exit gate:
 | Initial Lifecycle phase suspends | The same phase resumes without replaying completed phases; later phases remain ordered |
 | `OnPause` suspends and host resumes | `OnPause` completes, then `OnResume` runs exactly once |
 | Component `OnDisable` suspends and host resumes | Disable completes before re-enable; Component ends enabled |
+| Retained Resume reaches a suspended `OnEnable` | Resume remains pending through completion; `Update` does not run in that completion frame |
 | Reset while `Update` awaits | Old invocation is aborted; cancellation is not observed as success |
 | `OnReset` creates and awaits a task | New task survives reset and completes before later lifecycle phases |
 | Runtime Entry reset with another entry active | Only preceding work for the reset entry is cancelled; the other entry's work survives |
