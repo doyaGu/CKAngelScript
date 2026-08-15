@@ -188,6 +188,7 @@ private:
     bool DestroyModule(Module &module, bool hard = false);
     bool DisableModule(Module &module);
     bool PauseModule(Module &module, const ScriptContext &context);
+    bool ResumeModule(Module &module, const ScriptContext &context);
     bool ResetModule(Module &module, const ScriptContext &context);
     const char *ModuleState(const Module &module) const;
     Module *FindModule(const std::string &id) const;

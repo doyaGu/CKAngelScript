@@ -114,8 +114,14 @@ bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error
     const ScopedEnvVar validateOnly("CKAS_SCRIPT_VALIDATE_ONLY", "0");
     const std::string source =
         "int pauseCount = 0;\n"
+        "int resumeCount = 0;\n"
+        "int enableCount = 0;\n"
         "int disableCount = 0;\n"
         "int badPhaseCount = 0;\n"
+        "void OnEnable(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"OnEnable\") { badPhaseCount++; }\n"
+        "  enableCount++;\n"
+        "}\n"
         "void OnPause(const ScriptContext &in ctx) {\n"
         "  if (ctx.Phase() != \"OnPause\") { badPhaseCount++; }\n"
         "  pauseCount++;\n"
@@ -125,6 +131,10 @@ bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error
         "  disableCount++;\n"
         "  AsyncTask<void>@ delay = Async::Delay(1);\n"
         "  Await(delay);\n"
+        "}\n"
+        "void OnResume(const ScriptContext &in ctx) {\n"
+        "  if (ctx.Phase() != \"OnResume\") { badPhaseCount++; }\n"
+        "  resumeCount++;\n"
         "}\n";
     if (!PrepareRuntimeSelfTestPackage(root, scriptId, source, error)) {
         fs::remove_all(root, fsError);
@@ -168,25 +178,34 @@ bool RunRuntimePauseLifecycleSelfTest(ScriptManager *manager, std::string &error
         error = "Runtime pause lifecycle self-test requires an async scheduler.";
         return false;
     }
+    runtime.OnResume();
     scheduler->Tick();
+    runtime.PreProcess();
     runtime.PreProcess();
 
     const std::string moduleName = runtime.ModuleName(scriptId);
     int pauseCount = 0;
+    int resumeCount = 0;
+    int enableCount = 0;
     int disableCount = 0;
     int badPhaseCount = 0;
     if (!ReadRuntimeGlobalInt(manager, moduleName, "pauseCount", pauseCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "resumeCount", resumeCount) ||
+        !ReadRuntimeGlobalInt(manager, moduleName, "enableCount", enableCount) ||
         !ReadRuntimeGlobalInt(manager, moduleName, "disableCount", disableCount) ||
         !ReadRuntimeGlobalInt(manager, moduleName, "badPhaseCount", badPhaseCount)) {
         cleanup();
         error = "Runtime pause lifecycle self-test could not read probe counters.";
         return false;
     }
-    if (pauseCount != 1 || disableCount != 1 || badPhaseCount != 0) {
+    if (pauseCount != 1 || resumeCount != 1 || enableCount != 2 ||
+        disableCount != 1 || badPhaseCount != 0) {
         cleanup();
         error = "Runtime pause lifecycle self-test observed pause=" + std::to_string(pauseCount) +
+                ", resume=" + std::to_string(resumeCount) +
+                ", enable=" + std::to_string(enableCount) +
                 ", disable=" + std::to_string(disableCount) +
-                ", badPhase=" + std::to_string(badPhaseCount) + "; expected 1, 1, 0.";
+                ", badPhase=" + std::to_string(badPhaseCount) + "; expected 1, 1, 2, 1, 0.";
         return false;
     }
 

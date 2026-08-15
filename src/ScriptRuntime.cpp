@@ -78,6 +78,7 @@ constexpr const char *kStateDestroying = "destroying";
 constexpr const char *kStateDisabling = "disabling";
 constexpr const char *kStateSuspended = "suspended";
 constexpr const char *kStatePaused = "paused";
+constexpr const char *kStateResuming = "resuming";
 constexpr const char *kStateResetting = "resetting";
 constexpr const char *kStateUnloaded = "unloaded";
 constexpr const char *kStateDisabled = "disabled";
@@ -390,6 +391,7 @@ struct ScriptRuntime::Module {
     bool PendingDestroy = false;
     bool PendingErase = false;
     bool PendingPause = false;
+    bool PendingResume = false;
     bool PendingReset = false;
     std::unique_ptr<Module> PendingReplacement;
 };
@@ -772,6 +774,7 @@ void ScriptRuntime::OnPause() {
                                                                              m_FrameIndex,
                                                                              0.0f,
                                                                              0.0f);
+        module->PendingResume = false;
         PauseModule(*module, ctx);
     }
 }
@@ -794,23 +797,11 @@ void ScriptRuntime::OnResume() {
                                                                              m_FrameIndex,
                                                                              0.0f,
                                                                              0.0f);
+        module->PendingResume = true;
         if (module->PendingPause || module->PendingDisable || module->PendingDestroy || module->PendingReset) {
             continue;
         }
-        InvokeFinished(*module, "OnResume", ctx);
-        if (!module->EnableCalled) {
-            ScriptContext enableCtx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                                                                       module->Meta,
-                                                                                       "OnEnable",
-                                                                                       ModuleState(*module),
-                                                                                       module->Generation,
-                                                                                       m_FrameIndex,
-                                                                                       0.0f,
-                                                                                       0.0f);
-            if (InvokeFinished(*module, "OnEnable", enableCtx)) {
-                module->EnableCalled = true;
-            }
-        }
+        ResumeModule(*module, ctx);
     }
 }
 
@@ -1623,6 +1614,7 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
     module.PendingDestroy = false;
     module.PendingDisable = false;
     module.PendingPause = false;
+    module.PendingResume = false;
     module.PendingReset = false;
     return true;
 }
@@ -1721,13 +1713,55 @@ bool ScriptRuntime::PauseModule(Module &module, const ScriptContext &context) {
     return true;
 }
 
+bool ScriptRuntime::ResumeModule(Module &module, const ScriptContext &context) {
+    if (!UsesRuntimeLifecycle(module.Meta) || !module.Loaded || module.Failed || !module.Enabled) {
+        module.PendingResume = false;
+        return true;
+    }
+
+    module.PendingResume = true;
+    const bool resumingEnable = module.ActiveCall && module.ActiveInvocation == "OnEnable";
+    if (!resumingEnable) {
+        const InvokeStatus status = Invoke(module, "OnResume", context);
+        if (status == InvokeStatus::Suspended) {
+            return false;
+        }
+        if (status == InvokeStatus::Failed) {
+            module.PendingResume = false;
+            return true;
+        }
+    }
+
+    if (!module.EnableCalled) {
+        ScriptContext enableContext = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
+                                                         module.Meta,
+                                                         "OnEnable",
+                                                         ModuleState(module),
+                                                         module.Generation,
+                                                         m_FrameIndex,
+                                                         context.DeltaTime(),
+                                                         context.TimeSeconds());
+        const InvokeStatus status = Invoke(module, "OnEnable", enableContext);
+        if (status == InvokeStatus::Suspended) {
+            return false;
+        }
+        if (status == InvokeStatus::Finished) {
+            module.EnableCalled = true;
+        }
+    }
+    module.PendingResume = false;
+    return true;
+}
+
 bool ScriptRuntime::ResetModule(Module &module, const ScriptContext &context) {
     if (!UsesRuntimeLifecycle(module.Meta)) {
+        module.PendingResume = false;
         module.PendingReset = false;
         return true;
     }
     if (!module.PendingReset) {
         CancelActiveInvocation(module);
+        module.PendingResume = false;
     }
     module.PendingReset = true;
     const InvokeStatus status = Invoke(module, "OnReset", context);
@@ -1751,6 +1785,9 @@ const char *ScriptRuntime::ModuleState(const Module &module) const {
     }
     if (module.PendingPause || m_Paused) {
         return kStatePaused;
+    }
+    if (module.PendingResume) {
+        return kStateResuming;
     }
     if (module.PendingReset) {
         return kStateResetting;
@@ -1896,6 +1933,11 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
     if (module.PendingReset) {
         ScriptContext ctx = makeContext("OnReset");
         ResetModule(module, ctx);
+        return;
+    }
+    if (module.PendingResume) {
+        ScriptContext ctx = makeContext("OnResume");
+        ResumeModule(module, ctx);
         return;
     }
     if (module.InitialLifecycle.Next() == ScriptInitialPhase::OnLoad) {
