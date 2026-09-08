@@ -14,6 +14,8 @@ endif ()
 
 option(CKAS_BUILD_SELF_TESTS "Build optional AngelScript startup self-test support" OFF)
 option(CKAS_BUILD_CORE_TESTS "Build host-independent core tests" ON)
+set(CKAS_ENGINE_TEST_RUNTIME_DIR "" CACHE PATH
+    "Optional original Virtools runtime directory containing CK2.dll and VxMath.dll")
 option(CKAS_ENABLE_DYNCALL "Build DynCall-backed native FFI support" OFF)
 option(CKAS_ENABLE_API_EXPORT "Build runtime AngelScript API JSON export support" OFF)
 option(CKAS_INSTALL_DOCS "Install README, license, and Markdown documentation" ON)

@@ -52,6 +52,7 @@ try {
     if ($RunSelfTests) {
         Remove-Item -LiteralPath $resolvedSelfTestMarker -Force -ErrorAction SilentlyContinue
         $env:CKAS_SELFTEST_MARKER = $resolvedSelfTestMarker
+        $env:CKAS_SELFTEST_PLAYER_LIFECYCLE = "1"
     }
     $env:CKAS_EXPORT_SCRIPT_API = $resolvedOutput
     $player = Start-Process -FilePath $resolvedPlayer -WorkingDirectory $resolvedGameRoot -WindowStyle Hidden -PassThru
@@ -101,6 +102,7 @@ try {
 } finally {
     Remove-Item Env:CKAS_EXPORT_SCRIPT_API -ErrorAction SilentlyContinue
     Remove-Item Env:CKAS_SELFTEST_MARKER -ErrorAction SilentlyContinue
+    Remove-Item Env:CKAS_SELFTEST_PLAYER_LIFECYCLE -ErrorAction SilentlyContinue
     if ($player -and -not $player.HasExited) {
         Stop-Process -Id $player.Id -Force -ErrorAction SilentlyContinue
         [void]$player.WaitForExit(10000)
