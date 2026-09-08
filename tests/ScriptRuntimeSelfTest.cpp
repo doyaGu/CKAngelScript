@@ -76,7 +76,7 @@ bool PrepareRuntimeSelfTestPackage(const std::filesystem::path &root,
         return false;
     }
 
-    const std::string manifest = "[script id=\"" + id +
+    const std::string manifest = "[runtime id=\"" + id +
                                  "\" name=\"Runtime Self Test\" version=\"1.0.0\" entry=\"runtime.as\"]\n";
     return WriteRuntimeSelfTestFile(package / "script.as", manifest, error) &&
            WriteRuntimeSelfTestFile(package / "runtime.as", source, error);
@@ -715,23 +715,13 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
             return false;
         }
     }
-
-    ScriptContext defaultContext;
-    CKBehaviorContext defaultBehaviorContext = defaultContext.ToBehaviorContext();
-    if (defaultBehaviorContext.Behavior ||
-        defaultBehaviorContext.DeltaTime != 0.0f ||
-        defaultBehaviorContext.Context ||
-        defaultBehaviorContext.CurrentLevel ||
-        defaultBehaviorContext.CurrentScene ||
-        defaultBehaviorContext.PreviousScene ||
-        defaultBehaviorContext.CurrentRenderContext ||
-        defaultBehaviorContext.ParameterManager ||
-        defaultBehaviorContext.MessageManager ||
-        defaultBehaviorContext.AttributeManager ||
-        defaultBehaviorContext.TimeManager ||
-        defaultBehaviorContext.CallbackMessage != 0 ||
-        defaultBehaviorContext.CallbackArg) {
-        error = "Default ScriptContext produced a non-empty CKBehaviorContext.";
+    asITypeInfo *scriptContextType = engine->GetTypeInfoByDecl("ScriptContext");
+    if (!scriptContextType) {
+        error = "ScriptContext type is not registered.";
+        return false;
+    }
+    if (scriptContextType->GetMethodByDecl("CKBehaviorContext ToBehaviorContext() const")) {
+        error = "ScriptContext still exposes CKBehaviorContext reconstruction.";
         return false;
     }
 
@@ -753,8 +743,6 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  int metadataCount = ctx.MetadataCount();\n"
         "  string metadataKey = ctx.MetadataKey(0);\n"
         "  string metadataValue = ctx.MetadataValue(0);\n"
-        "  CKBehaviorContext behaviorContext = ctx.ToBehaviorContext();\n"
-        "  NativePointer callbackArg = behaviorContext.CallbackArg;\n"
         "  BehaviorGraph@ graph = Behavior::Graph(ctx, \"__missing__\");\n"
         "  BehaviorRef@ behavior = Behavior::Find(ctx, \"__missing__\");\n"
         "  BBDecl@ decl = BB::Require(ctx, \"__missing__\");\n"
@@ -824,29 +812,21 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  array<RuntimeDependencyInfo>@ requiredDeps = Runtime::RequiredDependencies(ctx, \"ckas.runtime.smoke\");\n"
         "  array<RuntimeDependencyInfo>@ optionalDeps = Runtime::OptionalDependencies(ctx, \"ckas.runtime.smoke\");\n"
         "}\n"
-        "int __ckas_runtime_bb_scope_probe(const ScriptContext &in runtimeCtx, const CKBehaviorContext &in behaviorCtx) {\n"
+        "int __ckas_runtime_bb_scope_probe(const ScriptContext &in runtimeCtx) {\n"
         "  int count = BB::Count(runtimeCtx);\n"
-        "  if (count <= 0 || BB::Count(behaviorCtx) != count) return 31;\n"
+        "  if (count <= 0) return 31;\n"
         "  BBBridge@ runtimeBridge = BB::From(runtimeCtx);\n"
-        "  BBBridge@ behaviorBridge = BB::From(behaviorCtx);\n"
-        "  if (runtimeBridge is null || behaviorBridge is null) return 32;\n"
+        "  if (runtimeBridge is null) return 32;\n"
         "  BBPrototype@ runtimeAt = BB::At(runtimeCtx, 0);\n"
-        "  BBPrototype@ behaviorAt = BB::At(behaviorCtx, 0);\n"
-        "  if (runtimeAt is null || behaviorAt is null || !runtimeAt.IsValid() || !behaviorAt.IsValid()) return 33;\n"
-        "  if (runtimeAt.GetGuid().opCmp(behaviorAt.GetGuid()) != 0 || runtimeAt.GetQualifiedName() != behaviorAt.GetQualifiedName()) return 34;\n"
+        "  if (runtimeAt is null || !runtimeAt.IsValid()) return 33;\n"
         "  string query = runtimeAt.GetQualifiedName();\n"
         "  BBPrototype@ runtimeFind = BB::Find(runtimeCtx, query);\n"
-        "  BBPrototype@ behaviorFind = BB::Find(behaviorCtx, query);\n"
-        "  if (runtimeFind is null || behaviorFind is null) return 35;\n"
-        "  if (runtimeFind.GetGuid().opCmp(behaviorFind.GetGuid()) != 0) return 36;\n"
+        "  if (runtimeFind is null) return 35;\n"
         "  array<BBPrototype@>@ runtimeAll = BB::FindAll(runtimeCtx, query);\n"
-        "  array<BBPrototype@>@ behaviorAll = BB::FindAll(behaviorCtx, query);\n"
-        "  if (runtimeAll is null || behaviorAll is null || runtimeAll.length() != behaviorAll.length() || runtimeAll.length() != 1) return 37;\n"
-        "  if (runtimeAll[0].GetGuid().opCmp(behaviorAll[0].GetGuid()) != 0) return 38;\n"
+        "  if (runtimeAll is null || runtimeAll.length() != 1) return 37;\n"
         "  BBDecl@ runtimeDecl = BB::Require(runtimeCtx, query);\n"
-        "  BBDecl@ behaviorDecl = BB::Require(behaviorCtx, query);\n"
-        "  if (runtimeDecl is null || behaviorDecl is null || !runtimeDecl.IsValid() || !behaviorDecl.IsValid()) return 39;\n"
-        "  if (runtimeDecl.Guid().opCmp(behaviorDecl.Guid()) != 0 || runtimeDecl.QualifiedName() != behaviorDecl.QualifiedName()) return 40;\n"
+        "  if (runtimeDecl is null || !runtimeDecl.IsValid()) return 39;\n"
+        "  if (runtimeDecl.Guid().opCmp(runtimeFind.GetGuid()) != 0 || runtimeDecl.QualifiedName() != query) return 40;\n"
         "  return 0;\n"
         "}\n"
         "int __ckas_runtime_bb_null_probe(const ScriptContext &in ctx) {\n"
@@ -855,27 +835,19 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  if (BB::FindAll(ctx, \"x\") !is null || BB::Require(ctx, \"x\") !is null) return 43;\n"
         "  return 0;\n"
         "}\n"
-        "void __ckas_runtime_bb_behavior_only_probe(const CKBehaviorContext &in ctx) {\n"
-        "  BB::Count(ctx);\n"
-        "}\n"
-        "int __ckas_runtime_behavior_scope_probe(const ScriptContext &in runtimeCtx, const CKBehaviorContext &in behaviorCtx) {\n"
+        "int __ckas_runtime_behavior_scope_probe(const ScriptContext &in runtimeCtx) {\n"
         "  BehaviorBridge@ runtimeBridge = Behavior::From(runtimeCtx);\n"
-        "  BehaviorBridge@ behaviorBridge = Behavior::From(behaviorCtx);\n"
-        "  if (runtimeBridge is null || behaviorBridge is null) return 51;\n"
+        "  if (runtimeBridge is null) return 51;\n"
         "  BehaviorRef@ runtimeByName = Behavior::Find(runtimeCtx, \"__CKAS_RuntimeBehaviorScopeTarget\");\n"
-        "  BehaviorRef@ behaviorByName = Behavior::Find(behaviorCtx, \"__CKAS_RuntimeBehaviorScopeTarget\");\n"
-        "  if (runtimeByName is null || behaviorByName is null || !runtimeByName.IsValid() || !behaviorByName.IsValid()) return 52;\n"
-        "  if (runtimeByName.Id() != behaviorByName.Id() || runtimeByName.Name() != \"__CKAS_RuntimeBehaviorScopeTarget\") return 53;\n"
+        "  if (runtimeByName is null || !runtimeByName.IsValid()) return 52;\n"
+        "  if (runtimeByName.Name() != \"__CKAS_RuntimeBehaviorScopeTarget\") return 53;\n"
         "  BehaviorRef@ runtimeById = Behavior::FindByID(runtimeCtx, runtimeByName.Id());\n"
-        "  BehaviorRef@ behaviorById = Behavior::FindByID(behaviorCtx, behaviorByName.Id());\n"
-        "  if (runtimeById is null || behaviorById is null || runtimeById.Id() != runtimeByName.Id() || behaviorById.Id() != behaviorByName.Id()) return 54;\n"
+        "  if (runtimeById is null || runtimeById.Id() != runtimeByName.Id()) return 54;\n"
         "  BehaviorGraph@ runtimeGraph = Behavior::Graph(runtimeCtx, \"__CKAS_RuntimeBehaviorScopeTarget\");\n"
-        "  BehaviorGraph@ behaviorGraph = Behavior::Graph(behaviorCtx);\n"
-        "  if (runtimeGraph is null || behaviorGraph is null || !runtimeGraph.IsValid() || !behaviorGraph.IsValid()) return 55;\n"
+        "  if (runtimeGraph is null || !runtimeGraph.IsValid()) return 55;\n"
         "  BehaviorNode@ runtimeRoot = runtimeGraph.Root();\n"
-        "  BehaviorNode@ behaviorRoot = behaviorGraph.Root();\n"
-        "  if (runtimeRoot is null || behaviorRoot is null || runtimeRoot.Behavior() is null || behaviorRoot.Behavior() is null) return 56;\n"
-        "  if (runtimeRoot.Behavior().Id() != runtimeByName.Id() || behaviorRoot.Behavior().Name() != \"__CKAS_RuntimeBBScopeSelfTest\") return 57;\n"
+        "  if (runtimeRoot is null || runtimeRoot.Behavior() is null) return 56;\n"
+        "  if (runtimeRoot.Behavior().Id() != runtimeByName.Id()) return 57;\n"
         "  BehaviorGraph@ missingGraph = Behavior::Graph(runtimeCtx, \"__CKAS_RuntimeBehaviorScopeMissing\");\n"
         "  if (missingGraph is null || missingGraph.IsValid()) return 58;\n"
         "  return 0;\n"
@@ -884,9 +856,6 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  if (Behavior::From(ctx) !is null || Behavior::Graph(ctx) !is null) return 61;\n"
         "  if (Behavior::Graph(ctx, \"x\") !is null || Behavior::Find(ctx, \"x\") !is null || Behavior::FindByID(ctx, 1) !is null) return 62;\n"
         "  return 0;\n"
-        "}\n"
-        "void __ckas_runtime_behavior_behavior_only_probe(const CKBehaviorContext &in ctx) {\n"
-        "  Behavior::From(ctx);\n"
         "}\n"
         "class __CKAS_RuntimeLifecycleProbe {\n"
         "  void OnLoad(const ScriptContext &in ctx) {}\n"
@@ -912,23 +881,17 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "  if (ctx.Generation() != 0 || ctx.FrameIndex() != 0) return 6;\n"
         "  if (ctx.Metadata(\"missing\", \"fallback\") != \"fallback\") return 7;\n"
         "  if (ctx.MetadataCount() != 0 || ctx.MetadataKey(0) != \"\" || ctx.MetadataValue(0) != \"\") return 8;\n"
-        "  CKBehaviorContext behaviorContext = ctx.ToBehaviorContext();\n"
-        "  if (behaviorContext.Behavior !is null || behaviorContext.Context !is null) return 9;\n"
-        "  if (behaviorContext.DeltaTime != 0.0f || behaviorContext.CallbackMessage != 0) return 10;\n"
-        "  if (behaviorContext.CurrentLevel !is null || behaviorContext.CurrentScene !is null || behaviorContext.PreviousScene !is null) return 11;\n"
-        "  if (behaviorContext.CurrentRenderContext !is null || behaviorContext.ParameterManager !is null || behaviorContext.MessageManager !is null) return 12;\n"
-        "  if (behaviorContext.AttributeManager !is null || behaviorContext.TimeManager !is null || !behaviorContext.CallbackArg.IsNull()) return 13;\n"
         "  RuntimeScriptInfo info;\n"
         "  RuntimeScriptInfo copied(info);\n"
         "  RuntimeScriptInfo assigned;\n"
         "  assigned = copied;\n"
-        "  if (assigned.Exists() || assigned.Enabled() || assigned.Loaded() || assigned.Failed()) return 14;\n"
-        "  if (assigned.Id() != \"\" || assigned.Name() != \"\" || assigned.Version() != \"\") return 15;\n"
-        "  if (assigned.Description() != \"\" || assigned.Author() != \"\" || assigned.Category() != \"\") return 16;\n"
-        "  if (assigned.State() != \"\" || assigned.Phase() != \"\" || assigned.Error() != \"\") return 17;\n"
-        "  if (assigned.Root() != \"\" || assigned.Manifest() != \"\" || assigned.Entry() != \"\") return 18;\n"
-        "  if (assigned.TagCount() != 0 || assigned.Tag(0) != \"\" || assigned.Tag(-1) != \"\") return 19;\n"
-        "  if (assigned.Generation() != 0) return 20;\n"
+        "  if (assigned.Exists() || assigned.Enabled() || assigned.Loaded() || assigned.Failed()) return 9;\n"
+        "  if (assigned.Id() != \"\" || assigned.Name() != \"\" || assigned.Version() != \"\") return 10;\n"
+        "  if (assigned.Description() != \"\" || assigned.Author() != \"\" || assigned.Category() != \"\") return 11;\n"
+        "  if (assigned.State() != \"\" || assigned.Phase() != \"\" || assigned.Error() != \"\") return 12;\n"
+        "  if (assigned.Root() != \"\" || assigned.Manifest() != \"\" || assigned.Entry() != \"\") return 13;\n"
+        "  if (assigned.TagCount() != 0 || assigned.Tag(0) != \"\" || assigned.Tag(-1) != \"\") return 14;\n"
+        "  if (assigned.Generation() != 0) return 15;\n"
         "  return 0;\n"
         "}\n";
     CKAngelScriptApi api = CKAngelScriptApi::Get(context);
@@ -941,6 +904,56 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         error = "Runtime self-test could not retrieve ScriptManager.";
         return false;
     }
+    const char *previousNamespace = engine->GetDefaultNamespace();
+    const std::string restoreNamespace = previousNamespace ? previousNamespace : "";
+    if (engine->SetDefaultNamespace("Behavior") < 0) {
+        error = "Runtime self-test could not enter the Behavior namespace.";
+        return false;
+    }
+    const char *removedBehaviorContextDecls[] = {
+        "BehaviorBridge@ From(const CKBehaviorContext&in)",
+        "BehaviorGraph@ Graph(const CKBehaviorContext&in)",
+        "BehaviorRef@ Find(const CKBehaviorContext&in, const string&in)",
+        "BehaviorRef@ Find(const CKBehaviorContext&in, CKBeObject@, const string&in)",
+        "BehaviorRef@ FindByID(const CKBehaviorContext&in, CK_ID)",
+        "GraphTask@ Start(const CKBehaviorContext&in, const string&in, int, bool, float)",
+        "GraphTask@ Watch(const CKBehaviorContext&in, const string&in, float)"
+    };
+    for (const char *decl : removedBehaviorContextDecls) {
+        if (engine->GetGlobalFunctionByDecl(decl)) {
+            engine->SetDefaultNamespace(restoreNamespace.c_str());
+            error = std::string("Runtime self-test found removed Behavior context declaration: ") + decl;
+            return false;
+        }
+    }
+    engine->SetDefaultNamespace(restoreNamespace.c_str());
+    if (engine->SetDefaultNamespace("BB") < 0) {
+        error = "Runtime self-test could not enter the BB namespace.";
+        return false;
+    }
+    const char *removedBBBehaviorContextDecls[] = {
+        "BBBridge@ From(const CKBehaviorContext&in)",
+        "BBPrototype@ Prototype(const CKBehaviorContext&in, const string&in)",
+        "BBPrototype@ Prototype(const CKBehaviorContext&in, CKGUID)",
+        "int Count(const CKBehaviorContext&in)",
+        "BBPrototype@ At(const CKBehaviorContext&in, int)",
+        "BBPrototype@ Find(const CKBehaviorContext&in, const string&in, int)",
+        "array<BBPrototype@>@ FindAll(const CKBehaviorContext&in, const string&in)",
+        "BBDecl@ Require(const CKBehaviorContext&in, const string&in)",
+        "BBDecl@ Require(const CKBehaviorContext&in, CKGUID)",
+        "BBCallBuilder@ Call(const CKBehaviorContext&in, const string&in)",
+        "BBCallBuilder@ Call(const CKBehaviorContext&in, CKGUID)",
+        "BBTaskBuilder@ Spawn(const CKBehaviorContext&in, const string&in)",
+        "BBTaskBuilder@ Spawn(const CKBehaviorContext&in, CKGUID)"
+    };
+    for (const char *decl : removedBBBehaviorContextDecls) {
+        if (engine->GetGlobalFunctionByDecl(decl)) {
+            engine->SetDefaultNamespace(restoreNamespace.c_str());
+            error = std::string("Runtime self-test found removed BB context declaration: ") + decl;
+            return false;
+        }
+    }
+    engine->SetDefaultNamespace(restoreNamespace.c_str());
     const char *moduleName = "__CKAS_RuntimeCompileSelfTest";
     CKAngelScriptResult result = {};
     if (api->CompileModule(moduleName, source, CKAS_COMPILE_REPLACEEXISTING, &result) != CKAS_OK) {
@@ -952,19 +965,14 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     asIScriptModule *module = manager->GetModule(moduleName);
     asIScriptFunction *function = module ? module->GetFunctionByDecl("int __ckas_runtime_execute_probe()") : nullptr;
     asIScriptFunction *bbScopeProbe = module ? module->GetFunctionByDecl(
-        "int __ckas_runtime_bb_scope_probe(const ScriptContext &in, const CKBehaviorContext &in)") : nullptr;
+        "int __ckas_runtime_bb_scope_probe(const ScriptContext &in)") : nullptr;
     asIScriptFunction *bbNullProbe = module ? module->GetFunctionByDecl(
         "int __ckas_runtime_bb_null_probe(const ScriptContext &in)") : nullptr;
-    asIScriptFunction *bbBehaviorOnlyProbe = module ? module->GetFunctionByDecl(
-        "void __ckas_runtime_bb_behavior_only_probe(const CKBehaviorContext &in)") : nullptr;
     asIScriptFunction *behaviorScopeProbe = module ? module->GetFunctionByDecl(
-        "int __ckas_runtime_behavior_scope_probe(const ScriptContext &in, const CKBehaviorContext &in)") : nullptr;
+        "int __ckas_runtime_behavior_scope_probe(const ScriptContext &in)") : nullptr;
     asIScriptFunction *behaviorNullProbe = module ? module->GetFunctionByDecl(
         "int __ckas_runtime_behavior_null_probe(const ScriptContext &in)") : nullptr;
-    asIScriptFunction *behaviorBehaviorOnlyProbe = module ? module->GetFunctionByDecl(
-        "void __ckas_runtime_behavior_behavior_only_probe(const CKBehaviorContext &in)") : nullptr;
-    if (!function || !bbScopeProbe || !bbNullProbe || !bbBehaviorOnlyProbe ||
-        !behaviorScopeProbe || !behaviorNullProbe || !behaviorBehaviorOnlyProbe) {
+    if (!function || !bbScopeProbe || !bbNullProbe || !behaviorScopeProbe || !behaviorNullProbe) {
         api->UnloadModule(moduleName, nullptr);
         error = "Runtime ScriptContext, BB scope, or Behavior scope probe function was not found.";
         return false;
@@ -1049,7 +1057,7 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
         context->DestroyObject(behaviorScopeTarget);
         context->DestroyObject(bbScopeBehavior);
         api->UnloadModule(moduleName, nullptr);
-        error = "Runtime BB Script Host Scope changed direct-context compatibility semantics.";
+        error = "Runtime BB Script Host Scope changed internal Behavior Frame resolution semantics.";
         return false;
     }
 
@@ -1102,42 +1110,30 @@ bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::
     const bool bbScopeOk = executeHostScopeProbe(
                                bbScopeProbe,
                                &runtimeContext,
-                               &behaviorContext,
                                nullptr,
-                               "runtime/behavior equivalence");
+                               nullptr,
+                               "runtime BB");
     const bool bbNullOk = bbScopeOk && executeHostScopeProbe(
                                bbNullProbe,
                                &nullRuntimeContext,
                                nullptr,
                                nullptr,
                                "null runtime");
-    const bool bbBehaviorOnlyOk = bbNullOk && executeHostScopeProbe(
-                               bbBehaviorOnlyProbe,
-                               &behaviorOnlyContext,
-                               nullptr,
-                               "AngelScript BB bridge is not available.",
-                               "BB behavior-only direct-context");
-    const bool behaviorScopeOk = bbBehaviorOnlyOk && executeHostScopeProbe(
+    const bool behaviorScopeOk = bbNullOk && executeHostScopeProbe(
                                behaviorScopeProbe,
                                &runtimeContext,
-                               &behaviorContext,
                                nullptr,
-                               "Behavior runtime/behavior equivalence");
+                               nullptr,
+                               "Behavior runtime scope");
     const bool behaviorNullOk = behaviorScopeOk && executeHostScopeProbe(
                                behaviorNullProbe,
                                &nullRuntimeContext,
                                nullptr,
                                nullptr,
                                "Behavior null runtime");
-    const bool behaviorBehaviorOnlyOk = behaviorNullOk && executeHostScopeProbe(
-                               behaviorBehaviorOnlyProbe,
-                               &behaviorOnlyContext,
-                               nullptr,
-                               "AngelScript behavior bridge is not available.",
-                               "Behavior behavior-only direct-context");
     context->DestroyObject(behaviorScopeTarget);
     context->DestroyObject(bbScopeBehavior);
-    if (!behaviorBehaviorOnlyOk) {
+    if (!behaviorNullOk) {
         api->UnloadModule(moduleName, nullptr);
         return false;
     }

@@ -40,6 +40,25 @@ CKBehaviorContext MakeExecutorSelfTestContext(CKContext *context, CKBehavior *be
     return behaviorContext;
 }
 
+CKERROR CallEngineBehaviorCallback(CKContext *context,
+                                   CKBehavior *behavior,
+                                   CKDWORD message,
+                                   const CKBehaviorContext &behaviorContext) {
+    if (!context || !behavior) {
+        return CKERR_INVALIDPARAMETER;
+    }
+
+#if CKVERSION == 0x13022002
+    CKBehaviorContext savedContext = context->m_BehaviorContext;
+    context->m_BehaviorContext = behaviorContext;
+    const CKERROR result = static_cast<CKERROR>(behavior->CallCallbackFunction(message));
+    context->m_BehaviorContext = savedContext;
+    return result;
+#else
+    return static_cast<CKERROR>(behavior->CallCallbackFunction(message));
+#endif
+}
+
 void DestroyExecutorSelfTestObject(CKContext *context, CKObject *object) {
     if (context && object && !object->IsToBeDeleted()) {
         context->DestroyObject(object);
@@ -653,7 +672,13 @@ bool RunExecutorCreateStateRebindSelfTest(CKContext *context,
 
 } // namespace
 
-bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error) {
+bool RunScriptExecutorSelfTest(CKContext *context,
+                               asIScriptEngine *engine,
+                               std::string &error,
+                               std::string *pauseResumeTrace) {
+    if (pauseResumeTrace) {
+        pauseResumeTrace->clear();
+    }
     if (!context || !engine) {
         error = "Executor self-test requires a CKContext and AngelScript engine.";
         return false;
@@ -672,10 +697,6 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "NativeBuffer@ LocalWriteData(int index) const",
         "NativeBuffer@ BehaviorLocalReadData(int index) const",
         "NativeBuffer@ BehaviorLocalWriteData(int index) const",
-        "NativeBuffer@ GetInputParameterReadData(int index) const",
-        "NativeBuffer@ GetOutputParameterWriteData(int index) const",
-        "NativeBuffer@ GetLocalParameterReadData(int index) const",
-        "NativeBuffer@ GetLocalParameterWriteData(int index) const",
     };
     if (!frameType) {
         error = "Executor self-test could not resolve BehaviorFrame.";
@@ -687,7 +708,19 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
             return false;
         }
     }
-    const char *forbiddenRawDataMethods[] = {
+    const char *removedCompatibilityMethods[] = {
+        "CKContext@ GetCKContext() const",
+        "CK_ID GetID() const",
+        "string GetName() const",
+        "CKBehaviorIO@ GetInput(int index) const",
+        "CKParameterIn@ GetInputParameter(int index) const",
+        "CKParameterOut@ GetOutputParameter(int index) const",
+        "CKParameterLocal@ LocalParameter(int index) const",
+        "CKParameterLocal@ GetLocalParameter(int index) const",
+        "NativeBuffer@ GetInputParameterReadData(int index) const",
+        "NativeBuffer@ GetOutputParameterWriteData(int index) const",
+        "NativeBuffer@ GetLocalParameterReadData(int index) const",
+        "NativeBuffer@ GetLocalParameterWriteData(int index) const",
         "NativePointer PinReadDataPtr(int index) const",
         "NativePointer PoutWriteDataPtr(int index) const",
         "NativePointer LocalReadDataPtr(int index) const",
@@ -698,10 +731,64 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "NativePointer GetOutputParameterWriteDataPtr(int index) const",
         "NativePointer GetLocalParameterReadDataPtr(int index) const",
         "NativePointer GetLocalParameterWriteDataPtr(int index) const",
+        "CKBehaviorIO@ Input(int index) const",
+        "CKBehaviorIO@ Output(int index) const",
+        "CKParameterIn@ InputParameter(int index) const",
+        "CKParameterOut@ OutputParameter(int index) const",
+        "CKParameterLocal@ BehaviorLocalParameter(int index) const",
+        "int InputPosition(CKBehaviorIO@ io) const",
+        "int OutputPosition(CKBehaviorIO@ io) const",
+        "int PinPosition(CKParameterIn@ pin) const",
+        "int PoutPosition(CKParameterOut@ pout) const",
+        "int LocalPosition(CKParameterLocal@ local) const",
+        "int SubBehaviorLinkCount() const",
+        "int ParameterOperationCount() const",
+        "CKERROR AddSubBehavior(CKBehavior@ behavior)",
+        "BehaviorRef@ RemoveSubBehavior(CKBehavior@ behavior)",
+        "BehaviorRef@ RemoveSubBehavior(int index)",
+        "CKBehaviorLink@ SubBehaviorLink(int index) const",
+        "CKERROR AddSubBehaviorLink(CKBehaviorLink@ link)",
+        "CKBehaviorLink@ RemoveSubBehaviorLink(CKBehaviorLink@ link)",
+        "CKBehaviorLink@ RemoveSubBehaviorLink(int index)",
+        "CKParameterOperation@ ParameterOperation(int index) const",
+        "CKERROR AddParameterOperation(CKParameterOperation@ operation)",
+        "CKParameterOperation@ RemoveParameterOperation(int index)",
+        "CKParameterOperation@ RemoveParameterOperation(CKParameterOperation@ operation)",
+        "CKParameterIn@ TargetParameter() const",
+        "CKParameterIn@ ReplaceTargetParameter(CKParameterIn@ targetParam)",
+        "CKParameterIn@ RemoveTargetParameter()",
+        "int AddInput(const string &in name)",
+        "int AddOutput(const string &in name)",
+        "CKBehaviorIO@ CreateInput(const string &in name)",
+        "CKBehaviorIO@ CreateOutput(const string &in name)",
+        "CKBehaviorIO@ RemoveInput(int index)",
+        "CKBehaviorIO@ RemoveOutput(int index)",
+        "CKERROR DeleteInput(int index)",
+        "CKERROR DeleteOutput(int index)",
+        "CKBehaviorIO@ ReplaceInput(int index, CKBehaviorIO@ io)",
+        "CKBehaviorIO@ ReplaceOutput(int index, CKBehaviorIO@ io)",
+        "CKERROR ExportPin(CKParameterIn@ pin)",
+        "CKParameterIn@ CreatePin(const string &in name, CKParameterType type)",
+        "CKParameterIn@ CreatePin(const string &in name, CKGUID guid)",
+        "CKParameterIn@ InsertPin(int index, const string &in name, CKParameterType type)",
+        "void AddPin(CKParameterIn@ pin)",
+        "CKParameterIn@ RemovePin(int index)",
+        "CKParameterIn@ ReplacePin(int index, CKParameterIn@ pin)",
+        "CKERROR ExportPout(CKParameterOut@ pout)",
+        "CKParameterOut@ CreatePout(const string &in name, CKParameterType type)",
+        "CKParameterOut@ CreatePout(const string &in name, CKGUID guid)",
+        "CKParameterOut@ InsertPout(int index, const string &in name, CKParameterType type)",
+        "void AddPout(CKParameterOut@ pout)",
+        "CKParameterOut@ RemovePout(int index)",
+        "CKParameterOut@ ReplacePout(int index, CKParameterOut@ pout)",
+        "CKParameterLocal@ CreateLocal(const string &in name, CKParameterType type)",
+        "CKParameterLocal@ CreateLocal(const string &in name, CKGUID guid)",
+        "CKParameterLocal@ RemoveLocal(int index)",
+        "void AddLocal(CKParameterLocal@ local)",
     };
-    for (const char *decl : forbiddenRawDataMethods) {
+    for (const char *decl : removedCompatibilityMethods) {
         if (frameType->GetMethodByDecl(decl)) {
-            error = std::string("Executor self-test found removed raw BehaviorFrame method: ") + decl;
+            error = std::string("Executor self-test found removed BehaviorFrame compatibility method: ") + decl;
             return false;
         }
     }
@@ -722,46 +809,28 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "class ExecutorProbe {\n"
         "  int Execute(BehaviorFrame@ frame) {\n"
         "    if (frame is null) return 101;\n"
-        "    if (frame.Behavior() is null) return 102;\n"
+        "    if (!frame.valid) return 102;\n"
         "    if (!frame.valid || frame.id == 0 || frame.name.length() == 0) return 115;\n"
-        "    CKBehaviorContext frameCtx = frame.ToBehaviorContext();\n"
-        "    if (frameCtx.Behavior is null || frameCtx.Context is null) return 116;\n"
         "    if (frame.Context() is null || frame.ParameterManager() is null || frame.MessageManager() is null || frame.AttributeManager() is null || frame.TimeManager() is null) return 117;\n"
         "    if (frame.InputCount() != 1 || frame.OutputCount() != 1 || frame.PinCount() != 1 || frame.PoutCount() != 1) return 118;\n"
         "    if (frame.InputName(0) != \"In\" || frame.OutputName(0) != \"Out\") return 119;\n"
         "    if (frame.FindInput(\"In\") != 0 || frame.FindOutput(\"Out\") != 0 || frame.FindPin(\"Value\") != 0 || frame.FindPout(\"Handled\") != 0) return 120;\n"
-        "    if (frame.Input(0) is null || frame.Output(0) is null) return 121;\n"
         "    if (frame.Pin(0) is null || frame.Pin(\"Value\") is null || frame.Pout(0) is null || frame.Pout(\"Handled\") is null) return 122;\n"
         "    if (!frame.PinEnabled(0) || !frame.PinEnabled(\"Value\") || !frame.PoutEnabled(0) || !frame.PoutEnabled(\"Handled\")) return 123;\n"
         "    frame.EnablePin(0, false); if (frame.PinEnabled(0)) return 124; frame.EnablePin(\"Value\", true); if (!frame.PinEnabled(0)) return 125;\n"
         "    frame.EnablePout(0, false); if (frame.PoutEnabled(0)) return 126; frame.EnablePout(\"Handled\", true); if (!frame.PoutEnabled(0)) return 127;\n"
         "    BehaviorRef@ self = frame.Self(); if (self is null || !self.valid || self.id != frame.id) return 128;\n"
         "    if (frame.Layout() is null || self.Layout() is null || frame.Graph() is null || frame.AsGraph() is null) return 129;\n"
-        "    CKBehavior@ raw = frame.Behavior();\n"
+        "    CKBehavior@ raw = cast<CKBehavior>(frame.Context().GetObject(frame.id));\n"
         "    if (raw is null) return 143;\n"
-        "    CKObject@ rawObject = frame.CKGetObject(frame.id); if (rawObject is null || rawObject.GetID() != frame.id) return 166;\n"
-        "    if (frame.GetParent() !is raw.GetParent() || frame.GetOwnerScript() !is raw.GetOwnerScript()) return 159;\n"
-        "    if (frame.GetSubBehaviorCount() > 0 && frame.GetSubBehavior(0) !is raw.GetSubBehavior(0)) return 160;\n"
         "    frame.ClassId(); frame.ObjectFlags(); frame.IsDynamic(); frame.IsToBeDeleted(); frame.IsNotToBeSaved(); frame.IsPrivate(); frame.IsInterfaceObj(); frame.IsUpToDate(); frame.MemoryOccupation(); frame.AppData();\n"
         "    frame.SceneInCount(); frame.SceneIn(0); frame.IsInScene(frame.CurrentScene()); frame.IsActiveInCurrentScene(); frame.IsActiveInScene(frame.CurrentScene()); frame.IsVisible(); frame.CanBeHide(); frame.IsHiddenByParent(); frame.IsHierarchicallyHide(); frame.IsObjectUsed(raw, raw.GetClassID());\n"
-        "    if (frame.GetCKContext() is null || frame.GetID() != frame.id || frame.GetName() != frame.name || frame.GetClassID() != frame.ClassId()) return 154;\n"
-        "    if (frame.GetInputCount() != frame.InputCount() || frame.GetOutputCount() != frame.OutputCount() || frame.GetInputParameterCount() != frame.PinCount() || frame.GetOutputParameterCount() != frame.PoutCount()) return 155;\n"
-        "    if (frame.GetLocalParameterCount() != frame.BehaviorLocalCount() || frame.LocalCount() != 2) return 175;\n"
-        "    if (!frame.IsInputActive(0) || frame.IsOutputActive(0) || !frame.IsInputParameterEnabled(0) || !frame.IsOutputParameterEnabled(0)) return 156;\n"
-        "    if (frame.GetInput(0) is null || frame.GetOutput(0) is null) return 157;\n"
-        "    if (frame.InputPosition(raw.GetInput(0)) != 0 || frame.OutputPosition(raw.GetOutput(0)) != 0) return 144;\n"
-        "    if (frame.InputParameter(0) is null || frame.OutputParameter(0) is null) return 151;\n"
-        "    if (frame.GetInputParameter(0) is null || frame.GetOutputParameter(0) is null) return 152;\n"
-        "    if (frame.GetInputParameterPosition(frame.GetInputParameter(0)) != 0 || frame.GetOutputParameterPosition(frame.GetOutputParameter(0)) != 0) return 158;\n"
-        "    if (frame.PinPosition(frame.InputParameter(0)) != 0 || frame.PoutPosition(frame.OutputParameter(0)) != 0) return 145;\n"
-        "    NativeBuffer@ pinData = frame.PinReadData(0); NativeBuffer@ sdkPinData = frame.GetInputParameterReadData(0);\n"
-        "    int bufferedPinValue = 0; if (pinData is null || sdkPinData is null || pinData.Size() != 4 || sdkPinData.Size() != 4 || pinData.Read(bufferedPinValue) != 4 || bufferedPinValue != 41) return 182;\n"
-        "    NativeBuffer@ poutData = frame.PoutWriteData(0); NativeBuffer@ sdkPoutData = frame.GetOutputParameterWriteData(0); if (poutData is null || sdkPoutData is null || poutData.Size() != 4 || sdkPoutData.Size() != 4) return 183;\n"
-        "    int sdkPinValue = 0;\n"
-        "    if (frame.GetInputParameterValue(0, sdkPinValue) != CK_OK || sdkPinValue != 41) return 161;\n"
+        "    NativeBuffer@ pinData = frame.PinReadData(0);\n"
+        "    int bufferedPinValue = 0; if (pinData is null || pinData.Size() != 4 || pinData.Read(bufferedPinValue) != 4 || bufferedPinValue != 41) return 182;\n"
+        "    NativeBuffer@ poutData = frame.PoutWriteData(0); if (poutData is null || poutData.Size() != 4) return 183;\n"
         "    frame.Function(); frame.InterfaceChunk();\n"
         "    frame.Type(); frame.Flags(); frame.PrototypeGuid(); frame.PrototypeName(); frame.Version(); frame.Priority(); frame.LastExecutionTime(); frame.IsActive(); frame.IsUsingFunction(); frame.IsTargetable(); frame.IsUsingTarget(); frame.CompatibleClassId();\n"
-        "    frame.SubBehaviorCount(); frame.SubBehaviorLinkCount(); frame.ParameterOperationCount(); frame.CurrentLevel(); frame.CurrentScene(); frame.PreviousScene(); frame.CurrentRenderContext(); frame.CallbackMessage();\n"
+        "    frame.SubBehaviorCount(); frame.CurrentLevel(); frame.CurrentScene(); frame.PreviousScene(); frame.CurrentRenderContext(); frame.CallbackMessage();\n"
         "    if (!frame.InputActive(0) || !frame.InputActive(\"In\")) return 130;\n"
         "    if (frame.OutputActive(0) || frame.OutputActive(\"Out\")) return 131;\n"
         "    int scratchLocal = frame.FindLocal(\"__CKAS_FrameScratch\");\n"
@@ -774,9 +843,6 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (frame.LocalInt(\"__CKAS_MappedLocal\", -1) != 301) return 178;\n"
         "    if (!frame.SetLocal(\"__CKAS_MappedLocal\", 302) || !frame.SetLocal(mappedLocal, 303)) return 179;\n"
         "    if (frame.LocalInt(\"__CKAS_MappedLocal\", -1) != 303 || frame.LocalInt(mappedLocal, -1) != 303) return 180;\n"
-        "    int sdkLocalValue = 0;\n"
-        "    if (frame.SetLocalParameterValue(scratchPhysical, 222) != CK_OK) return 162;\n"
-        "    if (frame.GetLocalParameterValue(scratchPhysical, sdkLocalValue) != CK_OK || sdkLocalValue != 222) return 163;\n"
         "    if (!frame.SetLocal(scratchLocal, 123) || !frame.SetLocal(\"__CKAS_FrameScratch\", 124)) return 133;\n"
         "    if (frame.LocalInt(\"__CKAS_FrameScratch\", -1) != 124 || frame.LocalInt(scratchLocal, -1) != 124) return 168;\n"
         "    if (frame.LocalInt(\"__CKAS_MissingLocal\", 77) != 77) return 169;\n"
@@ -784,11 +850,9 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (!frame.LocalBool(\"__CKAS_FrameScratch\", true)) return 171;\n"
         "    if (frame.LocalFloat(\"__CKAS_FrameScratch\", -1.0f) != 124.0f || frame.LocalFloat(scratchLocal, -1.0f) != 124.0f) return 172;\n"
         "    if (frame.LocalObject(\"__CKAS_MissingLocal\") !is null) return 173;\n"
-        "    if (frame.BehaviorLocalParameter(scratchPhysical) is null || frame.GetLocalParameter(scratchPhysical) is null) return 153;\n"
-        "    if (frame.LocalPosition(frame.BehaviorLocalParameter(scratchPhysical)) != scratchPhysical || frame.GetLocalParameterPosition(frame.GetLocalParameter(scratchPhysical)) != scratchPhysical) return 147;\n"
         "    NativeBuffer@ localRead = frame.LocalReadData(scratchLocal); NativeBuffer@ localWrite = frame.LocalWriteData(scratchLocal); if (localRead is null || localWrite is null || localRead.Size() != 4 || localWrite.Size() != 4) return 184;\n"
-        "    NativeBuffer@ physicalRead = frame.BehaviorLocalReadData(scratchPhysical); NativeBuffer@ physicalWrite = frame.BehaviorLocalWriteData(scratchPhysical); NativeBuffer@ sdkLocalRead = frame.GetLocalParameterReadData(scratchPhysical); NativeBuffer@ sdkLocalWrite = frame.GetLocalParameterWriteData(scratchPhysical);\n"
-        "    if (physicalRead is null || physicalWrite is null || sdkLocalRead is null || sdkLocalWrite is null || physicalRead.Size() != 4 || physicalWrite.Size() != 4 || sdkLocalRead.Size() != 4 || sdkLocalWrite.Size() != 4) return 185;\n"
+        "    NativeBuffer@ physicalRead = frame.BehaviorLocalReadData(scratchPhysical); NativeBuffer@ physicalWrite = frame.BehaviorLocalWriteData(scratchPhysical);\n"
+        "    if (physicalRead is null || physicalWrite is null || physicalRead.Size() != 4 || physicalWrite.Size() != 4) return 185;\n"
         "    frame.LocalObject(scratchLocal);\n"
         "    frame.NotifyEdition(); frame.NotifySettingsEdition();\n"
         "    BehaviorLayout@ runtimeLayout = frame.Layout();\n"
@@ -814,12 +878,9 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (delay is null) return 167;\n"
         "    Await(delay);\n"
         "    if (frame.Context() is null) return 111;\n"
-        "    if (frame.Behavior() is null) return 112;\n"
+        "    if (!frame.valid) return 112;\n"
         "    if (frame.Self() is null || frame.Layout() is null) return 138;\n"
         "    if (frame.PinInt(\"MissingAfterResume\", 43) != 43) return 113;\n"
-        "    bool sdkPoutValue = false;\n"
-        "    if (frame.SetOutputParameterValue(0, true) != CK_OK) return 164;\n"
-        "    if (frame.GetOutputParameterValue(0, sdkPoutValue) != CK_OK || !sdkPoutValue) return 165;\n"
         "    if (!frame.SetPout(\"Handled\", false) || !frame.SetPout(0, true)) return 105;\n"
         "    frame.Emit(0);\n"
         "    if (!frame.OutputActive(\"Out\")) return 139;\n"
@@ -829,9 +890,6 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    if (frame is null || frame.LocalCount() != 2) return;\n"
         "    frame.SetLocal(\"__CKAS_FrameScratch\", 901);\n"
         "    frame.SetLocal(\"__CKAS_MappedLocal\", 902);\n"
-        "  }\n"
-        "  int Execute(const CKBehaviorContext &in ctx) {\n"
-        "    return 1901;\n"
         "  }\n"
         "}\n"
         "class ExecutorRetriggerProbe {\n"
@@ -898,6 +956,32 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         "    int count = frame.LocalInt(\"__CKAS_FrameScratch\", 0);\n"
         "    if (!frame.SetLocal(\"__CKAS_FrameScratch\", count + 1)) return 404;\n"
         "    frame.Emit(\"Out\");\n"
+        "    return 0;\n"
+        "  }\n"
+        "}\n"
+        "class ExecutorPauseResumeProbe {\n"
+        "  void OnPause(BehaviorFrame@ frame) {\n"
+        "    if (frame is null || !frame.SetLocal(\"Trace\", 1)) return;\n"
+        "    AsyncTask<void>@ delay = frame.LinkDelay(1);\n"
+        "    if (delay is null) { frame.SetLocal(\"Trace\", -10); return; }\n"
+        "    Await(delay);\n"
+        "    frame.SetLocal(\"Trace\", frame.LocalInt(\"Trace\", -1000) * 10 + 2);\n"
+        "  }\n"
+        "  void OnResume(BehaviorFrame@ frame) {\n"
+        "    if (frame !is null) frame.SetLocal(\"Trace\", frame.LocalInt(\"Trace\", -1000) * 10 + 3);\n"
+        "  }\n"
+        "  int Execute(BehaviorFrame@ frame) {\n"
+        "    if (frame is null) return 601;\n"
+        "    int trace = frame.LocalInt(\"Trace\", -1000);\n"
+        "    if (trace == 9) {\n"
+        "      if (!frame.SetLocal(\"Trace\", 91)) return 602;\n"
+        "      AsyncTask<void>@ pendingExecute = frame.LinkDelay(10);\n"
+        "      if (pendingExecute is null) return 603;\n"
+        "      Await(pendingExecute);\n"
+        "      frame.SetLocal(\"Trace\", 999);\n"
+        "      return 604;\n"
+        "    }\n"
+        "    if (!frame.SetLocal(\"Trace\", trace * 10 + 4)) return 605;\n"
         "    return 0;\n"
         "  }\n"
         "}\n";
@@ -1135,6 +1219,7 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         const_cast<CKSTRING>("__CKAS_ExecutorSelfTestBehavior"),
         CK_OBJECTCREATION_DYNAMIC));
     CKBehavior *retriggerBehavior = nullptr;
+    CKBehavior *pauseResumeBehavior = nullptr;
     CKBehavior *chainRoot = nullptr;
     CKBehavior *chainSource = nullptr;
     CKBehavior *chainTarget = nullptr;
@@ -1146,6 +1231,7 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
     CKParameterLocal *scratchParam = nullptr;
     bool deleteCallbackSent = false;
     bool retriggerDeleteCallbackSent = false;
+    bool pauseResumeDeleteCallbackSent = false;
     bool chainSourceDeleteCallbackSent = false;
     bool chainTargetDeleteCallbackSent = false;
     auto cleanup = [&]() {
@@ -1157,6 +1243,9 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         }
         if (retriggerBehavior && retriggerDeleteCallbackSent) {
             CallBridgeBehaviorCallback(retriggerBehavior, CKM_BEHAVIORDELETE);
+        }
+        if (pauseResumeBehavior && pauseResumeDeleteCallbackSent) {
+            CallBridgeBehaviorCallback(pauseResumeBehavior, CKM_BEHAVIORDELETE);
         }
         if (behavior && deleteCallbackSent) {
             CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE);
@@ -1170,6 +1259,7 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
         DestroyExecutorSelfTestObject(context, mappedParam);
         DestroyExecutorSelfTestObject(context, sourceParam);
         DestroyExecutorSelfTestObject(context, retriggerBehavior);
+        DestroyExecutorSelfTestObject(context, pauseResumeBehavior);
         DestroyExecutorSelfTestObject(context, behavior);
         if (manager->GetRuntime()) {
             manager->GetRuntime()->Clear();
@@ -1426,6 +1516,144 @@ bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std:
             error = "Executor self-test generated a bridge input source while writing a mapped local.";
             return false;
         }
+    }
+
+    pauseResumeBehavior = CKBehavior::Cast(context->CreateObject(
+        CKCID_BEHAVIOR,
+        const_cast<CKSTRING>("__CKAS_ExecutorPauseResumeTrace"),
+        CK_OBJECTCREATION_DYNAMIC));
+    if (!pauseResumeBehavior) {
+        cleanup();
+        error = "Executor pause/resume trace failed to create its behavior.";
+        return false;
+    }
+    pauseResumeBehavior->UseFunction();
+    if (pauseResumeBehavior->InitFromGuid(CKGUID(0x15a41762, 0x0c7c4a91)) != CK_OK) {
+        cleanup();
+        error = "Executor pause/resume trace failed to initialize its Executor behavior.";
+        return false;
+    }
+    const char *pauseResumeInterface =
+        "input 0 name=\"In\"\n"
+        "output 0 name=\"Out\"\n"
+        "local 0 name=\"Trace\" type=\"Integer\" default=\"0\"\n";
+    if (!SetExecutorStringSetting(pauseResumeBehavior, EXECUTOR_SETTING_SCRIPT, scriptId, error) ||
+        !SetExecutorStringSetting(pauseResumeBehavior,
+                                  EXECUTOR_SETTING_CLASS,
+                                  "ExecutorPauseResumeProbe",
+                                  error) ||
+        !SetExecutorStringSetting(pauseResumeBehavior,
+                                  EXECUTOR_SETTING_INTERFACE,
+                                  pauseResumeInterface,
+                                  error) ||
+        !SetExecutorBoolSetting(pauseResumeBehavior,
+                                EXECUTOR_SETTING_STRICT_INTERFACE,
+                                true,
+                                error) ||
+        !SetExecutorBoolSetting(pauseResumeBehavior, EXECUTOR_SETTING_TRACE, false, error)) {
+        cleanup();
+        return false;
+    }
+    CKBehaviorContext pauseResumeContext = MakeExecutorSelfTestContext(context, pauseResumeBehavior);
+    if (CallBridgeBehaviorCallback(pauseResumeBehavior,
+                                   CKM_BEHAVIORCREATE,
+                                   &pauseResumeContext) != CK_OK ||
+        CallBridgeBehaviorCallback(pauseResumeBehavior,
+                                   CKM_BEHAVIORSETTINGSEDITED,
+                                   &pauseResumeContext) != CK_OK) {
+        cleanup();
+        error = "Executor pause/resume trace failed to initialize its runtime state.";
+        return false;
+    }
+    pauseResumeDeleteCallbackSent = true;
+    if (ExecuteExecutorSelfTestBehavior(context,
+                                        pauseResumeBehavior,
+                                        pauseResumeContext) != CKBR_OK) {
+        cleanup();
+        error = "Executor pause/resume trace failed to prime its script instance.";
+        return false;
+    }
+    CKParameterLocal *lifecycleTrace =
+        pauseResumeBehavior->GetLocalParameter(EXECUTOR_USER_LOCAL_START);
+    int lifecycleTraceValue = 9;
+    if (!lifecycleTrace || lifecycleTrace->SetValue(&lifecycleTraceValue) != CK_OK) {
+        cleanup();
+        error = "Executor pause/resume trace could not arm its suspended Execute.";
+        return false;
+    }
+    if (ExecuteExecutorSelfTestBehavior(context,
+                                        pauseResumeBehavior,
+                                        pauseResumeContext) != CKBR_ACTIVATENEXTFRAME ||
+        lifecycleTrace->GetValue(&lifecycleTraceValue) != CK_OK ||
+        lifecycleTraceValue != 91) {
+        cleanup();
+        error = "Executor pause/resume trace could not suspend the preceding Execute.";
+        return false;
+    }
+
+    if (CallEngineBehaviorCallback(context,
+                                   pauseResumeBehavior,
+                                   CKM_BEHAVIORPAUSE,
+                                   pauseResumeContext) != CK_OK ||
+        lifecycleTrace->GetValue(&lifecycleTraceValue) != CK_OK ||
+        lifecycleTraceValue != 1) {
+        cleanup();
+        error = "Original CK2 Executor pause callback did not suspend after OnPause.begin.";
+        return false;
+    }
+    ScriptExecutorState *pauseResumeState =
+        manager->GetExecutorState(pauseResumeBehavior->GetID(), pauseResumeBehavior);
+    if (!pauseResumeState ||
+        !pauseResumeState->InitialLifecycle.Paused() ||
+        !pauseResumeState->InitialLifecycle.PausePending() ||
+        pauseResumeState->ActiveLifecycleName != "OnPause") {
+        cleanup();
+        error = "Executor pause callback did not retain the suspended lifecycle phase.";
+        return false;
+    }
+    if (CallEngineBehaviorCallback(context,
+                                   pauseResumeBehavior,
+                                   CKM_BEHAVIORRESUME,
+                                   pauseResumeContext) != CK_OK ||
+        lifecycleTrace->GetValue(&lifecycleTraceValue) != CK_OK ||
+        lifecycleTraceValue != 1 ||
+        !pauseResumeState->InitialLifecycle.ResumePending()) {
+        cleanup();
+        error = "Original CK2 Executor resume callback did not retain Resume behind OnPause.";
+        return false;
+    }
+    if (ExecuteExecutorSelfTestBehavior(context,
+                                        pauseResumeBehavior,
+                                        pauseResumeContext) != CKBR_ACTIVATENEXTFRAME ||
+        lifecycleTrace->GetValue(&lifecycleTraceValue) != CK_OK ||
+        lifecycleTraceValue != 1) {
+        cleanup();
+        error = "Executor ran OnResume or Execute before the suspended OnPause wait completed.";
+        return false;
+    }
+    scheduler->Tick();
+    if (ExecuteExecutorSelfTestBehavior(context,
+                                        pauseResumeBehavior,
+                                        pauseResumeContext) != CKBR_OK ||
+        lifecycleTrace->GetValue(&lifecycleTraceValue) != CK_OK ||
+        lifecycleTraceValue != 123) {
+        cleanup();
+        error = "Executor did not finish OnPause before delivering the retained OnResume.";
+        return false;
+    }
+    if (ExecuteExecutorSelfTestBehavior(context,
+                                        pauseResumeBehavior,
+                                        pauseResumeContext) != CKBR_OK ||
+        lifecycleTrace->GetValue(&lifecycleTraceValue) != CK_OK ||
+        lifecycleTraceValue != 1234) {
+        cleanup();
+        error = "Executor did not defer Execute until the frame after OnResume.";
+        return false;
+    }
+    if (pauseResumeTrace) {
+        *pauseResumeTrace =
+            "executor:CKM_BEHAVIORPAUSE>Execute.abort>OnPause.begin>CKM_BEHAVIORRESUME>"
+            "OnPause.end>OnResume>Execute";
     }
 
     retriggerBehavior = CKBehavior::Cast(context->CreateObject(

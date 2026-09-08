@@ -19,6 +19,9 @@ class ScriptManager;
 class asIScriptEngine;
 
 CKERROR RunScriptStartupSelfTests(ScriptManager *manager);
+void RecordScriptManagerLifecycleSelfTestEvent(const char *event);
+void PrepareScriptManagerLifecycleEndSelfTest(ScriptManager *manager);
+CKERROR CompleteScriptManagerLifecycleSelfTest(ScriptManager *manager);
 
 bool RunScriptComponentMetadataSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptInvocationSelfTest(ScriptManager *manager, std::string &error);
@@ -31,7 +34,10 @@ bool RunScriptInfoExportSelfTest(asIScriptEngine *engine, std::string &error);
 bool RunScriptRuntimeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptBehaviorBridgeSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
-bool RunScriptExecutorSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
+bool RunScriptExecutorSelfTest(CKContext *context,
+                               asIScriptEngine *engine,
+                               std::string &error,
+                               std::string *pauseResumeTrace = nullptr);
 bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptNativeMemorySelfTest(CKContext *context, asIScriptEngine *engine, std::string &error);
 bool RunScriptVxBindingSelfTest(asIScriptEngine *engine, std::string &error);

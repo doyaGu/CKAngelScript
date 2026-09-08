@@ -9,15 +9,15 @@ namespace ScriptRuntimeMetadata {
 
 bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
     const std::string source =
-        "[script\n"
+        "[runtime\n"
         "  id=\"ckas.test\"\n"
         "  name=\"Test Script\"\n"
         "  version=\"1.2\"\n"
         "]\n"
-        "[script class=\"TestClass\" entry=\"runtime.as\" files=\"a.as;'b;c.as'\" custom=\"first\"]\n"
-        "[script description=\"Runtime smoke\" author=\"CKAS\" category=\"Diagnostics\" tags=\"debug;smoke\"]\n"
-        "[script.meta custom=\"second\" key=\"display\" value=\"Runtime Test\"]\n"
-        "[script.depends required=\"core>=1.0.0\" optional=\"debug\" before=\"late\" after=\"boot\"]\n"
+        "[runtime class=\"TestClass\" entry=\"runtime.as\" files=\"a.as;'b;c.as'\" custom=\"first\"]\n"
+        "[runtime description=\"Runtime smoke\" author=\"CKAS\" category=\"Diagnostics\" tags=\"debug;smoke\"]\n"
+        "[runtime.meta custom=\"second\" key=\"display\" value=\"Runtime Test\"]\n"
+        "[runtime.depends required=\"core>=1.0.0\" optional=\"debug\" before=\"late\" after=\"boot\"]\n"
         "class TestClass {}\n";
 
     ScriptRuntimeManifest manifest;
@@ -73,8 +73,8 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
     }
 
     const std::string sidecarSource =
-        "[script.meta key=\"display\" value=\"Helper\"]\n"
-        "[script.depends required=\"core\"]\n";
+        "[runtime.meta key=\"display\" value=\"Helper\"]\n"
+        "[runtime.depends required=\"core\"]\n";
     ScriptRuntimeManifest sidecar;
     sidecar.RootPath = std::filesystem::path("C:/Scripts");
     sidecar.ManifestPath = sidecar.RootPath / "helper.as";
@@ -116,6 +116,20 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
         return false;
     }
 
+    ScriptRuntimeManifest removedScriptAlias;
+    removedScriptAlias.RootPath = std::filesystem::path("C:/Scripts/removed-script-alias");
+    removedScriptAlias.ManifestPath = removedScriptAlias.RootPath / "script.as";
+    removedScriptAlias.EntryPath = removedScriptAlias.ManifestPath;
+    if (!ParseManifestSource("[script id=\"removed.alias\"]\nclass RemovedAlias {}\n",
+        removedScriptAlias.ManifestPath,
+        removedScriptAlias,
+        error) ||
+        removedScriptAlias.HasManifest ||
+        removedScriptAlias.HasScriptManifest) {
+        error = error.empty() ? "Runtime metadata parser still recognizes the removed [script] alias." : error;
+        return false;
+    }
+
     const std::string lexicalSource =
         "// [executor name=\"Comment Host\"]\n"
         "/*\n"
@@ -144,7 +158,7 @@ bool RunScriptRuntimeMetadataSelfTest(std::string &error) {
     const std::string fakeOnlySource =
         "// [runtime]\n"
         "string label = \"[executor]\";\n"
-        "/* [script] */\n";
+        "/* [runtime] */\n";
     ScriptRuntimeManifest fakeOnly;
     fakeOnly.RootPath = std::filesystem::path("C:/Scripts/fake-only");
     fakeOnly.ManifestPath = fakeOnly.RootPath / "helper.as";

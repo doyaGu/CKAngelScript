@@ -4615,6 +4615,13 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         api->ReleaseFunction(addFunction);
         return false;
     }
+    if (scriptManager->OnCKPostReset() != CK_OK) {
+        error = "CKAngelScript API self-test could not complete the CK reset lifecycle.";
+        api->ReleaseExecution(execution);
+        api->ReleaseFunction(asyncFunction);
+        api->ReleaseFunction(addFunction);
+        return false;
+    }
     api->ReleaseExecution(execution);
 
     asyncOptions.Flags = CKAS_CALL_NO_SUSPEND;

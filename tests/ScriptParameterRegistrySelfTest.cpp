@@ -15064,43 +15064,43 @@ bool RunParamHostScopeSelfTest(CKContext *context,
         directBehaviorOnlyScope.Manager() != nullptr ||
         directBehaviorOnlyScope.ParameterRegistry() != nullptr) {
         context->DestroyObject(behavior);
-        error = "Param Script Host Scope changed direct-context compatibility semantics.";
+        error = "Param Script Host Scope changed internal Behavior Frame resolution semantics.";
         return false;
+    }
+
+    for (asUINT i = 0; i < engine->GetGlobalFunctionCount(); ++i) {
+        asIScriptFunction *function = engine->GetGlobalFunctionByIndex(i);
+        const char *nameSpace = function ? function->GetNamespace() : nullptr;
+        const char *declaration = function ? function->GetDeclaration() : nullptr;
+        if (nameSpace && declaration &&
+            std::string(nameSpace) == "Param" &&
+            std::string(declaration).find("CKBehaviorContext") != std::string::npos) {
+            context->DestroyObject(behavior);
+            error = std::string("Param still exposes a CKBehaviorContext adapter: ") + declaration + ".";
+            return false;
+        }
     }
 
     constexpr const char *moduleName = "__CKAS_ParamHostScopeSelfTest";
     const char *source =
-        "int ProbeParamScopeEquivalence(CKContext@ rawCtx, const ScriptContext &in runtimeCtx, const CKBehaviorContext &in behaviorCtx) {\n"
+        "int ProbeParamScopeEquivalence(CKContext@ rawCtx, const ScriptContext &in runtimeCtx) {\n"
         "  int rawCount = Param::Count(rawCtx);\n"
-        "  if (rawCount <= 0 || Param::Count(runtimeCtx) != rawCount || Param::Count(behaviorCtx) != rawCount) return 1;\n"
+        "  if (rawCount <= 0 || Param::Count(runtimeCtx) != rawCount) return 1;\n"
         "  ParamTypeInfo@ rawAt = Param::At(rawCtx, 0);\n"
         "  ParamTypeInfo@ runtimeAt = Param::At(runtimeCtx, 0);\n"
-        "  ParamTypeInfo@ behaviorAt = Param::At(behaviorCtx, 0);\n"
-        "  if (rawAt is null || runtimeAt is null || behaviorAt is null) return 2;\n"
-        "  if (!rawAt.IsValid() || !runtimeAt.IsValid() || !behaviorAt.IsValid()) return 3;\n"
-        "  if (runtimeAt.Type() != rawAt.Type() || behaviorAt.Type() != rawAt.Type()) return 4;\n"
-        "  if (runtimeAt.Guid().opCmp(rawAt.Guid()) != 0 || behaviorAt.Guid().opCmp(rawAt.Guid()) != 0) return 5;\n"
-        "  if (runtimeAt.Name() != rawAt.Name() || behaviorAt.Name() != rawAt.Name()) return 6;\n"
+        "  if (rawAt is null || runtimeAt is null) return 2;\n"
+        "  if (!rawAt.IsValid() || !runtimeAt.IsValid()) return 3;\n"
+        "  if (runtimeAt.Type() != rawAt.Type()) return 4;\n"
+        "  if (runtimeAt.Guid().opCmp(rawAt.Guid()) != 0) return 5;\n"
+        "  if (runtimeAt.Name() != rawAt.Name()) return 6;\n"
         "  ParamTypeInfo@ rawType = Param::Type(rawCtx, rawAt.Guid());\n"
         "  ParamTypeInfo@ runtimeType = Param::Type(runtimeCtx, rawAt.Guid());\n"
-        "  ParamTypeInfo@ behaviorType = Param::Type(behaviorCtx, rawAt.Guid());\n"
-        "  if (rawType is null || runtimeType is null || behaviorType is null) return 7;\n"
-        "  if (runtimeType.Type() != rawType.Type() || behaviorType.Type() != rawType.Type()) return 8;\n"
+        "  if (rawType is null || runtimeType is null) return 7;\n"
+        "  if (runtimeType.Type() != rawType.Type()) return 8;\n"
         "  ParamTypeInfo@ rawFind = Param::Find(rawCtx, rawAt.Name());\n"
         "  ParamTypeInfo@ runtimeFind = Param::Find(runtimeCtx, rawAt.Name());\n"
-        "  ParamTypeInfo@ behaviorFind = Param::Find(behaviorCtx, rawAt.Name());\n"
-        "  if (rawFind is null || runtimeFind is null || behaviorFind is null) return 9;\n"
-        "  if (runtimeFind.Type() != rawFind.Type() || behaviorFind.Type() != rawFind.Type()) return 10;\n"
-        "  return 0;\n"
-        "}\n"
-        "int ProbeParamScopeBehaviorOnly(const CKBehaviorContext &in ctx) {\n"
-        "  if (Param::Count(ctx) != 0) return 11;\n"
-        "  if (Param::At(ctx, 0) !is null) return 12;\n"
-        "  if (Param::Find(ctx, \"int\") !is null) return 13;\n"
-        "  if (Param::Type(ctx, \"int\") !is null) return 14;\n"
-        "  if (Param::Value(ctx, \"int\", \"1\", 77) != 77) return 15;\n"
-        "  if (Param::Text(ctx, \"int\", 7) != \"7\") return 16;\n"
-        "  if (Param::Describe(ctx, \"int\") != \"\") return 17;\n"
+        "  if (rawFind is null || runtimeFind is null) return 9;\n"
+        "  if (runtimeFind.Type() != rawFind.Type()) return 10;\n"
         "  return 0;\n"
         "}\n";
 
@@ -15117,20 +15117,17 @@ bool RunParamHostScopeSelfTest(CKContext *context,
     }
 
     asIScriptFunction *equivalence = module->GetFunctionByDecl(
-        "int ProbeParamScopeEquivalence(CKContext@, const ScriptContext &in, const CKBehaviorContext &in)");
-    asIScriptFunction *behaviorOnly = module->GetFunctionByDecl(
-        "int ProbeParamScopeBehaviorOnly(const CKBehaviorContext &in)");
-    if (!equivalence || !behaviorOnly) {
+        "int ProbeParamScopeEquivalence(CKContext@, const ScriptContext &in)");
+    if (!equivalence) {
         context->DestroyObject(behavior);
         engine->DiscardModule(moduleName);
-        error = "Param Script Host Scope self-test functions were not found.";
+        error = "Param Script Host Scope self-test function was not found.";
         return false;
     }
 
     auto executeProbe = [&](asIScriptFunction *function,
                             void *arg0,
                             void *arg1,
-                            void *arg2,
                             const char *label) {
         asIScriptContext *scriptContext = engine->RequestContext();
         if (!scriptContext) {
@@ -15140,7 +15137,6 @@ bool RunParamHostScopeSelfTest(CKContext *context,
         int result = scriptContext->Prepare(function);
         if (result >= 0) result = scriptContext->SetArgObject(0, arg0);
         if (result >= 0 && arg1) result = scriptContext->SetArgObject(1, arg1);
-        if (result >= 0 && arg2) result = scriptContext->SetArgObject(2, arg2);
         if (result >= 0) result = scriptContext->Execute();
 
         bool ok = false;
@@ -15165,13 +15161,7 @@ bool RunParamHostScopeSelfTest(CKContext *context,
     const bool ok = executeProbe(equivalence,
                                  context,
                                  &runtimeContext,
-                                 &behaviorContext,
-                                 "raw/runtime/behavior equivalence") &&
-                    executeProbe(behaviorOnly,
-                                 &behaviorOnlyContext,
-                                 nullptr,
-                                 nullptr,
-                                 "behavior-only direct-context");
+                                 "raw/runtime equivalence");
     context->DestroyObject(behavior);
     engine->DiscardModule(moduleName);
     return ok;

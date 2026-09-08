@@ -3,6 +3,9 @@
 #include <fmt/format.h>
 
 #include "add_on/scriptarray/scriptarray.h"
+#include "ScriptBehaviorFrame.h"
+#include "ScriptHostScope.h"
+#include "ScriptManager.h"
 
 #include <cstdint>
 #include <fstream>
@@ -65,7 +68,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBInstance@ instance;\n";
     source += "    BBSlot@ pin;\n";
     source += "    void Update(BehaviorFrame@ frame) { if (frame !is null) frame.Trace(\"component-frame-probe\"); }\n";
-    source += "    void Start(BehaviorFrame@ frame) { if (frame is null) return; BehaviorRef@ self = frame.Self(); if (self !is null) { BehaviorFrame@ same = frame.FrameFor(self); if (same is null) return; } CKBehavior@ raw = frame.Behavior(); if (raw !is null) { BehaviorFrame@ rawFrame = frame.FrameFor(raw); if (rawFrame is null) return; } if (frame.SubBehaviorCount() > 0 && frame.SubFrame(0) is null) return; if (cfg !is null) { cfg.Validate(frame); @instance = cfg.EnsureStarted(frame); cfg.Stop(frame); cfg.Raise(frame); } if (instance !is null) { instance.Start(frame); instance.Step(frame); instance.Stop(frame); instance.Raise(frame); if (pin !is null) instance.StepSet(frame, pin, \"x\"); } }\n";
+    source += "    void Start(BehaviorFrame@ frame) { if (frame is null) return; BehaviorRef@ self = frame.Self(); if (self !is null) { BehaviorFrame@ same = frame.FrameFor(self); if (same is null) return; } if (frame.SubBehaviorCount() > 0 && frame.SubFrame(0) is null) return; if (cfg !is null) { cfg.Validate(frame); @instance = cfg.EnsureStarted(frame); cfg.Stop(frame); cfg.Raise(frame); } if (instance !is null) { instance.Start(frame); instance.Step(frame); instance.Stop(frame); instance.Raise(frame); if (pin !is null) instance.StepSet(frame, pin, \"x\"); } }\n";
     source += "    void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) { if (frame !is null) frame.Context(); }\n";
     source += "}\n";
     source += "void ProbeParamHandleApi(ParamRef@ param, ParamValue@ value, ParamStructValue@ structValue) {\n";
@@ -83,7 +86,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    ParamLocalRef@ paramLocal = cast<ParamLocalRef>(param); if (paramLocal !is null) { paramLocal.Id(); paramLocal.Set(value); ParamRef@ base = paramLocal; ObjectRef@ object = paramLocal; }\n";
     source += "    if (s !is null) { ObjectRef@ structObject = s; ParamRef@ structParam = s; s.Id(); s.Name(); s.ClassId(); s.IsDynamic(); if (structObject !is null) { structObject.Id(); } }\n";
     source += "}\n";
-    source += "int ProbeParamValueApi(const CKBehaviorContext &in ctx, CKGUID structGuid) {\n";
+    source += "int ProbeParamValueApi(CKContext@ host, CKGUID structGuid) {\n";
     source += "    ParamValue@ intValue = Param::Int(7);\n";
     source += "    ParamValue@ floatValue = Param::Float(1.5f);\n";
     source += "    ParamValue@ boolValue = Param::Bool(true);\n";
@@ -108,27 +111,28 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    vectorParam.AsVector(); vector2Param.AsVector2(); colorParam.AsColor(); quaternionParam.AsQuaternion(); matrixParam.AsMatrix();\n";
     source += "    NativeBuffer@ bytes = NativeBuffer(4);\n";
     source += "    if (bytes is null || bytes.WriteUInt(0x12345678) != 4) return 1045;\n";
-    source += "    ParamValue@ rawValue = Param::Raw(ctx, CKPGUID_INT, bytes);\n";
+    source += "    ParamValue@ rawValue = Param::Raw(CKPGUID_INT, bytes);\n";
     source += "    NativeBuffer@ rawCopy = rawValue !is null ? rawValue.AsRaw() : null;\n";
     source += "    if (rawCopy is null || rawCopy.Size() != 4) return 1046;\n";
-    source += "    ParamStructValue@ structValue = Param::Struct(ctx, structGuid);\n";
+    source += "    ParamStructValue@ structValue = Param::Struct(host, structGuid);\n";
     source += "    if (structValue is null || !structValue.IsValid() || !structValue.TypeGuid().IsValid() || structValue.TypeName() == \"\" || structValue.Describe() == \"\") return 1047;\n";
     source += "    if (structValue.Set(0, Param::Int(9)) is null) return 1048;\n";
     source += "    ParamValue@ structMemberValue = structValue.Value();\n";
     source += "    ParamValue@ structParam = structValue.AsValue();\n";
     source += "    if (structMemberValue is null || structMemberValue.AsStruct() is null || structParam is null || structParam.AsStruct() is null) return 1049;\n";
-    source += "    ParamValue@ textValue = Param::Text(ctx, CKPGUID_BOOL, \"TRUE\");\n";
+    source += "    ParamValue@ textValue = Param::Text(CKPGUID_BOOL, \"TRUE\");\n";
     source += "    if (textValue is null || textValue.AsText() == \"\") return 1062;\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeParamRefApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeParamRefApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 1050;\n";
     source += "    BBSlot@ pin = decl.Pin(\"pIn 0\");\n";
     source += "    if (pin is null || !pin.IsValid()) return 1051;\n";
     source += "    BBConfig@ cfg = decl.Configure();\n";
     source += "    if (cfg is null || !cfg.IsValid()) return 1052;\n";
-    source += "    BBInstance@ instance = cfg.SpawnStarted(ctx);\n";
+    source += "    BBInstance@ instance = cfg.SpawnStarted(frame);\n";
     source += "    if (instance is null || !instance.IsValid()) return 1053;\n";
     source += "    ParamRef@ param = cfg.PinRef(pin);\n";
     source += "    if (param is null || !param.IsValid()) return 1054;\n";
@@ -159,7 +163,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (info.DataSize() < 0 || info.Describe() == \"\") return baseCode + 3;\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "void ProbeSceneApi(const CKBehaviorContext &in ctx) {\n";
+    source += "void ProbeSceneApi(CKContext@ ctx) {\n";
     source += "    LevelRef@ currentLevel = Scene::CurrentLevel(ctx);\n";
     source += "    SceneRef@ currentScene = Scene::CurrentScene(ctx);\n";
     source += "    ObjectRef@ targetRef = Scene::Target(ctx);\n";
@@ -201,27 +205,28 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    selectRefs.insertLast(behaviorAsObject);\n";
     source += "    Scene::Select(ctx, selectRefs, true);\n";
     source += "}\n";
-    source += "void ProbeBBApi(const CKBehaviorContext &in ctx, ParamValue@ value, ParamRef@ source, ParamOp@ operation) {\n";
-    source += "    BBBridge@ bridge = BB::From(ctx); BBPrototype@ missing = BB::Prototype(ctx, \"__missing__\"); CKGUID emptyGuid; BBPrototype@ missingGuid = BB::Prototype(ctx, emptyGuid);\n";
-    source += "    BBCallBuilder@ call = BB::Call(ctx, \"__missing__\"); BBTaskBuilder@ spawn = BB::Spawn(ctx, \"__missing__\");\n";
-    source += "    int globalCount = BB::Count(ctx); BBPrototype@ globalFirst = BB::At(ctx, 0); BBPrototype@ globalFind = BB::Find(ctx, \"__missing__\");\n";
-    source += "    array<BBPrototype@>@ globalAll = BB::FindAll(ctx, \"__missing__\");\n";
+    source += "void ProbeBBApi(BehaviorFrame@ frame, ParamValue@ value, ParamRef@ source, ParamOp@ operation) {\n";
+    source += "    BBBridge@ bridge = frame.BB(); CKGUID emptyGuid; BBPrototype@ missing = bridge is null ? null : bridge.Prototype(\"__missing__\"); BBPrototype@ missingGuid = bridge is null ? null : bridge.Prototype(emptyGuid);\n";
+    source += "    BBCallBuilder@ call = frame.Call(\"__missing__\"); BBTaskBuilder@ spawn = missing is null ? null : missing.Spawn();\n";
+    source += "    int globalCount = bridge is null ? 0 : bridge.Count(); BBPrototype@ globalFirst = bridge is null ? null : bridge.At(0); BBPrototype@ globalFind = bridge is null ? null : bridge.Find(\"__missing__\");\n";
+    source += "    array<BBPrototype@>@ globalAll = bridge is null ? null : bridge.FindAll(\"__missing__\");\n";
     source += "    if (bridge !is null) { bridge.Prototype(\"__missing__\"); bridge.Prototype(emptyGuid); bridge.Count(); bridge.At(0); bridge.Find(\"__missing__\"); array<BBPrototype@>@ bridgeAll = bridge.FindAll(\"__missing__\"); }\n";
     source += "    CKObject@ objectValue = null;\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"__missing__\"); BBDecl@ declGuid = BB::Require(ctx, emptyGuid);\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"__missing__\"); BBDecl@ declGuid = bridge is null ? null : bridge.Require(emptyGuid);\n";
     source += "    if (bridge !is null) { bridge.Require(\"__missing__\"); bridge.Require(emptyGuid); }\n";
-    source += "    if (decl !is null) { decl.IsValid(); decl.Error(); decl.Guid(); decl.Name(); decl.Category(); decl.QualifiedName(); decl.BehaviorFlags(); decl.PrototypeFlags(); decl.CompatibleClassId(); decl.NeededManagerCount(); decl.NeededManagerGuid(0); BBLayout@ dl = decl.Layout(); BBSlot@ sin = decl.Input(\"In\"); BBSlot@ sout = decl.Output(\"Out\"); BBSlot@ spin = decl.Pin(\"Value\"); BBSlot@ spout = decl.Pout(\"Result\"); BBSlot@ ssetting = decl.Setting(\"Settings\"); BBSlot@ slocal = decl.Local(\"State\"); BBConfig@ cfg = decl.Configure(); decl.Describe(); if (dl !is null) { dl.InputCount(); dl.OutputCount(); dl.PinCount(); dl.PoutCount(); dl.SettingCount(); dl.LocalCount(); dl.FindSetting(\"Settings\"); dl.Setting(0); dl.Describe(); } if (sin !is null) { sin.IsValid(); sin.Error(); sin.Kind(); sin.Index(); sin.Name(); sin.TypeGuid(); sin.TypeName(); sin.Caps(); sin.LayoutGeneration(); sin.IsSetting(); sin.IsRequired(); sin.IsStart(); sin.IsStop(); sin.HasDefault(); sin.DefaultText(); sin.HasValue(); sin.ValueText(); sin.Describe(); } if (cfg !is null) { cfg.IsValid(); cfg.Error(); cfg.Decl(); cfg.Owner(null); cfg.Target(null); cfg.Set(spin, value); cfg.Set(spin, 1); cfg.Set(spin, 1.0f); cfg.Set(spin, true); cfg.Set(spin, \"x\"); cfg.Set(spin, objectValue); cfg.SetSetting(ssetting, value); cfg.SetSetting(ssetting, \"x\"); cfg.Source(spin, source); cfg.Operation(spin, operation); cfg.Validate(ctx); BBInstance@ instance = cfg.Spawn(ctx); cfg.Raise(ctx); if (instance !is null) { instance.IsValid(); instance.Error(); instance.Decl(); instance.Behavior(); BBLayout@ rl = instance.Layout(); BBSlot@ rin = instance.Input(\"In\"); BBSlot@ rout = instance.Output(\"Out\"); BBSlot@ rpin = instance.PinSlot(\"Value\"); BBSlot@ rpout = instance.PoutSlot(\"Result\"); BBSlot@ rsetting = instance.Setting(\"Settings\"); BBSlot@ rlocal = instance.Local(\"State\"); if (rl !is null) { rl.InputCount(); rl.OutputCount(); rl.PinCount(); rl.PoutCount(); rl.SettingCount(); rl.LocalCount(); } instance.Start(ctx, rin); instance.Start(ctx); instance.Start(sin); instance.Start(); instance.Step(ctx); instance.Stop(ctx); instance.Stop(); instance.OutputActive(rout); instance.Pin(rpin); instance.Pout(rpout); instance.SetSetting(rsetting, \"x\"); instance.Destroy(); instance.Raise(ctx); } } }\n";
+    source += "    if (decl !is null) { decl.IsValid(); decl.Error(); decl.Guid(); decl.Name(); decl.Category(); decl.QualifiedName(); decl.BehaviorFlags(); decl.PrototypeFlags(); decl.CompatibleClassId(); decl.NeededManagerCount(); decl.NeededManagerGuid(0); BBLayout@ dl = decl.Layout(); BBSlot@ sin = decl.Input(\"In\"); BBSlot@ sout = decl.Output(\"Out\"); BBSlot@ spin = decl.Pin(\"Value\"); BBSlot@ spout = decl.Pout(\"Result\"); BBSlot@ ssetting = decl.Setting(\"Settings\"); BBSlot@ slocal = decl.Local(\"State\"); BBConfig@ cfg = decl.Configure(); decl.Describe(); if (dl !is null) { dl.InputCount(); dl.OutputCount(); dl.PinCount(); dl.PoutCount(); dl.SettingCount(); dl.LocalCount(); dl.FindSetting(\"Settings\"); dl.Setting(0); dl.Describe(); } if (sin !is null) { sin.IsValid(); sin.Error(); sin.Kind(); sin.Index(); sin.Name(); sin.TypeGuid(); sin.TypeName(); sin.Caps(); sin.LayoutGeneration(); sin.IsSetting(); sin.IsRequired(); sin.IsStart(); sin.IsStop(); sin.HasDefault(); sin.DefaultText(); sin.HasValue(); sin.ValueText(); sin.Describe(); } if (cfg !is null) { cfg.IsValid(); cfg.Error(); cfg.Decl(); cfg.Owner(null); cfg.Target(null); cfg.Set(spin, value); cfg.Set(spin, 1); cfg.Set(spin, 1.0f); cfg.Set(spin, true); cfg.Set(spin, \"x\"); cfg.Set(spin, objectValue); cfg.SetSetting(ssetting, value); cfg.SetSetting(ssetting, \"x\"); cfg.Source(spin, source); cfg.Operation(spin, operation); cfg.Validate(frame); BBInstance@ instance = cfg.Spawn(frame); cfg.Raise(frame); if (instance !is null) { instance.IsValid(); instance.Error(); instance.Decl(); instance.Behavior(); BBLayout@ rl = instance.Layout(); BBSlot@ rin = instance.Input(\"In\"); BBSlot@ rout = instance.Output(\"Out\"); BBSlot@ rpin = instance.PinSlot(\"Value\"); BBSlot@ rpout = instance.PoutSlot(\"Result\"); BBSlot@ rsetting = instance.Setting(\"Settings\"); BBSlot@ rlocal = instance.Local(\"State\"); if (rl !is null) { rl.InputCount(); rl.OutputCount(); rl.PinCount(); rl.PoutCount(); rl.SettingCount(); rl.LocalCount(); } instance.Start(frame, rin); instance.Start(frame); instance.Start(sin); instance.Start(); instance.Step(frame); instance.Stop(frame); instance.Stop(); instance.OutputActive(rout); instance.Pin(rpin); instance.Pout(rpout); instance.SetSetting(rsetting, \"x\"); instance.Destroy(); instance.Raise(frame); } } }\n";
     source += "    if (decl !is null) { decl.Configure(); }\n";
-    source += "    if (decl !is null) { BBConfig@ c = decl.Configure(); if (c !is null) { BBSlot@ ci = c.Input(\"In\"); BBSlot@ co = c.Output(\"Out\"); BBSlot@ cp = c.Pin(\"Value\"); BBSlot@ cq = c.Pout(\"Result\"); BBSlot@ cs = c.Setting(\"Settings\"); c.Set(cp, value); c.Set(cp, 1); c.Set(cp, 1.0f); c.Set(cp, true); c.Set(cp, \"x\"); c.Set(cp, objectValue); c.SetSetting(cs, \"x\"); c.Source(cp, source); c.Operation(cp, operation); c.Instance(); c.EnsureSpawned(ctx); BBInstance@ si = c.EnsureStarted(ctx); c.Explain(); c.OutputActive(co); c.PinRef(cp); c.PoutRef(cq); c.Destroy(); if (si !is null) { BBSlot@ ri = si.Input(\"In\"); BBSlot@ ro = si.Output(\"Out\"); BBSlot@ rp = si.PinSlot(\"Value\"); BBSlot@ rq = si.PoutSlot(\"Result\"); BBSlot@ rs = si.Setting(\"Settings\"); si.IsAlive(); si.Explain(); si.Start(ctx, ri); si.OutputActive(ro); si.Pin(rp); si.Pout(rq); si.Set(rp, value); si.Set(rp, 1); si.Set(rp, 1.0f); si.Set(rp, true); si.Set(rp, \"x\"); si.Set(rp, objectValue); si.Source(rp, source); si.Operation(rp, operation); si.StepSet(ctx, rp, value); si.StepSet(ctx, rp, \"x\"); si.SetSetting(rs, value); si.SetSetting(rs, \"x\"); si.Stop(ctx); si.Destroy(); } } }\n";
+    source += "    if (decl !is null) { BBConfig@ c = decl.Configure(); if (c !is null) { BBSlot@ ci = c.Input(\"In\"); BBSlot@ co = c.Output(\"Out\"); BBSlot@ cp = c.Pin(\"Value\"); BBSlot@ cq = c.Pout(\"Result\"); BBSlot@ cs = c.Setting(\"Settings\"); c.Set(cp, value); c.Set(cp, 1); c.Set(cp, 1.0f); c.Set(cp, true); c.Set(cp, \"x\"); c.Set(cp, objectValue); c.SetSetting(cs, \"x\"); c.Source(cp, source); c.Operation(cp, operation); c.Instance(); c.EnsureSpawned(frame); BBInstance@ si = c.EnsureStarted(frame); c.Explain(); c.OutputActive(co); c.PinRef(cp); c.PoutRef(cq); c.Destroy(); if (si !is null) { BBSlot@ ri = si.Input(\"In\"); BBSlot@ ro = si.Output(\"Out\"); BBSlot@ rp = si.PinSlot(\"Value\"); BBSlot@ rq = si.PoutSlot(\"Result\"); BBSlot@ rs = si.Setting(\"Settings\"); si.IsAlive(); si.Explain(); si.Start(frame, ri); si.OutputActive(ro); si.Pin(rp); si.Pout(rq); si.Set(rp, value); si.Set(rp, 1); si.Set(rp, 1.0f); si.Set(rp, true); si.Set(rp, \"x\"); si.Set(rp, objectValue); si.Source(rp, source); si.Operation(rp, operation); si.StepSet(frame, rp, value); si.StepSet(frame, rp, \"x\"); si.SetSetting(rs, value); si.SetSetting(rs, \"x\"); si.Stop(frame); si.Destroy(); } } }\n";
     source += "    if (missing !is null) { missing.IsValid(); missing.GetGuid(); missing.GetName(); missing.GetCategory(); missing.GetQualifiedName(); missing.Layout(); missing.Call(); missing.Spawn(); missing.Describe(); }\n";
-    source += "    if (call !is null) { call.Owner(null); call.Target(null); call.Set(0, value); call.SetSource(0, source); call.SetOperation(0, operation); BBResult@ result = call.Run(); if (result !is null) { result.Ok(); bool ok = result.ok; result.ReturnCode(); result.Error(); result.OutputActive(0); result.Pout(0); result.Raise(ctx); } }\n";
-    source += "    if (spawn !is null) { spawn.Owner(null); spawn.Target(null); spawn.Set(0, value); spawn.SetSource(0, source); spawn.SetOperation(0, operation); BBTask@ task = spawn.Start(); if (task !is null) { task.IsValid(); task.IsAlive(); task.IsPaused(); task.ReturnCode(); task.Error(); task.OutputActive(0); task.Step(ctx); task.Reset(); task.Behavior(); task.Pout(0); task.Raise(ctx); task.Destroy(); } }\n";
+    source += "    if (call !is null) { call.Owner(null); call.Target(null); call.Set(0, value); call.SetSource(0, source); call.SetOperation(0, operation); BBResult@ result = call.Run(); if (result !is null) { result.Ok(); bool ok = result.ok; result.ReturnCode(); result.Error(); result.OutputActive(0); result.Pout(0); result.Raise(frame); } }\n";
+    source += "    if (spawn !is null) { spawn.Owner(null); spawn.Target(null); spawn.Set(0, value); spawn.SetSource(0, source); spawn.SetOperation(0, operation); BBTask@ task = spawn.Start(); if (task !is null) { task.IsValid(); task.IsAlive(); task.IsPaused(); task.ReturnCode(); task.Error(); task.OutputActive(0); task.Step(frame); task.Reset(); task.Behavior(); task.Pout(0); task.Raise(frame); task.Destroy(); } }\n";
     source += "    BBSlot@ slot = decl !is null ? decl.Pin(\"Value\") : null; BBSlot@ input = decl !is null ? decl.Input(\"In\") : null; BBSlot@ output = decl !is null ? decl.Output(\"Out\") : null;\n";
     source += "    if (call !is null) { call.Set(slot, value); call.Set(slot, 1); call.Set(slot, 1.0f); call.Set(slot, true); call.Set(slot, \"x\"); call.Set(slot, objectValue); call.Source(slot, source); call.Operation(slot, operation); BBResult@ sr = call.Run(input); if (sr !is null) { sr.OutputActive(output); sr.Pout(slot); } }\n";
-    source += "    if (spawn !is null) { spawn.Set(slot, value); spawn.Set(slot, 1); spawn.Set(slot, 1.0f); spawn.Set(slot, true); spawn.Set(slot, \"x\"); spawn.Set(slot, objectValue); spawn.Source(slot, source); spawn.Operation(slot, operation); BBTask@ st = spawn.Start(input); if (st !is null) { st.OutputActive(output); st.Step(ctx, input); st.Pout(slot); } }\n";
+    source += "    if (spawn !is null) { spawn.Set(slot, value); spawn.Set(slot, 1); spawn.Set(slot, 1.0f); spawn.Set(slot, true); spawn.Set(slot, \"x\"); spawn.Set(slot, objectValue); spawn.Source(slot, source); spawn.Operation(slot, operation); BBTask@ st = spawn.Start(input); if (st !is null) { st.OutputActive(output); st.Step(frame, input); st.Pout(slot); } }\n";
     source += "}\n";
-    source += "int ProbeBBDeclApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBBDeclApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 981;\n";
     source += "    CKGUID guid = decl.Guid();\n";
     source += "    if (!guid.IsValid()) return 982;\n";
@@ -229,8 +234,9 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBCallBuilder@ call = decl.Call();\n";
     source += "    BBTaskBuilder@ spawn = decl.Spawn();\n";
     source += "    if (call is null || spawn is null) return 1086;\n";
-    source += "    BBCallBuilder@ callByGuid = BB::Call(ctx, guid);\n";
-    source += "    BBTaskBuilder@ spawnByGuid = BB::Spawn(ctx, guid);\n";
+    source += "    BBCallBuilder@ callByGuid = frame.Call(guid);\n";
+    source += "    BBPrototype@ prototypeByGuid = bridge.Prototype(guid);\n";
+    source += "    BBTaskBuilder@ spawnByGuid = prototypeByGuid is null ? null : prototypeByGuid.Spawn();\n";
     source += "    if (callByGuid is null || spawnByGuid is null) return 1087;\n";
     source += "    decl.BehaviorFlags(); decl.PrototypeFlags(); decl.CompatibleClassId(); decl.Describe(); decl.Error();\n";
     source += "    int managerCount = decl.NeededManagerCount();\n";
@@ -246,14 +252,15 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBConfig@ config = decl.Configure();\n";
     source += "    if (config is null || !config.IsValid()) return 988;\n";
     source += "    CKGUID emptyGuid;\n";
-    source += "    BBDecl@ missing = BB::Require(ctx, \"__missing__\");\n";
-    source += "    BBDecl@ missingGuid = BB::Require(ctx, emptyGuid);\n";
+    source += "    BBDecl@ missing = bridge.Require(\"__missing__\");\n";
+    source += "    BBDecl@ missingGuid = bridge.Require(emptyGuid);\n";
     source += "    if (missing is null || missingGuid is null || missing.IsValid() || missingGuid.IsValid()) return 989;\n";
     source += "    missing.Error(); missing.Describe(); missing.Guid(); missing.Name(); missing.Category(); missing.QualifiedName();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBLayoutApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBBLayoutApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 990;\n";
     source += "    BBLayout@ layout = decl.Layout();\n";
     source += "    if (layout is null || layout.InputCount() <= 0 || layout.OutputCount() <= 0 || layout.PinCount() <= 0) return 991;\n";
@@ -274,35 +281,37 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (layout.Describe() == \"\") return 998;\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBPrototypeApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    int count = BB::Count(ctx);\n";
+    source += "int ProbeBBPrototypeApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    int count = bridge is null ? 0 : bridge.Count();\n";
     source += "    if (count <= 0) return 1000;\n";
-    source += "    BBPrototype@ first = BB::At(ctx, 0);\n";
+    source += "    BBPrototype@ first = bridge.At(0);\n";
     source += "    if (first is null || !first.IsValid()) return 1001;\n";
     source += "    first.GetGuid(); first.GetName(); first.GetCategory(); first.GetQualifiedName(); first.Describe();\n";
-    source += "    BBPrototype@ found = BB::Find(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBPrototype@ found = bridge.Find(\"Logics/Calculator/Identity\");\n";
     source += "    if (found is null || !found.IsValid()) return 1002;\n";
     source += "    CKGUID guid = found.GetGuid();\n";
     source += "    if (!guid.IsValid()) return 1003;\n";
-    source += "    BBPrototype@ byGuid = BB::Prototype(ctx, guid);\n";
+    source += "    BBPrototype@ byGuid = bridge.Prototype(guid);\n";
     source += "    if (byGuid is null || !byGuid.IsValid()) return 1004;\n";
     source += "    BehaviorLayout@ layout = found.Layout();\n";
     source += "    if (layout is null || layout.PinCount() <= 0) return 1005;\n";
     source += "    BBCallBuilder@ call = found.Call();\n";
     source += "    BBTaskBuilder@ spawn = found.Spawn();\n";
     source += "    if (call is null || spawn is null) return 1006;\n";
-    source += "    array<BBPrototype@>@ all = BB::FindAll(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    array<BBPrototype@>@ all = bridge.FindAll(\"Logics/Calculator/Identity\");\n";
     source += "    if (all is null) return 1007;\n";
-    source += "    BBPrototype@ missing = BB::Prototype(ctx, \"__missing__\");\n";
+    source += "    BBPrototype@ missing = bridge.Prototype(\"__missing__\");\n";
     source += "    CKGUID emptyGuid;\n";
-    source += "    BBPrototype@ missingGuid = BB::Prototype(ctx, emptyGuid);\n";
+    source += "    BBPrototype@ missingGuid = bridge.Prototype(emptyGuid);\n";
     source += "    if ((missing !is null && missing.IsValid()) || (missingGuid !is null && missingGuid.IsValid())) return 1008;\n";
     source += "    if (missing !is null) missing.Describe();\n";
     source += "    if (missingGuid !is null) missingGuid.Describe();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBSlotApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBBSlotApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 1010;\n";
     source += "    BBSlot@ input = decl.Input(\"In\");\n";
     source += "    BBSlot@ output = decl.Output(\"Out\");\n";
@@ -319,8 +328,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    missing.Error(); missing.Describe(); missing.Kind(); missing.Index(); missing.Name();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBBridgeApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBBridge@ bridge = BB::From(ctx);\n";
+    source += "int ProbeBBBridgeApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
     source += "    if (bridge is null) return 900;\n";
     source += "    int count = bridge.Count();\n";
     source += "    if (count < 0) return 901;\n";
@@ -340,8 +349,9 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    missingGuidDecl.IsValid(); missingGuidDecl.Error();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBCallBuilderApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBBCallBuilderApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 910;\n";
     source += "    BBSlot@ pin = decl.Pin(\"pIn 0\");\n";
     source += "    BBSlot@ input = decl.Input(\"In\");\n";
@@ -349,13 +359,13 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    ParamValue@ intValue = Param::Int(7);\n";
     source += "    if (intValue is null || !intValue.IsValid()) return 912;\n";
     source += "    CKObject@ objectValue = null;\n";
-    source += "    BBCallBuilder@ call = BB::Call(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBCallBuilder@ call = frame.Call(\"Logics/Calculator/Identity\");\n";
     source += "    if (call is null) return 913;\n";
     source += "    if (call.Owner(null) is null || call.Target(null) is null || call.Set(0, intValue) is null) return 914;\n";
     source += "    BBResult@ result = call.Run();\n";
     source += "    if (result is null || !result.Ok() || !result.OutputActive(0)) return 915;\n";
     source += "    result.ReturnCode();\n";
-    source += "    BBCallBuilder@ slotCall = BB::Call(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBCallBuilder@ slotCall = frame.Call(\"Logics/Calculator/Identity\");\n";
     source += "    if (slotCall is null) return 916;\n";
     source += "    slotCall.Set(pin, intValue);\n";
     source += "    slotCall.Set(pin, 8);\n";
@@ -367,7 +377,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBResult@ slotResult = slotCall.Run(input);\n";
     source += "    if (slotResult is null || !slotResult.Ok() || !slotResult.OutputActive(0)) return 918;\n";
     source += "    slotResult.ReturnCode();\n";
-    source += "    BBCallBuilder@ namedCall = BB::Call(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBCallBuilder@ namedCall = frame.Call(\"Logics/Calculator/Identity\");\n";
     source += "    if (namedCall is null) return 919;\n";
     source += "    namedCall.Set(\"pIn 0\", intValue);\n";
     source += "    namedCall.Set(\"pIn 0\", 9);\n";
@@ -380,8 +390,9 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (namedResult is null || !namedResult.Ok() || !namedResult.OutputActive(\"Out\")) return 921;\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBConfigApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBBConfigApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 940;\n";
     source += "    BBSlot@ pin = decl.Pin(\"pIn 0\");\n";
     source += "    BBSlot@ input = decl.Input(\"In\");\n";
@@ -398,8 +409,8 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    cfg.Set(pin, true);\n";
     source += "    cfg.Set(pin, \"8\");\n";
     source += "    cfg.Set(pin, objectValue);\n";
-    source += "    if (cfg.Set(pin, intValue) is null || !cfg.Validate(ctx)) return 945;\n";
-    source += "    BBInstance@ instance = cfg.SpawnStarted(ctx);\n";
+    source += "    if (cfg.Set(pin, intValue) is null || !cfg.Validate(frame)) return 945;\n";
+    source += "    BBInstance@ instance = cfg.SpawnStarted(frame);\n";
     source += "    if (instance is null || !instance.IsValid()) return 946;\n";
     source += "    if (!cfg.OutputActive(output)) return 947;\n";
     source += "    ParamRef@ pinRef = cfg.PinRef(pin);\n";
@@ -408,7 +419,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (pout !is null && pout.IsValid()) { ParamRef@ poutRef = cfg.PoutRef(pout); if (poutRef is null || !poutRef.IsValid()) return 949; }\n";
     source += "    cfg.Explain();\n";
     source += "    cfg.Destroy();\n";
-    source += "    BBDecl@ execDecl = BB::Require(ctx, CKGUID(0x15a41762, 0x0c7c4a91));\n";
+    source += "    BBDecl@ execDecl = bridge.Require(CKGUID(0x15a41762, 0x0c7c4a91));\n";
     source += "    if (execDecl is null || !execDecl.IsValid()) return 958;\n";
     source += "    BBConfig@ execCfg = execDecl.Configure();\n";
     source += "    if (execCfg is null || !execCfg.IsValid()) return 959;\n";
@@ -420,11 +431,12 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (execCfg.SetSetting(scriptSetting, \"ckas.bridge.selftest\") is null || execCfg.SetSetting(classSetting, \"Probe\") is null || execCfg.SetSetting(interfaceSetting, interfaceText) is null) return 961;\n";
     source += "    BBSlot@ messagePin = execCfg.Pin(\"Message\");\n";
     source += "    if (messagePin is null || !messagePin.IsValid() || messagePin.TypeGuid() != CKPGUID_MESSAGE) return 962;\n";
-    source += "    if (!execCfg.Validate(ctx)) return 963;\n";
+    source += "    if (!execCfg.Validate(frame)) return 963;\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBResultApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBBResultApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 950;\n";
     source += "    BBSlot@ pin = decl.Pin(\"pIn 0\");\n";
     source += "    BBSlot@ input = decl.Input(\"In\");\n";
@@ -432,7 +444,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (pin is null || !pin.IsValid() || input is null || !input.IsValid() || output is null || !output.IsValid()) return 951;\n";
     source += "    ParamValue@ intValue = Param::Int(7);\n";
     source += "    if (intValue is null || !intValue.IsValid()) return 952;\n";
-    source += "    BBCallBuilder@ call = BB::Call(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBCallBuilder@ call = frame.Call(\"Logics/Calculator/Identity\");\n";
     source += "    if (call is null || call.Set(pin, intValue) is null) return 953;\n";
     source += "    BBResult@ result = call.Run(input);\n";
     source += "    if (result is null || !result.Ok() || !result.OutputActive(output)) return 954;\n";
@@ -440,11 +452,12 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    result.ReturnCode(); result.Error();\n";
     source += "    BBSlot@ pout = decl.Pout(\"pOut 0\");\n";
     source += "    if (pout !is null && pout.IsValid()) { ParamRef@ poutRef = result.Pout(pout); if (poutRef is null || !poutRef.IsValid()) return 955; ParamRef@ poutByName = result.Pout(\"pOut 0\"); if (poutByName is null || !poutByName.IsValid()) return 957; }\n";
-    source += "    result.Raise(ctx);\n";
+    source += "    result.Raise(frame);\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBTaskApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBBTaskApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 960;\n";
     source += "    BBSlot@ pin = decl.Pin(\"pIn 0\");\n";
     source += "    BBSlot@ input = decl.Input(\"In\");\n";
@@ -452,20 +465,21 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (pin is null || !pin.IsValid() || input is null || !input.IsValid() || output is null || !output.IsValid()) return 961;\n";
     source += "    ParamValue@ intValue = Param::Int(7);\n";
     source += "    if (intValue is null || !intValue.IsValid()) return 962;\n";
-    source += "    BBTaskBuilder@ spawn = BB::Spawn(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBTaskBuilder@ spawn = decl.Spawn();\n";
     source += "    if (spawn is null || spawn.Set(pin, intValue) is null) return 963;\n";
     source += "    BBTask@ task = spawn.Start(input);\n";
     source += "    if (task is null || !task.IsValid()) return 964;\n";
-    source += "    if (!task.Step(ctx, input) || !task.OutputActive(output)) return 965;\n";
+    source += "    if (!task.Step(frame, input) || !task.OutputActive(output)) return 965;\n";
     source += "    task.IsAlive(); task.IsPaused(); task.ReturnCode(); task.Error(); task.Behavior();\n";
     source += "    BBSlot@ pout = decl.Pout(\"pOut 0\");\n";
     source += "    if (pout !is null && pout.IsValid()) { ParamRef@ poutRef = task.Pout(pout); if (poutRef is null || !poutRef.IsValid()) return 966; }\n";
-    source += "    task.Raise(ctx);\n";
+    source += "    task.Raise(frame);\n";
     source += "    task.Destroy();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBInstanceApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBBInstanceApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 970;\n";
     source += "    BBSlot@ pin = decl.Pin(\"pIn 0\");\n";
     source += "    BBSlot@ input = decl.Input(\"In\");\n";
@@ -475,38 +489,40 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (intValue is null || !intValue.IsValid()) return 972;\n";
     source += "    BBConfig@ cfg = decl.Configure();\n";
     source += "    if (cfg is null || cfg.Set(pin, intValue) is null) return 973;\n";
-    source += "    BBInstance@ instance = cfg.Spawn(ctx);\n";
+    source += "    BBInstance@ instance = cfg.Spawn(frame);\n";
     source += "    if (instance is null || !instance.IsValid()) return 974;\n";
     source += "    instance.IsAlive(); instance.Error(); instance.Explain(); instance.Decl(); instance.Behavior(); instance.Layout();\n";
     source += "    if (!instance.Set(pin, intValue) || !instance.Set(pin, 8) || !instance.Set(pin, 8.0f) || !instance.Set(pin, true) || !instance.Set(pin, \"8\")) return 975;\n";
-    source += "    if (!instance.Set(pin, intValue) || !instance.Start(ctx, input) || !instance.Step(ctx)) return 976;\n";
+    source += "    if (!instance.Set(pin, intValue) || !instance.Start(frame, input) || !instance.Step(frame)) return 976;\n";
     source += "    if (!instance.OutputActive(output)) return 977;\n";
     source += "    ParamRef@ pinRef = instance.Pin(pin);\n";
     source += "    if (pinRef is null || !pinRef.IsValid()) return 978;\n";
     source += "    BBSlot@ pout = decl.Pout(\"pOut 0\");\n";
     source += "    if (pout !is null && pout.IsValid()) { ParamRef@ poutRef = instance.Pout(pout); if (poutRef is null || !poutRef.IsValid()) return 979; }\n";
-    source += "    if (!instance.StepSet(ctx, pin, intValue) || !instance.StepSet(ctx, pin, 9)) return 980;\n";
-    source += "    instance.Stop(ctx);\n";
+    source += "    if (!instance.StepSet(frame, pin, intValue) || !instance.StepSet(frame, pin, 9)) return 980;\n";
+    source += "    instance.Stop(frame);\n";
     source += "    instance.Destroy();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBInstanceRuntimeError(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, CKGUID(0x6050252F, 0x3AA82D40));\n";
+    source += "int ProbeBBInstanceRuntimeError(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(CKGUID(0x6050252F, 0x3AA82D40));\n";
     source += "    if (decl is null) return 981;\n";
     source += "    if (!decl.IsValid()) return 982;\n";
     source += "    BBConfig@ cfg = decl.Configure();\n";
     source += "    if (cfg is null || !cfg.IsValid()) return 983;\n";
-    source += "    BBInstance@ instance = cfg.Spawn(ctx);\n";
+    source += "    BBInstance@ instance = cfg.Spawn(frame);\n";
     source += "    if (instance is null || !instance.IsValid()) return 984;\n";
     source += "    BBSlot@ input = instance.Input(\"In\");\n";
     source += "    if (input is null || !input.IsValid()) return 985;\n";
-    source += "    if (instance.Start(ctx, input)) return 986;\n";
+    source += "    if (instance.Start(frame, input)) return 986;\n";
     source += "    if (instance.Error().findFirst(\"40968\") < 0 && instance.Error().findFirst(\"error code\") < 0) return 987;\n";
     source += "    instance.Destroy();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBBTaskBuilderApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBBTaskBuilderApi(BehaviorFrame@ frame) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 920;\n";
     source += "    BBSlot@ pin = decl.Pin(\"pIn 0\");\n";
     source += "    BBSlot@ input = decl.Input(\"In\");\n";
@@ -514,14 +530,14 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    ParamValue@ intValue = Param::Int(7);\n";
     source += "    if (intValue is null || !intValue.IsValid()) return 922;\n";
     source += "    CKObject@ objectValue = null;\n";
-    source += "    BBTaskBuilder@ spawn = BB::Spawn(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBTaskBuilder@ spawn = decl.Spawn();\n";
     source += "    if (spawn is null) return 923;\n";
     source += "    if (spawn.Owner(null) is null || spawn.Target(null) is null || spawn.Set(0, intValue) is null) return 924;\n";
     source += "    BBTask@ task = spawn.Start();\n";
     source += "    if (task is null || !task.IsValid()) return 925;\n";
-    source += "    if (!task.Step(ctx, 0) || !task.OutputActive(0)) return 926;\n";
+    source += "    if (!task.Step(frame, 0) || !task.OutputActive(0)) return 926;\n";
     source += "    task.ReturnCode(); task.Destroy();\n";
-    source += "    BBTaskBuilder@ slotSpawn = BB::Spawn(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBTaskBuilder@ slotSpawn = decl.Spawn();\n";
     source += "    if (slotSpawn is null) return 927;\n";
     source += "    slotSpawn.Set(pin, intValue);\n";
     source += "    slotSpawn.Set(pin, 8);\n";
@@ -532,12 +548,13 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (slotSpawn.Set(pin, intValue) is null) return 928;\n";
     source += "    BBTask@ slotTask = slotSpawn.Start(input);\n";
     source += "    if (slotTask is null || !slotTask.IsValid()) return 929;\n";
-    source += "    if (!slotTask.Step(ctx, input) || !slotTask.OutputActive(0)) return 930;\n";
+    source += "    if (!slotTask.Step(frame, input) || !slotTask.OutputActive(0)) return 930;\n";
     source += "    slotTask.ReturnCode(); slotTask.Destroy();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBehaviorRefApi(const CKBehaviorContext &in ctx, const string &in operationName) {\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "int ProbeBehaviorRefApi(BehaviorFrame@ frame, const string &in operationName) {\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 980;\n";
     source += "    BBSlot@ input = decl.Input(\"In\");\n";
     source += "    BBSlot@ output = decl.Output(\"Out\");\n";
@@ -545,7 +562,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBSlot@ poutSlot = decl.Pout(\"pOut 0\");\n";
     source += "    BBSlot@ localSlot = decl.Local(\"State\");\n";
     source += "    if (input is null || output is null || pinSlot is null) return 981;\n";
-    source += "    BBTaskBuilder@ spawn = BB::Spawn(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBTaskBuilder@ spawn = decl.Spawn();\n";
     source += "    if (spawn is null) return 982;\n";
     source += "    BBTask@ task = spawn.Start(input);\n";
     source += "    if (task is null || !task.IsValid()) return 983;\n";
@@ -585,16 +602,15 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    startedByIndex.Cancel();\n";
     source += "    GraphTask@ started = behavior.Start(input, false, 0.01f);\n";
     source += "    if (started is null || !started.IsValid()) return 991;\n";
-    source += "    int graphTaskResult = ProbeGraphTaskApi(ctx, behavior, started, input, output, poutSlot);\n";
+    source += "    int graphTaskResult = ProbeGraphTaskApi(frame, behavior, started, input, output, poutSlot);\n";
     source += "    if (graphTaskResult != 0) return graphTaskResult;\n";
     source += "    watch.Cancel();\n";
     source += "    task.Destroy();\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBehaviorBridgeApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BehaviorBridge@ bridge = Behavior::From(ctx);\n";
-    source += "    if (bridge is null) return 1030;\n";
-    source += "    BehaviorGraph@ graph = bridge.Graph();\n";
+    source += "int ProbeBehaviorBridgeApi(BehaviorFrame@ frame) {\n";
+    source += "    if (frame is null) return 1030;\n";
+    source += "    BehaviorGraph@ graph = frame.Graph();\n";
     source += "    if (graph is null) return 1031;\n";
     source += "    graph.IsValid(); graph.Describe();\n";
     source += "    BehaviorNode@ root = graph.Root();\n";
@@ -615,34 +631,33 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BehaviorLinkRef@ nextLink = root.NextLink(nodeQuery);\n";
     source += "    BehaviorLinkRef@ prevLink = root.PrevLink(nodeQuery);\n";
     source += "    if (nextAll is null || prevAll is null || nextLinks is null || prevLinks is null || outputLinks is null || inputLinks is null) return 1034;\n";
-    source += "    BehaviorRef@ self = bridge.Self();\n";
+    source += "    BehaviorRef@ self = frame.Self();\n";
     source += "    if (self !is null) { self.IsValid(); self.Id(); self.Name(); self.Describe(); }\n";
     source += "    ObjectRef@ selfObject = self;\n";
     source += "    BehaviorQuery@ targetQuery = Behavior::Query().Target(selfObject);\n";
     source += "    if (targetQuery is null || targetQuery.Describe() == \"\") return 1035;\n";
     source += "    if (selfObject !is null && selfObject.IsValid()) { graph.Find(targetQuery); graph.FindAll(targetQuery); graph.DescribeCandidates(targetQuery); }\n";
-    source += "    BehaviorRef@ owner = bridge.OwnerScript();\n";
+    source += "    BehaviorRef@ owner = frame.OwnerScript();\n";
     source += "    if (owner !is null) { owner.IsValid(); owner.Id(); owner.Name(); }\n";
-    source += "    BehaviorRef@ missing = bridge.Find(\"__missing__\");\n";
-    source += "    BehaviorRef@ missingById = bridge.FindByID(0);\n";
-    source += "    BehaviorRef@ missingOnNull = bridge.FindOn(null, \"__missing__\");\n";
-    source += "    if (missing !is null || missingById !is null || missingOnNull !is null) return 1033;\n";
+    source += "    BehaviorNode@ missing = graph.Find(Behavior::Query().Name(\"__missing__\"));\n";
+    source += "    BehaviorNode@ missingById = graph.FindByID(0);\n";
+    source += "    if (missing !is null || missingById !is null) return 1033;\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeGraphTaskApi(const CKBehaviorContext &in ctx, BehaviorRef@ ref, GraphTask@ task, BBSlot@ input, BBSlot@ output, BBSlot@ poutSlot) {\n";
+    source += "int ProbeGraphTaskApi(BehaviorFrame@ frame, BehaviorRef@ ref, GraphTask@ task, BBSlot@ input, BBSlot@ output, BBSlot@ poutSlot) {\n";
     source += "    if (ref is null || task is null || input is null || output is null) return 1110;\n";
     source += "    if (!task.IsValid() || !task.valid) return 1112;\n";
     source += "    task.IsAlive(); task.IsPaused(); task.TimedOut(); task.Error(); task.Elapsed();\n";
     source += "    GraphTask@ same = task.Timeout(1.0f);\n";
     source += "    if (same is null || same !is task) return 1113;\n";
-    source += "    if (!task.Step(ctx)) return 1114;\n";
+    source += "    if (!task.Step(frame)) return 1114;\n";
     source += "    task.Done(); task.Done(0); task.Done(output);\n";
     source += "    task.OutputActive(); task.OutputActive(0); task.OutputActive(output);\n";
     source += "    BehaviorRef@ behavior = task.Behavior();\n";
     source += "    if (behavior is null || behavior.Id() != ref.Id()) return 1115;\n";
     source += "    if (poutSlot !is null && poutSlot.IsValid()) { ParamRef@ slotOut = task.Pout(poutSlot); if (slotOut !is null) { slotOut.GetText(); ParamValue@ v = slotOut.Get(); NativeBuffer@ raw = slotOut.GetRaw(); } }\n";
     source += "    ParamRef@ indexedOut = task.Pout(0); if (indexedOut !is null) { indexedOut.GetText(); }\n";
-    source += "    task.Raise(ctx);\n";
+    source += "    task.Raise(frame);\n";
     source += "    task.Reset();\n";
     source += "    task.Cancel();\n";
     source += "    return 0;\n";
@@ -660,35 +675,35 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    if (linkValid && (source is null || target is null)) return 1152;\n";
     source += "    return 0;\n";
     source += "}\n";
-    source += "int ProbeBehaviorGraphEditApi(const CKBehaviorContext &in ctx) {\n";
-    source += "    BehaviorBridge@ bridge = Behavior::From(ctx);\n";
-    source += "    if (bridge is null) return 1120;\n";
-    source += "    BehaviorGraph@ graph = bridge.Graph();\n";
+    source += "int ProbeBehaviorGraphEditApi(BehaviorFrame@ frame) {\n";
+    source += "    if (frame is null) return 1120;\n";
+    source += "    BBBridge@ bridge = frame.BB();\n";
+    source += "    BehaviorGraph@ graph = frame.Graph();\n";
     source += "    if (graph is null) return 1121;\n";
     source += "    BehaviorGraphEdit@ noOp = graph.Edit();\n";
     source += "    if (noOp is null) return 1122;\n";
     source += "    noOp.IsValid(); bool noOpValid = noOp.valid; noOp.Error();\n";
     source += "    if (noOp.Describe() == \"\") return 1123;\n";
-    source += "    GraphEditResult@ validation = noOp.Validate(ctx);\n";
+    source += "    GraphEditResult@ validation = noOp.Validate(frame);\n";
     source += "    if (validation is null) return 1124;\n";
     source += "    bool validationOk = validation.Ok(); bool validationProperty = validation.ok; bool validationIsOk = validation.IsOk();\n";
     source += "    validation.Error(); validation.Describe();\n";
     source += "    array<BehaviorNode@>@ validationNodes = validation.CreatedNodes();\n";
     source += "    array<BehaviorLinkRef@>@ validationLinks = validation.CreatedLinks();\n";
     source += "    if (validationNodes is null || validationLinks is null) return 1125;\n";
-    source += "    if (validationOk && validationProperty && validationIsOk) validation.Raise(ctx);\n";
-    source += "    GraphEditResult@ applied = noOp.Apply(ctx);\n";
+    source += "    if (validationOk && validationProperty && validationIsOk) validation.Raise(frame);\n";
+    source += "    GraphEditResult@ applied = noOp.Apply(frame);\n";
     source += "    if (applied is null) return 1126;\n";
     source += "    bool appliedOk = applied.Ok(); bool appliedProperty = applied.ok; bool appliedIsOk = applied.IsOk();\n";
     source += "    if (applied.CreatedNodes() is null || applied.CreatedLinks() is null) return 1127;\n";
     source += "    applied.Error(); applied.Describe();\n";
-    source += "    if (appliedOk && appliedProperty && appliedIsOk) applied.Raise(ctx);\n";
+    source += "    if (appliedOk && appliedProperty && appliedIsOk) applied.Raise(frame);\n";
     source += "    BehaviorGraphEdit@ edit = graph.Edit();\n";
     source += "    if (edit is null) return 1128;\n";
     source += "    edit.IsValid(); bool editValid = edit.valid;\n";
     source += "    BehaviorNode@ root = graph.Root();\n";
     source += "    if (root is null || !root.IsValid()) return 1129;\n";
-    source += "    BBDecl@ decl = BB::Require(ctx, \"Logics/Calculator/Identity\");\n";
+    source += "    BBDecl@ decl = bridge is null ? null : bridge.Require(\"Logics/Calculator/Identity\");\n";
     source += "    if (decl is null || !decl.IsValid()) return 1130;\n";
     source += "    BBConfig@ config = decl.Configure();\n";
     source += "    if (config is null || !config.IsValid()) return 1131;\n";
@@ -728,7 +743,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    edit.Set(addedDecl, pinSlot, true);\n";
     source += "    edit.Set(addedDecl, pinSlot, \"x\");\n";
     source += "    edit.Set(addedDecl, pinSlot, nullObject);\n";
-    source += "    GraphEditResult@ invalid = edit.Validate(ctx);\n";
+    source += "    GraphEditResult@ invalid = edit.Validate(frame);\n";
     source += "    if (invalid is null) return 1141;\n";
     source += "    invalid.Error(); invalid.Describe(); invalid.CreatedNodes(); invalid.CreatedLinks();\n";
     source += "    return 0;\n";
@@ -739,7 +754,10 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    BBConfig@ binding;\n";
     source += "    BBInstance@ instance;\n";
     source += "}\n";
-    source += "int Run(const CKBehaviorContext &in ctx) {\n";
+    source += "int Run(BehaviorFrame@ frame) {\n";
+    source += "    if (frame is null) return 1;\n";
+    source += "    CKContext@ host = frame.Context();\n";
+    source += "    if (host is null) return 2;\n";
     source += "    const string typeName = \"" + EscapeAngelScriptString(typeName) + "\";\n";
     source += "    const string operationName = \"" + EscapeAngelScriptString(operationName) + "\";\n";
     source += "    const bool hasOperation = operationName != \"\";\n";
@@ -749,11 +767,11 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    ids.PushBack(first);\n";
     source += "    ids.PushBack(second);\n";
     source += "    if (ids.Size() != 2 || ids[0] != first || ids[1] != second) return 10;\n";
-    source += "    ParamTypeInfo@ info = Param::Type(ctx, typeName);\n";
+    source += "    ParamTypeInfo@ info = Param::Type(host, typeName);\n";
     source += "    if (info is null || !info.IsValid() || info.Describe() == \"\") return 20;\n";
-    source += "    int paramCount = Param::Count(ctx);\n";
-    source += "    ParamTypeInfo@ firstParamType = Param::At(ctx, 0);\n";
-    source += "    ParamTypeInfo@ foundParamType = Param::Find(ctx, typeName);\n";
+    source += "    int paramCount = Param::Count(host);\n";
+    source += "    ParamTypeInfo@ firstParamType = Param::At(host, 0);\n";
+    source += "    ParamTypeInfo@ foundParamType = Param::Find(host, typeName);\n";
     source += "    if (paramCount <= 0 || foundParamType is null || foundParamType.Name() != info.Name()) return 21;\n";
     source += "    CKGUID typeGuid = info.Guid();\n";
     source += "    if (!typeGuid.IsValid()) return 30;\n";
@@ -763,69 +781,69 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
     source += "    XGUIDArray memberGuids;\n";
     source += "    memberGuids.PushBack(CKPGUID_INT);\n";
     source += "    memberGuids.PushBack(CKPGUID_STRING);\n";
-    source += "    Param::RegisterEnum(ctx, enumGuid, \"__CKAS_ScriptEnum\", \"Alpha=1,Beta=2\");\n";
-    source += "    Param::RegisterFlags(ctx, flagsGuid, \"__CKAS_ScriptFlags\", \"A=1,B=2\");\n";
-    source += "    Param::RegisterStruct(ctx, structGuid, \"__CKAS_ScriptStruct\", \"Count,Name\", memberGuids);\n";
-    source += "    ParamTypeInfo@ enumInfo = Param::Type(ctx, enumGuid);\n";
-    source += "    ParamTypeInfo@ flagsInfo = Param::Type(ctx, flagsGuid);\n";
-    source += "    ParamTypeInfo@ structInfo = Param::Type(ctx, structGuid);\n";
+    source += "    Param::RegisterEnum(host, enumGuid, \"__CKAS_ScriptEnum\", \"Alpha=1,Beta=2\");\n";
+    source += "    Param::RegisterFlags(host, flagsGuid, \"__CKAS_ScriptFlags\", \"A=1,B=2\");\n";
+    source += "    Param::RegisterStruct(host, structGuid, \"__CKAS_ScriptStruct\", \"Count,Name\", memberGuids);\n";
+    source += "    ParamTypeInfo@ enumInfo = Param::Type(host, enumGuid);\n";
+    source += "    ParamTypeInfo@ flagsInfo = Param::Type(host, flagsGuid);\n";
+    source += "    ParamTypeInfo@ structInfo = Param::Type(host, structGuid);\n";
     source += "    if (enumInfo is null || !enumInfo.IsEnum() || enumInfo.Enum().Find(\"Beta\") != 2) return 31;\n";
     source += "    if (flagsInfo is null || !flagsInfo.IsFlags() || flagsInfo.Flags().Parse(\"A|B\") != 3) return 32;\n";
     source += "    if (structInfo is null || !structInfo.IsStruct() || structInfo.Struct().FindMember(\"Name\") != 1) return 33;\n";
-    source += "    if (!Param::Guid(ctx, \"__CKAS_ScriptEnum\").IsValid() || !Param::IsEnum(ctx, enumGuid) || Param::IsEnum(ctx, flagsGuid)) return 37;\n";
-    source += "    if (!Param::IsFlags(ctx, flagsGuid) || Param::Value(ctx, enumGuid, \"Beta\", -1) != 2) return 38;\n";
-    source += "    if (Param::Flag(ctx, flagsGuid, \"B\", 0) != 2 || Param::FlagsMask(ctx, flagsGuid, \"A|B\", 0) != 3) return 39;\n";
-    source += "    if (Param::Text(ctx, enumGuid, 2) != \"Beta\" || Param::Text(ctx, flagsGuid, uint(3)) == \"\" || Param::Describe(ctx, enumGuid) == \"\") return 41;\n";
-    source += "    ParamValue@ enumValue = Param::Enum(ctx, enumGuid, \"Alpha\");\n";
-    source += "    ParamValue@ flagsValue = Param::Flags(ctx, flagsGuid, \"A,B\");\n";
-    source += "    ParamStructValue@ structValue = Param::Struct(ctx, structGuid);\n";
+    source += "    if (!Param::Guid(host, \"__CKAS_ScriptEnum\").IsValid() || !Param::IsEnum(host, enumGuid) || Param::IsEnum(host, flagsGuid)) return 37;\n";
+    source += "    if (!Param::IsFlags(host, flagsGuid) || Param::Value(host, enumGuid, \"Beta\", -1) != 2) return 38;\n";
+    source += "    if (Param::Flag(host, flagsGuid, \"B\", 0) != 2 || Param::FlagsMask(host, flagsGuid, \"A|B\", 0) != 3) return 39;\n";
+    source += "    if (Param::Text(host, enumGuid, 2) != \"Beta\" || Param::Text(host, flagsGuid, uint(3)) == \"\" || Param::Describe(host, enumGuid) == \"\") return 41;\n";
+    source += "    ParamValue@ enumValue = Param::Enum(host, enumGuid, \"Alpha\");\n";
+    source += "    ParamValue@ flagsValue = Param::Flags(host, flagsGuid, \"A,B\");\n";
+    source += "    ParamStructValue@ structValue = Param::Struct(host, structGuid);\n";
     source += "    if (enumValue is null || enumValue.AsInt() != 1) return 34;\n";
     source += "    if (flagsValue is null || flagsValue.AsInt() != 3) return 35;\n";
     source += "    if (structValue is null || !structValue.Set(0, Param::Int(5)).IsValid() || structValue.Value().AsStruct() is null) return 36;\n";
     source += "    if (hasOperation) {\n";
-    source += "        ParamOp@ byName = Param::Operation(ctx, operationName);\n";
+    source += "        ParamOp@ byName = Param::Operation(host, operationName);\n";
     source += "        if (byName is null) return 40;\n";
     source += "        ParamValue@ objectArrayValue = Param::ObjectArray(ids);\n";
     source += "        @byName = byName.Result(typeName).In(0, objectArrayValue).In(1, objectArrayValue);\n";
     source += "        if (byName.Describe() == \"\") return 50;\n";
-    source += "        ParamOp@ byNameCtxLast = Param::Operation(ctx, operationName);\n";
-    source += "        if (byNameCtxLast is null) return 60;\n";
+    source += "        ParamOp@ byNameAgain = Param::Operation(host, operationName);\n";
+    source += "        if (byNameAgain is null) return 60;\n";
     source += "    }\n";
-    source += "    ParamValue@ textValue = Param::Text(ctx, typeName, \"0\");\n";
+    source += "    ParamValue@ textValue = Param::Text(host, typeName, \"0\");\n";
     source += "    if (textValue is null || !textValue.IsValid()) return 55;\n";
-    source += "    int paramValueResult = ProbeParamValueApi(ctx, structGuid);\n";
+    source += "    int paramValueResult = ProbeParamValueApi(host, structGuid);\n";
     source += "    if (paramValueResult != 0) return paramValueResult;\n";
-    source += "    int paramRefResult = ProbeParamRefApi(ctx);\n";
+    source += "    int paramRefResult = ProbeParamRefApi(frame);\n";
     source += "    if (paramRefResult != 0) return paramRefResult;\n";
-    source += "    int bbDeclResult = ProbeBBDeclApi(ctx);\n";
+    source += "    int bbDeclResult = ProbeBBDeclApi(frame);\n";
     source += "    if (bbDeclResult != 0) return bbDeclResult;\n";
-    source += "    int bbLayoutResult = ProbeBBLayoutApi(ctx);\n";
+    source += "    int bbLayoutResult = ProbeBBLayoutApi(frame);\n";
     source += "    if (bbLayoutResult != 0) return bbLayoutResult;\n";
-    source += "    int bbPrototypeResult = ProbeBBPrototypeApi(ctx);\n";
+    source += "    int bbPrototypeResult = ProbeBBPrototypeApi(frame);\n";
     source += "    if (bbPrototypeResult != 0) return bbPrototypeResult;\n";
-    source += "    int bbSlotResult = ProbeBBSlotApi(ctx);\n";
+    source += "    int bbSlotResult = ProbeBBSlotApi(frame);\n";
     source += "    if (bbSlotResult != 0) return bbSlotResult;\n";
-    source += "    int bbBridgeResult = ProbeBBBridgeApi(ctx);\n";
+    source += "    int bbBridgeResult = ProbeBBBridgeApi(frame);\n";
     source += "    if (bbBridgeResult != 0) return bbBridgeResult;\n";
-    source += "    int bbCallBuilderResult = ProbeBBCallBuilderApi(ctx);\n";
+    source += "    int bbCallBuilderResult = ProbeBBCallBuilderApi(frame);\n";
     source += "    if (bbCallBuilderResult != 0) return bbCallBuilderResult;\n";
-    source += "    int bbConfigResult = ProbeBBConfigApi(ctx);\n";
+    source += "    int bbConfigResult = ProbeBBConfigApi(frame);\n";
     source += "    if (bbConfigResult != 0) return bbConfigResult;\n";
-    source += "    int bbResultResult = ProbeBBResultApi(ctx);\n";
+    source += "    int bbResultResult = ProbeBBResultApi(frame);\n";
     source += "    if (bbResultResult != 0) return bbResultResult;\n";
-    source += "    int bbTaskResult = ProbeBBTaskApi(ctx);\n";
+    source += "    int bbTaskResult = ProbeBBTaskApi(frame);\n";
     source += "    if (bbTaskResult != 0) return bbTaskResult;\n";
-    source += "    int bbInstanceResult = ProbeBBInstanceApi(ctx);\n";
+    source += "    int bbInstanceResult = ProbeBBInstanceApi(frame);\n";
     source += "    if (bbInstanceResult != 0) return bbInstanceResult;\n";
-    source += "    int bbInstanceRuntimeErrorResult = ProbeBBInstanceRuntimeError(ctx);\n";
+    source += "    int bbInstanceRuntimeErrorResult = ProbeBBInstanceRuntimeError(frame);\n";
     source += "    if (bbInstanceRuntimeErrorResult != 0) return bbInstanceRuntimeErrorResult;\n";
-    source += "    int bbTaskBuilderResult = ProbeBBTaskBuilderApi(ctx);\n";
+    source += "    int bbTaskBuilderResult = ProbeBBTaskBuilderApi(frame);\n";
     source += "    if (bbTaskBuilderResult != 0) return bbTaskBuilderResult;\n";
-    source += "    int behaviorRefResult = ProbeBehaviorRefApi(ctx, operationName);\n";
+    source += "    int behaviorRefResult = ProbeBehaviorRefApi(frame, operationName);\n";
     source += "    if (behaviorRefResult != 0) return behaviorRefResult;\n";
-    source += "    int behaviorBridgeResult = ProbeBehaviorBridgeApi(ctx);\n";
+    source += "    int behaviorBridgeResult = ProbeBehaviorBridgeApi(frame);\n";
     source += "    if (behaviorBridgeResult != 0) return behaviorBridgeResult;\n";
-    source += "    int behaviorGraphEditResult = ProbeBehaviorGraphEditApi(ctx);\n";
+    source += "    int behaviorGraphEditResult = ProbeBehaviorGraphEditApi(frame);\n";
     source += "    if (behaviorGraphEditResult != 0) return behaviorGraphEditResult;\n";
     source += "    return 0;\n";
     source += "}\n";
@@ -851,7 +869,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
         return false;
     }
 
-    asIScriptFunction *function = module->GetFunctionByDecl("int Run(const CKBehaviorContext &in ctx)");
+    asIScriptFunction *function = module->GetFunctionByDecl("int Run(BehaviorFrame@ frame)");
     if (!function) {
         error = "Failed to find AngelScript self-test Run() function.";
         manager->UnloadModule(moduleName, nullptr);
@@ -894,9 +912,10 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
         return false;
     }
 
+    BehaviorFrame *frame = new BehaviorFrame(behaviorContext);
     int r = scriptContext->Prepare(function);
     if (r >= 0) {
-        r = scriptContext->SetArgObject(0, &behaviorContext);
+        r = scriptContext->SetArgObject(0, frame);
     }
     if (r >= 0) {
         r = scriptContext->Execute();
@@ -920,6 +939,7 @@ static bool RunBehaviorBridgeScriptSelfTest(CKContext *context,
 
     scriptContext->Unprepare();
     engine->ReturnContext(scriptContext);
+    frame->Release();
     if (scriptRoot && !scriptRoot->IsToBeDeleted()) {
         context->DestroyObject(scriptRoot);
     }
@@ -1241,7 +1261,6 @@ static bool RunLiveOperationReplacementSelfTest(CKContext *context,
     }
 
     CKParameterIn *createdPin = behavior->CreateInputParameter(const_cast<CKSTRING>("__CKAS_OperationReplacementPin"), CKPGUID_INT);
-    bridge->InvalidateBehaviorLayout(behavior->GetID());
     pin->Release();
     pin = instance->PinSlot("__CKAS_OperationReplacementPin");
     CKParameterIn *targetPin = createdPin && pin && pin->IsValid() && pin->Index() >= 0 && pin->Index() < behavior->GetInputParameterCount()
@@ -1335,9 +1354,6 @@ static bool RunLiveMixedLinkReplacementSelfTest(CKContext *context,
         BBInstance *instance = config ? config->SpawnInstance(ctx) : nullptr;
         CKBehavior *behavior = instance ? bridge->GetInstanceBehavior(instance->BridgeInstanceId(), instance->BridgeGeneration()) : nullptr;
         CKParameterIn *createdPin = behavior ? behavior->CreateInputParameter(const_cast<CKSTRING>("__CKAS_MixedReplacementPin"), CKPGUID_INT) : nullptr;
-        if (behavior) {
-            bridge->InvalidateBehaviorLayout(behavior->GetID());
-        }
         BBSlot *pin = instance ? instance->PinSlot("__CKAS_MixedReplacementPin") : nullptr;
         CKParameterIn *targetPin = createdPin && pin && pin->IsValid() && pin->Index() >= 0 && behavior && pin->Index() < behavior->GetInputParameterCount()
             ? behavior->GetInputParameter(pin->Index())
@@ -3019,8 +3035,6 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     behavior->CreateInputParameter(const_cast<CKSTRING>("Value"), CKPGUID_INT);
     behavior->CreateOutputParameter(const_cast<CKSTRING>("Result"), CKPGUID_FLOAT);
     behavior->CreateLocalParameter(const_cast<CKSTRING>("State"), CKPGUID_BOOL);
-    bridge->InvalidateBehaviorLayout(behavior->GetID());
-
     const ScriptBridgeObjectStamp stamp = CaptureBridgeObjectStamp(behavior);
     const ScriptBridgeLayoutRecord *layout = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
     if (!layout ||
@@ -3037,6 +3051,7 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     }
 
     const std::string firstSignature = layout->Signature;
+    const int firstGeneration = layout->LayoutGeneration;
     WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-handle", std::string());
     BehaviorLayout layoutHandle(bridge, behavior->GetID());
     ParamInfo *pinInfo = layoutHandle.Pin(0);
@@ -3059,19 +3074,22 @@ static bool RunBehaviorBridgeNativeLayoutCacheSelfTest(CKContext *context,
     pinInfo->Release();
 
     behavior->CreateInputParameter(const_cast<CKSTRING>("Second"), CKPGUID_STRING);
-    bridge->InvalidateBehaviorLayout(behavior->GetID());
     WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-refresh", std::string());
     const ScriptBridgeLayoutRecord *refreshed = bridge->GetBehaviorLayout(behavior->GetID(), stamp);
     if (!refreshed ||
         refreshed->Pins.size() != 2 ||
         refreshed->Pins[1].Name != "Second" ||
-        refreshed->Signature == firstSignature) {
+        refreshed->Signature == firstSignature ||
+        refreshed->LayoutGeneration == firstGeneration ||
+        layoutHandle.PinCount() != 2 ||
+        layoutHandle.FindPin("Second", 0) != 1) {
         DestroySelfTestObject(context, behavior);
-        error = "Layout cache refresh self-test failed.";
+        error = "BehaviorLayout did not observe a structural change automatically.";
         return false;
     }
 
-    CKBehaviorContext emptyBehaviorContext = {};
+    const CKBehaviorContext emptyBehaviorContext =
+        ScriptHostScope::From(context).MakeBehaviorContext(nullptr);
     ScriptBridgeBBInvocationSpec emptyRequest = MakeDefaultRequest(emptyBehaviorContext);
     BBConfig defaultInputConfig(bridge, emptyBehaviorContext, emptyRequest);
     WriteBehaviorBridgeSelfTestMarker("running", "layout-cache", "layout-occurrence", std::string());
@@ -3214,8 +3232,17 @@ static bool RunBehaviorBridgeNativePrototypeDiscoverySelfTest(CKContext *context
 
 static bool RunBehaviorBridgeNativeShapeSelfTest(asIScriptEngine *engine, std::string &error) {
     if (engine) {
-        if (!engine->GetTypeInfoByName("BBDecl") || !engine->GetTypeInfoByName("BBConfig") ||
-            !engine->GetTypeInfoByName("BBInstance")) {
+        asITypeInfo *behaviorFrameType = engine->GetTypeInfoByName("BehaviorFrame");
+        asITypeInfo *bbConfigType = engine->GetTypeInfoByName("BBConfig");
+        asITypeInfo *bbInstanceType = engine->GetTypeInfoByName("BBInstance");
+        asITypeInfo *bbResultType = engine->GetTypeInfoByName("BBResult");
+        asITypeInfo *bbTaskType = engine->GetTypeInfoByName("BBTask");
+        asITypeInfo *graphTaskType = engine->GetTypeInfoByName("GraphTask");
+        asITypeInfo *graphEditResultType = engine->GetTypeInfoByName("GraphEditResult");
+        asITypeInfo *behaviorGraphEditType = engine->GetTypeInfoByName("BehaviorGraphEdit");
+        if (!behaviorFrameType || !engine->GetTypeInfoByName("BBDecl") || !bbConfigType || !bbInstanceType ||
+            !bbResultType || !bbTaskType || !graphTaskType || !graphEditResultType ||
+            !behaviorGraphEditType) {
             error = "Bridge v3 public type registration self-test failed.";
             return false;
         }
@@ -3354,6 +3381,71 @@ static bool RunBehaviorBridgeNativeShapeSelfTest(asIScriptEngine *engine, std::s
         }
         if (behaviorRefType->GetMethodByDecl("CKObject@ Object() const")) {
             error = "BehaviorRef still exposes a raw CKObject handle.";
+            return false;
+        }
+        if (behaviorFrameType->GetMethodByDecl("CKBehaviorContext ToBehaviorContext() const")) {
+            error = "BehaviorFrame still exposes CKBehaviorContext reconstruction.";
+            return false;
+        }
+        if (behaviorFrameType->GetMethodByDecl("CKBehavior@ Behavior() const") ||
+            behaviorFrameType->GetMethodByDecl("BehaviorFrame@ FrameFor(CKBehavior@ behavior) const")) {
+            error = "BehaviorFrame still exposes a raw CKBehavior escape hatch.";
+            return false;
+        }
+        const char *removedBehaviorRefMethods[] = {
+            "BBResult@ Step(const CKBehaviorContext &in ctx, int inputIndex = 0)",
+            "BBResult@ Step(const CKBehaviorContext &in ctx, BBSlot@+ input)"
+        };
+        for (const char *decl : removedBehaviorRefMethods) {
+            if (behaviorRefType->GetMethodByDecl(decl)) {
+                error = fmt::format("BehaviorRef still exposes raw context method '{}'.", decl);
+                return false;
+            }
+        }
+        const char *removedBBConfigMethods[] = {
+            "bool Raise(const CKBehaviorContext &in ctx) const",
+            "bool Validate(const CKBehaviorContext &in ctx) const",
+            "BBInstance@ EnsureSpawned(const CKBehaviorContext &in ctx)",
+            "BBInstance@ EnsureStarted(const CKBehaviorContext &in ctx)",
+            "BBInstance@ Spawn(const CKBehaviorContext &in ctx)",
+            "BBInstance@ SpawnStarted(const CKBehaviorContext &in ctx)",
+            "bool Stop(const CKBehaviorContext &in ctx)"
+        };
+        for (const char *decl : removedBBConfigMethods) {
+            if (bbConfigType->GetMethodByDecl(decl)) {
+                error = fmt::format("BBConfig still exposes raw context method '{}'.", decl);
+                return false;
+            }
+        }
+        const char *removedBBInstanceMethods[] = {
+            "bool Start(const CKBehaviorContext &in ctx)",
+            "bool Start(const CKBehaviorContext &in ctx, BBSlot@+ input)",
+            "bool Step(const CKBehaviorContext &in ctx)",
+            "bool Stop(const CKBehaviorContext &in ctx)",
+            "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, ParamValue@+ value)",
+            "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, int value)",
+            "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, float value)",
+            "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, bool value)",
+            "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, const string &in value)",
+            "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, CKObject@ value)",
+            "bool Raise(const CKBehaviorContext &in ctx) const"
+        };
+        for (const char *decl : removedBBInstanceMethods) {
+            if (bbInstanceType->GetMethodByDecl(decl)) {
+                error = fmt::format("BBInstance still exposes raw context method '{}'.", decl);
+                return false;
+            }
+        }
+        if (bbResultType->GetMethodByDecl("bool Raise(const CKBehaviorContext &in ctx) const") ||
+            bbTaskType->GetMethodByDecl("bool Step(const CKBehaviorContext &in ctx, int inputIndex = -1)") ||
+            bbTaskType->GetMethodByDecl("bool Step(const CKBehaviorContext &in ctx, BBSlot@+ input)") ||
+            bbTaskType->GetMethodByDecl("bool Raise(const CKBehaviorContext &in ctx) const") ||
+            graphTaskType->GetMethodByDecl("bool Step(const CKBehaviorContext &in ctx)") ||
+            graphTaskType->GetMethodByDecl("bool Raise(const CKBehaviorContext &in ctx) const") ||
+            graphEditResultType->GetMethodByDecl("bool Raise(const CKBehaviorContext &in ctx) const") ||
+            behaviorGraphEditType->GetMethodByDecl("GraphEditResult@ Validate(const CKBehaviorContext &in ctx) const") ||
+            behaviorGraphEditType->GetMethodByDecl("GraphEditResult@ Apply(const CKBehaviorContext &in ctx)")) {
+            error = "Bridge task/edit objects still expose raw CKBehaviorContext methods.";
             return false;
         }
         asITypeInfo *paramOperationType = engine->GetTypeInfoByName("ParamOperationRef");

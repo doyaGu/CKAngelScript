@@ -76,9 +76,21 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
 
+    for (asUINT i = 0; i < engine->GetGlobalFunctionCount(); ++i) {
+        asIScriptFunction *function = engine->GetGlobalFunctionByIndex(i);
+        const char *nameSpace = function ? function->GetNamespace() : nullptr;
+        const char *declaration = function ? function->GetDeclaration() : nullptr;
+        if (nameSpace && declaration &&
+            std::string(nameSpace) == "Scene" &&
+            std::string(declaration).find("CKBehaviorContext") != std::string::npos) {
+            error = std::string("Scene still exposes a CKBehaviorContext adapter: ") + declaration + ".";
+            return false;
+        }
+    }
+
     constexpr const char *moduleName = "__CKAS_SceneInteropSelfTest";
     const char *source =
-        "int Run(const CKBehaviorContext &in ctx) {\n"
+        "int Run(CKContext@ ctx) {\n"
         "  const string objectName = \"__CKAS_SceneInteropDynamic\";\n"
         "  const string persistentName = \"__CKAS_SceneInteropPersistent\";\n"
         "  const string parent3DName = \"__CKAS_SceneInteropParent3D\";\n"
@@ -93,7 +105,7 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         "  const string scoped2DMaterialName = \"__CKAS_SceneInteropScoped2DMaterial\";\n"
         "  const string scopedMeshName = \"__CKAS_SceneInteropScopedMesh\";\n"
         "  const string scopedBehaviorName = \"__CKAS_SceneInteropScopedBehavior\";\n"
-        "  CKRenderContext@ renderContext = ctx.Context.GetPlayerRenderContext();\n"
+        "  CKRenderContext@ renderContext = ctx.GetPlayerRenderContext();\n"
         "  if (renderContext !is null) {\n"
         "    VxStats renderStats;\n"
         "    renderContext.GetStats(renderStats);\n"
@@ -228,25 +240,22 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         "  if (!Scene::Destroy(ctx, replacement)) return 29;\n"
         "  return 0;\n"
         "}\n"
-        "int ProbeScopes(const CKBehaviorContext &in behaviorCtx, const ScriptContext &in runtimeCtx, CKContext@ rawCtx, CK_ID objectId) {\n"
+        "int ProbeScopes(const ScriptContext &in runtimeCtx, CKContext@ rawCtx, CK_ID objectId) {\n"
         "  ObjectRef@ rawObject = Scene::ById(rawCtx, objectId);\n"
         "  ObjectRef@ runtimeObject = Scene::ById(runtimeCtx, objectId);\n"
-        "  ObjectRef@ behaviorObject = Scene::ById(behaviorCtx, objectId);\n"
-        "  if (rawObject is null || runtimeObject is null || behaviorObject is null) return 201;\n"
-        "  if (!rawObject.valid || !runtimeObject.valid || !behaviorObject.valid) return 202;\n"
-        "  if (rawObject.Id() != objectId || runtimeObject.Id() != objectId || behaviorObject.Id() != objectId) return 203;\n"
+        "  if (rawObject is null || runtimeObject is null) return 201;\n"
+        "  if (!rawObject.valid || !runtimeObject.valid) return 202;\n"
+        "  if (rawObject.Id() != objectId || runtimeObject.Id() != objectId) return 203;\n"
         "  SceneRef@ rawScene = Scene::CurrentScene(rawCtx);\n"
         "  SceneRef@ runtimeScene = Scene::CurrentScene(runtimeCtx);\n"
-        "  SceneRef@ behaviorScene = Scene::CurrentScene(behaviorCtx);\n"
-        "  if (rawScene is null || runtimeScene is null || behaviorScene is null) return 204;\n"
-        "  if (rawScene.valid != runtimeScene.valid || rawScene.valid != behaviorScene.valid) return 205;\n"
-        "  if (rawScene.valid && (rawScene.Id() != runtimeScene.Id() || rawScene.Id() != behaviorScene.Id())) return 206;\n"
+        "  if (rawScene is null || runtimeScene is null) return 204;\n"
+        "  if (rawScene.valid != runtimeScene.valid) return 205;\n"
+        "  if (rawScene.valid && rawScene.Id() != runtimeScene.Id()) return 206;\n"
         "  LevelRef@ rawLevel = Scene::CurrentLevel(rawCtx);\n"
         "  LevelRef@ runtimeLevel = Scene::CurrentLevel(runtimeCtx);\n"
-        "  LevelRef@ behaviorLevel = Scene::CurrentLevel(behaviorCtx);\n"
-        "  if (rawLevel is null || runtimeLevel is null || behaviorLevel is null) return 207;\n"
-        "  if (rawLevel.valid != runtimeLevel.valid || rawLevel.valid != behaviorLevel.valid) return 208;\n"
-        "  if (rawLevel.valid && (rawLevel.Id() != runtimeLevel.Id() || rawLevel.Id() != behaviorLevel.Id())) return 209;\n"
+        "  if (rawLevel is null || runtimeLevel is null) return 207;\n"
+        "  if (rawLevel.valid != runtimeLevel.valid) return 208;\n"
+        "  if (rawLevel.valid && rawLevel.Id() != runtimeLevel.Id()) return 209;\n"
         "  ObjectRef@ rawTarget = Scene::Target(rawCtx);\n"
         "  ObjectRef@ rawOwner = Scene::Owner(rawCtx);\n"
         "  if (rawTarget is null || rawTarget.valid || rawTarget.Error() != \"CKContext has no behavior target.\") return 210;\n"
@@ -288,9 +297,9 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
 
     asIScriptModule *module = nullptr;
     api->BorrowModule(moduleName, &module, nullptr);
-    asIScriptFunction *function = module ? module->GetFunctionByDecl("int Run(const CKBehaviorContext &in ctx)") : nullptr;
+    asIScriptFunction *function = module ? module->GetFunctionByDecl("int Run(CKContext@ ctx)") : nullptr;
     asIScriptFunction *scopeFunction = module ? module->GetFunctionByDecl(
-        "int ProbeScopes(const CKBehaviorContext &in, const ScriptContext &in, CKContext@, CK_ID)") : nullptr;
+        "int ProbeScopes(const ScriptContext &in, CKContext@, CK_ID)") : nullptr;
     asIScriptFunction *nullScopeFunction = module ? module->GetFunctionByDecl("int ProbeNullScope()") : nullptr;
     if (!function || !scopeFunction || !nullScopeFunction) {
         error = "Scene API self-test could not find one or more probe functions.";
@@ -312,10 +321,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
 
-    CKBehaviorContext behaviorContext = {};
-    behaviorContext.Context = context;
-    behaviorContext.CurrentLevel = context->GetCurrentLevel();
-    behaviorContext.CurrentScene = context->GetCurrentScene();
+    CKBehaviorContext behaviorContext =
+        ScriptHostScope::From(context).MakeBehaviorContext(nullptr);
 
     asIScriptContext *scriptContext = engine->RequestContext();
     if (!scriptContext) {
@@ -355,6 +362,8 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         const ScriptHostScope runtimeScope = ScriptHostScope::From(runtimeContext);
         const ScriptHostScope behaviorScope = ScriptHostScope::From(fallbackBehaviorContext);
         const ScriptHostScope nullScope = ScriptHostScope::From(static_cast<CKContext *>(nullptr));
+        const CKBehaviorContext rebuiltBehaviorContext =
+            behaviorScope.MakeBehaviorContext(scopeProbeBehavior);
         if (rawScope.Kind() != ScriptHostScopeKind::Raw ||
             runtimeScope.Kind() != ScriptHostScopeKind::Runtime ||
             behaviorScope.Kind() != ScriptHostScopeKind::Behavior ||
@@ -364,18 +373,30 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
             rawScope.CurrentScene() != context->GetCurrentScene() || runtimeScope.CurrentScene() != context->GetCurrentScene() ||
             behaviorScope.CurrentScene() != context->GetCurrentScene() ||
             behaviorScope.Behavior() != scopeProbeBehavior || behaviorScope.ComponentId() != scopeProbeBehavior->GetID() ||
+            rebuiltBehaviorContext.Behavior != scopeProbeBehavior ||
+            rebuiltBehaviorContext.DeltaTime != 0.0f ||
+            rebuiltBehaviorContext.Context != context ||
+            rebuiltBehaviorContext.CurrentLevel != context->GetCurrentLevel() ||
+            rebuiltBehaviorContext.CurrentScene != context->GetCurrentScene() ||
+            rebuiltBehaviorContext.PreviousScene != nullptr ||
+            rebuiltBehaviorContext.CurrentRenderContext != context->GetPlayerRenderContext() ||
+            rebuiltBehaviorContext.ParameterManager != context->GetParameterManager() ||
+            rebuiltBehaviorContext.MessageManager != context->GetMessageManager() ||
+            rebuiltBehaviorContext.AttributeManager != context->GetAttributeManager() ||
+            rebuiltBehaviorContext.TimeManager != context->GetTimeManager() ||
+            rebuiltBehaviorContext.CallbackMessage != 0 ||
+            rebuiltBehaviorContext.CallbackArg != nullptr ||
             nullScope.IsValid() || nullScope.Context() || nullScope.Manager() || nullScope.Bridge()) {
             error = "Scene API self-test detected an invalid ScriptHostScope resolution invariant.";
             r = asERROR;
         }
     }
 
-    behaviorContext.Behavior = scopeProbeBehavior;
     if (r >= 0) {
         r = scriptContext->Prepare(function);
     }
     if (r >= 0) {
-        r = scriptContext->SetArgObject(0, &behaviorContext);
+        r = scriptContext->SetArgObject(0, context);
     }
     if (r >= 0) {
         r = scriptContext->Execute();
@@ -400,10 +421,9 @@ bool RunScriptSceneSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     if (ok) {
         scriptContext->Unprepare();
         r = scriptContext->Prepare(scopeFunction);
-        if (r >= 0) r = scriptContext->SetArgObject(0, &fallbackBehaviorContext);
-        if (r >= 0) r = scriptContext->SetArgObject(1, &runtimeContext);
-        if (r >= 0) r = scriptContext->SetArgObject(2, context);
-        if (r >= 0) r = scriptContext->SetArgDWord(3, scopeProbeBehavior->GetID());
+        if (r >= 0) r = scriptContext->SetArgObject(0, &runtimeContext);
+        if (r >= 0) r = scriptContext->SetArgObject(1, context);
+        if (r >= 0) r = scriptContext->SetArgDWord(2, scopeProbeBehavior->GetID());
         if (r >= 0) r = scriptContext->Execute();
         if (r == asEXECUTION_FINISHED) {
             const int returnCode = static_cast<int>(scriptContext->GetReturnDWord());

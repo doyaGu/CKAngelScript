@@ -168,5 +168,63 @@ bool RunScriptInitialLifecycleSelfTest(std::string &error) {
         error = "Lifecycle did not terminate a failed Reset transition.";
         return false;
     }
+
+    lifecycle.SetDesiredEnabled(true);
+    lifecycle.RequestPause(true);
+    lifecycle.RequestResume(true);
+    lifecycle.RequestReset();
+    lifecycle.RequestDestroy(true);
+    if (!lifecycle.DestroyPending() || lifecycle.Destroyed() ||
+        lifecycle.PausePending() || lifecycle.ResetPending() ||
+        lifecycle.ResumePending() || lifecycle.DesiredEnabled()) {
+        error = "Lifecycle Destroy did not supersede all earlier transitions.";
+        return false;
+    }
+
+    std::vector<ScriptDestroyPhase> destroyInvoked;
+    bool suspendedDestroy = false;
+    const auto invokeDestroy = [&](ScriptDestroyPhase phase) {
+        destroyInvoked.push_back(phase);
+        if (phase == ScriptDestroyPhase::OnDisable && !suspendedDestroy) {
+            suspendedDestroy = true;
+            return ScriptLifecycleInvocationStatus::Suspended;
+        }
+        return ScriptLifecycleInvocationStatus::Finished;
+    };
+    if (lifecycle.AdvanceDestroy(invokeDestroy) != ScriptLifecycleInvocationStatus::Suspended ||
+        !lifecycle.DestroyPending() || lifecycle.Destroyed() ||
+        lifecycle.AdvanceDestroy(invokeDestroy) != ScriptLifecycleInvocationStatus::Finished ||
+        destroyInvoked != std::vector<ScriptDestroyPhase>{ScriptDestroyPhase::OnDisable,
+                                                          ScriptDestroyPhase::OnDisable,
+                                                          ScriptDestroyPhase::OnDestroy} ||
+        !lifecycle.DestroyPending() || lifecycle.Destroyed()) {
+        error = "Lifecycle did not retain Destroy phase order across suspension.";
+        return false;
+    }
+    lifecycle.CompleteDestroy();
+    lifecycle.RequestPause(true);
+    lifecycle.RequestResume(true);
+    lifecycle.RequestReset();
+    if (lifecycle.DestroyPending() || !lifecycle.Destroyed() ||
+        lifecycle.PausePending() || lifecycle.ResetPending() ||
+        lifecycle.ResumePending()) {
+        error = "Lifecycle accepted a normal transition after Destroy completed.";
+        return false;
+    }
+
+    lifecycle.Clear();
+    lifecycle.SetDesiredEnabled(true);
+    lifecycle.RequestDestroy(false);
+    destroyInvoked.clear();
+    if (lifecycle.AdvanceDestroy([&](ScriptDestroyPhase phase) {
+            destroyInvoked.push_back(phase);
+            return ScriptLifecycleInvocationStatus::Failed;
+        }) != ScriptLifecycleInvocationStatus::Failed ||
+        destroyInvoked != std::vector<ScriptDestroyPhase>{ScriptDestroyPhase::OnDestroy} ||
+        !lifecycle.DestroyPending()) {
+        error = "Lifecycle did not finish a failing Destroy callback deterministically.";
+        return false;
+    }
+    lifecycle.CompleteDestroy();
     return true;
 }

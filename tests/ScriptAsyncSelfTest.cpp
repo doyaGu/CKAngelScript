@@ -59,6 +59,27 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
         return false;
     }
 
+    const char *previousNamespace = engine->GetDefaultNamespace();
+    const std::string restoreNamespace = previousNamespace ? previousNamespace : "";
+    if (engine->SetDefaultNamespace("Async") < 0) {
+        error = "Async self-test could not enter the Async namespace.";
+        return false;
+    }
+    const char *removedContextDecls[] = {
+        "AsyncTask<void>@ Wait(const CKBehaviorContext&in, BBTask@, int)",
+        "AsyncTask<void>@ Wait(const CKBehaviorContext&in, GraphTask@)",
+        "AsyncTask<void>@ WaitMessage(const CKBehaviorContext&in, const string&in, CKBeObject@)",
+        "AsyncTask<void>@ WaitMessage(const CKBehaviorContext&in, CKMessageType, CKBeObject@)"
+    };
+    for (const char *decl : removedContextDecls) {
+        if (engine->GetGlobalFunctionByDecl(decl)) {
+            engine->SetDefaultNamespace(restoreNamespace.c_str());
+            error = std::string("Async self-test found removed context declaration: ") + decl;
+            return false;
+        }
+    }
+    engine->SetDefaultNamespace(restoreNamespace.c_str());
+
     if (!CompileAsyncProbe(context,
                            engine,
                            "__CKAS_AsyncCompileDelaySelfTest",
@@ -184,22 +205,15 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     if (!CompileAsyncProbe(context,
                            engine,
                            "__CKAS_AsyncCompileBridgeSelfTest",
-                           "void __ckas_async_compile_bridge(const CKBehaviorContext &in ctx, BBTask@ bbTask, GraphTask@ graphTask) {\n"
-                           "  if (bbTask !is null) { Await(Async::Wait(ctx, bbTask)); }\n"
-                           "  if (graphTask !is null) { Await(Async::Wait(ctx, graphTask)); }\n"
-                           "}\n",
-                           error)) {
-        return false;
-    }
-
-    if (!CompileAsyncProbe(context,
-                           engine,
-                           "__CKAS_AsyncCompileMessageWaitSelfTest",
-                           "void __ckas_async_compile_message_wait(const CKBehaviorContext &in ctx, CKBeObject@ object) {\n"
-                           "  AsyncTask<void>@ task = Async::WaitMessage(ctx, \"__CKAS_AsyncCompileMessageWaitSelfTest\", object);\n"
+                           "void __ckas_async_compile_bridge(BehaviorFrame@ frame, BBTask@ bbTask, GraphTask@ graphTask, CKBeObject@ object) {\n"
+                           "  if (frame is null) return;\n"
+                           "  if (bbTask !is null) { Await(frame.Wait(bbTask)); }\n"
+                           "  if (graphTask !is null) { Await(frame.Wait(graphTask)); }\n"
+                           "  AsyncTask<void>@ task = frame.WaitMessage(\"__CKAS_AsyncCompileMessageWaitSelfTest\", object);\n"
                            "  if (task !is null) { task.Cancel(); }\n"
-                           "  CKMessageType type = ctx.MessageManager is null ? -1 : ctx.MessageManager.AddMessageType(\"__CKAS_AsyncCompileMessageWaitSelfTest\");\n"
-                           "  @task = Async::WaitMessage(ctx, type, object);\n"
+                           "  CKMessageManager@ manager = frame.MessageManager();\n"
+                           "  CKMessageType type = manager is null ? -1 : manager.AddMessageType(\"__CKAS_AsyncCompileMessageWaitSelfTest\");\n"
+                           "  @task = frame.WaitMessage(type, object);\n"
                            "  if (task !is null) { task.Cancel(); }\n"
                            "}\n",
                            error)) {
@@ -538,6 +552,41 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
     }
     ownedAggregate->Release();
     foreignChild->Release();
+    scheduler.Clear();
+
+    WriteAsyncSelfTestStage("orphan-cleanup-isolation");
+    const ScriptAsyncOwnerId liveOwner = scheduler.CreateOwner();
+    const ScriptAsyncOwnerId orphanOwner = scheduler.CreateOwner();
+    ScriptAsyncTaskBase *unownedTask = scheduler.CreateDelay(5);
+    ScriptAsyncTaskBase *liveTask = scheduler.CreateDelay(5);
+    ScriptAsyncTaskBase *orphanTask = scheduler.CreateDelay(5);
+    if (!unownedTask || !liveTask || !orphanTask) {
+        if (unownedTask) unownedTask->Release();
+        if (liveTask) liveTask->Release();
+        if (orphanTask) orphanTask->Release();
+        scheduler.Clear();
+        error = "Async orphan cleanup self-test could not create tasks.";
+        return false;
+    }
+    liveTask->SetOwnerId(liveOwner);
+    orphanTask->SetOwnerId(orphanOwner);
+    const std::string orphanReason = "Async work was orphaned by reset.";
+    const std::unordered_set<ScriptAsyncOwnerId> liveOwners = {liveOwner};
+    const bool orphanedCancelled = scheduler.CancelOrphaned(liveOwners, orphanReason);
+    if (!orphanedCancelled ||
+        !unownedTask->IsCancelled() || unownedTask->Error() != orphanReason ||
+        !orphanTask->IsCancelled() || orphanTask->Error() != orphanReason ||
+        !liveTask->IsPending()) {
+        unownedTask->Release();
+        liveTask->Release();
+        orphanTask->Release();
+        scheduler.Clear();
+        error = "Async orphan cleanup self-test did not preserve the live Script Host Scope.";
+        return false;
+    }
+    unownedTask->Release();
+    liveTask->Release();
+    orphanTask->Release();
     scheduler.Clear();
 
     WriteAsyncSelfTestStage("completed-result-dependencies");

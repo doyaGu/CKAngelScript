@@ -7,7 +7,6 @@
 #include "CKAngelScript.h"
 #include "ScriptComponentState.h"
 #include "ScriptComponentStateStore.h"
-#include "ScriptHostScope.h"
 #include "ScriptMessage.h"
 #include "ScriptManager.h"
 #include "ScriptRuntime.h"
@@ -86,30 +85,48 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
     const char *decls[] = {
         "ScriptMessageTarget Runtime(const string&in)",
         "ScriptMessageTarget Component(const ScriptContext&in, CK_ID)",
-        "ScriptMessageTarget Component(const CKBehaviorContext&in, CK_ID)",
+        "ScriptMessageTarget Component(BehaviorFrame@, CK_ID)",
         "bool Publish(const ScriptContext&in, const string&in, dictionary@)",
-        "bool Publish(const CKBehaviorContext&in, const string&in, dictionary@)",
+        "bool Publish(BehaviorFrame@, const string&in, dictionary@)",
         "bool Publish(const ScriptContext&in, const ScriptMessageTarget&in, const string&in, dictionary@)",
-        "bool Publish(const CKBehaviorContext&in, const ScriptMessageTarget&in, const string&in, dictionary@)",
-        "bool Publish(const ScriptContext&in, const string&in, dictionary@, const string&in)",
-        "bool Publish(const CKBehaviorContext&in, const string&in, dictionary@, const string&in)",
+        "bool Publish(BehaviorFrame@, const ScriptMessageTarget&in, const string&in, dictionary@)",
         "bool Send(const ScriptContext&in, const ScriptMessageTarget&in, const string&in, dictionary@)",
-        "bool Send(const CKBehaviorContext&in, const ScriptMessageTarget&in, const string&in, dictionary@)",
-        "bool Send(const ScriptContext&in, const string&in, const string&in, dictionary@)",
-        "bool Send(const CKBehaviorContext&in, const string&in, const string&in, dictionary@)",
+        "bool Send(BehaviorFrame@, const ScriptMessageTarget&in, const string&in, dictionary@)",
         "AsyncTask<dictionary@>@ Request(const ScriptContext&in, const ScriptMessageTarget&in, const string&in, dictionary@, int)",
-        "AsyncTask<dictionary@>@ Request(const CKBehaviorContext&in, const ScriptMessageTarget&in, const string&in, dictionary@, int)",
-        "AsyncTask<dictionary@>@ Request(const ScriptContext&in, const string&in, const string&in, dictionary@, int)",
-        "AsyncTask<dictionary@>@ Request(const CKBehaviorContext&in, const string&in, const string&in, dictionary@, int)",
+        "AsyncTask<dictionary@>@ Request(BehaviorFrame@, const ScriptMessageTarget&in, const string&in, dictionary@, int)",
+        "bool Reply(const ScriptContext&in, const ScriptMessage&in, dictionary@)",
+        "bool Reply(BehaviorFrame@, const ScriptMessage&in, dictionary@)",
+        "bool Reject(const ScriptContext&in, const ScriptMessage&in, const string&in)",
+        "bool Reject(BehaviorFrame@, const ScriptMessage&in, const string&in)",
         "bool Subscribe(const ScriptContext&in, const string&in)",
-        "bool Subscribe(const CKBehaviorContext&in, const string&in)",
+        "bool Subscribe(BehaviorFrame@, const string&in)",
         "bool Unsubscribe(const ScriptContext&in, const string&in)",
-        "bool Unsubscribe(const CKBehaviorContext&in, const string&in)"
+        "bool Unsubscribe(BehaviorFrame@, const string&in)"
     };
     for (const char *decl : decls) {
         if (!engine->GetGlobalFunctionByDecl(decl)) {
             engine->SetDefaultNamespace(restoreNamespace.c_str());
             error = std::string("Message self-test could not resolve declaration: ") + decl;
+            return false;
+        }
+    }
+    const char *removedDecls[] = {
+        "ScriptMessageTarget Component(const CKBehaviorContext&in, CK_ID)",
+        "bool Publish(const CKBehaviorContext&in, const string&in, dictionary@)",
+        "bool Send(const CKBehaviorContext&in, const ScriptMessageTarget&in, const string&in, dictionary@)",
+        "AsyncTask<dictionary@>@ Request(const CKBehaviorContext&in, const ScriptMessageTarget&in, const string&in, dictionary@, int)",
+        "bool Reply(const CKBehaviorContext&in, const ScriptMessage&in, dictionary@)",
+        "bool Reject(const CKBehaviorContext&in, const ScriptMessage&in, const string&in)",
+        "bool Subscribe(const CKBehaviorContext&in, const string&in)",
+        "bool Unsubscribe(const CKBehaviorContext&in, const string&in)",
+        "bool Publish(const ScriptContext&in, const string&in, dictionary@, const string&in)",
+        "bool Send(const ScriptContext&in, const string&in, const string&in, dictionary@)",
+        "AsyncTask<dictionary@>@ Request(const ScriptContext&in, const string&in, const string&in, dictionary@, int)"
+    };
+    for (const char *decl : removedDecls) {
+        if (engine->GetGlobalFunctionByDecl(decl)) {
+            engine->SetDefaultNamespace(restoreNamespace.c_str());
+            error = std::string("Message self-test found removed compatibility declaration: ") + decl;
             return false;
         }
     }
@@ -156,42 +173,22 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         "}\n"
         "class __CKAS_MessageReceiver {\n"
         "  int DirectCount = 0;\n"
-        "  void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) {\n"
+        "  void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) {\n"
+        "    ScriptMessageTarget self = Message::Component(frame, frame.Id());\n"
+        "    if (!self.IsValid()) return;\n"
         "    if (msg.Kind() == \"direct\") { ++DirectCount; return; }\n"
-        "    if (msg.Topic() == \"compat.reject\") Message::Reject(ctx, msg, \"rejected\");\n"
-        "    else Message::Reply(ctx, msg, null);\n"
+        "    if (msg.Topic() == \"message.reject\") Message::Reject(frame, msg, \"rejected\");\n"
+        "    else Message::Reply(frame, msg, null);\n"
         "  }\n"
         "}\n"
-        "int __ckas_message_string_runtime(const ScriptContext &in ctx, const string &in target) {\n"
-        "  if (!Message::Send(ctx, target, \"compat.direct\", null)) return 31;\n"
-        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, target, \"compat.reply\", null, 1);\n"
+        "int __ckas_message_runtime(const ScriptContext &in ctx, CK_ID componentId) {\n"
+        "  ScriptMessageTarget target = Message::Component(ctx, componentId);\n"
+        "  if (!target.IsValid()) return 30;\n"
+        "  if (!Message::Send(ctx, target, \"message.direct\", null)) return 31;\n"
+        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, target, \"message.reply\", null, 1);\n"
         "  if (task is null || !task.IsCompleted()) return 32;\n"
-        "  @task = Message::Request(ctx, target, \"compat.reject\", null, 1);\n"
+        "  @task = Message::Request(ctx, target, \"message.reject\", null, 1);\n"
         "  if (task is null || !task.IsFailed() || task.Error() != \"rejected\") return 35;\n"
-        "  return 0;\n"
-        "}\n"
-        "int __ckas_message_string_behavior(const CKBehaviorContext &in ctx, const string &in target) {\n"
-        "  if (!Message::Send(ctx, target, \"compat.direct\", null)) return 33;\n"
-        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, target, \"compat.reply\", null, 1);\n"
-        "  if (task is null || !task.IsCompleted()) return 34;\n"
-        "  return 0;\n"
-        "}\n"
-        "int __ckas_message_null_runtime(const ScriptContext &in ctx, const string &in target) {\n"
-        "  if (Message::Publish(ctx, \"compat.null.runtime.publish\", null, target)) return 41;\n"
-        "  if (Message::Send(ctx, target, \"compat.null.runtime.send\", null)) return 42;\n"
-        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, target, \"compat.null.runtime.request\", null, 1);\n"
-        "  if (task !is null) return 43;\n"
-        "  if (Message::Subscribe(ctx, \"compat.null.runtime.subscription\")) return 44;\n"
-        "  if (Message::Unsubscribe(ctx, \"compat.null.runtime.subscription\")) return 45;\n"
-        "  return 0;\n"
-        "}\n"
-        "int __ckas_message_null_behavior(const CKBehaviorContext &in ctx, const string &in target) {\n"
-        "  if (Message::Publish(ctx, \"compat.null.behavior.publish\", null, target)) return 46;\n"
-        "  if (Message::Send(ctx, target, \"compat.null.behavior.send\", null)) return 47;\n"
-        "  AsyncTask<dictionary@>@ task = Message::Request(ctx, target, \"compat.null.behavior.request\", null, 1);\n"
-        "  if (task !is null) return 48;\n"
-        "  if (Message::Subscribe(ctx, \"compat.null.behavior.subscription\")) return 49;\n"
-        "  if (Message::Unsubscribe(ctx, \"compat.null.behavior.subscription\")) return 50;\n"
         "  return 0;\n"
         "}\n";
 
@@ -269,133 +266,75 @@ bool RunScriptMessageSelfTest(CKContext *context, asIScriptEngine *engine, std::
         return false;
     }
 
-    auto executeCompatibilityProbe = [&](const char *declaration,
-                                         void *argument,
-                                         const std::string &targetText,
-                                         const char *label) {
-        asIScriptFunction *compatibilityFunction = module ? module->GetFunctionByDecl(declaration) : nullptr;
-        if (!compatibilityFunction) {
-            error = std::string("Message self-test script function was not found: ") + declaration;
-            return false;
-        }
-        asIScriptContext *compatibilityContext = engine->RequestContext();
-        if (!compatibilityContext) {
-            error = std::string("Message self-test could not create the ") + label + " execution context.";
-            return false;
-        }
-        int compatibilityResult = compatibilityContext->Prepare(compatibilityFunction);
-        if (compatibilityResult >= 0) {
-            compatibilityResult = compatibilityContext->SetArgObject(0, argument);
-        }
-        if (compatibilityResult >= 0) {
-            compatibilityResult = compatibilityContext->SetArgObject(1, const_cast<std::string *>(&targetText));
-        }
-        if (compatibilityResult >= 0) {
-            compatibilityResult = compatibilityContext->Execute();
-        }
-        bool compatibilityOk = false;
-        if (compatibilityResult == asEXECUTION_FINISHED) {
-            const int returnCode = static_cast<int>(compatibilityContext->GetReturnDWord());
-            compatibilityOk = returnCode == 0;
-            if (!compatibilityOk) {
-                error = std::string("Message ") + label + " compatibility probe returned " + std::to_string(returnCode) + ".";
-            }
-        } else if (compatibilityResult == asEXECUTION_EXCEPTION) {
-            const char *exception = compatibilityContext->GetExceptionString();
-            error = std::string("Message ") + label + " compatibility probe exception: " +
-                    (exception && exception[0] ? exception : "<empty>") + ".";
-        } else {
-            error = std::string("Message ") + label + " compatibility probe failed with code " +
-                    std::to_string(compatibilityResult) + ".";
-        }
-        compatibilityContext->Unprepare();
-        engine->ReturnContext(compatibilityContext);
-        return compatibilityOk;
-    };
-
-    CKBehavior *compatibilityReceiver = CKBehavior::Cast(context->CreateObject(
+    CKBehavior *receiver = CKBehavior::Cast(context->CreateObject(
         CKCID_BEHAVIOR,
-        const_cast<CKSTRING>("__CKAS_MessageCompatibilityReceiver"),
+        const_cast<CKSTRING>("__CKAS_MessageReceiverBehavior"),
         CK_OBJECTCREATION_DYNAMIC));
-    ScriptComponentState *receiverState = compatibilityReceiver
-        ? manager->GetOrCreateComponentState(compatibilityReceiver)
+    ScriptComponentState *receiverState = receiver
+        ? manager->GetOrCreateComponentState(receiver)
         : nullptr;
     asITypeInfo *receiverType = module ? module->GetTypeInfoByName("__CKAS_MessageReceiver") : nullptr;
     if (!receiverState || !receiverType) {
-        if (receiverState) manager->ReleaseComponentState(compatibilityReceiver);
-        if (compatibilityReceiver) context->DestroyObject(compatibilityReceiver);
+        if (receiverState) manager->ReleaseComponentState(receiver);
+        if (receiver) context->DestroyObject(receiver);
         manager->UnloadModule(moduleName, nullptr);
-        error = "Message compatibility self-test could not create a Component receiver.";
+        error = "Message self-test could not create a Component receiver.";
         return false;
     }
     receiverState->Invoker = new ScriptInvoker(manager);
     receiverState->Object = receiverState->Invoker->SetScript(moduleName)
         ? receiverState->Invoker->CreateScriptObject(receiverType)
         : nullptr;
+    receiverState->ModuleName = moduleName;
+    receiverState->AttachedModuleGeneration = manager->GetModuleGeneration(moduleName);
     receiverState->OnMessage = receiverType->GetMethodByDecl(
-        "void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx)");
+        "void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame)");
     if (receiverState->OnMessage) receiverState->OnMessage->AddRef();
-    receiverState->Loaded = receiverState->Object && receiverState->OnMessage;
+    receiverState->Loaded = receiverState->Object && receiverState->OnMessage &&
+                            receiverState->AttachedModuleGeneration != 0;
     receiverState->InstanceEnabled = receiverState->Loaded;
-    const std::string compatibilityTarget = ScriptMessageBus::ComponentTarget(compatibilityReceiver->GetID());
+    asIScriptFunction *runtimeFunction = module
+        ? module->GetFunctionByDecl("int __ckas_message_runtime(const ScriptContext &in ctx, CK_ID componentId)")
+        : nullptr;
+    asIScriptContext *runtimeCall = runtimeFunction ? engine->RequestContext() : nullptr;
+    if (!receiverState->Loaded || !runtimeCall) {
+        if (runtimeCall) engine->ReturnContext(runtimeCall);
+        manager->ReleaseComponentState(receiver);
+        context->DestroyObject(receiver);
+        manager->UnloadModule(moduleName, nullptr);
+        error = runtimeFunction
+            ? "Message self-test could not create the runtime execution context."
+            : "Message self-test runtime function was not found.";
+        return false;
+    }
 
     ScriptContext runtimeContext(context, nullptr, "SelfTest", "Running", 1, 0, 0.0f, 0.0f);
-    CKBehaviorContext compatibilityBehaviorContext = {};
-    compatibilityBehaviorContext.Context = context;
-    compatibilityBehaviorContext.Behavior = compatibilityReceiver;
-    CKBehaviorContext behaviorOnlyContext = compatibilityBehaviorContext;
-    behaviorOnlyContext.Context = nullptr;
-    ScriptContext nullRuntimeContext(nullptr, nullptr, "SelfTest", "Running", 1, 0, 0.0f, 0.0f);
-
-    const ScriptHostScope directBehaviorScope = ScriptHostScope::From(
-        compatibilityBehaviorContext,
-        ScriptHostScopeContextResolution::DirectContext);
-    const ScriptHostScope fallbackBehaviorScope = ScriptHostScope::From(behaviorOnlyContext);
-    const ScriptHostScope directBehaviorOnlyScope = ScriptHostScope::From(
-        behaviorOnlyContext,
-        ScriptHostScopeContextResolution::DirectContext);
-    if (directBehaviorScope.Context() != context ||
-        directBehaviorScope.Manager() != manager ||
-        directBehaviorScope.MessageBus() != manager->GetMessageBus() ||
-        directBehaviorScope.MessageSource() != compatibilityTarget ||
-        fallbackBehaviorScope.Context() != context ||
-        fallbackBehaviorScope.Manager() != manager ||
-        directBehaviorOnlyScope.Context() != nullptr ||
-        directBehaviorOnlyScope.Manager() != nullptr ||
-        directBehaviorOnlyScope.MessageBus() != nullptr ||
-        directBehaviorOnlyScope.MessageSource() != compatibilityTarget) {
-        manager->ReleaseComponentState(compatibilityReceiver);
-        context->DestroyObject(compatibilityReceiver);
-        manager->UnloadModule(moduleName, nullptr);
-        error = "Message Script Host Scope compatibility policy changed context or source resolution.";
-        return false;
+    int runtimeResult = runtimeCall->Prepare(runtimeFunction);
+    if (runtimeResult >= 0) runtimeResult = runtimeCall->SetArgObject(0, &runtimeContext);
+    if (runtimeResult >= 0) runtimeResult = runtimeCall->SetArgDWord(1, receiver->GetID());
+    if (runtimeResult >= 0) runtimeResult = runtimeCall->Execute();
+    bool runtimeOk = false;
+    if (runtimeResult == asEXECUTION_FINISHED) {
+        const int returnCode = static_cast<int>(runtimeCall->GetReturnDWord());
+        runtimeOk = returnCode == 0;
+        if (!runtimeOk) {
+            error = "Message runtime/frame probe returned " + std::to_string(returnCode) + ".";
+        }
+    } else if (runtimeResult == asEXECUTION_EXCEPTION) {
+        const char *exception = runtimeCall->GetExceptionString();
+        error = std::string("Message runtime/frame probe exception: ") +
+                (exception && exception[0] ? exception : "<empty>") + ".";
+    } else if (runtimeResult != asEXECUTION_FINISHED) {
+        error = "Message runtime/frame probe failed with code " + std::to_string(runtimeResult) + ".";
     }
-
-    if (!receiverState->Loaded ||
-        !executeCompatibilityProbe("int __ckas_message_string_runtime(const ScriptContext &in ctx, const string &in target)",
-                                   &runtimeContext,
-                                   compatibilityTarget,
-                                   "runtime string target") ||
-        !executeCompatibilityProbe("int __ckas_message_string_behavior(const CKBehaviorContext &in ctx, const string &in target)",
-                                   &compatibilityBehaviorContext,
-                                   compatibilityTarget,
-                                   "behavior string target") ||
-        !executeCompatibilityProbe("int __ckas_message_null_runtime(const ScriptContext &in ctx, const string &in target)",
-                                   &nullRuntimeContext,
-                                   compatibilityTarget,
-                                   "null runtime context") ||
-        !executeCompatibilityProbe("int __ckas_message_null_behavior(const CKBehaviorContext &in ctx, const string &in target)",
-                                   &behaviorOnlyContext,
-                                   compatibilityTarget,
-                                   "behavior-only context")) {
-        manager->ReleaseComponentState(compatibilityReceiver);
-        context->DestroyObject(compatibilityReceiver);
-        manager->UnloadModule(moduleName, nullptr);
-        return false;
-    }
-    manager->ReleaseComponentState(compatibilityReceiver);
-    context->DestroyObject(compatibilityReceiver);
+    runtimeCall->Unprepare();
+    engine->ReturnContext(runtimeCall);
+    manager->ReleaseComponentState(receiver);
+    context->DestroyObject(receiver);
     manager->UnloadModule(moduleName, nullptr);
+    if (!runtimeOk) {
+        return false;
+    }
 
     CKBeObject *waitTarget = CKBeObject::Cast(context->CreateObject(
         CKCID_BEOBJECT,

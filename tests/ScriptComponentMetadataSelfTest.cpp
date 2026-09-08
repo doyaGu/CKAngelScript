@@ -210,8 +210,6 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "  int startCount = 0;\n"
         "  int updateCount = 0;\n"
         "  int messageCount = 0;\n"
-        "  int legacyUpdateCount = 0;\n"
-        "  int legacyMessageCount = 0;\n"
         "  int enableCount = 0;\n"
         "  int disableCount = 0;\n"
         "  int resetCount = 0;\n"
@@ -222,11 +220,8 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "  AsyncTask<void>@ pendingMessage;\n"
         "  void Validate(BehaviorFrame@ frame, int code) {\n"
         "    if (frame is null) { frameError = code; return; }\n"
-        "    if (frame.Behavior() is null) { frameError = code + 1; return; }\n"
         "    if (frame.Context() is null) { frameError = code + 2; return; }\n"
         "    if (!frame.valid || frame.id == 0 || frame.Self() is null) { frameError = code + 4; return; }\n"
-        "    CKBehaviorContext ctx = frame.ToBehaviorContext();\n"
-        "    if (ctx.Behavior is null || ctx.Context is null) { frameError = code + 5; return; }\n"
         "    if (frame.ParameterManager() is null || frame.MessageManager() is null || frame.AttributeManager() is null || frame.TimeManager() is null) { frameError = code + 6; return; }\n"
         "    frame.InputCount(); frame.OutputCount(); frame.PinCount(); frame.PoutCount(); frame.LocalCount(); frame.SettingCount(); frame.Type(); frame.Flags(); frame.PrototypeGuid(); frame.PrototypeName();\n"
         "    if (frame.LocalCount() != frame.BehaviorLocalCount()) { frameError = code + 7; return; }\n"
@@ -243,7 +238,6 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "  }\n"
         "  void OnDisable(BehaviorFrame@ frame) { Validate(frame, 160); disableCount++; AsyncTask<void>@ delay = Async::Delay(1); Await(delay); Validate(frame, 170); }\n"
         "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
-        "  void Update(const CKBehaviorContext &in ctx) { legacyUpdateCount++; }\n"
         "  void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) {\n"
         "    Validate(frame, 300);\n"
         "    if (frameError != 0) return;\n"
@@ -254,7 +248,6 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "    if (frameError != 0) return;\n"
         "    if (msg.Topic() == \"component.frame.runtime\") messageCount++; else frameError = 398;\n"
         "  }\n"
-        "  void OnMessage(const ScriptMessage &in msg, const CKBehaviorContext &in ctx) { legacyMessageCount++; }\n"
         "  void OnReset(BehaviorFrame@ frame) {\n"
         "    Validate(frame, 350);\n"
         "    resetCount++;\n"
@@ -328,14 +321,6 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         return false;
     }
     const std::string privateModuleName = state->ModuleName;
-    if (state->StartArgument != ScriptBehaviorArgumentKind::BehaviorFrame ||
-        state->UpdateArgument != ScriptBehaviorArgumentKind::BehaviorFrame ||
-        state->OnMessageArgument != ScriptBehaviorArgumentKind::BehaviorFrame) {
-        cleanup();
-        error = "Component runtime self-test did not cache BehaviorFrame lifecycle/message methods.";
-        return false;
-    }
-
     ScriptMessage message(1,
                           ScriptMessageKind::Direct,
                           "component.frame.runtime",
@@ -496,24 +481,24 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         !ExpectIntProperty(object, "resetCount", 2, error) ||
         !ExpectIntProperty(object, "resetSawCancelled", 1, error) ||
         !ExpectIntProperty(object, "resetCompleted", 1, error) ||
-        !ExpectIntProperty(object, "legacyUpdateCount", 0, error) ||
-        !ExpectIntProperty(object, "legacyMessageCount", 0, error) ||
         !ExpectIntProperty(object, "frameError", 0, error)) {
         cleanup();
         return false;
     }
 
     object->AddRef();
-    const CKERROR deleteError = CallBridgeBehaviorCallback(behavior, CKM_BEHAVIORDELETE, &behaviorContext);
+    const CK_ID behaviorId = behavior->GetID();
+    const CKERROR deleteError = context->DestroyObject(behavior);
+    behavior = nullptr;
     deleteCallbackSent = false;
-    if (deleteError != CK_OK || manager->GetComponentState(behavior->GetID()) != nullptr ||
+    if (deleteError != CK_OK || manager->GetComponentState(behaviorId) != nullptr ||
         manager->HasModule(privateModuleName.c_str()) ||
         !ExpectIntProperty(object, "destroyCount", 1, error) ||
         !ExpectIntProperty(object, "frameError", 0, error)) {
         object->Release();
         cleanup();
         if (error.empty()) {
-            error = "Component runtime self-test did not run OnDestroy during delete teardown.";
+            error = "Component runtime self-test did not run OnDestroy during CK object deletion.";
         }
         return false;
     }
@@ -558,7 +543,7 @@ bool RunComponentScriptEntryModuleSelfTest(CKContext *context, asIScriptEngine *
         "  int version = 1;\n"
         "  int frameError = 0;\n"
         "  void Validate(BehaviorFrame@ frame, int code) {\n"
-        "    if (frame is null || frame.Behavior() is null || frame.Context() is null) { frameError = code; }\n"
+        "    if (frame is null || !frame.valid || frame.Context() is null) { frameError = code; }\n"
         "  }\n"
         "  void Start(BehaviorFrame@ frame) { Validate(frame, 100); startCount++; }\n"
         "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
@@ -570,7 +555,7 @@ bool RunComponentScriptEntryModuleSelfTest(CKContext *context, asIScriptEngine *
         "  int version = 2;\n"
         "  int frameError = 0;\n"
         "  void Validate(BehaviorFrame@ frame, int code) {\n"
-        "    if (frame is null || frame.Behavior() is null || frame.Context() is null) { frameError = code; }\n"
+        "    if (frame is null || !frame.valid || frame.Context() is null) { frameError = code; }\n"
         "  }\n"
         "  void Start(BehaviorFrame@ frame) { Validate(frame, 100); startCount++; }\n"
         "  void Update(BehaviorFrame@ frame) { Validate(frame, 200); updateCount++; }\n"
