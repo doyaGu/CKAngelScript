@@ -785,6 +785,15 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "CKParameterLocal@ CreateLocal(const string &in name, CKGUID guid)",
         "CKParameterLocal@ RemoveLocal(int index)",
         "void AddLocal(CKParameterLocal@ local)",
+        "CKLevel@ CurrentLevel() const",
+        "CKScene@ CurrentScene() const",
+        "CKScene@ PreviousScene() const",
+        "CKRenderContext@ CurrentRenderContext() const",
+        "CKParameterManager@ ParameterManager() const",
+        "CKMessageManager@ MessageManager() const",
+        "CKAttributeManager@ AttributeManager() const",
+        "CKTimeManager@ TimeManager() const",
+        "CKDWORD CallbackMessage() const",
     };
     for (const char *decl : removedCompatibilityMethods) {
         if (frameType->GetMethodByDecl(decl)) {
@@ -811,7 +820,7 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "    if (frame is null) return 101;\n"
         "    if (!frame.valid) return 102;\n"
         "    if (!frame.valid || frame.id == 0 || frame.name.length() == 0) return 115;\n"
-        "    if (frame.Context() is null || frame.ParameterManager() is null || frame.MessageManager() is null || frame.AttributeManager() is null || frame.TimeManager() is null) return 117;\n"
+        "    if (frame.Context() is null) return 117;\n"
         "    if (frame.InputCount() != 1 || frame.OutputCount() != 1 || frame.PinCount() != 1 || frame.PoutCount() != 1) return 118;\n"
         "    if (frame.InputName(0) != \"In\" || frame.OutputName(0) != \"Out\") return 119;\n"
         "    if (frame.FindInput(\"In\") != 0 || frame.FindOutput(\"Out\") != 0 || frame.FindPin(\"Value\") != 0 || frame.FindPout(\"Handled\") != 0) return 120;\n"
@@ -824,13 +833,14 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "    CKBehavior@ raw = cast<CKBehavior>(frame.Context().GetObject(frame.id));\n"
         "    if (raw is null) return 143;\n"
         "    frame.ClassId(); frame.ObjectFlags(); frame.IsDynamic(); frame.IsToBeDeleted(); frame.IsNotToBeSaved(); frame.IsPrivate(); frame.IsInterfaceObj(); frame.IsUpToDate(); frame.MemoryOccupation(); frame.AppData();\n"
-        "    frame.SceneInCount(); frame.SceneIn(0); frame.IsInScene(frame.CurrentScene()); frame.IsActiveInCurrentScene(); frame.IsActiveInScene(frame.CurrentScene()); frame.IsVisible(); frame.CanBeHide(); frame.IsHiddenByParent(); frame.IsHierarchicallyHide(); frame.IsObjectUsed(raw, raw.GetClassID());\n"
+        "    CKScene@ currentScene = frame.Context().GetCurrentScene();\n"
+        "    frame.SceneInCount(); frame.SceneIn(0); frame.IsInScene(currentScene); frame.IsActiveInCurrentScene(); frame.IsActiveInScene(currentScene); frame.IsVisible(); frame.CanBeHide(); frame.IsHiddenByParent(); frame.IsHierarchicallyHide(); frame.IsObjectUsed(raw, raw.GetClassID());\n"
         "    NativeBuffer@ pinData = frame.PinReadData(0);\n"
         "    int bufferedPinValue = 0; if (pinData is null || pinData.Size() != 4 || pinData.Read(bufferedPinValue) != 4 || bufferedPinValue != 41) return 182;\n"
         "    NativeBuffer@ poutData = frame.PoutWriteData(0); if (poutData is null || poutData.Size() != 4) return 183;\n"
         "    frame.Function(); frame.InterfaceChunk();\n"
         "    frame.Type(); frame.Flags(); frame.PrototypeGuid(); frame.PrototypeName(); frame.Version(); frame.Priority(); frame.LastExecutionTime(); frame.IsActive(); frame.IsUsingFunction(); frame.IsTargetable(); frame.IsUsingTarget(); frame.CompatibleClassId();\n"
-        "    frame.SubBehaviorCount(); frame.CurrentLevel(); frame.CurrentScene(); frame.PreviousScene(); frame.CurrentRenderContext(); frame.CallbackMessage();\n"
+        "    frame.SubBehaviorCount();\n"
         "    if (!frame.InputActive(0) || !frame.InputActive(\"In\")) return 130;\n"
         "    if (frame.OutputActive(0) || frame.OutputActive(\"Out\")) return 131;\n"
         "    int scratchLocal = frame.FindLocal(\"__CKAS_FrameScratch\");\n"

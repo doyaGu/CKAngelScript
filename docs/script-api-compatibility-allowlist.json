@@ -110,6 +110,51 @@
       "key": "method|ScriptMessage|string Target() const",
       "baselineCatalogSha256": "359d760e3caf3c2ff7a30e13e4989114c471d4453525575a0567dbdd09adf6d9",
       "reason": "Remove the string compatibility ABI; Target() now returns ScriptMessageTarget directly."
+    },
+    {
+      "key": "method|BehaviorFrame|CKAttributeManager@ AttributeManager() const",
+      "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
+      "reason": "Remove the CKBehaviorContext manager pass-through; explicit SDK access starts at BehaviorFrame.Context()."
+    },
+    {
+      "key": "method|BehaviorFrame|CKLevel@ CurrentLevel() const",
+      "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
+      "reason": "Remove the raw scene snapshot pass-through; use Scene::CurrentLevel(frame.Context()) for the high-level reference."
+    },
+    {
+      "key": "method|BehaviorFrame|CKMessageManager@ MessageManager() const",
+      "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
+      "reason": "Remove the CKBehaviorContext manager pass-through; explicit SDK access starts at BehaviorFrame.Context()."
+    },
+    {
+      "key": "method|BehaviorFrame|CKParameterManager@ ParameterManager() const",
+      "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
+      "reason": "Remove the CKBehaviorContext manager pass-through; explicit SDK access starts at BehaviorFrame.Context()."
+    },
+    {
+      "key": "method|BehaviorFrame|CKRenderContext@ CurrentRenderContext() const",
+      "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
+      "reason": "Remove the raw render-context snapshot pass-through; explicit SDK access starts at BehaviorFrame.Context()."
+    },
+    {
+      "key": "method|BehaviorFrame|CKScene@ CurrentScene() const",
+      "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
+      "reason": "Remove the raw scene snapshot pass-through; use Scene::CurrentScene(frame.Context()) for the high-level reference."
+    },
+    {
+      "key": "method|BehaviorFrame|CKScene@ PreviousScene() const",
+      "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
+      "reason": "Remove the raw previous-scene snapshot because it has no high-level Executor lifecycle contract."
+    },
+    {
+      "key": "method|BehaviorFrame|CKTimeManager@ TimeManager() const",
+      "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
+      "reason": "Remove the CKBehaviorContext manager pass-through; explicit SDK access starts at BehaviorFrame.Context()."
+    },
+    {
+      "key": "method|BehaviorFrame|uint CallbackMessage() const",
+      "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
+      "reason": "Remove the raw CKBehaviorContext callback field because it is not part of the Executor lifecycle contract."
     }
   ]
 }

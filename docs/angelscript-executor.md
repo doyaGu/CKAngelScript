@@ -129,12 +129,11 @@ terminal `BehaviorFrame` may still resolve that exact identity-stamped behavior
 for the duration of the synchronous callback. This does not make ordinary
 Object Refs valid during deletion.
 
-`BehaviorFrame` is the preferred current-BB facade. It covers the full current
-`CKBehaviorContext` plus the current `CKBehavior` identity, layout, IO,
-parameters, metadata, graph entry points, and the editable CKBehavior surface.
-Use the high-level convenience methods for normal gameplay code and the direct
-frame wrappers for SDK-level graph edits. The frame does not expose its raw
-`CKBehavior@`.
+`BehaviorFrame` is the preferred current-BB facade. It provides execution timing,
+the current `CKBehavior` identity, layout, IO, parameters, graph entry points,
+and lifecycle operations. Use the high-level methods for normal gameplay code.
+SDK-level context and manager access starts explicitly at `Context()`; the frame
+does not duplicate those APIs or expose its raw `CKBehavior@`.
 
 ```angelscript
 // Context and identity.
@@ -143,13 +142,6 @@ bool get_valid() const
 CK_ID get_id() const
 string get_name() const
 float DeltaTime() const
-CKLevel@ CurrentLevel() const
-CKScene@ CurrentScene() const
-CKRenderContext@ CurrentRenderContext() const
-CKParameterManager@ ParameterManager() const
-CKMessageManager@ MessageManager() const
-CKAttributeManager@ AttributeManager() const
-CKTimeManager@ TimeManager() const
 
 // CKObject / CKSceneObject inherited behavior state.
 void SetName(const string &in name, bool shared = false)

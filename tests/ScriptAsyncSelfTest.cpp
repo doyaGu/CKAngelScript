@@ -211,7 +211,7 @@ bool RunScriptAsyncSelfTest(CKContext *context, asIScriptEngine *engine, std::st
                            "  if (graphTask !is null) { Await(frame.Wait(graphTask)); }\n"
                            "  AsyncTask<void>@ task = frame.WaitMessage(\"__CKAS_AsyncCompileMessageWaitSelfTest\", object);\n"
                            "  if (task !is null) { task.Cancel(); }\n"
-                           "  CKMessageManager@ manager = frame.MessageManager();\n"
+                           "  CKMessageManager@ manager = frame.Context().GetMessageManager();\n"
                            "  CKMessageType type = manager is null ? -1 : manager.AddMessageType(\"__CKAS_AsyncCompileMessageWaitSelfTest\");\n"
                            "  @task = frame.WaitMessage(type, object);\n"
                            "  if (task !is null) { task.Cancel(); }\n"

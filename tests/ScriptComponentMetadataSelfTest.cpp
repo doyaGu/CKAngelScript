@@ -222,7 +222,7 @@ bool RunComponentBehaviorFrameRuntimeSelfTest(CKContext *context, asIScriptEngin
         "    if (frame is null) { frameError = code; return; }\n"
         "    if (frame.Context() is null) { frameError = code + 2; return; }\n"
         "    if (!frame.valid || frame.id == 0 || frame.Self() is null) { frameError = code + 4; return; }\n"
-        "    if (frame.ParameterManager() is null || frame.MessageManager() is null || frame.AttributeManager() is null || frame.TimeManager() is null) { frameError = code + 6; return; }\n"
+        "    if (frame.Context().GetParameterManager() is null || frame.Context().GetMessageManager() is null || frame.Context().GetAttributeManager() is null || frame.Context().GetTimeManager() is null) { frameError = code + 6; return; }\n"
         "    frame.InputCount(); frame.OutputCount(); frame.PinCount(); frame.PoutCount(); frame.LocalCount(); frame.SettingCount(); frame.Type(); frame.Flags(); frame.PrototypeGuid(); frame.PrototypeName();\n"
         "    if (frame.LocalCount() != frame.BehaviorLocalCount()) { frameError = code + 7; return; }\n"
         "    int componentLocal = frame.FindLocal(\"__CKAS_ComponentFrameSelfTest_0\");\n"

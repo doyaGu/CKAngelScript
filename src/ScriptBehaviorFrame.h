@@ -34,15 +34,6 @@ public:
     CKContext *Context() const;
 
     float DeltaTime() const;
-    CKLevel *CurrentLevel() const;
-    CKScene *CurrentScene() const;
-    CKScene *PreviousScene() const;
-    CKRenderContext *CurrentRenderContext() const;
-    CKParameterManager *ParameterManager() const;
-    CKMessageManager *MessageManager() const;
-    CKAttributeManager *AttributeManager() const;
-    CKTimeManager *TimeManager() const;
-    CKDWORD CallbackMessage() const;
 
     bool IsValid() const;
     CK_ID Id() const;

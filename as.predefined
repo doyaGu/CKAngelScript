@@ -2197,7 +2197,6 @@ class BehaviorFrame {
     void ActivateOutput(int index, bool active = true);
     NativePointer AppData() const;
     BehaviorGraph@ AsGraph() const;
-    CKAttributeManager@ AttributeManager() const;
     BBBridge@ BB() const;
     ParamRef@ BehaviorLocal(const string&in name, int occurrence = 0) const;
     ParamRef@ BehaviorLocal(int index) const;
@@ -2211,7 +2210,6 @@ class BehaviorFrame {
     int CallCallbackFunction(uint message);
     int CallSubBehaviorsCallbackFunction(uint message);
     int CallSubBehaviorsCallbackFunction(uint message, CKGUID guid);
-    uint CallbackMessage() const;
     int CanBeHide() const;
     void CheckPostDeletion();
     void CheckPreDeletion();
@@ -2219,9 +2217,6 @@ class BehaviorFrame {
     int CompatibleClassId() const;
     CKContext@ Context() const;
     CKERROR Copy(CKObject@ object, CKDependenciesContext&in context);
-    CKLevel@ CurrentLevel() const;
-    CKRenderContext@ CurrentRenderContext() const;
-    CKScene@ CurrentScene() const;
     float DeltaTime() const;
     void Emit(const string&in name = "Out", int occurrence = 0);
     void Emit(int index);
@@ -2290,7 +2285,6 @@ class BehaviorFrame {
     string LocalString(int index, const string&in defaultValue = "") const;
     NativeBuffer@ LocalWriteData(int index) const;
     int MemoryOccupation() const;
-    CKMessageManager@ MessageManager() const;
     CK_BEHAVIOR_FLAGS ModifyFlags(uint add, uint remove);
     void ModifyObjectFlags(uint add, uint remove);
     string Name() const;
@@ -2303,7 +2297,6 @@ class BehaviorFrame {
     string OutputName(int index) const;
     CKBeObject@ Owner() const;
     BehaviorRef@ OwnerScript() const;
-    CKParameterManager@ ParameterManager() const;
     BehaviorRef@ Parent() const;
     bool ParentScriptActiveInScene(CKScene@ scene) const;
     ParamRef@ Pin(const string&in name, int occurrence = 0) const;
@@ -2333,7 +2326,6 @@ class BehaviorFrame {
     void PreDelete();
     void PreSave(CKFile@ file, uint flags);
     CKERROR PrepareDependencies(CKDependenciesContext&in context);
-    CKScene@ PreviousScene() const;
     int Priority() const;
     CKBehaviorPrototype@ Prototype() const;
     CKGUID PrototypeGuid() const;
@@ -2398,7 +2390,6 @@ class BehaviorFrame {
     bool Take(const string&in name = "In", int occurrence = 0);
     bool Take(int index);
     CKBeObject@ Target() const;
-    CKTimeManager@ TimeManager() const;
     void Trace(const string&in message) const;
     CK_BEHAVIOR_TYPE Type() const;
     void UseFunction();

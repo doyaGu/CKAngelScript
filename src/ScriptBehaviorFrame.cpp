@@ -334,42 +334,6 @@ float BehaviorFrame::DeltaTime() const {
     return m_ContextSnapshot.DeltaTime;
 }
 
-CKLevel *BehaviorFrame::CurrentLevel() const {
-    return m_ContextSnapshot.CurrentLevel ? m_ContextSnapshot.CurrentLevel : (m_Context ? m_Context->GetCurrentLevel() : nullptr);
-}
-
-CKScene *BehaviorFrame::CurrentScene() const {
-    return m_ContextSnapshot.CurrentScene ? m_ContextSnapshot.CurrentScene : (m_Context ? m_Context->GetCurrentScene() : nullptr);
-}
-
-CKScene *BehaviorFrame::PreviousScene() const {
-    return m_ContextSnapshot.PreviousScene;
-}
-
-CKRenderContext *BehaviorFrame::CurrentRenderContext() const {
-    return m_ContextSnapshot.CurrentRenderContext ? m_ContextSnapshot.CurrentRenderContext : (m_Context ? m_Context->GetPlayerRenderContext() : nullptr);
-}
-
-CKParameterManager *BehaviorFrame::ParameterManager() const {
-    return m_ContextSnapshot.ParameterManager ? m_ContextSnapshot.ParameterManager : (m_Context ? m_Context->GetParameterManager() : nullptr);
-}
-
-CKMessageManager *BehaviorFrame::MessageManager() const {
-    return m_ContextSnapshot.MessageManager ? m_ContextSnapshot.MessageManager : (m_Context ? m_Context->GetMessageManager() : nullptr);
-}
-
-CKAttributeManager *BehaviorFrame::AttributeManager() const {
-    return m_ContextSnapshot.AttributeManager ? m_ContextSnapshot.AttributeManager : (m_Context ? m_Context->GetAttributeManager() : nullptr);
-}
-
-CKTimeManager *BehaviorFrame::TimeManager() const {
-    return m_ContextSnapshot.TimeManager ? m_ContextSnapshot.TimeManager : (m_Context ? m_Context->GetTimeManager() : nullptr);
-}
-
-CKDWORD BehaviorFrame::CallbackMessage() const {
-    return m_ContextSnapshot.CallbackMessage;
-}
-
 bool BehaviorFrame::IsValid() const {
     return Behavior() != nullptr;
 }
@@ -1739,13 +1703,13 @@ CKBehaviorContext BehaviorFrame::MakeContext() const {
     CKBehaviorContext ctx = m_ContextSnapshot;
     ctx.Context = m_Context;
     ctx.Behavior = Behavior();
-    ctx.CurrentLevel = CurrentLevel();
-    ctx.CurrentScene = CurrentScene();
-    ctx.CurrentRenderContext = CurrentRenderContext();
-    ctx.ParameterManager = ParameterManager();
-    ctx.MessageManager = MessageManager();
-    ctx.AttributeManager = AttributeManager();
-    ctx.TimeManager = TimeManager();
+    ctx.CurrentLevel = ctx.CurrentLevel ? ctx.CurrentLevel : (m_Context ? m_Context->GetCurrentLevel() : nullptr);
+    ctx.CurrentScene = ctx.CurrentScene ? ctx.CurrentScene : (m_Context ? m_Context->GetCurrentScene() : nullptr);
+    ctx.CurrentRenderContext = ctx.CurrentRenderContext ? ctx.CurrentRenderContext : (m_Context ? m_Context->GetPlayerRenderContext() : nullptr);
+    ctx.ParameterManager = ctx.ParameterManager ? ctx.ParameterManager : (m_Context ? m_Context->GetParameterManager() : nullptr);
+    ctx.MessageManager = ctx.MessageManager ? ctx.MessageManager : (m_Context ? m_Context->GetMessageManager() : nullptr);
+    ctx.AttributeManager = ctx.AttributeManager ? ctx.AttributeManager : (m_Context ? m_Context->GetAttributeManager() : nullptr);
+    ctx.TimeManager = ctx.TimeManager ? ctx.TimeManager : (m_Context ? m_Context->GetTimeManager() : nullptr);
     return ctx;
 }
 
