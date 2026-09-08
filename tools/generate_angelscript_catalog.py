@@ -177,7 +177,7 @@ def selected_bbs(bbs: list[dict[str, Any]], queries: Iterable[str]) -> list[dict
     return selected
 
 
-def add_bb_slot_helpers(lines: list[str], bb: dict[str, Any]) -> None:
+def add_bb_slot_metadata(lines: list[str], bb: dict[str, Any]) -> None:
     slot_specs = [
         ("In", "input", "inputs"),
         ("Out", "output", "outputs"),
@@ -190,7 +190,6 @@ def add_bb_slot_helpers(lines: list[str], bb: dict[str, Any]) -> None:
         used_names: set[str] = set()
         for name in bb_slot_items(bb, key):
             function_name = identifier(name or f"{method}Slot", used_names)
-            lines.append(f"    BBSlot@ {method}_{function_name}(const CKBehaviorContext &in ctx) {{ BBDecl@ decl = Decl(ctx); return decl is null ? null : decl.{method}({as_string(name)}); }}")
             lines.append(f"    string {method}_{function_name}_Metadata(const string &in fromField) {{ return \"[bbslot from=\\\"\" + fromField + \"\\\" {metadata_key}=\\\"\" + {as_string(name)} + \"\\\"]\"; }}")
 
 
@@ -204,8 +203,11 @@ def add_selected_bb_wrapper(lines: list[str], bb: dict[str, Any], wrapper_name: 
         field = identifier(name or "Pin", used_slot_fields)
         lines.append(f"    BBSlot@ {field};")
     lines.append("")
-    lines.append("    bool Bind(const CKBehaviorContext &in ctx) {")
-    lines.append(f"        @config = CKASCatalog::BBHints::{hint_name}::Config(ctx);")
+    lines.append("    bool Bind(BehaviorFrame@ frame) {")
+    lines.append("        if (frame is null) return false;")
+    lines.append("        BBBridge@ bridge = frame.BB();")
+    lines.append(f"        BBDecl@ decl = bridge is null ? null : bridge.Require(CKASCatalog::BBHints::{hint_name}::Guid());")
+    lines.append("        @config = decl is null ? null : decl.Configure();")
     lines.append("        if (config is null || !config.IsValid()) return false;")
     used_slot_fields.clear()
     for name in bb_slot_items(bb, "input_params"):
@@ -214,9 +216,9 @@ def add_selected_bb_wrapper(lines: list[str], bb: dict[str, Any], wrapper_name: 
     lines.append("        return true;")
     lines.append("    }")
     lines.append("")
-    lines.append("    BBInstance@ EnsureStarted(const CKBehaviorContext &in ctx) {")
-    lines.append("        if (config is null && !Bind(ctx)) return null;")
-    lines.append("        @instance = config.EnsureStarted(ctx);")
+    lines.append("    BBInstance@ EnsureStarted(BehaviorFrame@ frame) {")
+    lines.append("        if (config is null && !Bind(frame)) return null;")
+    lines.append("        @instance = config.EnsureStarted(frame);")
     lines.append("        return instance;")
     lines.append("    }")
     used_methods: set[str] = set()
@@ -225,9 +227,9 @@ def add_selected_bb_wrapper(lines: list[str], bb: dict[str, Any], wrapper_name: 
         field = identifier(name or "Pin", used_slot_fields)
         method = identifier(f"Set_{name}", used_methods)
         lines.append("")
-        lines.append(f"    bool {method}(const CKBehaviorContext &in ctx, const string &in value) {{")
-        lines.append("        BBInstance@ live = EnsureStarted(ctx);")
-        lines.append(f"        return live !is null && live.StepSet(ctx, {field}, value);")
+        lines.append(f"    bool {method}(BehaviorFrame@ frame, const string &in value) {{")
+        lines.append("        BBInstance@ live = EnsureStarted(frame);")
+        lines.append(f"        return live !is null && live.StepSet(frame, {field}, value);")
         lines.append("    }")
     lines.append("}")
     lines.append("")
@@ -264,8 +266,6 @@ def generate(params: list[dict[str, Any]],
         used_value_names: set[str] = set()
         lines.append(f"namespace {type_name} {{")
         lines.append(f"    CKGUID Type() {{ return {guid_expr(param)}; }}")
-        lines.append("    ParamTypeInfo@ Info(const CKBehaviorContext &in ctx) { return Param::Type(ctx, Type()); }")
-        lines.append("    string Text(const CKBehaviorContext &in ctx, int value) { return Param::Text(ctx, Type(), value); }")
         for value in param["values"]:
             lines.append(f"    const int {identifier(value.get('name'), used_value_names)} = {int(value.get('value', 0))};")
         lines.append("}")
@@ -279,9 +279,6 @@ def generate(params: list[dict[str, Any]],
         used_value_names: set[str] = set()
         lines.append(f"namespace {type_name} {{")
         lines.append(f"    CKGUID Type() {{ return {guid_expr(param)}; }}")
-        lines.append("    ParamTypeInfo@ Info(const CKBehaviorContext &in ctx) { return Param::Type(ctx, Type()); }")
-        lines.append("    string Text(const CKBehaviorContext &in ctx, uint value) { return Param::Text(ctx, Type(), value); }")
-        lines.append("    uint Mask(const CKBehaviorContext &in ctx, const string &in namesOrMask) { return Param::FlagsMask(ctx, Type(), namesOrMask); }")
         for value in param["values"]:
             lines.append(f"    const uint {identifier(value.get('name'), used_value_names)} = {hex_u32(value.get('value', 0))};")
         lines.append("}")
@@ -301,7 +298,6 @@ def generate(params: list[dict[str, Any]],
         op_name = identifier(op.get("name"), used_op_hint_names)
         lines.append(f"namespace {op_name} {{")
         lines.append(f"    CKGUID Guid() {{ return {guid_expr(op)}; }}")
-        lines.append("    ParamOp@ Create(const CKBehaviorContext &in ctx) { return Param::Operation(ctx, Guid()); }")
         lines.append("}")
     lines.append("}")
     lines.append("")
@@ -328,10 +324,7 @@ def generate(params: list[dict[str, Any]],
         lines.append(f"    const string Name = {as_string(name)};")
         lines.append(f"    const string Category = {as_string(category)};")
         lines.append(f"    const string QualifiedName = {as_string(qualified)};")
-        lines.append("    BBPrototype@ Find(const CKBehaviorContext &in ctx) { return BB::Prototype(ctx, Guid()); }")
-        lines.append("    BBDecl@ Decl(const CKBehaviorContext &in ctx) { return BB::Require(ctx, Guid()); }")
-        lines.append("    BBConfig@ Config(const CKBehaviorContext &in ctx) { BBDecl@ decl = Decl(ctx); return decl is null ? null : decl.Configure(); }")
-        add_bb_slot_helpers(lines, bb)
+        add_bb_slot_metadata(lines, bb)
         lines.append("}")
     lines.append("}")
     lines.append("}")

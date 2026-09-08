@@ -19,17 +19,17 @@ Generated from the tracked live-engine export in `docs/script-api.json`:
 
 | Registration kind | Count |
 | --- | ---: |
-| Global functions | 598 |
+| Global functions | 502 |
 | Global properties | 301 |
 | Object types | 336 |
-| Object methods | 11022 |
+| Object methods | 10849 |
 | Object behaviours | 777 |
 | Object properties | 465 |
 | Funcdefs | 29 |
 | Enums | 139 |
 | Enum values | 1427 |
 | Typedefs | 24 |
-| Total | 15118 |
+| Total | 14849 |
 
 Large raw SDK binding files and exported cast/behaviour entries dominate the total. The high-level and integration files are still the workflow surface; raw CK/Vx bindings and SDK constants account for most exported symbols.
 
@@ -37,12 +37,12 @@ Large raw SDK binding files and exported cast/behaviour entries dominate the tot
 
 | Namespace | Global functions | Main responsibility |
 | --- | ---: | --- |
-| `Scene` | 123 | Safe scene lookup, typed refs, creation, scene membership, selection, destruction |
-| `Param` | 83 | Parameter values, enum/flags/type metadata, text/raw conversion, operations |
-| `Async` | 25 | Frame-based cooperative tasks, aggregates, waits for BB/graph tasks |
-| `BB` | 20 | Building Block prototype discovery, declaration/config creation, runtime bridge entry points |
-| `Message` | 25 | Publish/send/request/reply messaging between runtime entries and components |
-| `Behavior` | 13 | Behavior graph lookup, query construction, graph bridge entry points |
+| `Scene` | 82 | Safe scene lookup, typed refs, creation, scene membership, selection, destruction |
+| `Param` | 58 | Parameter values, enum/flags/type metadata, text/raw conversion, operations |
+| `Async` | 21 | Frame-based cooperative tasks, aggregates, waits for BB/graph tasks |
+| `BB` | 7 | Building Block prototype discovery, declaration/config creation, runtime bridge entry points |
+| `Message` | 19 | Publish/send/request/reply messaging between runtime entries and components |
+| `Behavior` | 6 | Behavior graph lookup, query construction, graph bridge entry points |
 | `Runtime` | 11 | Script entry manager inspection and control |
 | `Global` | 298 | Raw CK/Vx helpers, constructors/operators, allocation helpers, format/info functions |
 
@@ -55,11 +55,11 @@ The global bucket includes raw SDK-style helpers and constructors, so new high-l
 | --- | --- | --- |
 | Script entries | `ScriptContext`, `RuntimeScriptInfo`, `RuntimeDependencyInfo`, `Runtime::*` | Discovered modules. `[runtime]` entries receive `ScriptContext` lifecycle; `[executor]` entries provide Executor classes. |
 | Scene interop | `Scene::*`, `ObjectRef`, `SceneObjectRef`, `Entity3DRef`, `Entity2DRef`, `MaterialRef`, `TextureRef`, `MeshRef`, `SceneRef`, `LevelRef` | Revalidating object handles are the durable identity layer; raw CK pointers should be reacquired near use. |
-| Script host frame | `BehaviorFrame` | Preferred Component/Executor lifecycle argument; complete current-`CKBehavior` facade for context fields, CKObject/scene inherited state, identity, owner/target, graph/layout entry points, IO, pins/pouts/settings, logical locals, child-frame derivation with `FrameFor`/`SubFrame`, generic SDK parameter value reads/writes, metadata/state, structural graph edits, graph-link activation-delay waits, frame-aware async waits/message waits, trace, one-shot BB calls, frame-aware `BBBridge` access for persistent BB discovery/configuration, SDK-style `Get*` migration aliases, physical-local `BehaviorLocal*` aliases, and raw `CKBehavior@` escape-hatch access while reacquiring the live behavior by id/stamp. `Local*` is the host logical-local API; `GetLocalParameter*`, `LocalParameter`, and `BehaviorLocal*` are physical CKBehavior local APIs. |
-| Behavior graph bridge | `Behavior::*`, `BehaviorRef`, `BehaviorGraph`, `BehaviorQuery`, `BehaviorNode`, `BehaviorLayout`, `BehaviorLinkRef`, `GraphTask` | Setup-time graph search, layout handles, target-parameter source preservation, graph traversal, synchronous `BehaviorRef.Step(ctx/frame, input)` execution of existing native BB instances, and graph task observation. |
-| Runtime BB bridge | `BB::*`, `BBPrototype`, `BBDecl`, `BBConfig`, `BBSlot`, `BBInstance`, `BBResult`, `BBTask`, `BBCallBuilder`, `BBTaskBuilder` | SDK-driven BB discovery, runtime BB spawning/stepping, live pin/settings updates, name-based one-shot calls, and `BehaviorFrame@` overloads for common config/instance operations. |
+| Script host frame | `BehaviorFrame` | The sole Component/Executor lifecycle argument; current-`CKBehavior` facade for context fields, CKObject/scene state, identity, owner/target, graph/layout entry points, IO, pins/pouts/settings, logical locals, child-frame derivation with `FrameFor`/`SubFrame`, metadata/state, structural graph edits, graph-link activation-delay waits, frame-aware async waits/message waits, trace, one-shot BB calls, frame-aware `BBBridge` access for persistent BB discovery/configuration, explicit physical-local `BehaviorLocal*` access, and raw `CKBehavior@` escape-hatch access while reacquiring the live behavior by id/stamp. `Local*` is the host logical-local interface; `BehaviorLocal*` is the physical CKBehavior-local interface. |
+| Behavior graph bridge | `Behavior::*`, `BehaviorRef`, `BehaviorGraph`, `BehaviorQuery`, `BehaviorNode`, `BehaviorLayout`, `BehaviorLinkRef`, `GraphTask` | Setup-time graph search, layout handles, target-parameter source preservation, graph traversal, synchronous `BehaviorRef.Step(frame, input)` execution of existing native BB instances, and graph task observation. |
+| Runtime BB bridge | `BB::*`, `BBPrototype`, `BBDecl`, `BBConfig`, `BBSlot`, `BBInstance`, `BBResult`, `BBTask`, `BBCallBuilder`, `BBTaskBuilder` | SDK-driven BB discovery, runtime BB spawning/stepping, live pin/settings updates, name-based one-shot calls, and a single `BehaviorFrame@` lifecycle path for config/instance operations. |
 | Parameters | `Param::*`, `ParamRef`, `ParamValue`, `ParamStructValue`, `ParamTypeInfo`, `ParamEnumInfo`, `ParamFlagsInfo`, `ParamStructInfo`, `ParamOp`, `ParamSourceLinkRef` | Generic parameter conversion and metadata backed by `CKParameterManager`. |
-| Messaging | `Message::*`, `ScriptMessage`, `ScriptMessageTarget` | Topic publish/subscribe, typed directed sends, compatible string-target adapters, generation-checked component targets, and request/reply over `AsyncTask<dictionary@>`. |
+| Messaging | `Message::*`, `ScriptMessage`, `ScriptMessageTarget` | Topic publish/subscribe, typed directed sends, generation-checked component targets, and request/reply over `AsyncTask<dictionary@>`. Runtime entries pass `ScriptContext`; Component and Executor callbacks pass `BehaviorFrame@`. |
 | Async | `Async::*`, `AsyncTask<T>`, `Await`, `Async*Func` funcdefs | Scheduler-backed suspension, not OS threads. |
 | Native/FFI | `NativePointer`, `NativeBuffer`, DynLoad/DynCall/DynCallback types | Advanced interop; signatures and ownership must be treated as unsafe native code. |
 
