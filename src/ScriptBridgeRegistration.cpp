@@ -303,6 +303,11 @@ void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
 void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKContext@ Context() const", asMETHOD(BehaviorFrame, Context), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "float DeltaTime() const", asMETHOD(BehaviorFrame, DeltaTime), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKLevel@ CurrentLevel() const", asMETHOD(BehaviorFrame, CurrentLevel), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKScene@ CurrentScene() const", asMETHOD(BehaviorFrame, CurrentScene), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKScene@ PreviousScene() const", asMETHOD(BehaviorFrame, PreviousScene), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKRenderContext@ CurrentRenderContext() const", asMETHOD(BehaviorFrame, CurrentRenderContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorFrame", "CKDWORD CallbackMessage() const", asMETHOD(BehaviorFrame, CallbackMessage), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsValid() const", asMETHOD(BehaviorFrame, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool get_valid() const", asMETHOD(BehaviorFrame, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CK_ID Id() const", asMETHOD(BehaviorFrame, Id), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

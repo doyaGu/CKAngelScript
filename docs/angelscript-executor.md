@@ -129,11 +129,17 @@ terminal `BehaviorFrame` may still resolve that exact identity-stamped behavior
 for the duration of the synchronous callback. This does not make ordinary
 Object Refs valid during deletion.
 
-`BehaviorFrame` is the preferred current-BB facade. It provides execution timing,
-the current `CKBehavior` identity, layout, IO, parameters, graph entry points,
-and lifecycle operations. Use the high-level methods for normal gameplay code.
-SDK-level context and manager access starts explicitly at `Context()`; the frame
-does not duplicate those APIs or expose its raw `CKBehavior@`.
+`BehaviorFrame` is the preferred current-BB facade. It provides the immutable
+snapshot fields that belong to this host invocation, the current `CKBehavior`
+identity, layout, IO, parameters, graph entry points, and lifecycle operations.
+Use the high-level methods for normal gameplay code. SDK-level context access
+starts explicitly at `Context()`; the frame does not duplicate manager APIs or
+expose its raw `CKBehavior@`.
+
+The snapshot describes the native `CKBehaviorContext` used to create that
+frame. `CallbackMessage()` is not the name of the script lifecycle method: a
+deferred phase such as retained `OnResume` can be fulfilled from a later host
+frame and therefore reports that later frame's callback message.
 
 ```angelscript
 // Context and identity.
@@ -142,6 +148,11 @@ bool get_valid() const
 CK_ID get_id() const
 string get_name() const
 float DeltaTime() const
+CKLevel@ CurrentLevel() const
+CKScene@ CurrentScene() const
+CKScene@ PreviousScene() const
+CKRenderContext@ CurrentRenderContext() const
+CKDWORD CallbackMessage() const
 
 // Current behavior refs and graph.
 BehaviorRef@ Self() const

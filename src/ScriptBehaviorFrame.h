@@ -32,6 +32,11 @@ public:
     CKContext *Context() const;
 
     float DeltaTime() const;
+    CKLevel *CurrentLevel() const;
+    CKScene *CurrentScene() const;
+    CKScene *PreviousScene() const;
+    CKRenderContext *CurrentRenderContext() const;
+    CKDWORD CallbackMessage() const;
 
     bool IsValid() const;
     CK_ID Id() const;

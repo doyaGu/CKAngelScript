@@ -698,6 +698,13 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "NativeBuffer@ BehaviorLocalReadData(int index) const",
         "NativeBuffer@ BehaviorLocalWriteData(int index) const",
     };
+    const char *requiredExecutionSnapshotMethods[] = {
+        "CKLevel@ CurrentLevel() const",
+        "CKScene@ CurrentScene() const",
+        "CKScene@ PreviousScene() const",
+        "CKRenderContext@ CurrentRenderContext() const",
+        "uint CallbackMessage() const",
+    };
     if (!frameType) {
         error = "Executor self-test could not resolve BehaviorFrame.";
         return false;
@@ -705,6 +712,12 @@ bool RunScriptExecutorSelfTest(CKContext *context,
     for (const char *decl : requiredSizedDataMethods) {
         if (!frameType->GetMethodByDecl(decl)) {
             error = std::string("Executor self-test could not resolve sized BehaviorFrame method: ") + decl;
+            return false;
+        }
+    }
+    for (const char *decl : requiredExecutionSnapshotMethods) {
+        if (!frameType->GetMethodByDecl(decl)) {
+            error = std::string("Executor self-test could not resolve BehaviorFrame execution snapshot method: ") + decl;
             return false;
         }
     }
@@ -785,15 +798,10 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "CKParameterLocal@ CreateLocal(const string &in name, CKGUID guid)",
         "CKParameterLocal@ RemoveLocal(int index)",
         "void AddLocal(CKParameterLocal@ local)",
-        "CKLevel@ CurrentLevel() const",
-        "CKScene@ CurrentScene() const",
-        "CKScene@ PreviousScene() const",
-        "CKRenderContext@ CurrentRenderContext() const",
         "CKParameterManager@ ParameterManager() const",
         "CKMessageManager@ MessageManager() const",
         "CKAttributeManager@ AttributeManager() const",
         "CKTimeManager@ TimeManager() const",
-        "CKDWORD CallbackMessage() const",
         "void SetName(const string &in name, bool shared = false)",
         "CK_CLASSID ClassId() const",
         "CKDWORD ObjectFlags() const",
@@ -900,6 +908,11 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "    if (!frame.valid) return 102;\n"
         "    if (!frame.valid || frame.id == 0 || frame.name.length() == 0) return 115;\n"
         "    if (frame.Context() is null) return 117;\n"
+        "    if (frame.CurrentLevel() !is frame.Context().GetCurrentLevel()) return 186;\n"
+        "    if (frame.CurrentScene() !is frame.Context().GetCurrentScene()) return 187;\n"
+        "    if (frame.PreviousScene() !is null) return 188;\n"
+        "    if (frame.CurrentRenderContext() !is frame.Context().GetPlayerRenderContext()) return 189;\n"
+        "    if (frame.CallbackMessage() != 0) return 190;\n"
         "    if (frame.InputCount() != 1 || frame.OutputCount() != 1 || frame.PinCount() != 1 || frame.PoutCount() != 1) return 118;\n"
         "    if (frame.InputName(0) != \"In\" || frame.OutputName(0) != \"Out\") return 119;\n"
         "    if (frame.FindInput(\"In\") != 0 || frame.FindOutput(\"Out\") != 0 || frame.FindPin(\"Value\") != 0 || frame.FindPout(\"Handled\") != 0) return 120;\n"
@@ -1042,14 +1055,17 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "}\n"
         "class ExecutorPauseResumeProbe {\n"
         "  void OnPause(BehaviorFrame@ frame) {\n"
-        "    if (frame is null || !frame.SetLocal(\"Trace\", 1)) return;\n"
+        "    if (frame is null) return;\n"
+        "    if (frame.CallbackMessage() != CKM_BEHAVIORPAUSE) { frame.SetLocal(\"Trace\", -11); return; }\n"
+        "    if (!frame.SetLocal(\"Trace\", 1)) return;\n"
         "    AsyncTask<void>@ delay = frame.LinkDelay(1);\n"
         "    if (delay is null) { frame.SetLocal(\"Trace\", -10); return; }\n"
         "    Await(delay);\n"
         "    frame.SetLocal(\"Trace\", frame.LocalInt(\"Trace\", -1000) * 10 + 2);\n"
         "  }\n"
         "  void OnResume(BehaviorFrame@ frame) {\n"
-        "    if (frame !is null) frame.SetLocal(\"Trace\", frame.LocalInt(\"Trace\", -1000) * 10 + 3);\n"
+        "    if (frame is null) return;\n"
+        "    frame.SetLocal(\"Trace\", frame.LocalInt(\"Trace\", -1000) * 10 + 3);\n"
         "  }\n"
         "  int Execute(BehaviorFrame@ frame) {\n"
         "    if (frame is null) return 601;\n"

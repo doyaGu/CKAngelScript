@@ -2205,7 +2205,11 @@ class BehaviorFrame {
     NativeBuffer@ BehaviorLocalWriteData(int index) const;
     BBCallBuilder@ Call(CKGUID guid) const;
     BBCallBuilder@ Call(const string&in prototype) const;
+    uint CallbackMessage() const;
     CKContext@ Context() const;
+    CKLevel@ CurrentLevel() const;
+    CKRenderContext@ CurrentRenderContext() const;
+    CKScene@ CurrentScene() const;
     float DeltaTime() const;
     void Emit(const string&in name = "Out", int occurrence = 0);
     void Emit(int index);
@@ -2276,6 +2280,7 @@ class BehaviorFrame {
     bool PoutEnabled(int index) const;
     CKObject@ PoutObject(int index) const;
     NativeBuffer@ PoutWriteData(int index) const;
+    CKScene@ PreviousScene() const;
     BehaviorRef@ Self() const;
     bool SetLocal(const string&in name, CKObject@ value, int occurrence = 0);
     bool SetLocal(const string&in name, bool value, int occurrence = 0);

@@ -22,14 +22,14 @@ Generated from the tracked live-engine export in `docs/script-api.json`:
 | Global functions | 502 |
 | Global properties | 301 |
 | Object types | 336 |
-| Object methods | 10761 |
+| Object methods | 10766 |
 | Object behaviours | 777 |
 | Object properties | 465 |
 | Funcdefs | 29 |
 | Enums | 139 |
 | Enum values | 1427 |
 | Typedefs | 24 |
-| Total | 14761 |
+| Total | 14766 |
 
 Large raw SDK binding files and exported cast/behaviour entries dominate the total. The high-level and integration files are still the workflow surface; raw CK/Vx bindings and SDK constants account for most exported symbols.
 
@@ -55,7 +55,7 @@ The global bucket includes raw SDK-style helpers and constructors, so new high-l
 | --- | --- | --- |
 | Script entries | `ScriptContext`, `RuntimeScriptInfo`, `RuntimeDependencyInfo`, `Runtime::*` | Discovered modules. `[runtime]` entries receive `ScriptContext` lifecycle; `[executor]` entries provide Executor classes. |
 | Scene interop | `Scene::*`, `ObjectRef`, `SceneObjectRef`, `Entity3DRef`, `Entity2DRef`, `MaterialRef`, `TextureRef`, `MeshRef`, `SceneRef`, `LevelRef` | Revalidating object handles are the durable identity layer; raw CK pointers should be reacquired near use. |
-| Script host frame | `BehaviorFrame` | The sole Component/Executor lifecycle argument; current-`CKBehavior` facade for context fields, CKObject/scene state, identity, owner/target, graph/layout entry points, IO, pins/pouts/settings, logical locals, child-frame derivation with `FrameFor`/`SubFrame`, metadata/state, structural graph edits, graph-link activation-delay waits, frame-aware async waits/message waits, trace, one-shot BB calls, frame-aware `BBBridge` access for persistent BB discovery/configuration, explicit physical-local `BehaviorLocal*` access, and raw `CKBehavior@` escape-hatch access while reacquiring the live behavior by id/stamp. `Local*` is the host logical-local interface; `BehaviorLocal*` is the physical CKBehavior-local interface. |
+| Script host frame | `BehaviorFrame` | The sole Component/Executor lifecycle argument; a revalidating current-`CKBehavior` facade with immutable invocation snapshot fields (`DeltaTime`, current/previous scene, current level/render context, callback message), identity through `BehaviorRef`, graph/layout entry points, IO, pins/pouts/settings, logical locals, child-frame derivation with `FrameFor`/`SubFrame`, frame-aware async waits/message waits, trace, and BB calls. Generic SDK object metadata and behavior control remain on `BehaviorRef`, `CKBehavior`, or `CKContext` instead of being duplicated here. `Local*` is the host logical-local interface; `BehaviorLocal*` is the physical CKBehavior-local interface. |
 | Behavior graph bridge | `Behavior::*`, `BehaviorRef`, `BehaviorGraph`, `BehaviorQuery`, `BehaviorNode`, `BehaviorLayout`, `BehaviorLinkRef`, `GraphTask` | Setup-time graph search, layout handles, target-parameter source preservation, graph traversal, synchronous `BehaviorRef.Step(frame, input)` execution of existing native BB instances, and graph task observation. |
 | Runtime BB bridge | `BB::*`, `BBPrototype`, `BBDecl`, `BBConfig`, `BBSlot`, `BBInstance`, `BBResult`, `BBTask`, `BBCallBuilder`, `BBTaskBuilder` | SDK-driven BB discovery, runtime BB spawning/stepping, live pin/settings updates, name-based one-shot calls, and a single `BehaviorFrame@` lifecycle path for config/instance operations. |
 | Parameters | `Param::*`, `ParamRef`, `ParamValue`, `ParamStructValue`, `ParamTypeInfo`, `ParamEnumInfo`, `ParamFlagsInfo`, `ParamStructInfo`, `ParamOp`, `ParamSourceLinkRef` | Generic parameter conversion and metadata backed by `CKParameterManager`. |

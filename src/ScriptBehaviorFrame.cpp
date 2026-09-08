@@ -301,8 +301,14 @@ BehaviorFrame::BehaviorFrame(const CKBehaviorContext &ctx) {
 }
 
 void BehaviorFrame::Refresh(const CKBehaviorContext &ctx) {
+    const ScriptHostScope scope = ScriptHostScope::From(ctx);
     m_ContextSnapshot = ctx;
-    m_Context = ScriptHostScope::From(ctx).Context();
+    m_Context = scope.Context();
+    m_ContextSnapshot.CurrentLevel = scope.CurrentLevel();
+    m_ContextSnapshot.CurrentScene = scope.CurrentScene();
+    if (!m_ContextSnapshot.CurrentRenderContext && m_Context) {
+        m_ContextSnapshot.CurrentRenderContext = m_Context->GetPlayerRenderContext();
+    }
     m_BehaviorId = ctx.Behavior ? ctx.Behavior->GetID() : 0;
     m_BehaviorStamp = CaptureBridgeObjectStamp(ctx.Behavior);
     // Original CK2 marks objects CK_OBJECT_TOBEDELETED before it calls
@@ -331,6 +337,26 @@ CKContext *BehaviorFrame::Context() const {
 
 float BehaviorFrame::DeltaTime() const {
     return m_ContextSnapshot.DeltaTime;
+}
+
+CKLevel *BehaviorFrame::CurrentLevel() const {
+    return m_ContextSnapshot.CurrentLevel;
+}
+
+CKScene *BehaviorFrame::CurrentScene() const {
+    return m_ContextSnapshot.CurrentScene;
+}
+
+CKScene *BehaviorFrame::PreviousScene() const {
+    return m_ContextSnapshot.PreviousScene;
+}
+
+CKRenderContext *BehaviorFrame::CurrentRenderContext() const {
+    return m_ContextSnapshot.CurrentRenderContext;
+}
+
+CKDWORD BehaviorFrame::CallbackMessage() const {
+    return m_ContextSnapshot.CallbackMessage;
 }
 
 bool BehaviorFrame::IsValid() const {
@@ -1209,9 +1235,6 @@ CKBehaviorContext BehaviorFrame::MakeContext() const {
     CKBehaviorContext ctx = m_ContextSnapshot;
     ctx.Context = m_Context;
     ctx.Behavior = Behavior();
-    ctx.CurrentLevel = ctx.CurrentLevel ? ctx.CurrentLevel : (m_Context ? m_Context->GetCurrentLevel() : nullptr);
-    ctx.CurrentScene = ctx.CurrentScene ? ctx.CurrentScene : (m_Context ? m_Context->GetCurrentScene() : nullptr);
-    ctx.CurrentRenderContext = ctx.CurrentRenderContext ? ctx.CurrentRenderContext : (m_Context ? m_Context->GetPlayerRenderContext() : nullptr);
     ctx.ParameterManager = ctx.ParameterManager ? ctx.ParameterManager : (m_Context ? m_Context->GetParameterManager() : nullptr);
     ctx.MessageManager = ctx.MessageManager ? ctx.MessageManager : (m_Context ? m_Context->GetMessageManager() : nullptr);
     ctx.AttributeManager = ctx.AttributeManager ? ctx.AttributeManager : (m_Context ? m_Context->GetAttributeManager() : nullptr);
