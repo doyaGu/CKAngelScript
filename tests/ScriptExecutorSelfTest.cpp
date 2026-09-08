@@ -794,6 +794,40 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "CKAttributeManager@ AttributeManager() const",
         "CKTimeManager@ TimeManager() const",
         "CKDWORD CallbackMessage() const",
+        "void SetName(const string &in name, bool shared = false)",
+        "CK_CLASSID ClassId() const",
+        "CKDWORD ObjectFlags() const",
+        "void ModifyObjectFlags(CKDWORD add, CKDWORD remove)",
+        "bool IsDynamic() const",
+        "bool IsToBeDeleted() const",
+        "bool IsNotToBeSaved() const",
+        "bool IsPrivate() const",
+        "bool IsInterfaceObj() const",
+        "bool IsUpToDate() const",
+        "bool IsObjectUsed(CKObject@ object, CK_CLASSID cid) const",
+        "int MemoryOccupation() const",
+        "NativePointer AppData() const",
+        "void SetAppData(NativePointer data)",
+        "CKERROR Copy(CKObject@ object, CKDependenciesContext &in context)",
+        "CKERROR PrepareDependencies(CKDependenciesContext &in context)",
+        "CKERROR RemapDependencies(CKDependenciesContext &in context)",
+        "CKStateChunk@ Save(CKFile@ file, CKDWORD flags)",
+        "CKERROR Load(CKStateChunk@ chunk, CKFile@ file)",
+        "void PreSave(CKFile@ file, CKDWORD flags)",
+        "void PreDelete()",
+        "void CheckPreDeletion()",
+        "void CheckPostDeletion()",
+        "void PostLoad()",
+        "CKScene@ SceneIn(int index) const",
+        "int SceneInCount() const",
+        "bool IsInScene(CKScene@ scene) const",
+        "bool IsActiveInCurrentScene() const",
+        "bool IsActiveInScene(CKScene@ scene) const",
+        "void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)",
+        "bool IsVisible() const",
+        "int CanBeHide() const",
+        "bool IsHiddenByParent() const",
+        "bool IsHierarchicallyHide() const",
     };
     for (const char *decl : removedCompatibilityMethods) {
         if (frameType->GetMethodByDecl(decl)) {
@@ -830,11 +864,6 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "    frame.EnablePout(0, false); if (frame.PoutEnabled(0)) return 126; frame.EnablePout(\"Handled\", true); if (!frame.PoutEnabled(0)) return 127;\n"
         "    BehaviorRef@ self = frame.Self(); if (self is null || !self.valid || self.id != frame.id) return 128;\n"
         "    if (frame.Layout() is null || self.Layout() is null || frame.Graph() is null || frame.AsGraph() is null) return 129;\n"
-        "    CKBehavior@ raw = cast<CKBehavior>(frame.Context().GetObject(frame.id));\n"
-        "    if (raw is null) return 143;\n"
-        "    frame.ClassId(); frame.ObjectFlags(); frame.IsDynamic(); frame.IsToBeDeleted(); frame.IsNotToBeSaved(); frame.IsPrivate(); frame.IsInterfaceObj(); frame.IsUpToDate(); frame.MemoryOccupation(); frame.AppData();\n"
-        "    CKScene@ currentScene = frame.Context().GetCurrentScene();\n"
-        "    frame.SceneInCount(); frame.SceneIn(0); frame.IsInScene(currentScene); frame.IsActiveInCurrentScene(); frame.IsActiveInScene(currentScene); frame.IsVisible(); frame.CanBeHide(); frame.IsHiddenByParent(); frame.IsHierarchicallyHide(); frame.IsObjectUsed(raw, raw.GetClassID());\n"
         "    NativeBuffer@ pinData = frame.PinReadData(0);\n"
         "    int bufferedPinValue = 0; if (pinData is null || pinData.Size() != 4 || pinData.Read(bufferedPinValue) != 4 || bufferedPinValue != 41) return 182;\n"
         "    NativeBuffer@ poutData = frame.PoutWriteData(0); if (poutData is null || poutData.Size() != 4) return 183;\n"

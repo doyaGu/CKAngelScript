@@ -143,28 +143,6 @@ CK_ID get_id() const
 string get_name() const
 float DeltaTime() const
 
-// CKObject / CKSceneObject inherited behavior state.
-void SetName(const string &in name, bool shared = false)
-CK_CLASSID ClassId() const
-CKDWORD ObjectFlags() const
-void ModifyObjectFlags(CKDWORD add, CKDWORD remove)
-bool IsDynamic() const
-bool IsToBeDeleted() const
-bool IsNotToBeSaved() const
-bool IsPrivate() const
-bool IsInterfaceObj() const
-bool IsUpToDate() const
-int MemoryOccupation() const
-NativePointer AppData() const
-void SetAppData(NativePointer data)
-CKScene@ SceneIn(int index) const
-int SceneInCount() const
-bool IsInScene(CKScene@ scene) const
-bool IsActiveInCurrentScene() const
-bool IsActiveInScene(CKScene@ scene) const
-void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)
-bool IsVisible() const
-
 // Current behavior object and graph.
 CKBeObject@ Owner() const
 CKBeObject@ Target() const

@@ -155,6 +155,176 @@
       "key": "method|BehaviorFrame|uint CallbackMessage() const",
       "baselineCatalogSha256": "9c8ee8cf40a59af14259df725c61b280b5842c56e4035390dbcf89bcad6734ed",
       "reason": "Remove the raw CKBehaviorContext callback field because it is not part of the Executor lifecycle contract."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR Copy(CKObject@ object, CKDependenciesContext&in context)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject persistence pass-through; use an explicit CKBehavior handle for SDK operations."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR Load(CKStateChunk@ chunk, CKFile@ file)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject persistence pass-through; use an explicit CKBehavior handle for SDK operations."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR PrepareDependencies(CKDependenciesContext&in context)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject persistence pass-through; use an explicit CKBehavior handle for SDK operations."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR RemapDependencies(CKDependenciesContext&in context)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject persistence pass-through; use an explicit CKBehavior handle for SDK operations."
+    },
+    {
+      "key": "method|BehaviorFrame|CKStateChunk@ Save(CKFile@ file, uint flags)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject persistence pass-through; use an explicit CKBehavior handle for SDK operations."
+    },
+    {
+      "key": "method|BehaviorFrame|CKScene@ SceneIn(int index) const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject pass-through; frame semantics do not include raw scene membership."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer AppData() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the raw CKObject app-data pass-through; use an explicit CKBehavior handle for SDK operations."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsActiveInCurrentScene() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject pass-through; frame semantics do not include raw scene membership."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsActiveInScene(CKScene@ scene) const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject pass-through; use an explicit CKBehavior handle for SDK operations."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsInScene(CKScene@ scene) const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject pass-through; frame semantics do not include raw scene membership."
+    },
+    {
+      "key": "method|BehaviorFrame|int SceneInCount() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject pass-through; frame semantics do not include raw scene membership."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsDynamic() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove duplicate CKObject metadata; BehaviorFrame.Self() provides the high-level identity view."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsInterfaceObj() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject metadata pass-through; use an explicit CKBehavior handle for SDK details."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsNotToBeSaved() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject metadata pass-through; use an explicit CKBehavior handle for SDK details."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsObjectUsed(CKObject@ object, int cid) const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject dependency pass-through; use an explicit CKBehavior handle for SDK operations."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsPrivate() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject metadata pass-through; use an explicit CKBehavior handle for SDK details."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsToBeDeleted() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject metadata pass-through; frame validity owns the high-level lifecycle contract."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsVisible() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject visibility pass-through; use an explicit CKBehavior handle for SDK details."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsHiddenByParent() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject visibility pass-through; use an explicit CKBehavior handle for SDK details."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsHierarchicallyHide() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject visibility pass-through; use an explicit CKBehavior handle for SDK details."
+    },
+    {
+      "key": "method|BehaviorFrame|int CanBeHide() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject visibility pass-through; use an explicit CKBehavior handle for SDK details."
+    },
+    {
+      "key": "method|BehaviorFrame|int ClassId() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove duplicate CKObject metadata; BehaviorFrame.Self() provides the high-level identity view."
+    },
+    {
+      "key": "method|BehaviorFrame|int MemoryOccupation() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject diagnostics pass-through; use an explicit CKBehavior handle for SDK details."
+    },
+    {
+      "key": "method|BehaviorFrame|uint ObjectFlags() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove raw CKObject flags from the high-level frame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|void ModifyObjectFlags(uint add, uint remove)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove raw CKObject flag mutation from the high-level frame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsUpToDate() const",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject metadata pass-through; use an explicit CKBehavior handle for SDK details."
+    },
+    {
+      "key": "method|BehaviorFrame|void CheckPostDeletion()",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject deletion callback pass-through; it is not part of the script lifecycle contract."
+    },
+    {
+      "key": "method|BehaviorFrame|void CheckPreDeletion()",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject deletion callback pass-through; it is not part of the script lifecycle contract."
+    },
+    {
+      "key": "method|BehaviorFrame|void PostLoad()",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject persistence callback pass-through; it is not part of the script lifecycle contract."
+    },
+    {
+      "key": "method|BehaviorFrame|void PreDelete()",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject deletion callback pass-through; it is not part of the script lifecycle contract."
+    },
+    {
+      "key": "method|BehaviorFrame|void PreSave(CKFile@ file, uint flags)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKObject persistence callback pass-through; it is not part of the script lifecycle contract."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetAppData(NativePointer data)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove raw CKObject app-data mutation from the high-level frame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetName(const string&in name, bool shared = false)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Keep BehaviorFrame identity read-only; use an explicit CKBehavior handle for SDK mutation."
+    },
+    {
+      "key": "method|BehaviorFrame|void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)",
+      "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
+      "reason": "Remove the CKSceneObject visibility pass-through; use an explicit CKBehavior handle for SDK operations."
     }
   ]
 }
