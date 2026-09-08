@@ -52,6 +52,9 @@ bool ScriptInitialLifecycle::Complete(ScriptInitialPhase phase) {
 }
 
 void ScriptInitialLifecycle::SetDesiredEnabled(bool enabled) {
+    if (DestroyPending() || Destroyed()) {
+        return;
+    }
     m_DesiredEnabled = enabled;
     if (!enabled) {
         CompleteResume();
@@ -63,6 +66,9 @@ bool ScriptInitialLifecycle::DesiredEnabled() const {
 }
 
 void ScriptInitialLifecycle::RequestPause(bool disableRequired) {
+    if (DestroyPending() || Destroyed()) {
+        return;
+    }
     const bool startsTransition = !m_Paused && !PausePending();
     m_Paused = true;
     m_ResumePending = false;
@@ -113,6 +119,9 @@ void ScriptInitialLifecycle::CompletePause() {
 }
 
 void ScriptInitialLifecycle::RequestResume(bool hostEligible) {
+    if (DestroyPending() || Destroyed()) {
+        return;
+    }
     m_Paused = false;
     m_ResumePending = m_DesiredEnabled && hostEligible;
 }
@@ -134,6 +143,9 @@ void ScriptInitialLifecycle::CompleteResume() {
 }
 
 void ScriptInitialLifecycle::RequestReset() {
+    if (DestroyPending() || Destroyed()) {
+        return;
+    }
     CompletePause();
     CompleteResume();
     ResetStart();
@@ -165,6 +177,68 @@ void ScriptInitialLifecycle::CompleteReset() {
     m_ResetPending = false;
 }
 
+void ScriptInitialLifecycle::RequestDestroy(bool disableRequired) {
+    if (DestroyPending() || Destroyed()) {
+        return;
+    }
+
+    CompletePause();
+    CompleteResume();
+    CompleteReset();
+    m_DesiredEnabled = false;
+    m_Paused = false;
+    m_DestroyPhase = disableRequired
+        ? ScriptDestroyPhase::OnDisable
+        : ScriptDestroyPhase::OnDestroy;
+    m_DestroyPending = true;
+}
+
+ScriptLifecycleInvocationStatus ScriptInitialLifecycle::AdvanceDestroy(
+    const ScriptDestroyLifecycleInvoker &invoke) {
+    if (!DestroyPending() || m_DestroyPhase == ScriptDestroyPhase::Ready) {
+        return ScriptLifecycleInvocationStatus::Finished;
+    }
+    if (!invoke) {
+        m_DestroyPhase = ScriptDestroyPhase::Ready;
+        return ScriptLifecycleInvocationStatus::Failed;
+    }
+
+    bool failed = false;
+    while (m_DestroyPhase != ScriptDestroyPhase::Ready) {
+        const ScriptDestroyPhase phase = m_DestroyPhase;
+        const ScriptLifecycleInvocationStatus status = invoke(phase);
+        if (status == ScriptLifecycleInvocationStatus::Suspended) {
+            return status;
+        }
+        failed = failed || status == ScriptLifecycleInvocationStatus::Failed;
+        m_DestroyPhase = phase == ScriptDestroyPhase::OnDisable
+            ? ScriptDestroyPhase::OnDestroy
+            : ScriptDestroyPhase::Ready;
+    }
+    return failed
+        ? ScriptLifecycleInvocationStatus::Failed
+        : ScriptLifecycleInvocationStatus::Finished;
+}
+
+bool ScriptInitialLifecycle::DestroyPending() const {
+    return m_DestroyPending;
+}
+
+bool ScriptInitialLifecycle::Destroyed() const {
+    return m_Destroyed;
+}
+
+void ScriptInitialLifecycle::CompleteDestroy() {
+    m_DestroyPhase = ScriptDestroyPhase::Ready;
+    m_DestroyPending = false;
+    m_Destroyed = true;
+    CompletePause();
+    CompleteResume();
+    CompleteReset();
+    m_DesiredEnabled = false;
+    m_Paused = false;
+}
+
 void ScriptInitialLifecycle::ResetStart() {
     if (m_CompletedPhases > 2) {
         m_CompletedPhases = 2;
@@ -177,4 +251,7 @@ void ScriptInitialLifecycle::Clear() {
     CompleteReset();
     m_Paused = false;
     m_ResumePending = false;
+    m_DestroyPhase = ScriptDestroyPhase::Ready;
+    m_DestroyPending = false;
+    m_Destroyed = false;
 }

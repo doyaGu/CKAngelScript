@@ -691,14 +691,6 @@ const char *CachedScript::GetSectionCode(int index) const {
     return std::get<1>(sections[index]).c_str();
 }
 
-void CachedScript::ClearCodeCache() {
-    for (size_t i = 0; i < sections.size(); ++i) {
-        if (!HasSectionCode(i)) {
-            std::get<1>(sections[i]).clear();
-        }
-    }
-}
-
 CachedScriptSourceState CachedScript::CaptureSourceState() const {
     CachedScriptSourceState state;
     state.Sections = sections;

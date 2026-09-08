@@ -36,8 +36,6 @@ public:
     virtual const char *GetSectionFilename(int index) const = 0;
     virtual const char *GetSectionCode(int index) const = 0;
 
-    virtual void ClearCodeCache() = 0;
-
     virtual bool LoadFromChunk(CKStateChunk *chunk) = 0;
     virtual bool SaveToChunk(CKStateChunk *chunk) = 0;
 
@@ -155,8 +153,6 @@ struct CachedScript : ICachedScript {
     int GetSectionCount() const override;
     const char *GetSectionFilename(int index) const override;
     const char *GetSectionCode(int index) const override;
-
-    void ClearCodeCache() override;
 
     CachedScriptSourceState CaptureSourceState() const;
     bool RestoreSourceState(const CachedScriptSourceState &state);

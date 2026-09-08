@@ -23,12 +23,20 @@ enum class ScriptPausePhase : std::uint8_t {
     Ready,
 };
 
+enum class ScriptDestroyPhase : std::uint8_t {
+    OnDisable,
+    OnDestroy,
+    Ready,
+};
+
 using ScriptInitialLifecycleInvoker =
     std::function<ScriptLifecycleInvocationStatus(ScriptInitialPhase)>;
 using ScriptPauseLifecycleInvoker =
     std::function<ScriptLifecycleInvocationStatus(ScriptPausePhase)>;
 using ScriptResetLifecycleInvoker =
     std::function<ScriptLifecycleInvocationStatus()>;
+using ScriptDestroyLifecycleInvoker =
+    std::function<ScriptLifecycleInvocationStatus(ScriptDestroyPhase)>;
 
 class ScriptInitialLifecycle final {
 public:
@@ -54,6 +62,12 @@ public:
         const ScriptResetLifecycleInvoker &invoke);
     bool ResetPending() const;
     void CompleteReset();
+    void RequestDestroy(bool disableRequired);
+    ScriptLifecycleInvocationStatus AdvanceDestroy(
+        const ScriptDestroyLifecycleInvoker &invoke);
+    bool DestroyPending() const;
+    bool Destroyed() const;
+    void CompleteDestroy();
     void ResetStart();
     void Clear();
 
@@ -65,6 +79,9 @@ private:
     bool m_Paused = false;
     bool m_ResumePending = false;
     bool m_ResetPending = false;
+    ScriptDestroyPhase m_DestroyPhase = ScriptDestroyPhase::Ready;
+    bool m_DestroyPending = false;
+    bool m_Destroyed = false;
 };
 
 #endif // CK_SCRIPT_INITIAL_LIFECYCLE_H

@@ -8,6 +8,7 @@
 #include "ScriptBridgeCommon.h"
 #include "ScriptBehaviorBridge.h"
 #include "ScriptBridgeHandles.h"
+#include "ScriptCache.h"
 #include "ScriptInvoker.h"
 
 namespace ScriptComponentSupport {

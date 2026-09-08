@@ -135,15 +135,6 @@ struct ScriptComponentState {
     asIScriptFunction *OnDestroy = nullptr;
     asIScriptFunction *OnReset = nullptr;
     asIScriptFunction *OnMessage = nullptr;
-    ScriptBehaviorArgumentKind OnLoadArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind AwakeArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnEnableArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind StartArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind UpdateArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnDisableArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnDestroyArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnResetArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnMessageArgument = ScriptBehaviorArgumentKind::BehaviorContext;
     asIScriptFunction *ActiveLifecycle = nullptr;
     std::string ActiveLifecycleName;
 
@@ -166,8 +157,6 @@ struct ScriptComponentState {
     bool InstanceEnabled = false;
     bool ScriptActive = false;
     bool Failed = false;
-    bool PendingDestroy = false;
-    bool DestructionCompleted = false;
     bool PendingDisableOutput = false;
     bool PendingResetRuntime = false;
 
@@ -193,15 +182,6 @@ struct ScriptComponentState {
         ReleaseFunction(OnDestroy);
         ReleaseFunction(OnReset);
         ReleaseFunction(OnMessage);
-        OnLoadArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        AwakeArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnEnableArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        StartArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        UpdateArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnDisableArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnDestroyArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnResetArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnMessageArgument = ScriptBehaviorArgumentKind::BehaviorContext;
         ActiveLifecycle = nullptr;
         ActiveLifecycleName.clear();
     }

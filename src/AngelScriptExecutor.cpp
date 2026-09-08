@@ -685,11 +685,6 @@ std::vector<ScriptBridgeFrameLocalDecl> FrameLocalDecls(const std::vector<Execut
     return decls;
 }
 
-ScriptBehaviorBridge *BehaviorBridgeFromContext(const CKBehaviorContext &ctx) {
-    return ScriptHostScope::From(
-        ctx, ScriptHostScopeContextResolution::DirectContext).Bridge();
-}
-
 bool ApplyInterface(const CKBehaviorContext &ctx,
                    CKBehavior *behavior,
                    const std::string &interfaceText,
@@ -698,7 +693,8 @@ bool ApplyInterface(const CKBehaviorContext &ctx,
     if (!behavior) {
         return true;
     }
-    ScriptBehaviorBridge *bridge = BehaviorBridgeFromContext(ctx);
+    ScriptBehaviorBridge *bridge = ScriptHostScope::From(
+        ctx, ScriptHostScopeContextResolution::DirectContext).Bridge();
     if (!bridge) {
         error = "Executor interface requires ScriptBehaviorBridge.";
         return false;
@@ -744,7 +740,7 @@ void SetState(CKBehavior *behavior, ScriptExecutorState *state) {
     }
 }
 
-bool IsExecutorMethod(asIScriptFunction *method, bool execute, ScriptBehaviorArgumentKind &argumentKind) {
+bool IsExecutorMethod(asIScriptFunction *method, bool execute) {
     if (!method || method->GetParamCount() != 1) {
         return false;
     }
@@ -760,35 +756,23 @@ bool IsExecutorMethod(asIScriptFunction *method, bool execute, ScriptBehaviorArg
         return false;
     }
     asIScriptEngine *engine = method->GetEngine();
-    const int expectedContext = engine ? engine->GetTypeIdByDecl("CKBehaviorContext") : -1;
     const int expectedFrame = engine ? engine->GetTypeIdByDecl("BehaviorFrame@") : -1;
     const asDWORD refFlags = flags & asTM_INOUTREF;
-    if (typeId == expectedFrame && refFlags == 0) {
-        argumentKind = ScriptBehaviorArgumentKind::BehaviorFrame;
-        return true;
-    }
-    if (typeId == expectedContext && refFlags == asTM_INREF && (flags & asTM_CONST) != 0) {
-        argumentKind = ScriptBehaviorArgumentKind::BehaviorContext;
-        return true;
-    }
-    return false;
+    return typeId == expectedFrame && refFlags == 0;
 }
 
 bool CacheLifecycle(asITypeInfo *type,
                     const char *name,
                     bool required,
                     asIScriptFunction *&out,
-                    ScriptBehaviorArgumentKind &argumentKind,
                     std::string &error) {
     out = nullptr;
-    argumentKind = ScriptBehaviorArgumentKind::BehaviorContext;
     if (!type) {
         return false;
     }
     const bool execute = std::strcmp(name, "Execute") == 0;
     bool sawName = false;
     std::string candidateDecls;
-    asIScriptFunction *contextMethod = nullptr;
     asIScriptFunction *frameMethod = nullptr;
     for (asUINT i = 0; i < type->GetMethodCount(); ++i) {
         asIScriptFunction *method = type->GetMethodByIndex(i);
@@ -800,27 +784,21 @@ bool CacheLifecycle(asITypeInfo *type,
             candidateDecls += "; ";
         }
         candidateDecls += method->GetDeclaration(false, false, true);
-        ScriptBehaviorArgumentKind matchedKind = ScriptBehaviorArgumentKind::BehaviorContext;
-        if (IsExecutorMethod(method, execute, matchedKind)) {
-            if (matchedKind == ScriptBehaviorArgumentKind::BehaviorFrame && !frameMethod) {
-                frameMethod = method;
-            } else if (matchedKind == ScriptBehaviorArgumentKind::BehaviorContext && !contextMethod) {
-                contextMethod = method;
-            }
+        if (IsExecutorMethod(method, execute) && !frameMethod) {
+            frameMethod = method;
         }
     }
 
-    if (frameMethod || contextMethod) {
-        out = frameMethod ? frameMethod : contextMethod;
-        argumentKind = frameMethod ? ScriptBehaviorArgumentKind::BehaviorFrame : ScriptBehaviorArgumentKind::BehaviorContext;
+    if (frameMethod) {
+        out = frameMethod;
         out->AddRef();
         return true;
     }
 
     if (sawName || required) {
         error = execute
-            ? "Invalid or missing executor method. Expected: void/int Execute(BehaviorFrame@ frame) or void/int Execute(const CKBehaviorContext &in ctx)"
-            : std::string("Invalid lifecycle method. Expected: void ") + name + "(BehaviorFrame@ frame) or void " + name + "(const CKBehaviorContext &in ctx)";
+            ? "Invalid or missing executor method. Expected: void/int Execute(BehaviorFrame@ frame)"
+            : std::string("Invalid lifecycle method. Expected: void ") + name + "(BehaviorFrame@ frame)";
         if (!candidateDecls.empty()) {
             error += ". Found candidates: ";
             error += candidateDecls;
@@ -864,7 +842,6 @@ bool ValidateAttachedModuleGeneration(const CKBehaviorContext &ctx,
 LifecycleInvokeStatus InvokeLifecycle(const CKBehaviorContext &ctx,
                                       ScriptExecutorState *state,
                                       asIScriptFunction *method,
-                                      ScriptBehaviorArgumentKind argumentKind,
                                       const char *name) {
     if (!state || !method) {
         return LifecycleInvokeStatus::Finished;
@@ -875,7 +852,7 @@ LifecycleInvokeStatus InvokeLifecycle(const CKBehaviorContext &ctx,
     if (state->Invoker && !state->Invoker->IsContextSuspended()) {
         state->ActiveLifecycleName = name ? name : "";
     }
-    const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(state->Object, method, ctx, argumentKind);
+    const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(state->Object, method, ctx);
     if (status == ScriptInvocationStatus::Suspended) {
         return LifecycleInvokeStatus::Suspended;
     }
@@ -902,25 +879,66 @@ LifecycleInvokeStatus AdvanceInitialLifecycle(const CKBehaviorContext &ctx,
                 return InvokeLifecycle(ctx,
                                        state,
                                        state->OnLoad,
-                                       state->OnLoadArgument,
                                        "OnLoad");
             case ScriptInitialPhase::Awake:
                 return InvokeLifecycle(ctx,
                                        state,
                                        state->Awake,
-                                       state->AwakeArgument,
                                        "Awake");
             case ScriptInitialPhase::Start:
                 return InvokeLifecycle(ctx,
                                        state,
                                        state->Start,
-                                       state->StartArgument,
                                        "Start");
             case ScriptInitialPhase::Ready:
                 break;
             }
             return LifecycleInvokeStatus::Failed;
         });
+}
+
+LifecycleInvokeStatus AdvancePauseTransition(const CKBehaviorContext &ctx,
+                                             ScriptExecutorState *state) {
+    if (!state) {
+        return LifecycleInvokeStatus::Failed;
+    }
+    return state->InitialLifecycle.AdvancePause(
+        [&](ScriptPausePhase phase) {
+            if (phase == ScriptPausePhase::OnDisable) {
+                return LifecycleInvokeStatus::Finished;
+            }
+            if (phase != ScriptPausePhase::OnPause) {
+                return LifecycleInvokeStatus::Failed;
+            }
+            return InvokeLifecycle(ctx,
+                                   state,
+                                   state->OnPause,
+                                   "OnPause");
+        });
+}
+
+LifecycleInvokeStatus AdvanceResumeTransition(const CKBehaviorContext &ctx,
+                                              ScriptExecutorState *state) {
+    if (!state || !state->InitialLifecycle.ResumeReady(false)) {
+        return LifecycleInvokeStatus::Finished;
+    }
+    const LifecycleInvokeStatus status = InvokeLifecycle(ctx,
+                                                         state,
+                                                         state->OnResume,
+                                                         "OnResume");
+    if (status != LifecycleInvokeStatus::Suspended) {
+        state->InitialLifecycle.CompleteResume();
+    }
+    return status;
+}
+
+void AbortExecutorInvocationBeforePause(ScriptExecutorState *state) {
+    if (!state || !state->Invoker || !state->Invoker->IsContextSuspended()) {
+        return;
+    }
+    state->Invoker->AbortContext();
+    state->SuspendedInputs.clear();
+    state->ActiveLifecycleName.clear();
 }
 
 LifecycleInvokeStatus AdvanceResetTransition(const CKBehaviorContext &ctx,
@@ -936,7 +954,6 @@ LifecycleInvokeStatus AdvanceResetTransition(const CKBehaviorContext &ctx,
             return InvokeLifecycle(ctx,
                                    state,
                                    state->OnReset,
-                                   state->OnResetArgument,
                                    "OnReset");
         });
 }
@@ -952,24 +969,35 @@ void CancelExecutorAsyncWork(ScriptExecutorState *state, const char *reason) {
 }
 
 void InvokeOnDestroy(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
-    if (state->Invoker && state->Object && state->OnDestroy) {
-        if (!ValidateAttachedModuleGeneration(ctx, state, "OnDestroy")) {
-            return;
-        }
-        if (state->Invoker->IsContextSuspended()) {
-            state->Invoker->AbortContext();
-            state->SuspendedInputs.clear();
-            state->ActiveLifecycleName.clear();
-        }
-        const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(
-            state->Object,
-            state->OnDestroy,
-            ctx,
-            state->OnDestroyArgument);
-        if (status == ScriptInvocationStatus::Suspended) {
-            state->Invoker->AbortContext();
-        }
+    if (!state || !state->Object) {
+        return;
     }
+
+    state->InitialLifecycle.RequestDestroy(false);
+    if (state->Invoker && state->Invoker->IsContextSuspended()) {
+        state->Invoker->AbortContext();
+        state->SuspendedInputs.clear();
+        state->ActiveLifecycleName.clear();
+    }
+    state->InitialLifecycle.AdvanceDestroy(
+        [&](ScriptDestroyPhase phase) {
+            if (phase == ScriptDestroyPhase::OnDisable) {
+                return LifecycleInvokeStatus::Finished;
+            }
+            LifecycleInvokeStatus status = InvokeLifecycle(
+                ctx,
+                state,
+                state->OnDestroy,
+                "OnDestroy");
+            if (status == LifecycleInvokeStatus::Suspended && state->Invoker) {
+                state->Invoker->AbortContext();
+                state->SuspendedInputs.clear();
+                state->ActiveLifecycleName.clear();
+                status = LifecycleInvokeStatus::Finished;
+            }
+            return status;
+        });
+    state->InitialLifecycle.CompleteDestroy();
 }
 
 void ReleaseStateContents(const CKBehaviorContext &ctx, ScriptExecutorState *state) {
@@ -987,7 +1015,8 @@ void ReleaseStateContents(const CKBehaviorContext &ctx, ScriptExecutorState *sta
     if (state->Invoker) {
         state->Invoker->AbortContext();
     }
-    if (ScriptBehaviorBridge *bridge = BehaviorBridgeFromContext(ctx)) {
+    if (ScriptBehaviorBridge *bridge = ScriptHostScope::From(
+            ctx, ScriptHostScopeContextResolution::DirectContext).Bridge()) {
         bridge->ClearFrameLocalInterface(state->BehaviorId, true);
     }
     state->ReleaseCachedMethods();
@@ -1094,6 +1123,11 @@ bool AttachScriptEntryModule(ScriptManager *manager,
             << " state='" << info.State() << "'"
             << " error='" << info.Error() << "'";
 
+    if (!info.Exists() || info.Host() != "executor") {
+        error = "Executor requires an [executor] script entry; " + details.str();
+        return false;
+    }
+
     if (scriptModule.empty()) {
         details << "; module=<none>";
         error = details.str();
@@ -1196,16 +1230,47 @@ ExecutorReadyStatus EnsureReady(const CKBehaviorContext &ctx, ScriptExecutorStat
         }
 
         std::string cacheError;
-        if (!CacheLifecycle(type, "Execute", true, state->Execute, state->ExecuteArgument, cacheError) ||
-            !CacheLifecycle(type, "OnLoad", false, state->OnLoad, state->OnLoadArgument, cacheError) ||
-            !CacheLifecycle(type, "Awake", false, state->Awake, state->AwakeArgument, cacheError) ||
-            !CacheLifecycle(type, "Start", false, state->Start, state->StartArgument, cacheError) ||
-            !CacheLifecycle(type, "OnDestroy", false, state->OnDestroy, state->OnDestroyArgument, cacheError) ||
-            !CacheLifecycle(type, "OnReset", false, state->OnReset, state->OnResetArgument, cacheError)) {
+        if (!CacheLifecycle(type, "Execute", true, state->Execute, cacheError) ||
+            !CacheLifecycle(type, "OnLoad", false, state->OnLoad, cacheError) ||
+            !CacheLifecycle(type, "Awake", false, state->Awake, cacheError) ||
+            !CacheLifecycle(type, "Start", false, state->Start, cacheError) ||
+            !CacheLifecycle(type, "OnPause", false, state->OnPause, cacheError) ||
+            !CacheLifecycle(type, "OnResume", false, state->OnResume, cacheError) ||
+            !CacheLifecycle(type, "OnDestroy", false, state->OnDestroy, cacheError) ||
+            !CacheLifecycle(type, "OnReset", false, state->OnReset, cacheError)) {
             FailSetup(ctx, state, cacheError);
             return ExecutorReadyStatus::Failed;
         }
+        state->InitialLifecycle.SetDesiredEnabled(true);
         state->Loaded = true;
+    }
+
+    bool activationTransitionAdvanced = false;
+    if (state->InitialLifecycle.PausePending()) {
+        const LifecycleInvokeStatus status = AdvancePauseTransition(ctx, state);
+        if (status == LifecycleInvokeStatus::Suspended) {
+            return ExecutorReadyStatus::Suspended;
+        }
+        if (status == LifecycleInvokeStatus::Failed) {
+            return ExecutorReadyStatus::Failed;
+        }
+        activationTransitionAdvanced = true;
+    }
+    if (state->InitialLifecycle.Paused()) {
+        return ExecutorReadyStatus::LifecycleOnly;
+    }
+    if (state->InitialLifecycle.ResumeReady(false)) {
+        const LifecycleInvokeStatus status = AdvanceResumeTransition(ctx, state);
+        if (status == LifecycleInvokeStatus::Suspended) {
+            return ExecutorReadyStatus::Suspended;
+        }
+        if (status == LifecycleInvokeStatus::Failed) {
+            return ExecutorReadyStatus::Failed;
+        }
+        activationTransitionAdvanced = true;
+    }
+    if (activationTransitionAdvanced) {
+        return ExecutorReadyStatus::LifecycleOnly;
     }
 
     const LifecycleInvokeStatus lifecycleStatus =
@@ -1279,14 +1344,8 @@ void KeepExecutorScheduled(CKBehavior *behavior) {
 }
 
 CKBehaviorContext ExecutorContext(ScriptManager *manager, ScriptExecutorState *state) {
-    CKBehaviorContext ctx = {};
-    ctx.Behavior = state ? state->Behavior : nullptr;
-    ctx.Context = manager ? manager->GetCKContext() : nullptr;
-    ctx.ParameterManager = ctx.Context ? ctx.Context->GetParameterManager() : nullptr;
-    ctx.MessageManager = ctx.Context ? ctx.Context->GetMessageManager() : nullptr;
-    ctx.AttributeManager = ctx.Context ? ctx.Context->GetAttributeManager() : nullptr;
-    ctx.TimeManager = ctx.Context ? ctx.Context->GetTimeManager() : nullptr;
-    return ctx;
+    return ScriptHostScope::From(manager ? manager->GetCKContext() : nullptr)
+        .MakeBehaviorContext(state ? state->Behavior : nullptr);
 }
 
 } // namespace
@@ -1471,7 +1530,6 @@ int AngelScriptExecutor(const CKBehaviorContext &behcontext) {
         state->Object,
         state->Execute,
         behcontext,
-        state->ExecuteArgument,
         [&](asIScriptContext *ctx) {
             if (!ctx) {
                 return false;
@@ -1584,6 +1642,41 @@ CKERROR AngelScriptExecutorCallback(const CKBehaviorContext &behcontext) {
                 if (status == LifecycleInvokeStatus::Failed) {
                     return CKBR_OK;
                 }
+            }
+            break;
+        }
+        case CKM_BEHAVIORPAUSE: {
+            ScriptExecutorState *state = GetState(behavior);
+            if (!state || !state->Loaded || state->Failed ||
+                state->InitialLifecycle.Paused()) {
+                break;
+            }
+            state->InitialLifecycle.RequestPause(false);
+            if (state->InitialLifecycle.ResetPending()) {
+                KeepExecutorScheduled(behavior);
+                break;
+            }
+            AbortExecutorInvocationBeforePause(state);
+            const LifecycleInvokeStatus status = AdvancePauseTransition(behcontext, state);
+            if (status == LifecycleInvokeStatus::Suspended) {
+                KeepExecutorScheduled(behavior);
+            }
+            break;
+        }
+        case CKM_BEHAVIORRESUME: {
+            ScriptExecutorState *state = GetState(behavior);
+            if (!state || !state->Loaded || state->Failed) {
+                break;
+            }
+            const bool transitionBlocked = state->InitialLifecycle.PausePending() ||
+                                           state->InitialLifecycle.ResetPending();
+            state->InitialLifecycle.RequestResume(true);
+            const bool resumeEligible = state->InitialLifecycle.ResumePending();
+            if (state->InitialLifecycle.ResumeReady(transitionBlocked)) {
+                AdvanceResumeTransition(behcontext, state);
+            }
+            if (resumeEligible) {
+                KeepExecutorScheduled(behavior);
             }
             break;
         }

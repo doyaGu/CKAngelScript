@@ -167,7 +167,7 @@ std::string MetadataSuffixKind(const std::string &kind) {
 }
 
 bool IsMetadataBaseKind(const std::string &base) {
-    return base == "script" || base == "runtime" || base == "executor";
+    return base == "runtime" || base == "executor";
 }
 
 bool IsMainMetadataKind(const std::string &kind) {

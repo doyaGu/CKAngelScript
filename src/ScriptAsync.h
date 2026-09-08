@@ -195,6 +195,8 @@ public:
     void BeginOwnerExecution(asIScriptContext *context, ScriptAsyncOwnerId ownerId);
     void EndOwnerExecution(asIScriptContext *context);
     bool CancelOwner(ScriptAsyncOwnerId ownerId, const std::string &reason);
+    bool CancelOrphaned(const std::unordered_set<ScriptAsyncOwnerId> &liveOwnerIds,
+                        const std::string &reason);
 
     ScriptAsyncTaskBase *CreateDelay(int frames);
     ScriptAsyncTaskBase *CreateManualTask(int subtypeId);

@@ -52,8 +52,11 @@ ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object) {
     return stamp;
 }
 
-bool BridgeObjectStampMatches(CKObject *object, const ScriptBridgeObjectStamp &stamp) {
-    if (!object || object->IsToBeDeleted()) {
+bool BridgeObjectStampMatches(CKObject *object,
+                              const ScriptBridgeObjectStamp &stamp,
+                              ScriptBridgeObjectResolvePolicy policy) {
+    if (!object ||
+        (policy == ScriptBridgeObjectResolvePolicy::LiveOnly && object->IsToBeDeleted())) {
         return false;
     }
     if (stamp.Address && reinterpret_cast<std::uintptr_t>(object) != stamp.Address) {
@@ -108,7 +111,8 @@ bool BridgeObjectStampMatches(CKObject *object, const ScriptBridgeObjectStamp &s
 
 CKObject *GetStampedCKObjectById(CKContext *context,
                                  CK_ID id,
-                                 const ScriptBridgeObjectStamp &stamp) {
+                                 const ScriptBridgeObjectStamp &stamp,
+                                 ScriptBridgeObjectResolvePolicy policy) {
     CKObject *object = context && id ? CKGetObject(context, id) : nullptr;
-    return BridgeObjectStampMatches(object, stamp) ? object : nullptr;
+    return BridgeObjectStampMatches(object, stamp, policy) ? object : nullptr;
 }

@@ -112,8 +112,6 @@ public:
     bool Discard(ScriptManager &manager, const char *moduleName);
 
     bool RestoreFromChunk(const char *scriptName, CKStateChunk *chunk);
-    bool SaveToChunk(const char *scriptName, CKStateChunk *chunk);
-    bool ClearCode(const char *scriptName);
     void ApplyCachedIncludeEdges(ScriptModuleStateStore &stateStore, const char *moduleName);
     unsigned long long BuildSourceHash(const char *moduleName);
 

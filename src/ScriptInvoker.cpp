@@ -5,6 +5,23 @@
 #include "ScriptBehaviorFrame.h"
 #include "ScriptManager.h"
 
+namespace {
+
+bool UsesBehaviorFrameArgument(asIScriptFunction *function, asUINT index) {
+    if (!function || index >= function->GetParamCount()) {
+        return false;
+    }
+    int typeId = 0;
+    asDWORD flags = 0;
+    asIScriptEngine *engine = function->GetEngine();
+    return function->GetParam(index, &typeId, &flags) >= 0 &&
+           engine &&
+           typeId == engine->GetTypeIdByDecl("BehaviorFrame@") &&
+           (flags & asTM_INOUTREF) == 0;
+}
+
+} // namespace
+
 ScriptInvoker::ScriptInvoker(ScriptManager *manager)
     : m_ScriptManager(manager),
       m_Invocation(manager) {}
@@ -134,48 +151,10 @@ ScriptInvocationStatus ScriptInvoker::ExecuteScriptStatus(
         : m_Invocation.Start(function, spec);
 }
 
-bool ScriptInvoker::ExecuteObjectMethod(asIScriptObject *object,
-                                        asIScriptFunction *function,
-                                        const CKBehaviorContext &behaviorContext) {
-    return ExecuteObjectMethodStatus(object, function, behaviorContext) == ScriptInvocationStatus::Finished;
-}
-
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
-    asIScriptObject *object,
-    asIScriptFunction *function,
-    const CKBehaviorContext &behaviorContext) {
-    return ExecuteObjectMethodStatus(object,
-                                     function,
-                                     behaviorContext,
-                                     ScriptBehaviorArgumentKind::BehaviorContext,
-                                     nullptr);
-}
-
 ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
     asIScriptObject *object,
     asIScriptFunction *function,
     const CKBehaviorContext &behaviorContext,
-    ScriptBehaviorArgumentKind argumentKind) {
-    return ExecuteObjectMethodStatus(object, function, behaviorContext, argumentKind, nullptr);
-}
-
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
-    asIScriptObject *object,
-    asIScriptFunction *function,
-    const CKBehaviorContext &behaviorContext,
-    const ScriptFunctionArgumentHandler &resultHandler) {
-    return ExecuteObjectMethodStatus(object,
-                                     function,
-                                     behaviorContext,
-                                     ScriptBehaviorArgumentKind::BehaviorContext,
-                                     resultHandler);
-}
-
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
-    asIScriptObject *object,
-    asIScriptFunction *function,
-    const CKBehaviorContext &behaviorContext,
-    ScriptBehaviorArgumentKind argumentKind,
     const ScriptFunctionArgumentHandler &resultHandler) {
     m_Invocation.ClearDiagnostics();
     if (!m_CachedScript) {
@@ -196,14 +175,15 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
 
     m_BehaviorContextStorage = behaviorContext;
     ReleaseBehaviorFrame();
-    if (argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame) {
+    const bool useBehaviorFrame = UsesBehaviorFrameArgument(function, 0);
+    if (useBehaviorFrame) {
         m_BehaviorFrameStorage = new BehaviorFrame(behaviorContext);
     }
 
     ScriptInvocationSpec spec;
     spec.Label = "Script Method";
     spec.AsyncOwnerId = m_AsyncOwnerId;
-    spec.Prepare = [this, object, function, argumentKind](asIScriptContext *context) {
+    spec.Prepare = [this, object, function, useBehaviorFrame](asIScriptContext *context) {
         int result = context->SetObject(object);
         if (result < 0) {
             SetErrorMessage("Failed to bind script method object.");
@@ -212,12 +192,12 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
         if (function->GetParamCount() == 0) {
             return true;
         }
-        void *argument = argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
+        void *argument = useBehaviorFrame
             ? static_cast<void *>(m_BehaviorFrameStorage)
             : static_cast<void *>(&m_BehaviorContextStorage);
         result = context->SetArgObject(0, argument);
         if (result < 0) {
-            SetErrorMessage(argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
+            SetErrorMessage(useBehaviorFrame
                 ? "Failed to bind script method behavior frame."
                 : "Failed to bind script method behavior context.");
             return false;
@@ -242,19 +222,6 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
     asIScriptFunction *function,
     const ScriptMessage &message,
     const CKBehaviorContext &behaviorContext) {
-    return ExecuteObjectMethodStatus(object,
-                                     function,
-                                     message,
-                                     behaviorContext,
-                                     ScriptBehaviorArgumentKind::BehaviorContext);
-}
-
-ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
-    asIScriptObject *object,
-    asIScriptFunction *function,
-    const ScriptMessage &message,
-    const CKBehaviorContext &behaviorContext,
-    ScriptBehaviorArgumentKind argumentKind) {
     m_Invocation.ClearDiagnostics();
     if (!m_CachedScript) {
         SetErrorMessage("No script to execute.");
@@ -275,20 +242,21 @@ ScriptInvocationStatus ScriptInvoker::ExecuteObjectMethodStatus(
     m_MessageStorage = message;
     m_BehaviorContextStorage = behaviorContext;
     ReleaseBehaviorFrame();
-    if (argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame) {
+    const bool useBehaviorFrame = UsesBehaviorFrameArgument(function, 1);
+    if (useBehaviorFrame) {
         m_BehaviorFrameStorage = new BehaviorFrame(behaviorContext);
     }
 
     ScriptInvocationSpec spec;
     spec.Label = "Script Message";
     spec.AsyncOwnerId = m_AsyncOwnerId;
-    spec.Prepare = [this, object, argumentKind](asIScriptContext *context) {
+    spec.Prepare = [this, object, useBehaviorFrame](asIScriptContext *context) {
         int result = context->SetObject(object);
         if (result >= 0) {
             result = context->SetArgObject(0, &m_MessageStorage);
         }
         if (result >= 0) {
-            void *argument = argumentKind == ScriptBehaviorArgumentKind::BehaviorFrame
+            void *argument = useBehaviorFrame
                 ? static_cast<void *>(m_BehaviorFrameStorage)
                 : static_cast<void *>(&m_BehaviorContextStorage);
             result = context->SetArgObject(1, argument);

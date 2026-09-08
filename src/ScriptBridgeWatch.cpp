@@ -4,6 +4,8 @@
 
 #include <fmt/format.h>
 
+#include "ScriptManager.h"
+
 GraphTask *ScriptBehaviorBridge::CreateGraphWatch(CKBehavior *behavior, CK_ID componentId, float timeoutSeconds) {
     if (!behavior) {
         SetScriptException("GraphTask target behavior is not valid.");

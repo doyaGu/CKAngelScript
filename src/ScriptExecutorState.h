@@ -25,14 +25,10 @@ struct ScriptExecutorState {
     asIScriptFunction *OnLoad = nullptr;
     asIScriptFunction *Awake = nullptr;
     asIScriptFunction *Start = nullptr;
+    asIScriptFunction *OnPause = nullptr;
+    asIScriptFunction *OnResume = nullptr;
     asIScriptFunction *OnDestroy = nullptr;
     asIScriptFunction *OnReset = nullptr;
-    ScriptBehaviorArgumentKind ExecuteArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnLoadArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind AwakeArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind StartArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnDestroyArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-    ScriptBehaviorArgumentKind OnResetArgument = ScriptBehaviorArgumentKind::BehaviorContext;
 
     std::string ScriptId;
     std::string ModuleName;
@@ -56,14 +52,10 @@ struct ScriptExecutorState {
         ReleaseFunction(OnLoad);
         ReleaseFunction(Awake);
         ReleaseFunction(Start);
+        ReleaseFunction(OnPause);
+        ReleaseFunction(OnResume);
         ReleaseFunction(OnDestroy);
         ReleaseFunction(OnReset);
-        ExecuteArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnLoadArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        AwakeArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        StartArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnDestroyArgument = ScriptBehaviorArgumentKind::BehaviorContext;
-        OnResetArgument = ScriptBehaviorArgumentKind::BehaviorContext;
     }
 
     void ReleaseObject() {

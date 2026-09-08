@@ -66,6 +66,15 @@ bool ScriptExecutorStateStore::HasModuleConsumer(const std::string &moduleName) 
     return false;
 }
 
+void ScriptExecutorStateStore::CollectAsyncOwnerIds(
+    std::unordered_set<std::uint64_t> &ownerIds) const {
+    for (const auto &entry : m_Impl->States) {
+        if (entry.second && entry.second->AsyncOwnerId != 0) {
+            ownerIds.insert(entry.second->AsyncOwnerId);
+        }
+    }
+}
+
 bool ScriptExecutorStateStore::Remove(CK_ID id,
                                       CKBehavior *expectedBehavior,
                                       const StateCallback &beforeRemove) {

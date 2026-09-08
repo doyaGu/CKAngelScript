@@ -39,15 +39,6 @@ ScriptAsyncScheduler *SchedulerFromActiveContext() {
     return ctx ? SchedulerFromEngine(ctx->GetEngine()) : nullptr;
 }
 
-asIScriptEngine *EngineFromActiveContext(const char *apiName) {
-    asIScriptContext *ctx = asGetActiveContext();
-    asIScriptEngine *engine = ctx ? ctx->GetEngine() : nullptr;
-    if (!engine) {
-        SetScriptException(fmt::format("{} requires an active AngelScript context.", apiName ? apiName : "Async API"));
-    }
-    return engine;
-}
-
 void AppendUniqueModuleName(std::vector<std::string> &moduleNames, const char *moduleName) {
     if (!moduleName || moduleName[0] == '\0') {
         return;
@@ -516,86 +507,6 @@ ScriptAsyncTaskBase *AsyncWaitGraphTask(GraphTask *task) {
         return nullptr;
     }
     return scheduler->CreateGraphTask(task);
-}
-
-ScriptAsyncTaskBase *AsyncWaitBBTaskWithContext(const CKBehaviorContext &ctx, BBTask *task, int inputIndex) {
-    ScriptAsyncScheduler *scheduler = SchedulerFromActiveContext();
-    if (!scheduler) {
-        SetScriptException("Async scheduler is not available.");
-        return nullptr;
-    }
-    return scheduler->CreateBBTask(task, &ctx, inputIndex);
-}
-
-ScriptAsyncTaskBase *AsyncWaitGraphTaskWithContext(const CKBehaviorContext &ctx, GraphTask *task) {
-    ScriptAsyncScheduler *scheduler = SchedulerFromActiveContext();
-    if (!scheduler) {
-        SetScriptException("Async scheduler is not available.");
-        return nullptr;
-    }
-    return scheduler->CreateGraphTask(task, &ctx);
-}
-
-ScriptAsyncTaskBase *AsyncWaitMessageByContext(const CKBehaviorContext &ctx,
-                                               const std::string &message,
-                                               CKBeObject *object) {
-    ScriptAsyncScheduler *scheduler = SchedulerFromActiveContext();
-    if (!scheduler) {
-        SetScriptException("Async scheduler is not available.");
-        return nullptr;
-    }
-    if (!ctx.Context) {
-        SetScriptException("Async::WaitMessage requires a CKContext.");
-        return nullptr;
-    }
-    CKBeObject *waitObject = object;
-    if (!waitObject && ctx.Behavior) {
-        waitObject = ctx.Behavior->GetTarget();
-        if (!waitObject) {
-            waitObject = ctx.Behavior->GetOwner();
-        }
-    }
-    if (!waitObject) {
-        SetScriptException("Async::WaitMessage requires a non-null object or behavior target/owner.");
-        return nullptr;
-    }
-    std::string error;
-    ScriptAsyncTaskBase *task = scheduler->CreateMessageWait(ctx.Context, message, waitObject, &error);
-    if (!task) {
-        SetScriptException(error.empty() ? "Async::WaitMessage failed to create a message wait task." : error);
-    }
-    return task;
-}
-
-ScriptAsyncTaskBase *AsyncWaitMessageTypeByContext(const CKBehaviorContext &ctx,
-                                                   CKMessageType messageType,
-                                                   CKBeObject *object) {
-    ScriptAsyncScheduler *scheduler = SchedulerFromActiveContext();
-    if (!scheduler) {
-        SetScriptException("Async scheduler is not available.");
-        return nullptr;
-    }
-    if (!ctx.Context) {
-        SetScriptException("Async::WaitMessage requires a CKContext.");
-        return nullptr;
-    }
-    CKBeObject *waitObject = object;
-    if (!waitObject && ctx.Behavior) {
-        waitObject = ctx.Behavior->GetTarget();
-        if (!waitObject) {
-            waitObject = ctx.Behavior->GetOwner();
-        }
-    }
-    if (!waitObject) {
-        SetScriptException("Async::WaitMessage requires a non-null object or behavior target/owner.");
-        return nullptr;
-    }
-    std::string error;
-    ScriptAsyncTaskBase *task = scheduler->CreateMessageWait(ctx.Context, messageType, waitObject, &error);
-    if (!task) {
-        SetScriptException(error.empty() ? "Async::WaitMessage failed to create a message wait task." : error);
-    }
-    return task;
 }
 
 void AsyncSpawnGeneric(asIScriptGeneric *gen) {
@@ -1983,6 +1894,44 @@ bool ScriptAsyncScheduler::CancelOwner(ScriptAsyncOwnerId ownerId, const std::st
     return cancelled;
 }
 
+bool ScriptAsyncScheduler::CancelOrphaned(
+    const std::unordered_set<ScriptAsyncOwnerId> &liveOwnerIds,
+    const std::string &reason) {
+    bool cancelled = false;
+    std::unordered_set<ScriptAsyncTaskBase *> visited;
+    asIScriptEngine *engine = GetEngine();
+    auto it = m_Tasks.begin();
+    while (it != m_Tasks.end()) {
+        ScriptAsyncTaskBase *task = *it;
+        const ScriptAsyncOwnerId ownerId = task ? task->OwnerId() : 0;
+        if (task && ownerId != 0 && liveOwnerIds.find(ownerId) != liveOwnerIds.end()) {
+            ++it;
+            continue;
+        }
+        if (task) {
+            task->CancelOwnedVisited(
+                visited,
+                ownerId,
+                reason.empty()
+                    ? "Async task was cancelled because its script host no longer exists."
+                    : reason);
+            task->ReleaseAllReferences(engine);
+            task->Release();
+        }
+        it = m_Tasks.erase(it);
+        cancelled = true;
+    }
+
+    for (auto active = m_ActiveOwners.begin(); active != m_ActiveOwners.end();) {
+        if (active->second == 0 || liveOwnerIds.find(active->second) == liveOwnerIds.end()) {
+            active = m_ActiveOwners.erase(active);
+        } else {
+            ++active;
+        }
+    }
+    return cancelled;
+}
+
 void ScriptAsyncScheduler::CancelAll(const std::string &reason) {
     asIScriptEngine *engine = GetEngine();
     std::vector<ScriptAsyncTaskBase *> tasks;
@@ -2102,10 +2051,6 @@ void RegisterScriptAsync(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("void Any(?&in tasks, ?&out task)", asFUNCTION(AsyncAnyGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(BBTask@+ task)", asFUNCTION(AsyncWaitBBTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(GraphTask@+ task)", asFUNCTION(AsyncWaitGraphTask), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, BBTask@+ task, int inputIndex = -1)", asFUNCTION(AsyncWaitBBTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ Wait(const CKBehaviorContext &in ctx, GraphTask@+ task)", asFUNCTION(AsyncWaitGraphTaskWithContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ WaitMessage(const CKBehaviorContext &in ctx, const string &in message, CKBeObject@ object = null)", asFUNCTION(AsyncWaitMessageByContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<void>@ WaitMessage(const CKBehaviorContext &in ctx, CKMessageType messageType, CKBeObject@ object = null)", asFUNCTION(AsyncWaitMessageTypeByContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->SetDefaultNamespace(previous.c_str()); CKAS_CHECK_REGISTER(r);
 

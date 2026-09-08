@@ -4,6 +4,7 @@
 #include <memory>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <angelscript.h>
@@ -52,6 +53,7 @@ public:
     CKStateChunk *SaveData(CKFile *SavedFile) override;
     CKERROR LoadData(CKStateChunk *chunk, CKFile *LoadedFile) override;
 
+    CKERROR PreClearAll() override;
     CKERROR PostClearAll() override;
     CKERROR PreProcess() override;
     CKERROR PostProcess() override;
@@ -60,22 +62,28 @@ public:
     CKERROR OnCKEnd() override;
 
     CKERROR OnCKReset() override;
+    CKERROR OnCKPostReset() override;
     CKERROR OnCKPause() override;
     CKERROR OnCKPlay() override;
+
+    CKERROR SequenceToBeDeleted(CK_ID *objids, int count) override;
 
     CKERROR PostLoad() override;
 
     CKERROR OnPostCopy(CKDependenciesContext &context) override;
 
     CKDWORD GetValidFunctionsMask() override {
-        return CKMANAGER_FUNC_PostClearAll |
+        return CKMANAGER_FUNC_PreClearAll |
+               CKMANAGER_FUNC_PostClearAll |
                CKMANAGER_FUNC_PreProcess |
                CKMANAGER_FUNC_PostProcess |
                CKMANAGER_FUNC_OnCKInit |
                CKMANAGER_FUNC_OnCKEnd |
                CKMANAGER_FUNC_OnCKPlay |
                CKMANAGER_FUNC_OnCKReset |
+               CKMANAGER_FUNC_OnCKPostReset |
                CKMANAGER_FUNC_OnCKPause |
+               CKMANAGER_FUNC_OnSequenceToBeDeleted |
                CKMANAGER_FUNC_PostLoad |
                CKMANAGER_FUNC_OnPostCopy;
     }
@@ -98,24 +106,6 @@ public:
                                   void *userData,
                                   CKAngelScriptResult *result = nullptr);
     bool RejectHostCall(const char *apiName, CKDWORD flags);
-
-    // Low-level AngelScript helpers. The public AngelScript C API
-    // intentionally exposes only module and execution operations.
-    int PrepareMultithread(asIThreadManager *externalMgr = nullptr);
-    void UnprepareMultithread();
-    asIThreadManager *GetThreadManager();
-    void AcquireExclusiveLock();
-    void ReleaseExclusiveLock();
-    void AcquireSharedLock();
-    void ReleaseSharedLock();
-    int AtomicInc(int &value);
-    int AtomicDec(int &value);
-    int ThreadCleanup();
-    int SetGlobalMemoryFunctions(asALLOCFUNC_t allocFunc, asFREEFUNC_t freeFunc);
-    int ResetGlobalMemoryFunctions();
-    void *AllocMem(size_t size);
-    void FreeMem(void *mem);
-    asILockableSharedBool *CreateLockableSharedBool();
 
     CKAS_STATUS LoadModule(const CKAngelScriptLoadOptions &options, CKAngelScriptResult *result = nullptr);
     CKAS_STATUS CompileModule(const char *moduleName,
@@ -225,8 +215,6 @@ public:
     std::shared_ptr<CachedScript> GetCachedScript(const char *scriptName);
     std::shared_ptr<CachedScript> NewCachedScript(const char *scriptName);
     bool RestoreCachedScriptFromChunk(const char *scriptName, CKStateChunk *chunk);
-    bool SaveCachedScriptToChunk(const char *scriptName, CKStateChunk *chunk);
-    bool ClearCachedScriptCode(const char *scriptName);
 
     CKERROR ResolveScriptFileName(XString &filename);
 
@@ -303,6 +291,9 @@ public:
     static bool RejectActiveHostCall(const char *apiName, CKDWORD flags);
 
 protected:
+    void CancelResetOrphanedAsyncWork();
+    void ClearObjectBoundRuntime();
+
     CKAngelScriptResult MakeResult(CKAS_STATUS status,
                                  int angelScriptCode = 0,
                                  const std::string &errorMessage = std::string(),
@@ -338,6 +329,7 @@ protected:
     int m_PublicCallbackDepth = 0;
     int m_BytecodeCallbackDepth = 0;
     int m_MessageOutputSuppressionDepth = 0;
+    bool m_ResetOrphanCleanupPending = false;
 };
 
 #endif // CK_SCRIPTMANAGER_H

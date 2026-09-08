@@ -247,11 +247,3 @@ std::shared_ptr<CachedScript> ScriptManager::NewCachedScript(const char *scriptN
 bool ScriptManager::RestoreCachedScriptFromChunk(const char *scriptName, CKStateChunk *chunk) {
     return m_ModuleRegistry.RestoreFromChunk(scriptName, chunk);
 }
-
-bool ScriptManager::SaveCachedScriptToChunk(const char *scriptName, CKStateChunk *chunk) {
-    return m_ModuleRegistry.SaveToChunk(scriptName, chunk);
-}
-
-bool ScriptManager::ClearCachedScriptCode(const char *scriptName) {
-    return m_ModuleRegistry.ClearCode(scriptName);
-}

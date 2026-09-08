@@ -8,6 +8,7 @@
 #include "ScriptAsync.h"
 #include "AngelScriptComponent.h"
 #include "ScriptComponentState.h"
+#include "ScriptHostScope.h"
 #include "ScriptInvoker.h"
 #include "ScriptManager.h"
 #include "ScriptMessage.h"
@@ -85,6 +86,15 @@ bool ScriptComponentStateStore::HasModuleConsumer(const std::string &moduleName)
         }
     }
     return false;
+}
+
+void ScriptComponentStateStore::CollectAsyncOwnerIds(
+    std::unordered_set<std::uint64_t> &ownerIds) const {
+    for (const auto &entry : m_Impl->States) {
+        if (entry.second && entry.second->AsyncOwnerId != 0) {
+            ownerIds.insert(entry.second->AsyncOwnerId);
+        }
+    }
 }
 
 bool ScriptComponentStateStore::Remove(CK_ID id,
@@ -204,8 +214,6 @@ void ScriptManager::ResetComponentStateRuntime(ScriptComponentState *state, bool
     state->InitialLifecycle.Clear();
     state->InstanceEnabled = false;
     state->Failed = false;
-    state->PendingDestroy = false;
-    state->DestructionCompleted = false;
     state->PendingDisableOutput = false;
     state->PendingResetRuntime = false;
 
@@ -295,15 +303,13 @@ bool ScriptManager::DeliverComponentMessage(CK_ID id,
         error = "Component message target is busy.";
         return false;
     }
-    CKBehaviorContext ctx = {};
-    ctx.Context = m_Context;
-    ctx.Behavior = state->Behavior;
+    const CKBehaviorContext ctx =
+        ScriptHostScope::From(m_Context).MakeBehaviorContext(state->Behavior);
     const ScriptInvocationStatus status = state->Invoker->ExecuteObjectMethodStatus(
         state->Object,
         state->OnMessage,
         message,
-        ctx,
-        state->OnMessageArgument);
+        ctx);
     if (status == ScriptInvocationStatus::Suspended) {
         state->ActiveLifecycle = state->OnMessage;
         state->ActiveLifecycleName = "OnMessage";

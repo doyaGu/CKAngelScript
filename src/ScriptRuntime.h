@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <angelscript.h>
@@ -125,8 +126,6 @@ public:
     std::string MetadataValue(int index) const;
     void Raise(const std::string &message) const;
 
-    CKBehaviorContext ToBehaviorContext() const;
-
 private:
     CKContext *m_Context = nullptr;
     const ScriptRuntimeManifest *m_Metadata = nullptr;
@@ -165,6 +164,7 @@ public:
     std::vector<RuntimeDependencyInfo> RequiredDependencies(const std::string &id) const;
     std::vector<RuntimeDependencyInfo> OptionalDependencies(const std::string &id) const;
     bool DeliverMessage(const std::string &id, const ScriptMessage &message, bool immediate, std::string &error);
+    void CollectAsyncOwnerIds(std::unordered_set<std::uint64_t> &ownerIds) const;
 
 private:
     struct Module;
@@ -184,7 +184,6 @@ private:
     void SubscribeStaticTopics(Module &module) const;
     void DiscardPendingReplacement(Module &module);
     bool ReplaceModule(const ScriptRuntimeManifest &metadata, std::unique_ptr<Module> module);
-    bool RemoveModuleById(const std::string &id);
     void RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts);
     bool DestroyModule(Module &module, bool hard = false);
     bool DisableModule(Module &module);
@@ -205,7 +204,6 @@ private:
     void UpdateModule(Module &module, float deltaTime, float timeSeconds);
     InvokeStatus InvokeMessage(Module &module, const ScriptMessage &message, const ScriptContext &context);
     InvokeStatus Invoke(Module &module, const char *name, const ScriptContext &context, bool required = false);
-    bool InvokeFinished(Module &module, const char *name, const ScriptContext &context, bool required = false);
     void CancelOwnedAsyncWork(Module &module, const char *reason);
     void CancelActiveInvocation(Module &module);
     void SetModuleError(Module &module, const std::string &error);

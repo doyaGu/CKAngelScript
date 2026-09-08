@@ -18,11 +18,6 @@ struct CachedScript;
 
 using ScriptFunctionArgumentHandler = ScriptInvocationHandler;
 
-enum class ScriptBehaviorArgumentKind {
-    BehaviorContext,
-    BehaviorFrame
-};
-
 class ScriptInvoker {
 public:
     explicit ScriptInvoker(ScriptManager *man);
@@ -50,27 +45,14 @@ public:
                                                const ScriptFunctionArgumentHandler &argsHandler = nullptr,
                                                const ScriptFunctionArgumentHandler &retHandler = nullptr,
                                                const ScriptFunctionArgumentHandler &resumeHandler = nullptr);
-    bool ExecuteObjectMethod(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
-    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const CKBehaviorContext &behcontext);
     ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object,
                                                      asIScriptFunction *func,
                                                      const CKBehaviorContext &behcontext,
-                                                     ScriptBehaviorArgumentKind argumentKind);
-    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object,
-                                                     asIScriptFunction *func,
-                                                     const CKBehaviorContext &behcontext,
-                                                     const ScriptFunctionArgumentHandler &retHandler);
-    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object,
-                                                     asIScriptFunction *func,
-                                                     const CKBehaviorContext &behcontext,
-                                                     ScriptBehaviorArgumentKind argumentKind,
-                                                     const ScriptFunctionArgumentHandler &retHandler);
-    ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object, asIScriptFunction *func, const ScriptMessage &message, const CKBehaviorContext &behcontext);
+                                                     const ScriptFunctionArgumentHandler &retHandler = nullptr);
     ScriptInvocationStatus ExecuteObjectMethodStatus(asIScriptObject *object,
                                                      asIScriptFunction *func,
                                                      const ScriptMessage &message,
-                                                     const CKBehaviorContext &behcontext,
-                                                     ScriptBehaviorArgumentKind argumentKind);
+                                                     const CKBehaviorContext &behcontext);
     ScriptInvocationStatus ResumeObjectMessageStatus(const CKBehaviorContext &behcontext);
     bool IsContextSuspended() const;
     void AbortActiveContext();

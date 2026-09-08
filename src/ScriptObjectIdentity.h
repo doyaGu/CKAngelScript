@@ -64,10 +64,19 @@ struct ScriptBridgeStampedObjectId {
 
 using ScriptBridgeStampedObjectRef = ScriptBridgeStampedObjectId;
 
+enum class ScriptBridgeObjectResolvePolicy {
+    LiveOnly,
+    IncludePendingDeletion,
+};
+
 ScriptBridgeObjectStamp CaptureBridgeObjectStamp(CKObject *object);
-bool BridgeObjectStampMatches(CKObject *object, const ScriptBridgeObjectStamp &stamp);
+bool BridgeObjectStampMatches(
+    CKObject *object,
+    const ScriptBridgeObjectStamp &stamp,
+    ScriptBridgeObjectResolvePolicy policy = ScriptBridgeObjectResolvePolicy::LiveOnly);
 CKObject *GetStampedCKObjectById(CKContext *context,
                                  CK_ID id,
-                                 const ScriptBridgeObjectStamp &stamp);
+                                 const ScriptBridgeObjectStamp &stamp,
+                                 ScriptBridgeObjectResolvePolicy policy = ScriptBridgeObjectResolvePolicy::LiveOnly);
 
 #endif // CK_SCRIPT_OBJECT_IDENTITY_H

@@ -7,6 +7,7 @@
 #include "ScriptBridgeCommon.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptComponentMetadata.h"
+#include "ScriptManager.h"
 #include "ScriptParameterConversion.h"
 #include "ScriptInvoker.h"
 

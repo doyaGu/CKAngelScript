@@ -1,9 +1,11 @@
 #ifndef CK_SCRIPT_EXECUTOR_STATE_STORE_H
 #define CK_SCRIPT_EXECUTOR_STATE_STORE_H
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_set>
 
 #include "CKAll.h"
 
@@ -26,6 +28,7 @@ public:
                                      const StateCallback &beforeReplace);
     ScriptExecutorState *Get(CK_ID id, CKBehavior *expectedBehavior = nullptr) const;
     bool HasModuleConsumer(const std::string &moduleName) const;
+    void CollectAsyncOwnerIds(std::unordered_set<std::uint64_t> &ownerIds) const;
     bool Remove(CK_ID id, CKBehavior *expectedBehavior, const StateCallback &beforeRemove);
     void ReleaseModule(const std::string &moduleName, const StateCallback &beforeRemove);
     void Clear(const StateCallback &beforeRemove);

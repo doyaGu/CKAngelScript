@@ -4,6 +4,8 @@
 #include <utility>
 #include <vector>
 
+#include "CKBehavior.h"
+
 #include <fmt/format.h>
 
 #ifndef CKAS_BUILD_SELF_TESTS
@@ -56,10 +58,8 @@ CKStateChunk *ScriptManager::SaveData(CKFile *SavedFile) {
 CKERROR ScriptManager::LoadData(CKStateChunk *chunk, CKFile *LoadedFile) {
     return CK_OK;
 }
-
-
-
-CKERROR ScriptManager::PostClearAll() {
+void ScriptManager::ClearObjectBoundRuntime() {
+    m_ResetOrphanCleanupPending = false;
     m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because CK objects are being cleared.");
     if (m_MessageBus) {
         m_MessageBus->CancelPendingWork("Message work was cancelled because CK objects are being cleared.");
@@ -67,16 +67,35 @@ CKERROR ScriptManager::PostClearAll() {
     if (m_AsyncScheduler) {
         m_AsyncScheduler->CancelAll("Async task was cancelled because CK objects are being cleared.");
     }
+
+    // CK2 calls PreClearAll while CKBehavior objects are still resolvable. Keep
+    // the behavior bridge alive until all adapters have delivered OnDestroy.
     ClearExecutorStates();
+    ClearComponentStates();
     if (m_Runtime) {
         m_Runtime->Clear();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
-    ClearComponentStates();
     ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
     ClearCKObjectData();
+}
+
+CKERROR ScriptManager::PreClearAll() {
+#if CKAS_BUILD_SELF_TESTS
+    RecordScriptManagerLifecycleSelfTestEvent("PreClearAll");
+#endif
+    ClearObjectBoundRuntime();
+    return CK_OK;
+}
+
+CKERROR ScriptManager::PostClearAll() {
+#if CKAS_BUILD_SELF_TESTS
+    RecordScriptManagerLifecycleSelfTestEvent("PostClearAll");
+#endif
+    // Idempotent fallback for hosts/tools that do not dispatch PreClearAll.
+    ClearObjectBoundRuntime();
     return CK_OK;
 }
 
@@ -87,6 +106,9 @@ CKERROR ScriptManager::PreProcess() {
         return selfTestResult;
     }
 #endif
+    // OnCKPostReset is the normal Virtools seam. Keep this fallback for hosts
+    // that omit that callback and for direct lifecycle calls in tests/tools.
+    CancelResetOrphanedAsyncWork();
     if (m_AsyncScheduler) {
         m_AsyncScheduler->Tick();
     }
@@ -111,6 +133,11 @@ CKERROR ScriptManager::OnCKInit() {
 }
 
 CKERROR ScriptManager::OnCKEnd() {
+#if CKAS_BUILD_SELF_TESTS
+    RecordScriptManagerLifecycleSelfTestEvent("OnCKEnd.begin");
+    PrepareScriptManagerLifecycleEndSelfTest(this);
+#endif
+    m_ResetOrphanCleanupPending = false;
     m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because CK is ending.");
     if (m_MessageBus) {
         m_MessageBus->CancelPendingWork("Message work was cancelled because CK is ending.");
@@ -119,24 +146,28 @@ CKERROR ScriptManager::OnCKEnd() {
         m_AsyncScheduler->CancelAll("Async task was cancelled because CK is ending.");
     }
     ClearExecutorStates();
+    ClearComponentStates();
     if (m_Runtime) {
         m_Runtime->OnEnd();
     }
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
-    ClearComponentStates();
     ClearRuntimeQueues(m_MessageBus.get(), m_AsyncScheduler.get());
+#if CKAS_BUILD_SELF_TESTS
+    return CompleteScriptManagerLifecycleSelfTest(this);
+#else
     return CK_OK;
+#endif
 }
 
 CKERROR ScriptManager::OnCKReset() {
+#if CKAS_BUILD_SELF_TESTS
+    RecordScriptManagerLifecycleSelfTestEvent("OnCKReset");
+#endif
     m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because CK is resetting.");
     if (m_MessageBus) {
         m_MessageBus->CancelPendingWork("Message work was cancelled because CK is resetting.");
-    }
-    if (m_AsyncScheduler) {
-        m_AsyncScheduler->CancelAll("Async task was cancelled because CK is resetting.");
     }
     if (m_Runtime) {
         m_Runtime->OnReset();
@@ -144,10 +175,64 @@ CKERROR ScriptManager::OnCKReset() {
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear(false);
     }
+    m_ResetOrphanCleanupPending = true;
     return CK_OK;
 }
 
+CKERROR ScriptManager::OnCKPostReset() {
+#if CKAS_BUILD_SELF_TESTS
+    RecordScriptManagerLifecycleSelfTestEvent("OnCKPostReset");
+#endif
+    CancelResetOrphanedAsyncWork();
+    return CK_OK;
+}
+
+CKERROR ScriptManager::SequenceToBeDeleted(CK_ID *objids, int count) {
+    if (!m_Context || !objids || count <= 0) {
+        return CK_OK;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        CKBehavior *behavior = CKBehavior::Cast(m_Context->GetObject(objids[i]));
+        if (!behavior) {
+            continue;
+        }
+
+        // Original CK2 sends this manager callback while the behavior is still
+        // live and does not emit CKM_BEHAVIORDELETE from ordinary deletion.
+        // The Ballanced source implementation mirrors that contract.
+        // Both releases are idempotent and only the matching store can own the
+        // behavior, so this is also safe on hosts that do emit the BB callback.
+        ReleaseExecutorState(behavior);
+        ReleaseComponentState(behavior);
+    }
+    return CK_OK;
+}
+
+void ScriptManager::CancelResetOrphanedAsyncWork() {
+    if (!m_ResetOrphanCleanupPending) {
+        return;
+    }
+    m_ResetOrphanCleanupPending = false;
+    if (!m_AsyncScheduler) {
+        return;
+    }
+
+    std::unordered_set<ScriptAsyncOwnerId> liveOwnerIds;
+    if (m_Runtime) {
+        m_Runtime->CollectAsyncOwnerIds(liveOwnerIds);
+    }
+    m_ComponentStates.CollectAsyncOwnerIds(liveOwnerIds);
+    m_ExecutorStates.CollectAsyncOwnerIds(liveOwnerIds);
+    m_AsyncScheduler->CancelOrphaned(
+        liveOwnerIds,
+        "Async task was cancelled because it was orphaned by CK reset.");
+}
+
 CKERROR ScriptManager::OnCKPause() {
+#if CKAS_BUILD_SELF_TESTS
+    RecordScriptManagerLifecycleSelfTestEvent("OnCKPause");
+#endif
     if (m_Runtime) {
         m_Runtime->OnPause();
     }
@@ -161,6 +246,12 @@ CKERROR ScriptManager::OnCKPause() {
 }
 
 CKERROR ScriptManager::OnCKPlay() {
+#if CKAS_BUILD_SELF_TESTS
+    RecordScriptManagerLifecycleSelfTestEvent("OnCKPlay");
+#endif
+    // A failed/partial host Reset can omit OnCKPostReset. Sweep before either
+    // scheduler resumes so no orphan can advance on the first played frame.
+    CancelResetOrphanedAsyncWork();
     if (m_AsyncScheduler) {
         m_AsyncScheduler->ResumeProcessing();
     }
@@ -214,14 +305,15 @@ int ScriptManager::Shutdown() {
     if (!IsInited())
         return -2;
 
+    m_ResetOrphanCleanupPending = false;
     m_HandleRegistry.CancelActiveExecutions("Execution was cancelled because the script manager is shutting down.");
     m_HandleRegistry.Clear();
 
     ClearExecutorStates();
+    ClearComponentStates();
     if (m_Runtime) {
         m_Runtime->Clear();
     }
-    ClearComponentStates();
     if (m_BehaviorBridge) {
         m_BehaviorBridge->Clear();
     }
@@ -341,66 +433,6 @@ CKAS_STATUS ScriptManager::RegisterEngineExtension(const CKAngelScriptEngineExte
 CKAS_STATUS ScriptManager::UnregisterEngineExtension(const char *name,
                                                      CKAngelScriptResult *result) {
     return m_EngineHost.UnregisterExtension(*this, name, result);
-}
-
-int ScriptManager::PrepareMultithread(asIThreadManager *externalMgr) {
-    return asPrepareMultithread(externalMgr);
-}
-
-void ScriptManager::UnprepareMultithread() {
-    asUnprepareMultithread();
-}
-
-asIThreadManager *ScriptManager::GetThreadManager() {
-    return asGetThreadManager();
-}
-
-void ScriptManager::AcquireExclusiveLock() {
-    asAcquireExclusiveLock();
-}
-
-void ScriptManager::ReleaseExclusiveLock() {
-    asReleaseExclusiveLock();
-}
-
-void ScriptManager::AcquireSharedLock() {
-    asAcquireSharedLock();
-}
-
-void ScriptManager::ReleaseSharedLock() {
-    asReleaseSharedLock();
-}
-
-int ScriptManager::AtomicInc(int &value) {
-    return asAtomicInc(value);
-}
-
-int ScriptManager::AtomicDec(int &value) {
-    return asAtomicDec(value);
-}
-
-int ScriptManager::ThreadCleanup() {
-    return asThreadCleanup();
-}
-
-int ScriptManager::SetGlobalMemoryFunctions(asALLOCFUNC_t allocFunc, asFREEFUNC_t freeFunc) {
-    return asSetGlobalMemoryFunctions(allocFunc, freeFunc);
-}
-
-int ScriptManager::ResetGlobalMemoryFunctions() {
-    return asResetGlobalMemoryFunctions();
-}
-
-void *ScriptManager::AllocMem(size_t size) {
-    return asAllocMem(size);
-}
-
-void ScriptManager::FreeMem(void *mem) {
-    asFreeMem(mem);
-}
-
-asILockableSharedBool *ScriptManager::CreateLockableSharedBool() {
-    return asCreateLockableSharedBool();
 }
 
 void ScriptManager::MessageCallback(const asSMessageInfo &msg) {

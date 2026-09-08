@@ -186,23 +186,6 @@ bool ScriptModuleRegistry::RestoreFromChunk(const char *scriptName, CKStateChunk
     return true;
 }
 
-bool ScriptModuleRegistry::SaveToChunk(const char *scriptName, CKStateChunk *chunk) {
-    if (!chunk) {
-        return false;
-    }
-    std::shared_ptr<CachedScript> script = GetCachedScript(scriptName);
-    return script ? script->SaveToChunk(chunk) : false;
-}
-
-bool ScriptModuleRegistry::ClearCode(const char *scriptName) {
-    std::shared_ptr<CachedScript> script = GetCachedScript(scriptName);
-    if (!script) {
-        return false;
-    }
-    script->ClearCodeCache();
-    return true;
-}
-
 void ScriptModuleRegistry::ApplyCachedIncludeEdges(ScriptModuleStateStore &stateStore, const char *moduleName) {
     if (!ScriptApiSupport::IsNonEmpty(moduleName)) {
         return;

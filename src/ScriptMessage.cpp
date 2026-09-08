@@ -10,6 +10,7 @@
 
 #include "CKAll.h"
 #include "ScriptAsync.h"
+#include "ScriptBehaviorFrame.h"
 #include "ScriptComponentState.h"
 #include "ScriptHostScope.h"
 #include "ScriptManager.h"
@@ -31,9 +32,9 @@ void RaiseRuntimeError(const ScriptContext &ctx, const std::string &error) {
     }
 }
 
-void RaiseBehaviorError(const CKBehaviorContext &ctx, const std::string &error) {
-    if (!error.empty() && ctx.Context) {
-        ctx.Context->OutputToConsoleEx(const_cast<char *>("[AngelScript Message] %s"), error.c_str());
+void RaiseFrameError(BehaviorFrame *frame, const std::string &error) {
+    if (!error.empty() && frame && frame->Context()) {
+        frame->Context()->OutputToConsoleEx(const_cast<char *>("[AngelScript Message] %s"), error.c_str());
     }
 }
 
@@ -71,8 +72,10 @@ ScriptMessageTarget ComponentMessageTarget(ScriptManager *manager, CK_ID id) {
     return target;
 }
 
-ScriptHostScope BehaviorMessageScope(const CKBehaviorContext &ctx) {
-    return ScriptHostScope::From(ctx, ScriptHostScopeContextResolution::DirectContext);
+ScriptHostScope FrameMessageScope(BehaviorFrame *frame) {
+    return frame
+        ? ScriptHostScope::From(frame->MakeContext(), ScriptHostScopeContextResolution::DirectContext)
+        : ScriptHostScope::From(static_cast<CKContext *>(nullptr));
 }
 
 template <typename Invocation>
@@ -87,12 +90,12 @@ bool InvokeRuntimeMessage(const ScriptContext &ctx, const char *fallbackError, I
 }
 
 template <typename Invocation>
-bool InvokeBehaviorMessage(const CKBehaviorContext &ctx, const char *fallbackError, Invocation &&invocation) {
-    const ScriptHostScope scope = BehaviorMessageScope(ctx);
+bool InvokeFrameMessage(BehaviorFrame *frame, const char *fallbackError, Invocation &&invocation) {
+    const ScriptHostScope scope = FrameMessageScope(frame);
     std::string error;
     const bool ok = invocation(scope, error);
     if (!ok) {
-        RaiseBehaviorError(ctx, error.empty() ? fallbackError : error);
+        RaiseFrameError(frame, error.empty() ? fallbackError : error);
     }
     return ok;
 }
@@ -111,14 +114,14 @@ ScriptAsyncTaskBase *InvokeRuntimeMessageTask(const ScriptContext &ctx,
 }
 
 template <typename Invocation>
-ScriptAsyncTaskBase *InvokeBehaviorMessageTask(const CKBehaviorContext &ctx,
-                                               const char *fallbackError,
-                                               Invocation &&invocation) {
-    const ScriptHostScope scope = BehaviorMessageScope(ctx);
+ScriptAsyncTaskBase *InvokeFrameMessageTask(BehaviorFrame *frame,
+                                            const char *fallbackError,
+                                            Invocation &&invocation) {
+    const ScriptHostScope scope = FrameMessageScope(frame);
     std::string error;
     ScriptAsyncTaskBase *task = invocation(scope, error);
     if (!task) {
-        RaiseBehaviorError(ctx, error.empty() ? fallbackError : error);
+        RaiseFrameError(frame, error.empty() ? fallbackError : error);
     }
     return task;
 }
@@ -184,8 +187,8 @@ ScriptMessageTarget ComponentRuntimeMessageTarget(const ScriptContext &ctx, CK_I
     return ComponentMessageTarget(ScriptHostScope::From(ctx).Manager(), id);
 }
 
-ScriptMessageTarget ComponentBehaviorMessageTarget(const CKBehaviorContext &ctx, CK_ID id) {
-    return ComponentMessageTarget(BehaviorMessageScope(ctx).Manager(), id);
+ScriptMessageTarget ComponentFrameMessageTarget(BehaviorFrame *frame, CK_ID id) {
+    return ComponentMessageTarget(FrameMessageScope(frame).Manager(), id);
 }
 
 bool PublishRuntime(const ScriptContext &ctx, const std::string &topic, CScriptDictionary *payload) {
@@ -194,8 +197,8 @@ bool PublishRuntime(const ScriptContext &ctx, const std::string &topic, CScriptD
     });
 }
 
-bool PublishBehavior(const CKBehaviorContext &ctx, const std::string &topic, CScriptDictionary *payload) {
-    return InvokeBehaviorMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
+bool PublishFrame(BehaviorFrame *frame, const std::string &topic, CScriptDictionary *payload) {
+    return InvokeFrameMessage(frame, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
         return PublishInScope(scope, ScriptMessageTarget(), topic, payload, error);
     });
 }
@@ -206,20 +209,8 @@ bool PublishTargetRuntime(const ScriptContext &ctx, const ScriptMessageTarget &t
     });
 }
 
-bool PublishTargetBehavior(const CKBehaviorContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
-    return InvokeBehaviorMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
-        return PublishInScope(scope, target, topic, payload, error);
-    });
-}
-
-bool PublishStringRuntime(const ScriptContext &ctx, const std::string &topic, CScriptDictionary *payload, const std::string &target) {
-    return InvokeRuntimeMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
-        return PublishInScope(scope, target, topic, payload, error);
-    });
-}
-
-bool PublishStringBehavior(const CKBehaviorContext &ctx, const std::string &topic, CScriptDictionary *payload, const std::string &target) {
-    return InvokeBehaviorMessage(ctx, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
+bool PublishTargetFrame(BehaviorFrame *frame, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
+    return InvokeFrameMessage(frame, "Message::Publish failed.", [&](const ScriptHostScope &scope, std::string &error) {
         return PublishInScope(scope, target, topic, payload, error);
     });
 }
@@ -230,20 +221,8 @@ bool SendRuntime(const ScriptContext &ctx, const ScriptMessageTarget &target, co
     });
 }
 
-bool SendBehavior(const CKBehaviorContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
-    return InvokeBehaviorMessage(ctx, "Message::Send failed.", [&](const ScriptHostScope &scope, std::string &error) {
-        return SendInScope(scope, target, topic, payload, error);
-    });
-}
-
-bool SendStringRuntime(const ScriptContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
-    return InvokeRuntimeMessage(ctx, "Message::Send failed.", [&](const ScriptHostScope &scope, std::string &error) {
-        return SendInScope(scope, target, topic, payload, error);
-    });
-}
-
-bool SendStringBehavior(const CKBehaviorContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload) {
-    return InvokeBehaviorMessage(ctx, "Message::Send failed.", [&](const ScriptHostScope &scope, std::string &error) {
+bool SendFrame(BehaviorFrame *frame, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload) {
+    return InvokeFrameMessage(frame, "Message::Send failed.", [&](const ScriptHostScope &scope, std::string &error) {
         return SendInScope(scope, target, topic, payload, error);
     });
 }
@@ -254,20 +233,8 @@ ScriptAsyncTaskBase *RequestRuntime(const ScriptContext &ctx, const ScriptMessag
     });
 }
 
-ScriptAsyncTaskBase *RequestBehavior(const CKBehaviorContext &ctx, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload, int timeoutFrames) {
-    return InvokeBehaviorMessageTask(ctx, "Message::Request failed.", [&](const ScriptHostScope &scope, std::string &error) {
-        return RequestInScope(scope, target, topic, payload, timeoutFrames, error);
-    });
-}
-
-ScriptAsyncTaskBase *RequestStringRuntime(const ScriptContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload, int timeoutFrames) {
-    return InvokeRuntimeMessageTask(ctx, "Message::Request failed.", [&](const ScriptHostScope &scope, std::string &error) {
-        return RequestInScope(scope, target, topic, payload, timeoutFrames, error);
-    });
-}
-
-ScriptAsyncTaskBase *RequestStringBehavior(const CKBehaviorContext &ctx, const std::string &target, const std::string &topic, CScriptDictionary *payload, int timeoutFrames) {
-    return InvokeBehaviorMessageTask(ctx, "Message::Request failed.", [&](const ScriptHostScope &scope, std::string &error) {
+ScriptAsyncTaskBase *RequestFrame(BehaviorFrame *frame, const ScriptMessageTarget &target, const std::string &topic, CScriptDictionary *payload, int timeoutFrames) {
+    return InvokeFrameMessageTask(frame, "Message::Request failed.", [&](const ScriptHostScope &scope, std::string &error) {
         return RequestInScope(scope, target, topic, payload, timeoutFrames, error);
     });
 }
@@ -278,8 +245,8 @@ bool ReplyRuntime(const ScriptContext &ctx, const ScriptMessage &request, CScrip
     });
 }
 
-bool ReplyBehavior(const CKBehaviorContext &ctx, const ScriptMessage &request, CScriptDictionary *payload) {
-    return InvokeBehaviorMessage(ctx, "Message::Reply failed.", [&](const ScriptHostScope &scope, std::string &error) {
+bool ReplyFrame(BehaviorFrame *frame, const ScriptMessage &request, CScriptDictionary *payload) {
+    return InvokeFrameMessage(frame, "Message::Reply failed.", [&](const ScriptHostScope &scope, std::string &error) {
         return ReplyInScope(scope, request, payload, error);
     });
 }
@@ -290,8 +257,8 @@ bool RejectRuntime(const ScriptContext &ctx, const ScriptMessage &request, const
     });
 }
 
-bool RejectBehavior(const CKBehaviorContext &ctx, const ScriptMessage &request, const std::string &message) {
-    return InvokeBehaviorMessage(ctx, "Message::Reject failed.", [&](const ScriptHostScope &scope, std::string &error) {
+bool RejectFrame(BehaviorFrame *frame, const ScriptMessage &request, const std::string &message) {
+    return InvokeFrameMessage(frame, "Message::Reject failed.", [&](const ScriptHostScope &scope, std::string &error) {
         return RejectInScope(scope, request, message, error);
     });
 }
@@ -302,8 +269,8 @@ bool SubscribeRuntime(const ScriptContext &ctx, const std::string &topic) {
     });
 }
 
-bool SubscribeBehavior(const CKBehaviorContext &ctx, const std::string &topic) {
-    return InvokeBehaviorMessage(ctx, "", [&](const ScriptHostScope &scope, std::string &error) {
+bool SubscribeFrame(BehaviorFrame *frame, const std::string &topic) {
+    return InvokeFrameMessage(frame, "", [&](const ScriptHostScope &scope, std::string &error) {
         return SubscribeInScope(scope, topic, error);
     });
 }
@@ -312,8 +279,8 @@ bool UnsubscribeRuntime(const ScriptContext &ctx, const std::string &topic) {
     return UnsubscribeInScope(ScriptHostScope::From(ctx), topic);
 }
 
-bool UnsubscribeBehavior(const CKBehaviorContext &ctx, const std::string &topic) {
-    return UnsubscribeInScope(BehaviorMessageScope(ctx), topic);
+bool UnsubscribeFrame(BehaviorFrame *frame, const std::string &topic) {
+    return UnsubscribeInScope(FrameMessageScope(frame), topic);
 }
 
 } // namespace
@@ -1052,28 +1019,22 @@ void RegisterScriptMessage(asIScriptEngine *engine) {
     r = engine->SetDefaultNamespace("Message"); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("ScriptMessageTarget Runtime(const string &in id)", asFUNCTION(RuntimeMessageTarget), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("ScriptMessageTarget Component(const ScriptContext &in ctx, CK_ID id)", asFUNCTION(ComponentRuntimeMessageTarget), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ScriptMessageTarget Component(const CKBehaviorContext &in ctx, CK_ID id)", asFUNCTION(ComponentBehaviorMessageTarget), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ScriptMessageTarget Component(BehaviorFrame@+ frame, CK_ID id)", asFUNCTION(ComponentFrameMessageTarget), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(BehaviorFrame@+ frame, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishFrame), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishTargetRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishTargetBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload, const string &in target)", asFUNCTION(PublishStringRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload, const string &in target)", asFUNCTION(PublishStringBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Publish(BehaviorFrame@+ frame, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(PublishTargetFrame), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Send(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Send(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Send(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendStringRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Send(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendStringBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Send(BehaviorFrame@+ frame, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)", asFUNCTION(SendFrame), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestStringRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestStringBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("AsyncTask<dictionary@>@ Request(BehaviorFrame@+ frame, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null, int timeoutFrames = 300)", asFUNCTION(RequestFrame), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Reply(const ScriptContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Reply(const CKBehaviorContext &in ctx, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Reply(BehaviorFrame@+ frame, const ScriptMessage &in request, dictionary@ payload = null)", asFUNCTION(ReplyFrame), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Reject(const ScriptContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Reject(const CKBehaviorContext &in ctx, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Reject(BehaviorFrame@+ frame, const ScriptMessage &in request, const string &in error)", asFUNCTION(RejectFrame), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Subscribe(const ScriptContext &in ctx, const string &in topic)", asFUNCTION(SubscribeRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Subscribe(const CKBehaviorContext &in ctx, const string &in topic)", asFUNCTION(SubscribeBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Subscribe(BehaviorFrame@+ frame, const string &in topic)", asFUNCTION(SubscribeFrame), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Unsubscribe(const ScriptContext &in ctx, const string &in topic)", asFUNCTION(UnsubscribeRuntime), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Unsubscribe(const CKBehaviorContext &in ctx, const string &in topic)", asFUNCTION(UnsubscribeBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("bool Unsubscribe(BehaviorFrame@+ frame, const string &in topic)", asFUNCTION(UnsubscribeFrame), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->SetDefaultNamespace(previous.c_str()); CKAS_CHECK_REGISTER(r);
 }

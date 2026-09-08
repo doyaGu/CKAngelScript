@@ -89,9 +89,6 @@ constexpr const char *kStateLoaded = "loaded";
 bool ScriptEntryValidateOnly() {
     const char *value = std::getenv("CKAS_SCRIPT_VALIDATE_ONLY");
     if (!value || value[0] == '\0') {
-        value = std::getenv("CKAS_RUNTIME_VALIDATE_ONLY");
-    }
-    if (!value || value[0] == '\0') {
         return false;
     }
     const std::string lowered = ScriptRuntimeMetadata::ToLower(value);
@@ -123,24 +120,6 @@ ScriptContext MakeRuntimeContext(CKContext *context,
                                         float deltaTime,
                                         float timeSeconds) {
     return MakeRuntimeContext(context, metadata, "", "", 0, 0, deltaTime, timeSeconds);
-}
-
-CKBehaviorContext MakeClearedBehaviorContext() {
-    CKBehaviorContext ctx;
-    ctx.Behavior = nullptr;
-    ctx.DeltaTime = 0.0f;
-    ctx.Context = nullptr;
-    ctx.CurrentLevel = nullptr;
-    ctx.CurrentScene = nullptr;
-    ctx.PreviousScene = nullptr;
-    ctx.CurrentRenderContext = nullptr;
-    ctx.ParameterManager = nullptr;
-    ctx.MessageManager = nullptr;
-    ctx.AttributeManager = nullptr;
-    ctx.TimeManager = nullptr;
-    ctx.CallbackMessage = 0;
-    ctx.CallbackArg = nullptr;
-    return ctx;
 }
 
 int LifecycleIndexByName(const char *name) {
@@ -389,7 +368,6 @@ struct ScriptRuntime::Module {
     ScriptContext ContextStorage;
     ScriptMessage MessageStorage;
     bool PendingDisable = false;
-    bool PendingDestroy = false;
     bool PendingErase = false;
     std::unique_ptr<Module> PendingReplacement;
 };
@@ -634,24 +612,6 @@ void ScriptContext::Raise(const std::string &message) const {
     }
 }
 
-CKBehaviorContext ScriptContext::ToBehaviorContext() const {
-    CKBehaviorContext ctx = MakeClearedBehaviorContext();
-#if CKVERSION == 0x13022002
-    if (m_Context) {
-        ctx = m_Context->m_BehaviorContext;
-    }
-#endif
-    ctx.Context = m_Context;
-    ctx.DeltaTime = m_DeltaTime;
-    if (m_Context) {
-        ctx.TimeManager = m_Context->GetTimeManager();
-        ctx.ParameterManager = m_Context->GetParameterManager();
-        ctx.MessageManager = m_Context->GetMessageManager();
-        ctx.AttributeManager = m_Context->GetAttributeManager();
-    }
-    return ctx;
-}
-
 ScriptRuntime::ScriptRuntime(ScriptManager *manager) : m_Manager(manager) {}
 
 ScriptRuntime::~ScriptRuntime() {
@@ -674,7 +634,7 @@ void ScriptRuntime::PreProcess() {
         if (module && UsesRuntimeLifecycle(module->Meta)) {
             if (m_Paused &&
                 !module->PendingDisable &&
-                !module->PendingDestroy &&
+                !module->InitialLifecycle.DestroyPending() &&
                 !module->InitialLifecycle.PausePending() &&
                 !module->InitialLifecycle.ResetPending()) {
                 continue;
@@ -760,6 +720,15 @@ void ScriptRuntime::OnReset() {
     }
 }
 
+void ScriptRuntime::CollectAsyncOwnerIds(
+    std::unordered_set<std::uint64_t> &ownerIds) const {
+    for (const std::unique_ptr<Module> &module : m_Modules) {
+        if (module && module->AsyncOwnerId != 0) {
+            ownerIds.insert(module->AsyncOwnerId);
+        }
+    }
+}
+
 void ScriptRuntime::OnPause() {
     if (m_Paused) {
         return;
@@ -806,7 +775,7 @@ void ScriptRuntime::OnResume() {
                                                                              0.0f);
         const bool transitionBlocked = module->InitialLifecycle.PausePending() ||
                                        module->PendingDisable ||
-                                       module->PendingDestroy ||
+                                       module->InitialLifecycle.DestroyPending() ||
                                        module->InitialLifecycle.ResetPending();
         module->InitialLifecycle.RequestResume(true);
         if (!module->InitialLifecycle.ResumeReady(transitionBlocked)) {
@@ -1162,7 +1131,7 @@ ScriptRuntimeLoadPlan ScriptRuntime::Discover(std::string &error) const {
             }
             if (!metadata.HasScriptManifest) {
                 if (ScriptRuntimeMetadata::ToLower(candidate.filename().string()) == "script.as") {
-                    error += fmt::format("Skipping '{}': missing main [runtime], [executor], or legacy [script] metadata.\n",
+                    error += fmt::format("Skipping '{}': missing main [runtime] or [executor] metadata.\n",
                                          ScriptRuntimeMetadata::PathString(candidate));
                 }
                 continue;
@@ -1272,23 +1241,6 @@ bool ScriptRuntime::ReplaceWithFailedModule(const ScriptRuntimeManifest &metadat
     failed->Failed = true;
     failed->Error = error;
     return ReplaceModule(metadata, std::move(failed));
-}
-
-bool ScriptRuntime::RemoveModuleById(const std::string &id) {
-    const std::string canonical = ScriptRuntimeMetadata::SanitizeId(id);
-    for (auto it = m_Modules.begin(); it != m_Modules.end(); ++it) {
-        Module *module = it->get();
-        if (!module || (module->Meta.Id != canonical && module->Meta.Id != id)) {
-            continue;
-        }
-        module->PendingErase = true;
-        if (DestroyModule(*module)) {
-            m_ModulesById.erase(module->Meta.Id);
-            m_Modules.erase(it);
-        }
-        return true;
-    }
-    return false;
 }
 
 void ScriptRuntime::RemoveModulesNotIn(const std::vector<ScriptRuntimeManifest> &scripts) {
@@ -1554,48 +1506,55 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
     if (m_Manager && m_Manager->GetMessageBus()) {
         m_Manager->GetMessageBus()->ClearTarget(module.MessageTarget, "Script entry was destroyed.");
     }
-    if (hard || !module.PendingDestroy) {
+    const bool destroyAlreadyPending = module.InitialLifecycle.DestroyPending();
+    if (hard || !destroyAlreadyPending) {
         CancelOwnedAsyncWork(module,
                              "Async work was cancelled because its Runtime Entry is being destroyed.");
     }
-    if (hard) {
+    if (hard || !destroyAlreadyPending) {
         CancelActiveInvocation(module);
     }
-    module.PendingDestroy = !hard;
-    if (UsesRuntimeLifecycle(module.Meta) && module.Loaded && !module.Failed) {
-        ScriptContext ctx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                                                             module.Meta,
-                                                                             "OnDisable",
-                                                                             ModuleState(module),
-                                                                             module.Generation,
-                                                                             m_FrameIndex,
-                                                                             0.0f,
-                                                                             0.0f);
-        if (module.EnableCalled) {
-            const InvokeStatus status = Invoke(module, "OnDisable", ctx);
-            if (status == InvokeStatus::Suspended) {
-                if (!hard) {
-                    return false;
+    const bool invokeLifecycle = UsesRuntimeLifecycle(module.Meta) &&
+                                 module.Loaded &&
+                                 !module.Failed;
+    module.InitialLifecycle.RequestDestroy(invokeLifecycle && module.EnableCalled);
+    const ScriptLifecycleInvocationStatus destroyStatus =
+        module.InitialLifecycle.AdvanceDestroy(
+            [&](ScriptDestroyPhase phase) {
+                const bool disablePhase = phase == ScriptDestroyPhase::OnDisable;
+                if (disablePhase && !module.EnableCalled) {
+                    return ScriptLifecycleInvocationStatus::Finished;
                 }
-                CancelActiveInvocation(module);
-            }
-            module.EnableCalled = false;
-        }
-        ctx = MakeRuntimeContext(m_Manager ? m_Manager->GetCKContext() : nullptr,
-                                                        module.Meta,
-                                                        "OnDestroy",
-                                                        ModuleState(module),
-                                                        module.Generation,
-                                                        m_FrameIndex,
-                                                        0.0f,
-                                                        0.0f);
-        const InvokeStatus status = Invoke(module, "OnDestroy", ctx);
-        if (status == InvokeStatus::Suspended) {
-            if (!hard) {
-                return false;
-            }
-            CancelActiveInvocation(module);
-        }
+                if (!invokeLifecycle) {
+                    return ScriptLifecycleInvocationStatus::Finished;
+                }
+
+                const char *name = disablePhase ? "OnDisable" : "OnDestroy";
+                const ScriptContext ctx = MakeRuntimeContext(
+                    m_Manager ? m_Manager->GetCKContext() : nullptr,
+                    module.Meta,
+                    name,
+                    ModuleState(module),
+                    module.Generation,
+                    m_FrameIndex,
+                    0.0f,
+                    0.0f);
+                const InvokeStatus status = Invoke(module, name, ctx);
+                if (status == InvokeStatus::Suspended) {
+                    if (!hard) {
+                        return ScriptLifecycleInvocationStatus::Suspended;
+                    }
+                    CancelActiveInvocation(module);
+                }
+                if (disablePhase) {
+                    module.EnableCalled = false;
+                }
+                return status == InvokeStatus::Failed
+                    ? ScriptLifecycleInvocationStatus::Failed
+                    : ScriptLifecycleInvocationStatus::Finished;
+            });
+    if (destroyStatus == ScriptLifecycleInvocationStatus::Suspended) {
+        return false;
     }
     CancelOwnedAsyncWork(module,
                          "Async work was cancelled because its Runtime Entry was destroyed.");
@@ -1611,7 +1570,6 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
             ScriptModuleMutationOrigin::RuntimeEntryRetirement,
             &unloadResult);
         if (unloadStatus != CKAS_OK && unloadStatus != CKAS_NOTFOUND) {
-            module.PendingDestroy = true;
             module.Error = unloadResult.ErrorMessage && unloadResult.ErrorMessage[0] != '\0'
                 ? unloadResult.ErrorMessage
                 : fmt::format("Runtime Entry module '{}' could not be retired.", module.ModuleName);
@@ -1621,11 +1579,8 @@ bool ScriptRuntime::DestroyModule(Module &module, bool hard) {
     }
     module.Cached.reset();
     module.Loaded = false;
-    module.PendingDestroy = false;
     module.PendingDisable = false;
-    module.InitialLifecycle.CompletePause();
-    module.InitialLifecycle.CompleteResume();
-    module.InitialLifecycle.CompleteReset();
+    module.InitialLifecycle.CompleteDestroy();
     return true;
 }
 
@@ -1826,11 +1781,11 @@ ScriptRuntime::InvokeStatus ScriptRuntime::AdvanceInitialLifecycle(
 }
 
 const char *ScriptRuntime::ModuleState(const Module &module) const {
+    if (module.InitialLifecycle.DestroyPending()) {
+        return kStateDestroying;
+    }
     if (module.Failed) {
         return kStateFailed;
-    }
-    if (module.PendingDestroy) {
-        return kStateDestroying;
     }
     if (module.PendingDisable) {
         return kStateDisabling;
@@ -1935,13 +1890,13 @@ void ScriptRuntime::FinalizePendingModules() {
             changed = true;
             continue;
         }
-        if (module->PendingErase && !module->PendingDestroy && !module->ActiveCall) {
+        if (module->PendingErase && !module->InitialLifecycle.DestroyPending() && !module->ActiveCall) {
             DiscardPendingReplacement(*module);
             it = m_Modules.erase(it);
             changed = true;
             continue;
         }
-        if (module->PendingReplacement && !module->PendingDestroy && !module->ActiveCall) {
+        if (module->PendingReplacement && !module->InitialLifecycle.DestroyPending() && !module->ActiveCall) {
             *it = std::move(module->PendingReplacement);
             SubscribeStaticTopics(**it);
             changed = true;
@@ -1969,7 +1924,7 @@ void ScriptRuntime::UpdateModule(Module &module, float deltaTime, float timeSeco
                                                         deltaTime,
                                                         timeSeconds);
     };
-    if (module.PendingDestroy) {
+    if (module.InitialLifecycle.DestroyPending()) {
         DestroyModule(module);
         return;
     }
@@ -2122,10 +2077,6 @@ ScriptRuntime::InvokeStatus ScriptRuntime::Invoke(Module &module, const char *na
     return InvokeStatus::Finished;
 }
 
-bool ScriptRuntime::InvokeFinished(Module &module, const char *name, const ScriptContext &context, bool required) {
-    return Invoke(module, name, context, required) == InvokeStatus::Finished;
-}
-
 void ScriptRuntime::CancelOwnedAsyncWork(Module &module, const char *reason) {
     ScriptAsyncScheduler *scheduler = m_Manager ? m_Manager->GetAsyncScheduler() : nullptr;
     if (!scheduler || module.AsyncOwnerId == 0) {
@@ -2265,7 +2216,6 @@ void RegisterScriptRuntime(asIScriptEngine *engine) {
     r = engine->RegisterObjectMethod("ScriptContext", "string MetadataKey(int index) const", asMETHOD(ScriptContext, MetadataKey), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptContext", "string MetadataValue(int index) const", asMETHOD(ScriptContext, MetadataValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("ScriptContext", "void Raise(const string &in message) const", asMETHOD(ScriptContext, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("ScriptContext", "CKBehaviorContext ToBehaviorContext() const", asMETHOD(ScriptContext, ToBehaviorContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     RegisterScriptSceneRuntime(engine);
 
