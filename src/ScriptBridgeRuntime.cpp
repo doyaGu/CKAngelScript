@@ -1,4 +1,6 @@
 #include "ScriptBridgeHandles.h"
+#include "ScriptHostScope.h"
+#include "ScriptManager.h"
 
 #include <algorithm>
 
@@ -458,15 +460,6 @@ BBTask *ScriptBehaviorBridge::StartTask(const ScriptBridgeBBInvocationSpec &requ
     return new BBTask(this, it->second.TaskId, it->second.Generation);
 }
 
-bool ScriptBehaviorBridge::SetTaskSetting(CK_ID taskId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error) {
-    CKBehavior *behavior = GetTaskBehavior(taskId, generation);
-    if (!behavior) {
-        error = "BBTask behavior is not available.";
-        return false;
-    }
-    return SetBehaviorSetting(behavior, settingIndex, value, error);
-}
-
 CK_ID ScriptBehaviorBridge::CreateInstance(const ScriptBridgeBBInvocationSpec &request,
                                            const CKBehaviorContext &ctx,
                                            int &generation,
@@ -605,8 +598,6 @@ CKBehavior *ScriptBehaviorBridge::CreatePersistentBehavior(const ScriptBridgeBBI
     if (!EnsurePrototypePostSettingsLayout(behavior, prototype, error)) {
         return fail(error);
     }
-    InvalidateBehaviorLayout(behavior->GetID());
-
     if (!ResolveNamedValues(this, behavior, resolvedRequest, false, error)) {
         return fail(error);
     }
@@ -705,31 +696,6 @@ bool ScriptBehaviorBridge::StopInstance(CK_ID instanceId, int generation, const 
     return true;
 }
 
-void ScriptBehaviorBridge::RemoveInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex, bool restoreTarget) {
-    InstanceRecord *record = FindInstance(instanceId, generation);
-    if (!record) {
-        return;
-    }
-    const auto it = std::lower_bound(record->SourceLinks.begin(),
-                                     record->SourceLinks.end(),
-                                     pinIndex,
-                                     [](const InstanceRecord::SourceLink &entry, int index) {
-                                         return entry.PinIndex < index;
-                                     });
-    if (it == record->SourceLinks.end() || it->PinIndex != pinIndex) {
-        return;
-    }
-    if (it->Link) {
-        if (restoreTarget) {
-            it->Link->Restore();
-        } else {
-            it->Link->DestroyDetached();
-        }
-        it->Link->Release();
-    }
-    record->SourceLinks.erase(it);
-}
-
 ParamSourceLinkRef *ScriptBehaviorBridge::TakeInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex) {
     InstanceRecord *record = FindInstance(instanceId, generation);
     if (!record) {
@@ -747,31 +713,6 @@ ParamSourceLinkRef *ScriptBehaviorBridge::TakeInstanceSourceLink(CK_ID instanceI
     ParamSourceLinkRef *link = it->Link;
     record->SourceLinks.erase(it);
     return link;
-}
-
-void ScriptBehaviorBridge::RemoveInstanceOperation(CK_ID instanceId, int generation, int pinIndex, bool restoreTarget) {
-    InstanceRecord *record = FindInstance(instanceId, generation);
-    if (!record) {
-        return;
-    }
-    const auto it = std::lower_bound(record->Operations.begin(),
-                                     record->Operations.end(),
-                                     pinIndex,
-                                     [](const InstanceRecord::OperationLink &entry, int index) {
-                                         return entry.PinIndex < index;
-                                     });
-    if (it == record->Operations.end() || it->PinIndex != pinIndex) {
-        return;
-    }
-    if (it->Operation) {
-        if (restoreTarget) {
-            it->Operation->Destroy();
-        } else {
-            it->Operation->DestroyDetached();
-        }
-        it->Operation->Release();
-    }
-    record->Operations.erase(it);
 }
 
 ParamOperationRef *ScriptBehaviorBridge::TakeInstanceOperation(CK_ID instanceId, int generation, int pinIndex) {
@@ -1201,8 +1142,6 @@ CKBehavior *ScriptBehaviorBridge::CreateRuntimeBehavior(const ScriptBridgeBBInvo
     if (!EnsurePrototypePostSettingsLayout(behavior, prototype, state.Error)) {
         return fail(state.Error);
     }
-    InvalidateBehaviorLayout(behavior->GetID());
-
     if (!ResolveNamedValues(this, behavior, resolvedRequest, false, error)) {
         return fail(error);
     }
@@ -1391,9 +1330,8 @@ bool ScriptBehaviorBridge::SetBehaviorSetting(CKBehavior *behavior,
                                               int settingIndex,
                                               const ScriptParamValue &value,
                                               std::string &error) {
-    CKBehaviorContext ctx = {};
-    ctx.Context = behavior ? behavior->GetCKContext() : nullptr;
-    ctx.Behavior = behavior;
+    const CKBehaviorContext ctx = ScriptHostScope::From(
+        behavior ? behavior->GetCKContext() : nullptr).MakeBehaviorContext(behavior);
     return SetBehaviorSetting(behavior, settingIndex, value, ctx, error);
 }
 
@@ -1426,7 +1364,6 @@ bool ScriptBehaviorBridge::SetBehaviorSetting(CKBehavior *behavior,
             return false;
         }
     }
-    m_BehaviorLayouts.erase(behavior->GetID());
     return true;
 }
 ScriptBehaviorBridge::TaskRecord *ScriptBehaviorBridge::FindTask(CK_ID taskId, int generation) {

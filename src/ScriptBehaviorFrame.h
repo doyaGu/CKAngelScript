@@ -32,7 +32,6 @@ public:
 
     CKBehavior *Behavior() const;
     CKContext *Context() const;
-    CKBehaviorContext ToBehaviorContext() const;
 
     float DeltaTime() const;
     CKLevel *CurrentLevel() const;
@@ -88,7 +87,6 @@ public:
     bool IsHierarchicallyHide() const;
     CKBeObject *Owner() const;
     CKBeObject *Target() const;
-    CKParameterIn *TargetParameter() const;
     BehaviorRef *Self() const;
     BehaviorRef *Parent() const;
     BehaviorRef *OwnerScript() const;
@@ -113,8 +111,6 @@ public:
     void SetAsTargetable(bool target = true);
     CKERROR UseTarget(bool use = true);
     bool IsUsingTarget() const;
-    CKParameterIn *ReplaceTargetParameter(CKParameterIn *targetParam);
-    CKParameterIn *RemoveTargetParameter();
     CK_CLASSID CompatibleClassId() const;
     void SetCompatibleClassId(CK_CLASSID cid);
     void SetFunction(NativePointer fct);
@@ -149,8 +145,6 @@ public:
     int BehaviorLocalCount() const;
     int SettingCount() const;
     int SubBehaviorCount() const;
-    int SubBehaviorLinkCount() const;
-    int ParameterOperationCount() const;
     std::string InputName(int index) const;
     std::string OutputName(int index) const;
     int FindInput(const std::string &name, int occurrence = 0) const;
@@ -174,36 +168,8 @@ public:
     void ActivateOutput(const std::string &name = "Out", bool active = true, int occurrence = 0);
     void ActivateOutputIndex(int index, bool active = true);
 
-    CKBehaviorIO *Input(int index) const;
-    CKBehaviorIO *Output(int index) const;
-    CKParameterIn *InputParameter(int index) const;
-    CKParameterOut *OutputParameter(int index) const;
     CKParameterLocal *LocalParameter(int index) const;
-    int AddInput(const std::string &name);
-    int AddOutput(const std::string &name);
-    CKBehaviorIO *CreateInput(const std::string &name);
-    CKBehaviorIO *CreateOutput(const std::string &name);
-    CKBehaviorIO *RemoveInput(int index);
-    CKBehaviorIO *RemoveOutput(int index);
-    CKERROR DeleteInput(int index);
-    CKERROR DeleteOutput(int index);
-    CKBehaviorIO *ReplaceInput(int index, CKBehaviorIO *io);
-    CKBehaviorIO *ReplaceOutput(int index, CKBehaviorIO *io);
-    int InputPosition(CKBehaviorIO *io) const;
-    int OutputPosition(CKBehaviorIO *io) const;
     BehaviorRef *SubBehavior(int index) const;
-    CKBehavior *SubBehaviorObject(int index) const;
-    CKERROR AddSubBehavior(CKBehavior *behavior);
-    BehaviorRef *RemoveSubBehavior(CKBehavior *behavior);
-    BehaviorRef *RemoveSubBehaviorIndex(int index);
-    CKBehaviorLink *SubBehaviorLink(int index) const;
-    CKERROR AddSubBehaviorLink(CKBehaviorLink *link);
-    CKBehaviorLink *RemoveSubBehaviorLink(CKBehaviorLink *link);
-    CKBehaviorLink *RemoveSubBehaviorLinkIndex(int index);
-    CKParameterOperation *ParameterOperation(int index) const;
-    CKERROR AddParameterOperation(CKParameterOperation *operation);
-    CKParameterOperation *RemoveParameterOperation(int index);
-    CKParameterOperation *RemoveParameterOperationObject(CKParameterOperation *operation);
 
     ParamRef *Pin(const std::string &name, int occurrence = 0) const;
     ParamRef *PinIndex(int index) const;
@@ -240,27 +206,11 @@ public:
     bool PinEnabledIndex(int index) const;
     void EnablePin(const std::string &name, bool enable, int occurrence = 0);
     void EnablePinIndex(int index, bool enable);
-    CKERROR ExportPin(CKParameterIn *pin);
-    CKParameterIn *CreatePin(const std::string &name, CKParameterType type);
-    CKParameterIn *CreatePinGuid(const std::string &name, CKGUID guid);
-    CKParameterIn *InsertPin(int index, const std::string &name, CKParameterType type);
-    void AddPin(CKParameterIn *pin);
-    int PinPosition(CKParameterIn *pin) const;
-    CKParameterIn *RemovePin(int index);
-    CKParameterIn *ReplacePin(int index, CKParameterIn *pin);
     NativeBuffer *PinReadData(int index) const;
     bool PoutEnabled(const std::string &name, int occurrence = 0) const;
     bool PoutEnabledIndex(int index) const;
     void EnablePout(const std::string &name, bool enable, int occurrence = 0);
     void EnablePoutIndex(int index, bool enable);
-    CKERROR ExportPout(CKParameterOut *pout);
-    CKParameterOut *CreatePout(const std::string &name, CKParameterType type);
-    CKParameterOut *CreatePoutGuid(const std::string &name, CKGUID guid);
-    CKParameterOut *InsertPout(int index, const std::string &name, CKParameterType type);
-    void AddPout(CKParameterOut *pout);
-    int PoutPosition(CKParameterOut *pout) const;
-    CKParameterOut *RemovePout(int index);
-    CKParameterOut *ReplacePout(int index, CKParameterOut *pout);
     NativeBuffer *PoutWriteData(int index) const;
     CKObject *PoutObject(int index) const;
     CKERROR SetOutputParameterObject(int index, CKObject *object);
@@ -286,17 +236,11 @@ public:
     bool SetLocalStringIndex(int index, const std::string &value);
     bool SetLocalObject(const std::string &name, CKObject *value, int occurrence = 0);
     bool SetLocalObjectIndex(int index, CKObject *value);
-    CKParameterLocal *CreateLocal(const std::string &name, CKParameterType type);
-    CKParameterLocal *CreateLocalGuid(const std::string &name, CKGUID guid);
-    CKParameterLocal *RemoveLocal(int index);
-    void AddLocal(CKParameterLocal *local);
-    int LocalPosition(CKParameterLocal *local) const;
     NativeBuffer *LocalWriteData(int index) const;
     NativeBuffer *LocalReadData(int index) const;
     CKObject *LocalObject(int index) const;
     NativeBuffer *BehaviorLocalWriteData(int index) const;
     NativeBuffer *BehaviorLocalReadData(int index) const;
-    CKParameterLocal *BehaviorLocalParameter(int index) const;
     CKERROR SetLocalObject(int index, CKObject *object);
 
     bool SetSettingInt(const std::string &name, int value, int occurrence = 0);
@@ -332,7 +276,6 @@ public:
 
 private:
     ScriptBehaviorBridge *Bridge() const;
-    void InvalidateLayout() const;
     BehaviorRef *WrapBehavior(CKBehavior *behavior) const;
     ParamRef *WrapParameter(CKObject *parameter, ScriptBridgeSlotKind kind, int index) const;
     bool SetSettingValue(int localIndex, const ScriptParamValue &value, const char *method);
@@ -359,6 +302,8 @@ private:
     CKContext *m_Context = nullptr;
     CK_ID m_BehaviorId = 0;
     ScriptBridgeObjectStamp m_BehaviorStamp;
+    ScriptBridgeObjectResolvePolicy m_BehaviorResolvePolicy =
+        ScriptBridgeObjectResolvePolicy::LiveOnly;
 };
 
 void BehaviorFrameGetInputParameterValueGeneric(asIScriptGeneric *generic);

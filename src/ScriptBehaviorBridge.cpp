@@ -5,6 +5,7 @@
 
 #include <fmt/format.h>
 
+#include "ScriptManager.h"
 #include "ScriptParameterConversion.h"
 
 #ifndef CKAS_BUILD_SELF_TESTS
@@ -321,17 +322,6 @@ void ScriptBridgeExecutionState::IndexSet::MergeFrom(const IndexSet &other) {
     for (int index : other.Overflow) {
         Insert(index);
     }
-}
-
-std::vector<int> ScriptBridgeExecutionState::IndexSet::ToVector() const {
-    std::vector<int> result;
-    for (int i = 0; i < 32; ++i) {
-        if ((InlineMask & (1u << i)) != 0) {
-            result.push_back(i);
-        }
-    }
-    result.insert(result.end(), Overflow.begin(), Overflow.end());
-    return result;
 }
 
 ScriptBehaviorBridge::ScriptBehaviorBridge(ScriptManager *manager)
@@ -748,7 +738,6 @@ bool ScriptBehaviorBridge::ApplyFrameLocalInterface(CKBehavior *behavior,
         interfaceLayout.Locals = std::move(slots);
         m_FrameLocalInterfaces.insert_or_assign(behaviorId, std::move(interfaceLayout));
     }
-    InvalidateBehaviorLayout(behaviorId);
     return true;
 }
 
@@ -795,7 +784,6 @@ bool ScriptBehaviorBridge::ApplyFrameLocalInterfaceTransaction(
     } else {
         m_FrameLocalInterfaces.erase(behaviorId);
     }
-    InvalidateBehaviorLayout(behaviorId);
     error = commitError;
     return false;
 }
@@ -808,7 +796,6 @@ void ScriptBehaviorBridge::ClearFrameLocalInterface(CK_ID behaviorId, bool clear
     if (clearBindings) {
         m_FrameLocalBindings.erase(behaviorId);
     }
-    InvalidateBehaviorLayout(behaviorId);
 }
 
 bool ScriptBehaviorBridge::HasFrameLocalInterface(CK_ID behaviorId) const {

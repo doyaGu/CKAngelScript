@@ -34,6 +34,8 @@ public:
         const CKBehaviorContext &context,
         ScriptHostScopeContextResolution resolution = ScriptHostScopeContextResolution::BehaviorContextFallback);
 
+    CKBehaviorContext MakeBehaviorContext(CKBehavior *behavior) const;
+
     ScriptHostScopeKind Kind() const { return m_Kind; }
     CKContext *Context() const { return m_Context; }
     ScriptManager *Manager() const { return m_Manager; }

@@ -8,9 +8,7 @@
 #include <fmt/format.h>
 
 #include "CKAll.h"
-#include "ScriptHostScope.h"
 #include "ScriptRefCounted.h"
-#include "ScriptManager.h"
 #include "XObjectArray.h"
 
 #undef GetObject
@@ -154,13 +152,6 @@ std::string ParameterTypeLabel(CKContext *context, CKParameter *parameter) {
 
 std::string ParameterTypeLabel(CKContext *context, CKParameterIn *parameter) {
     return parameter ? ParameterTypeLabel(context, parameter->GetGUID()) : std::string("unknown");
-}
-
-std::string DescribePrototypeParameter(CKContext *context, CKPARAMETER_DESC *parameter) {
-    if (!parameter) {
-        return "<null>";
-    }
-    return fmt::format("{}: {}", SafeString(parameter->Name), ParameterTypeLabel(context, parameter->Guid));
 }
 
 CKBEHAVIORIO_DESC *GetPrototypeInput(CKBehaviorPrototype *prototype, int index) {
@@ -410,24 +401,6 @@ bool EnsurePrototypePostSettingsLayout(CKBehavior *behavior,
     return EnsurePrototypeStaticLayout(behavior, prototype, error);
 }
 
-int FindInputIndex(CKBehavior *behavior, const std::string &name) {
-    if (!behavior) {
-        return -1;
-    }
-
-    if (name.empty()) {
-        return behavior->GetInputCount() > 0 ? 0 : -1;
-    }
-
-    for (int i = 0; i < behavior->GetInputCount(); ++i) {
-        CKBehaviorIO *io = behavior->GetInput(i);
-        if (io && NameEquals(io->GetName(), name)) {
-            return i;
-        }
-    }
-    return -1;
-}
-
 int FindOutputIndex(CKBehavior *behavior, const std::string &name) {
     if (!behavior) {
         return -1;
@@ -458,63 +431,6 @@ int FindInputParameterIndex(CKBehavior *behavior, const std::string &name) {
         }
     }
     return -1;
-}
-
-std::vector<int> FindInputParameterIndices(CKBehavior *behavior, const std::string &name) {
-    std::vector<int> matches;
-    if (!behavior) {
-        return matches;
-    }
-
-    for (int i = 0; i < behavior->GetInputParameterCount(); ++i) {
-        CKParameterIn *param = behavior->GetInputParameter(i);
-        if (param && NameEquals(param->GetName(), name)) {
-            matches.push_back(i);
-        }
-    }
-    return matches;
-}
-
-std::string DescribeInputParameterList(CKBehavior *behavior) {
-    if (!behavior) {
-        return "<behavior is null>";
-    }
-
-    std::string result;
-    CKContext *context = behavior->GetCKContext();
-    for (int i = 0; i < behavior->GetInputParameterCount(); ++i) {
-        CKParameterIn *param = behavior->GetInputParameter(i);
-        if (!param) {
-            continue;
-        }
-
-        if (!result.empty()) {
-            result += ", ";
-        }
-        result += fmt::format("#{} {}: {}", i, SafeString(param->GetName()), ParameterTypeLabel(context, param));
-    }
-
-    return result.empty() ? "<none>" : result;
-}
-
-std::string DescribeInputParameterCandidates(CKBehavior *behavior, const std::vector<int> &indices) {
-    if (!behavior) {
-        return "<behavior is null>";
-    }
-
-    std::string result;
-    CKContext *context = behavior->GetCKContext();
-    for (int index : indices) {
-        CKParameterIn *param = index >= 0 && index < behavior->GetInputParameterCount() ? behavior->GetInputParameter(index) : nullptr;
-        if (!param) {
-            continue;
-        }
-        if (!result.empty()) {
-            result += ", ";
-        }
-        result += fmt::format("#{} {}: {}", index, SafeString(param->GetName()), ParameterTypeLabel(context, param));
-    }
-    return result.empty() ? "<none>" : result;
 }
 
 bool ResolveInputParameterIndex(CKBehavior *behavior,
@@ -574,14 +490,6 @@ std::string OutputName(CKBehavior *behavior, int index) {
     CKBehaviorIO *io = behavior ? behavior->GetOutput(index) : nullptr;
     if (io && io->GetName() && io->GetName()[0] != '\0') {
         return io->GetName();
-    }
-    return IndexedName("#", index);
-}
-
-std::string OutputParamName(CKBehavior *behavior, int index) {
-    CKParameterOut *param = behavior ? behavior->GetOutputParameter(index) : nullptr;
-    if (param && param->GetName() && param->GetName()[0] != '\0') {
-        return param->GetName();
     }
     return IndexedName("#", index);
 }
@@ -707,16 +615,6 @@ CKParameterLocal *EnsureOutputSink(CKBehavior *behavior, int index) {
     return sink;
 }
 
-void EnsureOutputSinks(CKBehavior *behavior) {
-    if (!behavior) {
-        return;
-    }
-
-    for (int i = 0; i < behavior->GetOutputParameterCount(); ++i) {
-        EnsureOutputSink(behavior, i);
-    }
-}
-
 bool SetInputParameterValueByIndex(CKBehavior *behavior,
                                           int index,
                                           const ScriptParamValue &value,
@@ -760,18 +658,6 @@ bool SetInputParameterValueByIndex(CKBehavior *behavior,
     return true;
 }
 
-bool ApplyInputParameters(CKBehavior *behavior,
-                                 const std::vector<ScriptBridgeIndexedValue> &parameters,
-                                 std::string &error,
-                                 ScriptBridgeInputSourceBindings *inputSources) {
-    for (const auto &entry : parameters) {
-        if (!SetInputParameterValueByIndex(behavior, entry.PinIndex, entry.Value, error, inputSources)) {
-            return false;
-        }
-    }
-    return true;
-}
-
 bool ApplyIndexedInputParameters(CKBehavior *behavior,
                                         const std::vector<ScriptBridgeIndexedValue> &parameters,
                                         std::string &error,
@@ -781,36 +667,6 @@ bool ApplyIndexedInputParameters(CKBehavior *behavior,
             return false;
         }
     }
-    return true;
-}
-
-bool PulseInput(CKBehavior *behavior, const std::string &input, std::string &error, bool reset) {
-    if (!behavior) {
-        error = "Behavior is null.";
-        return false;
-    }
-
-    if (reset) {
-        behavior->Activate(TRUE, TRUE);
-    }
-
-    if (behavior->GetInputCount() == 0) {
-        if (!reset) {
-            behavior->Activate(TRUE, FALSE);
-        }
-        return true;
-    }
-
-    const int index = FindInputIndex(behavior, input);
-    if (index < 0) {
-        error = input.empty()
-            ? "Behavior has no default input."
-            : fmt::format("Input '{}' not found.", input);
-        return false;
-    }
-
-    behavior->ActivateInput(index, TRUE);
-    behavior->Activate(TRUE, FALSE);
     return true;
 }
 
@@ -864,10 +720,6 @@ void ClearOutputs(CKBehavior *behavior) {
 
 bool ExecutionOutputActive(const ScriptBridgeExecutionState &state, int index) {
     return index < 0 ? !state.ActiveOutputs.Empty() : state.ActiveOutputs.Contains(index);
-}
-
-bool ExecutionOutputSeen(const ScriptBridgeExecutionState &state, int index) {
-    return index < 0 ? !state.SeenOutputs.Empty() : state.SeenOutputs.Contains(index);
 }
 
 void MergeSeenOutputs(ScriptBridgeExecutionState &state) {
@@ -971,11 +823,6 @@ CK_ID ComponentIdFromContext(const CKBehaviorContext &ctx) {
     return ctx.Behavior ? ctx.Behavior->GetID() : 0;
 }
 
-ScriptManager *ManagerFromContext(const CKBehaviorContext &ctx) {
-    return ScriptHostScope::From(
-        ctx, ScriptHostScopeContextResolution::DirectContext).Manager();
-}
-
 CKBehavior *FindBehaviorRecursive(CKBehavior *root, const std::string &name) {
     if (!root) {
         return nullptr;
@@ -1013,10 +860,6 @@ CKParameter *ParameterSourceForConnection(CKObject *parameter) {
         return pin->GetRealSource();
     }
     return CKParameter::Cast(parameter);
-}
-
-CKParameter *ResolveParameterSource(CKContext *context, CK_ID id) {
-    return ParameterSourceForConnection(GetCKObjectById(context, id));
 }
 
 CKParameter *ResolveStampedParameterSource(CKContext *context,

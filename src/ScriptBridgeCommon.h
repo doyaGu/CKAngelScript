@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "CKAll.h"
-#include "ScriptManager.h"
 
 #undef GetObject
 
@@ -32,7 +31,6 @@ std::string ParameterTypeLabel(CKContext *context, CKGUID guid);
 int ParameterDefaultSize(CKContext *context, CKGUID guid);
 std::string ParameterTypeLabel(CKContext *context, CKParameter *parameter);
 std::string ParameterTypeLabel(CKContext *context, CKParameterIn *parameter);
-std::string DescribePrototypeParameter(CKContext *context, CKPARAMETER_DESC *parameter);
 
 CKBEHAVIORIO_DESC *GetPrototypeInput(CKBehaviorPrototype *prototype, int index);
 CKBEHAVIORIO_DESC *GetPrototypeOutput(CKBehaviorPrototype *prototype, int index);
@@ -42,18 +40,13 @@ CKPARAMETER_DESC *GetPrototypeLocalParameter(CKBehaviorPrototype *prototype, int
 bool EnsurePrototypeStaticLayout(CKBehavior *behavior, CKBehaviorPrototype *prototype, std::string &error);
 bool EnsurePrototypePostSettingsLayout(CKBehavior *behavior, CKBehaviorPrototype *prototype, std::string &error);
 
-int FindInputIndex(CKBehavior *behavior, const std::string &name);
 int FindOutputIndex(CKBehavior *behavior, const std::string &name);
 int FindInputParameterIndex(CKBehavior *behavior, const std::string &name);
-std::vector<int> FindInputParameterIndices(CKBehavior *behavior, const std::string &name);
-std::string DescribeInputParameterList(CKBehavior *behavior);
-std::string DescribeInputParameterCandidates(CKBehavior *behavior, const std::vector<int> &indices);
 bool ResolveInputParameterIndex(CKBehavior *behavior, int index, std::string &error);
 int InputParameterIndexOrResolved(CKBehavior *behavior, int index, std::string &error);
 
 CKParameter *FindReadableParameter(CKBehavior *behavior, const std::string &name);
 std::string OutputName(CKBehavior *behavior, int index);
-std::string OutputParamName(CKBehavior *behavior, int index);
 
 CKGUID ResolveBridgeValueType(CKContext *context,
                               const ScriptParamValue &value,
@@ -65,28 +58,21 @@ CKParameterLocal *EnsureInputSource(CKBehavior *behavior,
 std::string OutputSinkName(int index);
 CKParameterLocal *FindLocalParameterByName(CKBehavior *behavior, const std::string &name);
 CKParameterLocal *EnsureOutputSink(CKBehavior *behavior, int index);
-void EnsureOutputSinks(CKBehavior *behavior);
 bool SetInputParameterValueByIndex(CKBehavior *behavior,
                                    int index,
                                    const ScriptParamValue &value,
                                    std::string &error,
                                    ScriptBridgeInputSourceBindings *inputSources);
-bool ApplyInputParameters(CKBehavior *behavior,
-                          const std::vector<ScriptBridgeIndexedValue> &parameters,
-                          std::string &error,
-                          ScriptBridgeInputSourceBindings *inputSources);
 bool ApplyIndexedInputParameters(CKBehavior *behavior,
                                  const std::vector<ScriptBridgeIndexedValue> &parameters,
                                  std::string &error,
                                  ScriptBridgeInputSourceBindings *inputSources);
 
-bool PulseInput(CKBehavior *behavior, const std::string &input, std::string &error, bool reset = false);
 bool PulseInputIndex(CKBehavior *behavior, int inputIndex, std::string &error, bool reset = false);
 void ClearInputs(CKBehavior *behavior);
 void ClearOutputs(CKBehavior *behavior);
 
 bool ExecutionOutputActive(const ScriptBridgeExecutionState &state, int index);
-bool ExecutionOutputSeen(const ScriptBridgeExecutionState &state, int index);
 void MergeSeenOutputs(ScriptBridgeExecutionState &state);
 ScriptBridgeExecutionState CaptureExecutionState(CKBehavior *behavior, int returnCode);
 void ActivateParentChain(CKBehavior *behavior, bool reset);
@@ -95,12 +81,10 @@ bool RaiseExecutionState(const ScriptBridgeExecutionState &state, const CKBehavi
 
 ScriptBridgeBBInvocationSpec MakeDefaultRequest(const CKBehaviorContext &ctx);
 CK_ID ComponentIdFromContext(const CKBehaviorContext &ctx);
-ScriptManager *ManagerFromContext(const CKBehaviorContext &ctx);
 CKBehavior *FindBehaviorRecursive(CKBehavior *root, const std::string &name);
 CKBehavior *FindBehaviorOnOwner(CKBeObject *owner, const std::string &name);
 
 CKParameter *ParameterSourceForConnection(CKObject *parameter);
-CKParameter *ResolveParameterSource(CKContext *context, CK_ID id);
 CKParameter *ResolveStampedParameterSource(CKContext *context,
                                            CK_ID id,
                                            const ScriptBridgeObjectStamp &stamp,

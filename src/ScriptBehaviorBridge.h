@@ -233,7 +233,6 @@ struct ScriptBridgeExecutionState {
         bool Contains(int index) const;
         bool Insert(int index);
         void MergeFrom(const IndexSet &other);
-        std::vector<int> ToVector() const;
     };
 
     bool Ok = true;
@@ -324,7 +323,6 @@ public:
     BBResult *RunCall(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, const std::string &inputName, int occurrence = 0);
     BBResult *RunBehavior(CKBehavior *behavior, const CKBehaviorContext &ctx, int inputIndex);
     BBTask *StartTask(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int inputIndex);
-    bool SetTaskSetting(CK_ID taskId, int generation, int settingIndex, const ScriptParamValue &value, std::string &error);
     CK_ID CreateInstance(const ScriptBridgeBBInvocationSpec &request, const CKBehaviorContext &ctx, int &generation, std::string &error);
     CKBehavior *CreatePersistentBehavior(const ScriptBridgeBBInvocationSpec &request,
                                          const CKBehaviorContext &ctx,
@@ -334,9 +332,7 @@ public:
     bool StartInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
     bool StepInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx);
     bool StopInstance(CK_ID instanceId, int generation, const CKBehaviorContext &ctx, int inputIndex);
-    void RemoveInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex, bool restoreTarget = true);
     ParamSourceLinkRef *TakeInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex);
-    void RemoveInstanceOperation(CK_ID instanceId, int generation, int pinIndex, bool restoreTarget = true);
     ParamOperationRef *TakeInstanceOperation(CK_ID instanceId, int generation, int pinIndex);
     bool StoreInstanceSourceLink(CK_ID instanceId, int generation, int pinIndex, ParamSourceLinkRef *link);
     bool StoreInstanceOperation(CK_ID instanceId, int generation, int pinIndex, ParamOperationRef *operation);
@@ -351,7 +347,6 @@ public:
     CKBehaviorPrototype *ResolvePrototypeObject(const ScriptBridgeBBInvocationSpec &request, std::string &error) const;
     const ScriptBridgeLayoutRecord *GetBehaviorLayout(CK_ID behaviorId, const ScriptBridgeObjectStamp &stamp) const;
     const ScriptBridgeLayoutRecord *GetPrototypeLayout(const CKBehaviorContext &ctx, const ScriptBridgeBBInvocationSpec &request) const;
-    void InvalidateBehaviorLayout(CK_ID behaviorId) const;
     bool BindFrameLocal(CKBehavior *behavior,
                         const std::string &name,
                         CKGUID guid,

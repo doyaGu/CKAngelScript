@@ -6,14 +6,10 @@
 
 #include "ScriptBridgeCommon.h"
 #include "ScriptBridgeHandles.h"
-#include "ScriptManager.h"
+#include "ScriptHostScope.h"
 #include "ScriptRegistration.h"
 
 namespace {
-
-CKObject *ObjectById(CKContext *context, CK_ID id) {
-    return id ? GetCKObjectById(context, id) : nullptr;
-}
 
 struct ObjectRefIdentityOptions {
     bool isValid = true;
@@ -129,11 +125,6 @@ void RegisterObjectRefAccessor(asIScriptEngine *engine,
     CKAS_CHECK_REGISTER(r);
 }
 
-ScriptBehaviorBridge *BridgeFromContext(CKContext *context) {
-    ScriptManager *manager = ScriptManager::GetManager(context);
-    return manager ? manager->GetBehaviorBridge() : nullptr;
-}
-
 ObjectRefIdentityOptions WithoutLegacyIdentityMethods() {
     ObjectRefIdentityOptions options;
     options.isValid = false;
@@ -190,7 +181,7 @@ ObjectRef::ObjectRef(CKContext *context, CKObject *object) {
 }
 
 ObjectRef::ObjectRef(CKContext *context, CK_ID id, std::string error) {
-    CKObject *object = ObjectById(context, id);
+    CKObject *object = GetCKObjectById(context, id);
     ResetObject(context, id, CaptureBridgeObjectStamp(object), std::move(error));
 }
 
@@ -310,7 +301,7 @@ ObjectRef *MakeScriptObjectRef(CKContext *context,
         return MakeInvalidObjectRef(resolvedContext, error.empty() ? "Object is null." : error);
     }
     if (!bridge) {
-        bridge = BridgeFromContext(resolvedContext);
+        bridge = ScriptHostScope::From(resolvedContext).Bridge();
     }
 
     if (CKBehavior *behavior = CKBehavior::Cast(object)) {

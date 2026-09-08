@@ -1,5 +1,7 @@
 #include "ScriptBridgeHandles.h"
 
+#include "ScriptManager.h"
+
 #include <algorithm>
 
 #include <fmt/format.h>

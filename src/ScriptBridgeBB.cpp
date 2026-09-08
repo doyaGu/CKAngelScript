@@ -7,7 +7,21 @@
 #include "add_on/scriptarray/scriptarray.h"
 #include "ScriptBehaviorFrame.h"
 #include "ScriptHostScope.h"
+#include "ScriptManager.h"
 #include "ScriptParameterConversion.h"
+
+bool MakeContextFromFrame(BehaviorFrame *frame, CKBehaviorContext &ctx, const char *method) {
+    if (!frame) {
+        SetScriptException(fmt::format("{} requires a valid BehaviorFrame.", method));
+        return false;
+    }
+    ctx = frame->MakeContext();
+    if (!ctx.Context || !ctx.Behavior) {
+        SetScriptException(fmt::format("{} requires a live BehaviorFrame behavior.", method));
+        return false;
+    }
+    return true;
+}
 
 namespace {
 
@@ -25,19 +39,6 @@ bool PrototypeMatches(CKObjectDeclaration *decl, const std::string &query) {
         return false;
     }
     return SafeString(decl->GetName()) == query || PrototypeQualifiedName(decl) == query || GuidToString(decl->GetGuid()) == query;
-}
-
-bool MakeContextFromFrame(BehaviorFrame *frame, CKBehaviorContext &ctx, const char *method) {
-    if (!frame) {
-        SetScriptException(fmt::format("{} requires a valid BehaviorFrame.", method));
-        return false;
-    }
-    ctx = frame->MakeContext();
-    if (!ctx.Context || !ctx.Behavior) {
-        SetScriptException(fmt::format("{} requires a live BehaviorFrame behavior.", method));
-        return false;
-    }
-    return true;
 }
 
 std::vector<CKObjectDeclaration *> FindPrototypeDeclarations(const std::string &query) {
@@ -1690,22 +1691,6 @@ bool BBConfig::ApplySlotMetadata(BBSlot *slot) {
     return true;
 }
 
-bool BBConfig::SetLiveValue(BBSlot *slot, const ScriptParamValue &value, const char *method) {
-    ParamRef *ref = PinRefSlot(slot);
-    if (!ref) {
-        SetError(fmt::format("{} could not resolve live pin.", method));
-        SetScriptException(m_Error);
-        return false;
-    }
-    ParamValue paramValue(value);
-    const bool ok = ref->Set(&paramValue);
-    if (!ok) {
-        SetError(fmt::format("{} failed to write live pin '{}'.", method, slot ? slot->Name() : std::string("<null>")));
-    }
-    ref->Release();
-    return ok;
-}
-
 bool BBConfig::SourceForPin(BBSlot *slot, ParamRef *source, const char *method) {
     int pinIndex = -1;
     if (!ResolvePin(slot, pinIndex, method)) {
@@ -2850,15 +2835,7 @@ CKBehavior *BBTaskBuilder::Component() const {
 }
 
 CKBehaviorContext BBTaskBuilder::MakeContext() const {
-    CKBehaviorContext ctx = {};
-    ctx.Context = m_Context;
-    ctx.Behavior = Component();
-    ctx.ParameterManager = m_Context ? m_Context->GetParameterManager() : nullptr;
-    ctx.MessageManager = m_Context ? m_Context->GetMessageManager() : nullptr;
-    ctx.AttributeManager = m_Context ? m_Context->GetAttributeManager() : nullptr;
-    ctx.TimeManager = m_Context ? m_Context->GetTimeManager() : nullptr;
-    ctx.CurrentRenderContext = m_Context ? m_Context->GetPlayerRenderContext() : nullptr;
-    return ctx;
+    return ScriptHostScope::From(m_Context).MakeBehaviorContext(Component());
 }
 
 BBPrototype::BBPrototype(ScriptBehaviorBridge *bridge,
@@ -2937,15 +2914,7 @@ CKBehavior *BBBridge::Component() const {
 }
 
 CKBehaviorContext BBBridge::MakeContext() const {
-    CKBehaviorContext ctx;
-    ctx.Context = m_Context;
-    ctx.Behavior = Component();
-    ctx.ParameterManager = m_Context ? m_Context->GetParameterManager() : nullptr;
-    ctx.MessageManager = m_Context ? m_Context->GetMessageManager() : nullptr;
-    ctx.AttributeManager = m_Context ? m_Context->GetAttributeManager() : nullptr;
-    ctx.TimeManager = m_Context ? m_Context->GetTimeManager() : nullptr;
-    ctx.CurrentRenderContext = m_Context ? m_Context->GetPlayerRenderContext() : nullptr;
-    return ctx;
+    return ScriptHostScope::From(m_Context).MakeBehaviorContext(Component());
 }
 
 BBPrototype *BBBridge::PrototypeByName(const std::string &name) const {

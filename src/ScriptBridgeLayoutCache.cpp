@@ -5,6 +5,8 @@
 
 #include <fmt/format.h>
 
+#include "ScriptManager.h"
+
 namespace {
 
 std::string LayoutGuidKey(CKGUID guid) {
@@ -354,9 +356,6 @@ const ScriptBridgeLayoutRecord *ScriptBehaviorBridge::GetPrototypeLayout(const C
     return &inserted->second;
 }
 
-void ScriptBehaviorBridge::InvalidateBehaviorLayout(CK_ID behaviorId) const {
-    m_BehaviorLayouts.erase(behaviorId);
-}
 ScriptBridgeLayoutRecord ScriptBehaviorBridge::BuildBehaviorLayout(CKBehavior *behavior) const {
     ScriptBridgeLayoutRecord layout;
     layout.Prototype = false;

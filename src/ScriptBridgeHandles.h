@@ -24,6 +24,8 @@ class GraphEditResult;
 class ParamRef;
 class ParamStructRef;
 
+bool MakeContextFromFrame(BehaviorFrame *frame, CKBehaviorContext &ctx, const char *method);
+
 class ParamInfo final : public RefCounted {
 public:
     ParamInfo(ScriptBridgeSlotKind kind,
@@ -470,6 +472,7 @@ public:
     CScriptArray *CreatedNodes() const;
     CScriptArray *CreatedLinks() const;
     bool Raise(const CKBehaviorContext &ctx) const;
+    bool Raise(BehaviorFrame *frame) const;
 
 private:
     CKBehavior *RootBehavior() const;
@@ -566,7 +569,9 @@ public:
                                  const std::string &label = std::string());
     BehaviorGraphEdit *Operation(GraphEditNode *node, BBSlot *pin, ParamOp *operation);
     GraphEditResult *Validate(const CKBehaviorContext &ctx) const;
+    GraphEditResult *Validate(BehaviorFrame *frame) const;
     GraphEditResult *Apply(const CKBehaviorContext &ctx);
+    GraphEditResult *Apply(BehaviorFrame *frame);
 
     ScriptBehaviorBridge *Bridge() const;
     const CKBehaviorContext &Context() const;
@@ -1009,7 +1014,6 @@ private:
     BBSlot *DefaultStopSlot();
     bool ResolvePin(BBSlot *slot, int &pinIndex, const char *method);
     bool SetValueForPin(BBSlot *slot, const ScriptParamValue &value, const char *method);
-    bool SetLiveValue(BBSlot *slot, const ScriptParamValue &value, const char *method);
     bool SourceForPin(BBSlot *slot, ParamRef *source, const char *method);
     bool OperationForPin(BBSlot *slot, ParamOp *operation, const char *method);
     bool SetValueForSetting(BBSlot *slot, const ScriptParamValue &value, const char *method);
@@ -1261,6 +1265,7 @@ public:
     ParamRef *PoutSlot(BBSlot *slot) const;
     ParamRef *PoutName(const std::string &name, int occurrence = 0) const;
     bool Raise(const CKBehaviorContext &ctx) const;
+    bool Raise(BehaviorFrame *frame) const;
 
 private:
     ScriptBridgeExecutionState State() const;
@@ -1283,14 +1288,16 @@ public:
     bool OutputActive(int outputIndex) const;
     bool OutputActiveSlot(BBSlot *output) const;
     bool Step(const CKBehaviorContext &ctx, int inputIndex);
+    bool Step(BehaviorFrame *frame, int inputIndex);
     bool StepSlot(const CKBehaviorContext &ctx, BBSlot *input);
+    bool StepSlot(BehaviorFrame *frame, BBSlot *input);
     bool Reset();
     bool Destroy();
     BehaviorRef *Behavior() const;
     ParamRef *Pout(int index) const;
     ParamRef *PoutSlot(BBSlot *slot) const;
     bool Raise(const CKBehaviorContext &ctx) const;
-    CK_ID BridgeTaskId() const;
+    bool Raise(BehaviorFrame *frame) const;
     int BridgeGeneration() const;
 
 private:
@@ -1314,6 +1321,7 @@ public:
     std::string Error() const;
     GraphTask *Timeout(float seconds);
     bool Step(const CKBehaviorContext &ctx);
+    bool Step(BehaviorFrame *frame);
     bool Done(int outputIndex) const;
     bool DoneSlot(BBSlot *output) const;
     bool OutputActive(int outputIndex) const;
@@ -1324,6 +1332,7 @@ public:
     ParamRef *Pout(int index) const;
     ParamRef *PoutSlot(BBSlot *slot) const;
     bool Raise(const CKBehaviorContext &ctx) const;
+    bool Raise(BehaviorFrame *frame) const;
 
 private:
     ScriptBridgeExecutionState State() const;

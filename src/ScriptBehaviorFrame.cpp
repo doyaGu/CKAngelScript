@@ -306,20 +306,28 @@ void BehaviorFrame::Refresh(const CKBehaviorContext &ctx) {
     m_Context = ScriptHostScope::From(ctx).Context();
     m_BehaviorId = ctx.Behavior ? ctx.Behavior->GetID() : 0;
     m_BehaviorStamp = CaptureBridgeObjectStamp(ctx.Behavior);
+    // Original CK2 marks objects CK_OBJECT_TOBEDELETED before it calls
+    // SequenceToBeDeleted. A frame created for the synchronous terminal
+    // lifecycle callback must still be able to inspect that exact behavior.
+    // The captured identity continues to reject ID reuse, and normal object
+    // references retain their stricter live-only policy.
+    m_BehaviorResolvePolicy = ctx.Behavior && ctx.Behavior->IsToBeDeleted()
+        ? ScriptBridgeObjectResolvePolicy::IncludePendingDeletion
+        : ScriptBridgeObjectResolvePolicy::LiveOnly;
     m_ContextSnapshot.Behavior = nullptr;
     m_ContextSnapshot.Context = m_Context;
 }
 
 CKBehavior *BehaviorFrame::Behavior() const {
-    return CKBehavior::Cast(GetStampedCKObjectById(m_Context, m_BehaviorId, m_BehaviorStamp));
+    return CKBehavior::Cast(GetStampedCKObjectById(
+        m_Context,
+        m_BehaviorId,
+        m_BehaviorStamp,
+        m_BehaviorResolvePolicy));
 }
 
 CKContext *BehaviorFrame::Context() const {
     return m_Context;
-}
-
-CKBehaviorContext BehaviorFrame::ToBehaviorContext() const {
-    return MakeContext();
 }
 
 float BehaviorFrame::DeltaTime() const {
@@ -379,7 +387,6 @@ std::string BehaviorFrame::Name() const {
 void BehaviorFrame::SetName(const std::string &name, bool shared) {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.SetName")) {
         behavior->SetName(const_cast<CKSTRING>(name.c_str()), shared);
-        InvalidateLayout();
     }
 }
 
@@ -507,11 +514,7 @@ CKERROR BehaviorFrame::Load(CKStateChunk *chunk, CKFile *file) {
     if (!behavior) {
         return CKERR_INVALIDOBJECT;
     }
-    CKERROR err = behavior->Load(chunk, file);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
+    return behavior->Load(chunk, file);
 }
 
 void BehaviorFrame::PreSave(CKFile *file, CKDWORD flags) {
@@ -541,7 +544,6 @@ void BehaviorFrame::CheckPostDeletion() {
 void BehaviorFrame::PostLoad() {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.PostLoad")) {
         behavior->PostLoad();
-        InvalidateLayout();
     }
 }
 
@@ -604,11 +606,6 @@ CKBeObject *BehaviorFrame::Owner() const {
 CKBeObject *BehaviorFrame::Target() const {
     CKBehavior *behavior = Behavior();
     return behavior ? behavior->GetTarget() : nullptr;
-}
-
-CKParameterIn *BehaviorFrame::TargetParameter() const {
-    CKBehavior *behavior = Behavior();
-    return behavior ? behavior->GetTargetParameter() : nullptr;
 }
 
 BehaviorRef *BehaviorFrame::Self() const {
@@ -716,7 +713,6 @@ CK_BEHAVIOR_TYPE BehaviorFrame::Type() const {
 void BehaviorFrame::SetType(CK_BEHAVIOR_TYPE type) {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.SetType")) {
         behavior->SetType(type);
-        InvalidateLayout();
     }
 }
 
@@ -728,7 +724,6 @@ CK_BEHAVIOR_FLAGS BehaviorFrame::Flags() const {
 void BehaviorFrame::SetFlags(CK_BEHAVIOR_FLAGS flags) {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.SetFlags")) {
         behavior->SetFlags(flags);
-        InvalidateLayout();
     }
 }
 
@@ -737,22 +732,18 @@ CK_BEHAVIOR_FLAGS BehaviorFrame::ModifyFlags(CKDWORD add, CKDWORD remove) {
     if (!behavior) {
         return CKBEHAVIOR_NONE;
     }
-    CK_BEHAVIOR_FLAGS flags = behavior->ModifyFlags(add, remove);
-    InvalidateLayout();
-    return flags;
+    return behavior->ModifyFlags(add, remove);
 }
 
 void BehaviorFrame::UseGraph() {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.UseGraph")) {
         behavior->UseGraph();
-        InvalidateLayout();
     }
 }
 
 void BehaviorFrame::UseFunction() {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.UseFunction")) {
         behavior->UseFunction();
-        InvalidateLayout();
     }
 }
 
@@ -769,7 +760,6 @@ bool BehaviorFrame::IsTargetable() const {
 void BehaviorFrame::SetAsTargetable(bool target) {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.SetAsTargetable")) {
         behavior->SetAsTargetable(target);
-        InvalidateLayout();
     }
 }
 
@@ -778,36 +768,12 @@ CKERROR BehaviorFrame::UseTarget(bool use) {
     if (!behavior) {
         return CKERR_INVALIDOBJECT;
     }
-    CKERROR err = behavior->UseTarget(use);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
+    return behavior->UseTarget(use);
 }
 
 bool BehaviorFrame::IsUsingTarget() const {
     CKBehavior *behavior = Behavior();
     return behavior && behavior->IsUsingTarget();
-}
-
-CKParameterIn *BehaviorFrame::ReplaceTargetParameter(CKParameterIn *targetParam) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.ReplaceTargetParameter")) {
-        return nullptr;
-    }
-    CKParameterIn *previous = behavior->ReplaceTargetParameter(targetParam);
-    InvalidateLayout();
-    return previous;
-}
-
-CKParameterIn *BehaviorFrame::RemoveTargetParameter() {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveTargetParameter")) {
-        return nullptr;
-    }
-    CKParameterIn *previous = behavior->RemoveTargetParameter();
-    InvalidateLayout();
-    return previous;
 }
 
 CK_CLASSID BehaviorFrame::CompatibleClassId() const {
@@ -818,14 +784,12 @@ CK_CLASSID BehaviorFrame::CompatibleClassId() const {
 void BehaviorFrame::SetCompatibleClassId(CK_CLASSID cid) {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.SetCompatibleClassId")) {
         behavior->SetCompatibleClassID(cid);
-        InvalidateLayout();
     }
 }
 
 void BehaviorFrame::SetFunction(NativePointer fct) {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.SetFunction")) {
         behavior->SetFunction(reinterpret_cast<CKBEHAVIORFCT>(fct.Get()));
-        InvalidateLayout();
     }
 }
 
@@ -886,11 +850,7 @@ CKERROR BehaviorFrame::InitFromPrototype(CKBehaviorPrototype *prototype) {
     if (!RequireBehavior(behavior, "BehaviorFrame.InitFromPrototype")) {
         return CKERR_INVALIDOBJECT;
     }
-    CKERROR err = behavior->InitFromPrototype(prototype);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
+    return behavior->InitFromPrototype(prototype);
 }
 
 CKERROR BehaviorFrame::InitFromGuid(CKGUID guid) {
@@ -898,11 +858,7 @@ CKERROR BehaviorFrame::InitFromGuid(CKGUID guid) {
     if (!RequireBehavior(behavior, "BehaviorFrame.InitFromGuid")) {
         return CKERR_INVALIDOBJECT;
     }
-    CKERROR err = behavior->InitFromGuid(guid);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
+    return behavior->InitFromGuid(guid);
 }
 
 CKERROR BehaviorFrame::InitFctPtrFromGuid(CKGUID guid) {
@@ -910,11 +866,7 @@ CKERROR BehaviorFrame::InitFctPtrFromGuid(CKGUID guid) {
     if (!RequireBehavior(behavior, "BehaviorFrame.InitFctPtrFromGuid")) {
         return CKERR_INVALIDOBJECT;
     }
-    CKERROR err = behavior->InitFctPtrFromGuid(guid);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
+    return behavior->InitFctPtrFromGuid(guid);
 }
 
 CKERROR BehaviorFrame::InitFctPtrFromPrototype(CKBehaviorPrototype *prototype) {
@@ -922,11 +874,7 @@ CKERROR BehaviorFrame::InitFctPtrFromPrototype(CKBehaviorPrototype *prototype) {
     if (!RequireBehavior(behavior, "BehaviorFrame.InitFctPtrFromPrototype")) {
         return CKERR_INVALIDOBJECT;
     }
-    CKERROR err = behavior->InitFctPtrFromPrototype(prototype);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
+    return behavior->InitFctPtrFromPrototype(prototype);
 }
 
 CKGUID BehaviorFrame::PrototypeGuid() const {
@@ -952,7 +900,6 @@ CKDWORD BehaviorFrame::Version() const {
 void BehaviorFrame::SetVersion(CKDWORD version) {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.SetVersion")) {
         behavior->SetVersion(version);
-        InvalidateLayout();
     }
 }
 
@@ -1012,16 +959,6 @@ int BehaviorFrame::SettingCount() const {
 int BehaviorFrame::SubBehaviorCount() const {
     CKBehavior *behavior = Behavior();
     return behavior ? behavior->GetSubBehaviorCount() : 0;
-}
-
-int BehaviorFrame::SubBehaviorLinkCount() const {
-    CKBehavior *behavior = Behavior();
-    return behavior ? behavior->GetSubBehaviorLinkCount() : 0;
-}
-
-int BehaviorFrame::ParameterOperationCount() const {
-    CKBehavior *behavior = Behavior();
-    return behavior ? behavior->GetParameterOperationCount() : 0;
 }
 
 std::string BehaviorFrame::InputName(int index) const {
@@ -1156,283 +1093,14 @@ void BehaviorFrame::ActivateOutputIndex(int index, bool active) {
     }
 }
 
-CKBehaviorIO *BehaviorFrame::Input(int index) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && index >= 0 && index < behavior->GetInputCount() ? behavior->GetInput(index) : nullptr;
-}
-
-CKBehaviorIO *BehaviorFrame::Output(int index) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && index >= 0 && index < behavior->GetOutputCount() ? behavior->GetOutput(index) : nullptr;
-}
-
-CKParameterIn *BehaviorFrame::InputParameter(int index) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && index >= 0 && index < behavior->GetInputParameterCount() ? behavior->GetInputParameter(index) : nullptr;
-}
-
-CKParameterOut *BehaviorFrame::OutputParameter(int index) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && index >= 0 && index < behavior->GetOutputParameterCount() ? behavior->GetOutputParameter(index) : nullptr;
-}
-
 CKParameterLocal *BehaviorFrame::LocalParameter(int index) const {
     CKBehavior *behavior = Behavior();
     return behavior && index >= 0 && index < behavior->GetLocalParameterCount() ? behavior->GetLocalParameter(index) : nullptr;
 }
 
-int BehaviorFrame::AddInput(const std::string &name) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.AddInput")) {
-        return -1;
-    }
-    const int index = behavior->AddInput(const_cast<CKSTRING>(name.c_str()));
-    if (index >= 0) {
-        InvalidateLayout();
-    }
-    return index;
-}
-
-int BehaviorFrame::AddOutput(const std::string &name) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.AddOutput")) {
-        return -1;
-    }
-    const int index = behavior->AddOutput(const_cast<CKSTRING>(name.c_str()));
-    if (index >= 0) {
-        InvalidateLayout();
-    }
-    return index;
-}
-
-CKBehaviorIO *BehaviorFrame::CreateInput(const std::string &name) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.CreateInput")) {
-        return nullptr;
-    }
-    CKBehaviorIO *io = behavior->CreateInput(const_cast<CKSTRING>(name.c_str()));
-    if (io) {
-        InvalidateLayout();
-    }
-    return io;
-}
-
-CKBehaviorIO *BehaviorFrame::CreateOutput(const std::string &name) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.CreateOutput")) {
-        return nullptr;
-    }
-    CKBehaviorIO *io = behavior->CreateOutput(const_cast<CKSTRING>(name.c_str()));
-    if (io) {
-        InvalidateLayout();
-    }
-    return io;
-}
-
-CKBehaviorIO *BehaviorFrame::RemoveInput(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveInput")) {
-        return nullptr;
-    }
-    CKBehaviorIO *io = behavior->RemoveInput(index);
-    if (io) {
-        InvalidateLayout();
-    }
-    return io;
-}
-
-CKBehaviorIO *BehaviorFrame::RemoveOutput(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveOutput")) {
-        return nullptr;
-    }
-    CKBehaviorIO *io = behavior->RemoveOutput(index);
-    if (io) {
-        InvalidateLayout();
-    }
-    return io;
-}
-
-CKERROR BehaviorFrame::DeleteInput(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.DeleteInput")) {
-        return CKERR_INVALIDOBJECT;
-    }
-    CKERROR err = behavior->DeleteInput(index);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
-}
-
-CKERROR BehaviorFrame::DeleteOutput(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.DeleteOutput")) {
-        return CKERR_INVALIDOBJECT;
-    }
-    CKERROR err = behavior->DeleteOutput(index);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
-}
-
-CKBehaviorIO *BehaviorFrame::ReplaceInput(int index, CKBehaviorIO *io) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.ReplaceInput")) {
-        return nullptr;
-    }
-    CKBehaviorIO *previous = behavior->ReplaceInput(index, io);
-    InvalidateLayout();
-    return previous;
-}
-
-CKBehaviorIO *BehaviorFrame::ReplaceOutput(int index, CKBehaviorIO *io) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.ReplaceOutput")) {
-        return nullptr;
-    }
-    CKBehaviorIO *previous = behavior->ReplaceOutput(index, io);
-    InvalidateLayout();
-    return previous;
-}
-
-int BehaviorFrame::InputPosition(CKBehaviorIO *io) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && io ? behavior->GetInputPosition(io) : -1;
-}
-
-int BehaviorFrame::OutputPosition(CKBehaviorIO *io) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && io ? behavior->GetOutputPosition(io) : -1;
-}
-
 BehaviorRef *BehaviorFrame::SubBehavior(int index) const {
     CKBehavior *behavior = Behavior();
     return WrapBehavior(behavior && index >= 0 && index < behavior->GetSubBehaviorCount() ? behavior->GetSubBehavior(index) : nullptr);
-}
-
-CKBehavior *BehaviorFrame::SubBehaviorObject(int index) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && index >= 0 && index < behavior->GetSubBehaviorCount() ? behavior->GetSubBehavior(index) : nullptr;
-}
-
-CKERROR BehaviorFrame::AddSubBehavior(CKBehavior *subBehavior) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.AddSubBehavior")) {
-        return CKERR_INVALIDOBJECT;
-    }
-    CKERROR err = behavior->AddSubBehavior(subBehavior);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
-}
-
-BehaviorRef *BehaviorFrame::RemoveSubBehavior(CKBehavior *subBehavior) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveSubBehavior")) {
-        return nullptr;
-    }
-    CKBehavior *removed = behavior->RemoveSubBehavior(subBehavior);
-    if (removed) {
-        InvalidateLayout();
-    }
-    return WrapBehavior(removed);
-}
-
-BehaviorRef *BehaviorFrame::RemoveSubBehaviorIndex(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveSubBehavior")) {
-        return nullptr;
-    }
-    CKBehavior *removed = behavior->RemoveSubBehavior(index);
-    if (removed) {
-        InvalidateLayout();
-    }
-    return WrapBehavior(removed);
-}
-
-CKBehaviorLink *BehaviorFrame::SubBehaviorLink(int index) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && index >= 0 && index < behavior->GetSubBehaviorLinkCount() ? behavior->GetSubBehaviorLink(index) : nullptr;
-}
-
-CKERROR BehaviorFrame::AddSubBehaviorLink(CKBehaviorLink *link) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.AddSubBehaviorLink")) {
-        return CKERR_INVALIDOBJECT;
-    }
-    CKERROR err = behavior->AddSubBehaviorLink(link);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
-}
-
-CKBehaviorLink *BehaviorFrame::RemoveSubBehaviorLink(CKBehaviorLink *link) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveSubBehaviorLink")) {
-        return nullptr;
-    }
-    CKBehaviorLink *removed = behavior->RemoveSubBehaviorLink(link);
-    if (removed) {
-        InvalidateLayout();
-    }
-    return removed;
-}
-
-CKBehaviorLink *BehaviorFrame::RemoveSubBehaviorLinkIndex(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveSubBehaviorLink")) {
-        return nullptr;
-    }
-    CKBehaviorLink *removed = behavior->RemoveSubBehaviorLink(index);
-    if (removed) {
-        InvalidateLayout();
-    }
-    return removed;
-}
-
-CKParameterOperation *BehaviorFrame::ParameterOperation(int index) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && index >= 0 && index < behavior->GetParameterOperationCount() ? behavior->GetParameterOperation(index) : nullptr;
-}
-
-CKERROR BehaviorFrame::AddParameterOperation(CKParameterOperation *operation) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.AddParameterOperation")) {
-        return CKERR_INVALIDOBJECT;
-    }
-    CKERROR err = behavior->AddParameterOperation(operation);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
-}
-
-CKParameterOperation *BehaviorFrame::RemoveParameterOperation(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveParameterOperation")) {
-        return nullptr;
-    }
-    CKParameterOperation *removed = behavior->RemoveParameterOperation(index);
-    if (removed) {
-        InvalidateLayout();
-    }
-    return removed;
-}
-
-CKParameterOperation *BehaviorFrame::RemoveParameterOperationObject(CKParameterOperation *operation) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveParameterOperation")) {
-        return nullptr;
-    }
-    CKParameterOperation *removed = behavior->RemoveParameterOperation(operation);
-    if (removed) {
-        InvalidateLayout();
-    }
-    return removed;
 }
 
 ParamRef *BehaviorFrame::Pin(const std::string &name, int occurrence) const {
@@ -1718,88 +1386,6 @@ void BehaviorFrame::EnablePinIndex(int index, bool enable) {
     }
 }
 
-CKERROR BehaviorFrame::ExportPin(CKParameterIn *pin) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.ExportPin")) {
-        return CKERR_INVALIDOBJECT;
-    }
-    CKERROR err = behavior->ExportInputParameter(pin);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
-}
-
-CKParameterIn *BehaviorFrame::CreatePin(const std::string &name, CKParameterType type) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.CreatePin")) {
-        return nullptr;
-    }
-    CKParameterIn *pin = behavior->CreateInputParameter(const_cast<CKSTRING>(name.c_str()), type);
-    if (pin) {
-        InvalidateLayout();
-    }
-    return pin;
-}
-
-CKParameterIn *BehaviorFrame::CreatePinGuid(const std::string &name, CKGUID guid) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.CreatePin")) {
-        return nullptr;
-    }
-    CKParameterIn *pin = behavior->CreateInputParameter(const_cast<CKSTRING>(name.c_str()), guid);
-    if (pin) {
-        InvalidateLayout();
-    }
-    return pin;
-}
-
-CKParameterIn *BehaviorFrame::InsertPin(int index, const std::string &name, CKParameterType type) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.InsertPin")) {
-        return nullptr;
-    }
-    CKParameterIn *pin = behavior->InsertInputParameter(index, const_cast<CKSTRING>(name.c_str()), type);
-    if (pin) {
-        InvalidateLayout();
-    }
-    return pin;
-}
-
-void BehaviorFrame::AddPin(CKParameterIn *pin) {
-    if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.AddPin")) {
-        behavior->AddInputParameter(pin);
-        InvalidateLayout();
-    }
-}
-
-int BehaviorFrame::PinPosition(CKParameterIn *pin) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && pin ? behavior->GetInputParameterPosition(pin) : -1;
-}
-
-CKParameterIn *BehaviorFrame::RemovePin(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemovePin")) {
-        return nullptr;
-    }
-    CKParameterIn *pin = behavior->RemoveInputParameter(index);
-    if (pin) {
-        InvalidateLayout();
-    }
-    return pin;
-}
-
-CKParameterIn *BehaviorFrame::ReplacePin(int index, CKParameterIn *pin) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.ReplacePin")) {
-        return nullptr;
-    }
-    CKParameterIn *previous = behavior->ReplaceInputParameter(index, pin);
-    InvalidateLayout();
-    return previous;
-}
-
 NativeBuffer *BehaviorFrame::PinReadData(int index) const {
     CKBehavior *behavior = Behavior();
     CKParameterIn *pin = behavior && index >= 0 && index < behavior->GetInputParameterCount()
@@ -1828,88 +1414,6 @@ void BehaviorFrame::EnablePoutIndex(int index, bool enable) {
     if (behavior && ValidIndex(index, behavior->GetOutputParameterCount(), "BehaviorFrame.EnablePout", "pout")) {
         behavior->EnableOutputParameter(index, enable);
     }
-}
-
-CKERROR BehaviorFrame::ExportPout(CKParameterOut *pout) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.ExportPout")) {
-        return CKERR_INVALIDOBJECT;
-    }
-    CKERROR err = behavior->ExportOutputParameter(pout);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
-}
-
-CKParameterOut *BehaviorFrame::CreatePout(const std::string &name, CKParameterType type) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.CreatePout")) {
-        return nullptr;
-    }
-    CKParameterOut *pout = behavior->CreateOutputParameter(const_cast<CKSTRING>(name.c_str()), type);
-    if (pout) {
-        InvalidateLayout();
-    }
-    return pout;
-}
-
-CKParameterOut *BehaviorFrame::CreatePoutGuid(const std::string &name, CKGUID guid) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.CreatePout")) {
-        return nullptr;
-    }
-    CKParameterOut *pout = behavior->CreateOutputParameter(const_cast<CKSTRING>(name.c_str()), guid);
-    if (pout) {
-        InvalidateLayout();
-    }
-    return pout;
-}
-
-CKParameterOut *BehaviorFrame::InsertPout(int index, const std::string &name, CKParameterType type) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.InsertPout")) {
-        return nullptr;
-    }
-    CKParameterOut *pout = behavior->InsertOutputParameter(index, const_cast<CKSTRING>(name.c_str()), type);
-    if (pout) {
-        InvalidateLayout();
-    }
-    return pout;
-}
-
-void BehaviorFrame::AddPout(CKParameterOut *pout) {
-    if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.AddPout")) {
-        behavior->AddOutputParameter(pout);
-        InvalidateLayout();
-    }
-}
-
-int BehaviorFrame::PoutPosition(CKParameterOut *pout) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && pout ? behavior->GetOutputParameterPosition(pout) : -1;
-}
-
-CKParameterOut *BehaviorFrame::RemovePout(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemovePout")) {
-        return nullptr;
-    }
-    CKParameterOut *pout = behavior->RemoveOutputParameter(index);
-    if (pout) {
-        InvalidateLayout();
-    }
-    return pout;
-}
-
-CKParameterOut *BehaviorFrame::ReplacePout(int index, CKParameterOut *pout) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.ReplacePout")) {
-        return nullptr;
-    }
-    CKParameterOut *previous = behavior->ReplaceOutputParameter(index, pout);
-    InvalidateLayout();
-    return previous;
 }
 
 NativeBuffer *BehaviorFrame::PoutWriteData(int index) const {
@@ -2012,54 +1516,6 @@ bool BehaviorFrame::SetLocalObjectIndex(int index, CKObject *value) {
     return ApplyParamRef(LocalIndex(index), [value](ParamRef *ref) { return ref->SetObject(value); });
 }
 
-CKParameterLocal *BehaviorFrame::CreateLocal(const std::string &name, CKParameterType type) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.CreateLocal")) {
-        return nullptr;
-    }
-    CKParameterLocal *local = behavior->CreateLocalParameter(const_cast<CKSTRING>(name.c_str()), type);
-    if (local) {
-        InvalidateLayout();
-    }
-    return local;
-}
-
-CKParameterLocal *BehaviorFrame::CreateLocalGuid(const std::string &name, CKGUID guid) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.CreateLocal")) {
-        return nullptr;
-    }
-    CKParameterLocal *local = behavior->CreateLocalParameter(const_cast<CKSTRING>(name.c_str()), guid);
-    if (local) {
-        InvalidateLayout();
-    }
-    return local;
-}
-
-CKParameterLocal *BehaviorFrame::RemoveLocal(int index) {
-    CKBehavior *behavior = Behavior();
-    if (!RequireBehavior(behavior, "BehaviorFrame.RemoveLocal")) {
-        return nullptr;
-    }
-    CKParameterLocal *local = behavior->RemoveLocalParameter(index);
-    if (local) {
-        InvalidateLayout();
-    }
-    return local;
-}
-
-void BehaviorFrame::AddLocal(CKParameterLocal *local) {
-    if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.AddLocal")) {
-        behavior->AddLocalParameter(local);
-        InvalidateLayout();
-    }
-}
-
-int BehaviorFrame::LocalPosition(CKParameterLocal *local) const {
-    CKBehavior *behavior = Behavior();
-    return behavior && local ? behavior->GetLocalParameterPosition(local) : -1;
-}
-
 NativeBuffer *BehaviorFrame::LocalWriteData(int index) const {
     return ParameterWriteBuffer(FindLocalSourceIndex(index));
 }
@@ -2079,10 +1535,6 @@ NativeBuffer *BehaviorFrame::BehaviorLocalWriteData(int index) const {
 
 NativeBuffer *BehaviorFrame::BehaviorLocalReadData(int index) const {
     return ParameterReadBuffer(LocalParameter(index));
-}
-
-CKParameterLocal *BehaviorFrame::BehaviorLocalParameter(int index) const {
-    return LocalParameter(index);
 }
 
 CKERROR BehaviorFrame::SetLocalObject(int index, CKObject *object) {
@@ -2140,11 +1592,7 @@ CKERROR BehaviorFrame::SetOwner(CKBeObject *owner, bool callback) {
     if (!RequireBehavior(behavior, "BehaviorFrame.SetOwner")) {
         return CKERR_INVALIDOBJECT;
     }
-    CKERROR err = behavior->SetOwner(owner, callback);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
+    return behavior->SetOwner(owner, callback);
 }
 
 CKERROR BehaviorFrame::SetSubBehaviorOwner(CKBeObject *owner, bool callback) {
@@ -2152,24 +1600,18 @@ CKERROR BehaviorFrame::SetSubBehaviorOwner(CKBeObject *owner, bool callback) {
     if (!RequireBehavior(behavior, "BehaviorFrame.SetSubBehaviorOwner")) {
         return CKERR_INVALIDOBJECT;
     }
-    CKERROR err = behavior->SetSubBehaviorOwner(owner, callback);
-    if (err == CK_OK) {
-        InvalidateLayout();
-    }
-    return err;
+    return behavior->SetSubBehaviorOwner(owner, callback);
 }
 
 void BehaviorFrame::NotifyEdition() {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.NotifyEdition")) {
         behavior->NotifyEdition();
-        InvalidateLayout();
     }
 }
 
 void BehaviorFrame::NotifySettingsEdition() {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.NotifySettingsEdition")) {
         behavior->NotifySettingsEdition();
-        InvalidateLayout();
     }
 }
 
@@ -2181,7 +1623,6 @@ CKStateChunk *BehaviorFrame::InterfaceChunk() const {
 void BehaviorFrame::SetInterfaceChunk(CKStateChunk *state) {
     if (CKBehavior *behavior = RequireBehavior(Behavior(), "BehaviorFrame.SetInterfaceChunk")) {
         behavior->SetInterfaceChunk(state);
-        InvalidateLayout();
     }
 }
 
@@ -2315,13 +1756,6 @@ ScriptBehaviorBridge *BehaviorFrame::Bridge() const {
     }
     return ScriptHostScope::From(
         context, ScriptHostScopeContextResolution::DirectContext).Bridge();
-}
-
-void BehaviorFrame::InvalidateLayout() const {
-    ScriptBehaviorBridge *bridge = Bridge();
-    if (bridge && m_BehaviorId != 0) {
-        bridge->InvalidateBehaviorLayout(m_BehaviorId);
-    }
 }
 
 BehaviorRef *BehaviorFrame::WrapBehavior(CKBehavior *behavior) const {

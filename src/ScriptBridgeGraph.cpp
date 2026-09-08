@@ -6,6 +6,7 @@
 #include <fmt/format.h>
 
 #include "add_on/scriptarray/scriptarray.h"
+#include "ScriptManager.h"
 #include "ScriptParameterConversion.h"
 
 namespace {
@@ -232,14 +233,11 @@ CKBehaviorIO *RemoveLastBehaviorIo(CKBehavior *behavior, bool input) {
                  : behavior->RemoveOutput(count - 1);
 }
 
-void NotifyBehaviorLayoutEdited(ScriptBehaviorBridge *bridge, CKBehavior *behavior) {
+void NotifyBehaviorLayoutEdited(CKBehavior *behavior) {
     if (!behavior) {
         return;
     }
     CallBridgeBehaviorCallback(behavior, CKM_BEHAVIOREDITED);
-    if (bridge) {
-        bridge->InvalidateBehaviorLayout(behavior->GetID());
-    }
     behavior->NotifyEdition();
 }
 
@@ -776,6 +774,11 @@ bool GraphEditResult::Raise(const CKBehaviorContext &ctx) const {
     return RaiseExecutionState(state, ctx);
 }
 
+bool GraphEditResult::Raise(BehaviorFrame *frame) const {
+    CKBehaviorContext ctx = {};
+    return MakeContextFromFrame(frame, ctx, "GraphEditResult.Raise") && Raise(ctx);
+}
+
 GraphEditNode::GraphEditNode(BehaviorGraphEdit *edit, int specIndex, CK_ID behaviorId, const std::string &error)
     : m_Edit(edit), m_SpecIndex(specIndex), m_BehaviorId(behaviorId), m_Error(error) {
     if (m_Edit) {
@@ -1264,6 +1267,11 @@ GraphEditResult *BehaviorGraphEdit::Validate(const CKBehaviorContext &ctx) const
     return MakeResult(true, std::string(), "Graph edit validation succeeded.");
 }
 
+GraphEditResult *BehaviorGraphEdit::Validate(BehaviorFrame *frame) const {
+    CKBehaviorContext ctx = {};
+    return MakeContextFromFrame(frame, ctx, "BehaviorGraphEdit.Validate") ? Validate(ctx) : nullptr;
+}
+
 GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
     std::string error;
     if (!ValidatePlan(ctx, error)) {
@@ -1337,7 +1345,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
                     break;
                 }
             }
-            NotifyBehaviorLayoutEdited(m_Bridge, behavior);
+            NotifyBehaviorLayoutEdited(behavior);
         }
         appliedLayoutEdits.clear();
         for (auto it = appliedTargetEdits.rbegin(); it != appliedTargetEdits.rend(); ++it) {
@@ -1465,7 +1473,7 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
                 return failApply(error);
             }
         }
-        NotifyBehaviorLayoutEdited(m_Bridge, behavior);
+        NotifyBehaviorLayoutEdited(behavior);
     }
 
     for (const TargetSpec &spec : m_Targets) {
@@ -1512,9 +1520,6 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
             previous ? previous->GetID() : 0,
             CaptureBridgeObjectStamp(previous)
         });
-        if (m_Bridge) {
-            m_Bridge->InvalidateBehaviorLayout(behavior->GetID());
-        }
     }
 
     for (LinkSpec &spec : m_Links) {
@@ -1625,9 +1630,6 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
                                 err);
             return failApply(error);
         }
-        if (m_Bridge) {
-            m_Bridge->InvalidateBehaviorLayout(targetRoot->GetID());
-        }
         targetRoot->NotifyEdition();
     }
 
@@ -1653,9 +1655,6 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
         context->DestroyObject(behavior);
     }
 
-    if (m_Bridge) {
-        m_Bridge->InvalidateBehaviorLayout(root->GetID());
-    }
     root->NotifyEdition();
     for (ParamSourceLinkRef *link : appliedSourceLinks) {
         if (link) {
@@ -1690,6 +1689,11 @@ GraphEditResult *BehaviorGraphEdit::Apply(const CKBehaviorContext &ctx) {
                                   m_Moves.size()),
                       createdNodes,
                       createdLinks);
+}
+
+GraphEditResult *BehaviorGraphEdit::Apply(BehaviorFrame *frame) {
+    CKBehaviorContext ctx = {};
+    return MakeContextFromFrame(frame, ctx, "BehaviorGraphEdit.Apply") ? Apply(ctx) : nullptr;
 }
 
 ScriptBehaviorBridge *BehaviorGraphEdit::Bridge() const { return m_Bridge; }

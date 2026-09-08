@@ -118,6 +118,11 @@ std::string BBResult::Error() const { return State().Error; }
 bool BBResult::OutputActive(int outputIndex) const { return ExecutionOutputActive(State(), outputIndex); }
 bool BBResult::Raise(const CKBehaviorContext &ctx) const { return RaiseExecutionState(State(), ctx); }
 
+bool BBResult::Raise(BehaviorFrame *frame) const {
+    CKBehaviorContext ctx = {};
+    return MakeContextFromFrame(frame, ctx, "BBResult.Raise") && Raise(ctx);
+}
+
 bool BBResult::OutputActiveSlot(BBSlot *output) const {
     int outputIndex = -1;
     std::string error;
@@ -185,6 +190,11 @@ int BBTask::ReturnCode() const { return State().ReturnCode; }
 std::string BBTask::Error() const { return State().Error; }
 bool BBTask::OutputActive(int outputIndex) const { return ExecutionOutputActive(State(), outputIndex); }
 bool BBTask::Step(const CKBehaviorContext &ctx, int inputIndex) { return m_Bridge && m_Bridge->StepTask(m_TaskId, m_Generation, ctx, inputIndex); }
+
+bool BBTask::Step(BehaviorFrame *frame, int inputIndex) {
+    CKBehaviorContext ctx = {};
+    return MakeContextFromFrame(frame, ctx, "BBTask.Step") && Step(ctx, inputIndex);
+}
 bool BBTask::Reset() { return m_Bridge && m_Bridge->ResetTask(m_TaskId, m_Generation); }
 
 bool BBTask::OutputActiveSlot(BBSlot *output) const {
@@ -201,6 +211,11 @@ bool BBTask::StepSlot(const CKBehaviorContext &ctx, BBSlot *input) {
         return false;
     }
     return Step(ctx, inputIndex);
+}
+
+bool BBTask::StepSlot(BehaviorFrame *frame, BBSlot *input) {
+    CKBehaviorContext ctx = {};
+    return MakeContextFromFrame(frame, ctx, "BBTask.Step") && StepSlot(ctx, input);
 }
 
 bool BBTask::Destroy() {
@@ -236,7 +251,11 @@ bool BBTask::Raise(const CKBehaviorContext &ctx) const {
     return RaiseExecutionState(State(), ctx);
 }
 
-CK_ID BBTask::BridgeTaskId() const { return m_TaskId; }
+bool BBTask::Raise(BehaviorFrame *frame) const {
+    CKBehaviorContext ctx = {};
+    return MakeContextFromFrame(frame, ctx, "BBTask.Raise") && Raise(ctx);
+}
+
 int BBTask::BridgeGeneration() const { return m_Generation; }
 
 GraphTask::GraphTask(ScriptBehaviorBridge *bridge, CK_ID watchId, int generation)
@@ -271,6 +290,11 @@ GraphTask *GraphTask::Timeout(float seconds) {
 }
 
 bool GraphTask::Step(const CKBehaviorContext &ctx) { return m_Bridge && m_Bridge->StepGraphWatch(m_WatchId, m_Generation, ctx); }
+
+bool GraphTask::Step(BehaviorFrame *frame) {
+    CKBehaviorContext ctx = {};
+    return MakeContextFromFrame(frame, ctx, "GraphTask.Step") && Step(ctx);
+}
 bool GraphTask::Done(int outputIndex) const { return m_Bridge && m_Bridge->IsGraphWatchDone(m_WatchId, m_Generation, outputIndex); }
 bool GraphTask::OutputActive(int outputIndex) const { return ExecutionOutputActive(State(), outputIndex); }
 
@@ -319,4 +343,9 @@ ParamRef *GraphTask::PoutSlot(BBSlot *slot) const {
 
 bool GraphTask::Raise(const CKBehaviorContext &ctx) const {
     return RaiseExecutionState(State(), ctx);
+}
+
+bool GraphTask::Raise(BehaviorFrame *frame) const {
+    CKBehaviorContext ctx = {};
+    return MakeContextFromFrame(frame, ctx, "GraphTask.Raise") && Raise(ctx);
 }

@@ -5,166 +5,11 @@
 #include <fmt/format.h>
 #include "ScriptRegistration.h"
 #include "ScriptBehaviorFrame.h"
-#include "ScriptBridgeScope.h"
 
 namespace {
 
-ScriptHostScope BehaviorBridgeScope(const CKBehaviorContext &ctx) {
-    return ScriptHostScope::From(ctx, ScriptHostScopeContextResolution::DirectContext);
-}
-
-ScriptBehaviorBridge *BridgeFromContext(const CKBehaviorContext &ctx) {
-    return BehaviorBridgeScope(ctx).Bridge();
-}
-
-BehaviorBridge *BehaviorFromContext(const CKBehaviorContext &ctx) {
-    return ScriptBehaviorAdapter::From(BehaviorBridgeScope(ctx));
-}
-
-BehaviorGraph *BehaviorGraphFromContext(const CKBehaviorContext &ctx) {
-    return ScriptBehaviorAdapter::Graph(BehaviorBridgeScope(ctx));
-}
-
 BehaviorQuery *BehaviorQueryFactory() {
     return new BehaviorQuery();
-}
-
-BBBridge *BBFromContext(const CKBehaviorContext &ctx) {
-    return ScriptBBAdapter::From(BehaviorBridgeScope(ctx), ScriptBridgeFailureMode::ScriptException);
-}
-
-BehaviorRef *BehaviorFindByName(const CKBehaviorContext &ctx, const std::string &name) {
-    return ScriptBehaviorAdapter::Find(BehaviorBridgeScope(ctx), name);
-}
-
-BehaviorRef *BehaviorFindOnOwner(const CKBehaviorContext &ctx, CKBeObject *owner, const std::string &name) {
-    BehaviorBridge *bridge = BehaviorFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BehaviorRef *ref = bridge->FindOn(owner, name);
-    bridge->Release();
-    return ref;
-}
-
-BehaviorRef *BehaviorFindById(const CKBehaviorContext &ctx, CK_ID id) {
-    return ScriptBehaviorAdapter::FindById(BehaviorBridgeScope(ctx), id);
-}
-
-GraphTask *BehaviorStartByName(const CKBehaviorContext &ctx,
-                                      const std::string &name,
-                                      int inputIndex,
-                                      bool reset,
-                                      float timeoutSeconds) {
-    BehaviorRef *ref = BehaviorFindByName(ctx, name);
-    if (!ref) {
-        SetScriptException(fmt::format("Behavior '{}' not found.", name));
-        return nullptr;
-    }
-    GraphTask *task = ref->Start(inputIndex, reset, timeoutSeconds);
-    ref->Release();
-    return task;
-}
-
-GraphTask *BehaviorWatchByName(const CKBehaviorContext &ctx,
-                                      const std::string &name,
-                                      float timeoutSeconds) {
-    BehaviorRef *ref = BehaviorFindByName(ctx, name);
-    if (!ref) {
-        SetScriptException(fmt::format("Behavior '{}' not found.", name));
-        return nullptr;
-    }
-    GraphTask *task = ref->Watch(timeoutSeconds);
-    ref->Release();
-    return task;
-}
-
-BBPrototype *BBPrototypeByName(const CKBehaviorContext &ctx, const std::string &name) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBPrototype *prototype = bridge->PrototypeByName(name);
-    bridge->Release();
-    return prototype;
-}
-
-BBPrototype *BBPrototypeByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
-    BBBridge *bridge = BBFromContext(ctx);
-    if (!bridge) {
-        return nullptr;
-    }
-    BBPrototype *prototype = bridge->PrototypeByGuid(guid);
-    bridge->Release();
-    return prototype;
-}
-
-int BBCount(const CKBehaviorContext &ctx) {
-    return ScriptBBAdapter::Count(BehaviorBridgeScope(ctx), ScriptBridgeFailureMode::ScriptException);
-}
-
-BBPrototype *BBAt(const CKBehaviorContext &ctx, int index) {
-    return ScriptBBAdapter::At(BehaviorBridgeScope(ctx), index, ScriptBridgeFailureMode::ScriptException);
-}
-
-BBPrototype *BBFind(const CKBehaviorContext &ctx, const std::string &query, int occurrence) {
-    return ScriptBBAdapter::Find(
-        BehaviorBridgeScope(ctx), query, occurrence, ScriptBridgeFailureMode::ScriptException);
-}
-
-CScriptArray *BBFindAll(const CKBehaviorContext &ctx, const std::string &query) {
-    return ScriptBBAdapter::FindAll(
-        BehaviorBridgeScope(ctx), query, ScriptBridgeFailureMode::ScriptException);
-}
-
-BBCallBuilder *BBCallByName(const CKBehaviorContext &ctx, const std::string &name) {
-    BBPrototype *prototype = BBPrototypeByName(ctx, name);
-    if (!prototype) {
-        return nullptr;
-    }
-    BBCallBuilder *builder = prototype->Call();
-    prototype->Release();
-    return builder;
-}
-
-BBCallBuilder *BBCallByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
-    BBPrototype *prototype = BBPrototypeByGuid(ctx, guid);
-    if (!prototype) {
-        return nullptr;
-    }
-    BBCallBuilder *builder = prototype->Call();
-    prototype->Release();
-    return builder;
-}
-
-BBTaskBuilder *BBSpawnByName(const CKBehaviorContext &ctx, const std::string &name) {
-    BBPrototype *prototype = BBPrototypeByName(ctx, name);
-    if (!prototype) {
-        return nullptr;
-    }
-    BBTaskBuilder *builder = prototype->Spawn();
-    prototype->Release();
-    return builder;
-}
-
-BBTaskBuilder *BBSpawnByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
-    BBPrototype *prototype = BBPrototypeByGuid(ctx, guid);
-    if (!prototype) {
-        return nullptr;
-    }
-    BBTaskBuilder *builder = prototype->Spawn();
-    prototype->Release();
-    return builder;
-}
-
-BBDecl *BBRequireByName(const CKBehaviorContext &ctx, const std::string &query) {
-    return ScriptBBAdapter::Require(
-        BehaviorBridgeScope(ctx), query, ScriptBridgeFailureMode::ScriptException);
-}
-
-BBDecl *BBRequireByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
-    return ScriptBBAdapter::Require(
-        BehaviorBridgeScope(ctx), guid, ScriptBridgeFailureMode::ScriptException);
 }
 
 ParamValue *ParamInt(int value) { return new ParamValue(MakeScriptParamInt(value)); }
@@ -180,27 +25,25 @@ ParamValue *ParamMatrix(const VxMatrix &value) { return new ParamValue(MakeScrip
 ParamValue *ParamObject(CKObject *value) { return new ParamValue(MakeScriptParamObject(value)); }
 ParamValue *ParamObjectArray(const XObjectArray &value) { return new ParamValue(MakeScriptParamObjectArray(value)); }
 
-ParamValue *ParamTextByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &text) {
-    CKContext *context = ctx.Context;
+ParamValue *ParamTextByName(CKContext *context, const std::string &typeName, const std::string &text) {
     return new ParamValue(MakeScriptParamText(text, ScriptResolveParameterGuid(context, typeName, CKPGUID_STRING), typeName));
 }
 
-ParamValue *ParamTextByGuid(const CKBehaviorContext &, CKGUID guid, const std::string &text) {
+ParamValue *ParamTextByGuid(CKGUID guid, const std::string &text) {
     return new ParamValue(MakeScriptParamText(text, guid, std::string()));
 }
 
-ParamValue *ParamRawByName(const CKBehaviorContext &ctx, const std::string &typeName, NativeBuffer *buffer) {
-    CKContext *context = ctx.Context;
+ParamValue *ParamRawByName(CKContext *context, const std::string &typeName, NativeBuffer *buffer) {
     CKGUID guid = ScriptResolveParameterGuid(context, typeName);
     return new ParamValue(MakeScriptParamRaw(guid, typeName, buffer ? buffer->Data() : nullptr, buffer ? static_cast<int>(buffer->Size()) : 0));
 }
 
-ParamValue *ParamRawByGuid(const CKBehaviorContext &, CKGUID guid, NativeBuffer *buffer) {
+ParamValue *ParamRawByGuid(CKGUID guid, NativeBuffer *buffer) {
     return new ParamValue(MakeScriptParamRaw(guid, std::string(), buffer ? buffer->Data() : nullptr, buffer ? static_cast<int>(buffer->Size()) : 0));
 }
 
-ParamValue *ParamEnumByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &nameOrValue) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamValue *ParamEnumByName(CKContext *context, const std::string &typeName, const std::string &nameOrValue) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     int value = 0;
     std::string error;
@@ -211,8 +54,8 @@ ParamValue *ParamEnumByName(const CKBehaviorContext &ctx, const std::string &typ
     return new ParamValue(MakeScriptParamEnum(record->Guid, record->Name, static_cast<CKDWORD>(value)));
 }
 
-ParamValue *ParamEnumByGuid(const CKBehaviorContext &ctx, CKGUID guid, const std::string &nameOrValue) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamValue *ParamEnumByGuid(CKContext *context, CKGUID guid, const std::string &nameOrValue) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     int value = 0;
     std::string error;
@@ -223,8 +66,8 @@ ParamValue *ParamEnumByGuid(const CKBehaviorContext &ctx, CKGUID guid, const std
     return new ParamValue(MakeScriptParamEnum(record->Guid, record->Name, static_cast<CKDWORD>(value)));
 }
 
-ParamValue *ParamEnumIntByName(const CKBehaviorContext &ctx, const std::string &typeName, int value) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamValue *ParamEnumIntByName(CKContext *context, const std::string &typeName, int value) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::EnumLike)) {
         SetScriptException(fmt::format("Enum type '{}' was not found.", typeName));
@@ -233,8 +76,8 @@ ParamValue *ParamEnumIntByName(const CKBehaviorContext &ctx, const std::string &
     return new ParamValue(MakeScriptParamEnum(record->Guid, record->Name, static_cast<CKDWORD>(value)));
 }
 
-ParamValue *ParamEnumIntByGuid(const CKBehaviorContext &ctx, CKGUID guid, int value) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamValue *ParamEnumIntByGuid(CKContext *context, CKGUID guid, int value) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::EnumLike)) {
         SetScriptException(fmt::format("Enum type '{}' was not found.", GuidToString(guid)));
@@ -243,8 +86,8 @@ ParamValue *ParamEnumIntByGuid(const CKBehaviorContext &ctx, CKGUID guid, int va
     return new ParamValue(MakeScriptParamEnum(record->Guid, record->Name, static_cast<CKDWORD>(value)));
 }
 
-ParamValue *ParamFlagsByName(const CKBehaviorContext &ctx, const std::string &typeName, const std::string &namesOrMask) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamValue *ParamFlagsByName(CKContext *context, const std::string &typeName, const std::string &namesOrMask) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     CKDWORD value = 0;
     std::string error;
@@ -255,8 +98,8 @@ ParamValue *ParamFlagsByName(const CKBehaviorContext &ctx, const std::string &ty
     return new ParamValue(MakeScriptParamFlags(record->Guid, record->Name, value));
 }
 
-ParamValue *ParamFlagsByGuid(const CKBehaviorContext &ctx, CKGUID guid, const std::string &namesOrMask) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamValue *ParamFlagsByGuid(CKContext *context, CKGUID guid, const std::string &namesOrMask) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     CKDWORD value = 0;
     std::string error;
@@ -267,8 +110,8 @@ ParamValue *ParamFlagsByGuid(const CKBehaviorContext &ctx, CKGUID guid, const st
     return new ParamValue(MakeScriptParamFlags(record->Guid, record->Name, value));
 }
 
-ParamValue *ParamFlagsMaskByName(const CKBehaviorContext &ctx, const std::string &typeName, CKDWORD value) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamValue *ParamFlagsMaskByName(CKContext *context, const std::string &typeName, CKDWORD value) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::FlagsLike)) {
         SetScriptException(fmt::format("Flags type '{}' was not found.", typeName));
@@ -277,8 +120,8 @@ ParamValue *ParamFlagsMaskByName(const CKBehaviorContext &ctx, const std::string
     return new ParamValue(MakeScriptParamFlags(record->Guid, record->Name, value));
 }
 
-ParamValue *ParamFlagsMaskByGuid(const CKBehaviorContext &ctx, CKGUID guid, CKDWORD value) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamValue *ParamFlagsMaskByGuid(CKContext *context, CKGUID guid, CKDWORD value) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::FlagsLike)) {
         SetScriptException(fmt::format("Flags type '{}' was not found.", GuidToString(guid)));
@@ -287,8 +130,8 @@ ParamValue *ParamFlagsMaskByGuid(const CKBehaviorContext &ctx, CKGUID guid, CKDW
     return new ParamValue(MakeScriptParamFlags(record->Guid, record->Name, value));
 }
 
-ParamStructValue *ParamStructByName(const CKBehaviorContext &ctx, const std::string &typeName) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamStructValue *ParamStructByName(CKContext *context, const std::string &typeName) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(typeName) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::StructLike)) {
         SetScriptException(fmt::format("Struct type '{}' was not found.", typeName));
@@ -297,8 +140,8 @@ ParamStructValue *ParamStructByName(const CKBehaviorContext &ctx, const std::str
     return new ParamStructValue(MakeScriptParamStruct(record->Guid, record->Name));
 }
 
-ParamStructValue *ParamStructByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
-    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(ctx.Context);
+ParamStructValue *ParamStructByGuid(CKContext *context, CKGUID guid) {
+    ScriptParameterRegistry *registry = ScriptParameterRegistry::FromContext(context);
     const ScriptParamTypeRecord *record = registry ? registry->GetType(guid) : nullptr;
     if (!record || !record->Has(ScriptParamTypeCaps::StructLike)) {
         SetScriptException(fmt::format("Struct type '{}' was not found.", GuidToString(guid)));
@@ -307,15 +150,13 @@ ParamStructValue *ParamStructByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
     return new ParamStructValue(MakeScriptParamStruct(record->Guid, record->Name));
 }
 
-ParamOp *ParamOperationByName(const CKBehaviorContext &ctx, const std::string &name) {
-    ScriptBehaviorBridge *bridge = BridgeFromContext(ctx);
-    if (!bridge) {
-        SetScriptException("AngelScript behavior bridge is not available.");
+ParamOp *ParamOperationByName(CKContext *context, const std::string &name) {
+    if (!context) {
+        SetScriptException("CKContext is null.");
         return nullptr;
     }
 
     std::string error;
-    CKContext *context = ctx.Context ? ctx.Context : (bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr);
     if (!CKGuidIsValid(ResolveOperationGuid(context, CKGUID(), name, error))) {
         SetScriptException(error);
         return nullptr;
@@ -323,15 +164,13 @@ ParamOp *ParamOperationByName(const CKBehaviorContext &ctx, const std::string &n
     return new ParamOp(context, name);
 }
 
-ParamOp *ParamOperationByGuid(const CKBehaviorContext &ctx, CKGUID guid) {
-    ScriptBehaviorBridge *bridge = BridgeFromContext(ctx);
-    if (!bridge) {
-        SetScriptException("AngelScript behavior bridge is not available.");
+ParamOp *ParamOperationByGuid(CKContext *context, CKGUID guid) {
+    if (!context) {
+        SetScriptException("CKContext is null.");
         return nullptr;
     }
 
     std::string error;
-    CKContext *context = ctx.Context ? ctx.Context : (bridge->GetManager() ? bridge->GetManager()->GetCKContext() : nullptr);
     if (!CKGuidIsValid(ResolveOperationGuid(context, guid, std::string(), error))) {
         SetScriptException(error);
         return nullptr;
@@ -367,22 +206,22 @@ void RegisterParamValueFactories(asIScriptEngine *engine, int &r) {
     r = engine->RegisterGlobalFunction("ParamValue@ Matrix(const VxMatrix &in value)", asFUNCTION(ParamMatrix), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("ParamValue@ Object(CKObject@ value)", asFUNCTION(ParamObject), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("ParamValue@ ObjectArray(const XObjectArray &in value)", asFUNCTION(ParamObjectArray), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Text(const CKBehaviorContext &in ctx, const string &in typeName, const string &in text)", asFUNCTION(ParamTextByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Text(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in text)", asFUNCTION(ParamTextByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, const string &in typeName, NativeBuffer@+ data)", asFUNCTION(ParamRawByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Raw(const CKBehaviorContext &in ctx, CKGUID typeGuid, NativeBuffer@+ data)", asFUNCTION(ParamRawByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, const string &in typeName, const string &in nameOrValue)", asFUNCTION(ParamEnumByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in nameOrValue)", asFUNCTION(ParamEnumByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, const string &in typeName, int value)", asFUNCTION(ParamEnumIntByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Enum(const CKBehaviorContext &in ctx, CKGUID typeGuid, int value)", asFUNCTION(ParamEnumIntByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, const string &in typeName, const string &in namesOrMask)", asFUNCTION(ParamFlagsByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, CKGUID typeGuid, const string &in namesOrMask)", asFUNCTION(ParamFlagsByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, const string &in typeName, uint mask)", asFUNCTION(ParamFlagsMaskByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamValue@ Flags(const CKBehaviorContext &in ctx, CKGUID typeGuid, uint mask)", asFUNCTION(ParamFlagsMaskByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamStructValue@ Struct(const CKBehaviorContext &in ctx, const string &in typeName)", asFUNCTION(ParamStructByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamStructValue@ Struct(const CKBehaviorContext &in ctx, CKGUID typeGuid)", asFUNCTION(ParamStructByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamOp@ Operation(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(ParamOperationByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ParamOp@ Operation(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(ParamOperationByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Text(CKContext@ context, const string &in typeName, const string &in text)", asFUNCTION(ParamTextByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Text(CKGUID typeGuid, const string &in text)", asFUNCTION(ParamTextByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Raw(CKContext@ context, const string &in typeName, NativeBuffer@+ data)", asFUNCTION(ParamRawByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Raw(CKGUID typeGuid, NativeBuffer@+ data)", asFUNCTION(ParamRawByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Enum(CKContext@ context, const string &in typeName, const string &in nameOrValue)", asFUNCTION(ParamEnumByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Enum(CKContext@ context, CKGUID typeGuid, const string &in nameOrValue)", asFUNCTION(ParamEnumByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Enum(CKContext@ context, const string &in typeName, int value)", asFUNCTION(ParamEnumIntByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Enum(CKContext@ context, CKGUID typeGuid, int value)", asFUNCTION(ParamEnumIntByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Flags(CKContext@ context, const string &in typeName, const string &in namesOrMask)", asFUNCTION(ParamFlagsByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Flags(CKContext@ context, CKGUID typeGuid, const string &in namesOrMask)", asFUNCTION(ParamFlagsByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Flags(CKContext@ context, const string &in typeName, uint mask)", asFUNCTION(ParamFlagsMaskByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamValue@ Flags(CKContext@ context, CKGUID typeGuid, uint mask)", asFUNCTION(ParamFlagsMaskByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamStructValue@ Struct(CKContext@ context, const string &in typeName)", asFUNCTION(ParamStructByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamStructValue@ Struct(CKContext@ context, CKGUID typeGuid)", asFUNCTION(ParamStructByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamOp@ Operation(CKContext@ context, const string &in name)", asFUNCTION(ParamOperationByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterGlobalFunction("ParamOp@ Operation(CKContext@ context, CKGUID guid)", asFUNCTION(ParamOperationByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 }
 
 template <typename T>
@@ -461,108 +300,8 @@ void RegisterBridgeObjectTypes(asIScriptEngine *engine) {
     RegisterObjectTypeAndRefCount<GraphTask>(engine, "GraphTask");
 }
 
-void RegisterBehaviorFrameSdkAliases(asIScriptEngine *engine, int &r) {
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKContext@ GetCKContext() const", asMETHOD(BehaviorFrame, Context), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CK_ID GetID() const", asMETHOD(BehaviorFrame, Id), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "string GetName() const", asMETHOD(BehaviorFrame, Name), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CK_CLASSID GetClassID() const", asMETHOD(BehaviorFrame, ClassId), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKDWORD GetObjectFlags() const", asMETHOD(BehaviorFrame, ObjectFlags), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetAppData() const", asMETHOD(BehaviorFrame, AppData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetMemoryOccupation() const", asMETHOD(BehaviorFrame, MemoryOccupation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR CKDestroyObject(CKObject@ object, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(BehaviorFrame, DestroyObject, (CKObject *, CKDWORD, CKDependencies *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHOD(BehaviorFrame, DestroyObjectById), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR CKDestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHOD(BehaviorFrame, DestroyObjects), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ CKGetObject(CK_ID id) const", asMETHOD(BehaviorFrame, GetObjectById), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKScene@ GetSceneIn(int index) const", asMETHOD(BehaviorFrame, SceneIn), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetSceneInCount() const", asMETHOD(BehaviorFrame, SceneInCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBeObject@ GetOwner() const", asMETHOD(BehaviorFrame, Owner), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehavior@ GetParent() const", asMETHOD(BehaviorFrame, ParentBehavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehavior@ GetOwnerScript() const", asMETHOD(BehaviorFrame, OwnerScriptBehavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBeObject@ GetTarget() const", asMETHOD(BehaviorFrame, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ GetTargetParameter() const", asMETHOD(BehaviorFrame, TargetParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CK_BEHAVIOR_TYPE GetType() const", asMETHOD(BehaviorFrame, Type), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CK_BEHAVIOR_FLAGS GetFlags() const", asMETHOD(BehaviorFrame, Flags), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CK_CLASSID GetCompatibleClassID() const", asMETHOD(BehaviorFrame, CompatibleClassId), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "void SetCompatibleClassID(CK_CLASSID cid)", asMETHOD(BehaviorFrame, SetCompatibleClassId), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "NativePointer GetFunction() const", asMETHOD(BehaviorFrame, Function), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKStateChunk@ GetInterfaceChunk() const", asMETHOD(BehaviorFrame, InterfaceChunk), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "float GetLastExecutionTime() const", asMETHOD(BehaviorFrame, LastExecutionTime), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetPriority() const", asMETHOD(BehaviorFrame, Priority), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorPrototype@ GetPrototype() const", asMETHOD(BehaviorFrame, Prototype), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKGUID GetPrototypeGuid() const", asMETHOD(BehaviorFrame, PrototypeGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "string GetPrototypeName() const", asMETHOD(BehaviorFrame, PrototypeName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR InitFromPrototype(CKBehaviorPrototype &in proto)", asMETHOD(BehaviorFrame, InitFromPrototype), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR InitFctPtrFromPrototype(CKBehaviorPrototype &in proto)", asMETHOD(BehaviorFrame, InitFctPtrFromPrototype), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetShortestDelay(CKBehavior@ behavior) const", asMETHOD(BehaviorFrame, ShortestDelay), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKDWORD GetVersion() const", asMETHOD(BehaviorFrame, Version), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsParentScriptActiveInScene(CKScene@ scene) const", asMETHOD(BehaviorFrame, ParentScriptActiveInScene), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ GetInput(int index) const", asMETHOD(BehaviorFrame, Input), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ GetOutput(int index) const", asMETHOD(BehaviorFrame, Output), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetInputCount() const", asMETHOD(BehaviorFrame, InputCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetOutputCount() const", asMETHOD(BehaviorFrame, OutputCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetInputPosition(CKBehaviorIO@ io) const", asMETHOD(BehaviorFrame, InputPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetOutputPosition(CKBehaviorIO@ io) const", asMETHOD(BehaviorFrame, OutputPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsInputActive(int index) const", asMETHOD(BehaviorFrame, InputActiveIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsOutputActive(int index) const", asMETHOD(BehaviorFrame, OutputActiveIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetInputParameterCount() const", asMETHOD(BehaviorFrame, PinCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetOutputParameterCount() const", asMETHOD(BehaviorFrame, PoutCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetLocalParameterCount() const", asMETHOD(BehaviorFrame, BehaviorLocalCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetInputParameterPosition(CKParameterIn@ pin) const", asMETHOD(BehaviorFrame, PinPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetOutputParameterPosition(CKParameterOut@ pout) const", asMETHOD(BehaviorFrame, PoutPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetLocalParameterPosition(CKParameterLocal@ local) const", asMETHOD(BehaviorFrame, LocalPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR GetInputParameterValue(int index, ?&out value)", asFUNCTION(BehaviorFrameGetInputParameterValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR GetOutputParameterValue(int index, ?&out value)", asFUNCTION(BehaviorFrameGetOutputParameterValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR SetOutputParameterValue(int index, ?&in value)", asFUNCTION(BehaviorFrameSetOutputParameterValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR GetLocalParameterValue(int index, ?&out value)", asFUNCTION(BehaviorFrameGetLocalParameterValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR SetLocalParameterValue(int index, ?&in value)", asFUNCTION(BehaviorFrameSetLocalParameterValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ GetInputParameterReadData(int index) const", asMETHOD(BehaviorFrame, PinReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ GetOutputParameterWriteData(int index) const", asMETHOD(BehaviorFrame, PoutWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ GetLocalParameterReadData(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ GetLocalParameterWriteData(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ GetInputParameterObject(int index) const", asMETHOD(BehaviorFrame, PinObjectIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ GetOutputParameterObject(int index) const", asMETHOD(BehaviorFrame, PoutObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ GetLocalParameterObject(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalObjectIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsInputParameterEnabled(int index) const", asMETHOD(BehaviorFrame, PinEnabledIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsOutputParameterEnabled(int index) const", asMETHOD(BehaviorFrame, PoutEnabledIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "void EnableInputParameter(int index, bool enable)", asMETHOD(BehaviorFrame, EnablePinIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "void EnableOutputParameter(int index, bool enable)", asMETHOD(BehaviorFrame, EnablePoutIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR ExportInputParameter(CKParameterIn@ pin)", asMETHOD(BehaviorFrame, ExportPin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR ExportOutputParameter(CKParameterOut@ pout)", asMETHOD(BehaviorFrame, ExportPout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ CreateInputParameter(const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, CreatePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ CreateInputParameter(const string &in name, CKGUID guid)", asMETHOD(BehaviorFrame, CreatePinGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ CreateOutputParameter(const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, CreatePout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ CreateOutputParameter(const string &in name, CKGUID guid)", asMETHOD(BehaviorFrame, CreatePoutGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ CreateLocalParameter(const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, CreateLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ CreateLocalParameter(const string &in name, CKGUID guid)", asMETHOD(BehaviorFrame, CreateLocalGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ InsertInputParameter(int index, const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, InsertPin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ InsertOutputParameter(int index, const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, InsertPout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "void AddInputParameter(CKParameterIn@ pin)", asMETHOD(BehaviorFrame, AddPin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "void AddOutputParameter(CKParameterOut@ pout)", asMETHOD(BehaviorFrame, AddPout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "void AddLocalParameter(CKParameterLocal@ local)", asMETHOD(BehaviorFrame, AddLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ RemoveInputParameter(int index)", asMETHOD(BehaviorFrame, RemovePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ RemoveOutputParameter(int index)", asMETHOD(BehaviorFrame, RemovePout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ RemoveLocalParameter(int index)", asMETHOD(BehaviorFrame, RemoveLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ ReplaceInputParameter(int index, CKParameterIn@ pin)", asMETHOD(BehaviorFrame, ReplacePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ ReplaceOutputParameter(int index, CKParameterOut@ pout)", asMETHOD(BehaviorFrame, ReplacePout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsLocalParameterSetting(int index) const", asMETHOD(BehaviorFrame, IsSetting), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR SetLocalParameterObject(int index, CKObject@ object)", asMETHODPR(BehaviorFrame, SetLocalObject, (int, CKObject *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR SetOutputParameterObject(int index, CKObject@ object)", asMETHOD(BehaviorFrame, SetOutputParameterObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOperation@ GetParameterOperation(int index) const", asMETHOD(BehaviorFrame, ParameterOperation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetParameterOperationCount() const", asMETHOD(BehaviorFrame, ParameterOperationCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehavior@ GetSubBehavior(int index) const", asMETHOD(BehaviorFrame, SubBehaviorObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetSubBehaviorCount() const", asMETHOD(BehaviorFrame, SubBehaviorCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorLink@ GetSubBehaviorLink(int index) const", asMETHOD(BehaviorFrame, SubBehaviorLink), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int GetSubBehaviorLinkCount() const", asMETHOD(BehaviorFrame, SubBehaviorLinkCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-}
-
 void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehavior@ Behavior() const", asMETHOD(BehaviorFrame, Behavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKContext@ Context() const", asMETHOD(BehaviorFrame, Context), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorContext ToBehaviorContext() const", asMETHOD(BehaviorFrame, ToBehaviorContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "float DeltaTime() const", asMETHOD(BehaviorFrame, DeltaTime), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKLevel@ CurrentLevel() const", asMETHOD(BehaviorFrame, CurrentLevel), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKScene@ CurrentScene() const", asMETHOD(BehaviorFrame, CurrentScene), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -615,11 +354,9 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsHierarchicallyHide() const", asMETHOD(BehaviorFrame, IsHierarchicallyHide), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKBeObject@ Owner() const", asMETHOD(BehaviorFrame, Owner), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKBeObject@ Target() const", asMETHOD(BehaviorFrame, Target), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ TargetParameter() const", asMETHOD(BehaviorFrame, TargetParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorRef@ Self() const", asMETHOD(BehaviorFrame, Self), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorRef@ Parent() const", asMETHOD(BehaviorFrame, Parent), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorRef@ OwnerScript() const", asMETHOD(BehaviorFrame, OwnerScript), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorFrame@ FrameFor(CKBehavior@ behavior) const", asMETHOD(BehaviorFrame, FrameFor), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorFrame@ FrameFor(BehaviorRef@+ behavior) const", asMETHOD(BehaviorFrame, FrameForRef), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorFrame@ SubFrame(int index) const", asMETHOD(BehaviorFrame, SubFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorLayout@ Layout() const", asMETHOD(BehaviorFrame, Layout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -637,8 +374,6 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "void SetAsTargetable(bool target = true)", asMETHOD(BehaviorFrame, SetAsTargetable), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR UseTarget(bool use = true)", asMETHOD(BehaviorFrame, UseTarget), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool IsUsingTarget() const", asMETHOD(BehaviorFrame, IsUsingTarget), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ ReplaceTargetParameter(CKParameterIn@ targetParam)", asMETHOD(BehaviorFrame, ReplaceTargetParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ RemoveTargetParameter()", asMETHOD(BehaviorFrame, RemoveTargetParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CK_CLASSID CompatibleClassId() const", asMETHOD(BehaviorFrame, CompatibleClassId), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void SetCompatibleClassId(CK_CLASSID cid)", asMETHOD(BehaviorFrame, SetCompatibleClassId), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void SetFunction(NativePointer fct)", asMETHOD(BehaviorFrame, SetFunction), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -672,8 +407,6 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "int BehaviorLocalCount() const", asMETHOD(BehaviorFrame, BehaviorLocalCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int SettingCount() const", asMETHOD(BehaviorFrame, SettingCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int SubBehaviorCount() const", asMETHOD(BehaviorFrame, SubBehaviorCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int SubBehaviorLinkCount() const", asMETHOD(BehaviorFrame, SubBehaviorLinkCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int ParameterOperationCount() const", asMETHOD(BehaviorFrame, ParameterOperationCount), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "string InputName(int index) const", asMETHOD(BehaviorFrame, InputName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "string OutputName(int index) const", asMETHOD(BehaviorFrame, OutputName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "int FindInput(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, FindInput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -695,38 +428,7 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "void ActivateInput(int index, bool active = true)", asMETHOD(BehaviorFrame, ActivateInputIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void ActivateOutput(const string &in name = \"Out\", bool active = true, int occurrence = 0)", asMETHOD(BehaviorFrame, ActivateOutput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void ActivateOutput(int index, bool active = true)", asMETHOD(BehaviorFrame, ActivateOutputIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ Input(int index) const", asMETHOD(BehaviorFrame, Input), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ Output(int index) const", asMETHOD(BehaviorFrame, Output), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ InputParameter(int index) const", asMETHOD(BehaviorFrame, InputParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ GetInputParameter(int index) const", asMETHOD(BehaviorFrame, InputParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ OutputParameter(int index) const", asMETHOD(BehaviorFrame, OutputParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ GetOutputParameter(int index) const", asMETHOD(BehaviorFrame, OutputParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ LocalParameter(int index) const", asMETHOD(BehaviorFrame, LocalParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ GetLocalParameter(int index) const", asMETHOD(BehaviorFrame, LocalParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int AddInput(const string &in name)", asMETHOD(BehaviorFrame, AddInput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int AddOutput(const string &in name)", asMETHOD(BehaviorFrame, AddOutput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ CreateInput(const string &in name)", asMETHOD(BehaviorFrame, CreateInput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ CreateOutput(const string &in name)", asMETHOD(BehaviorFrame, CreateOutput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ RemoveInput(int index)", asMETHOD(BehaviorFrame, RemoveInput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ RemoveOutput(int index)", asMETHOD(BehaviorFrame, RemoveOutput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR DeleteInput(int index)", asMETHOD(BehaviorFrame, DeleteInput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR DeleteOutput(int index)", asMETHOD(BehaviorFrame, DeleteOutput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ ReplaceInput(int index, CKBehaviorIO@ io)", asMETHOD(BehaviorFrame, ReplaceInput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorIO@ ReplaceOutput(int index, CKBehaviorIO@ io)", asMETHOD(BehaviorFrame, ReplaceOutput), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int InputPosition(CKBehaviorIO@ io) const", asMETHOD(BehaviorFrame, InputPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int OutputPosition(CKBehaviorIO@ io) const", asMETHOD(BehaviorFrame, OutputPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorRef@ SubBehavior(int index) const", asMETHOD(BehaviorFrame, SubBehavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR AddSubBehavior(CKBehavior@ behavior)", asMETHOD(BehaviorFrame, AddSubBehavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorRef@ RemoveSubBehavior(CKBehavior@ behavior)", asMETHOD(BehaviorFrame, RemoveSubBehavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "BehaviorRef@ RemoveSubBehavior(int index)", asMETHOD(BehaviorFrame, RemoveSubBehaviorIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorLink@ SubBehaviorLink(int index) const", asMETHOD(BehaviorFrame, SubBehaviorLink), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR AddSubBehaviorLink(CKBehaviorLink@ link)", asMETHOD(BehaviorFrame, AddSubBehaviorLink), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorLink@ RemoveSubBehaviorLink(CKBehaviorLink@ link)", asMETHOD(BehaviorFrame, RemoveSubBehaviorLink), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKBehaviorLink@ RemoveSubBehaviorLink(int index)", asMETHOD(BehaviorFrame, RemoveSubBehaviorLinkIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOperation@ ParameterOperation(int index) const", asMETHOD(BehaviorFrame, ParameterOperation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR AddParameterOperation(CKParameterOperation@ operation)", asMETHOD(BehaviorFrame, AddParameterOperation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOperation@ RemoveParameterOperation(int index)", asMETHOD(BehaviorFrame, RemoveParameterOperation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOperation@ RemoveParameterOperation(CKParameterOperation@ operation)", asMETHOD(BehaviorFrame, RemoveParameterOperationObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Pin(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, Pin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Pin(int index) const", asMETHOD(BehaviorFrame, PinIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "ParamRef@ Pout(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -762,27 +464,11 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool PinEnabled(int index) const", asMETHOD(BehaviorFrame, PinEnabledIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void EnablePin(const string &in name, bool enable, int occurrence = 0)", asMETHOD(BehaviorFrame, EnablePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void EnablePin(int index, bool enable)", asMETHOD(BehaviorFrame, EnablePinIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR ExportPin(CKParameterIn@ pin)", asMETHOD(BehaviorFrame, ExportPin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ CreatePin(const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, CreatePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ CreatePin(const string &in name, CKGUID guid)", asMETHOD(BehaviorFrame, CreatePinGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ InsertPin(int index, const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, InsertPin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "void AddPin(CKParameterIn@ pin)", asMETHOD(BehaviorFrame, AddPin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int PinPosition(CKParameterIn@ pin) const", asMETHOD(BehaviorFrame, PinPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ RemovePin(int index)", asMETHOD(BehaviorFrame, RemovePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterIn@ ReplacePin(int index, CKParameterIn@ pin)", asMETHOD(BehaviorFrame, ReplacePin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ PinReadData(int index) const", asMETHOD(BehaviorFrame, PinReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool PoutEnabled(const string &in name, int occurrence = 0) const", asMETHOD(BehaviorFrame, PoutEnabled), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool PoutEnabled(int index) const", asMETHOD(BehaviorFrame, PoutEnabledIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void EnablePout(const string &in name, bool enable, int occurrence = 0)", asMETHOD(BehaviorFrame, EnablePout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void EnablePout(int index, bool enable)", asMETHOD(BehaviorFrame, EnablePoutIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR ExportPout(CKParameterOut@ pout)", asMETHOD(BehaviorFrame, ExportPout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ CreatePout(const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, CreatePout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ CreatePout(const string &in name, CKGUID guid)", asMETHOD(BehaviorFrame, CreatePoutGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ InsertPout(int index, const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, InsertPout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "void AddPout(CKParameterOut@ pout)", asMETHOD(BehaviorFrame, AddPout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int PoutPosition(CKParameterOut@ pout) const", asMETHOD(BehaviorFrame, PoutPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ RemovePout(int index)", asMETHOD(BehaviorFrame, RemovePout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterOut@ ReplacePout(int index, CKParameterOut@ pout)", asMETHOD(BehaviorFrame, ReplacePout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ PoutWriteData(int index) const", asMETHOD(BehaviorFrame, PoutWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ PoutObject(int index) const", asMETHOD(BehaviorFrame, PoutObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetPout(const string &in name, int value, int occurrence = 0)", asMETHOD(BehaviorFrame, SetPoutInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -805,17 +491,11 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetLocal(int index, const string &in value)", asMETHOD(BehaviorFrame, SetLocalStringIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetLocal(const string &in name, CKObject@ value, int occurrence = 0)", asMETHODPR(BehaviorFrame, SetLocalObject, (const std::string &, CKObject *, int), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetLocal(int index, CKObject@ value)", asMETHOD(BehaviorFrame, SetLocalObjectIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ CreateLocal(const string &in name, CKParameterType type)", asMETHOD(BehaviorFrame, CreateLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ CreateLocal(const string &in name, CKGUID guid)", asMETHOD(BehaviorFrame, CreateLocalGuid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ RemoveLocal(int index)", asMETHOD(BehaviorFrame, RemoveLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "void AddLocal(CKParameterLocal@ local)", asMETHOD(BehaviorFrame, AddLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "int LocalPosition(CKParameterLocal@ local) const", asMETHOD(BehaviorFrame, LocalPosition), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ LocalWriteData(int index) const", asMETHOD(BehaviorFrame, LocalWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ LocalReadData(int index) const", asMETHOD(BehaviorFrame, LocalReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKObject@ LocalObject(int index) const", asMETHODPR(BehaviorFrame, LocalObject, (int) const, CKObject *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ BehaviorLocalWriteData(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalWriteData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "NativeBuffer@ BehaviorLocalReadData(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalReadData), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorFrame", "CKParameterLocal@ BehaviorLocalParameter(int index) const", asMETHOD(BehaviorFrame, BehaviorLocalParameter), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "CKERROR SetLocalObject(int index, CKObject@ object)", asMETHODPR(BehaviorFrame, SetLocalObject, (int, CKObject *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetSetting(const string &in name, int value, int occurrence = 0)", asMETHOD(BehaviorFrame, SetSettingInt), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "bool SetSetting(int index, int value)", asMETHOD(BehaviorFrame, SetSettingIntIndex), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -839,7 +519,6 @@ void RegisterBehaviorFrameMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorFrame", "BBBridge@ BB() const", asMETHOD(BehaviorFrame, BB), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorFrame", "void Trace(const string &in message) const", asMETHOD(BehaviorFrame, Trace), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
-    RegisterBehaviorFrameSdkAliases(engine, r);
 }
 
 void RegisterParamHandleMethods(asIScriptEngine *engine, int &r) {
@@ -997,9 +676,7 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorRef", "BehaviorGraph@ AsGraph() const", asMETHOD(BehaviorRef, AsGraph), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool Trigger(int inputIndex = 0, bool reset = false)", asMETHOD(BehaviorRef, Trigger), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool Trigger(BBSlot@+ input, bool reset = false)", asMETHOD(BehaviorRef, TriggerSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorRef", "BBResult@ Step(const CKBehaviorContext &in ctx, int inputIndex = 0)", asMETHOD(BehaviorRef, Step), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "BBResult@ Step(BehaviorFrame@+ frame, int inputIndex = 0)", asMETHOD(BehaviorRef, StepFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorRef", "BBResult@ Step(const CKBehaviorContext &in ctx, BBSlot@+ input)", asMETHOD(BehaviorRef, StepSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "BBResult@ Step(BehaviorFrame@+ frame, BBSlot@+ input)", asMETHOD(BehaviorRef, StepSlotFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool InputActive(int inputIndex) const", asMETHOD(BehaviorRef, InputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorRef", "bool InputActive(BBSlot@+ input) const", asMETHOD(BehaviorRef, InputActiveSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1057,7 +734,7 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("GraphEditResult", "string Describe() const", asMETHOD(GraphEditResult, Describe), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphEditResult", "array<BehaviorNode@>@ CreatedNodes() const", asMETHOD(GraphEditResult, CreatedNodes), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphEditResult", "array<BehaviorLinkRef@>@ CreatedLinks() const", asMETHOD(GraphEditResult, CreatedLinks), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("GraphEditResult", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(GraphEditResult, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("GraphEditResult", "bool Raise(BehaviorFrame@+ frame) const", asMETHODPR(GraphEditResult, Raise, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("GraphEditNode", "bool IsValid() const", asMETHOD(GraphEditNode, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphEditNode", "bool get_valid() const", asMETHOD(GraphEditNode, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1099,8 +776,8 @@ void RegisterBehaviorMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Source(GraphEditNode@+ node, BBSlot@+ pin, ParamRef@+ source)", asMETHOD(BehaviorGraphEdit, Source), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ BindLocal(GraphEditNode@+ node, const string &in name, ParamRef@+ source, CKGUID guid, const string &in label = \"\")", asMETHOD(BehaviorGraphEdit, BindLocal), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorGraphEdit", "BehaviorGraphEdit@ Operation(GraphEditNode@+ node, BBSlot@+ pin, ParamOp@+ operation)", asMETHOD(BehaviorGraphEdit, Operation), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Validate(const CKBehaviorContext &in ctx) const", asMETHOD(BehaviorGraphEdit, Validate), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Apply(const CKBehaviorContext &in ctx)", asMETHOD(BehaviorGraphEdit, Apply), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Validate(BehaviorFrame@+ frame) const", asMETHODPR(BehaviorGraphEdit, Validate, (BehaviorFrame *) const, GraphEditResult *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BehaviorGraphEdit", "GraphEditResult@ Apply(BehaviorFrame@+ frame)", asMETHODPR(BehaviorGraphEdit, Apply, (BehaviorFrame *), GraphEditResult *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("BehaviorNode", "bool IsValid() const", asMETHOD(BehaviorNode, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BehaviorNode", "bool get_valid() const", asMETHOD(BehaviorNode, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1191,7 +868,6 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBConfig", "string Describe() const", asMETHOD(BBConfig, Describe), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "string Explain() const", asMETHOD(BBConfig, Explain), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBDecl@ Decl() const", asMETHOD(BBConfig, Decl), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHODPR(BBConfig, Raise, (const CKBehaviorContext &) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "bool Raise(BehaviorFrame@+ frame) const", asMETHODPR(BBConfig, Raise, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBSlot@ Input(const string &in name, int occurrence = 0)", asMETHOD(BBConfig, In), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBSlot@ Output(const string &in name, int occurrence = 0)", asMETHOD(BBConfig, Out), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1211,18 +887,12 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBConfig", "BBConfig@ SetSetting(BBSlot@+ setting, const string &in value)", asMETHOD(BBConfig, SetSettingString), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBConfig@ Source(BBSlot@+ pin, ParamRef@+ source)", asMETHOD(BBConfig, SourceSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBConfig@ Operation(BBSlot@+ pin, ParamOp@+ operation)", asMETHOD(BBConfig, OperationSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "bool Validate(const CKBehaviorContext &in ctx) const", asMETHODPR(BBConfig, Validate, (const CKBehaviorContext &) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "bool Validate(BehaviorFrame@+ frame) const", asMETHODPR(BBConfig, Validate, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ Instance() const", asMETHOD(BBConfig, Instance), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureSpawned(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, EnsureSpawned, (const CKBehaviorContext &), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureSpawned(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, EnsureSpawned, (BehaviorFrame *), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureStarted(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, EnsureStarted, (const CKBehaviorContext &), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ EnsureStarted(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, EnsureStarted, (BehaviorFrame *), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ Spawn(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, SpawnInstance, (const CKBehaviorContext &), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ Spawn(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, SpawnInstance, (BehaviorFrame *), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ SpawnStarted(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, SpawnStarted, (const CKBehaviorContext &), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "BBInstance@ SpawnStarted(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, SpawnStarted, (BehaviorFrame *), BBInstance *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBConfig", "bool Stop(const CKBehaviorContext &in ctx)", asMETHODPR(BBConfig, Stop, (const CKBehaviorContext &), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "bool Stop(BehaviorFrame@+ frame)", asMETHODPR(BBConfig, Stop, (BehaviorFrame *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "bool Destroy()", asMETHOD(BBConfig, Destroy), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBConfig", "bool OutputActive(BBSlot@+ output)", asMETHOD(BBConfig, OutputActiveSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1245,14 +915,10 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBInstance", "BBSlot@ Local(const string &in name, int occurrence = 0) const", asMETHOD(BBInstance, Local), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Start()", asMETHODPR(BBInstance, Start, (), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Start(BBSlot@+ input)", asMETHODPR(BBInstance, Start, (BBSlot *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool Start(const CKBehaviorContext &in ctx)", asMETHOD(BBInstance, StartWithContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Start(BehaviorFrame@+ frame)", asMETHOD(BBInstance, StartWithFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool Start(const CKBehaviorContext &in ctx, BBSlot@+ input)", asMETHOD(BBInstance, StartSlotWithContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Start(BehaviorFrame@+ frame, BBSlot@+ input)", asMETHOD(BBInstance, StartSlotWithFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool Step(const CKBehaviorContext &in ctx)", asMETHODPR(BBInstance, Step, (const CKBehaviorContext &), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Step(BehaviorFrame@+ frame)", asMETHODPR(BBInstance, Step, (BehaviorFrame *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Stop()", asMETHOD(BBInstance, Stop), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool Stop(const CKBehaviorContext &in ctx)", asMETHOD(BBInstance, StopWithContext), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Stop(BehaviorFrame@+ frame)", asMETHOD(BBInstance, StopWithFrame), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool OutputActive(BBSlot@+ output) const", asMETHOD(BBInstance, OutputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "ParamRef@ Pin(BBSlot@+ pin) const", asMETHOD(BBInstance, Pin), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1265,22 +931,15 @@ void RegisterBBMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBInstance", "bool Set(BBSlot@+ pin, CKObject@ value)", asMETHOD(BBInstance, SetSlotObject), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Source(BBSlot@+ pin, ParamRef@+ source)", asMETHOD(BBInstance, SourceSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Operation(BBSlot@+ pin, ParamOp@+ operation)", asMETHOD(BBInstance, OperationSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, ParamValue@+ value)", asMETHODPR(BBInstance, StepSetSlot, (const CKBehaviorContext &, BBSlot *, ParamValue *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, ParamValue@+ value)", asMETHODPR(BBInstance, StepSetSlot, (BehaviorFrame *, BBSlot *, ParamValue *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, int value)", asMETHODPR(BBInstance, StepSetSlotInt, (const CKBehaviorContext &, BBSlot *, int), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, int value)", asMETHODPR(BBInstance, StepSetSlotInt, (BehaviorFrame *, BBSlot *, int), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, float value)", asMETHODPR(BBInstance, StepSetSlotFloat, (const CKBehaviorContext &, BBSlot *, float), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, float value)", asMETHODPR(BBInstance, StepSetSlotFloat, (BehaviorFrame *, BBSlot *, float), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, bool value)", asMETHODPR(BBInstance, StepSetSlotBool, (const CKBehaviorContext &, BBSlot *, bool), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, bool value)", asMETHODPR(BBInstance, StepSetSlotBool, (BehaviorFrame *, BBSlot *, bool), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, const string &in value)", asMETHODPR(BBInstance, StepSetSlotString, (const CKBehaviorContext &, BBSlot *, const std::string &), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, const string &in value)", asMETHODPR(BBInstance, StepSetSlotString, (BehaviorFrame *, BBSlot *, const std::string &), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(const CKBehaviorContext &in ctx, BBSlot@+ pin, CKObject@ value)", asMETHODPR(BBInstance, StepSetSlotObject, (const CKBehaviorContext &, BBSlot *, CKObject *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool StepSet(BehaviorFrame@+ frame, BBSlot@+ pin, CKObject@ value)", asMETHODPR(BBInstance, StepSetSlotObject, (BehaviorFrame *, BBSlot *, CKObject *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool SetSetting(BBSlot@+ setting, ParamValue@+ value)", asMETHOD(BBInstance, SetSettingValue), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool SetSetting(BBSlot@+ setting, const string &in value)", asMETHOD(BBInstance, SetSetting), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Destroy()", asMETHOD(BBInstance, Destroy), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBInstance", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHODPR(BBInstance, Raise, (const CKBehaviorContext &) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBInstance", "bool Raise(BehaviorFrame@+ frame) const", asMETHODPR(BBInstance, Raise, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("BBPrototype", "bool IsValid() const", asMETHOD(BBPrototype, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1359,7 +1018,7 @@ void RegisterTaskMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBResult", "ParamRef@ Pout(int index) const", asMETHOD(BBResult, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBResult", "ParamRef@ Pout(BBSlot@+ pout) const", asMETHOD(BBResult, PoutSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBResult", "ParamRef@ Pout(const string &in pout, int occurrence = 0) const", asMETHOD(BBResult, PoutName), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBResult", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(BBResult, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBResult", "bool Raise(BehaviorFrame@+ frame) const", asMETHODPR(BBResult, Raise, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("BBTask", "bool IsValid() const", asMETHOD(BBTask, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool IsAlive() const", asMETHOD(BBTask, IsAlive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1368,14 +1027,14 @@ void RegisterTaskMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("BBTask", "string Error() const", asMETHOD(BBTask, Error), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool OutputActive(int outputIndex) const", asMETHOD(BBTask, OutputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool OutputActive(BBSlot@+ output) const", asMETHOD(BBTask, OutputActiveSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBTask", "bool Step(const CKBehaviorContext &in ctx, int inputIndex = -1)", asMETHOD(BBTask, Step), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBTask", "bool Step(const CKBehaviorContext &in ctx, BBSlot@+ input)", asMETHOD(BBTask, StepSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBTask", "bool Step(BehaviorFrame@+ frame, int inputIndex = -1)", asMETHODPR(BBTask, Step, (BehaviorFrame *, int), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBTask", "bool Step(BehaviorFrame@+ frame, BBSlot@+ input)", asMETHODPR(BBTask, StepSlot, (BehaviorFrame *, BBSlot *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool Reset()", asMETHOD(BBTask, Reset), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "bool Destroy()", asMETHOD(BBTask, Destroy), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "BehaviorRef@ Behavior() const", asMETHOD(BBTask, Behavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "ParamRef@ Pout(int index) const", asMETHOD(BBTask, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("BBTask", "ParamRef@ Pout(BBSlot@+ pout) const", asMETHOD(BBTask, PoutSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("BBTask", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(BBTask, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("BBTask", "bool Raise(BehaviorFrame@+ frame) const", asMETHODPR(BBTask, Raise, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("GraphTask", "bool IsValid() const", asMETHOD(GraphTask, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphTask", "bool get_valid() const", asMETHOD(GraphTask, IsValid), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1385,7 +1044,7 @@ void RegisterTaskMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("GraphTask", "string Error() const", asMETHOD(GraphTask, Error), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphTask", "float Elapsed() const", asMETHOD(GraphTask, Elapsed), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphTask", "GraphTask@ Timeout(float seconds)", asMETHOD(GraphTask, Timeout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("GraphTask", "bool Step(const CKBehaviorContext &in ctx)", asMETHOD(GraphTask, Step), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("GraphTask", "bool Step(BehaviorFrame@+ frame)", asMETHODPR(GraphTask, Step, (BehaviorFrame *), bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphTask", "bool Done(int outputIndex = -1) const", asMETHOD(GraphTask, Done), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphTask", "bool Done(BBSlot@+ output) const", asMETHOD(GraphTask, DoneSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphTask", "bool OutputActive(int outputIndex = -1) const", asMETHOD(GraphTask, OutputActive), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
@@ -1395,7 +1054,7 @@ void RegisterTaskMethods(asIScriptEngine *engine, int &r) {
     r = engine->RegisterObjectMethod("GraphTask", "BehaviorRef@ Behavior() const", asMETHOD(GraphTask, Behavior), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphTask", "ParamRef@ Pout(int index) const", asMETHOD(GraphTask, Pout), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("GraphTask", "ParamRef@ Pout(BBSlot@+ pout) const", asMETHOD(GraphTask, PoutSlot), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("GraphTask", "bool Raise(const CKBehaviorContext &in ctx) const", asMETHOD(GraphTask, Raise), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("GraphTask", "bool Raise(BehaviorFrame@+ frame) const", asMETHODPR(GraphTask, Raise, (BehaviorFrame *) const, bool), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 }
 
 void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
@@ -1403,29 +1062,7 @@ void RegisterBridgeNamespaces(asIScriptEngine *engine, int &r) {
     std::string previous = previousNamespace ? previousNamespace : "";
 
     r = engine->SetDefaultNamespace("Behavior"); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BehaviorBridge@ From(const CKBehaviorContext &in ctx)", asFUNCTION(BehaviorFromContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BehaviorGraph@ Graph(const CKBehaviorContext &in ctx)", asFUNCTION(BehaviorGraphFromContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("BehaviorQuery@ Query()", asFUNCTION(BehaviorQueryFactory), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BehaviorRef@ Find(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BehaviorFindByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BehaviorRef@ Find(const CKBehaviorContext &in ctx, CKBeObject@ owner, const string &in name)", asFUNCTION(BehaviorFindOnOwner), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BehaviorRef@ FindByID(const CKBehaviorContext &in ctx, CK_ID id)", asFUNCTION(BehaviorFindById), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("GraphTask@ Start(const CKBehaviorContext &in ctx, const string &in name, int inputIndex = 0, bool reset = false, float timeout = 0.0f)", asFUNCTION(BehaviorStartByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("GraphTask@ Watch(const CKBehaviorContext &in ctx, const string &in name, float timeout = 0.0f)", asFUNCTION(BehaviorWatchByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-
-    r = engine->SetDefaultNamespace("BB"); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBBridge@ From(const CKBehaviorContext &in ctx)", asFUNCTION(BBFromContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBPrototype@ Prototype(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBPrototypeByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBPrototype@ Prototype(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBPrototypeByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("int Count(const CKBehaviorContext &in ctx)", asFUNCTION(BBCount), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBPrototype@ At(const CKBehaviorContext &in ctx, int index)", asFUNCTION(BBAt), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBPrototype@ Find(const CKBehaviorContext &in ctx, const string &in query, int occurrence = 0)", asFUNCTION(BBFind), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("array<BBPrototype@>@ FindAll(const CKBehaviorContext &in ctx, const string &in query = \"\")", asFUNCTION(BBFindAll), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBDecl@ Require(const CKBehaviorContext &in ctx, const string &in query)", asFUNCTION(BBRequireByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBDecl@ Require(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBRequireByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBCallByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBCallBuilder@ Call(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBCallByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, const string &in name)", asFUNCTION(BBSpawnByName), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BBTaskBuilder@ Spawn(const CKBehaviorContext &in ctx, CKGUID guid)", asFUNCTION(BBSpawnByGuid), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->SetDefaultNamespace("Param"); CKAS_CHECK_REGISTER(r);
     RegisterParamValueFactories(engine, r);

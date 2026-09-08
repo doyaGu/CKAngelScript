@@ -11,6 +11,7 @@
 #include "ScriptBridgeCommon.h"
 #include "ScriptBridgeHandles.h"
 #include "ScriptHostScope.h"
+#include "ScriptManager.h"
 #include "ScriptRuntime.h"
 #include "ScriptRegistration.h"
 
@@ -87,10 +88,6 @@ T *MakeCheckedTypedRef(CKContext *context,
 
 bool NameMatches(CKObject *object, const std::string &name) {
     return name.empty() || NameEquals(object ? object->GetName() : nullptr, name);
-}
-
-bool SameObject(CKObject *lhs, CKObject *rhs) {
-    return lhs && rhs && lhs->GetID() == rhs->GetID() && lhs->GetCKContext() == rhs->GetCKContext();
 }
 
 bool IsSceneMembershipAsset(CKObject *object) {
@@ -922,53 +919,6 @@ bool SelectCtx(CKContext *context, CScriptArray *objects, bool clearSelection) {
     return result;
 }
 
-// CKBehaviorContext overloads.
-LevelRef *CurrentLevelBehavior(const CKBehaviorContext &ctx) { return CurrentLevelInScope(ScriptHostScope::From(ctx)); }
-SceneRef *CurrentSceneBehavior(const CKBehaviorContext &ctx) { return CurrentSceneInScope(ScriptHostScope::From(ctx)); }
-ObjectRef *TargetBehavior(const CKBehaviorContext &ctx) { return TargetInScope(ScriptHostScope::From(ctx)); }
-ObjectRef *OwnerBehavior(const CKBehaviorContext &ctx) { return OwnerInScope(ScriptHostScope::From(ctx)); }
-ObjectRef *RefBehavior(const CKBehaviorContext &ctx, CKObject *object) { return RefInScope(ScriptHostScope::From(ctx), object); }
-ObjectRef *ByIdBehavior(const CKBehaviorContext &ctx, CK_ID id) { return ByIdInScope(ScriptHostScope::From(ctx), id); }
-ObjectRef *FindBehaviorContext(const CKBehaviorContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, int occurrence, bool currentSceneOnly) { return FindInScope(ScriptHostScope::From(ctx), name, cid, derived, occurrence, currentSceneOnly); }
-ObjectRef *FindOneBehaviorContext(const CKBehaviorContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindOneInScope(ScriptHostScope::From(ctx), name, cid, derived, currentSceneOnly); }
-CScriptArray *FindAllBehavior(const CKBehaviorContext &ctx, const std::string &name, CK_CLASSID cid, bool derived, bool currentSceneOnly) { return FindAllInScope(ScriptHostScope::From(ctx), name, cid, derived, currentSceneOnly); }
-Entity3DRef *FindEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), name, CKCID_3DENTITY, occurrence, currentSceneOnly, "CK3dEntity"); }
-Entity2DRef *FindEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), name, CKCID_2DENTITY, occurrence, currentSceneOnly, "CK2dEntity"); }
-MaterialRef *FindMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), name, CKCID_MATERIAL, occurrence, currentSceneOnly, "CKMaterial"); }
-TextureRef *FindTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<TextureRef>(ScriptHostScope::From(ctx), name, CKCID_TEXTURE, occurrence, currentSceneOnly, "CKTexture"); }
-MeshRef *FindMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindTypedInScope<MeshRef>(ScriptHostScope::From(ctx), name, CKCID_MESH, occurrence, currentSceneOnly, "CKMesh"); }
-BehaviorRef *FindBehaviorBehavior(const CKBehaviorContext &ctx, const std::string &name, int occurrence, bool currentSceneOnly) { return FindBehaviorInScope(ScriptHostScope::From(ctx), name, occurrence, currentSceneOnly); }
-Entity3DRef *FindOneEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), name, CKCID_3DENTITY, currentSceneOnly, "CK3dEntity"); }
-Entity2DRef *FindOneEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), name, CKCID_2DENTITY, currentSceneOnly, "CK2dEntity"); }
-MaterialRef *FindOneMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), name, CKCID_MATERIAL, currentSceneOnly, "CKMaterial"); }
-TextureRef *FindOneTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<TextureRef>(ScriptHostScope::From(ctx), name, CKCID_TEXTURE, currentSceneOnly, "CKTexture"); }
-MeshRef *FindOneMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneTypedInScope<MeshRef>(ScriptHostScope::From(ctx), name, CKCID_MESH, currentSceneOnly, "CKMesh"); }
-BehaviorRef *FindOneBehaviorBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindOneBehaviorInScope(ScriptHostScope::From(ctx), name, currentSceneOnly); }
-CScriptArray *FindAllEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), name, CKCID_3DENTITY, currentSceneOnly, "array<Entity3DRef@>"); }
-CScriptArray *FindAllEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), name, CKCID_2DENTITY, currentSceneOnly, "array<Entity2DRef@>"); }
-CScriptArray *FindAllMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), name, CKCID_MATERIAL, currentSceneOnly, "array<MaterialRef@>"); }
-CScriptArray *FindAllTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<TextureRef>(ScriptHostScope::From(ctx), name, CKCID_TEXTURE, currentSceneOnly, "array<TextureRef@>"); }
-CScriptArray *FindAllMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllTypedInScope<MeshRef>(ScriptHostScope::From(ctx), name, CKCID_MESH, currentSceneOnly, "array<MeshRef@>"); }
-CScriptArray *FindAllBehaviorBehavior(const CKBehaviorContext &ctx, const std::string &name, bool currentSceneOnly) { return FindAllBehaviorInScope(ScriptHostScope::From(ctx), name, currentSceneOnly); }
-ObjectRef *CreateBehavior(const CKBehaviorContext &ctx, CK_CLASSID cid, const std::string &name, bool dynamic) { return CreateInScope(ScriptHostScope::From(ctx), cid, name, dynamic); }
-Entity3DRef *CreateEntity3DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<Entity3DRef>(ScriptHostScope::From(ctx), CKCID_3DENTITY, name, dynamic, "CK3dEntity"); }
-Entity2DRef *CreateEntity2DBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<Entity2DRef>(ScriptHostScope::From(ctx), CKCID_2DENTITY, name, dynamic, "CK2dEntity"); }
-MaterialRef *CreateMaterialBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<MaterialRef>(ScriptHostScope::From(ctx), CKCID_MATERIAL, name, dynamic, "CKMaterial"); }
-TextureRef *CreateTextureBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<TextureRef>(ScriptHostScope::From(ctx), CKCID_TEXTURE, name, dynamic, "CKTexture"); }
-MeshRef *CreateMeshBehavior(const CKBehaviorContext &ctx, const std::string &name, bool dynamic) { return CreateTypedInScope<MeshRef>(ScriptHostScope::From(ctx), CKCID_MESH, name, dynamic, "CKMesh"); }
-bool AddToCurrentSceneBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool dependencies) { return AddToCurrentSceneImpl(ScriptHostScope::From(ctx).Context(), ref, dependencies); }
-bool RemoveFromCurrentSceneBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool dependencies) { return RemoveFromCurrentSceneImpl(ScriptHostScope::From(ctx).Context(), ref, dependencies); }
-bool IsInCurrentSceneBehavior(const CKBehaviorContext &ctx, ObjectRef *ref) { return IsInCurrentSceneImpl(ScriptHostScope::From(ctx).Context(), ref); }
-bool IsInSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref) { return IsInSceneImpl(ScriptHostScope::From(ctx).Context(), scene, ref); }
-bool AddToSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return AddToSceneImpl(ScriptHostScope::From(ctx).Context(), scene, ref, dependencies); }
-bool RemoveFromSceneBehavior(const CKBehaviorContext &ctx, SceneRef *scene, ObjectRef *ref, bool dependencies) { return RemoveFromSceneImpl(ScriptHostScope::From(ctx).Context(), scene, ref, dependencies); }
-bool DestroyBehavior(const CKBehaviorContext &ctx, ObjectRef *ref, bool allowPersistent, CKDWORD flags) { return DestroyImpl(ScriptHostScope::From(ctx).Context(), ref, allowPersistent, flags); }
-bool SelectBehavior(const CKBehaviorContext &ctx, CScriptArray *objects, bool clearSelection) {
-    const bool result = SelectImpl(ScriptHostScope::From(ctx).Context(), objects, clearSelection);
-    ReleaseScriptArrayParam(objects);
-    return result;
-}
-
 // ScriptContext overloads.
 LevelRef *CurrentLevelScript(const ScriptContext &ctx) { return CurrentLevelInScope(ScriptHostScope::From(ctx)); }
 SceneRef *CurrentSceneScript(const ScriptContext &ctx) { return CurrentSceneInScope(ScriptHostScope::From(ctx)); }
@@ -1074,48 +1024,6 @@ void RegisterScriptSceneCore(asIScriptEngine *engine) {
     r = engine->RegisterGlobalFunction("bool RemoveFromScene(CKContext@ ctx, SceneRef@ scene, ObjectRef@ obj, bool dependencies = true)", asFUNCTION(RemoveFromSceneCtx), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Destroy(CKContext@ ctx, ObjectRef@ obj, bool allowPersistent = false, CKDWORD flags = 0)", asFUNCTION(DestroyCtx), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterGlobalFunction("bool Select(CKContext@ ctx, array<ObjectRef@>@ objects, bool clearSelection = true)", asFUNCTION(SelectCtx), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-
-    r = engine->RegisterGlobalFunction("LevelRef@ CurrentLevel(const CKBehaviorContext &in ctx)", asFUNCTION(CurrentLevelBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("SceneRef@ CurrentScene(const CKBehaviorContext &in ctx)", asFUNCTION(CurrentSceneBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ObjectRef@ Target(const CKBehaviorContext &in ctx)", asFUNCTION(TargetBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ObjectRef@ Owner(const CKBehaviorContext &in ctx)", asFUNCTION(OwnerBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ObjectRef@ Ref(const CKBehaviorContext &in ctx, CKObject@ obj)", asFUNCTION(RefBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ObjectRef@ ById(const CKBehaviorContext &in ctx, CK_ID id)", asFUNCTION(ByIdBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ObjectRef@ Find(const CKBehaviorContext &in ctx, const string &in name, CK_CLASSID cid = CKCID_OBJECT, bool derived = true, int occurrence = 0, bool currentSceneOnly = false)", asFUNCTION(FindBehaviorContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ObjectRef@ FindOne(const CKBehaviorContext &in ctx, const string &in name, CK_CLASSID cid = CKCID_OBJECT, bool derived = true, bool currentSceneOnly = false)", asFUNCTION(FindOneBehaviorContext), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("array<ObjectRef@>@ FindAll(const CKBehaviorContext &in ctx, const string &in name = \"\", CK_CLASSID cid = CKCID_OBJECT, bool derived = true, bool currentSceneOnly = false)", asFUNCTION(FindAllBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("Entity3DRef@ FindEntity3D(const CKBehaviorContext &in ctx, const string &in name = \"\", int occurrence = 0, bool currentSceneOnly = false)", asFUNCTION(FindEntity3DBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("Entity2DRef@ FindEntity2D(const CKBehaviorContext &in ctx, const string &in name = \"\", int occurrence = 0, bool currentSceneOnly = false)", asFUNCTION(FindEntity2DBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("MaterialRef@ FindMaterial(const CKBehaviorContext &in ctx, const string &in name = \"\", int occurrence = 0, bool currentSceneOnly = false)", asFUNCTION(FindMaterialBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("TextureRef@ FindTexture(const CKBehaviorContext &in ctx, const string &in name = \"\", int occurrence = 0, bool currentSceneOnly = false)", asFUNCTION(FindTextureBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("MeshRef@ FindMesh(const CKBehaviorContext &in ctx, const string &in name = \"\", int occurrence = 0, bool currentSceneOnly = false)", asFUNCTION(FindMeshBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BehaviorRef@ FindBehavior(const CKBehaviorContext &in ctx, const string &in name = \"\", int occurrence = 0, bool currentSceneOnly = false)", asFUNCTION(FindBehaviorBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("Entity3DRef@ FindOneEntity3D(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindOneEntity3DBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("Entity2DRef@ FindOneEntity2D(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindOneEntity2DBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("MaterialRef@ FindOneMaterial(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindOneMaterialBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("TextureRef@ FindOneTexture(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindOneTextureBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("MeshRef@ FindOneMesh(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindOneMeshBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("BehaviorRef@ FindOneBehavior(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindOneBehaviorBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("array<Entity3DRef@>@ FindAllEntity3D(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindAllEntity3DBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("array<Entity2DRef@>@ FindAllEntity2D(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindAllEntity2DBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("array<MaterialRef@>@ FindAllMaterial(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindAllMaterialBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("array<TextureRef@>@ FindAllTexture(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindAllTextureBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("array<MeshRef@>@ FindAllMesh(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindAllMeshBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("array<BehaviorRef@>@ FindAllBehavior(const CKBehaviorContext &in ctx, const string &in name = \"\", bool currentSceneOnly = false)", asFUNCTION(FindAllBehaviorBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("ObjectRef@ Create(const CKBehaviorContext &in ctx, CK_CLASSID cid, const string &in name = \"\", bool dynamic = true)", asFUNCTION(CreateBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("Entity3DRef@ CreateEntity3D(const CKBehaviorContext &in ctx, const string &in name = \"\", bool dynamic = true)", asFUNCTION(CreateEntity3DBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("Entity2DRef@ CreateEntity2D(const CKBehaviorContext &in ctx, const string &in name = \"\", bool dynamic = true)", asFUNCTION(CreateEntity2DBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("MaterialRef@ CreateMaterial(const CKBehaviorContext &in ctx, const string &in name = \"\", bool dynamic = true)", asFUNCTION(CreateMaterialBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("TextureRef@ CreateTexture(const CKBehaviorContext &in ctx, const string &in name = \"\", bool dynamic = true)", asFUNCTION(CreateTextureBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("MeshRef@ CreateMesh(const CKBehaviorContext &in ctx, const string &in name = \"\", bool dynamic = true)", asFUNCTION(CreateMeshBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool AddToCurrentScene(const CKBehaviorContext &in ctx, ObjectRef@ obj, bool dependencies = true)", asFUNCTION(AddToCurrentSceneBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool RemoveFromCurrentScene(const CKBehaviorContext &in ctx, ObjectRef@ obj, bool dependencies = true)", asFUNCTION(RemoveFromCurrentSceneBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool IsInCurrentScene(const CKBehaviorContext &in ctx, ObjectRef@ obj)", asFUNCTION(IsInCurrentSceneBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool IsInScene(const CKBehaviorContext &in ctx, SceneRef@ scene, ObjectRef@ obj)", asFUNCTION(IsInSceneBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool AddToScene(const CKBehaviorContext &in ctx, SceneRef@ scene, ObjectRef@ obj, bool dependencies = true)", asFUNCTION(AddToSceneBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool RemoveFromScene(const CKBehaviorContext &in ctx, SceneRef@ scene, ObjectRef@ obj, bool dependencies = true)", asFUNCTION(RemoveFromSceneBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Destroy(const CKBehaviorContext &in ctx, ObjectRef@ obj, bool allowPersistent = false, CKDWORD flags = 0)", asFUNCTION(DestroyBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterGlobalFunction("bool Select(const CKBehaviorContext &in ctx, array<ObjectRef@>@ objects, bool clearSelection = true)", asFUNCTION(SelectBehavior), asCALL_CDECL); CKAS_CHECK_REGISTER(r);
 
     r = engine->SetDefaultNamespace(previous.c_str()); CKAS_CHECK_REGISTER(r);
 }

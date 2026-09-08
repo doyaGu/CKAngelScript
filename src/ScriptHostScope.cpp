@@ -32,12 +32,6 @@ ScriptHostScope ScriptHostScope::From(const ScriptContext &context) {
     ScriptHostScope scope = From(context.Context());
     scope.m_Kind = ScriptHostScopeKind::Runtime;
     scope.m_MessageSource = context.Target();
-
-    const CKBehaviorContext behaviorContext = context.ToBehaviorContext();
-    scope.m_Behavior = behaviorContext.Behavior;
-    scope.m_ComponentId = scope.m_Behavior ? scope.m_Behavior->GetID() : 0;
-    scope.m_Owner = scope.m_Behavior ? scope.m_Behavior->GetOwner() : nullptr;
-    scope.m_Target = scope.m_Behavior ? scope.m_Behavior->GetTarget() : nullptr;
     return scope;
 }
 
@@ -63,6 +57,24 @@ ScriptHostScope ScriptHostScope::From(const CKBehaviorContext &context,
                                   : (context.Behavior ? ScriptMessageBus::ComponentTarget(context.Behavior->GetID())
                                                       : std::string());
     return scope;
+}
+
+CKBehaviorContext ScriptHostScope::MakeBehaviorContext(CKBehavior *behavior) const {
+    CKBehaviorContext context;
+    context.Behavior = behavior;
+    context.DeltaTime = 0.0f;
+    context.Context = m_Context;
+    context.CurrentLevel = m_CurrentLevel;
+    context.CurrentScene = m_CurrentScene;
+    context.PreviousScene = nullptr;
+    context.CurrentRenderContext = m_Context ? m_Context->GetPlayerRenderContext() : nullptr;
+    context.ParameterManager = m_Context ? m_Context->GetParameterManager() : nullptr;
+    context.MessageManager = m_Context ? m_Context->GetMessageManager() : nullptr;
+    context.AttributeManager = m_Context ? m_Context->GetAttributeManager() : nullptr;
+    context.TimeManager = m_Context ? m_Context->GetTimeManager() : nullptr;
+    context.CallbackMessage = 0;
+    context.CallbackArg = nullptr;
+    return context;
 }
 
 ScriptBehaviorBridge *ScriptHostScope::Bridge() const {

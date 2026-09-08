@@ -1,5 +1,7 @@
 #include "ScriptBridgeHandles.h"
 #include "ScriptBehaviorFrame.h"
+#include "ScriptHostScope.h"
+#include "ScriptManager.h"
 
 #include <algorithm>
 #include <set>
@@ -286,13 +288,17 @@ BehaviorGraph *BehaviorRef::AsGraph() const {
         return nullptr;
     }
 
-    CKBehaviorContext context = {};
-    context.Context = m_Bridge && m_Bridge->GetManager() ? m_Bridge->GetManager()->GetCKContext() : nullptr;
-    context.Behavior = CKBehavior::Cast(GetCKObjectById(context.Context, m_ComponentId));
-    if (!context.Behavior) {
-        context.Behavior = behavior;
+    CKContext *context = m_Bridge && m_Bridge->GetManager()
+        ? m_Bridge->GetManager()->GetCKContext()
+        : nullptr;
+    CKBehavior *component = CKBehavior::Cast(GetCKObjectById(context, m_ComponentId));
+    if (!component) {
+        component = behavior;
     }
-    return new BehaviorGraph(m_Bridge, context, behavior->GetID());
+    return new BehaviorGraph(
+        m_Bridge,
+        ScriptHostScope::From(context).MakeBehaviorContext(component),
+        behavior->GetID());
 }
 
 bool BehaviorRef::Trigger(int inputIndex, bool reset) {
@@ -342,7 +348,7 @@ BBResult *BehaviorRef::StepFrame(BehaviorFrame *frame, int inputIndex) {
         SetScriptException("BehaviorRef.Step requires a BehaviorFrame.");
         return nullptr;
     }
-    return Step(frame->ToBehaviorContext(), inputIndex);
+    return Step(frame->MakeContext(), inputIndex);
 }
 
 BBResult *BehaviorRef::StepSlot(const CKBehaviorContext &ctx, BBSlot *input) {
@@ -360,7 +366,7 @@ BBResult *BehaviorRef::StepSlotFrame(BehaviorFrame *frame, BBSlot *input) {
         SetScriptException("BehaviorRef.Step requires a BehaviorFrame.");
         return nullptr;
     }
-    return StepSlot(frame->ToBehaviorContext(), input);
+    return StepSlot(frame->MakeContext(), input);
 }
 
 GraphTask *BehaviorRef::Start(int inputIndex, bool reset, float timeoutSeconds) {
@@ -556,15 +562,7 @@ CKBehavior *BehaviorBridge::Component() const {
 }
 
 CKBehaviorContext BehaviorBridge::MakeContext() const {
-    CKBehaviorContext ctx;
-    ctx.Context = m_Context;
-    ctx.Behavior = Component();
-    ctx.ParameterManager = m_Context ? m_Context->GetParameterManager() : nullptr;
-    ctx.MessageManager = m_Context ? m_Context->GetMessageManager() : nullptr;
-    ctx.AttributeManager = m_Context ? m_Context->GetAttributeManager() : nullptr;
-    ctx.TimeManager = m_Context ? m_Context->GetTimeManager() : nullptr;
-    ctx.CurrentRenderContext = m_Context ? m_Context->GetPlayerRenderContext() : nullptr;
-    return ctx;
+    return ScriptHostScope::From(m_Context).MakeBehaviorContext(Component());
 }
 
 BehaviorGraph *BehaviorBridge::Graph() const {

@@ -6,13 +6,6 @@
 
 namespace {
 
-CKBehaviorContext MakeBBContext(const ScriptHostScope &scope) {
-    CKBehaviorContext context = {};
-    context.Context = scope.Context();
-    context.Behavior = scope.Behavior();
-    return context;
-}
-
 void ReportMissingBridge(ScriptBridgeFailureMode failureMode) {
     if (failureMode == ScriptBridgeFailureMode::ScriptException) {
         SetScriptException("AngelScript BB bridge is not available.");
@@ -27,23 +20,6 @@ void ReportMissingBehaviorBridge(const ScriptHostScope &scope) {
 
 CKBehavior *BehaviorForScope(const ScriptHostScope &scope) {
     return scope.Kind() == ScriptHostScopeKind::Behavior ? scope.Behavior() : nullptr;
-}
-
-CKBehaviorContext MakeBehaviorContext(const ScriptHostScope &scope,
-                                      CKBehavior *behavior = nullptr) {
-    CKBehaviorContext context = {};
-    context.Context = scope.Context();
-    context.Behavior = behavior;
-    context.CurrentLevel = scope.CurrentLevel();
-    context.CurrentScene = scope.CurrentScene();
-    if (CKContext *ckContext = scope.Context()) {
-        context.ParameterManager = ckContext->GetParameterManager();
-        context.MessageManager = ckContext->GetMessageManager();
-        context.AttributeManager = ckContext->GetAttributeManager();
-        context.TimeManager = ckContext->GetTimeManager();
-        context.CurrentRenderContext = ckContext->GetPlayerRenderContext();
-    }
-    return context;
 }
 
 CKBehavior *FindRuntimeBehaviorByName(const ScriptHostScope &scope,
@@ -65,7 +41,7 @@ BBBridge *From(const ScriptHostScope &scope, ScriptBridgeFailureMode failureMode
         ReportMissingBridge(failureMode);
         return nullptr;
     }
-    return new BBBridge(bridge, MakeBBContext(scope));
+    return new BBBridge(bridge, scope.MakeBehaviorContext(scope.Behavior()));
 }
 
 BBDecl *Require(const ScriptHostScope &scope,
@@ -150,7 +126,7 @@ BehaviorBridge *From(const ScriptHostScope &scope) {
         return nullptr;
     }
     return bridge->CreateBehaviorBridge(
-        MakeBehaviorContext(scope, BehaviorForScope(scope)));
+        scope.MakeBehaviorContext(BehaviorForScope(scope)));
 }
 
 BehaviorGraph *Graph(const ScriptHostScope &scope,
@@ -175,7 +151,7 @@ BehaviorGraph *Graph(const ScriptHostScope &scope,
         ? nullptr
         : FindRuntimeBehaviorByName(scope, rootBehaviorName);
     return new BehaviorGraph(
-        bridge, MakeBehaviorContext(scope, root), root ? root->GetID() : 0);
+        bridge, scope.MakeBehaviorContext(root), root ? root->GetID() : 0);
 }
 
 BehaviorRef *Find(const ScriptHostScope &scope, const std::string &name) {
