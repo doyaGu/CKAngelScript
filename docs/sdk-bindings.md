@@ -18,14 +18,14 @@ CKAngelScript registers a broad CK/Vx SDK surface for AngelScript. These binding
 Raw bindings generally preserve native naming and mutability. They are useful when a script needs a specific CK SDK call:
 
 ```angelscript
-Entity3DRef@ ref = Scene::FindEntity3D(ctx, "Ball");
-CK3dEntity@ entity = ref !is null ? ref.Entity3D() : null;
+CKObject@ object = frame.Context().GetObjectByNameAndParentClass("Ball", CKCID_3DENTITY, null);
+CK3dEntity@ entity = cast<CK3dEntity>(object);
 if (entity !is null) {
     entity.Translate(0.0f, 1.0f, 0.0f);
 }
 ```
 
-Use raw pointers near the operation. Do not cache raw CK object pointers long-term; cache `ObjectRef@`-derived handles instead.
+Use raw pointers near the operation and do not cache them long-term. High-level `ObjectRef@` handles intentionally do not convert back to raw CK pointers.
 
 ## Prefer High-Level APIs First
 

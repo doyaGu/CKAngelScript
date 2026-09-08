@@ -86,12 +86,10 @@ Behavior Bridge tasks can be wrapped:
 ```angelscript
 AsyncTask<void>@ Async::Wait(BBTask@ task)
 AsyncTask<void>@ Async::Wait(GraphTask@ task)
-AsyncTask<void>@ Async::Wait(const CKBehaviorContext &in ctx, BBTask@ task, int inputIndex = -1)
-AsyncTask<void>@ Async::Wait(const CKBehaviorContext &in ctx, GraphTask@ task)
 ```
 
-When code already runs with `BehaviorFrame@ frame`, prefer the frame-aware
-wrappers so the script does not reconstruct `CKBehaviorContext` manually:
+Component and Executor code must use the frame methods when the wait depends on
+the current behavior execution state:
 
 ```angelscript
 AsyncTask<void>@ frame.Wait(BBTask@ task, int inputIndex = -1)
@@ -100,6 +98,10 @@ AsyncTask<void>@ frame.WaitMessage(const string &in message, CKBeObject@ object 
 AsyncTask<void>@ frame.WaitMessage(CKMessageType messageType, CKBeObject@ object = null)
 AsyncTask<void>@ frame.LinkDelay(int frames)
 ```
+
+The `Async` namespace no longer accepts `CKBehaviorContext`. `BehaviorFrame`
+keeps execution identity, target/owner fallback, and task context together at
+one Interface; callers do not reconstruct the native context value.
 
 Use `frame.LinkDelay(frames)` for a translated `CKBehaviorLink`
 activation-delay wait. Use `Async::Delay(frames)` for ordinary script-authored
@@ -141,4 +143,12 @@ a Runtime Entry generation likewise cancels its owned tasks before unloading
 its physical module without cancelling work owned by another Runtime Entry.
 A repeated host Reset cancels tasks from the suspended `OnReset`, aborts that
 prepared invocation, and opens a replacement Reset Epoch; only tasks created by
-the replacement invocation remain owned by the current epoch.
+the replacement invocation remain owned by the current epoch. CK Reset no
+longer performs a scheduler-wide `CancelAll`. Instead, manager
+`OnCKPostReset`—after CK2 has delivered all behavior reset callbacks and reset
+the level/scene—collects the owners of all live Runtime Entries, Components, and
+Executors, then cancels only ownerless work or work whose owner no longer
+exists. `OnCKPlay` and `PreProcess` keep idempotent fallbacks for failed resets,
+hosts, or direct lifecycle callers that omit `OnCKPostReset`. In every case the
+sweep precedes resumed task or message advancement, so a new-epoch task cannot
+consume a frame before the ownership boundary is checked.

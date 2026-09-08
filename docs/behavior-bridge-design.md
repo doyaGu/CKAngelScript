@@ -7,9 +7,9 @@ Most scripts use the bridge in one of four ways:
 | Goal | Preferred API |
 | --- | --- |
 | Work with the currently executing BB frame | `BehaviorFrame@` |
-| Find an existing behavior in the current graph | `Behavior::Graph(ctx)`, `BehaviorQuery`, `BehaviorNode` |
+| Find an existing behavior in the current graph | `frame.Graph()`, `BehaviorQuery`, `BehaviorNode` |
 | Read or write CK parameters | `ParamRef@`, `ParamValue@`, `Param::*` |
-| Spawn and step a runtime Building Block | `BB::Require`, `BBDecl@`, `BBConfig@`, `BBInstance@` |
+| Spawn and step a runtime Building Block | `frame.BB()`, `BBDecl@`, `BBConfig@`, `BBInstance@` |
 | Configure a BB from component metadata | `[bbconfig]`, `[bbslot]`, `lifetime="component"` |
 | Turn a graph execution point into a script message | `AngelScript/Event Hook` BB |
 
@@ -28,11 +28,13 @@ void Execute(BehaviorFrame@ frame) {
 ```
 
 ```angelscript
-void Start(const CKBehaviorContext &in ctx) {
-    BehaviorRef@ behavior = Behavior::Find(ctx, "OpenDoor");
-    if (behavior is null || !behavior.valid) {
+void Start(BehaviorFrame@ frame) {
+    BehaviorNode@ node = frame.Graph().Find(
+        Behavior::Query().Name("OpenDoor").Recursive(true));
+    if (node is null || !node.valid) {
         return;
     }
+    BehaviorRef@ behavior = node.Behavior();
 
     BehaviorLayout@ layout = behavior.Layout();
     int input = layout.FindInput("In");
@@ -46,11 +48,13 @@ void Start(const CKBehaviorContext &in ctx) {
 For new runtime BB instances, prefer `BBConfig@`:
 
 ```angelscript
-BBDecl@ decl = BB::Require(ctx, "Interface/Text/2D Text");
-BBSlot@ text = decl.Pin("Text");
+void Start(BehaviorFrame@ frame) {
+    BBDecl@ decl = frame.BB().Require("Interface/Text/2D Text");
+    BBSlot@ text = decl.Pin("Text");
 
-BBConfig@ config = decl.Configure().Set(text, "Ready");
-BBInstance@ instance = config.SpawnStarted(ctx);
+    BBConfig@ config = decl.Configure().Set(text, "Ready");
+    BBInstance@ instance = config.SpawnStarted(frame);
+}
 ```
 
 `AngelScript/Event Hook` is the bridge point for persistent graph edits that need to notify runtime entries. It has one input, `Out` and `Error` outputs, and three input parameters:
@@ -119,17 +123,15 @@ node. It exposes:
   `TargetParameter()`;
 - CKObject/scene inherited state: class id, object flags, app data, scene
   membership, active-in-scene queries, visibility, dependency/load/save
-  callbacks, object lifecycle hooks, `CKGetObject`, and
-  `CKDestroyObject(s)` context helpers;
+  callbacks, and object lifecycle hooks;
 - graph entry points: `Self()`, `Parent()`, `OwnerScript()`, `Layout()`,
   `Graph()`, and `AsGraph()`;
 - CKBehavior metadata/state: type, flags, active state, targetable state,
   compatible class id, prototype guid/name, version, priority, execution time;
 - IO and parameters by name or index: input/output counts, names, `Find*`,
   `InputActive`, `Take`, `Emit`, `OutputActive`, `Pin`, `Pout`, `Local`,
-  `Setting`, raw parameter-handle getters for migration, enable/disable for
-  pins and pouts, generic SDK `Get*ParameterValue`/`Set*ParameterValue`
-  methods, typed local fallback readers, and typed `SetPout`, `SetLocal`,
+  `Setting`, enable/disable for pins and pouts, typed local fallback readers,
+  and typed `SetPout`, `SetLocal`,
   `SetSetting` helpers;
 - SDK-level CKBehavior graph edits: `Add/Create/Remove/Delete/Replace`
   wrappers for inputs, outputs, pins, pouts, and locals, position lookup,
@@ -158,14 +160,12 @@ Behavior locals are intentionally split into two APIs:
   `CK_ID` plus type metadata, reacquire the source every access, and read/write
   the original parameter directly. They are not copied through temporary bridge
   input sources.
-- `GetLocalParameter*`, `SetLocalParameterValue`, `CreateLocalParameter`,
-  `RemoveLocalParameter`, `LocalParameter`, and `BehaviorLocal*` use physical
-  CKBehavior local-parameter order. Use these only for SDK-style migration and
-  graph-edit code.
+- `BehaviorLocal*` uses physical CKBehavior local-parameter order for graph-edit
+  code that intentionally addresses the native layout.
 
 The intent is full current-`CKBehavior` coverage without forcing script authors
 back to raw SDK naming for ordinary replacement work. `Behavior()` remains
-available for legacy interop and APIs that intentionally operate on arbitrary
+available for low-level interop and APIs that intentionally operate on arbitrary
 behaviors rather than the current frame. `BehaviorFrame` intentionally does not
 define `opImplCast`; scripts should call `Behavior()` explicitly when a raw
 `CKBehavior@` is required.
@@ -189,14 +189,17 @@ local-parameter index because Virtools stores settings as local parameters.
 `SetSetting()` writes through the bridge setting path, sends
 `CKM_BEHAVIORSETTINGSEDITED`, and invalidates the runtime layout cache.
 
-`CKBehaviorContext` remains the low-level compatible API. New Component and
-Executor lifecycle code should prefer `BehaviorFrame@ frame`; existing scripts
-using `const CKBehaviorContext &in ctx` continue to run.
+High-level code does not reconstruct `CKBehaviorContext`: Runtime Entries use
+`ScriptContext`, while Component and Executor code uses `BehaviorFrame`. The
+native type remains registered only because low-level SDK funcdefs require its
+ABI.
 
 ## Layout First
 
 ```angelscript
-BehaviorRef@ b = Behavior::Find(ctx, "Some BB");
+BehaviorNode@ node = frame.Graph().Find(
+    Behavior::Query().Name("Some BB").Recursive(true));
+BehaviorRef@ b = node is null ? null : node.Behavior();
 BehaviorLayout@ layout = b.Layout();
 
 int in = layout.FindInput("In");
@@ -204,7 +207,7 @@ int value = layout.FindPin("Value");
 int done = layout.FindOutput("Done");
 
 b.Pin(value).Set(Param::Int(10));
-BBResult@ result = b.Step(ctx, in);
+BBResult@ result = b.Step(frame, in);
 if (result is null || !result.Ok() || !result.OutputActive(done)) {
     return;
 }
@@ -212,7 +215,7 @@ if (result is null || !result.Ok() || !result.OutputActive(done)) {
 
 `BehaviorLayout` exposes `InputCount/OutputCount/PinCount/PoutCount/LocalCount`, name lookup with occurrence, and `ParamInfo` for parameter slots. Use `Find*()` once in `Start()` or setup code, then cache the indices.
 
-Use `BehaviorRef.Step(ctx/frame, input)` when an AS graph replacement must
+Use `BehaviorRef.Step(frame, input)` when an AS graph replacement must
 synchronously drive an existing native BB instance from the original graph. It
 returns a normal `BBResult@`, but the result does not own or destroy the
 watched `CKBehavior`. Use `Trigger()` only when you want normal graph
@@ -221,12 +224,12 @@ activation without an immediate return-code/output snapshot, and use
 
 ## Behavior Graph Search
 
-Large real game graphs should be searched through a container graph instead of global name lookup. `Behavior::Graph(ctx)` and `BehaviorFrame.Graph()` return the owner script graph for the current component. `BehaviorRef.AsGraph()` and `BehaviorFrame.AsGraph()` treat a behavior as a subgraph container.
+Large real game graphs should be searched through a container graph instead of global name lookup. `BehaviorFrame.Graph()` returns the surrounding graph for Component and Executor code. Runtime Entries can select a global root with `Behavior::Graph(ctx, rootName)`. `BehaviorRef.AsGraph()` and `BehaviorFrame.AsGraph()` treat a behavior as a subgraph container.
 
 Search is setup-time only. `BehaviorQuery` defaults to exact name matching when `Name()` is used; use `NameContains()` only for exploration or diagnostics. Recursive search is explicit, pre-order, and preserves CK subbehavior order. The root container is not returned unless `IncludeRoot(true)` is set.
 
 ```angelscript
-BehaviorGraph@ graph = Behavior::Graph(ctx);
+BehaviorGraph@ graph = frame.Graph();
 BehaviorQuery@ query = Behavior::Query()
     .Name("Loading_Manager")
     .Recursive(true)
@@ -235,7 +238,7 @@ BehaviorQuery@ query = Behavior::Query()
 
 BehaviorNode@ node = graph.Require(query);
 if (node is null || !node.valid) {
-    ctx.RaiseError(graph.DescribeCandidates(query));
+    frame.Trace(graph.DescribeCandidates(query));
     return;
 }
 
@@ -263,7 +266,7 @@ if (link !is null && link.valid) {
 
 `Next/Prev` accept an optional `BehaviorQuery@` filter. `Input(index)` and `Output(index)` are link traversal helpers for a specific target input or source output. `End(maxSteps)` follows the first next link until there is no next node or a cycle/step limit is reached.
 
-`Behavior::Find(ctx, name)` remains as a small convenience wrapper over `Behavior::Graph(ctx).Find(Behavior::Query().Name(name).Recursive(true))`; new scripts should prefer explicit graph/query/node code when the graph is large or duplicate names are possible.
+For Runtime Entries, `Behavior::Find(ctx, name)` remains a small convenience wrapper. Component and Executor code uses `frame.Graph().Find(query)`, keeping graph identity in the Behavior Frame Interface.
 
 `BehaviorRef.TargetParameter()` returns the behavior target parameter as a
 `ParamRef@` when the node is targetable. This is mainly for graph adapters that
@@ -275,24 +278,24 @@ already carries the source link.
 
 ## Persistent Graph Editing
 
-Graph editing is explicit and transaction-style. The bridge mutates the live `CKBehavior` graph only when `Apply(ctx)` is called; saving the edited graph to `.cmo/.nmo` remains the host/libnmo responsibility.
+Graph editing is explicit and transaction-style. The bridge mutates the live `CKBehavior` graph only when `Apply(frame)` is called; saving the edited graph to `.cmo/.nmo` remains the host/libnmo responsibility.
 
 ```angelscript
-BehaviorGraph@ graph = Behavior::Graph(ctx);
-BBDecl@ decl = BB::Require(ctx, "Logics/Calculator/Identity");
+BehaviorGraph@ graph = frame.Graph();
+BBDecl@ decl = frame.BB().Require("Logics/Calculator/Identity");
 
 BehaviorGraphEdit@ edit = graph.Edit();
 GraphEditNode@ node = edit.Add(decl, "Probe Identity");
 
-GraphEditResult@ check = edit.Validate(ctx);
+GraphEditResult@ check = edit.Validate(frame);
 if (check is null || !check.ok) {
-    check.Raise(ctx);
+    check.Raise(frame);
     return;
 }
 
-GraphEditResult@ applied = edit.Apply(ctx);
+GraphEditResult@ applied = edit.Apply(frame);
 if (applied is null || !applied.ok) {
-    applied.Raise(ctx);
+    applied.Raise(frame);
     return;
 }
 ```
@@ -336,8 +339,9 @@ Param::ObjectArray(ids);
 Unknown or plugin-defined types use SDK-driven paths:
 
 ```angelscript
-Param::Text(ctx, "Render Options", "Clear ZBuffer,Buffer Swapping");
-Param::Raw(ctx, "SomeFixedStruct", buffer);
+CKContext@ host = frame.Context();
+Param::Text(host, "Render Options", "Clear ZBuffer,Buffer Swapping");
+Param::Raw(host, "SomeFixedStruct", buffer);
 ```
 
 The bridge delegates type names, enum/flags text, object compatibility, and operations to `CKParameterManager`. It does not maintain a hard-coded operation or custom struct table.
@@ -376,13 +380,11 @@ BBConfig@ cfg = iterator.Configure()
 BBInstance@ inst = cfg.Spawn(frame);
 ```
 
-`BehaviorFrame.BB()` is the frame-aware equivalent of `BB::From(ctx)`. Use it
-for discovery, `BBDecl@`, `BBConfig@`, and `BBInstance@` workflows that need the
-current Component/Executor context but should not rebuild or expose a
-`CKBehaviorContext` in business code.
+`BehaviorFrame.BB()` is the Component/Executor discovery entry point. Runtime
+Entries use the `BB::*` overloads that accept `ScriptContext`. Raw
+`CKBehaviorContext` values stay inside the host implementation.
 
-`BB::Call(ctx, "Category/Name")` and `BB::Call(ctx, CKGUID(...))` remain
-available for legacy `CKBehaviorContext` code. `BBCallBuilder.Set("Pin", value)`,
+`BBCallBuilder.Set("Pin", value)`,
 `Setting("Setting", value)`, and `Run("Input")` resolve names after target and
 settings are applied to the runtime behavior, so dynamic layouts such as
 `Add Row` are inspected in their final runtime shape. Missing names report the
@@ -440,7 +442,7 @@ void Update(BehaviorFrame@ frame) {
 }
 ```
 
-`BBConfig.EnsureSpawned(frame)` and `EnsureStarted(frame)` reuse the current live `BBInstance@` when possible, so setup code can be idempotent. The same calls still accept `CKBehaviorContext` for legacy code. `BBConfig.Instance()` returns the current instance or `null` with a clear error. `BBConfig.Explain()` and `BBInstance.Explain()` return multi-line diagnostics for metadata, source wiring, target, and current runtime errors.
+`BBConfig.EnsureSpawned(frame)` and `EnsureStarted(frame)` reuse the current live `BBInstance@` when possible, so setup code can be idempotent. Config and live-instance lifecycle methods accept only `BehaviorFrame@`; raw `CKBehaviorContext` overloads are not part of the high-level interface. `BBConfig.Instance()` returns the current instance or `null` with a clear error. `BBConfig.Explain()` and `BBInstance.Explain()` return multi-line diagnostics for metadata, source wiring, target, and current runtime errors.
 
 `BBSlot` records the slot kind, index, name, parameter type, layout caps, and layout generation. Passing a `pout` slot to `Set()`, passing a pin slot to `SetSetting()`, or using a stale slot after a dynamic layout change fails with a targeted diagnostic. The lower-level `BBPrototype.Call()` / `Spawn()` and raw index API remain available for generated code and performance-sensitive scripts.
 
@@ -479,11 +481,12 @@ class FpsOverlay {
 BB prototype discovery is SDK-driven and uses `CKGetPrototypeDeclaration*` order:
 
 ```angelscript
-int count = BB::Count(ctx);
-BBPrototype@ first = BB::At(ctx, 0);
-BBPrototype@ text = BB::Find(ctx, "Interface/Text/2D Text");
-BBDecl@ requiredText = BB::Require(ctx, "Interface/Text/2D Text");
-array<BBPrototype@>@ textCandidates = BB::FindAll(ctx, "2D Text");
+BBBridge@ bb = frame.BB();
+int count = bb.Count();
+BBPrototype@ first = bb.At(0);
+BBPrototype@ text = bb.Find("Interface/Text/2D Text");
+BBDecl@ requiredText = bb.Require("Interface/Text/2D Text");
+array<BBPrototype@>@ textCandidates = bb.FindAll("2D Text");
 
 string category = text.GetCategory();
 string qualified = text.GetQualifiedName();
@@ -491,19 +494,20 @@ CKGUID guid = text.GetGuid();
 string layout = text.Describe();
 ```
 
-`BB::Require` accepts a name, `Category/Name`, or `guid:0x...,0x...` text and must resolve to exactly one prototype. Zero or multiple candidates produce an invalid `BBDecl@` with candidate diagnostics. `BB::FindAll` returns every matching SDK prototype declaration, so setup code can diagnose duplicate names and then cache the selected GUID and slot handles.
+`BBBridge.Require` accepts a name, `Category/Name`, or `guid:0x...,0x...` text and must resolve to exactly one prototype. Zero or multiple candidates produce an invalid `BBDecl@` with candidate diagnostics. `BBBridge.FindAll` returns every matching SDK prototype declaration, so setup code can diagnose duplicate names and then cache the selected GUID and slot handles. Runtime Entries have the same operations through `BB::*` with `ScriptContext`.
 
 `Param` helpers expose enum/flags/type metadata without hard-coded integer tables:
 
 ```angelscript
-int typeCount = Param::Count(ctx);
-ParamTypeInfo@ firstType = Param::At(ctx, 0);
-ParamTypeInfo@ renderInfo = Param::Find(ctx, "Render Options");
-CKGUID renderOptions = Param::Guid(ctx, "Render Options");
-uint clear = Param::Flag(ctx, renderOptions, "Clear ZBuffer");
-uint clearAndSwap = Param::FlagsMask(ctx, renderOptions, "Clear ZBuffer,Buffer Swapping");
-string text = Param::Text(ctx, renderOptions, clearAndSwap);
-string description = Param::Describe(ctx, renderOptions);
+CKContext@ host = frame.Context();
+int typeCount = Param::Count(host);
+ParamTypeInfo@ firstType = Param::At(host, 0);
+ParamTypeInfo@ renderInfo = Param::Find(host, "Render Options");
+CKGUID renderOptions = Param::Guid(host, "Render Options");
+uint clear = Param::Flag(host, renderOptions, "Clear ZBuffer");
+uint clearAndSwap = Param::FlagsMask(host, renderOptions, "Clear ZBuffer,Buffer Swapping");
+string text = Param::Text(host, renderOptions, clearAndSwap);
+string description = Param::Describe(host, renderOptions);
 ```
 
 For IDE hints or script constants, generate a catalog from validation exports:
@@ -518,23 +522,25 @@ For scripts that use only a few BBs, ask the generator for selected wrappers ins
 python tools/generate_angelscript_catalog.py --validation-dir build/validation/host --selected-bb "Interface/Text/2D Text" --selected-bb "Interface/Fonts/Create System Font"
 ```
 
-The generated hints keep the flat GUID functions and add ergonomic helper namespaces:
+The generated hints keep identifiers and metadata without adding another context adapter:
 
 ```angelscript
 CKGUID textGuid = CKASCatalog::BBHints::Interface_Text_2D_Text::Guid();
-BBPrototype@ text = CKASCatalog::BBHints::Interface_Text_2D_Text::Find(ctx);
-BBDecl@ textDecl = CKASCatalog::BBHints::Interface_Text_2D_Text::Decl(ctx);
-BBConfig@ textConfig = CKASCatalog::BBHints::Interface_Text_2D_Text::Config(ctx);
-BBSlot@ textPin = CKASCatalog::BBHints::Interface_Text_2D_Text::Pin_Text(ctx);
+BBBridge@ bb = frame.BB();
+BBDecl@ textDecl = bb.Require(textGuid);
+BBConfig@ textConfig = textDecl.Configure();
+BBSlot@ textPin = textDecl.Pin("Text");
 string textPinMetadata = CKASCatalog::BBHints::Interface_Text_2D_Text::Pin_Text_Metadata("text");
 
-uint flags = CKASCatalog::Flags::Render_Options::Mask(ctx, "Clear ZBuffer,Buffer Swapping");
-string flagsText = CKASCatalog::Flags::Render_Options::Text(ctx, flags);
+CKContext@ host = frame.Context();
+CKGUID renderOptions = CKASCatalog::Flags::Render_Options::Type();
+uint flags = Param::FlagsMask(host, renderOptions, "Clear ZBuffer,Buffer Swapping");
+string flagsText = Param::Text(host, renderOptions, flags);
 
-ParamOp@ add = CKASCatalog::OperationHints::Addition::Create(ctx);
+ParamOp@ add = Param::Operation(host, CKASCatalog::OperationHints::Addition::Guid());
 ```
 
-Selected wrappers expose a tiny class per requested BB with `Config(ctx)`, cached slot helpers, `EnsureStarted(ctx)`, and simple typed setters. They are optional; the runtime bridge still resolves everything from SDK prototype declarations.
+Selected wrappers expose a tiny class per requested BB with frame-based binding, cached slot helpers, `EnsureStarted(frame)`, and simple typed setters. They are optional; the runtime bridge still resolves everything from SDK prototype declarations.
 
 Generated names are sanitized deterministically; duplicate source names get numeric suffixes.
 
@@ -543,20 +549,27 @@ Generated names are sanitized deterministically; duplicate source names get nume
 `GraphTask` observes an existing `CKBehavior` or behavior graph. It does not execute, reset, clear, or destroy the target graph.
 
 ```angelscript
-BehaviorRef@ graph = Behavior::Find(ctx, "OpenDoor");
-BehaviorLayout@ layout = graph.Layout();
-int input = layout.FindInput("In");
-int done = layout.FindOutput("Done");
+GraphTask@ task;
+int done = -1;
 
-GraphTask@ task = graph.Start(input, false, 3.0f);
+void Start(BehaviorFrame@ frame) {
+    BehaviorNode@ node = frame.Graph().Find(
+        Behavior::Query().Name("OpenDoor").Recursive(true));
+    BehaviorRef@ graph = node is null ? null : node.Behavior();
+    if (graph is null) return;
+    BehaviorLayout@ layout = graph.Layout();
+    int input = layout.FindInput("In");
+    done = layout.FindOutput("Done");
+    @task = graph.Start(input, false, 3.0f);
+}
 
-void Update(const CKBehaviorContext &in ctx) {
+void Update(BehaviorFrame@ frame) {
     if (task !is null && task.IsAlive()) {
-        task.Step(ctx);
+        task.Step(frame);
         if (task.Done(done)) {
             task.Cancel();
         } else if (task.TimedOut()) {
-            task.Raise(ctx);
+            task.Raise(frame);
         }
     }
 }
@@ -569,7 +582,7 @@ void Update(const CKBehaviorContext &in ctx) {
 Parameter operations are generic and SDK-driven:
 
 ```angelscript
-ParamOp@ op = Param::Operation(ctx, "Addition")
+ParamOp@ op = Param::Operation(frame.Context(), "Addition")
     .Result(target.Pin(0).TypeGuid())
     .In(0, source.Pout(0))
     .In(1, Param::Float(1.0f));

@@ -5,8 +5,8 @@ These examples are small and copyable. They use current public signatures and av
 ## Runtime Script: Publish a Ready Message
 
 ```angelscript
-[script id="example.ready" name="Ready Publisher" version="1.0.0" entry="runtime.as"]
-[script.messages topics="example.ping"]
+[runtime id="example.ready" name="Ready Publisher" version="1.0.0" entry="runtime.as"]
+[runtime.messages topics="example.ping"]
 ```
 
 ```angelscript
@@ -35,7 +35,7 @@ class DoorLabel {
     [param type="3dentity" name="Target"]
     CK3dEntity@ Target;
 
-    void Start(const CKBehaviorContext &in ctx) {
+    void Start(BehaviorFrame@ frame) {
         if (Target !is null) {
             print("Target is " + Target.GetName());
         }
@@ -66,8 +66,8 @@ void Update(const ScriptContext &in ctx) {
 Responder:
 
 ```angelscript
-[script id="service.clock" entry="runtime.as"]
-[script.messages topics="clock.now"]
+[runtime id="service.clock" entry="runtime.as"]
+[runtime.messages topics="clock.now"]
 ```
 
 ```angelscript
@@ -97,13 +97,6 @@ void Start(const ScriptContext &in ctx) {
         print("clock response received");
     }
 }
-```
-
-Existing scripts may keep the string-target form:
-
-```angelscript
-AsyncTask<dictionary@>@ task = Message::Request(
-    ctx, "runtime:service.clock", "clock.now", request, 120);
 ```
 
 ## Async: Delay and Spawn
@@ -138,13 +131,13 @@ class TextOverlay {
 
     BBInstance@ Instance;
 
-    void Start(const CKBehaviorContext &in ctx) {
-        @Instance = Text.EnsureStarted(ctx);
+    void Start(BehaviorFrame@ frame) {
+        @Instance = Text.EnsureStarted(frame);
     }
 
-    void Update(const CKBehaviorContext &in ctx) {
+    void Update(BehaviorFrame@ frame) {
         if (Instance !is null) {
-            Instance.StepSet(ctx, TextPin, "Frame running");
+            Instance.StepSet(frame, TextPin, "Frame running");
         }
     }
 }
@@ -161,7 +154,8 @@ python tools\generate_angelscript_catalog.py --validation-dir build\validation\h
 Script:
 
 ```angelscript
-BBDecl@ componentDecl = CKASCatalog::BBHints::AngelScript_AngelScript_Component::Decl(ctx);
+CKGUID componentGuid = CKASCatalog::BBHints::AngelScript_AngelScript_Component::Guid();
+BBDecl@ componentDecl = frame.BB().Require(componentGuid);
 CKGUID stringType = CKASCatalog::ParamTypes::String();
 ```
 

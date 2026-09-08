@@ -39,7 +39,7 @@ This manual is written for AngelScript authors using CKAngelScript inside a Virt
 | Feature | Main namespace/type | Context |
 | --- | --- | --- |
 | Script entries | `Runtime`, `ScriptContext` | Discovered modules; `[runtime]` entries run `ScriptContext` lifecycle, `[executor]` entries back Executor BBs |
-| Components | `AngelScript Component`, `BehaviorFrame` | One script class instance per behavior; raw `CKBehaviorContext` remains a low-level compatible form |
+| Components | `AngelScript Component`, `BehaviorFrame` | One script class instance per behavior; lifecycle and message callbacks use `BehaviorFrame@` |
 | Executors | `AngelScript Executor`, `BehaviorFrame` | Graph replacement BBs with frame-aware pins, locals, BB calls, waits, and trace |
 | Scene interop | `Scene`, `ObjectRef@` | Runtime entries and components |
 | Behavior graph interop | `Behavior`, `BB`, `Param` | Runtime entries and components |

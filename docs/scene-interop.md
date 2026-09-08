@@ -10,51 +10,47 @@
 ObjectRef@ ref = Scene::Find(ctx, "Ball");
 Entity3DRef@ ball = cast<Entity3DRef>(ref);
 if (ball !is null && ball.valid) {
-  CK3dEntity@ entity = ball.Entity3D();
+  string identity = ball.Describe();
 }
 ```
 
-All object refs support `IsValid()`, `valid`, `Error()`, `Describe()`, `Id()`, `Name()`, `ClassId()`, `IsDynamic()`, and `Object()`. They deliberately do not mirror the full CK SDK editing surface; use typed accessors when you need raw SDK methods. Invalid refs are still useful diagnostic values: `valid` becomes false, typed accessors return `null`, and `Error()` explains the last known failure where the helper can provide one.
+All object refs support `IsValid()`, `valid`, `Error()`, `Describe()`, `Id()`, `Name()`, `ClassId()`, and `IsDynamic()`. They deliberately do not expose raw CK object pointers. Invalid refs are still useful diagnostic values: `valid` becomes false and `Error()` explains the last known failure where the helper can provide one.
 
-Precise ref types add typed accessors: `SceneObjectRef.SceneObject()`, `Entity3DRef.Entity3D()`, `Entity2DRef.Entity2D()`, `MaterialRef.Material()`, `TextureRef.Texture()`, `MeshRef.Mesh()`, `SceneRef.Scene()`, and `LevelRef.Level()`. Bridge refs such as `BehaviorRef@`, `ParamRef@`, `ParamStructRef@`, `ParamOperationRef@`, and `BehaviorLinkRef@` are also `ObjectRef@`-compatible. Transaction handles, values, builders, tasks, and graph cursors stay outside the ref hierarchy; use their methods to obtain `ObjectRef@`-derived handles when needed.
+Precise ref types provide checked narrowing and make the expected object class explicit. Bridge refs such as `BehaviorRef@`, `ParamRef@`, `ParamStructRef@`, `ParamOperationRef@`, and `BehaviorLinkRef@` are also `ObjectRef@`-compatible. Transaction handles, values, builders, tasks, and graph cursors stay outside the ref hierarchy; use their methods to obtain `ObjectRef@`-derived handles when needed.
 
 ## Typed Ref Matrix
 
-| Ref type | Raw accessor | Typical source |
+| Ref type | Checked relationship | Typical source |
 | --- | --- | --- |
-| `ObjectRef@` | `Object()` | `Scene::Find`, `Scene::ById`, `Scene::Ref` |
-| `SceneObjectRef@` | `SceneObject()` | Scene-membership helpers |
-| `Entity3DRef@` | `Entity3D()` | `FindEntity3D`, `CreateEntity3D` |
-| `Entity2DRef@` | `Entity2D()` | `FindEntity2D`, `CreateEntity2D` |
-| `MaterialRef@` | `Material()` | `FindMaterial`, `CreateMaterial` |
-| `TextureRef@` | `Texture()` | `FindTexture`, `CreateTexture` |
-| `MeshRef@` | `Mesh()` | `FindMesh`, `CreateMesh` |
-| `BehaviorRef@` | bridge behavior accessors | `Scene::FindBehavior`, `Behavior::Find` |
-| `SceneRef@` | `Scene()` | `CurrentScene`, `AddToScene` |
-| `LevelRef@` | `Level()` | `CurrentLevel` |
+| `ObjectRef@` | Can narrow to any supported precise ref | `Scene::Find`, `Scene::ById`, `Scene::Ref` |
+| `SceneObjectRef@` | Can narrow to 2D/3D entity or scene | Scene-membership helpers |
+| `Entity3DRef@` | Upcasts to `SceneObjectRef@` / `ObjectRef@` | `FindEntity3D`, `CreateEntity3D` |
+| `Entity2DRef@` | Upcasts to `SceneObjectRef@` / `ObjectRef@` | `FindEntity2D`, `CreateEntity2D` |
+| `MaterialRef@` | Upcasts to `ObjectRef@` | `FindMaterial`, `CreateMaterial` |
+| `TextureRef@` | Upcasts to `ObjectRef@` | `FindTexture`, `CreateTexture` |
+| `MeshRef@` | Upcasts to `ObjectRef@` | `FindMesh`, `CreateMesh` |
+| `BehaviorRef@` | Upcasts to `ObjectRef@` | `Scene::FindBehavior`, `Behavior::Find` |
+| `SceneRef@` | Upcasts to `SceneObjectRef@` / `ObjectRef@` | `CurrentScene`, `AddToScene` |
+| `LevelRef@` | Upcasts to `ObjectRef@` | `CurrentLevel` |
 
-## Editing With Raw SDK Accessors
+## Low-Level SDK Editing
 
-Prefer `ObjectRef@`-derived handles for lookup, identity, stale-id protection, and typed narrowing. For actual scene editing, resolve a short-lived raw SDK pointer from the typed accessor and call the registered SDK API directly.
+`ObjectRef@`-derived handles are an identity-safe high-level interface, not an Adapter back to raw pointers. Code that deliberately needs the low-level SDK starts from `CKContext@` directly and keeps the resulting pointer local to that operation:
 
 ```angelscript
-Entity3DRef@ marker = Scene::CreateEntity3D(ctx, "DebugMarker");
-Entity3DRef@ parent = Scene::FindEntity3D(ctx, "Level");
-
-CK3dEntity@ markerEntity = marker !is null ? marker.Entity3D() : null;
-CK3dEntity@ parentEntity = parent !is null ? parent.Entity3D() : null;
-if (markerEntity !is null) {
-  markerEntity.SetParent(parentEntity);
-  markerEntity.SetPosition(0.0f, 2.0f, 0.0f, parentEntity);
-  markerEntity.Translate(VxVector(1.0f, 0.0f, 0.0f));
+CKContext@ host = frame.Context();
+CKObject@ object = host.GetObjectByNameAndParentClass("DebugMarker", CKCID_3DENTITY, null);
+CK3dEntity@ marker = cast<CK3dEntity>(object);
+if (marker !is null) {
+  marker.Translate(VxVector(1.0f, 0.0f, 0.0f));
 }
 ```
 
-The same pattern applies to `Entity2DRef.Entity2D()`, `MaterialRef.Material()`, `TextureRef.Texture()`, `MeshRef.Mesh()`, and other precise refs. Avoid storing raw pointers long-term; keep `ObjectRef@`-derived handles as the durable script-side identity and reacquire raw SDK pointers near the operation.
+Do not cache that raw pointer as durable script state. Prefer focused `Scene`, `Behavior`, `BB`, and `Param` operations wherever they cover the required mutation.
 
-## Context Overloads
+## Context Entry Points
 
-Every `Scene::*` helper has overloads for `ScriptContext`, `CKBehaviorContext`, and `CKContext@`. Runtime entries should pass `ScriptContext`; AngelScript Components should pass `CKBehaviorContext`; low-level utility code can pass `CKContext@` when it is not tied to either runtime. Use the natural context for the script you are writing:
+Every `Scene::*` helper has overloads for `ScriptContext` and `CKContext@`. Runtime Entries pass `ScriptContext`. Component and Executor code takes the host from its `BehaviorFrame`; it uses the frame itself for behavior-specific owner/target identity:
 
 ```angelscript
 void Update(const ScriptContext &in ctx) {
@@ -63,8 +59,9 @@ void Update(const ScriptContext &in ctx) {
 }
 
 class Component {
-  void Start(const CKBehaviorContext &in ctx) {
-    ObjectRef@ target = Scene::Target(ctx);
+  void Start(BehaviorFrame@ frame) {
+    CKContext@ host = frame.Context();
+    ObjectRef@ target = Scene::Ref(host, frame.Target());
   }
 }
 ```
@@ -135,18 +132,17 @@ if (!Scene::Destroy(ctx, marker)) {
 }
 ```
 
-Use `allowPersistent=true` only for deliberate cleanup of non-dynamic objects. Stale refs remain usable as diagnostics: after a successful destruction, `ref.valid` becomes `false` and typed accessors return `null`.
+Use `allowPersistent=true` only for deliberate cleanup of non-dynamic objects. Stale refs remain usable as diagnostics: after a successful destruction, `ref.valid` becomes `false`.
 
-Destruction does not make previously copied raw CK pointers safe. If a script needs to perform several operations, keep the durable `ObjectRef@`, reacquire the raw pointer immediately before each SDK call, and stop using any raw pointer after `Destroy`, scene reset, or level clear.
+Low-level raw pointers obtained independently through `CKContext@` become unsafe after `Destroy`, scene reset, or level clear.
 
 ## Runtime vs Component Contexts
 
-Use the overload matching your script:
+Use the entry point matching your script:
 
 ```angelscript
 Scene::FindEntity3D(const ScriptContext &in ctx, const string &in name = "", int occurrence = 0, bool currentSceneOnly = false)
-Scene::FindEntity3D(const CKBehaviorContext &in ctx, const string &in name = "", int occurrence = 0, bool currentSceneOnly = false)
 Scene::FindEntity3D(CKContext@ ctx, const string &in name = "", int occurrence = 0, bool currentSceneOnly = false)
 ```
 
-Runtime entries should pass `ScriptContext`; components should pass `CKBehaviorContext`; shared utility code can pass `CKContext@` only when it is deliberately detached from runtime/component ownership.
+Runtime Entries pass `ScriptContext`. Components and Executors pass `frame.Context()` to scene operations and use `BehaviorFrame` for the current behavior's owner, target, graph, and lifecycle. Shared utility code can pass `CKContext@` directly.

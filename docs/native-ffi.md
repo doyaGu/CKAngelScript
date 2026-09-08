@@ -43,7 +43,8 @@ Raw CK parameter pattern:
 ```angelscript
 NativeBuffer@ buffer = NativeBuffer(16);
 buffer.Fill(0, buffer.Size());
-ParamValue@ raw = Param::Raw(ctx, "SomeFixedStruct", buffer);
+CKContext@ host = frame.Context();
+ParamValue@ raw = Param::Raw(host, "SomeFixedStruct", buffer);
 ```
 
 Use `ParamRef.GetRaw()` and `ParamRef.SetRaw(buffer)` when a CK parameter type cannot be represented by a higher-level `ParamValue`.
@@ -95,13 +96,10 @@ if (input !is null && input.Size() == 4) {
 }
 ```
 
-The SDK-style aliases are `GetInputParameterReadData`,
-`GetOutputParameterWriteData`, `GetLocalParameterReadData`, and
-`GetLocalParameterWriteData`. These buffers are bounded but borrow live
-Virtools parameter memory: consume them during the current behavior call and do
-not retain them across frames or layout changes. The old `BehaviorFrame`
-`*DataPtr` variants are intentionally not exposed because they cannot validate
-an allocation length.
+These buffers are bounded but borrow live Virtools parameter memory: consume
+them during the current behavior call and do not retain them across frames or
+layout changes. Raw `BehaviorFrame` `*DataPtr` variants are not exposed because
+they cannot validate an allocation length.
 
 Use script arrays for typed lists instead of packing integers manually:
 

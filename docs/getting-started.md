@@ -14,6 +14,12 @@ For offline builds, pass `-DCKAS_ANGELSCRIPT_ARCHIVE=C:\Path\To\angelscript_2.38
 
 The plugin is built as 32-bit for supported Virtools 2.x hosts.
 
+For an optional CTest that loads the original engine DLLs, point
+`CKAS_ENGINE_TEST_RUNTIME_DIR` at the installation directory containing
+`CK2.dll` and `VxMath.dll` (for Ballance, normally its `Bin` directory). Ballanced
+or other replacement CK2 builds are useful as source references, but are not a
+substitute for this compatibility gate.
+
 ## Configure and Build
 
 ```powershell
@@ -73,8 +79,8 @@ Data\Scripts\hello.runtime\runtime.as
 `script.as`:
 
 ```angelscript
-[script id="hello.runtime" name="Hello Runtime" version="1.0.0" entry="runtime.as"]
-[script.messages topics="hello.ping"]
+[runtime id="hello.runtime" name="Hello Runtime" version="1.0.0" entry="runtime.as"]
+[runtime.messages topics="hello.ping"]
 ```
 
 `runtime.as`:
@@ -108,25 +114,18 @@ tools\Validate-ScriptEntries.ps1 -ScriptRoot C:\Path\To\Game\Data
 Add the `AngelScript Component` Building Block to a behavior graph. Give it a class name and script source:
 
 ```angelscript
-class Spinner {
-    [param type="float" default="0.02"]
-    float Speed;
+class ObjectProbe {
+    [param type="string" default="Ball"]
+    string ObjectName;
 
-    void Update(const CKBehaviorContext &in ctx) {
-        Entity3DRef@ target = Scene::FindEntity3D(ctx, "Ball", 0, true);
-        if (target is null || !target.valid) {
-            return;
-        }
-
-        CK3dEntity@ entity = target.Entity3D();
-        if (entity !is null) {
-            entity.Rotate(0.0f, 1.0f, 0.0f, Speed);
-        }
+    void Start(BehaviorFrame@ frame) {
+        Entity3DRef@ target = Scene::FindEntity3D(frame.Context(), ObjectName, 0, true);
+        frame.Trace(target !is null && target.valid ? target.Describe() : "Object not found");
     }
 }
 ```
 
-The `[param]` metadata creates a Virtools input parameter and injects its value into `Speed`.
+The `[param]` metadata creates a Virtools input parameter and injects its value into `ObjectName`.
 
 ## Next Steps
 

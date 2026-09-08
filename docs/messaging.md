@@ -14,7 +14,7 @@ Use topics for event names, and targets for directed messages.
 
 `ScriptMessageTarget` is a copied value. `IsValid()`, `Kind()`, and `ToString()` are available for validation and diagnostics. Component targets capture the component state's generation; deleting, recreating, or rebuilding a component runtime makes the old target stale even when the `CK_ID` and state object are reused.
 
-String-target `Publish`, `Send`, and `Request` overloads remain available for existing scripts and native text adapters. New code should construct a typed target when it needs generation-safe Component identity. `ScriptMessage.Target()` returns `ScriptMessageTarget`; use `msg.Target().ToString()` when text is needed for logging.
+`Publish`, `Send`, and `Request` accept typed targets only. Constructing the target first keeps Component generations checked instead of reparsing an untyped `runtime:*` or `component:*` string on each call. `ScriptMessage.Target()` returns `ScriptMessageTarget`; use `msg.Target().ToString()` when text is needed for logging.
 
 Topic names should be stable strings such as `game.ready`, `ui.changed`, or `clock.now`.
 
@@ -23,8 +23,8 @@ Topic names should be stable strings such as `game.ready`, `ui.changed`, or `clo
 Runtime entries can declare topics in metadata:
 
 ```angelscript
-[script id="hud.runtime" entry="runtime.as"]
-[script.messages topics="game.ready;ui.changed"]
+[runtime id="hud.runtime" entry="runtime.as"]
+[runtime.messages topics="game.ready;ui.changed"]
 ```
 
 Runtime entries and components can also subscribe dynamically:
@@ -47,28 +47,18 @@ ScriptMessageTarget hud = Message::Runtime("hud.runtime");
 Message::Send(ctx, hud, "ui.changed", payload);
 ```
 
-Both `ScriptContext` and `CKBehaviorContext` overloads are registered:
+Runtime entries pass `ScriptContext`; Component and Executor callbacks pass `BehaviorFrame@`:
 
 ```angelscript
 ScriptMessageTarget Runtime(const string &in id)
 ScriptMessageTarget Component(const ScriptContext &in ctx, CK_ID id)
-ScriptMessageTarget Component(const CKBehaviorContext &in ctx, CK_ID id)
+ScriptMessageTarget Component(BehaviorFrame@ frame, CK_ID id)
 bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload = null)
-bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload = null)
+bool Publish(BehaviorFrame@ frame, const string &in topic, dictionary@ payload = null)
 bool Publish(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
-bool Publish(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
-bool Publish(const ScriptContext &in ctx, const string &in topic, dictionary@ payload, const string &in target)
-bool Publish(const CKBehaviorContext &in ctx, const string &in topic, dictionary@ payload, const string &in target)
+bool Publish(BehaviorFrame@ frame, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
 bool Send(const ScriptContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
-bool Send(const CKBehaviorContext &in ctx, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
-bool Send(const ScriptContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)
-bool Send(const CKBehaviorContext &in ctx, const string &in target, const string &in topic, dictionary@ payload = null)
-```
-
-Compatibility form:
-
-```angelscript
-Message::Send(ctx, "runtime:hud.runtime", "ui.changed", payload);
+bool Send(BehaviorFrame@ frame, const ScriptMessageTarget &in target, const string &in topic, dictionary@ payload = null)
 ```
 
 ## Request and Reply
@@ -80,12 +70,6 @@ ScriptMessageTarget clock = Message::Runtime("service.clock");
 AsyncTask<dictionary@>@ task = Message::Request(ctx, clock, "clock.now", null, 300);
 dictionary@ response;
 Await(task, @response);
-```
-
-The equivalent string-target request remains valid:
-
-```angelscript
-AsyncTask<dictionary@>@ task = Message::Request(ctx, "runtime:service.clock", "clock.now", null, 300);
 ```
 
 Responder:

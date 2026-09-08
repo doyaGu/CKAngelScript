@@ -64,6 +64,12 @@ Copy-Item build\src\Release\AngelScript.dll C:\Path\To\Virtools\BuildingBlocks\
 and dependency resolution tests; it does not require Virtools Player. DLL startup
 self-tests remain controlled separately by `CKAS_BUILD_SELF_TESTS`.
 
+To add an engine-backed CTest against an original Virtools installation, configure
+with `-DCKAS_ENGINE_TEST_RUNTIME_DIR=C:\Path\To\Ballance\Bin`. The test builds with
+the Virtools SDK import libraries, loads `CK2.dll` and `VxMath.dll` only from that
+runtime directory, registers the built plugin, and verifies the real reset,
+object-deletion, and clear-all manager callback seams.
+
 To create a distributable ZIP:
 
 ```powershell
@@ -103,7 +109,7 @@ tools\Validate-Local.ps1 -BuildDir build -Configuration Release
 Create `Data\Scripts\hello.runtime\script.as`:
 
 ```angelscript
-[script id="hello.runtime" name="Hello Runtime" version="1.0.0" entry="runtime.as"]
+[runtime id="hello.runtime" name="Hello Runtime" version="1.0.0" entry="runtime.as"]
 ```
 
 Create `Data\Scripts\hello.runtime\runtime.as`:
@@ -133,23 +139,18 @@ tools\Validate-RuntimeScripts.ps1 -ScriptRoot C:\Path\To\Game\Data
 Use the `AngelScript Component` Building Block when a script should live on a behavior instance:
 
 ```angelscript
-class Spinner {
-    [param type="float" default="1.0"]
-    float Speed;
+class ObjectProbe {
+    [param type="string" default="Ball"]
+    string ObjectName;
 
-    void Update(const CKBehaviorContext &in ctx) {
-        Entity3DRef@ target = Scene::FindEntity3D(ctx, "Ball", 0, true);
-        if (target !is null && target.valid) {
-            CK3dEntity@ entity = target.Entity3D();
-            if (entity !is null) {
-                entity.Rotate(0.0f, 1.0f, 0.0f, Speed);
-            }
-        }
+    void Start(BehaviorFrame@ frame) {
+        Entity3DRef@ target = Scene::FindEntity3D(frame.Context(), ObjectName, 0, true);
+        frame.Trace(target !is null && target.valid ? target.Describe() : "Object not found");
     }
 }
 ```
 
-Set the component `Class` parameter to `Spinner`, then provide either inline source, a script file, or a shared module. Component metadata can create editor inputs and inject them into script fields.
+Set the component `Class` parameter to `ObjectProbe`, then provide either inline source, a script file, or a shared module. Component metadata creates the `ObjectName` editor input and injects it into the script field.
 
 ## License
 

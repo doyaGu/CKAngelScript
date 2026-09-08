@@ -69,6 +69,11 @@ tools\Export-LiveApiCatalog.ps1 `
   -Refresh
 ```
 
+With `-RunSelfTests`, the validation enables the Player lifecycle trace. After
+the ordinary startup tests pass, the plugin requests a graceful Player close;
+the script waits until the real manager `OnCKEnd` callback writes the final
+`status=ok` marker, then still restores the installed DLL in `finally`.
+
 The refresh normalizes the live export, removes volatile process addresses and
 registration-order IDs, writes `docs/script-api.json`, regenerates
 `as.predefined`, and records a hash of every source/configuration file that
@@ -110,9 +115,9 @@ paths that exist on that self-hosted runner:
 | --- | --- | --- |
 | `CKAS_RUN_SELFTESTS` | Plugin runtime | Truthy value runs startup self-tests in the host. |
 | `CKAS_SELFTEST_MARKER` | Plugin runtime / validation scripts | File path where startup self-test status is written. |
+| `CKAS_SELFTEST_PLAYER_LIFECYCLE` | Plugin runtime / validation scripts | Truthy value extends marker-based startup tests through original Player pause/play, reset/clear, and graceful `OnCKEnd`; the validation script sets it automatically with `-RunSelfTests`. |
 | `CKAS_SCRIPT_ROOTS` | Script entry manager / validation scripts | Semicolon-separated extra script entry roots. |
 | `CKAS_SCRIPT_VALIDATE_ONLY` | Script entry manager | Compile discovered script entries without running runtime lifecycle callbacks. |
-| `CKAS_RUNTIME_VALIDATE_ONLY` | Script entry manager | Legacy alias for `CKAS_SCRIPT_VALIDATE_ONLY`. |
 | `CKAS_EXPORT_SCRIPT_API` | Plugin runtime / validation scripts | File path where the initialized `asIScriptEngine` API JSON is written. Requires a DLL built with `CKAS_ENABLE_API_EXPORT=ON`. |
 | `CKAS_DISABLE_CK2_PROTOTYPE_HOOK` | Plugin runtime | `1`, `true`, `yes`, or `on` (case-insensitive) disables CKAS' `CreateCKBehaviorPrototypeRunTime` compatibility hook. Use only when isolating loader issues. |
 
@@ -124,6 +129,7 @@ When `CKAS_SELFTEST_MARKER` is set, startup self-tests write:
 status=running|ok|failed
 stage=<current-stage>
 message=<failure-text>
+trace=<host-lifecycle-trace>
 ```
 
 Expected success:
@@ -131,6 +137,7 @@ Expected success:
 ```text
 status=ok
 stage=complete
+trace=executor:...;manager:...
 ```
 
 If validation closes or kills Player after marker success, the self-tests still passed; the script closes Player as soon as `status=ok` is observed and may force-kill if the window does not exit quickly. If the marker reports `failed`, Player exits early, or the timeout expires, the thrown error includes marker content plus the log tails written during the current validation run.
@@ -156,7 +163,7 @@ Start with the first failure in the summary; later failures often cascade from i
 | Player starts but marker is missing | Self-tests not built or Player did not load the plugin | Configure with `-DCKAS_BUILD_SELF_TESTS=ON`, confirm plugin location. |
 | Marker says `failed` | A startup self-test failed | Read `stage` and `message`, then inspect `AngelScript.log`. |
 | Script entry is not discovered | Wrong root or missing `Scripts` directory | Pass `-ScriptRoot`, set `CKAS_SCRIPT_ROOTS`, or place modules under `Data\Scripts`. |
-| A shared source file is compiled as its own script entry | `CKAS_SCRIPT_ROOTS` points at an implementation directory instead of a root containing `Scripts`, or the file has an accidental main `[runtime]`, `[executor]`, or `[script]` block | Point the root at the package root. Shared libraries should live outside `Scripts`, for example under `Libs`, and should not contain a main entry block. |
+| A shared source file is compiled as its own script entry | `CKAS_SCRIPT_ROOTS` points at an implementation directory instead of a root containing `Scripts`, or the file has an accidental main `[runtime]` or `[executor]` block | Point the root at the package root. Shared libraries should live outside `Scripts`, for example under `Libs`, and should not contain a main entry block. |
 | Script entry is discovered but not loaded | Compile error or missing required dependency | Use `Runtime::Info(ctx, id)` and `Runtime::RequiredDependencies(ctx, id)`. |
 | Executor reports `Failed to attach script module` | The `Script` setting did not resolve to a loaded script module id | Check the full Executor diagnostic: it reports the script id value, module existence/load/failure state, host, resolved module, cache state, and engine module state. |
 | Component or Executor reports a stale or untracked module generation | Cached object/method state no longer matches the manager's tracked module generation, or the module was attached outside tracked loading and has generation `0` | Retire/recreate the host state through its owning Component or Runtime Entry path. Do not replace or unload live modules through the borrowed AngelScript engine. |
@@ -164,7 +171,7 @@ Start with the first failure in the summary; later failures often cascade from i
 | Component fields are not injected | Metadata field name/type mismatch | Check [component-metadata-manifest.md](component-metadata-manifest.md). |
 | Scene ref becomes invalid | CK object was deleted, reset, or id was reused | Reacquire through `Scene::*` and avoid storing raw CK pointers long-term. |
 | `ParamValue.AsInt()` returns `1` or a bool-like value for an integer pin | Older conversion code treated `CKPGUID_INT` as bool storage before checking integer storage | Rebuild with the `ScriptParameterConversion` fix and run startup self-tests; `CKPGUID_INT` must read/write as integer storage, while `CKPGUID_BOOL` remains bool storage. |
-| Runtime BB call reports `Building Block 'Activate Script' is not targetable` | `BB::Call(ctx, ...)` inherited the current `CKBehaviorContext` target | Add `Target(null)` for non-targetable BBs, and pass script-name parameters with the original CK parameter GUID, for example `CKPGUID_SCRIPT`. |
+| Behavior Frame BB call reports `Building Block 'Activate Script' is not targetable` | `frame.Call(...)` inherited the current behavior target | Add `Target(null)` for non-targetable BBs, and pass script-name parameters with the original CK parameter GUID, for example `CKPGUID_SCRIPT`. |
 | Dynamic pins such as `Add Row` row values are missing or have no names | The BB declaration has no static input parameter list; pins are synthesized after a target and settings are applied | Prefer `BehaviorFrame` one-shot calls: set `Target(RegisterNMO)`, set `Setting("Unique Key Column", true)`, then use `Set("All_Group", group)` and `Set("Load ID", loadId)`. The builder resolves names against the final runtime layout, so do not add `pIn 0` / `pIn 1` fallback slot names in gameplay code. |
 | Runtime BB call throws `BBSlot 'Out' layout changed; bind the slot again` | A target-dependent BB callback rebuilt dynamic outputs after a cached `BBSlot@` was captured | Reacquire the live slot from `BBInstance@` after setting changes, target assignment, or execution before calling `OutputActive`, `Set`, or `Source`. |
 | Runtime-created BB prototypes have missing or invalid layouts | Virtools' `CreateCKBehaviorPrototypeRunTime` path diverges from the normal prototype constructor in this host | CKAS installs a process-local compatibility hook that redirects the runtime export to `CreateCKBehaviorPrototype`. Leave it enabled for script-created BB prototypes. The hook is sticky by default and tolerates later same-target hooks such as BML+. |
