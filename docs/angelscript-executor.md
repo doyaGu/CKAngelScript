@@ -21,8 +21,8 @@ execution host:
 - script code can call runtime BBs through `frame.Call(...)`.
 
 `BehaviorFrame` is shared with `AngelScript Component`; it is not an
-Executor-specific call object. The older `CKBehaviorContext` ABI remains
-available for low-level compatibility and migration.
+Executor-specific call object. It does not expose a conversion back to the
+native `CKBehaviorContext` ABI.
 
 ## Prototype
 
@@ -35,10 +35,8 @@ Base prototype:
 | Settings | `Script`, `Class`, `Interface`, `Strict Interface`, `Trace` |
 | Local | state pointer |
 
-`Script` is a stable script module id. New Executor code should point it at an
-`[executor]` entry such as `base.loading.register_activate_init`; using a
-`[runtime]` entry is supported only for compatibility with older packages. The
-Executor resolves that id through the script entry
+`Script` is a stable script module id and must point at an `[executor]` entry
+such as `base.loading.register_activate_init`. The Executor resolves that id through the script entry
 manager and attaches the loaded module behind it. It does not
 accept generated internal module names such as `__CKASRuntime_*` or arbitrary
 module names outside the script entry manager.
@@ -87,22 +85,12 @@ Rules:
 
 ## Script ABI
 
-The preferred required method is one of:
+The required method is one of:
 
 ```angelscript
 void Execute(BehaviorFrame@ frame)
 int Execute(BehaviorFrame@ frame)
 ```
-
-Legacy methods remain valid:
-
-```angelscript
-void Execute(const CKBehaviorContext &in ctx)
-int Execute(const CKBehaviorContext &in ctx)
-```
-
-When both signatures are present on the same class, the `BehaviorFrame@`
-signature is selected.
 
 If `Execute` returns `int`, the value is used as the native BB return code. This
 allows scripts to return `CKBR_ACTIVATENEXTFRAME` for graph loops. If `Execute`
@@ -114,25 +102,43 @@ Optional lifecycle methods:
 void OnLoad(BehaviorFrame@ frame) {}
 void Awake(BehaviorFrame@ frame) {}
 void Start(BehaviorFrame@ frame) {}
+void OnPause(BehaviorFrame@ frame) {}
+void OnResume(BehaviorFrame@ frame) {}
 void OnReset(BehaviorFrame@ frame) {}
 void OnDestroy(BehaviorFrame@ frame) {}
 ```
 
-The legacy `const CKBehaviorContext &in ctx` form is accepted for every
-lifecycle method. If both forms exist, the `BehaviorFrame@` form is selected.
+`CKM_BEHAVIORPAUSE` and `CKM_BEHAVIORRESUME` are delivered to an already
+loaded Executor instance as `OnPause` and `OnResume`. Both callbacks may
+suspend. While `OnPause` is pending, `Execute` does not run; if Resume arrives
+first, the shared lifecycle Module retains it until `OnPause` finishes, then
+runs `OnResume` exactly once. The frame that completes `OnResume` remains
+lifecycle-only, so normal `Execute` resumes on the following activation.
+A later Pause supersedes a retained Resume. Reset and Destroy supersede both.
+If ordinary `Execute` is suspended when Pause arrives, its prepared invocation
+is aborted before `OnPause` starts so one Executor never has two script
+contexts in flight. Executor classes still do not expose `OnDisable`.
+
+Executor teardown uses the shared terminal lifecycle transition, with
+`OnDisable` mapped to a no-op because Executor classes do not expose that
+callback. `OnDestroy` runs while the owning `CKBehavior` is still valid. Since
+CK object deletion cannot wait for a suspended callback, a suspended Executor
+`OnDestroy` is aborted before native state is released.
+When original CK2 has already marked the behavior pending deletion, the
+terminal `BehaviorFrame` may still resolve that exact identity-stamped behavior
+for the duration of the synchronous callback. This does not make ordinary
+Object Refs valid during deletion.
 
 `BehaviorFrame` is the preferred current-BB facade. It covers the full current
 `CKBehaviorContext` plus the current `CKBehavior` identity, layout, IO,
 parameters, metadata, graph entry points, and the editable CKBehavior surface.
 Use the high-level convenience methods for normal gameplay code and the direct
-frame wrappers for SDK-level graph edits. `Behavior()` remains available as an
-escape hatch and for interop with APIs that still expect a raw `CKBehavior@`.
+frame wrappers for SDK-level graph edits. The frame does not expose its raw
+`CKBehavior@`.
 
 ```angelscript
 // Context and identity.
-CKBehavior@ Behavior() const
 CKContext@ Context() const
-CKBehaviorContext ToBehaviorContext() const
 bool get_valid() const
 CK_ID get_id() const
 string get_name() const
@@ -159,13 +165,6 @@ bool IsUpToDate() const
 int MemoryOccupation() const
 NativePointer AppData() const
 void SetAppData(NativePointer data)
-CKObject@ CKGetObject(CK_ID id) const
-CKERROR CKDestroyObject(CKObject@ object, CKDWORD flags = 0,
-                        CKDependencies &in depoptions = void)
-CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0,
-                        CKDependencies &in depoptions = void)
-CKERROR CKDestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0,
-                         CKDependencies &in depoptions = void)
 CKScene@ SceneIn(int index) const
 int SceneInCount() const
 bool IsInScene(CKScene@ scene) const
@@ -177,12 +176,9 @@ bool IsVisible() const
 // Current behavior object and graph.
 CKBeObject@ Owner() const
 CKBeObject@ Target() const
-CKParameterIn@ TargetParameter() const
 BehaviorRef@ Self() const
 BehaviorRef@ Parent() const
 BehaviorRef@ OwnerScript() const
-CKBehavior@ GetParent() const
-CKBehavior@ GetOwnerScript() const
 BehaviorLayout@ Layout() const
 BehaviorGraph@ Graph() const       // owner-script/container graph
 BehaviorGraph@ AsGraph() const     // current behavior as subgraph
@@ -230,18 +226,10 @@ bool Take(const string &in name = "In", int occurrence = 0)
 bool Take(int index)
 void Emit(const string &in name = "Out", int occurrence = 0)
 void Emit(int index)
-CKBehaviorIO@ Input(int index) const
-CKBehaviorIO@ Output(int index) const
-CKParameterIn@ InputParameter(int index) const
-CKParameterOut@ OutputParameter(int index) const
-CKParameterLocal@ LocalParameter(int index) const
 int BehaviorLocalCount() const
 int FindBehaviorLocal(const string &in name, int occurrence = 0) const
 ParamRef@ BehaviorLocal(const string &in name, int occurrence = 0) const
 ParamRef@ BehaviorLocal(int index) const
-CKParameterLocal@ BehaviorLocalParameter(int index) const
-int InputPosition(CKBehaviorIO@ io) const
-int OutputPosition(CKBehaviorIO@ io) const
 ParamRef@ Pin(const string &in name, int occurrence = 0) const
 ParamRef@ Pin(int index) const
 ParamRef@ Pout(const string &in name, int occurrence = 0) const
@@ -250,21 +238,12 @@ ParamRef@ Local(const string &in name, int occurrence = 0) const
 ParamRef@ Local(int index) const
 ParamRef@ Setting(const string &in name, int occurrence = 0) const
 ParamRef@ Setting(int index) const
-int PinPosition(CKParameterIn@ pin) const
-int PoutPosition(CKParameterOut@ pout) const
-int LocalPosition(CKParameterLocal@ local) const
 NativeBuffer@ PinReadData(int index) const
 NativeBuffer@ PoutWriteData(int index) const
 NativeBuffer@ LocalReadData(int index) const
 NativeBuffer@ LocalWriteData(int index) const
 NativeBuffer@ BehaviorLocalReadData(int index) const
 NativeBuffer@ BehaviorLocalWriteData(int index) const
-CKERROR GetInputParameterValue(int index, ?&out value)
-CKERROR GetOutputParameterValue(int index, ?&out value)
-CKERROR SetOutputParameterValue(int index, ?&in value)
-CKERROR GetLocalParameterValue(int index, ?&out value)
-CKERROR SetLocalParameterValue(int index, ?&in value)
-
 // Typed convenience.
 int PinInt(const string &in name, int fallback = 0, int occurrence = 0) const
 int PinInt(int index, int fallback = 0) const
@@ -275,28 +254,8 @@ bool SetPout(int index, bool value)
 bool SetLocal(const string &in name, int value, int occurrence = 0)
 bool SetSetting(int index, const string &in value)
 
-// Structural CKBehavior wrappers for migration and graph-edit code.
-int AddInput(const string &in name)
-int AddOutput(const string &in name)
-CKBehaviorIO@ CreateInput(const string &in name)
-CKBehaviorIO@ CreateOutput(const string &in name)
-CKBehaviorIO@ RemoveInput(int index)
-CKBehaviorIO@ RemoveOutput(int index)
-CKERROR DeleteInput(int index)
-CKERROR DeleteOutput(int index)
-CKParameterIn@ CreatePin(const string &in name, CKParameterType type)
-CKParameterOut@ CreatePout(const string &in name, CKParameterType type)
-CKParameterLocal@ CreateLocal(const string &in name, CKParameterType type)
-CKParameterIn@ RemovePin(int index)
-CKParameterOut@ RemovePout(int index)
-CKParameterLocal@ RemoveLocal(int index)
+// Safe child inspection. Structural graph edits use frame.Graph().Edit().
 BehaviorRef@ SubBehavior(int index) const
-CKBehavior@ GetSubBehavior(int index) const
-CKERROR AddSubBehavior(CKBehavior@ behavior)
-BehaviorRef@ RemoveSubBehavior(int index)
-CKBehaviorLink@ SubBehaviorLink(int index) const
-CKERROR AddSubBehaviorLink(CKBehaviorLink@ link)
-CKParameterOperation@ ParameterOperation(int index) const
 void NotifyEdition()
 void NotifySettingsEdition()
 BBCallBuilder@ Call(const string &in prototype) const
@@ -323,9 +282,9 @@ activation delay into AS replacement code. It returns an `AsyncTask<void>@`
 driven by the CKAS scheduler and keeps that Virtools graph semantics distinct
 from ordinary `Async::Delay()` waits.
 
-Use `frame.Wait(...)` and `frame.WaitMessage(...)` instead of rebuilding a
-`CKBehaviorContext` only to call `Async::Wait(ctx, ...)` or
-`Async::WaitMessage(ctx, ...)`.
+Use `frame.Wait(...)` and `frame.WaitMessage(...)` for bridge-task and CK
+message waits. The `Async` namespace does not accept a reconstructed
+`CKBehaviorContext`.
 
 `LocalCount`, `FindLocal`, `Local(index/name)`, typed `Local*`, and typed
 `SetLocal` use the host's logical local interface. For an Executor with
@@ -333,9 +292,8 @@ Use `frame.Wait(...)` and `frame.WaitMessage(...)` instead of rebuilding a
 physical `CKBehavior` local index. If a logical local is mapped by the runtime
 patch facade, `Local*` reads and writes the original source parameter directly.
 
-`GetLocalParameter*`, `SetLocalParameterValue`, `CreateLocalParameter`,
-`RemoveLocalParameter`, `LocalParameter`, and the `BehaviorLocal*` aliases use
-the physical CKBehavior local-parameter order. `Setting(index)` and
+`BehaviorLocal*` uses the physical CKBehavior local-parameter order.
+`Setting(index)` and
 `FindSetting(name)` also use that physical local index. `SetSetting()` writes
 through the bridge setting path, sends `CKM_BEHAVIORSETTINGSEDITED`, and
 refreshes runtime layout resolution.
@@ -367,6 +325,11 @@ class EventHandlerExecutor {
 }
 ```
 
+Executor retirement uses the shared terminal transition and delivers `OnDestroy`
+while its `CKBehavior` is still live. Ordinary deletion is intercepted by manager
+`SequenceToBeDeleted`; full CK object clearing is intercepted by `PreClearAll`.
+Hard teardown aborts a suspended destroy callback before releasing the instance.
+
 The native Executor snapshots active inputs before calling `Execute` and clears
 those inputs after the call either finishes or suspends. During the initial
 `Execute` call, the script sees the real active input state. After an `await`
@@ -391,8 +354,7 @@ The first implementation intentionally keeps the surface small:
 
 - script module id plus class loading only;
 - no inline `Source` or `File` private module path;
-- `[executor]` entries are the preferred module source; legacy `[runtime]`
-  entries remain attachable for compatibility;
+- only `[executor]` entries can be attached;
 - no custom Executor-only call object; use the shared `BehaviorFrame`;
 - interface reshaping covers counts and created parameter types, with strict
   name/GUID validation;

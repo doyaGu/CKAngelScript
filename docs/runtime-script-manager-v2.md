@@ -8,7 +8,6 @@ Entries have a host:
 - `[executor]` is a module that provides classes for `AngelScript Executor`
   BB instances. It is compiled and reloadable, but it does not receive
   `ScriptContext` runtime lifecycle callbacks.
-- `[script]` remains a compatibility alias for `[runtime]`.
 
 The manager scans each Virtools data path `Scripts` directory shallowly for compatibility, then recursively scans each root listed in `CKAS_SCRIPT_ROOTS`. If an environment root is not already named `Scripts`, its `Scripts` child is scanned when present.
 
@@ -23,8 +22,8 @@ Runtime discovery is designed for game data first and explicit overrides second:
 
 Within an explicit `Scripts` directory, CKAngelScript recursively accepts
 directory modules with `script.as` and explicit single-file `.as` modules. A
-single-file module must contain a main `[runtime]`, `[executor]`, or legacy
-`[script]` metadata block; plain `.as` files without a main entry block are
+single-file module must contain a main `[runtime]` or `[executor]` metadata
+block; plain `.as` files without a main entry block are
 treated as include/source files and are not loaded independently. A directory
 containing `script.as` is a module boundary and is not recursively scanned for
 more entries. Avoid hidden/internal directory names beginning with `.` or `_`;
@@ -106,7 +105,7 @@ void OnResume(const ScriptContext &in ctx) {}
 void OnMessage(const ScriptMessage &in msg, const ScriptContext &in ctx) {}
 ```
 
-Parameterless lifecycle functions are invalid for runtime entries in v2. Async callbacks are serialized per runtime entry; a suspended phase resumes before a later phase runs. The shared lifecycle Module owns `OnLoad` → `Awake` → `Start` progression for Runtime Entry, Component, and Executor Adapters, plus pending `OnPause` → `OnDisable` position for Runtime Entry and Component Adapters. Host-specific context construction and side effects stay in each Adapter. An initial phase commits only after the Adapter reports completion; suspension or failure leaves it current. `OnEnable` remains Host Activation and may occur between `Awake` and `Start`.
+Parameterless lifecycle functions are invalid for runtime entries in v2. Async callbacks are serialized per runtime entry; a suspended phase resumes before a later phase runs. The shared lifecycle Module owns `OnLoad` → `Awake` → `Start` progression, pending `OnPause` → `OnDisable` position, and terminal `OnDisable` → `OnDestroy` ordering for Runtime Entry, Component, and Executor Adapters. Component maps unsupported `OnPause` to a no-op; Executor maps unsupported `OnDisable` to a no-op. Host-specific context construction and side effects stay in each Adapter. An initial phase commits only after the Adapter reports completion; suspension or failure leaves it current. `OnEnable` remains Host Activation and may occur between `Awake` and `Start`.
 
 If Play arrives while `OnPause` or its following `OnDisable` is suspended, Host Activation retains the resume event: the old phase finishes first, followed by `OnResume` and `OnEnable`. If `OnEnable` also suspends, the Runtime Entry remains in its resuming state until that invocation finishes. Normal update work starts on a later transition step, never in the frame that completes the retained Resume. A later Pause supersedes the pending Resume. `Runtime::Enable(ctx, id, false)` also clears retained Resume and aborts a suspended `OnEnable`; a disabled Runtime Entry still consumes the host Resume condition without scheduling lifecycle callbacks.
 
@@ -120,6 +119,16 @@ sequence runs before normal update work. `[executor]` entries may define
 Executor lifecycle methods such as `OnLoad(BehaviorFrame@ frame)` on their
 Executor classes; those are invoked by each `AngelScript Executor` BB instance,
 not by the runtime manager.
+
+Destroy supersedes pending initial, Pause/Resume, and Reset work. A normal
+Runtime Entry retirement may keep a suspended `OnDisable` or `OnDestroy` phase
+until a later tick; hard clear/shutdown aborts a suspended destroy callback and
+continues terminal cleanup. A callback failure is reported but cannot return a
+destroying entry to normal update work.
+Manager `PreClearAll` performs hard teardown in Executor → Component → Runtime
+Entry order while CK behaviors remain live, and clears the behavior bridge only
+after every adapter has had its terminal callback opportunity. `PostClearAll`
+repeats cleanup idempotently for nonstandard hosts that omit the pre-clear hook.
 
 `AngelScript Component` is not a script-entry host. Its `Script` parameter may
 resolve to a script entry id when no loaded module has that name, but the
@@ -183,9 +192,9 @@ array<RuntimeDependencyInfo>@ Runtime::RequiredDependencies(const ScriptContext 
 array<RuntimeDependencyInfo>@ Runtime::OptionalDependencies(const ScriptContext &in ctx, const string &in id)
 ```
 
-Use the generic `Message` namespace for script communication. Runtime entries can subscribe with `[runtime.messages]` or `Message::Subscribe(ctx, topic)`, publish with `Message::Publish(ctx, topic, payload)`, send directly with `Message::Send(ctx, Message::Runtime("other"), topic, payload)`, and reply to requests with `Message::Reply(ctx, msg, payload)`. AngelScript Components use the same `ScriptMessage` and `ScriptMessageTarget` values with `CKBehaviorContext`.
+Use the generic `Message` namespace for script communication. Runtime entries can subscribe with `[runtime.messages]` or `Message::Subscribe(ctx, topic)`, publish with `Message::Publish(ctx, topic, payload)`, send directly with `Message::Send(ctx, Message::Runtime("other"), topic, payload)`, and reply to requests with `Message::Reply(ctx, msg, payload)`. AngelScript Components use the same `ScriptMessage` and `ScriptMessageTarget` values with `BehaviorFrame@`.
 
-Use the `Scene` namespace for high-level Virtools object interop. `ObjectRef@` and precise typed refs revalidate object ids before each access, and `Scene::*` overloads accept `ScriptContext`, `CKBehaviorContext`, or `CKContext@`. See [scene-interop.md](scene-interop.md) for lookup, creation, scene membership, selection, and guarded destruction helpers.
+Use the `Scene` namespace for high-level Virtools object interop. `ObjectRef@` and precise typed refs revalidate object ids before each access. Runtime Entries pass `ScriptContext`; Component and Executor code passes `frame.Context()` as `CKContext@`. See [scene-interop.md](scene-interop.md) for lookup, creation, scene membership, selection, and guarded destruction helpers.
 
 ## Validation
 
@@ -208,8 +217,14 @@ tools\Validate-Local.ps1 -ScriptRoot C:\Game\Data
 Build startup self-tests with `-DCKAS_BUILD_SELF_TESTS=ON`. At runtime, set
 `CKAS_RUN_SELFTESTS=1` to run them inside the host, or set
 `CKAS_SELFTEST_MARKER` to a marker file path; the marker records `status`,
-`stage`, and any failure message. Host validation tools can use that marker to
-verify that startup self-tests reached `status=ok`.
+`stage`, any failure message, and host-only lifecycle trace evidence when a
+trace probe runs. Host validation tools can use that marker to verify that
+startup self-tests reached `status=ok` and inspect the proven callback order.
+`Export-LiveApiCatalog.ps1 -RunSelfTests` additionally sets
+`CKAS_SELFTEST_PLAYER_LIFECYCLE=1`: the probe performs manager Pause/Play through
+the original `CKContext`, requests a graceful Player close, and writes final
+success only after original Reset/Clear/End callbacks have completed and the
+End-cancelled public execution has been verified.
 
 ## Troubleshooting
 
@@ -217,7 +232,7 @@ If a script is not discovered, confirm that the root points to a `Scripts` direc
 
 ## Validate-Only Mode
 
-`CKAS_SCRIPT_VALIDATE_ONLY=1` makes the manager compile discovered entries and report errors without running runtime lifecycle callbacks. This is used by `Validate-ScriptEntries.ps1 -CompileProbe`, so entries can be checked inside a real host without triggering gameplay logic. `CKAS_RUNTIME_VALIDATE_ONLY` remains a compatibility alias.
+`CKAS_SCRIPT_VALIDATE_ONLY=1` makes the manager compile discovered entries and report errors without running runtime lifecycle callbacks. This is used by `Validate-ScriptEntries.ps1 -CompileProbe`, so entries can be checked inside a real host without triggering gameplay logic.
 
 ## Best Practices
 

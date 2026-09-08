@@ -252,7 +252,7 @@ Object metadata can use editor type aliases such as `object`, `behavior`, `3dent
 
 `BBDecl@` uses the same string/GUID/behavior source rules as `BBPrototype@`, but exposes real prototype metadata and the v3 layout API. `BBSlot@` binds a setup-time slot from a `BBConfig@` through `from="ConfigField"` or from a standalone prototype query. Prefer `from` because the slot can register `start`, `stop`, `default`, and `value` metadata with the owning config automatically.
 
-`BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, receives declarative metadata, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(frame)`, `SpawnStarted(frame)`, `EnsureSpawned(frame)`, or `EnsureStarted(frame)`. The same methods still accept `CKBehaviorContext` for legacy code. Parameters not mentioned by metadata or `BBSlot@` keep the SDK/prototype defaults.
+`BBConfig@` is the v3 runtime Building Block configuration facade. It resolves the prototype during injection, receives declarative metadata, stores pending pin/source/operation bindings, and creates a `BBInstance@` with `Spawn(frame)`, `SpawnStarted(frame)`, `EnsureSpawned(frame)`, or `EnsureStarted(frame)`. These lifecycle methods accept only `BehaviorFrame@`. Parameters not mentioned by metadata or `BBSlot@` keep the SDK/prototype defaults.
 
 ## Lifecycle Signatures
 
@@ -269,11 +269,6 @@ void OnDestroy(BehaviorFrame@ frame) {}
 void OnReset(BehaviorFrame@ frame) {}
 void OnMessage(const ScriptMessage &in msg, BehaviorFrame@ frame) {}
 ```
-
-The legacy `const CKBehaviorContext &in ctx` form remains compatible for
-lifecycle methods and `OnMessage(const ScriptMessage &in msg, const
-CKBehaviorContext &in ctx)`. If both forms exist on the same class, the
-`BehaviorFrame@` form is selected.
 
 If CK Resume arrives while a suspendable `OnDisable` is still pending, the
 Component retains the resume request. The old disable finishes first, then
@@ -295,6 +290,22 @@ owned work, aborts its suspended `OnReset`, and invokes a replacement `OnReset`
 instead of resuming the old context. Pause requested while `OnReset` is pending
 is retained and advances only after Reset finishes.
 
+Destroy uses the same shared terminal transition as Runtime Entries. It
+supersedes pending Pause/Resume and Reset work, then runs `OnDisable` when the
+instance is enabled before `OnDestroy`. Script identity rebuilds may retain a
+suspended destroy phase on the Component BB; CK object deletion and hard clear
+abort a suspended callback and finish teardown while the `CKBehavior` is still
+valid. Ordinary CK deletion enters this path from manager
+`SequenceToBeDeleted`, because original CK2 ordinary deletion does not synthesize
+`CKM_BEHAVIORDELETE`. This ordering is verified against the original runtime;
+Ballanced is used only as a readable implementation reference. Full object clearing
+enters the same hard path from manager `PreClearAll`, before CK2 invalidates the
+behaviors; `PostClearAll` remains an idempotent structural-cleanup fallback.
+During the synchronous hard-destroy callback, `BehaviorFrame` continues to
+resolve the exact identity-stamped behavior internally even though CK2 has
+already marked it pending deletion. This exception is local to the terminal
+frame; ordinary Object Refs remain invalid once deletion starts.
+
 Use `BehaviorFrame` for current-BB work. It fully covers the current
 `CKBehaviorContext` and the current `CKBehavior` as a high-level facade:
 context fields, owner/target, target parameter, current behavior identity,
@@ -302,10 +313,9 @@ CKObject/scene inherited state, layout, graph entry points, input/output
 activation, pin/pout/local/setting parameters, metadata/state, editable
 CKBehavior graph structure, graph-link activation-delay waits, frame-aware
 async waits/message waits, trace prefixes, one-shot runtime BB calls,
-frame-aware `BBBridge` discovery/configuration for persistent BB instances, and
-raw `CKBehavior@ Behavior()` access as an interop escape hatch. Keep
-`CKBehaviorContext` only for low-level migration code that needs the raw native
-context shape.
+frame-aware `BBBridge` discovery/configuration for persistent BB instances. The
+native `CKBehavior` and `CKBehaviorContext` values remain implementation and SDK
+ABI details; the high-level script Interface does not reconstruct them.
 
 `Frame.Graph()` returns the owner-script/container graph. `Frame.AsGraph()`
 treats the current behavior as a subgraph container. `LocalCount`, `FindLocal`,
@@ -313,8 +323,7 @@ treats the current behavior as a subgraph container. `LocalCount`, `FindLocal`,
 interface. Components without an installed interface map logical locals to
 physical CKBehavior locals; Executors can install an interface where logical
 locals are declaration-ordered and may be mapped to original graph parameters.
-`GetLocalParameter*`, `LocalParameter`, and `BehaviorLocal*` keep physical
-CKBehavior local semantics. `Setting(index)` and `FindSetting(name)` also use
+`BehaviorLocal*` keeps physical CKBehavior local semantics. `Setting(index)` and `FindSetting(name)` also use
 physical CKBehavior local indexes because Virtools stores settings as locals.
 
 `Pin()`/`Pout()`/`Local()` remain strict reference APIs. The typed `PinInt`,
@@ -385,27 +394,27 @@ class RenderComponent {
     uint RenderOptions;
 
     void Update(BehaviorFrame@ frame) {
-        CKContext@ ctx = frame.Context();
-        ParamTypeInfo@ info = Param::Find(ctx, "Render Options");
-        uint clearAndSwap = Param::FlagsMask(ctx, "Render Options", "Clear ZBuffer,Buffer Swapping");
-        int modulate = Param::Value(ctx, "Texture Blend Mode", "Modulate");
-        string text = Param::Text(ctx, "Render Options", clearAndSwap);
+        CKContext@ host = frame.Context();
+        ParamTypeInfo@ info = Param::Find(host, "Render Options");
+        uint clearAndSwap = Param::FlagsMask(host, "Render Options", "Clear ZBuffer,Buffer Swapping");
+        int modulate = Param::Value(host, "Texture Blend Mode", "Modulate");
+        string text = Param::Text(host, "Render Options", clearAndSwap);
     }
 }
 ```
 
 Available helpers:
 
-- `Param::Count(ctx)`, `Param::At(ctx, index)`, and `Param::Find(ctx, query, occurrence = 0)`
-- `Param::Guid(ctx, typeName)` and `Param::Type(ctx, typeName)`
-- `Param::IsEnum(ctx, typeName)` and `Param::IsFlags(ctx, typeName)`
-- `Param::Value(ctx, typeName, valueName, fallback = 0)`
-- `Param::Flag(ctx, typeName, flagName, fallback = 0)`
-- `Param::FlagsMask(ctx, typeName, "Flag A,Flag B", fallback = 0)`
-- `Param::Text(ctx, typeName, value)`
-- `Param::Describe(ctx, typeName)`
+- `Param::Count(host)`, `Param::At(host, index)`, and `Param::Find(host, query, occurrence = 0)`
+- `Param::Guid(host, typeName)` and `Param::Type(host, typeName)`
+- `Param::IsEnum(host, typeName)` and `Param::IsFlags(host, typeName)`
+- `Param::Value(host, typeName, valueName, fallback = 0)`
+- `Param::Flag(host, typeName, flagName, fallback = 0)`
+- `Param::FlagsMask(host, typeName, "Flag A,Flag B", fallback = 0)`
+- `Param::Text(host, typeName, value)`
+- `Param::Describe(host, typeName)`
 
-All helpers also accept `CKContext@` in place of `CKBehaviorContext`. The type argument can be a type name or a parameter type `CKGUID`.
+These helpers take `CKContext@`; Component and Executor scripts obtain it with `frame.Context()`. Runtime Entries can also pass `ScriptContext` to `Count`, `At`, `Find`, and `Type`. The type argument can be a type name or a parameter type `CKGUID`.
 
 ## Common Recipes
 
@@ -455,7 +464,7 @@ class Overlay {
 | `BBSlot@` omits `from` when it belongs to a config | Defaults and lifecycle metadata are not attached to the config | Prefer `from="ConfigField"`. |
 | Runtime BB uses `lifetime="manual"` without cleanup | Runtime behavior can remain after disable/reset | Use `lifetime="component"` or call `Destroy()`. |
 | Enum/flags text does not match the SDK parameter type | Conversion fails during injection or validation | Run the host integration's validation tool and inspect `Explain()`. |
-| Parameterless lifecycle callbacks | Component conventions are not met | Use `BehaviorFrame@ frame` or the compatible `const CKBehaviorContext &in ctx` form. |
+| Parameterless lifecycle callbacks | Component conventions are not met | Use `BehaviorFrame@ frame`. |
 
 ## Injection Rules
 
@@ -488,7 +497,7 @@ When `Output Error Message` is enabled, the error text is written to the Compone
 ## Remaining Gaps
 
 - Enum/flags values are represented as `int` / `uint` in scripts. Runtime lookup is available through `Param::*`; generated compile-time hints can be produced with `tools/generate_angelscript_catalog.py`.
-- No dedicated BB prototype picker; `BBPrototype@` / `BBDecl@` / `BBConfig@` currently use string, `Category/Name`, GUID text, or SDK-driven `BB::Find/FindAll/At`. `BBSlot@` and `BBConfig@` add setup-time slot binding on top of the resolved prototype.
+- No dedicated BB prototype picker; `BBPrototype@` / `BBDecl@` / `BBConfig@` currently use string, `Category/Name`, GUID text, or SDK-driven `frame.BB().Find/FindAll/At`. `BBSlot@` and `BBConfig@` add setup-time slot binding on top of the resolved prototype.
 - A dedicated BB prototype picker is still preferable long term. `type=behavior` is a practical editor-facing fallback because Virtools already has a behavior picker.
 - Managed parameter pruning is intentionally tied to manifest/metadata rebuilds, not to arbitrary runtime graph edits.
 - Generic plugin-defined struct parameters are not decoded field-by-field. Use `ParamRef@` source connections or SDK string-backed defaults for unknown types.

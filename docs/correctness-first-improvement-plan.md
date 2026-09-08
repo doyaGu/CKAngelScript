@@ -13,28 +13,52 @@ Implemented correctness work includes:
 - Reset cancels pre-reset async/message work and suspended public execution
   handles before `OnReset`, so work created by `OnReset` is not erased by a
   later global clear;
-- End and PostClearAll cancel public executions and pending work before hard
-  teardown;
+- End and `PreClearAll` cancel public executions and pending work before hard
+  teardown; `PostClearAll` is an idempotent fallback;
 - Runtime Entry resume events are retained while `OnPause`/`OnDisable` is
   suspended, then run in `OnResume` → `OnEnable` order;
 - Component resume requests are retained while `OnDisable` is suspended, then
   run `OnEnable` exactly once after disable completes;
+- Executor resume requests are retained while `OnPause` is suspended, then run
+  `OnResume` exactly once before `Execute` is allowed to continue;
 - the shared lifecycle Module owns `OnLoad` → `Awake` → `Start` ordering and
   suspension/failure outcomes for Runtime Entry, Component, and Executor
   Adapters; host-specific context construction remains local to each Adapter;
 - the same Module owns Host Activation's desired enabled and pause states,
   pending `OnPause` → `OnDisable` position, and deferred Resume event for
-  Runtime Entry and Component Adapters; the Component Adapter supplies a no-op
-  `OnPause` phase, explicit Disable clears retained Resume and aborts a
-  suspended `OnEnable`, and Resume completion does not run normal update work;
+  Runtime Entry, Component, and Executor Adapters; the Component Adapter
+  supplies a no-op `OnPause` phase, the Executor Adapter supplies a no-op
+  `OnDisable` phase, explicit Disable clears retained Resume and aborts a
+  suspended `OnEnable`, and Resume completion does not run normal work;
 - the same Module owns Reset phase progression and the `Start` rewind for
   Runtime Entry, Component, and Executor Adapters. Every host Reset opens a new
   Reset Epoch: it supersedes a suspended `OnReset`, while a later Pause is
   retained until the replacement Reset finishes;
+- the same Module owns terminal Destroy phase progression for Runtime Entry,
+  Component, and Executor Adapters. Destroy supersedes Pause/Resume and Reset,
+  orders optional `OnDisable` before `OnDestroy`, retains soft-retirement
+  suspension, and lets hard teardown abort a suspended terminal callback;
 - async tasks created by Runtime Entry, Component, and Executor invocations
   carry stable owner identities; their Reset callbacks cancel the preceding
   work for that owner before `OnReset`, without cancelling another host or work
   created by the new Reset Epoch;
+- CK Reset no longer uses a manager-wide scheduler `CancelAll`. Manager
+  `OnCKPostReset`, after CK2 behavior/level/scene reset work, collects live
+  Runtime Entry, Component, and Executor owners and cancels only ownerless or
+  no-longer-live work. `OnCKPlay` and `PreProcess` are idempotent fallbacks for
+  failed resets, hosts, or direct lifecycle callers that omit the post-reset
+  callback;
+- ordinary CK object deletion releases Component and Executor state from
+  manager `SequenceToBeDeleted`, while each `CKBehavior` is still live. This
+  matches the original CK2 runtime, whose ordinary deletion path does not emit
+  `CKM_BEHAVIORDELETE`; Ballanced provides the readable implementation reference;
+- a `BehaviorFrame` created for that synchronous terminal callback may resolve
+  the exact pending-deletion behavior after full identity-stamp validation;
+  ordinary Object Refs and non-terminal frames keep their live-only policy;
+- full CK object clearing performs terminal adapter teardown from manager
+  `PreClearAll`, before CK2 deletes behaviors. Executor, Component, and Runtime
+  Entry teardown runs before the behavior bridge is cleared; `PostClearAll`
+  repeats only idempotent cleanup when needed;
 - Runtime Entry lifecycle and message invocations share the physical
   generation's owner; reload cancels that generation's tasks before unload
   without cancelling work owned by another Runtime Entry;
@@ -53,23 +77,32 @@ Implemented correctness work includes:
 
 The following work remains open:
 
-- separate the manager-wide reset fallback into explicit public/orphan cleanup
-  after all Script Host Scope transitions; Executor has no pause/resume
-  lifecycle surface, so no synthetic resume callback was added;
-- consolidate Destroy ordering behind the shared lifecycle Seam;
-- add the engine-backed CTest target and obtain a passing real Player callback
-  trace for the new startup regressions.
+- extend the engine-backed CTest from its suspended-wait and shared-Component
+  cases to failed-candidate and Executor-consumer mutation cases; add a
+  manager-destruction test distinct from the now-covered Player `OnCKEnd`
+  transition.
 
-Validation on 2026-08-15: the Release DLL builds and links with startup
-self-tests compiled in, and `CKAngelScript.Core` passes. Local Player validation
-was attempted but could not reach the startup marker: the Ballance host failed
-render-engine initialization, while the separate NeMo test distribution did
-not load this SDK build into a manager frame. The Player gate therefore remains
-open; build success is not recorded as a substitute for it. The API catalog
-tool's four unit tests pass, but `sync_api_catalog.py --check` reports an
-existing `docs/script-api.lock.json` drift. None of the tracked catalog inputs
-or outputs changed in this tranche, and no public AngelScript declaration was
-changed, so the lock was not regenerated without a fresh live-engine export.
+Validation on 2026-09-07: Debug and Release builds pass both
+`CKAngelScript.Core` and `CKAngelScript.Engine`. The engine test loads only the
+original `C:\Users\kakut\Games\Ballance\Bin\CK2.dll` and `VxMath.dll`; Ballanced
+DLLs are not test inputs. It now drives a public `Async::Delay` execution to
+`CKAS_SUSPENDED`, cancels it through original `CKContext::Reset`, and verifies
+the retained cancellation result and rejected resume. It also attaches a real
+AngelScript Component to a loaded shared module, proves public unload/replace
+return `CKAS_INUSE` without changing the generation or consumer, then deletes
+the Component through original CK2 and proves replacement increments the
+generation exactly once.
+
+The Release plugin also passes the complete startup self-test sequence in the
+original `Player.exe` (`status=ok`, `stage=complete`). Its marker captures both
+Executor behavior dispatch and manager transitions. The manager trace uses
+original `CKContext::Pause`/`Play`, observes shutdown Reset and two paired
+`PreClearAll`/`PostClearAll` cycles, and reaches the real `OnCKEnd`. A public
+execution is armed inside `OnCKEnd` immediately before manager cancellation;
+the test verifies `CKAS_CANCELLED`, the End reason, and rejected resume before
+writing success. That Player run produced a fresh live API export; the catalog
+tool's four unit tests and `sync_api_catalog.py --check` pass. No public
+AngelScript declaration changed.
 
 This plan addresses correctness risks in async suspension, host lifecycle
 transitions, and module-generation ownership before attempting broad structural
@@ -143,9 +176,12 @@ Relevant implementation:
 - [`EnableInstance`, `DisableInstance`, and the Component callback`](../src/AngelScriptComponent.cpp)
 - [documented Runtime Entry serialization](runtime-script-manager-v2.md)
 
-Actual Virtools callback ordering still requires Player validation. The shared
-lifecycle Interface now retains the event and phase position independently of
-that ordering; no callback order is allowed to erase either state.
+The original Player validation now covers Reset, ordinary deletion, full clear,
+and Executor behavior-level pause/resume ordering used by these regressions.
+Manager-level pause/resume and end trace coverage still remains to be expanded.
+The shared lifecycle Interface retains the event and phase position
+independently of host ordering; no callback order is allowed to erase either
+state.
 
 ### 3. Module mutation did not account for all internal consumers
 
@@ -189,7 +225,7 @@ Relevant implementation:
 - [`ScriptManager::DeliverComponentMessage`](../src/ScriptComponentStateStore.cpp)
 - [`ScriptMessageTarget`](../src/ScriptMessage.cpp)
 
-### 4. The highest-risk behavior is not covered by the default CTest seam
+### 4. The highest-risk behavior needs both engine and Player test seams
 
 The default `CKAngelScript.Core` executable covers the host-neutral initial
 lifecycle, metadata, and dependency modules. Most engine, Component, Executor,
@@ -198,6 +234,12 @@ compiled into the DLL when `CKAS_BUILD_SELF_TESTS` is enabled.
 
 This makes the real state-machine interaction harder to exercise in a normal
 CTest run and makes Player callback ordering an implicit part of correctness.
+An optional `CKAngelScript.Engine` CTest now loads the built plugin against the
+original `CK2.dll`/`VxMath.dll` selected by `CKAS_ENGINE_TEST_RUNTIME_DIR`. Its
+probe verifies that ordinary deletion exposes a still-live object to
+`SequenceToBeDeleted`, Reset orders `OnCKReset` before `OnCKPostReset`, and full
+clear brackets live and deleted object states with `PreClearAll`/`PostClearAll`.
+Player validation remains necessary for full BB and startup-self-test coverage.
 
 ## Correctness Contracts
 
@@ -389,15 +431,21 @@ No production behavior changes.
 
 1. Add table-driven tests for lifecycle event ordering and all invocation
    outcomes: finished, suspended, failed, and cancelled.
-2. Add an engine-backed test for a wait record that is cancelled while its
-   context is suspended.
-3. Add Player trace coverage for manager and behavior callback order during
-   pause, resume, reset, end, and clear.
-4. Add a Component test that attaches to a loaded shared module and attempts
-   same-name replace and unload.
-5. Add public execution-handle tests across pause, reset, end, and shutdown.
-6. Add a queued-message test across Component runtime rebuild and verify stale
-   message incarnation handling.
+2. **Done:** add an engine-backed test for a wait record that is cancelled while
+   its context is suspended. The test uses the public C ABI and original
+   `CKContext::Reset`.
+3. **Done:** add Player trace coverage for manager and behavior callback order
+   during pause, resume, reset, end, and clear. Executor behavior-level
+   pause/resume uses original `CKBehavior::CallCallbackFunction`; manager
+   pause/play and shutdown use original `CKContext`/Player dispatch.
+4. **Done:** add a Component test that attaches to a loaded shared module and
+   attempts same-name replace and unload.
+5. **Done for pause, reset, and End:** public execution handles remain suspended
+   across Player pause/play and become cancelled with preserved reasons across
+   original reset/end dispatch. Manager destruction after `OnCKEnd` remains a
+   separate shutdown case.
+6. **Done:** add a queued-message test across Component runtime rebuild and
+   verify stale message incarnation handling.
 7. Record the chosen pause/reset semantics in `async.md`,
    `runtime-script-manager-v2.md`, and `component-metadata-manifest.md` alongside
    the implementation change, not before.
@@ -414,10 +462,12 @@ Exit gate:
 1. Split scheduler processing state from destructive teardown.
 2. Preserve terminal wait results until consumed or explicitly forgotten.
 3. Replace pause-time queue clearing with freeze/resume behavior.
-4. **Done for host-owned work:** use Script Host Scope cancellation before each
-   Runtime Entry, Component, and Executor owner's `OnReset`. CK Reset still uses
-   a manager-wide `CancelAll` before those callbacks for public and orphaned
-   work; split that fallback into explicit cleanup after owner transitions.
+4. **Done:** use Script Host Scope cancellation before each Runtime Entry,
+   Component, and Executor owner's `OnReset`, then perform an explicit
+   `OnCKPostReset` orphan sweep after host reset callbacks (with `OnCKPlay` and
+   `PreProcess` fallbacks). Public execution handles
+   are cancelled directly; ownerless tasks and tasks whose owner no longer maps
+   to a live Script Host Scope are cancelled without touching new-epoch work.
 5. Retain deferred resume events until pending pause/disable phases complete.
 6. Make shutdown ordering explicit: abort invocations, forget contexts, cancel
    tasks, release task references, then release the engine.
@@ -489,35 +539,41 @@ Exit gate:
 
 ### Phase 3 — Consolidate lifecycle ordering
 
-1. **In progress:** `ScriptInitialLifecycle` now owns the active initial phase
-   and terminal invocation outcome, Host Activation's desired enabled and
-   pause states and deferred Resume event, and Reset phase progression. Destroy
-   remains to be consolidated.
+1. **Done:** `ScriptInitialLifecycle` owns the active initial phase and terminal
+   invocation outcome, Host Activation's desired enabled and pause states and
+   deferred Resume event, Reset phase progression, and terminal Destroy phase
+   progression.
 2. **Done for Initial Lifecycle:** move `OnLoad` → `Awake` → `Start` ordering
    out of Runtime Entry, Component, and Executor callers.
-3. **Done for deferred Resume:** retain Resume across suspended disable/enable
-   phases in Runtime Entry and Component Adapters; a later Pause supersedes it.
+3. **Done for deferred Resume:** retain Resume across suspended pause,
+   disable, and enable phases in Runtime Entry, Component, and Executor
+   Adapters; a later Pause supersedes it.
 4. **Done for Pause phases:** advance `OnPause` → `OnDisable` once behind the
-   shared lifecycle Interface. Runtime Entry and Component Adapters both use
-   it; the Component Adapter maps its absent `OnPause` callback to a no-op.
+   shared lifecycle Interface. Runtime Entry, Component, and Executor Adapters
+   use it; Component maps absent `OnPause` to a no-op and Executor maps absent
+   `OnDisable` to a no-op.
 5. **Done for desired activation:** own desired enabled state and combine it
    with Adapter eligibility before retaining Resume. Explicit Disable clears a
    retained Resume; Runtime Entry and Component Adapters retain actual enabled
-   state and side effects.
+   state and side effects, while loaded Executors are always desired-active.
 6. **Done for Reset phases:** every Runtime Entry, Component, and Executor
    Adapter cancels owner-scoped work and aborts the superseded prepared context
    before requesting Reset from the shared Module. The Module clears older
    Pause/Resume transitions, rewinds `Start`, retains suspended `OnReset`
    position, and lets a repeated Reset replace that position with a new Reset
    Epoch. Pause requested after Reset remains queued behind it.
-7. **Preserved for migrated transitions:** keep context construction, parameter
+7. **Done for Destroy phases:** Destroy supersedes pending Pause/Resume and
+   Reset, then advances optional `OnDisable` before `OnDestroy`. Runtime Entry
+   and Component soft retirement can retain a suspended phase; hard teardown
+   aborts suspension. Executor maps unsupported `OnDisable` to a no-op.
+8. **Preserved for migrated transitions:** keep context construction, parameter
    injection, Behavior Frame refresh, and host-specific side effects in the
    Adapters.
-8. Delete duplicated pending flags only after parity tests pass for each entry
-   kind. Runtime Entry `Enabled`/`PendingPause`/`PendingResume` and Component
-   `DesiredEnabled`/`Paused`/`PendingResume` are removed. Runtime Entry
-   `PendingReset` is also removed; remaining Destroy transition flags stay
-   until that phase migrates.
+9. **Done for migrated flags:** Runtime Entry
+   `Enabled`/`PendingPause`/`PendingResume`/`PendingReset`/`PendingDestroy` and
+   Component `DesiredEnabled`/`Paused`/`PendingResume`/`PendingDestroy`/
+   `DestructionCompleted` are removed after their transition state moved into
+   the shared Module.
 
 Exit gate:
 
@@ -529,8 +585,11 @@ Exit gate:
 
 ### Phase 4 — Promote the test seam into normal CI
 
-1. Add an engine-backed CTest target for scheduler, invocation, and module
-   mutation tests that do not require Player.
+1. **Partially done:** `CKAngelScript.Engine` now covers original-CK2 manager
+   callback order, pending-deletion identity policy, suspended public execution
+   cancellation through Reset, and shared-Component module mutation. Extend it
+   with failed-candidate and Executor-consumer mutation cases that do not
+   require Player.
 2. Keep CK callback-order and real Building Block tests in the Player workflow.
 3. Make Player validation required for changes touching lifecycle, async,
    Component, Executor, Message, or module mutation sources.
@@ -603,6 +662,9 @@ python tools\test_sync_api_catalog.py
 python tools\sync_api_catalog.py --check
 tools\Validate-Local.ps1 -BuildDir build-current-release -Configuration Release
 ```
+
+Configure `CKAS_ENGINE_TEST_RUNTIME_DIR` to the original game's `Bin` directory
+before the CTest command to include the engine-backed callback-order gate.
 
 Changes touching host transitions must also pass the Player Validation workflow
 with startup self-tests enabled. A successful Core CTest alone is insufficient.
