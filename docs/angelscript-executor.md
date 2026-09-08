@@ -143,42 +143,13 @@ CK_ID get_id() const
 string get_name() const
 float DeltaTime() const
 
-// Current behavior object and graph.
-CKBeObject@ Owner() const
-CKBeObject@ Target() const
+// Current behavior refs and graph.
 BehaviorRef@ Self() const
 BehaviorRef@ Parent() const
 BehaviorRef@ OwnerScript() const
 BehaviorLayout@ Layout() const
 BehaviorGraph@ Graph() const       // owner-script/container graph
 BehaviorGraph@ AsGraph() const     // current behavior as subgraph
-
-// CKBehavior metadata/state.
-CK_BEHAVIOR_TYPE Type() const
-void SetType(CK_BEHAVIOR_TYPE type)
-CK_BEHAVIOR_FLAGS Flags() const
-void SetFlags(CK_BEHAVIOR_FLAGS flags)
-CK_BEHAVIOR_FLAGS ModifyFlags(CKDWORD add, CKDWORD remove)
-void UseGraph()
-void UseFunction()
-bool IsActive() const
-void Activate(bool active = true, bool reset = false)
-bool IsTargetable() const
-void SetAsTargetable(bool target = true)
-CKERROR UseTarget(bool use = true)
-bool IsUsingTarget() const
-CK_CLASSID CompatibleClassId() const
-void SetCompatibleClassId(CK_CLASSID cid)
-NativePointer Function() const
-void SetFunction(NativePointer fct)
-CKGUID PrototypeGuid() const
-CKBehaviorPrototype@ Prototype() const
-string PrototypeName() const
-CKDWORD Version() const
-void SetVersion(CKDWORD version)
-int Priority() const
-void SetPriority(int priority)
-float LastExecutionTime() const
 
 // IO and parameters, by name or index. Index overloads use CKBehavior slot
 // indexes directly.
@@ -226,8 +197,6 @@ bool SetSetting(int index, const string &in value)
 
 // Safe child inspection. Structural graph edits use frame.Graph().Edit().
 BehaviorRef@ SubBehavior(int index) const
-void NotifyEdition()
-void NotifySettingsEdition()
 BBCallBuilder@ Call(const string &in prototype) const
 BBCallBuilder@ Call(CKGUID guid) const
 BBBridge@ BB() const

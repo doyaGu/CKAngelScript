@@ -828,6 +828,51 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "int CanBeHide() const",
         "bool IsHiddenByParent() const",
         "bool IsHierarchicallyHide() const",
+        "CKBeObject@ Owner() const",
+        "CKBeObject@ Target() const",
+        "CK_BEHAVIOR_TYPE Type() const",
+        "void SetType(CK_BEHAVIOR_TYPE type)",
+        "CK_BEHAVIOR_FLAGS Flags() const",
+        "void SetFlags(CK_BEHAVIOR_FLAGS flags)",
+        "CK_BEHAVIOR_FLAGS ModifyFlags(CKDWORD add, CKDWORD remove)",
+        "void UseGraph()",
+        "void UseFunction()",
+        "bool IsUsingFunction() const",
+        "bool IsTargetable() const",
+        "void SetAsTargetable(bool target = true)",
+        "CKERROR UseTarget(bool use = true)",
+        "bool IsUsingTarget() const",
+        "CK_CLASSID CompatibleClassId() const",
+        "void SetCompatibleClassId(CK_CLASSID cid)",
+        "void SetFunction(NativePointer fct)",
+        "NativePointer Function() const",
+        "void SetCallbackFunction(NativePointer fct)",
+        "int CallCallbackFunction(CKDWORD message)",
+        "int CallSubBehaviorsCallbackFunction(CKDWORD message)",
+        "int CallSubBehaviorsCallbackFunction(CKDWORD message, CKGUID guid)",
+        "bool IsActive() const",
+        "int Execute(float delta)",
+        "void Activate(bool active = true, bool reset = false)",
+        "bool ParentScriptActiveInScene(CKScene@ scene) const",
+        "int ShortestDelay(CKBehavior@ behavior) const",
+        "CKERROR InitFromPrototype(CKBehaviorPrototype@ prototype)",
+        "CKERROR InitFromGuid(CKGUID guid)",
+        "CKERROR InitFctPtrFromGuid(CKGUID guid)",
+        "CKERROR InitFctPtrFromPrototype(CKBehaviorPrototype@ prototype)",
+        "CKGUID PrototypeGuid() const",
+        "CKBehaviorPrototype@ Prototype() const",
+        "string PrototypeName() const",
+        "CKDWORD Version() const",
+        "void SetVersion(CKDWORD version)",
+        "int Priority() const",
+        "void SetPriority(int priority)",
+        "float LastExecutionTime() const",
+        "CKERROR SetOwner(CKBeObject@ owner, bool callback = true)",
+        "CKERROR SetSubBehaviorOwner(CKBeObject@ owner, bool callback = true)",
+        "void NotifyEdition()",
+        "void NotifySettingsEdition()",
+        "CKStateChunk@ InterfaceChunk() const",
+        "void SetInterfaceChunk(CKStateChunk@ state)",
     };
     for (const char *decl : removedCompatibilityMethods) {
         if (frameType->GetMethodByDecl(decl)) {
@@ -867,8 +912,6 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "    NativeBuffer@ pinData = frame.PinReadData(0);\n"
         "    int bufferedPinValue = 0; if (pinData is null || pinData.Size() != 4 || pinData.Read(bufferedPinValue) != 4 || bufferedPinValue != 41) return 182;\n"
         "    NativeBuffer@ poutData = frame.PoutWriteData(0); if (poutData is null || poutData.Size() != 4) return 183;\n"
-        "    frame.Function(); frame.InterfaceChunk();\n"
-        "    frame.Type(); frame.Flags(); frame.PrototypeGuid(); frame.PrototypeName(); frame.Version(); frame.Priority(); frame.LastExecutionTime(); frame.IsActive(); frame.IsUsingFunction(); frame.IsTargetable(); frame.IsUsingTarget(); frame.CompatibleClassId();\n"
         "    frame.SubBehaviorCount();\n"
         "    if (!frame.InputActive(0) || !frame.InputActive(\"In\")) return 130;\n"
         "    if (frame.OutputActive(0) || frame.OutputActive(\"Out\")) return 131;\n"
@@ -893,7 +936,6 @@ bool RunScriptExecutorSelfTest(CKContext *context,
         "    NativeBuffer@ physicalRead = frame.BehaviorLocalReadData(scratchPhysical); NativeBuffer@ physicalWrite = frame.BehaviorLocalWriteData(scratchPhysical);\n"
         "    if (physicalRead is null || physicalWrite is null || physicalRead.Size() != 4 || physicalWrite.Size() != 4) return 185;\n"
         "    frame.LocalObject(scratchLocal);\n"
-        "    frame.NotifyEdition(); frame.NotifySettingsEdition();\n"
         "    BehaviorLayout@ runtimeLayout = frame.Layout();\n"
         "    int traceSetting = frame.FindSetting(\"Trace\");\n"
         "    if (frame.SettingCount() <= 0 || runtimeLayout is null || traceSetting < 0 || traceSetting != runtimeLayout.FindSetting(\"Trace\")) return 134;\n"

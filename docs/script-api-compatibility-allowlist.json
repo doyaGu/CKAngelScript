@@ -325,6 +325,231 @@
       "key": "method|BehaviorFrame|void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)",
       "baselineCatalogSha256": "b0b23016e9dc5025cda933d0de3504feb6fa2e26e96182149194dd746f33d978",
       "reason": "Remove the CKSceneObject visibility pass-through; use an explicit CKBehavior handle for SDK operations."
+    },
+    {
+      "key": "method|BehaviorFrame|CKBeObject@ Owner() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw ownership shortcut; BehaviorFrame.Self() is the high-level identity boundary."
+    },
+    {
+      "key": "method|BehaviorFrame|CKBeObject@ Target() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw ownership shortcut; BehaviorFrame.Self() is the high-level identity boundary."
+    },
+    {
+      "key": "method|BehaviorFrame|CKBehaviorPrototype@ Prototype() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR InitFctPtrFromGuid(CKGUID guid)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR InitFctPtrFromPrototype(CKBehaviorPrototype@ prototype)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR InitFromGuid(CKGUID guid)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR InitFromPrototype(CKBehaviorPrototype@ prototype)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR SetOwner(CKBeObject@ owner, bool callback = true)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR SetSubBehaviorOwner(CKBeObject@ owner, bool callback = true)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|CKERROR UseTarget(bool use = true)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|CKGUID PrototypeGuid() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|CKStateChunk@ InterfaceChunk() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|CK_BEHAVIOR_FLAGS Flags() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|CK_BEHAVIOR_FLAGS ModifyFlags(uint add, uint remove)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|CK_BEHAVIOR_TYPE Type() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|NativePointer Function() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsActive() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the direct CKBehavior execution path so Executor lifecycle remains host-driven."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsTargetable() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsUsingFunction() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|bool IsUsingTarget() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|bool ParentScriptActiveInScene(CKScene@ scene) const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|float LastExecutionTime() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|int CallCallbackFunction(uint message)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the direct CKBehavior execution path so Executor lifecycle remains host-driven."
+    },
+    {
+      "key": "method|BehaviorFrame|int CallSubBehaviorsCallbackFunction(uint message)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the direct CKBehavior execution path so Executor lifecycle remains host-driven."
+    },
+    {
+      "key": "method|BehaviorFrame|int CallSubBehaviorsCallbackFunction(uint message, CKGUID guid)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the direct CKBehavior execution path so Executor lifecycle remains host-driven."
+    },
+    {
+      "key": "method|BehaviorFrame|int CompatibleClassId() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|int Execute(float delta)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the direct CKBehavior execution path so Executor lifecycle remains host-driven."
+    },
+    {
+      "key": "method|BehaviorFrame|int Priority() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|int ShortestDelay(CKBehavior@ behavior) const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|string PrototypeName() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|uint Version() const",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove duplicate CKBehavior metadata from the high-level BehaviorFrame facade."
+    },
+    {
+      "key": "method|BehaviorFrame|void Activate(bool active = true, bool reset = false)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the direct CKBehavior execution path so Executor lifecycle remains host-driven."
+    },
+    {
+      "key": "method|BehaviorFrame|void NotifyEdition()",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void NotifySettingsEdition()",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetAsTargetable(bool target = true)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetCallbackFunction(NativePointer fct)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetCompatibleClassId(int cid)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetFlags(CK_BEHAVIOR_FLAGS flags)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetFunction(NativePointer fct)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetInterfaceChunk(CKStateChunk@ state)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetPriority(int priority)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetType(CK_BEHAVIOR_TYPE type)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void SetVersion(uint version)",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void UseFunction()",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
+    },
+    {
+      "key": "method|BehaviorFrame|void UseGraph()",
+      "baselineCatalogSha256": "2ffee4457992177686e0f5632f66ace29e4fbf75ebb692ee5624b05900038a44",
+      "reason": "Remove the raw CKBehavior control pass-through; explicit SDK work belongs on CKBehavior."
     }
   ]
 }

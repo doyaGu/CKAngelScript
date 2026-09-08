@@ -6,7 +6,6 @@
 
 #include "CKBehavior.h"
 #include "ScriptBehaviorBridge.h"
-#include "ScriptNativePointer.h"
 #include "ScriptRefCounted.h"
 
 class asIScriptGeneric;
@@ -37,57 +36,15 @@ public:
     bool IsValid() const;
     CK_ID Id() const;
     std::string Name() const;
-    CKBeObject *Owner() const;
-    CKBeObject *Target() const;
     BehaviorRef *Self() const;
     BehaviorRef *Parent() const;
     BehaviorRef *OwnerScript() const;
     BehaviorFrame *FrameFor(CKBehavior *behavior) const;
     BehaviorFrame *FrameForRef(BehaviorRef *behavior) const;
     BehaviorFrame *SubFrame(int index) const;
-    CKBehavior *ParentBehavior() const;
-    CKBehavior *OwnerScriptBehavior() const;
     BehaviorLayout *Layout() const;
     BehaviorGraph *Graph() const;
     BehaviorGraph *AsGraph() const;
-
-    CK_BEHAVIOR_TYPE Type() const;
-    void SetType(CK_BEHAVIOR_TYPE type);
-    CK_BEHAVIOR_FLAGS Flags() const;
-    void SetFlags(CK_BEHAVIOR_FLAGS flags);
-    CK_BEHAVIOR_FLAGS ModifyFlags(CKDWORD add, CKDWORD remove);
-    void UseGraph();
-    void UseFunction();
-    bool IsUsingFunction() const;
-    bool IsTargetable() const;
-    void SetAsTargetable(bool target = true);
-    CKERROR UseTarget(bool use = true);
-    bool IsUsingTarget() const;
-    CK_CLASSID CompatibleClassId() const;
-    void SetCompatibleClassId(CK_CLASSID cid);
-    void SetFunction(NativePointer fct);
-    NativePointer Function() const;
-    void SetCallbackFunction(NativePointer fct);
-    int CallCallbackFunction(CKDWORD message);
-    int CallSubBehaviorsCallbackFunction(CKDWORD message);
-    int CallSubBehaviorsCallbackFunction(CKDWORD message, CKGUID guid);
-    bool IsActive() const;
-    int Execute(float delta);
-    void Activate(bool active = true, bool reset = false);
-    bool ParentScriptActiveInScene(CKScene *scene) const;
-    int ShortestDelay(CKBehavior *behavior) const;
-    CKERROR InitFromPrototype(CKBehaviorPrototype *prototype);
-    CKERROR InitFromGuid(CKGUID guid);
-    CKERROR InitFctPtrFromGuid(CKGUID guid);
-    CKERROR InitFctPtrFromPrototype(CKBehaviorPrototype *prototype);
-    CKGUID PrototypeGuid() const;
-    CKBehaviorPrototype *Prototype() const;
-    std::string PrototypeName() const;
-    CKDWORD Version() const;
-    void SetVersion(CKDWORD version);
-    int Priority() const;
-    void SetPriority(int priority);
-    float LastExecutionTime() const;
 
     int InputCount() const;
     int OutputCount() const;
@@ -206,13 +163,6 @@ public:
     bool SetSettingObject(const std::string &name, CKObject *value, int occurrence = 0);
     bool SetSettingObjectIndex(int index, CKObject *value);
     bool IsSetting(int localIndex) const;
-    CKERROR SetOwner(CKBeObject *owner, bool callback = true);
-    CKERROR SetSubBehaviorOwner(CKBeObject *owner, bool callback = true);
-    void NotifyEdition();
-    void NotifySettingsEdition();
-    CKStateChunk *InterfaceChunk() const;
-    void SetInterfaceChunk(CKStateChunk *state);
-
     BBCallBuilder *CallName(const std::string &prototype) const;
     BBCallBuilder *CallGuid(CKGUID guid) const;
     BBBridge *BB() const;

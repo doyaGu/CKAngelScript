@@ -61,7 +61,8 @@ void Update(const ScriptContext &in ctx) {
 class Component {
   void Start(BehaviorFrame@ frame) {
     CKContext@ host = frame.Context();
-    ObjectRef@ target = Scene::Ref(host, frame.Target());
+    BehaviorRef@ self = frame.Self();
+    ObjectRef@ target = self is null ? null : Scene::Ref(host, self.Target());
   }
 }
 ```
