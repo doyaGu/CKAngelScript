@@ -37,9 +37,15 @@ if ($RunSelfTests) {
     New-Item -ItemType Directory -Force -Path $markerParent | Out-Null
 }
 
-$existingPlayer = Get-Process -Name Player -ErrorAction SilentlyContinue
-if ($existingPlayer) {
-    throw "Player.exe is already running; refusing to replace a loaded plugin."
+$targetPlayerAlreadyRunning = Get-Process -Name Player -ErrorAction SilentlyContinue | Where-Object {
+    try {
+        [System.IO.Path]::GetFullPath($_.Path) -ieq $resolvedPlayer
+    } catch {
+        $true
+    }
+}
+if ($targetPlayerAlreadyRunning) {
+    throw "The target Player.exe is already running; refusing to replace its loaded plugin."
 }
 
 $backup = Join-Path ([System.IO.Path]::GetTempPath()) ("CKAngelScript-catalog-{0}.dll" -f [guid]::NewGuid().ToString("N"))
