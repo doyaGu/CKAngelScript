@@ -37,6 +37,8 @@ CKBehaviorContext MakeExecutorSelfTestContext(CKContext *context, CKBehavior *be
     behaviorContext.MessageManager = context ? context->GetMessageManager() : nullptr;
     behaviorContext.AttributeManager = context ? context->GetAttributeManager() : nullptr;
     behaviorContext.TimeManager = context ? context->GetTimeManager() : nullptr;
+    behaviorContext.CallbackMessage = 0;
+    behaviorContext.CallbackArg = nullptr;
     return behaviorContext;
 }
 
