@@ -193,6 +193,142 @@ static void RegisterCKObjectCast(asIScriptEngine *engine, const char *derived, c
     r = engine->RegisterObjectMethod(derived, decl.c_str(), asFUNCTIONPR((CKObjectUpcast<B, D>), (D *), B *), asCALL_CDECL_OBJLAST); CKAS_CHECK_REGISTER(r);
 }
 
+static bool RejectCKObjectMutation(const char *method) {
+    return ScriptManager::RejectActiveHostMutation(method);
+}
+
+template <typename T>
+static void SetCKObjectName(T *self, const std::string &name, bool shared) {
+    if (!RejectCKObjectMutation("CKObject::SetName")) {
+        self->SetName(const_cast<CKSTRING>(name.c_str()), shared);
+    }
+}
+
+template <typename T>
+static void SetCKObjectAppData(T *self, NativePointer data) {
+    if (!RejectCKObjectMutation("CKObject::SetAppData")) {
+        self->SetAppData(data.Get());
+    }
+}
+
+template <typename T>
+static void ShowCKObject(T *self, CK_OBJECT_SHOWOPTION option) {
+    if (!RejectCKObjectMutation("CKObject::Show")) {
+        self->Show(option);
+    }
+}
+
+template <typename T>
+static void ModifyCKObjectFlags(T *self, CKDWORD add, CKDWORD remove) {
+    if (!RejectCKObjectMutation("CKObject::ModifyObjectFlags")) {
+        static_cast<CKObject *>(self)->ModifyObjectFlags(add, remove);
+    }
+}
+
+template <typename T>
+static void PreSaveCKObject(T *self, CKFile *file, CKDWORD flags) {
+    if (!RejectCKObjectMutation("CKObject::PreSave")) {
+        self->PreSave(file, flags);
+    }
+}
+
+template <typename T>
+static CKStateChunk *SaveCKObject(T *self, CKFile *file, CKDWORD flags) {
+    return RejectCKObjectMutation("CKObject::Save") ? nullptr : self->Save(file, flags);
+}
+
+template <typename T>
+static CKERROR LoadCKObject(T *self, CKStateChunk *chunk, CKFile *file) {
+    return RejectCKObjectMutation("CKObject::Load")
+               ? CKERR_INVALIDOPERATION
+               : self->Load(chunk, file);
+}
+
+template <typename T>
+static void PostLoadCKObject(T *self) {
+    if (!RejectCKObjectMutation("CKObject::PostLoad")) {
+        self->PostLoad();
+    }
+}
+
+template <typename T>
+static void PreDeleteCKObject(T *self) {
+    if (!RejectCKObjectMutation("CKObject::PreDelete")) {
+        self->PreDelete();
+    }
+}
+
+template <typename T>
+static void CheckPreDeletionCKObject(T *self) {
+    if (!RejectCKObjectMutation("CKObject::CheckPreDeletion")) {
+        self->CheckPreDeletion();
+    }
+}
+
+template <typename T>
+static void CheckPostDeletionCKObject(T *self) {
+    if (!RejectCKObjectMutation("CKObject::CheckPostDeletion")) {
+        self->CheckPostDeletion();
+    }
+}
+
+#if CKVERSION == 0x13022002
+template <typename T>
+static CKERROR PrepareCKObjectDependencies(T *self, CKDependenciesContext &context) {
+    if (RejectCKObjectMutation("CKObject::PrepareDependencies")) {
+        return CKERR_INVALIDOPERATION;
+    }
+    return self->PrepareDependencies(context);
+}
+#else
+template <typename T>
+static CKERROR PrepareCKObjectDependencies(T *self,
+                                          CKDependenciesContext &context,
+                                          bool caller) {
+    if (RejectCKObjectMutation("CKObject::PrepareDependencies")) {
+        return CKERR_INVALIDOPERATION;
+    }
+    return self->PrepareDependencies(context, caller);
+}
+#endif
+
+template <typename T>
+static CKERROR RemapCKObjectDependencies(T *self, CKDependenciesContext &context) {
+    return RejectCKObjectMutation("CKObject::RemapDependencies")
+               ? CKERR_INVALIDOPERATION
+               : self->RemapDependencies(context);
+}
+
+template <typename T>
+static CKERROR DestroyCKObject(T *self,
+                               CKObject *object,
+                               CKDWORD flags,
+                               CKDependencies *dependencies) {
+    return RejectCKObjectMutation("CKObject::CKDestroyObject")
+               ? CKERR_INVALIDOPERATION
+               : self->CKDestroyObject(object, flags, dependencies);
+}
+
+template <typename T>
+static CKERROR DestroyCKObjectById(T *self,
+                                   CK_ID id,
+                                   CKDWORD flags,
+                                   CKDependencies *dependencies) {
+    return RejectCKObjectMutation("CKObject::CKDestroyObject")
+               ? CKERR_INVALIDOPERATION
+               : self->CKDestroyObject(id, flags, dependencies);
+}
+
+template <typename T>
+static CKERROR DestroyCKObjects(T *self,
+                                const XObjectArray &objects,
+                                CKDWORD flags,
+                                CKDependencies *dependencies) {
+    return RejectCKObjectMutation("CKObject::CKDestroyObjects")
+               ? CKERR_INVALIDOPERATION
+               : self->CKDestroyObjects(objects.Begin(), objects.Size(), flags, dependencies);
+}
+
 template <typename T>
 static CKERROR CopyCKObject(T *self, CKObject *obj, CKDependenciesContext &context) {
     if (!self || !obj) {
@@ -201,12 +337,18 @@ static CKERROR CopyCKObject(T *self, CKObject *obj, CKDependenciesContext &conte
         }
         return CKERR_INVALIDPARAMETER;
     }
+    if (RejectCKObjectMutation("CKObject::Copy")) {
+        return CKERR_INVALIDOPERATION;
+    }
     return self->Copy(*obj, context);
 }
 
 static CKERROR CopyCKCurvePoint(CKCurvePoint *self, CKObject *obj, CKDependenciesContext &context) {
     if (!self || !obj) {
         return CKERR_INVALIDPARAMETER;
+    }
+    if (RejectCKObjectMutation("CKObject::Copy")) {
+        return CKERR_INVALIDOPERATION;
     }
     return self->Copy(*obj, context);
 }
@@ -215,12 +357,12 @@ template <typename T>
 static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
-    r = engine->RegisterObjectMethod(name, "void SetName(const string &in name, bool shared = false)", asFUNCTIONPR([](T *self, const std::string &name, bool shared) { self->SetName(const_cast<CKSTRING>(name.c_str()), shared); }, (T *, const std::string &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetName(const string &in name, bool shared = false)", asFUNCTIONPR(SetCKObjectName<T>, (T *, const std::string &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "NativePointer GetAppData()", asFUNCTIONPR([](T *self) { return NativePointer(self->GetAppData()); }, (T *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetAppData(NativePointer data)", asFUNCTIONPR([](T *self, NativePointer data) { self->SetAppData(data.Get()); }, (T *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetAppData(NativePointer data)", asFUNCTIONPR(SetCKObjectAppData<T>, (T *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)", asMETHODPR(T, Show, (CK_OBJECT_SHOWOPTION), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)", asFUNCTIONPR(ShowCKObject<T>, (T *, CK_OBJECT_SHOWOPTION), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsHiddenByParent()", asFUNCTIONPR([](T *self) -> bool { return self->IsHiddenByParent(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int CanBeHide()", asMETHODPR(T, CanBeHide, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsVisible()", asFUNCTIONPR([](T *self) -> bool { return self->IsVisible(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -232,27 +374,27 @@ static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "CKDWORD GetObjectFlags()", asMETHODPR(T, GetObjectFlags, (), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsDynamic()", asFUNCTIONPR([](T *self) -> bool { return self->IsDynamic(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsToBeDeleted()", asFUNCTIONPR([](T *self) -> bool { return self->IsToBeDeleted(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void ModifyObjectFlags(CKDWORD add, CKDWORD remove)", asMETHODPR(T, ModifyObjectFlags, (CKDWORD, CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void ModifyObjectFlags(CKDWORD add, CKDWORD remove)", asFUNCTIONPR(ModifyCKObjectFlags<T>, (T *, CKDWORD, CKDWORD), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CK_CLASSID GetClassID()", asMETHODPR(T, GetClassID, (), CK_CLASSID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void PreSave(CKFile@ file, CKDWORD flags)", asMETHODPR(T, PreSave, (CKFile *, CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKStateChunk@ Save(CKFile@ file, CKDWORD flags)", asMETHODPR(T, Save, (CKFile *, CKDWORD), CKStateChunk *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR Load(CKStateChunk@ chunk, CKFile@ file)", asMETHODPR(T, Load, (CKStateChunk *, CKFile *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void PostLoad()", asMETHODPR(T, PostLoad, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void PreSave(CKFile@ file, CKDWORD flags)", asFUNCTIONPR(PreSaveCKObject<T>, (T *, CKFile *, CKDWORD), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKStateChunk@ Save(CKFile@ file, CKDWORD flags)", asFUNCTIONPR(SaveCKObject<T>, (T *, CKFile *, CKDWORD), CKStateChunk *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR Load(CKStateChunk@ chunk, CKFile@ file)", asFUNCTIONPR(LoadCKObject<T>, (T *, CKStateChunk *, CKFile *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void PostLoad()", asFUNCTIONPR(PostLoadCKObject<T>, (T *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void PreDelete()", asMETHODPR(T, PreDelete, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void CheckPreDeletion()", asMETHODPR(T, CheckPreDeletion, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void CheckPostDeletion()", asMETHODPR(T, CheckPostDeletion, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void PreDelete()", asFUNCTIONPR(PreDeleteCKObject<T>, (T *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void CheckPreDeletion()", asFUNCTIONPR(CheckPreDeletionCKObject<T>, (T *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void CheckPostDeletion()", asFUNCTIONPR(CheckPostDeletionCKObject<T>, (T *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "int GetMemoryOccupation()", asMETHODPR(T, GetMemoryOccupation, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsObjectUsed(CKObject@ obj, CK_CLASSID cid)", asFUNCTIONPR([](T *self, CKObject *obj, CK_CLASSID cid) -> bool { return self->IsObjectUsed(obj, cid); }, (T *, CKObject *, CK_CLASSID), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context)", asMETHODPR(T, PrepareDependencies, (CKDependenciesContext &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context)", asFUNCTIONPR(PrepareCKObjectDependencies<T>, (T *, CKDependenciesContext &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #else
-    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context, bool caller = true)", asFUNCTIONPR([](T *self, CKDependenciesContext &context, bool caller) -> CKERROR { return self->PrepareDependencies(context, caller); }, (T *, CKDependenciesContext &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context, bool caller = true)", asFUNCTIONPR(PrepareCKObjectDependencies<T>, (T *, CKDependenciesContext &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
-    r = engine->RegisterObjectMethod(name, "CKERROR RemapDependencies(CKDependenciesContext &in context)", asMETHODPR(T, RemapDependencies, (CKDependenciesContext &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR RemapDependencies(CKDependenciesContext &in context)", asFUNCTIONPR(RemapCKObjectDependencies<T>, (T *, CKDependenciesContext &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     if constexpr (std::is_same_v<T, CKCurvePoint>) {
         r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asFUNCTION(CopyCKCurvePoint), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     } else {
@@ -264,14 +406,9 @@ static void RegisterCKObjectMembers(asIScriptEngine *engine, const char *name) {
     r = engine->RegisterObjectMethod(name, "bool IsNotToBeSaved()", asFUNCTIONPR([](T *self) -> bool { return self->IsNotToBeSaved(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsInterfaceObj()", asFUNCTIONPR([](T *self) -> bool { return self->IsInterfaceObj(); }, (T *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-#if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(T, CKDestroyObject, (CKObject*, CKDWORD, CKDependencies*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(T, CKDestroyObject, (CK_ID, CKDWORD, CKDependencies*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-#else
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(T, CKDestroyObject, (CKObject*, DWORD, CKDependencies*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(T, CKDestroyObject, (CK_ID, DWORD, CKDependencies*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-#endif
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR([](T *obj, const XObjectArray &objects, CKDWORD flags, CKDependencies *deps) { return obj->CKDestroyObjects(objects.Begin(), objects.Size(), flags, deps); }, (T *, const XObjectArray &, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR(DestroyCKObject<T>, (T *, CKObject *, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR(DestroyCKObjectById<T>, (T *, CK_ID, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR(DestroyCKObjects<T>, (T *, const XObjectArray &, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKObject@ CKGetObject(CK_ID id)", asMETHODPR(T, CKGetObject, (CK_ID), CKObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     if (strcmp(name, "CKObject") != 0) {
@@ -283,12 +420,12 @@ template <>
 static void RegisterCKObjectMembers<CKScene>(asIScriptEngine *engine, const char *name) {
     int r = 0;
 
-    r = engine->RegisterObjectMethod(name, "void SetName(const string &in name, bool shared = false)", asFUNCTIONPR([](CKScene *self, const std::string &name, bool shared) { self->SetName(const_cast<CKSTRING>(name.c_str()), shared); }, (CKScene *, const std::string &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetName(const string &in name, bool shared = false)", asFUNCTIONPR(SetCKObjectName<CKScene>, (CKScene *, const std::string &, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "NativePointer GetAppData()", asFUNCTIONPR([](CKScene *self) { return NativePointer(self->GetAppData()); }, (CKScene *), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void SetAppData(NativePointer data)", asFUNCTIONPR([](CKScene *self, NativePointer data) { self->SetAppData(data.Get()); }, (CKScene *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void SetAppData(NativePointer data)", asFUNCTIONPR(SetCKObjectAppData<CKScene>, (CKScene *, NativePointer), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)", asMETHODPR(CKScene, Show, (CK_OBJECT_SHOWOPTION), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void Show(CK_OBJECT_SHOWOPTION show = CKSHOW)", asFUNCTIONPR(ShowCKObject<CKScene>, (CKScene *, CK_OBJECT_SHOWOPTION), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsHiddenByParent()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsHiddenByParent(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "int CanBeHide()", asMETHODPR(CKScene, CanBeHide, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsVisible()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsVisible(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -300,27 +437,27 @@ static void RegisterCKObjectMembers<CKScene>(asIScriptEngine *engine, const char
     r = engine->RegisterObjectMethod(name, "CKDWORD GetObjectFlags()", asMETHODPR(CKObject, GetObjectFlags, (), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsDynamic()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsDynamic(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsToBeDeleted()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsToBeDeleted(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void ModifyObjectFlags(CKDWORD add, CKDWORD remove)", asMETHODPR(CKObject, ModifyObjectFlags, (CKDWORD, CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void ModifyObjectFlags(CKDWORD add, CKDWORD remove)", asFUNCTIONPR(ModifyCKObjectFlags<CKScene>, (CKScene *, CKDWORD, CKDWORD), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "CK_CLASSID GetClassID()", asMETHODPR(CKScene, GetClassID, (), CK_CLASSID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void PreSave(CKFile@ file, CKDWORD flags)", asMETHODPR(CKScene, PreSave, (CKFile *, CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKStateChunk@ Save(CKFile@ file, CKDWORD flags)", asMETHODPR(CKScene, Save, (CKFile *, CKDWORD), CKStateChunk *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR Load(CKStateChunk@ chunk, CKFile@ file)", asMETHODPR(CKScene, Load, (CKStateChunk *, CKFile *), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void PostLoad()", asMETHODPR(CKScene, PostLoad, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void PreSave(CKFile@ file, CKDWORD flags)", asFUNCTIONPR(PreSaveCKObject<CKScene>, (CKScene *, CKFile *, CKDWORD), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKStateChunk@ Save(CKFile@ file, CKDWORD flags)", asFUNCTIONPR(SaveCKObject<CKScene>, (CKScene *, CKFile *, CKDWORD), CKStateChunk *), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR Load(CKStateChunk@ chunk, CKFile@ file)", asFUNCTIONPR(LoadCKObject<CKScene>, (CKScene *, CKStateChunk *, CKFile *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void PostLoad()", asFUNCTIONPR(PostLoadCKObject<CKScene>, (CKScene *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-    r = engine->RegisterObjectMethod(name, "void PreDelete()", asMETHODPR(CKScene, PreDelete, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void CheckPreDeletion()", asMETHODPR(CKScene, CheckPreDeletion, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "void CheckPostDeletion()", asMETHODPR(CKScene, CheckPostDeletion, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void PreDelete()", asFUNCTIONPR(PreDeleteCKObject<CKScene>, (CKScene *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void CheckPreDeletion()", asFUNCTIONPR(CheckPreDeletionCKObject<CKScene>, (CKScene *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "void CheckPostDeletion()", asFUNCTIONPR(CheckPostDeletionCKObject<CKScene>, (CKScene *), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "int GetMemoryOccupation()", asMETHODPR(CKScene, GetMemoryOccupation, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsObjectUsed(CKObject@ obj, CK_CLASSID cid)", asFUNCTIONPR([](CKScene *self, CKObject *obj, CK_CLASSID cid) -> bool { return self->IsObjectUsed(obj, cid); }, (CKScene *, CKObject *, CK_CLASSID), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
 #if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context)", asMETHODPR(CKScene, PrepareDependencies, (CKDependenciesContext &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context)", asFUNCTIONPR(PrepareCKObjectDependencies<CKScene>, (CKScene *, CKDependenciesContext &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #else
-    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context, bool caller = true)", asFUNCTIONPR([](CKScene *obj, CKDependenciesContext &context, bool caller) { return obj->PrepareDependencies(context, caller); }, (CKScene *, CKDependenciesContext &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR PrepareDependencies(CKDependenciesContext &in context, bool caller = true)", asFUNCTIONPR(PrepareCKObjectDependencies<CKScene>, (CKScene *, CKDependenciesContext &, bool), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 #endif
-    r = engine->RegisterObjectMethod(name, "CKERROR RemapDependencies(CKDependenciesContext &in context)", asMETHODPR(CKScene, RemapDependencies, (CKDependenciesContext &), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR RemapDependencies(CKDependenciesContext &in context)", asFUNCTIONPR(RemapCKObjectDependencies<CKScene>, (CKScene *, CKDependenciesContext &), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKERROR Copy(CKObject@ obj, CKDependenciesContext &in context)", asFUNCTION(CopyCKObject<CKScene>), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod(name, "bool IsUpToDate()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsUpToDate(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
@@ -328,14 +465,9 @@ static void RegisterCKObjectMembers<CKScene>(asIScriptEngine *engine, const char
     r = engine->RegisterObjectMethod(name, "bool IsNotToBeSaved()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsNotToBeSaved(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "bool IsInterfaceObj()", asFUNCTIONPR([](CKScene *self) -> bool { return self->IsInterfaceObj(); }, (CKScene *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
-#if CKVERSION == 0x13022002
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(CKScene, CKDestroyObject, (CKObject*, CKDWORD, CKDependencies*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(CKScene, CKDestroyObject, (CK_ID, CKDWORD, CKDependencies*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-#else
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(CKScene, CKDestroyObject, (CKObject*, DWORD, CKDependencies*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asMETHODPR(CKScene, CKDestroyObject, (CK_ID, DWORD, CKDependencies*), CKERROR), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-#endif
-    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR([](CKScene *obj, const XObjectArray &objects, CKDWORD flags, CKDependencies *deps) { return obj->CKDestroyObjects(objects.Begin(), objects.Size(), flags, deps); }, (CKScene *, const XObjectArray &, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CKObject@ obj, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR(DestroyCKObject<CKScene>, (CKScene *, CKObject *, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObject(CK_ID id, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR(DestroyCKObjectById<CKScene>, (CKScene *, CK_ID, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod(name, "CKERROR CKDestroyObjects(const XObjectArray &in ids, CKDWORD flags = 0, CKDependencies &in depoptions = void)", asFUNCTIONPR(DestroyCKObjects<CKScene>, (CKScene *, const XObjectArray &, CKDWORD, CKDependencies *), CKERROR), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod(name, "CKObject@ CKGetObject(CK_ID id)", asMETHODPR(CKScene, CKGetObject, (CK_ID), CKObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     RegisterCKObjectCast<CKScene, CKObject>(engine, name, "CKObject");

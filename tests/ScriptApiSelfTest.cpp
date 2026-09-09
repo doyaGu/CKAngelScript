@@ -5168,6 +5168,7 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  int UseConstHandle(const __CKAS_PublicObject@ other) { return other is null ? -1 : other.base + base; }\n"
         "  int UseNative(__CKAS_PublicNativeBox@ box) { return box is null ? -3 : box.GetValue() + base; }\n"
         "  void CreateNativeObject() { GetCKContext(0).CreateObject(CKCID_OBJECT, \"__CKAS_HostMutationProbe\"); }\n"
+        "  void RenameNativeObject() { GetCKContext(0).GetObjectByName(\"__CKAS_ObjectMutationProbe\").SetName(\"__CKAS_ObjectMutationRejected\"); }\n"
         "  void SpawnDetached() { Async::Spawn(AsyncVoidFunc(__ckas_public_object_async_worker)); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
@@ -5815,6 +5816,64 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         unexpectedMutationObject ||
         !mutationFilterCleared) {
         error = "CKAngelScript API self-test expected filtered CKContext mutation to fail before changing host state.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    methodOptions.MethodDecl = "void RenameNativeObject()";
+    CKAngelScriptMethod *renameNativeObjectMethod = nullptr;
+    if (api->FindObjectMethod(methodOptions, &renameNativeObjectMethod, &result) != CKAS_OK ||
+        !renameNativeObjectMethod) {
+        error = "CKAngelScript API self-test failed to find RenameNativeObject object method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    constexpr const char *objectMutationProbeName = "__CKAS_ObjectMutationProbe";
+    CKObject *objectMutationProbe =
+        context->CreateObject(CKCID_OBJECT,
+                              const_cast<CKSTRING>(objectMutationProbeName),
+                              CK_OBJECTCREATION_DYNAMIC);
+    if (!objectMutationProbe) {
+        error = "CKAngelScript API self-test could not create the CKObject mutation probe.";
+        api->ReleaseMethod(renameNativeObjectMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    hostCallFilterProbe = HostCallFilterProbeData();
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install the CKObject mutation filter.";
+        context->DestroyObject(objectMutationProbe);
+        api->ReleaseMethod(renameNativeObjectMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    const int objectCountBeforeRejectedRename = context->GetObjectCount();
+    objectCall.Method = renameNativeObjectMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    const CKAS_STATUS rejectedRenameStatus = api->CallObjectMethod(objectCall, &result);
+    const std::string rejectedRenameError = result.ErrorMessage ? result.ErrorMessage : "";
+    const int objectCountAfterRejectedRename = context->GetObjectCount();
+    const bool objectNameUnchanged =
+        objectMutationProbe->GetName() &&
+        std::strcmp(objectMutationProbe->GetName(), objectMutationProbeName) == 0;
+    const bool objectMutationFilterCleared =
+        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
+    context->DestroyObject(objectMutationProbe);
+    api->ReleaseMethod(renameNativeObjectMethod);
+    if (rejectedRenameStatus != CKAS_EXECUTIONFAILED ||
+        rejectedRenameError.find("CKObject::SetName is not available") == std::string::npos ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKObject::SetName") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
+        objectCountAfterRejectedRename != objectCountBeforeRejectedRename ||
+        !objectNameUnchanged ||
+        !objectMutationFilterCleared) {
+        error = "CKAngelScript API self-test expected filtered CKObject mutation to fail before changing host state.";
         api->ReleaseMethod(addMethod);
         api->ReleaseObject(object);
         return false;

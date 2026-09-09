@@ -137,9 +137,9 @@ CKAngelScriptInitResult(&result);
 CKAngelScriptSetHostCallFilter(angelScript, FilterHostCall, hostState, &result);
 ```
 
-`CKAS_HOSTCALL_MUTATES_HOST_STATE` identifies calls that change Virtools or bridge state. `CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK` identifies every CKAngelScript async task-creation path, including delays, script tasks, aggregates, bridge waits, and message waits. Rejecting async scheduling raises a script exception before a task is allocated or retained.
+`CKAS_HOSTCALL_MUTATES_HOST_STATE` identifies calls that change Virtools or bridge state. CKAngelScript currently applies it to the high-level `Scene` mutations, `CKContext` mutations, and the common mutating surface inherited from `CKObject`. `CKAS_HOSTCALL_SCHEDULES_ASYNC_WORK` identifies every CKAngelScript async task-creation path, including delays, script tasks, aggregates, bridge waits, and message waits. Rejected calls on these participating surfaces raise a script exception before the operation changes host state or retains async work.
 
-The filter is not a sandbox and does not cover raw Virtools SDK bindings unless those bindings explicitly call into it. A non-`CKAS_OK` return rejects the host call; callers that need a script exception should set one with `CKAngelScriptSetActiveContextException()` from the active script thread.
+The filter is not a sandbox. Specialized raw Virtools SDK bindings are covered only when their wrapper explicitly participates in the filter; extension authors must make the same choice for their own host calls. A non-`CKAS_OK` return rejects a participating call. Extensions that invoke the callback themselves can use `CKAngelScriptSetActiveContextException()` to report the rejection from the active script thread.
 
 ## Module Lifecycle
 
