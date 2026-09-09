@@ -7468,10 +7468,17 @@ bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         contextType->GetMethodByDecl("CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR DestroyObjects(const XObjectArray &in ids, CKDWORD flags, CKDependencies &in depoptions)") == nullptr ||
         contextType->GetMethodByDecl("CKObject@ GetObject(CK_ID id)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR Load(const string &in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR Load(const string &in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags, CKGUID &in readerGuid)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR Load(int size, NativePointer buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR Load(NativeBuffer@ buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR GetFileInfo(int size, NativePointer buffer, CKFileInfo &out fileInfo)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR GetFileInfo(NativeBuffer@ buffer, CKFileInfo &out fileInfo)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR Save(const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR Save(const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags, CKDependencies &in dependencies)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR Save(const string &in fileName, CKObjectArray@ objects, CKDWORD saveFlags, CKDependencies &in dependencies, CKGUID &in readerGuid)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR LoadAnimationOnCharacter(const string &in fileName, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)") == nullptr ||
+        contextType->GetMethodByDecl("CKERROR LoadAnimationOnCharacter(const string &in fileName, CKObjectArray@ objects, CKCharacter@ carac, CKGUID &in readerGuid, bool asDynamicObjects = false)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR LoadAnimationOnCharacter(int size, NativePointer buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR LoadAnimationOnCharacter(NativeBuffer@ buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)") == nullptr) {
         error = "CKContext self-test could not find expected object and guarded buffer methods.";
@@ -7521,6 +7528,18 @@ bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         "}\n"
         "void CompileCKContextCopyObjectsDefaults(CKContext@ ctx, const XObjectArray &in objects) {\n"
         "  ctx.CopyObjects(objects);\n"
+        "}\n"
+        "void CompileCKContextFileDefaults(CKContext@ ctx, CKObjectArray@ objects, CKCharacter@ character) {\n"
+        "  ctx.Load(\"\", objects);\n"
+        "  ctx.Save(\"\", objects, 0);\n"
+        "  ctx.LoadAnimationOnCharacter(\"\", objects, character);\n"
+        "  ctx.LoadAnimationOnCharacter(\"\", objects, character, true);\n"
+        "  CKDependencies dependencies;\n"
+        "  CKGUID readerGuid;\n"
+        "  ctx.Load(\"\", objects, CK_LOAD_DEFAULT, readerGuid);\n"
+        "  ctx.Save(\"\", objects, 0, dependencies);\n"
+        "  ctx.Save(\"\", objects, 0, dependencies, readerGuid);\n"
+        "  ctx.LoadAnimationOnCharacter(\"\", objects, character, readerGuid);\n"
         "}\n"
         "int ProbeCKContextNativeBufferLoaders(CKContext@ ctx) {\n"
         "  NativeBuffer@ bytes = NativeBuffer(1);\n"

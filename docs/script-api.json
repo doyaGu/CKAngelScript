@@ -134113,11 +134113,11 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcontext::ckerror load(const string&in filename, ckobjectarray@ objects, ck_load_flags loadflags = ck_load_default, ckguid&in readerguid = void)",
+          "docId": "method::::ckcontext::ckerror load(const string&in filename, ckobjectarray@ objects, ck_load_flags loadflags = ck_load_default)",
           "name": "Load",
           "namespace": "",
-          "declaration": "CKERROR Load(const string&in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT, CKGUID&in readerGuid = void)",
-          "declarationWithNamespace": "CKERROR Load(const string&in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT, CKGUID&in readerGuid = void)",
+          "declaration": "CKERROR Load(const string&in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)",
+          "declarationWithNamespace": "CKERROR Load(const string&in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT)",
           "memberRole": "method",
           "objectName": "CKContext",
           "functionType": "system",
@@ -134161,6 +134161,62 @@
               "flags": 0,
               "flagNames": [],
               "defaultArg": "CK_LOAD_DEFAULT"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror load(const string&in filename, ckobjectarray@ objects, ck_load_flags loadflags, ckguid&in readerguid)",
+          "name": "Load",
+          "namespace": "",
+          "declaration": "CKERROR Load(const string&in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags, CKGUID&in readerGuid)",
+          "declarationWithNamespace": "CKERROR Load(const string&in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags, CKGUID&in readerGuid)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "fileName",
+              "type": "string",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "objects",
+              "type": "CKObjectArray@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "loadFlags",
+              "type": "CK_LOAD_FLAGS",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
             },
             {
               "index": 3,
@@ -134170,7 +134226,7 @@
               "flagNames": [
                 "inref"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             }
           ],
           "apiCategory": "global",
@@ -134301,11 +134357,11 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcontext::ckerror loadanimationoncharacter(const string&in filename, ckobjectarray@ objects, ckcharacter@ carac, ckguid&in readerguid = void, bool asdynamicobjects = false)",
+          "docId": "method::::ckcontext::ckerror loadanimationoncharacter(const string&in filename, ckobjectarray@ objects, ckcharacter@ carac, ckguid&in readerguid, bool asdynamicobjects = false)",
           "name": "LoadAnimationOnCharacter",
           "namespace": "",
-          "declaration": "CKERROR LoadAnimationOnCharacter(const string&in fileName, CKObjectArray@ objects, CKCharacter@ carac, CKGUID&in readerGuid = void, bool asDynamicObjects = false)",
-          "declarationWithNamespace": "CKERROR LoadAnimationOnCharacter(const string&in fileName, CKObjectArray@ objects, CKCharacter@ carac, CKGUID&in readerGuid = void, bool asDynamicObjects = false)",
+          "declaration": "CKERROR LoadAnimationOnCharacter(const string&in fileName, CKObjectArray@ objects, CKCharacter@ carac, CKGUID&in readerGuid, bool asDynamicObjects = false)",
+          "declarationWithNamespace": "CKERROR LoadAnimationOnCharacter(const string&in fileName, CKObjectArray@ objects, CKCharacter@ carac, CKGUID&in readerGuid, bool asDynamicObjects = false)",
           "memberRole": "method",
           "objectName": "CKContext",
           "functionType": "system",
@@ -134358,10 +134414,74 @@
               "flagNames": [
                 "inref"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 4,
+              "name": "asDynamicObjects",
+              "type": "bool",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "false"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror loadanimationoncharacter(const string&in filename, ckobjectarray@ objects, ckcharacter@ carac, bool asdynamicobjects = false)",
+          "name": "LoadAnimationOnCharacter",
+          "namespace": "",
+          "declaration": "CKERROR LoadAnimationOnCharacter(const string&in fileName, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)",
+          "declarationWithNamespace": "CKERROR LoadAnimationOnCharacter(const string&in fileName, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "fileName",
+              "type": "string",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "objects",
+              "type": "CKObjectArray@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "carac",
+              "type": "CKCharacter@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            },
+            {
+              "index": 3,
               "name": "asDynamicObjects",
               "type": "bool",
               "flags": 0,
@@ -134814,11 +134934,67 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcontext::ckerror save(const string&in filename, ckobjectarray@ objects, uint saveflags, ckdependencies&in dependencies = void, ckguid&in readerguid = void)",
+          "docId": "method::::ckcontext::ckerror save(const string&in filename, ckobjectarray@ objects, uint saveflags)",
           "name": "Save",
           "namespace": "",
-          "declaration": "CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags, CKDependencies&in dependencies = void, CKGUID&in readerGuid = void)",
-          "declarationWithNamespace": "CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags, CKDependencies&in dependencies = void, CKGUID&in readerGuid = void)",
+          "declaration": "CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags)",
+          "declarationWithNamespace": "CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "fileName",
+              "type": "string",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "objects",
+              "type": "CKObjectArray@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "saveFlags",
+              "type": "uint",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror save(const string&in filename, ckobjectarray@ objects, uint saveflags, ckdependencies&in dependencies)",
+          "name": "Save",
+          "namespace": "",
+          "declaration": "CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags, CKDependencies&in dependencies)",
+          "declarationWithNamespace": "CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags, CKDependencies&in dependencies)",
           "memberRole": "method",
           "objectName": "CKContext",
           "functionType": "system",
@@ -134871,7 +135047,73 @@
               "flagNames": [
                 "inref"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::ckerror save(const string&in filename, ckobjectarray@ objects, uint saveflags, ckdependencies&in dependencies, ckguid&in readerguid)",
+          "name": "Save",
+          "namespace": "",
+          "declaration": "CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags, CKDependencies&in dependencies, CKGUID&in readerGuid)",
+          "declarationWithNamespace": "CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags, CKDependencies&in dependencies, CKGUID&in readerGuid)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKERROR",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "fileName",
+              "type": "string",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "objects",
+              "type": "CKObjectArray@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            },
+            {
+              "index": 2,
+              "name": "saveFlags",
+              "type": "uint",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            },
+            {
+              "index": 3,
+              "name": "dependencies",
+              "type": "CKDependencies",
+              "flags": 1,
+              "flagNames": [
+                "inref"
+              ],
+              "defaultArg": ""
             },
             {
               "index": 4,
@@ -134881,7 +135123,7 @@
               "flagNames": [
                 "inref"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             }
           ],
           "apiCategory": "global",

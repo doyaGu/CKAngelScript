@@ -4743,10 +4743,12 @@ class CKContext {
     bool IsReseted();
     bool IsRunTime();
     CKERROR Load(NativeBuffer@ buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT);
-    CKERROR Load(const string&in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT, CKGUID&in readerGuid = void);
+    CKERROR Load(const string&in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT);
+    CKERROR Load(const string&in fileName, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags, CKGUID&in readerGuid);
     CKERROR Load(int size, NativePointer buffer, CKObjectArray@ objects, CK_LOAD_FLAGS loadFlags = CK_LOAD_DEFAULT);
     CKERROR LoadAnimationOnCharacter(NativeBuffer@ buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false);
-    CKERROR LoadAnimationOnCharacter(const string&in fileName, CKObjectArray@ objects, CKCharacter@ carac, CKGUID&in readerGuid = void, bool asDynamicObjects = false);
+    CKERROR LoadAnimationOnCharacter(const string&in fileName, CKObjectArray@ objects, CKCharacter@ carac, CKGUID&in readerGuid, bool asDynamicObjects = false);
+    CKERROR LoadAnimationOnCharacter(const string&in fileName, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false);
     CKERROR LoadAnimationOnCharacter(int size, NativePointer buffer, CKObjectArray@ objects, CKCharacter@ carac, bool asDynamicObjects = false);
     CKERROR OutputToConsole(const string&in str, bool beep = true);
     CKERROR OutputToInfo(const string&in format);
@@ -4759,7 +4761,9 @@ class CKContext {
     CKERROR RefreshBuildingBlocks(const XGUIDArray&in guids);
     CKERROR RegisterNewManager(CKBaseManager@ manager);
     CKERROR Reset();
-    CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags, CKDependencies&in dependencies = void, CKGUID&in readerGuid = void);
+    CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags);
+    CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags, CKDependencies&in dependencies);
+    CKERROR Save(const string&in fileName, CKObjectArray@ objects, uint saveFlags, CKDependencies&in dependencies, CKGUID&in readerGuid);
     CKERROR Select(const XObjectArray&in objects, bool clearSelection = true);
     uint SendInterfaceMessage(uint reason, uint param1, uint param2);
     void SetCompressionLevel(int level);
