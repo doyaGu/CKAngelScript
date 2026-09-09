@@ -5178,6 +5178,8 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         "  void ActivateNativeBehavior() { CKBehavior@ b = cast<CKBehavior@>(GetCKContext(0).GetObjectByName(\"__CKAS_BehaviorMutationProbe\")); b.Activate(true, false); }\n"
         "  void MoveNativeEntity() { CK3dEntity@ e = cast<CK3dEntity@>(GetCKContext(0).GetObjectByName(\"__CKAS_EntityMutationProbe\")); e.SetPosition(4.0f, 5.0f, 6.0f); }\n"
         "  void MakeNativeEntityUnpickable() { CK3dEntity@ e = cast<CK3dEntity@>(GetCKContext(0).GetObjectByName(\"__CKAS_EntityStateProbe\")); e.SetPickable(false); }\n"
+        "  void SetNativeDataArrayElement() { CKDataArray@ a = cast<CKDataArray@>(GetCKContext(0).GetObjectByName(\"__CKAS_DataArrayMutationProbe\")); int value = 99; a.SetElementValue(0, 0, value); }\n"
+        "  void BorrowNativeDataArrayRow() { CKDataArray@ a = cast<CKDataArray@>(GetCKContext(0).GetObjectByName(\"__CKAS_DataArrayMutationProbe\")); a.GetRow(0).Size(); }\n"
         "  void SpawnDetached() { Async::Spawn(AsyncVoidFunc(__ckas_public_object_async_worker)); }\n"
         "  int Wait() { AsyncTask<void>@ delay = Async::Delay(1); Await(delay); return 5; }\n"
         "  void Boom() { array<int> values; values[1] = 1; }\n"
@@ -6116,6 +6118,125 @@ bool RunScriptApiSelfTest(CKContext *context, std::string &error) {
         !entityRemainsPickable ||
         !entityStateMutationFilterCleared) {
         error = "CKAngelScript API self-test expected filtered CK3dEntity state mutation to preserve pickability.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    methodOptions.MethodDecl = "void SetNativeDataArrayElement()";
+    CKAngelScriptMethod *setNativeDataArrayElementMethod = nullptr;
+    if (api->FindObjectMethod(methodOptions, &setNativeDataArrayElementMethod, &result) != CKAS_OK ||
+        !setNativeDataArrayElementMethod) {
+        error = "CKAngelScript API self-test failed to find SetNativeDataArrayElement object method.";
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    methodOptions.MethodDecl = "void BorrowNativeDataArrayRow()";
+    CKAngelScriptMethod *borrowNativeDataArrayRowMethod = nullptr;
+    if (api->FindObjectMethod(methodOptions, &borrowNativeDataArrayRowMethod, &result) != CKAS_OK ||
+        !borrowNativeDataArrayRowMethod) {
+        error = "CKAngelScript API self-test failed to find BorrowNativeDataArrayRow object method.";
+        api->ReleaseMethod(setNativeDataArrayElementMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    constexpr const char *dataArrayMutationProbeName = "__CKAS_DataArrayMutationProbe";
+    CKDataArray *dataArrayMutationProbe = CKDataArray::Cast(
+        context->CreateObject(CKCID_DATAARRAY,
+                              const_cast<CKSTRING>(dataArrayMutationProbeName),
+                              CK_OBJECTCREATION_DYNAMIC));
+    int dataArrayValueBefore = 7;
+    if (!dataArrayMutationProbe) {
+        error = "CKAngelScript API self-test could not create the CKDataArray mutation probe.";
+        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
+        api->ReleaseMethod(setNativeDataArrayElementMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    dataArrayMutationProbe->InsertColumn(-1,
+                                         CKARRAYTYPE_INT,
+                                         const_cast<CKSTRING>("Value"));
+    dataArrayMutationProbe->AddRow();
+    if (!dataArrayMutationProbe->SetElementValue(0, 0, &dataArrayValueBefore)) {
+        error = "CKAngelScript API self-test could not initialize the CKDataArray mutation probe.";
+        context->DestroyObject(dataArrayMutationProbe);
+        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
+        api->ReleaseMethod(setNativeDataArrayElementMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    hostCallFilterProbe = HostCallFilterProbeData();
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install the CKDataArray element mutation filter.";
+        context->DestroyObject(dataArrayMutationProbe);
+        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
+        api->ReleaseMethod(setNativeDataArrayElementMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = setNativeDataArrayElementMethod;
+    objectCall.WriteArgs = nullptr;
+    objectCall.ReadResult = nullptr;
+    const CKAS_STATUS rejectedDataArrayElementStatus = api->CallObjectMethod(objectCall, &result);
+    const std::string rejectedDataArrayElementError = result.ErrorMessage ? result.ErrorMessage : "";
+    int dataArrayValueAfterElementRejection = 0;
+    const bool dataArrayElementReadable =
+        dataArrayMutationProbe->GetElementValue(0, 0, &dataArrayValueAfterElementRejection) != FALSE;
+    const bool dataArrayElementFilterCleared =
+        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
+    if (rejectedDataArrayElementStatus != CKAS_EXECUTIONFAILED ||
+        rejectedDataArrayElementError.find("CKDataArray::SetElementValue is not available in the current script host phase") == std::string::npos ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKDataArray::SetElementValue") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
+        !dataArrayElementReadable ||
+        dataArrayValueAfterElementRejection != dataArrayValueBefore ||
+        !dataArrayElementFilterCleared) {
+        error = "CKAngelScript API self-test expected filtered CKDataArray element mutation to preserve the value.";
+        context->DestroyObject(dataArrayMutationProbe);
+        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
+        api->ReleaseMethod(setNativeDataArrayElementMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+
+    hostCallFilterProbe = HostCallFilterProbeData();
+    if (api->SetHostCallFilter(HostCallFilterProbe, &hostCallFilterProbe, &hostCallFilterResult) != CKAS_OK) {
+        error = "CKAngelScript API self-test failed to install the CKDataArray row-borrow filter.";
+        context->DestroyObject(dataArrayMutationProbe);
+        api->ReleaseMethod(borrowNativeDataArrayRowMethod);
+        api->ReleaseMethod(setNativeDataArrayElementMethod);
+        api->ReleaseMethod(addMethod);
+        api->ReleaseObject(object);
+        return false;
+    }
+    objectCall.Method = borrowNativeDataArrayRowMethod;
+    const CKAS_STATUS rejectedDataArrayRowStatus = api->CallObjectMethod(objectCall, &result);
+    const std::string rejectedDataArrayRowError = result.ErrorMessage ? result.ErrorMessage : "";
+    int dataArrayValueAfterRowRejection = 0;
+    const bool dataArrayRowReadable =
+        dataArrayMutationProbe->GetElementValue(0, 0, &dataArrayValueAfterRowRejection) != FALSE;
+    const bool dataArrayRowFilterCleared =
+        api->SetHostCallFilter(nullptr, nullptr, &hostCallFilterResult) == CKAS_OK;
+    context->DestroyObject(dataArrayMutationProbe);
+    api->ReleaseMethod(borrowNativeDataArrayRowMethod);
+    api->ReleaseMethod(setNativeDataArrayElementMethod);
+    if (rejectedDataArrayRowStatus != CKAS_EXECUTIONFAILED ||
+        rejectedDataArrayRowError.find("CKDataArray::GetRow is not available in the current script host phase") == std::string::npos ||
+        hostCallFilterProbe.CallCount != 1 ||
+        !CkasStringEquals(hostCallFilterProbe.LastApiName, "CKDataArray::GetRow") ||
+        hostCallFilterProbe.LastFlags != CKAS_HOSTCALL_MUTATES_HOST_STATE ||
+        !dataArrayRowReadable ||
+        dataArrayValueAfterRowRejection != dataArrayValueBefore ||
+        !dataArrayRowFilterCleared) {
+        error = "CKAngelScript API self-test expected filtered CKDataArray row access to reject the mutable view.";
         api->ReleaseMethod(addMethod);
         api->ReleaseObject(object);
         return false;

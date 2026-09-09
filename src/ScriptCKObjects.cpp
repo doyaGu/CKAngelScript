@@ -3579,6 +3579,11 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
     asIScriptEngine *engine = gen->GetEngine();
     asIScriptContext *ctx = asGetActiveContext();
 
+    if (!AllowCKObjectMutation("CKDataArray::SetElementValue")) {
+        gen->SetReturnByte(0);
+        return;
+    }
+
     auto *self = static_cast<CKDataArray *>(gen->GetObject());
     int i = gen->GetArgDWord(0);
     int c = gen->GetArgDWord(1);
@@ -3637,13 +3642,18 @@ static void CKDataArraySetElementValueGeneric(asIScriptGeneric *gen) {
 static CKDataRow &MissingCKDataRow(const char *message) {
     static thread_local CKDataRow dummy;
     dummy.Clear();
-    if (asIScriptContext *ctx = asGetActiveContext()) {
-        ctx->SetException(message);
+    if (message) {
+        asIScriptContext *ctx = asGetActiveContext();
+        if (ctx)
+            ctx->SetException(message);
     }
     return dummy;
 }
 
 static CKDataRow &GetCKDataArrayRow(CKDataArray *self, int n) {
+    if (!AllowCKObjectMutation("CKDataArray::GetRow")) {
+        return MissingCKDataRow(nullptr);
+    }
     if (self) {
         if (CKDataRow *row = self->GetRow(n)) {
             return *row;
@@ -3653,6 +3663,9 @@ static CKDataRow &GetCKDataArrayRow(CKDataArray *self, int n) {
 }
 
 static CKDataRow &InsertCKDataArrayRow(CKDataArray *self, int n) {
+    if (!AllowCKObjectMutation("CKDataArray::InsertRow")) {
+        return MissingCKDataRow(nullptr);
+    }
     if (self) {
         if (CKDataRow *row = self->InsertRow(n)) {
             return *row;
@@ -3667,6 +3680,9 @@ static CKDataRow &FindCKDataArrayRow(CKDataArray *self,
                                      CKDWORD key,
                                      int size,
                                      int startIndex) {
+    if (!AllowCKObjectMutation("CKDataArray::FindRow")) {
+        return MissingCKDataRow(nullptr);
+    }
     if (self) {
         if (CKDataRow *row = self->FindRow(c, op, key, size, startIndex)) {
             return *row;
@@ -3683,68 +3699,146 @@ void RegisterCKDataArray(asIScriptEngine *engine) {
     RegisterCKBeObjectMembers<CKDataArray>(engine, "CKDataArray");
 
     // Column/Format Functions
-    r = engine->RegisterObjectMethod("CKDataArray", "void InsertColumn(int cDest, CK_ARRAYTYPE type, const string &in name, CKGUID paramGuid = CKGUID(0, 0))", asFUNCTIONPR([](CKDataArray *array, int cDest, CK_ARRAYTYPE type, const std::string &name, CKGUID paramGuid) { array->InsertColumn(cDest, type, const_cast<char *>(name.c_str()), paramGuid); }, (CKDataArray *, int, CK_ARRAYTYPE, const std::string &, CKGUID), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void MoveColumn(int cSrc, int cDest)", asMETHODPR(CKDataArray, MoveColumn, (int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void RemoveColumn(int c)", asMETHODPR(CKDataArray, RemoveColumn, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void SetColumnName(int c, const string &in name)", asFUNCTIONPR([](CKDataArray *array, int c, const std::string &name) { array->SetColumnName(c, const_cast<char *>(name.c_str())); }, (CKDataArray *, int, const std::string &), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, CK_ARRAYTYPE, const std::string &, CKGUID>(
+        engine, "CKDataArray", "void InsertColumn(int cDest, CK_ARRAYTYPE type, const string &in name, CKGUID paramGuid = CKGUID(0, 0))", "CKDataArray::InsertColumn",
+        [](CKDataArray *array, int cDest, CK_ARRAYTYPE type, const std::string &name, CKGUID paramGuid) {
+            array->InsertColumn(cDest, type, const_cast<char *>(name.c_str()), paramGuid);
+        }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, int>(
+        engine, "CKDataArray", "void MoveColumn(int cSrc, int cDest)", "CKDataArray::MoveColumn",
+        [](CKDataArray *array, int source, int destination) { array->MoveColumn(source, destination); }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int>(
+        engine, "CKDataArray", "void RemoveColumn(int c)", "CKDataArray::RemoveColumn",
+        [](CKDataArray *array, int column) { array->RemoveColumn(column); }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, const std::string &>(
+        engine, "CKDataArray", "void SetColumnName(int c, const string &in name)", "CKDataArray::SetColumnName",
+        [](CKDataArray *array, int column, const std::string &name) {
+            array->SetColumnName(column, const_cast<char *>(name.c_str()));
+        }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "string GetColumnName(int c)", asFUNCTIONPR([](CKDataArray *self, int c) -> std::string { return ScriptStringify(self->GetColumnName(c)); }, (CKDataArray *, int), std::string), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void SetColumnType(int c, CK_ARRAYTYPE type, CKGUID paramGuid = CKGUID(0, 0))", asMETHODPR(CKDataArray, SetColumnType, (int, CK_ARRAYTYPE, CKGUID), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, CK_ARRAYTYPE, CKGUID>(
+        engine, "CKDataArray", "void SetColumnType(int c, CK_ARRAYTYPE type, CKGUID paramGuid = CKGUID(0, 0))", "CKDataArray::SetColumnType",
+        [](CKDataArray *array, int column, CK_ARRAYTYPE type, CKGUID parameterGuid) {
+            array->SetColumnType(column, type, parameterGuid);
+        }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "CK_ARRAYTYPE GetColumnType(int c)", asMETHODPR(CKDataArray, GetColumnType, (int), CK_ARRAYTYPE), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "CKGUID GetColumnParameterGuid(int c)", asMETHODPR(CKDataArray, GetColumnParameterGuid, (int), CKGUID), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "int GetKeyColumn()", asMETHODPR(CKDataArray, GetKeyColumn, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void SetKeyColumn(int c)", asMETHODPR(CKDataArray, SetKeyColumn, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int>(
+        engine, "CKDataArray", "void SetKeyColumn(int c)", "CKDataArray::SetKeyColumn",
+        [](CKDataArray *array, int column) { array->SetKeyColumn(column); }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "int GetColumnCount()", asMETHODPR(CKDataArray, GetColumnCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
 
     // Elements Functions
-    r = engine->RegisterObjectMethod("CKDataArray", "NativePointer GetElement(int i, int c)", asFUNCTIONPR([](CKDataArray *self, int i, int c) -> NativePointer { return NativePointer(self->GetElement(i, c)); }, (CKDataArray *, int, int), NativePointer), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<CKDataArray, NativePointer, int, int>(
+        engine, "CKDataArray", "NativePointer GetElement(int i, int c)", "CKDataArray::GetElement",
+        [](CKDataArray *array, int row, int column) { return NativePointer(array->GetElement(row, column)); },
+        NativePointer()); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKDataArray", "bool GetElementValue(int i, int c, NativePointer value)", asFUNCTIONPR([](CKDataArray *self, int i, int c, NativePointer value) -> bool { return self->GetElementValue(i, c, value.Get()); }, (CKDataArray *, int, int, NativePointer), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "bool GetElementValue(int i, int c, ?&out value)", asFUNCTION(CKDataArrayGetElementValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "CKObject@ GetElementObject(int i, int c)", asMETHODPR(CKDataArray, GetElementObject, (int, int), CKObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     // r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementValue(int i, int c, NativePointer value, int size = 0)", asFUNCTIONPR([](CKDataArray *self, int i, int c, NativePointer value, int size) -> bool { return self->SetElementValue(i, c, value.Get(), size); }, (CKDataArray *, int, int, NativePointer, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementValue(int i, int c, ?&in value)", asFUNCTION(CKDataArraySetElementValueGeneric), asCALL_GENERIC); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementValueFromParameter(int i, int c, CKParameter@ pout)", asFUNCTIONPR([](CKDataArray *self, int i, int c, CKParameter *pout) -> bool { return self->SetElementValueFromParameter(i, c, pout); }, (CKDataArray *, int, int, CKParameter *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementObject(int i, int c, CKObject@ obj)", asFUNCTIONPR([](CKDataArray *self, int i, int c, CKObject *obj) -> bool { return self->SetElementObject(i, c, obj); }, (CKDataArray *, int, int, CKObject *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<CKDataArray, bool, int, int, CKParameter *>(
+        engine, "CKDataArray", "bool SetElementValueFromParameter(int i, int c, CKParameter@ pout)", "CKDataArray::SetElementValueFromParameter",
+        [](CKDataArray *array, int row, int column, CKParameter *parameter) -> bool {
+            return array->SetElementValueFromParameter(row, column, parameter) != FALSE;
+        }, false); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<CKDataArray, bool, int, int, CKObject *>(
+        engine, "CKDataArray", "bool SetElementObject(int i, int c, CKObject@ obj)", "CKDataArray::SetElementObject",
+        [](CKDataArray *array, int row, int column, CKObject *object) -> bool {
+            return array->SetElementObject(row, column, object) != FALSE;
+        }, false); CKAS_CHECK_REGISTER(r);
 
     // Parameters Shortcuts
-    r = engine->RegisterObjectMethod("CKDataArray", "bool PasteShortcut(int i, int c, CKParameter@ pout)", asFUNCTIONPR([](CKDataArray *self, int i, int c, CKParameter *pout) -> bool { return self->PasteShortcut(i, c, pout); }, (CKDataArray *, int, int, CKParameter *), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "CKParameterOut@ RemoveShortcut(int i, int c)", asMETHODPR(CKDataArray, RemoveShortcut, (int, int), CKParameterOut *), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<CKDataArray, bool, int, int, CKParameter *>(
+        engine, "CKDataArray", "bool PasteShortcut(int i, int c, CKParameter@ pout)", "CKDataArray::PasteShortcut",
+        [](CKDataArray *array, int row, int column, CKParameter *parameter) -> bool {
+            return array->PasteShortcut(row, column, parameter) != FALSE;
+        }, false); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<CKDataArray, CKParameterOut *, int, int>(
+        engine, "CKDataArray", "CKParameterOut@ RemoveShortcut(int i, int c)", "CKDataArray::RemoveShortcut",
+        [](CKDataArray *array, int row, int column) { return array->RemoveShortcut(row, column); },
+        static_cast<CKParameterOut *>(nullptr)); CKAS_CHECK_REGISTER(r);
 
     // String Value
-    r = engine->RegisterObjectMethod("CKDataArray", "bool SetElementStringValue(int i, int c, const string &in value)", asFUNCTIONPR([](CKDataArray *array, int i, int c, const std::string &value) -> bool { return array->SetElementStringValue(i, c, const_cast<char *>(value.c_str())); }, (CKDataArray *, int, int, const std::string &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<CKDataArray, bool, int, int, const std::string &>(
+        engine, "CKDataArray", "bool SetElementStringValue(int i, int c, const string &in value)", "CKDataArray::SetElementStringValue",
+        [](CKDataArray *array, int row, int column, const std::string &value) -> bool {
+            return array->SetElementStringValue(row, column, const_cast<char *>(value.c_str())) != FALSE;
+        }, false); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "int GetStringValue(CKDWORD key, int c, string &out value)", asFUNCTIONPR([](CKDataArray *array, CKDWORD key, int c, std::string &value) -> int { char buffer[4096] = {}; int result = array->GetStringValue(key, c, buffer); if (result) value = buffer; else value.clear(); return result; }, (CKDataArray *, CKDWORD, int, std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "int GetElementStringValue(int i, int c, string &out value)", asFUNCTIONPR([](CKDataArray *array, int i, int c, std::string &value) -> int { char buffer[4096] = {}; int result = array->GetElementStringValue(i, c, buffer); if (result) value = buffer; else value.clear(); return result; }, (CKDataArray *, int, int, std::string &), int), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     // Load / Write
-    r = engine->RegisterObjectMethod("CKDataArray", "bool LoadElements(const string &in str, bool append, int column)", asFUNCTIONPR([](CKDataArray *array, const std::string &str, bool append, int column) -> bool { return array->LoadElements(const_cast<char *>(str.c_str()), append, column); }, (CKDataArray *, const std::string &, bool, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "bool WriteElements(const string &in str, int column, int number, bool append = false)", asFUNCTIONPR([](CKDataArray *array, const std::string &str, int column, int number, bool append) -> bool { return array->WriteElements(const_cast<char *>(str.c_str()), column, number, append); }, (CKDataArray *, const std::string &, int, int, bool), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<CKDataArray, bool, const std::string &, bool, int>(
+        engine, "CKDataArray", "bool LoadElements(const string &in str, bool append, int column)", "CKDataArray::LoadElements",
+        [](CKDataArray *array, const std::string &path, bool append, int column) -> bool {
+            return array->LoadElements(const_cast<char *>(path.c_str()), append, column) != FALSE;
+        }, false); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedMutationMethod<CKDataArray, bool, const std::string &, int, int, bool>(
+        engine, "CKDataArray", "bool WriteElements(const string &in str, int column, int number, bool append = false)", "CKDataArray::WriteElements",
+        [](CKDataArray *array, const std::string &path, int column, int number, bool append) -> bool {
+            return array->WriteElements(const_cast<char *>(path.c_str()), column, number, append) != FALSE;
+        }, false); CKAS_CHECK_REGISTER(r);
 
     // Rows Functions
     r = engine->RegisterObjectMethod("CKDataArray", "int GetRowCount()", asMETHODPR(CKDataArray, GetRowCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &GetRow(int n)", asFUNCTION(GetCKDataArrayRow), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void AddRow()", asMETHODPR(CKDataArray, AddRow, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray>(
+        engine, "CKDataArray", "void AddRow()", "CKDataArray::AddRow",
+        [](CKDataArray *array) { array->AddRow(); }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &InsertRow(int n = -1)", asFUNCTION(InsertCKDataArrayRow), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "bool TestRow(int row, int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0)", asFUNCTIONPR([](CKDataArray *self, int row, int c, CK_COMPOPERATOR op, CKDWORD key, int size) -> bool { return self->TestRow(row, c, op, key, size); }, (CKDataArray *, int, int, CK_COMPOPERATOR, CKDWORD, int), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "int FindRowIndex(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startingIndex = 0)", asMETHODPR(CKDataArray, FindRowIndex, (int, CK_COMPOPERATOR, CKDWORD, int, int), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "CKDataRow &FindRow(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0, int startIndex = 0)", asFUNCTION(FindCKDataArrayRow), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void RemoveRow(int row)", asMETHODPR(CKDataArray, RemoveRow, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void MoveRow(int rSrc, int rDest)", asMETHODPR(CKDataArray, MoveRow, (int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void SwapRows(int i1, int i2)", asMETHODPR(CKDataArray, SwapRows, (int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void Clear(bool params = true)", asFUNCTIONPR([](CKDataArray *self, bool params) { self->Clear(params); }, (CKDataArray *, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int>(
+        engine, "CKDataArray", "void RemoveRow(int row)", "CKDataArray::RemoveRow",
+        [](CKDataArray *array, int row) { array->RemoveRow(row); }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, int>(
+        engine, "CKDataArray", "void MoveRow(int rSrc, int rDest)", "CKDataArray::MoveRow",
+        [](CKDataArray *array, int source, int destination) { array->MoveRow(source, destination); }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, int>(
+        engine, "CKDataArray", "void SwapRows(int i1, int i2)", "CKDataArray::SwapRows",
+        [](CKDataArray *array, int first, int second) { array->SwapRows(first, second); }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, bool>(
+        engine, "CKDataArray", "void Clear(bool params = true)", "CKDataArray::Clear",
+        [](CKDataArray *array, bool parameters) { array->Clear(parameters); }); CKAS_CHECK_REGISTER(r);
 
     // Algorithm
     r = engine->RegisterObjectMethod("CKDataArray", "bool GetHighest(int c, int &out row)", asFUNCTIONPR([](CKDataArray *self, int c, int &row) -> bool { return self->GetHighest(c, row); }, (CKDataArray *, int, int &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "bool GetLowest(int c, int &out row)", asFUNCTIONPR([](CKDataArray *self, int c, int &row) -> bool { return self->GetLowest(c, row); }, (CKDataArray *, int, int &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "bool GetNearest(int c, NativePointer value, int &out row)", asFUNCTIONPR([](CKDataArray *self, int c, NativePointer value, int &row) -> bool { return self->GetNearest(c, value.Get(), row); }, (CKDataArray *, int, NativePointer, int &), bool), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void ColumnTransform(int c, CK_BINARYOPERATOR op, CKDWORD value)", asMETHODPR(CKDataArray, ColumnTransform, (int, CK_BINARYOPERATOR, CKDWORD), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void ColumnsOperate(int c, CK_BINARYOPERATOR op, int c2, int cr)", asMETHODPR(CKDataArray, ColumnsOperate, (int, CK_BINARYOPERATOR, int, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void Sort(int c, bool ascending)", asFUNCTIONPR([](CKDataArray *self, int c, bool ascending) { self->Sort(c, ascending); }, (CKDataArray *, int, bool), void), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void Unique(int c)", asMETHODPR(CKDataArray, Unique, (int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void RandomShuffle()", asMETHODPR(CKDataArray, RandomShuffle, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void Reverse()", asMETHODPR(CKDataArray, Reverse, (), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, CK_BINARYOPERATOR, CKDWORD>(
+        engine, "CKDataArray", "void ColumnTransform(int c, CK_BINARYOPERATOR op, CKDWORD value)", "CKDataArray::ColumnTransform",
+        [](CKDataArray *array, int column, CK_BINARYOPERATOR operation, CKDWORD value) {
+            array->ColumnTransform(column, operation, value);
+        }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, CK_BINARYOPERATOR, int, int>(
+        engine, "CKDataArray", "void ColumnsOperate(int c, CK_BINARYOPERATOR op, int c2, int cr)", "CKDataArray::ColumnsOperate",
+        [](CKDataArray *array, int first, CK_BINARYOPERATOR operation, int second, int result) {
+            array->ColumnsOperate(first, operation, second, result);
+        }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, bool>(
+        engine, "CKDataArray", "void Sort(int c, bool ascending)", "CKDataArray::Sort",
+        [](CKDataArray *array, int column, bool ascending) { array->Sort(column, ascending); }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int>(
+        engine, "CKDataArray", "void Unique(int c)", "CKDataArray::Unique",
+        [](CKDataArray *array, int column) { array->Unique(column); }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray>(
+        engine, "CKDataArray", "void RandomShuffle()", "CKDataArray::RandomShuffle",
+        [](CKDataArray *array) { array->RandomShuffle(); }); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray>(
+        engine, "CKDataArray", "void Reverse()", "CKDataArray::Reverse",
+        [](CKDataArray *array) { array->Reverse(); }); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "CKDWORD Sum(int c)", asMETHODPR(CKDataArray, Sum, (int), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "CKDWORD Product(int c)", asMETHODPR(CKDataArray, Product, (int), CKDWORD), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKDataArray", "int GetCount(int c, CK_COMPOPERATOR op, CKDWORD key, int size = 0)", asMETHODPR(CKDataArray, GetCount, (int, CK_COMPOPERATOR, CKDWORD, int), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKDataArray", "void CreateGroup(int mc, CK_COMPOPERATOR op, CKDWORD key, int size, CKGroup@ group, int ec = 0)", asMETHODPR(CKDataArray, CreateGroup, (int, CK_COMPOPERATOR, CKDWORD, int, CKGroup*, int), void), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
+    r = RegisterGuardedVoidMutationMethod<CKDataArray, int, CK_COMPOPERATOR, CKDWORD, int, CKGroup *, int>(
+        engine, "CKDataArray", "void CreateGroup(int mc, CK_COMPOPERATOR op, CKDWORD key, int size, CKGroup@ group, int ec = 0)", "CKDataArray::CreateGroup",
+        [](CKDataArray *array, int matchColumn, CK_COMPOPERATOR operation, CKDWORD key, int size, CKGroup *group, int elementColumn) {
+            array->CreateGroup(matchColumn, operation, key, size, group, elementColumn);
+        }); CKAS_CHECK_REGISTER(r);
 }
 
 template <typename T>
