@@ -312,13 +312,63 @@ static CKERROR DestroyCKContextObjectsWithFlags(CKContext *self,
     return DestroyCKContextObjects(self, objects, flags, nullptr);
 }
 
+static CKObject *CopyCKContextObject(CKContext *self,
+                                     CKObject *source,
+                                     CKDependencies *dependencies,
+                                     const std::string &appendName,
+                                     CK_OBJECTCREATION_OPTIONS options) {
+    if (RejectCKContextMutation("CKContext::CopyObject")) {
+        return nullptr;
+    }
+    return self->CopyObject(source,
+                            dependencies,
+                            appendName.empty() ? nullptr : const_cast<CKSTRING>(appendName.c_str()),
+                            options);
+}
+
+static CKObject *CopyCKContextObjectWithDefaults(CKContext *self,
+                                                 CKObject *source,
+                                                 const std::string &appendName,
+                                                 CK_OBJECTCREATION_OPTIONS options) {
+    return CopyCKContextObject(self, source, nullptr, appendName, options);
+}
+
+static const XObjectArray &EmptyCKContextObjectArray() {
+    static XObjectArray empty;
+    return empty;
+}
+
+static const XObjectArray &CopyCKContextObjects(CKContext *self,
+                                                const XObjectArray &sourceObjects,
+                                                CKDependencies *dependencies,
+                                                CK_OBJECTCREATION_OPTIONS options,
+                                                const std::string &appendName) {
+    if (RejectCKContextMutation("CKContext::CopyObjects")) {
+        return EmptyCKContextObjectArray();
+    }
+    return self->CopyObjects(sourceObjects,
+                             dependencies,
+                             options,
+                             appendName.empty() ? nullptr : const_cast<CKSTRING>(appendName.c_str()));
+}
+
+static const XObjectArray &CopyCKContextObjectsWithDefaults(
+    CKContext *self,
+    const XObjectArray &sourceObjects,
+    CK_OBJECTCREATION_OPTIONS options,
+    const std::string &appendName) {
+    return CopyCKContextObjects(self, sourceObjects, nullptr, options, appendName);
+}
+
 void RegisterCKContext(asIScriptEngine *engine) {
     int r = 0;
 
     // Objects Management
     r = engine->RegisterObjectMethod("CKContext", "CKObject@ CreateObject(CK_CLASSID cid, const string &in name = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE &out res = void)", asFUNCTIONPR([](CKContext *self, CK_CLASSID cid, const std::string &name, CK_OBJECTCREATION_OPTIONS options, CK_CREATIONMODE &res) -> CKObject * { if (RejectCKContextMutation("CKContext::CreateObject")) return nullptr; return self->CreateObject(cid, name.empty() ? nullptr : const_cast<CKSTRING>(name.c_str()), options, &res); }, (CKContext *, CK_CLASSID, const std::string &, CK_OBJECTCREATION_OPTIONS, CK_CREATIONMODE &), CKObject*), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "CKObject@ CopyObject(CKObject@ src, CKDependencies &in dependencies = void, const string &in appendName = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)", asFUNCTIONPR([](CKContext *self, CKObject *src, CKDependencies *dependencies, const std::string &appendName, CK_OBJECTCREATION_OPTIONS options) -> CKObject * { if (RejectCKContextMutation("CKContext::CopyObject")) return nullptr; return self->CopyObject(src, dependencies, appendName.empty() ? nullptr : const_cast<CKSTRING>(appendName.c_str()), options); }, (CKContext *, CKObject *, CKDependencies *, const std::string &, CK_OBJECTCREATION_OPTIONS), CKObject*), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
-    r = engine->RegisterObjectMethod("CKContext", "const XObjectArray &CopyObjects(const XObjectArray &in srcObjects, CKDependencies &in dependencies = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string &in appendName = void)", asFUNCTIONPR([](CKContext *self, const XObjectArray &srcObjects, CKDependencies *dependencies, CK_OBJECTCREATION_OPTIONS options, const std::string &appendName) -> const XObjectArray & { if (RejectCKContextMutation("CKContext::CopyObjects")) { static XObjectArray empty; return empty; } return self->CopyObjects(srcObjects, dependencies, options, appendName.empty() ? nullptr : const_cast<CKSTRING>(appendName.c_str())); }, (CKContext *, const XObjectArray &, CKDependencies *, CK_OBJECTCREATION_OPTIONS, const std::string &), const XObjectArray &), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKObject@ CopyObject(CKObject@ src, const string &in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)", asFUNCTION(CopyCKContextObjectWithDefaults), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "CKObject@ CopyObject(CKObject@ src, CKDependencies &in dependencies, const string &in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)", asFUNCTION(CopyCKContextObject), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "const XObjectArray &CopyObjects(const XObjectArray &in srcObjects, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string &in appendName = \"\")", asFUNCTION(CopyCKContextObjectsWithDefaults), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
+    r = engine->RegisterObjectMethod("CKContext", "const XObjectArray &CopyObjects(const XObjectArray &in srcObjects, CKDependencies &in dependencies, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string &in appendName = \"\")", asFUNCTION(CopyCKContextObjects), asCALL_CDECL_OBJFIRST); CKAS_CHECK_REGISTER(r);
 
     r = engine->RegisterObjectMethod("CKContext", "CKObject@ GetObject(CK_ID id)", asMETHODPR(CKContext, GetObject, (CK_ID), CKObject*), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);
     r = engine->RegisterObjectMethod("CKContext", "int GetObjectCount()", asMETHODPR(CKContext, GetObjectCount, (), int), asCALL_THISCALL); CKAS_CHECK_REGISTER(r);

@@ -130383,11 +130383,11 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcontext::ckobject@ copyobject(ckobject@ src, ckdependencies&in dependencies = void, const string&in appendname = void, ck_objectcreation_options options = ck_objectcreation_nonamecheck)",
+          "docId": "method::::ckcontext::ckobject@ copyobject(ckobject@ src, ckdependencies&in dependencies, const string&in appendname = \"\", ck_objectcreation_options options = ck_objectcreation_nonamecheck)",
           "name": "CopyObject",
           "namespace": "",
-          "declaration": "CKObject@ CopyObject(CKObject@ src, CKDependencies&in dependencies = void, const string&in appendName = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)",
-          "declarationWithNamespace": "CKObject@ CopyObject(CKObject@ src, CKDependencies&in dependencies = void, const string&in appendName = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)",
+          "declaration": "CKObject@ CopyObject(CKObject@ src, CKDependencies&in dependencies, const string&in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)",
+          "declarationWithNamespace": "CKObject@ CopyObject(CKObject@ src, CKDependencies&in dependencies, const string&in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)",
           "memberRole": "method",
           "objectName": "CKContext",
           "functionType": "system",
@@ -130421,7 +130421,7 @@
               "flagNames": [
                 "inref"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 2,
@@ -130432,7 +130432,7 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": "\"\""
             },
             {
               "index": 3,
@@ -130449,11 +130449,67 @@
           "apiSourceArea": ""
         },
         {
-          "docId": "method::::ckcontext::const xobjectarray& copyobjects(const xobjectarray&in srcobjects, ckdependencies&in dependencies = void, ck_objectcreation_options options = ck_objectcreation_nonamecheck, const string&in appendname = void)",
+          "docId": "method::::ckcontext::ckobject@ copyobject(ckobject@ src, const string&in appendname = \"\", ck_objectcreation_options options = ck_objectcreation_nonamecheck)",
+          "name": "CopyObject",
+          "namespace": "",
+          "declaration": "CKObject@ CopyObject(CKObject@ src, const string&in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)",
+          "declarationWithNamespace": "CKObject@ CopyObject(CKObject@ src, const string&in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "CKObject@",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "src",
+              "type": "CKObject@",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "appendName",
+              "type": "string",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": "\"\""
+            },
+            {
+              "index": 2,
+              "name": "options",
+              "type": "CK_OBJECTCREATION_OPTIONS",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "CK_OBJECTCREATION_NONAMECHECK"
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::const xobjectarray& copyobjects(const xobjectarray&in srcobjects, ckdependencies&in dependencies, ck_objectcreation_options options = ck_objectcreation_nonamecheck, const string&in appendname = \"\")",
           "name": "CopyObjects",
           "namespace": "",
-          "declaration": "const XObjectArray& CopyObjects(const XObjectArray&in srcObjects, CKDependencies&in dependencies = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string&in appendName = void)",
-          "declarationWithNamespace": "const XObjectArray& CopyObjects(const XObjectArray&in srcObjects, CKDependencies&in dependencies = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string&in appendName = void)",
+          "declaration": "const XObjectArray& CopyObjects(const XObjectArray&in srcObjects, CKDependencies&in dependencies, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string&in appendName = \"\")",
+          "declarationWithNamespace": "const XObjectArray& CopyObjects(const XObjectArray&in srcObjects, CKDependencies&in dependencies, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string&in appendName = \"\")",
           "memberRole": "method",
           "objectName": "CKContext",
           "functionType": "system",
@@ -130490,7 +130546,7 @@
               "flagNames": [
                 "inref"
               ],
-              "defaultArg": "void"
+              "defaultArg": ""
             },
             {
               "index": 2,
@@ -130509,7 +130565,66 @@
                 "inref",
                 "const"
               ],
-              "defaultArg": "void"
+              "defaultArg": "\"\""
+            }
+          ],
+          "apiCategory": "global",
+          "apiCategoryName": "Global namespace",
+          "apiAudience": "global",
+          "apiSourceArea": ""
+        },
+        {
+          "docId": "method::::ckcontext::const xobjectarray& copyobjects(const xobjectarray&in srcobjects, ck_objectcreation_options options = ck_objectcreation_nonamecheck, const string&in appendname = \"\")",
+          "name": "CopyObjects",
+          "namespace": "",
+          "declaration": "const XObjectArray& CopyObjects(const XObjectArray&in srcObjects, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string&in appendName = \"\")",
+          "declarationWithNamespace": "const XObjectArray& CopyObjects(const XObjectArray&in srcObjects, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string&in appendName = \"\")",
+          "memberRole": "method",
+          "objectName": "CKContext",
+          "functionType": "system",
+          "moduleName": "",
+          "configGroup": "",
+          "accessMask": 4294967295,
+          "returnType": "XObjectArray",
+          "isReadOnly": false,
+          "isPrivate": false,
+          "isProtected": false,
+          "isFinal": false,
+          "isOverride": false,
+          "isShared": true,
+          "isExplicit": false,
+          "isProperty": false,
+          "isVariadic": false,
+          "params": [
+            {
+              "index": 0,
+              "name": "srcObjects",
+              "type": "XObjectArray",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": ""
+            },
+            {
+              "index": 1,
+              "name": "options",
+              "type": "CK_OBJECTCREATION_OPTIONS",
+              "flags": 0,
+              "flagNames": [],
+              "defaultArg": "CK_OBJECTCREATION_NONAMECHECK"
+            },
+            {
+              "index": 2,
+              "name": "appendName",
+              "type": "string",
+              "flags": 5,
+              "flagNames": [
+                "inref",
+                "const"
+              ],
+              "defaultArg": "\"\""
             }
           ],
           "apiCategory": "global",

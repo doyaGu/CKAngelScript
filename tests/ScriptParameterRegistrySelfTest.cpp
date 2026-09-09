@@ -7454,6 +7454,10 @@ bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         return false;
     }
     if (contextType->GetMethodByDecl("CKObject@ CreateObject(CK_CLASSID cid, const string &in name = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, CK_LOADMODE &out res = void)") == nullptr ||
+        contextType->GetMethodByDecl("CKObject@ CopyObject(CKObject@ src, const string &in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)") == nullptr ||
+        contextType->GetMethodByDecl("CKObject@ CopyObject(CKObject@ src, CKDependencies &in dependencies, const string &in appendName = \"\", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK)") == nullptr ||
+        contextType->GetMethodByDecl("const XObjectArray &CopyObjects(const XObjectArray &in srcObjects, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string &in appendName = \"\")") == nullptr ||
+        contextType->GetMethodByDecl("const XObjectArray &CopyObjects(const XObjectArray &in srcObjects, CKDependencies &in dependencies, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string &in appendName = \"\")") == nullptr ||
         contextType->GetMethodByDecl("CKERROR DestroyObject(CKObject@ obj)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR DestroyObject(CKObject@ obj, CKDWORD flags)") == nullptr ||
         contextType->GetMethodByDecl("CKERROR DestroyObject(CKObject@ obj, CKDWORD flags, CKDependencies &in depoptions)") == nullptr ||
@@ -7494,21 +7498,29 @@ bool RunCKContextScriptSelfTest(CKContext *context, asIScriptEngine *engine, std
         "  if (ctx.GetObjectsCountByClassID(CKCID_BEOBJECT) <= 0) return 12;\n"
         "  if (ctx.GetRenderManager() is null || ctx.GetParameterManager() is null) return 13;\n"
         "  if (ctx.GetManagerCount() <= 0) return 14;\n"
+        "  CKObject@ copied = ctx.CopyObject(obj);\n"
+        "  if (copied is null || copied is obj) return 15;\n"
+        "  CK_ID copiedId = copied.GetID();\n"
+        "  if (ctx.DestroyObject(copied) != CK_OK) return 16;\n"
+        "  if (ctx.GetObject(copiedId) !is null) return 17;\n"
         "  CKObject@ unnamed = ctx.CreateObject(CKCID_OBJECT);\n"
-        "  if (unnamed is null) return 15;\n"
+        "  if (unnamed is null) return 18;\n"
         "  CK_ID unnamedId = unnamed.GetID();\n"
-        "  if (ctx.DestroyObject(unnamed) != CK_OK) return 16;\n"
-        "  if (ctx.GetObject(unnamedId) !is null) return 17;\n"
+        "  if (ctx.DestroyObject(unnamed) != CK_OK) return 19;\n"
+        "  if (ctx.GetObject(unnamedId) !is null) return 20;\n"
         "  CKObject@ byId = ctx.CreateObject(CKCID_OBJECT, \"__CKAS_CKContextDestroyByIdSelfTest\");\n"
-        "  if (byId is null) return 18;\n"
+        "  if (byId is null) return 21;\n"
         "  CK_ID byIdValue = byId.GetID();\n"
-        "  if (ctx.DestroyObject(byIdValue, 0) != CK_OK) return 19;\n"
-        "  if (ctx.GetObject(byIdValue) !is null) return 20;\n"
+        "  if (ctx.DestroyObject(byIdValue, 0) != CK_OK) return 22;\n"
+        "  if (ctx.GetObject(byIdValue) !is null) return 23;\n"
         "  CKDependencies deps;\n"
-        "  if (ctx.DestroyObject(obj, 0, deps) != CK_OK) return 21;\n"
-        "  if (ctx.GetObject(id) !is null) return 22;\n"
-        "  if (ctx.GetObjectCount() > beforeCount + 1) return 23;\n"
+        "  if (ctx.DestroyObject(obj, 0, deps) != CK_OK) return 24;\n"
+        "  if (ctx.GetObject(id) !is null) return 25;\n"
+        "  if (ctx.GetObjectCount() > beforeCount + 4) return 26;\n"
         "  return 0;\n"
+        "}\n"
+        "void CompileCKContextCopyObjectsDefaults(CKContext@ ctx, const XObjectArray &in objects) {\n"
+        "  ctx.CopyObjects(objects);\n"
         "}\n"
         "int ProbeCKContextNativeBufferLoaders(CKContext@ ctx) {\n"
         "  NativeBuffer@ bytes = NativeBuffer(1);\n"

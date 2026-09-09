@@ -4652,8 +4652,10 @@ class CKContext {
     const XObjectPointerArray& CKFillObjectsUnused();
     void ChangeObjectDynamic(CKObject@ obj, bool setDynamic = true);
     CKERROR ClearAll();
-    CKObject@ CopyObject(CKObject@ src, CKDependencies&in dependencies = void, const string&in appendName = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK);
-    const XObjectArray& CopyObjects(const XObjectArray&in srcObjects, CKDependencies&in dependencies = void, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string&in appendName = void);
+    CKObject@ CopyObject(CKObject@ src, CKDependencies&in dependencies, const string&in appendName = "", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK);
+    CKObject@ CopyObject(CKObject@ src, const string&in appendName = "", CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK);
+    const XObjectArray& CopyObjects(const XObjectArray&in srcObjects, CKDependencies&in dependencies, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string&in appendName = "");
+    const XObjectArray& CopyObjects(const XObjectArray&in srcObjects, CK_OBJECTCREATION_OPTIONS options = CK_OBJECTCREATION_NONAMECHECK, const string&in appendName = "");
     CKFile@ CreateCKFile();
     CKParameterIn@ CreateCKParameterIn(const string&in name, CKGUID guid, bool dynamic = false);
     CKParameterIn@ CreateCKParameterIn(const string&in name, const string&in typeName, bool dynamic = false);
